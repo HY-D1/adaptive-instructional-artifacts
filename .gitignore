@@ -4,6 +4,8 @@ dist/
 build/
 .env
 *.log
+playwright-report/
+test-results/
 
 # Python
 __pycache__/

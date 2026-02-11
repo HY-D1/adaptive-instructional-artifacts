@@ -1,0 +1,45 @@
+{
+  "fixtureId": "toy-trace-week2-v1",
+  "baseTimestampMs": 1739145600000,
+  "learners": [
+    {
+      "learnerId": "toy-learner-1",
+      "problemId": "join-orders-users",
+      "attempts": [
+        {
+          "attemptId": "attempt-1",
+          "offsetMs": 10000,
+          "outcome": "error",
+          "errorSubtype": "incomplete query",
+          "errorMessage": "syntax error near FROM"
+        },
+        {
+          "attemptId": "attempt-2",
+          "offsetMs": 35000,
+          "outcome": "error",
+          "errorSubtype": "undefined table",
+          "errorMessage": "no such table: customer"
+        },
+        {
+          "attemptId": "attempt-3",
+          "offsetMs": 60000,
+          "outcome": "error",
+          "errorSubtype": "undefined table",
+          "errorMessage": "no such table: customer"
+        },
+        {
+          "attemptId": "attempt-4",
+          "offsetMs": 85000,
+          "outcome": "error",
+          "errorSubtype": "undefined column",
+          "errorMessage": "no such column: user_full_name"
+        },
+        {
+          "attemptId": "attempt-5",
+          "offsetMs": 120000,
+          "outcome": "success"
+        }
+      ]
+    }
+  ]
+}
