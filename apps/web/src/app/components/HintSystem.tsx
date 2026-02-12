@@ -2,13 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Lightbulb, BookOpen } from 'lucide-react';
-import { InteractionEvent } from '../types';
+import { Lightbulb } from 'lucide-react';
+import { HelpEventType, InteractionEvent } from '../types';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { storage } from '../lib/storage';
 import {
-  canonicalizeSqlEngageSubtype,
-  getSqlEngagePolicyVersion
+  canonicalizeSqlEngageSubtype
 } from '../data/sql-engage';
 
 interface HintSystemProps {
@@ -34,11 +33,14 @@ export function HintSystem({
   onEscalate,
   onInteractionLogged
 }: HintSystemProps) {
-  const [currentHintLevel, setCurrentHintLevel] = useState(0);
   const [hints, setHints] = useState<string[]>([]);
   const [showExplanation, setShowExplanation] = useState(false);
   const [activeHintSubtype, setActiveHintSubtype] = useState<string | null>(null);
   const lastAutoEscalatedErrorId = useRef<string | null>(null);
+  const helpFlowKeyRef = useRef('');
+  const nextHelpRequestIndexRef = useRef(1);
+  const emittedHelpEventKeysRef = useRef<Set<string>>(new Set());
+  const helpEventSequenceRef = useRef(0);
 
   const profile = storage.getProfile(learnerId);
   const scopedInteractions = recentInteractions.filter(
@@ -54,7 +56,6 @@ export function HintSystem({
   const isCanonicalOverrideActive = isSubtypeOverrideActive && Boolean(canonicalOverrideSubtype);
 
   const resetHintFlow = () => {
-    setCurrentHintLevel(0);
     setHints([]);
     setShowExplanation(false);
     setActiveHintSubtype(null);
@@ -63,11 +64,86 @@ export function HintSystem({
 
   useEffect(() => {
     resetHintFlow();
-  }, [problemId, sessionId]);
+  }, [learnerId, problemId, sessionId]);
 
   useEffect(() => {
     resetHintFlow();
   }, [isCanonicalOverrideActive, canonicalOverrideSubtype]);
+
+  const getProblemTrace = () => scopedInteractions.filter((interaction) => interaction.problemId === problemId);
+  const getHelpFlowKey = () => `${sessionId || 'no-session'}|${learnerId}|${problemId}`;
+  const getNextHelpRequestIndex = (problemTrace: InteractionEvent[]) =>
+    problemTrace.filter(
+      (interaction) =>
+        interaction.eventType === 'hint_view' || interaction.eventType === 'explanation_view'
+    ).length + 1;
+  const syncHelpFlowIndex = (problemTrace: InteractionEvent[]) => {
+    const flowKey = getHelpFlowKey();
+    const persistedNextHelpRequestIndex = getNextHelpRequestIndex(problemTrace);
+    if (helpFlowKeyRef.current !== flowKey) {
+      helpFlowKeyRef.current = flowKey;
+      nextHelpRequestIndexRef.current = persistedNextHelpRequestIndex;
+      emittedHelpEventKeysRef.current = new Set();
+      helpEventSequenceRef.current = 0;
+      return persistedNextHelpRequestIndex;
+    }
+    if (persistedNextHelpRequestIndex > nextHelpRequestIndexRef.current) {
+      nextHelpRequestIndexRef.current = persistedNextHelpRequestIndex;
+    }
+    return nextHelpRequestIndexRef.current;
+  };
+  const allocateNextHelpRequestIndex = (problemTrace: InteractionEvent[]) => {
+    const allocated = syncHelpFlowIndex(problemTrace);
+    nextHelpRequestIndexRef.current = allocated + 1;
+    return allocated;
+  };
+  const registerHelpEvent = (eventType: HelpEventType, helpRequestIndex: number) => {
+    const dedupeKey = `${getHelpFlowKey()}|${eventType}|${helpRequestIndex}`;
+    if (emittedHelpEventKeysRef.current.has(dedupeKey)) {
+      return false;
+    }
+    emittedHelpEventKeysRef.current.add(dedupeKey);
+    return true;
+  };
+  const buildHelpEventId = (prefix: 'hint' | 'explanation', helpRequestIndex: number, suffix?: string) => {
+    helpEventSequenceRef.current += 1;
+    const parts = [
+      prefix,
+      Date.now().toString(),
+      helpRequestIndex.toString(),
+      helpEventSequenceRef.current.toString()
+    ];
+    if (suffix) {
+      parts.push(suffix);
+    }
+    return parts.join('-');
+  };
+  useEffect(() => {
+    syncHelpFlowIndex(getProblemTrace());
+  }, [sessionId, learnerId, problemId, recentInteractions]);
+
+  const getHelpSelectionForIndex = (helpRequestIndex: number) => {
+    if (!profile) {
+      return null;
+    }
+    const overrideSubtype = isCanonicalOverrideActive ? canonicalOverrideSubtype : undefined;
+    const fallbackSubtype = errorSubtypeId || 'incomplete query';
+    const effectiveSubtype = activeHintSubtype ||
+      canonicalizeSqlEngageSubtype(overrideSubtype || fallbackSubtype);
+    const levelForSelection = Math.max(1, Math.min(3, helpRequestIndex)) as 1 | 2 | 3;
+
+    return orchestrator.getNextHint(
+      effectiveSubtype,
+      levelForSelection - 1,
+      profile,
+      problemId,
+      {
+        knownSubtypeOverride: overrideSubtype,
+        isSubtypeOverrideActive: isCanonicalOverrideActive,
+        helpRequestIndex
+      }
+    );
+  };
 
   const handleRequestHint = () => {
     if (!profile) {
@@ -76,58 +152,84 @@ export function HintSystem({
     if (!sessionId) {
       return;
     }
-    if (currentHintLevel >= 3) {
+    const problemTrace = getProblemTrace();
+    const nextHelpRequestIndex = allocateNextHelpRequestIndex(problemTrace);
+    if (nextHelpRequestIndex >= 4) {
+      handleShowExplanation('auto', nextHelpRequestIndex, problemTrace);
       return;
     }
-    const overrideSubtype = isCanonicalOverrideActive ? canonicalOverrideSubtype : undefined;
-    const fallbackSubtype = errorSubtypeId || 'incomplete query';
-    const effectiveSubtype = activeHintSubtype ||
-      canonicalizeSqlEngageSubtype(overrideSubtype || fallbackSubtype);
-
-    if (!activeHintSubtype) {
-      setActiveHintSubtype(effectiveSubtype);
+    const hintSelection = getHelpSelectionForIndex(nextHelpRequestIndex);
+    if (!hintSelection) {
+      return;
+    }
+    if (!registerHelpEvent('hint_view', nextHelpRequestIndex)) {
+      return;
     }
 
-    const nextLevel = Math.min(currentHintLevel + 1, 3);
-    const {
-      hint,
-      sqlEngageSubtypeUsed,
-      sqlEngageRowId,
-      policyVersion
-    } = orchestrator.getNextHint(
-      effectiveSubtype,
-      currentHintLevel,
-      profile,
-      `${learnerId}:${problemId}`,
-      {
-        knownSubtypeOverride: overrideSubtype,
-        isSubtypeOverrideActive: isCanonicalOverrideActive
-      }
-    );
-
-    const newHints = [...hints, hint];
-    setHints(newHints);
-    setCurrentHintLevel(nextLevel);
+    setHints((currentHints) => [...currentHints, hintSelection.hintText]);
+    setActiveHintSubtype(hintSelection.sqlEngageSubtype);
+    if (hintSelection.shouldEscalate) {
+      setShowExplanation(true);
+    }
+    const errorCount = problemTrace.filter((interaction) => interaction.eventType === 'error').length;
+    const hintCount = problemTrace.filter((interaction) => interaction.eventType === 'hint_view').length;
+    const timeSpent = problemTrace.length > 0
+      ? Date.now() - problemTrace[0].timestamp
+      : 0;
 
     // Log interaction
     const hintEvent: InteractionEvent = {
-      id: `hint-${Date.now()}`,
+      id: buildHelpEventId('hint', nextHelpRequestIndex),
       sessionId,
       learnerId,
       timestamp: Date.now(),
       eventType: 'hint_view',
       problemId,
-      hintLevel: nextLevel as 1 | 2 | 3,
-      sqlEngageSubtype: sqlEngageSubtypeUsed,
-      sqlEngageRowId,
-      policyVersion
+      hintText: hintSelection.hintText,
+      hintLevel: hintSelection.hintLevel,
+      helpRequestIndex: nextHelpRequestIndex,
+      sqlEngageSubtype: hintSelection.sqlEngageSubtype,
+      sqlEngageRowId: hintSelection.sqlEngageRowId,
+      policyVersion: hintSelection.policyVersion,
+      ruleFired: decision.ruleFired,
+      inputs: {
+        retry_count: Math.max(0, errorCount - 1),
+        hint_count: hintCount,
+        time_spent_ms: timeSpent
+      },
+      outputs: {
+        hint_level: hintSelection.hintLevel,
+        help_request_index: nextHelpRequestIndex,
+        sql_engage_subtype: hintSelection.sqlEngageSubtype,
+        sql_engage_row_id: hintSelection.sqlEngageRowId
+      }
     };
     storage.saveInteraction(hintEvent);
     onInteractionLogged?.(hintEvent);
+
+    // Escalation happens automatically after level 3 hint (recorded as help request 4).
+    if (hintSelection.shouldEscalate) {
+      setShowExplanation(true);
+      handleShowExplanation('auto', nextHelpRequestIndex + 1, [...problemTrace, hintEvent]);
+    }
   };
 
-  const handleShowExplanation = (source: 'manual' | 'auto' = 'manual') => {
+  const handleShowExplanation = (
+    source: 'auto' = 'auto',
+    forcedHelpRequestIndex?: number,
+    traceOverride?: InteractionEvent[]
+  ) => {
     if (!profile || !sessionId) {
+      return;
+    }
+    const problemTrace = traceOverride || getProblemTrace();
+    const nextHelpRequestIndex = forcedHelpRequestIndex ?? allocateNextHelpRequestIndex(problemTrace);
+    nextHelpRequestIndexRef.current = Math.max(nextHelpRequestIndexRef.current, nextHelpRequestIndex + 1);
+    const helpSelection = getHelpSelectionForIndex(nextHelpRequestIndex);
+    if (!helpSelection) {
+      return;
+    }
+    if (!registerHelpEvent('explanation_view', nextHelpRequestIndex)) {
       return;
     }
     setShowExplanation(true);
@@ -135,12 +237,8 @@ export function HintSystem({
       .reverse()
       .find((interaction) => interaction.problemId === problemId && interaction.eventType === 'error');
     const sourceInteractionIds =
-      source === 'auto'
-        ? autoEscalation.triggerErrorId
-          ? [autoEscalation.triggerErrorId]
-          : latestProblemError
-            ? [latestProblemError.id]
-            : []
+      autoEscalation.triggerErrorId
+        ? [autoEscalation.triggerErrorId]
         : latestProblemError
           ? [latestProblemError.id]
           : [];
@@ -148,14 +246,29 @@ export function HintSystem({
 
     // Log interaction
     const explanationEvent: InteractionEvent = {
-      id: `explanation-${Date.now()}-${source}`,
+      id: buildHelpEventId('explanation', nextHelpRequestIndex, source),
       sessionId,
       learnerId,
       timestamp: Date.now(),
       eventType: 'explanation_view',
       problemId,
-      errorSubtypeId: activeHintSubtype || errorSubtypeId,
-      policyVersion: getSqlEngagePolicyVersion()
+      errorSubtypeId: helpSelection.sqlEngageSubtype,
+      helpRequestIndex: nextHelpRequestIndex,
+      sqlEngageSubtype: helpSelection.sqlEngageSubtype,
+      sqlEngageRowId: helpSelection.sqlEngageRowId,
+      policyVersion: helpSelection.policyVersion,
+      ruleFired: decision.ruleFired,
+      inputs: {
+        retry_count: Math.max(0, problemTrace.filter((interaction) => interaction.eventType === 'error').length - 1),
+        hint_count: problemTrace.filter((interaction) => interaction.eventType === 'hint_view').length,
+        time_spent_ms: problemTrace.length > 0 ? Date.now() - problemTrace[0].timestamp : 0
+      },
+      outputs: {
+        explanation_requested: true,
+        help_request_index: nextHelpRequestIndex,
+        sql_engage_subtype: helpSelection.sqlEngageSubtype,
+        sql_engage_row_id: helpSelection.sqlEngageRowId
+      }
     };
     storage.saveInteraction(explanationEvent);
     onInteractionLogged?.(explanationEvent);
@@ -177,10 +290,23 @@ export function HintSystem({
   }, [profile, sessionId, autoEscalationAllowed, autoEscalation.shouldEscalate, autoEscalation.triggerErrorId]);
 
   if (!profile) return null;
+  const nextHelpRequestIndex = Math.max(
+    getNextHelpRequestIndex(getProblemTrace()),
+    nextHelpRequestIndexRef.current
+  );
+  const primaryActionLabel = nextHelpRequestIndex >= 4
+    ? 'Get More Help'
+    : hints.length === 0
+      ? 'Request Hint'
+      : 'Next Hint';
+  const helpStep = Math.min(nextHelpRequestIndex, 4);
+  const stepMessage = nextHelpRequestIndex >= 4
+    ? 'You are in explanation mode. Additional help requests provide deeper explanation support.'
+    : `Request ${helpStep} gives Hint ${helpStep}.`;
 
   return (
-    <Card className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
+    <Card className="p-4 space-y-4" data-testid="hint-panel">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
           <Lightbulb className="size-5 text-yellow-600" />
           <h3 className="font-semibold">HintWise</h3>
@@ -189,9 +315,14 @@ export function HintSystem({
           decision.decision === 'show_hint' ? 'default' :
           decision.decision === 'show_explanation' ? 'secondary' :
           'outline'
-        }>
+        } className="w-fit">
           {decision.decision.replace('_', ' ')}
         </Badge>
+      </div>
+
+      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+        <p className="font-medium">Help step {helpStep} of 4</p>
+        <p>{stepMessage}</p>
       </div>
 
       {hints.length === 0 ? (
@@ -202,41 +333,35 @@ export function HintSystem({
         <div className="space-y-3">
           {hints.map((hint, idx) => (
             <div key={idx} className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex gap-2">
-                <Badge variant="outline" className="shrink-0">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                <Badge variant="outline" className="w-fit shrink-0">
                   Hint {idx + 1}
                 </Badge>
-                <p className="text-sm text-blue-900">{hint}</p>
+                <p className="text-sm leading-relaxed text-blue-900 break-words">{hint}</p>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <Button
           onClick={handleRequestHint}
           variant="outline"
           size="sm"
-          className="flex-1"
-          disabled={currentHintLevel >= 3}
+          className="w-full sm:flex-1"
+          disabled={!profile || !sessionId}
         >
           <Lightbulb className="size-4 mr-2" />
-          {currentHintLevel >= 3 ? 'Max Hints Reached' : hints.length === 0 ? 'Request Hint' : 'Next Hint'}
+          {primaryActionLabel}
         </Button>
-
-        {(showExplanation || decision.decision === 'show_explanation') && (
-          <Button
-            onClick={handleShowExplanation}
-            variant="default"
-            size="sm"
-            className="flex-1"
-          >
-            <BookOpen className="size-4 mr-2" />
-            Show Explanation
-          </Button>
-        )}
       </div>
+
+      {showExplanation && (
+        <p className="text-xs text-emerald-700">
+          Escalation is automatic after Hint 3. Explanation has been generated.
+        </p>
+      )}
 
       {decision.reasoning && (
         <div className="text-xs text-gray-500 pt-2 border-t">

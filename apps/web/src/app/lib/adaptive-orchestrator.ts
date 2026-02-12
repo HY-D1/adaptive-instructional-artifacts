@@ -2,17 +2,24 @@ import {
   InteractionEvent, 
   AdaptiveDecision, 
   InstructionalUnit,
-  LearnerProfile 
+  LearnerProfile,
+  NextHintSelection
 } from '../types';
 import {
-  getErrorSubtype,
   getConceptById,
-  getHintsForError,
+  getConceptIdsForSqlEngageSubtype,
   canonicalizeSqlEngageSubtype,
   getDeterministicSqlEngageAnchor,
   getProgressiveSqlEngageHintText,
   getSqlEngagePolicyVersion
 } from '../data/sql-engage';
+
+const POLICY_REPLAY_EVENT_TYPES: InteractionEvent['eventType'][] = [
+  'execution',
+  'error',
+  'hint_view',
+  'explanation_view'
+];
 
 export type DecisionRuleFired =
   | 'no-errors-show-hint'
@@ -43,6 +50,8 @@ export type ReplayDecisionPoint = {
   reasoning: string;
 };
 
+export type HintSelection = NextHintSelection;
+
 /**
  * Adaptive Content Orchestrator
  * Determines when to:
@@ -53,7 +62,6 @@ export type ReplayDecisionPoint = {
 export class AdaptiveOrchestrator {
   private errorThresholds: Record<LearnerProfile['currentStrategy'], StrategyThresholds> = {
     'hint-only': { escalate: Infinity, aggregate: Infinity },
-    'adaptive': { escalate: 3, aggregate: 6 },
     'adaptive-low': { escalate: 5, aggregate: 10 },
     'adaptive-medium': { escalate: 3, aggregate: 6 },
     'adaptive-high': { escalate: 2, aggregate: 4 }
@@ -77,23 +85,12 @@ export class AdaptiveOrchestrator {
     const autoEscalation = this.getAutoEscalationState(recentInteractions, currentProblemId);
     const selection = this.selectDecision(context, thresholds, autoEscalation);
 
-    if (selection.decision === 'show_explanation') {
-      const explanation = this.generateExplanation(context.recentErrors, profile);
-      return {
-        timestamp: now,
-        learnerId: profile.id,
-        context,
-        decision: selection.decision,
-        reasoning: selection.reasoning,
-        instructionalUnitId: explanation.id
-      };
-    }
-
     return {
       timestamp: now,
       learnerId: profile.id,
       context,
       decision: selection.decision,
+      ruleFired: selection.ruleFired,
       reasoning: selection.reasoning
     };
   }
@@ -103,13 +100,12 @@ export class AdaptiveOrchestrator {
     traceSlice: InteractionEvent[],
     strategyOverride: LearnerProfile['currentStrategy']
   ): ReplayDecisionPoint[] {
-    const sortedTrace = [...traceSlice].sort((a, b) => a.timestamp - b.timestamp);
+    const sortedTrace = this.getPolicyReplayTrace(traceSlice);
     const thresholds = this.getThresholds(strategyOverride);
     const policyVersion = getSqlEngagePolicyVersion();
     const runningInteractions: InteractionEvent[] = [];
 
     return sortedTrace
-      .filter(event => Boolean(event.problemId))
       .map((event, index) => {
         runningInteractions.push(event);
         const context = this.analyzeContext(runningInteractions, event.problemId, event.timestamp);
@@ -133,6 +129,12 @@ export class AdaptiveOrchestrator {
           reasoning: selection.reasoning
         };
       });
+  }
+
+  getPolicyReplayTrace(traceSlice: InteractionEvent[]): InteractionEvent[] {
+    return [...traceSlice]
+      .filter((event) => Boolean(event.problemId) && POLICY_REPLAY_EVENT_TYPES.includes(event.eventType))
+      .sort((a, b) => a.timestamp - b.timestamp);
   }
 
   private selectDecision(
@@ -194,9 +196,6 @@ export class AdaptiveOrchestrator {
     const problemInteractions = interactions.filter(i => i.problemId === problemId);
     
     const errorInteractions = problemInteractions.filter(i => i.eventType === 'error');
-    const executionAttempts = problemInteractions.filter(
-      i => i.eventType === 'execution' || i.eventType === 'error'
-    );
     const hintViews = problemInteractions.filter(i => i.eventType === 'hint_view');
     
     const recentErrors = errorInteractions
@@ -210,7 +209,8 @@ export class AdaptiveOrchestrator {
 
     return {
       errorCount: errorInteractions.length,
-      retryCount: Math.max(0, executionAttempts.length - 1),
+      // Retry count is failed re-attempts after the first failure for this problem.
+      retryCount: Math.max(0, errorInteractions.length - 1),
       timeSpent,
       currentHintLevel: Math.min(hintViews.length, 3),
       recentErrors
@@ -272,26 +272,27 @@ export class AdaptiveOrchestrator {
     errorSubtypeIds: string[],
     profile: LearnerProfile
   ): InstructionalUnit {
-    // Find most common error
     const errorCounts = errorSubtypeIds.reduce((acc, id) => {
       acc[id] = (acc[id] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
-    const mostCommonError = Object.entries(errorCounts)
-      .sort(([, a], [, b]) => b - a)[0]?.[0];
-
-    const errorSubtype = getErrorSubtype(''); // Get from SQL-Engage
-    const hints = getHintsForError(mostCommonError || '', 3);
-    
-    // Generate comprehensive explanation
-    const content = this.generateExplanationContent(mostCommonError, hints);
+    const mostCommonSubtype = canonicalizeSqlEngageSubtype(
+      Object.entries(errorCounts).sort(([, a], [, b]) => b - a)[0]?.[0] || 'incomplete query'
+    );
+    const anchor = getDeterministicSqlEngageAnchor(
+      mostCommonSubtype,
+      `${profile.id}|${mostCommonSubtype}`
+    );
+    const conceptId = getConceptIdsForSqlEngageSubtype(mostCommonSubtype)[0] || 'select-basic';
+    const concept = getConceptById(conceptId);
+    const content = this.generateExplanationContent(mostCommonSubtype, conceptId, anchor);
 
     return {
       id: `explanation-${Date.now()}`,
       type: 'explanation',
-      conceptId: hints[0]?.conceptId || 'unknown',
-      title: `Understanding: ${errorSubtype?.description || 'SQL Concept'}`,
+      conceptId,
+      title: `Understanding: ${concept?.name || mostCommonSubtype}`,
       content,
       prerequisites: [],
       addedTimestamp: Date.now(),
@@ -303,12 +304,16 @@ export class AdaptiveOrchestrator {
    * Use LLM in controlled manner to generate explanation
    * (Template-based with constrained scope)
    */
-  private generateExplanationContent(errorSubtypeId: string, hints: any[]): string {
-    // Retrieval-first: Get validated templates
-    const conceptId = hints[0]?.conceptId;
+  private generateExplanationContent(
+    errorSubtypeId: string,
+    conceptId: string,
+    anchor?: { feedback_target: string; intended_learning_outcome: string }
+  ): string {
     const concept = getConceptById(conceptId);
+    const level1 = getProgressiveSqlEngageHintText(errorSubtypeId, 1, anchor);
+    const level2 = getProgressiveSqlEngageHintText(errorSubtypeId, 2, anchor);
+    const level3 = getProgressiveSqlEngageHintText(errorSubtypeId, 3, anchor);
 
-    // Template with constrained generation
     return `
 # ${concept?.name || 'SQL Concept'}
 
@@ -318,7 +323,9 @@ ${concept?.description || ''}
 
 You've encountered this error multiple times. Here's a deeper explanation:
 
-${hints.map(h => `- ${h.content}`).join('\n')}
+- ${level1}
+- ${level2}
+- ${level3}
 
 ## Examples
 
@@ -388,43 +395,37 @@ ${c?.examples.map((ex, i) => `${i + 1}. Review this pattern: \`${ex}\``).join('\
   getNextHint(
     errorSubtypeId: string,
     currentLevel: number,
-    _profile: LearnerProfile,
-    seed: string,
+    profile: LearnerProfile,
+    problemId: string,
     options?: {
       knownSubtypeOverride?: string;
       isSubtypeOverrideActive?: boolean;
+      helpRequestIndex?: number;
     }
-  ): {
-    hint: string;
-    shouldEscalate: boolean;
-    sqlEngageSubtypeUsed: string;
-    sqlEngageRowId: string;
-    policyVersion: string;
-  } {
-    const nextLevel = currentLevel + 1;
+  ): HintSelection {
+    const requestedLevel = Number.isFinite(options?.helpRequestIndex)
+      ? Number(options?.helpRequestIndex)
+      : currentLevel + 1;
+    const nextLevel = Math.max(1, Math.min(3, requestedLevel)) as 1 | 2 | 3;
     const policyVersion = getSqlEngagePolicyVersion();
     const effectiveSubtype = options?.isSubtypeOverrideActive
       ? options.knownSubtypeOverride || errorSubtypeId
       : errorSubtypeId;
     const canonicalSubtype = canonicalizeSqlEngageSubtype(effectiveSubtype);
-    const row = getDeterministicSqlEngageAnchor(canonicalSubtype, seed);
-    if (row) {
-      const subtypeUsed = canonicalizeSqlEngageSubtype(row.error_subtype);
-      return {
-        hint: getProgressiveSqlEngageHintText(subtypeUsed, nextLevel, row),
-        shouldEscalate: nextLevel >= 3,
-        sqlEngageSubtypeUsed: subtypeUsed,
-        sqlEngageRowId: row.rowId,
-        policyVersion
-      };
-    }
-    const fallbackRow = getDeterministicSqlEngageAnchor('incomplete query', seed);
+    const learnerKey = profile.id?.trim() || 'anonymous-learner';
+    const problemKey = problemId.trim() || 'unknown-problem';
+    const deterministicSeed = `${learnerKey}|${problemKey}|${canonicalSubtype}|L${nextLevel}`;
+    const row = getDeterministicSqlEngageAnchor(canonicalSubtype, deterministicSeed);
+    const subtypeUsed = canonicalizeSqlEngageSubtype(row.error_subtype || canonicalSubtype);
+    const rowId = row.rowId?.trim() || 'sql-engage:fallback-synthetic';
+
     return {
-      hint: getProgressiveSqlEngageHintText('incomplete query', nextLevel, fallbackRow),
-      shouldEscalate: nextLevel >= 3,
-      sqlEngageSubtypeUsed: 'incomplete query',
-      sqlEngageRowId: fallbackRow?.rowId || 'sql-engage:incomplete-query-fallback',
-      policyVersion
+      hintText: getProgressiveSqlEngageHintText(subtypeUsed, nextLevel, row),
+      sqlEngageSubtype: subtypeUsed,
+      sqlEngageRowId: rowId,
+      hintLevel: nextLevel,
+      policyVersion,
+      shouldEscalate: nextLevel >= 3
     };
   }
 }

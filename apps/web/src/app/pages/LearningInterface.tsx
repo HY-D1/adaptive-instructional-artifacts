@@ -11,6 +11,8 @@ import { SQLProblem, InteractionEvent, InstructionalUnit, LearnerProfile, Learni
 import { sqlProblems } from '../data/problems';
 import { storage } from '../lib/storage';
 import { QueryResult } from '../lib/sql-executor';
+import { orchestrator } from '../lib/adaptive-orchestrator';
+import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content-generator';
 import {
   canonicalizeSqlEngageSubtype,
   getKnownSqlEngageSubtypes,
@@ -21,7 +23,6 @@ const INSTRUCTOR_SUBTYPE_OPTIONS = getKnownSqlEngageSubtypes();
 
 const STRATEGY_OPTIONS: Array<{ value: LearnerProfile['currentStrategy']; label: string }> = [
   { value: 'hint-only', label: 'Hint Only' },
-  { value: 'adaptive', label: 'Adaptive (Legacy)' },
   { value: 'adaptive-low', label: 'Adaptive Low' },
   { value: 'adaptive-medium', label: 'Adaptive Medium' },
   { value: 'adaptive-high', label: 'Adaptive High' }
@@ -40,6 +41,9 @@ export function LearningInterface() {
   const [subtypeOverride, setSubtypeOverride] = useState('auto');
   const [escalationTriggered, setEscalationTriggered] = useState(false);
   const [notesActionMessage, setNotesActionMessage] = useState<string | undefined>();
+  const [isGeneratingUnit, setIsGeneratingUnit] = useState(false);
+  const [generationError, setGenerationError] = useState<string | undefined>();
+  const [latestGeneratedUnit, setLatestGeneratedUnit] = useState<InstructionalUnit | null>(null);
 
   useEffect(() => {
     // Initialize learner profile if doesn't exist
@@ -50,7 +54,8 @@ export function LearningInterface() {
     setStrategyOverride(profile.currentStrategy);
     setSubtypeOverride('auto');
 
-    // Start a new active session on app load / learner switch.
+    // Reset and start a new active session on app load / learner switch.
+    storage.clearActiveSession();
     const newSessionId = storage.startSession(learnerId);
     setSessionId(newSessionId);
     setInteractions(
@@ -62,6 +67,9 @@ export function LearningInterface() {
     setLastErrorEventId(undefined);
     setEscalationTriggered(false);
     setNotesActionMessage(undefined);
+    setGenerationError(undefined);
+    setLatestGeneratedUnit(null);
+    setStartTime(Date.now());
   }, [learnerId]);
 
   const handleLearnerChange = (nextLearnerId: string) => {
@@ -75,6 +83,9 @@ export function LearningInterface() {
     setLastErrorEventId(undefined);
     setEscalationTriggered(false);
     setNotesActionMessage(undefined);
+    setGenerationError(undefined);
+    setLatestGeneratedUnit(null);
+    setStartTime(Date.now());
     setLearnerId(nextLearnerId);
   };
 
@@ -107,7 +118,142 @@ export function LearningInterface() {
     setInteractions((previousInteractions) => [...previousInteractions, event]);
   };
 
-  const handleExecute = (query: string, result: QueryResult) => {
+  const collectNoteEvidenceIds = (
+    extraIds: string[] = [],
+    options?: { maxInteractions?: number }
+  ): string[] => {
+    const relevantTypes: InteractionEvent['eventType'][] = ['error', 'execution', 'hint_view', 'explanation_view'];
+    const sessionInteractions = storage
+      .getInteractionsByLearner(learnerId)
+      .filter(
+        (interaction) =>
+          interaction.sessionId === sessionId &&
+          interaction.problemId === currentProblem.id &&
+          relevantTypes.includes(interaction.eventType)
+      )
+      .map((interaction) => interaction.id);
+    const maxInteractions = options?.maxInteractions;
+    const boundedSessionInteractions =
+      typeof maxInteractions === 'number' && maxInteractions > 0
+        ? sessionInteractions.slice(-maxInteractions)
+        : sessionInteractions;
+
+    return Array.from(new Set([
+      ...(lastErrorEventId ? [lastErrorEventId] : []),
+      ...boundedSessionInteractions,
+      ...extraIds
+    ]));
+  };
+
+  const persistGeneratedUnit = async (
+    templateId: 'explanation.v1' | 'notebook_unit.v1',
+    sourceInteractionIds: string[],
+    errorSubtypeId?: string,
+    ruleFired: string = 'manual'
+  ) => {
+    const trace = storage
+      .getInteractionsByLearner(learnerId)
+      .filter((interaction) =>
+        interaction.sessionId === sessionId &&
+        interaction.problemId === currentProblem.id
+      );
+
+    const bundle = buildBundleForCurrentProblem({
+      learnerId,
+      problem: currentProblem,
+      interactions: trace,
+      triggerInteractionIds: sourceInteractionIds,
+      lastErrorSubtypeId: errorSubtypeId
+    });
+
+    const generation = await generateUnitFromLLM({
+      learnerId,
+      sessionId,
+      templateId,
+      bundle,
+      triggerInteractionIds: sourceInteractionIds
+    });
+
+    const textbookResult = storage.saveTextbookUnit(learnerId, generation.unit);
+    setLatestGeneratedUnit(textbookResult.unit);
+    const parseSuccess = generation.parseTelemetry.status === 'success';
+    const parseMode = generation.parseTelemetry.mode || null;
+    const parseFailureReason = generation.parseTelemetry.failureReason || null;
+
+    const llmEvent: InteractionEvent = {
+      id: `llm-${Date.now()}-${templateId}`,
+      sessionId,
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'llm_generate',
+      problemId: currentProblem.id,
+      templateId,
+      inputHash: generation.inputHash,
+      model: generation.model,
+      policyVersion: getSqlEngagePolicyVersion(),
+      ruleFired,
+      noteId: textbookResult.unit.id,
+      retrievedSourceIds: textbookResult.unit.provenance?.retrievedSourceIds || bundle.retrievedSourceIds,
+      triggerInteractionIds: sourceInteractionIds,
+      inputs: {
+        retry_count: bundle.recentInteractionsSummary.retries,
+        hint_count: bundle.recentInteractionsSummary.hintCount,
+        time_spent_ms: bundle.recentInteractionsSummary.timeSpent
+      },
+      outputs: {
+        note_id: textbookResult.unit.id,
+        template_id: templateId,
+        cache_hit: generation.fromCache,
+        parse_success: parseSuccess,
+        parse_mode: parseMode,
+        parse_attempts: generation.parseTelemetry.attempts,
+        parse_failure_reason: parseFailureReason,
+        fallback_used: generation.usedFallback,
+        fallback_reason: generation.fallbackReason
+      }
+    };
+    storage.saveInteraction(llmEvent);
+    setInteractions((previousInteractions) => [...previousInteractions, llmEvent]);
+
+    const textbookEvent: InteractionEvent = {
+      id: `textbook-${Date.now()}-${templateId}`,
+      sessionId,
+      learnerId,
+      timestamp: Date.now(),
+      eventType: textbookResult.action === 'created' ? 'textbook_add' : 'textbook_update',
+      problemId: currentProblem.id,
+      noteId: textbookResult.unit.id,
+      templateId,
+      inputHash: generation.inputHash,
+      model: generation.model,
+      policyVersion: getSqlEngagePolicyVersion(),
+      ruleFired,
+      retrievedSourceIds: textbookResult.unit.provenance?.retrievedSourceIds || bundle.retrievedSourceIds,
+      triggerInteractionIds: sourceInteractionIds,
+      inputs: {
+        retry_count: bundle.recentInteractionsSummary.retries,
+        hint_count: bundle.recentInteractionsSummary.hintCount,
+        time_spent_ms: bundle.recentInteractionsSummary.timeSpent
+      },
+      outputs: {
+        note_id: textbookResult.unit.id,
+        textbook_action: textbookResult.action,
+        template_id: templateId,
+        parse_success: parseSuccess,
+        parse_mode: parseMode,
+        parse_attempts: generation.parseTelemetry.attempts,
+        parse_failure_reason: parseFailureReason,
+        fallback_used: generation.usedFallback,
+        fallback_reason: generation.fallbackReason
+      }
+    };
+    storage.saveInteraction(textbookEvent);
+    setInteractions((previousInteractions) => [...previousInteractions, textbookEvent]);
+
+    return { generation, textbookResult };
+  };
+
+  const handleExecute = async (query: string, result: QueryResult) => {
     const resolvedSubtype = !result.success
       ? canonicalizeSqlEngageSubtype(instructorSubtypeOverride || result.errorSubtypeId)
       : undefined;
@@ -134,6 +280,7 @@ export function LearningInterface() {
       setLastError(resolvedSubtype);
       setLastErrorEventId(event.id);
       setNotesActionMessage(undefined);
+      setGenerationError(undefined);
     }
 
     if (result.success) {
@@ -141,14 +288,77 @@ export function LearningInterface() {
       setLastErrorEventId(undefined);
       setEscalationTriggered(false);
       setNotesActionMessage(undefined);
+      setGenerationError(undefined);
+      setLatestGeneratedUnit(null);
+      return;
+    }
+
+    const profile = storage.getProfile(learnerId);
+    if (!profile) {
+      return;
+    }
+
+    const scopedInteractions = storage
+      .getInteractionsByLearner(learnerId)
+      .filter((interaction) =>
+        interaction.sessionId === sessionId &&
+        interaction.problemId === currentProblem.id
+      );
+    const decision = orchestrator.makeDecision(profile, scopedInteractions, currentProblem.id);
+
+    if (decision.decision === 'add_to_textbook' && resolvedSubtype) {
+      const sourceIds = collectNoteEvidenceIds([event.id]);
+      setIsGeneratingUnit(true);
+      setGenerationError(undefined);
+      try {
+        const { textbookResult } = await persistGeneratedUnit(
+          'notebook_unit.v1',
+          sourceIds,
+          resolvedSubtype,
+          decision.ruleFired || 'aggregation-threshold-met'
+        );
+        setNotesActionMessage(
+          textbookResult.action === 'created'
+            ? 'Policy added a note to My Textbook.'
+            : 'Policy refreshed an existing note in My Textbook.'
+        );
+      } catch (error) {
+        setGenerationError((error as Error).message);
+      } finally {
+        setIsGeneratingUnit(false);
+      }
     }
   };
 
   const handleEscalate = (sourceInteractionIds?: string[]) => {
     setEscalationTriggered(true);
+    const sourceIds = sourceInteractionIds && sourceInteractionIds.length > 0
+      ? sourceInteractionIds
+      : collectNoteEvidenceIds([], { maxInteractions: 8 });
     if (sourceInteractionIds && sourceInteractionIds.length > 0) {
       setLastErrorEventId(sourceInteractionIds[sourceInteractionIds.length - 1]);
     }
+
+    if (!lastError) {
+      return;
+    }
+
+    setIsGeneratingUnit(true);
+    setGenerationError(undefined);
+    void persistGeneratedUnit('explanation.v1', sourceIds, lastError, 'show-explanation-escalation')
+      .then(({ textbookResult }) => {
+        setNotesActionMessage(
+          textbookResult.action === 'created'
+            ? 'Explanation generated automatically.'
+            : 'Explanation refreshed automatically.'
+        );
+      })
+      .catch((error) => {
+        setGenerationError((error as Error).message);
+      })
+      .finally(() => {
+        setIsGeneratingUnit(false);
+      });
   };
 
   const handleHintSystemInteraction = (event: InteractionEvent) => {
@@ -158,53 +368,37 @@ export function LearningInterface() {
     if (sessionId && event.sessionId && event.sessionId !== sessionId) {
       return;
     }
-    setInteractions((previousInteractions) => [...previousInteractions, event]);
+    setInteractions((previousInteractions) => {
+      if (previousInteractions.some((existing) => existing.id === event.id)) {
+        return previousInteractions;
+      }
+      return [...previousInteractions, event];
+    });
   };
 
-  const collectNoteEvidenceIds = (): string[] => {
-    const relevantTypes: InteractionEvent['eventType'][] = ['error', 'execution', 'hint_view', 'explanation_view'];
-    const sessionInteractions = storage
-      .getInteractionsByLearner(learnerId)
-      .filter(
-        (interaction) =>
-          interaction.sessionId === sessionId &&
-          interaction.problemId === currentProblem.id &&
-          relevantTypes.includes(interaction.eventType)
-      )
-      .map((interaction) => interaction.id);
-
-    return Array.from(new Set([...(lastErrorEventId ? [lastErrorEventId] : []), ...sessionInteractions]));
-  };
-
-  const generateExplanationUnit = (errorSubtypeId: string, sourceInteractionIds: string[]): InstructionalUnit => {
-    const normalizedSubtype = canonicalizeSqlEngageSubtype(errorSubtypeId);
-    const conceptId = currentProblem.concepts[0] || 'unknown-concept';
-    return {
-      id: `unit-${Date.now()}`,
-      sessionId,
-      updatedSessionIds: sessionId ? [sessionId] : [],
-      type: 'explanation',
-      conceptId,
-      title: `Help with ${currentProblem.title}`,
-      content: `This note was added from escalation for "${currentProblem.title}". Last detected issue: "${normalizedSubtype}". Review this concept and retry with a minimal valid SELECT structure before adding clauses.`,
-      prerequisites: [],
-      addedTimestamp: Date.now(),
-      sourceInteractionIds
-    };
-  };
-
-  const handleAddToNotes = () => {
+  const handleAddToNotes = async () => {
     if (!lastError) return;
 
-    const sourceIds = collectNoteEvidenceIds();
-    const explanation = generateExplanationUnit(lastError, sourceIds);
-    const result = storage.saveTextbookUnit(learnerId, explanation);
-    const evidenceCount = result.unit.sourceInteractionIds.length;
-    setNotesActionMessage(
-      result.action === 'created'
-        ? `Added to My Notes (${evidenceCount} evidence interaction${evidenceCount === 1 ? '' : 's'}).`
-        : `Updated existing note (${evidenceCount} merged evidence interaction${evidenceCount === 1 ? '' : 's'}).`
-    );
+    const sourceIds = collectNoteEvidenceIds([], { maxInteractions: 12 });
+    setIsGeneratingUnit(true);
+    setGenerationError(undefined);
+    try {
+      const { textbookResult } = await persistGeneratedUnit(
+        'notebook_unit.v1',
+        sourceIds,
+        lastError,
+        'manual-add-to-notes'
+      );
+      setNotesActionMessage(
+        textbookResult.action === 'created'
+          ? 'Added to My Notes.'
+          : 'Updated existing My Notes entry.'
+      );
+    } catch (error) {
+      setGenerationError((error as Error).message);
+    } finally {
+      setIsGeneratingUnit(false);
+    }
   };
 
   const learnerSessionInteractions = interactions.filter(
@@ -215,18 +409,25 @@ export function LearningInterface() {
   const problemInteractions = learnerSessionInteractions.filter(i => i.problemId === currentProblem.id);
   const showAddToNotes = escalationTriggered && !!lastError;
   const errorCount = problemInteractions.filter(i => i.eventType === 'error').length;
+  const totalAttempts = problemInteractions.filter(
+    (interaction) => interaction.eventType === 'execution' || interaction.eventType === 'error'
+  ).length;
+  const hintViewsCount = problemInteractions.filter((interaction) => interaction.eventType === 'hint_view').length;
+  const helpRequestsCount = problemInteractions.filter(
+    (interaction) => interaction.eventType === 'hint_view' || interaction.eventType === 'explanation_view'
+  ).length;
   const timeSpent = Date.now() - startTime;
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="border-b bg-white">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h1 className="text-2xl font-bold">SQL Learning Lab</h1>
               <p className="text-gray-600 text-sm">Adaptive instructional system with HintWise</p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
               <div className="flex items-center gap-2">
                 <Clock className="size-4 text-gray-500" />
                 <span className="text-sm">
@@ -234,7 +435,7 @@ export function LearningInterface() {
                 </span>
               </div>
               <Select value={mode} onValueChange={(value) => setMode(value as LearningInterfaceMode)}>
-                <SelectTrigger className="w-[150px]">
+                <SelectTrigger className="w-full sm:w-[150px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -243,7 +444,7 @@ export function LearningInterface() {
                 </SelectContent>
               </Select>
               <Select value={learnerId} onValueChange={handleLearnerChange}>
-                <SelectTrigger className="w-[200px]">
+                <SelectTrigger className="w-full sm:w-[200px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -260,17 +461,17 @@ export function LearningInterface() {
       <div className="container mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main problem area */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="lg:col-span-2 space-y-4 min-w-0">
             <Card className="p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
+              <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
                     <h2 className="text-xl font-bold">{currentProblem.title}</h2>
                     <Badge variant={
                       currentProblem.difficulty === 'beginner' ? 'default' :
                       currentProblem.difficulty === 'intermediate' ? 'secondary' :
                       'destructive'
-                    }>
+                    } className="w-fit">
                       {currentProblem.difficulty}
                     </Badge>
                   </div>
@@ -286,9 +487,11 @@ export function LearningInterface() {
                     setLastErrorEventId(undefined);
                     setEscalationTriggered(false);
                     setNotesActionMessage(undefined);
+                    setGenerationError(undefined);
+                    setLatestGeneratedUnit(null);
                   }}
                 >
-                  <SelectTrigger className="w-[200px]">
+                  <SelectTrigger className="w-full lg:w-[220px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -301,7 +504,7 @@ export function LearningInterface() {
                 </Select>
               </div>
 
-              <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
+              <div className="mb-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
                 <div className="flex items-center gap-1">
                   <AlertCircle className="size-4" />
                   <span>{errorCount} errors</span>
@@ -374,8 +577,9 @@ export function LearningInterface() {
           </div>
 
           {/* Sidebar with hints */}
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             <HintSystem
+              key={`${learnerId}:${sessionId}:${currentProblem.id}:${instructorSubtypeOverride || 'auto'}`}
               sessionId={sessionId}
               learnerId={learnerId}
               problemId={currentProblem.id}
@@ -392,14 +596,30 @@ export function LearningInterface() {
                 <div>
                   <h3 className="font-semibold">Escalation</h3>
                   <p className="text-sm text-gray-600">
-                    Add this concept to My Notes with merged evidence IDs from this session.
+                    Explanations are generated automatically after Hint 3. Add to My Notes to save a reflective notebook unit.
                   </p>
                 </div>
-                <Button onClick={handleAddToNotes} size="sm" className="w-full">
-                  Add to My Notes
+                <Button onClick={handleAddToNotes} size="sm" className="w-full" disabled={isGeneratingUnit}>
+                  {isGeneratingUnit ? 'Generating...' : 'Add to My Notes'}
                 </Button>
+                {isGeneratingUnit && (
+                  <p className="text-xs text-gray-500">Generating grounded content from retrieved sources...</p>
+                )}
+                {generationError && (
+                  <p className="text-xs text-amber-700">{generationError}</p>
+                )}
                 {notesActionMessage && (
                   <p className="text-xs text-gray-600">{notesActionMessage}</p>
+                )}
+                {latestGeneratedUnit && (
+                  <div className="rounded border bg-slate-50 p-2">
+                    <p className="text-xs font-medium text-slate-700">{latestGeneratedUnit.title}</p>
+                    {latestGeneratedUnit.provenance && (
+                      <p className="text-[11px] text-slate-600 mt-1">
+                        {latestGeneratedUnit.provenance.templateId} • {latestGeneratedUnit.provenance.model}
+                      </p>
+                    )}
+                  </div>
                 )}
               </Card>
             )}
@@ -419,22 +639,20 @@ export function LearningInterface() {
 
             <Card className="p-4">
               <h3 className="font-semibold mb-3">Session Stats</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Total attempts:</span>
-                  <span className="font-medium">{problemInteractions.length}</span>
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 text-sm">
+                <div className="text-gray-600">Total attempts:</div>
+                <div className="font-medium text-right">{totalAttempts}</div>
+                <div className="text-gray-600">Hints viewed:</div>
+                <div className="font-medium text-right">{hintViewsCount}</div>
+                <div className="text-gray-600">Help requests:</div>
+                <div className="font-medium text-right">{helpRequestsCount}</div>
+                <div className="text-gray-600">Session ID:</div>
+                <div className="max-w-[180px] break-all text-right text-[11px] font-medium text-gray-700 sm:max-w-[220px] sm:text-xs">
+                  {sessionId || 'pending'}
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Hints viewed:</span>
-                  <span className="font-medium">
-                    {problemInteractions.filter(i => i.eventType === 'hint_view').length}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600">Time spent:</span>
-                  <span className="font-medium">
-                    {Math.floor(timeSpent / 60000)}m {Math.floor((timeSpent % 60000) / 1000)}s
-                  </span>
+                <div className="text-gray-600">Time spent:</div>
+                <div className="font-medium text-right">
+                  {Math.floor(timeSpent / 60000)}m {Math.floor((timeSpent % 60000) / 1000)}s
                 </div>
               </div>
             </Card>

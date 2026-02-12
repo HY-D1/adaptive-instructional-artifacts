@@ -28,6 +28,7 @@ import { Download, Play, RefreshCw, Users, Activity } from 'lucide-react';
 import { storage } from '../lib/storage';
 import { InteractionEvent, LearnerProfile, ExperimentCondition } from '../types';
 import { orchestrator, ReplayDecisionPoint } from '../lib/adaptive-orchestrator';
+import { checkOllamaHealth, OLLAMA_MODEL } from '../lib/llm-client';
 
 const experimentConditions: ExperimentCondition[] = [
   {
@@ -71,19 +72,44 @@ export function ResearchDashboard() {
   const [isReplaying, setIsReplaying] = useState(false);
   const [replayNonce, setReplayNonce] = useState(0);
   const [exportAllHistory, setExportAllHistory] = useState(false);
+  const [isCheckingLLM, setIsCheckingLLM] = useState(false);
+  const [llmHealthMessage, setLlmHealthMessage] = useState('Not checked. Click "Test LLM" to verify local Ollama.');
+  const [llmHealthOk, setLlmHealthOk] = useState<boolean | null>(null);
+  const [policyReplayMode, setPolicyReplayMode] = useState(storage.getPolicyReplayMode());
+  const [pdfIndexSummary, setPdfIndexSummary] = useState<string>('No PDF index loaded');
 
   useEffect(() => {
     loadData();
   }, []);
 
+  useEffect(() => {
+    storage.setPolicyReplayMode(policyReplayMode);
+  }, [policyReplayMode]);
+
   const loadData = () => {
     setInteractions(storage.getAllInteractions());
-    const loadedProfiles = storage.getAllProfiles() as LearnerProfile[];
+    const loadedProfiles = storage
+      .getAllProfiles()
+      .map((profile: { id: string }) => storage.getProfile(profile.id))
+      .filter((profile): profile is LearnerProfile => Boolean(profile));
     setProfiles(loadedProfiles);
+    setPolicyReplayMode(storage.getPolicyReplayMode());
+    const pdfIndex = storage.getPdfIndex();
+    if (pdfIndex) {
+      setPdfIndexSummary(`${pdfIndex.sourceName} (${pdfIndex.chunks.length} chunks)`);
+    } else {
+      setPdfIndexSummary('No PDF index loaded');
+    }
     if (!selectedTraceLearner && loadedProfiles[0]) {
       setSelectedTraceLearner(loadedProfiles[0].id);
     }
   };
+
+  useEffect(() => {
+    if (selectedLearner !== 'all' && !profiles.some((profile) => profile.id === selectedLearner)) {
+      setSelectedLearner('all');
+    }
+  }, [profiles, selectedLearner]);
 
   useEffect(() => {
     if (!selectedTraceLearner && profiles[0]) {
@@ -96,7 +122,9 @@ export function ResearchDashboard() {
   }, [profiles, selectedTraceLearner]);
 
   const handleExport = () => {
-    const data = storage.exportData({ allHistory: exportAllHistory });
+    const data = exportAllHistory
+      ? storage.exportAllData()
+      : storage.exportData();
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -104,6 +132,21 @@ export function ResearchDashboard() {
     a.download = `sql-learning-data-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleLLMHealthCheck = async () => {
+    setIsCheckingLLM(true);
+    setLlmHealthMessage('Checking local Ollama...');
+    try {
+      const status = await checkOllamaHealth();
+      setLlmHealthMessage(status.message);
+      setLlmHealthOk(status.ok);
+    } catch (error) {
+      setLlmHealthOk(false);
+      setLlmHealthMessage(`LLM health check failed unexpectedly: ${(error as Error).message}`);
+    } finally {
+      setIsCheckingLLM(false);
+    }
   };
 
   const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,9 +158,31 @@ export function ResearchDashboard() {
       try {
         const data = JSON.parse(e.target?.result as string);
         storage.importData(data);
+        setExportAllHistory(false);
         loadData();
       } catch (error) {
         alert('Error importing data');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handlePdfIndexImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target?.result as string);
+        if (!data || !Array.isArray(data.chunks)) {
+          throw new Error('Invalid PDF index format');
+        }
+        storage.savePdfIndex(data);
+        const sourceName = data.sourceName || file.name;
+        setPdfIndexSummary(`${sourceName} (${data.chunks.length} chunks)`);
+      } catch {
+        alert('Error importing PDF index JSON');
       }
     };
     reader.readAsText(file);
@@ -157,6 +222,9 @@ export function ResearchDashboard() {
     const errorCount = learnerInteractions.filter(i => i.eventType === 'error').length;
     const hintCount = learnerInteractions.filter(i => i.eventType === 'hint_view').length;
     const successCount = learnerInteractions.filter(i => i.eventType === 'execution' && i.successful).length;
+    const escalationCount = learnerInteractions.filter(i => i.eventType === 'explanation_view').length;
+    const unitsAddedCount = learnerInteractions.filter(i => i.eventType === 'textbook_add').length;
+    const unitUpdateCount = learnerInteractions.filter(i => i.eventType === 'textbook_update').length;
 
     if (!acc[profile.currentStrategy]) {
       acc[profile.currentStrategy] = {
@@ -164,6 +232,9 @@ export function ResearchDashboard() {
         totalErrors: 0,
         totalHints: 0,
         totalSuccess: 0,
+        totalEscalations: 0,
+        totalUnitsAdded: 0,
+        totalUnitUpdates: 0,
         learnerCount: 0
       };
     }
@@ -171,16 +242,27 @@ export function ResearchDashboard() {
     acc[profile.currentStrategy].totalErrors += errorCount;
     acc[profile.currentStrategy].totalHints += hintCount;
     acc[profile.currentStrategy].totalSuccess += successCount;
+    acc[profile.currentStrategy].totalEscalations += escalationCount;
+    acc[profile.currentStrategy].totalUnitsAdded += unitsAddedCount;
+    acc[profile.currentStrategy].totalUnitUpdates += unitUpdateCount;
     acc[profile.currentStrategy].learnerCount += 1;
 
     return acc;
   }, {} as Record<string, any>);
 
+  const safeAverage = (total: number, count: number, digits = 1) => (
+    count > 0 ? (total / count).toFixed(digits) : (0).toFixed(digits)
+  );
   const comparisonData = Object.values(strategyComparison).map((s: any) => ({
     strategy: s.strategy.replace(/-/g, ' '),
-    avgErrors: (s.totalErrors / s.learnerCount).toFixed(1),
-    avgHints: (s.totalHints / s.learnerCount).toFixed(1),
-    avgSuccess: (s.totalSuccess / s.learnerCount).toFixed(1)
+    avgErrors: safeAverage(s.totalErrors, s.learnerCount),
+    avgHints: safeAverage(s.totalHints, s.learnerCount),
+    avgSuccess: safeAverage(s.totalSuccess, s.learnerCount),
+    avgEscalations: safeAverage(s.totalEscalations, s.learnerCount),
+    avgUnitsAdded: safeAverage(s.totalUnitsAdded, s.learnerCount),
+    avgDedupRate: s.totalUnitsAdded + s.totalUnitUpdates > 0
+      ? (s.totalUnitUpdates / (s.totalUnitsAdded + s.totalUnitUpdates)).toFixed(2)
+      : '0.00'
   }));
 
   const sortedTimelineInteractions = filteredInteractions
@@ -233,24 +315,24 @@ export function ResearchDashboard() {
     });
   }, [selectedTraceLearner, selectedTraceProblem, traceWindow, interactions, replayNonce]);
 
-  const replayTraceSlice = useMemo(() => (
-    // Keep replay counterfactual inputs policy-neutral for baseline comparison.
-    traceSlice.filter((event) => event.eventType !== 'explanation_view')
-  ), [traceSlice]);
+  const replayPolicyTrace = useMemo(
+    () => orchestrator.getPolicyReplayTrace(traceSlice),
+    [traceSlice]
+  );
 
   const replayDecisions = useMemo<ReplayDecisionPoint[]>(() => {
-    if (!selectedTraceProfile || replayTraceSlice.length === 0) return [];
+    if (!selectedTraceProfile || replayPolicyTrace.length === 0) return [];
     return orchestrator.replayDecisionTrace(
       selectedTraceProfile,
-      replayTraceSlice,
+      replayPolicyTrace,
       selectedReplayStrategy
     );
-  }, [selectedTraceProfile, replayTraceSlice, selectedReplayStrategy]);
+  }, [selectedTraceProfile, replayPolicyTrace, selectedReplayStrategy]);
 
   const hintOnlyDecisions = useMemo<ReplayDecisionPoint[]>(() => {
-    if (!selectedTraceProfile || replayTraceSlice.length === 0) return [];
-    return orchestrator.replayDecisionTrace(selectedTraceProfile, replayTraceSlice, 'hint-only');
-  }, [selectedTraceProfile, replayTraceSlice]);
+    if (!selectedTraceProfile || replayPolicyTrace.length === 0) return [];
+    return orchestrator.replayDecisionTrace(selectedTraceProfile, replayPolicyTrace, 'hint-only');
+  }, [selectedTraceProfile, replayPolicyTrace]);
 
   const hintOnlyByIndex = useMemo(() => {
     return hintOnlyDecisions.reduce((acc, point) => {
@@ -266,10 +348,12 @@ export function ResearchDashboard() {
   const replayPolicyVersion = replayDecisions[0]?.policyVersion || 'n/a';
 
   const activeThresholds = orchestrator.getThresholds(selectedReplayStrategy);
-  const traceStartTime = replayTraceSlice[0]?.timestamp;
+  const traceStartTime = replayPolicyTrace[0]?.timestamp;
 
   const formatThreshold = (value: number) => (Number.isFinite(value) ? String(value) : 'never');
   const formatDecision = (decision: ReplayDecisionPoint['decision']) => decision.replace(/_/g, ' ');
+  const formatEventType = (eventType: InteractionEvent['eventType']) => eventType.replace(/_/g, ' ');
+  const formatSubtype = (subtype?: string) => subtype ? subtype.replace(/-/g, ' ') : '-';
 
   const handleReplay = () => {
     setIsReplaying(true);
@@ -298,7 +382,7 @@ export function ResearchDashboard() {
                 checked={exportAllHistory}
                 onChange={(e) => setExportAllHistory(e.target.checked)}
               />
-              Export all history
+              Include all history
             </label>
             <label>
               <input
@@ -315,6 +399,62 @@ export function ResearchDashboard() {
               <RefreshCw className="size-4" />
             </Button>
           </div>
+        </div>
+        <p
+          className="mb-4 text-xs text-gray-600"
+          data-testid="export-scope-label"
+        >
+          Export scope: {exportAllHistory ? 'all history' : 'active session (default)'}
+        </p>
+
+        <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <Card className="p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">LLM Health Check</p>
+                <p className="text-xs text-gray-500">Target model: {OLLAMA_MODEL}</p>
+                <p className={`text-xs ${llmHealthOk === null ? 'text-gray-600' : llmHealthOk ? 'text-emerald-700' : 'text-red-700'}`}>
+                  {llmHealthMessage}
+                </p>
+              </div>
+              <Button size="sm" variant="outline" onClick={handleLLMHealthCheck} disabled={isCheckingLLM}>
+                {isCheckingLLM ? 'Checking...' : 'Test LLM'}
+              </Button>
+            </div>
+          </Card>
+          <Card className="p-3">
+            <label className="flex items-center justify-between gap-2 text-sm">
+              <div>
+                <p className="font-medium">Policy Replay Mode</p>
+                <p className="text-xs text-gray-600">Disables live LLM calls and uses cache/fallback only.</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={policyReplayMode}
+                onChange={(event) => setPolicyReplayMode(event.target.checked)}
+              />
+            </label>
+          </Card>
+          <Card className="p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-medium">PDF Retrieval Index</p>
+                <p className="text-xs text-gray-600" data-testid="pdf-index-summary">{pdfIndexSummary}</p>
+              </div>
+              <label>
+                <input
+                  type="file"
+                  accept=".json"
+                  onChange={handlePdfIndexImport}
+                  data-testid="pdf-index-file-input"
+                  className="hidden"
+                />
+                <Button variant="outline" size="sm" asChild>
+                  <span>Load Index</span>
+                </Button>
+              </label>
+            </div>
+          </Card>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -433,18 +573,29 @@ export function ResearchDashboard() {
               ))}
             </div>
             {comparisonData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={comparisonData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="strategy" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="avgErrors" fill="#ef4444" name="Avg Errors" />
-                  <Bar dataKey="avgHints" fill="#eab308" name="Avg Hints" />
-                  <Bar dataKey="avgSuccess" fill="#22c55e" name="Avg Success" />
-                </BarChart>
-              </ResponsiveContainer>
+              <>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={comparisonData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="strategy" />
+                    <YAxis />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="avgErrors" fill="#ef4444" name="Avg Errors" />
+                    <Bar dataKey="avgHints" fill="#eab308" name="Avg Hints" />
+                    <Bar dataKey="avgSuccess" fill="#22c55e" name="Avg Success" />
+                    <Bar dataKey="avgEscalations" fill="#6366f1" name="Avg Escalations" />
+                    <Bar dataKey="avgUnitsAdded" fill="#0ea5e9" name="Avg Units Added" />
+                  </BarChart>
+                </ResponsiveContainer>
+                <div className="mt-4 text-sm text-gray-700 space-y-1">
+                  {comparisonData.map((row: any) => (
+                    <p key={row.strategy}>
+                      {row.strategy}: dedup rate {row.avgDedupRate}
+                    </p>
+                  ))}
+                </div>
+              </>
             ) : (
               <p className="text-gray-500 text-center py-8">
                 No comparison data available. Add more learners with different strategies.
@@ -578,51 +729,55 @@ export function ResearchDashboard() {
             </p>
 
             {replayDecisions.length > 0 ? (
-              <Table data-testid="trace-events-table">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>#</TableHead>
-                    <TableHead>t(s)</TableHead>
-                    <TableHead>event</TableHead>
-                    <TableHead>error subtype</TableHead>
-                    <TableHead>context (E/R/H)</TableHead>
-                    <TableHead>decision</TableHead>
-                    <TableHead>hint-only</TableHead>
-                    <TableHead>rule fired</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody data-testid="trace-events-table-body">
-                  {replayDecisions.map((point) => {
-                    const baseline = hintOnlyByIndex[point.index];
-                    const decisionChanged = baseline && baseline.decision !== point.decision;
-                    const elapsedSeconds = traceStartTime
-                      ? Math.max(0, Math.round((point.timestamp - traceStartTime) / 1000))
-                      : 0;
+              <div className="overflow-x-auto rounded border">
+                <Table data-testid="trace-events-table">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>#</TableHead>
+                      <TableHead>t(s)</TableHead>
+                      <TableHead>event</TableHead>
+                      <TableHead>error subtype</TableHead>
+                      <TableHead>context (E/R/H)</TableHead>
+                      <TableHead>decision</TableHead>
+                      <TableHead>hint-only</TableHead>
+                      <TableHead>rule fired</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody data-testid="trace-events-table-body">
+                    {replayDecisions.map((point) => {
+                      const baseline = hintOnlyByIndex[point.index];
+                      const decisionChanged = baseline && baseline.decision !== point.decision;
+                      const elapsedSeconds = typeof traceStartTime === 'number'
+                        ? Math.max(0, Math.round((point.timestamp - traceStartTime) / 1000))
+                        : 0;
 
-                    return (
-                      <TableRow
-                        key={`${point.eventId}-${point.index}`}
-                        className={decisionChanged ? 'bg-amber-50/80' : undefined}
-                      >
-                        <TableCell>{point.index}</TableCell>
-                        <TableCell>{elapsedSeconds}</TableCell>
-                        <TableCell>{point.eventType}</TableCell>
-                        <TableCell>{point.errorSubtypeId || '-'}</TableCell>
-                        <TableCell>
-                          {point.context.errorCount}/{point.context.retryCount}/{point.context.currentHintLevel}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={point.decision === 'show_explanation' ? 'secondary' : 'outline'}>
-                            {formatDecision(point.decision)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{baseline ? formatDecision(baseline.decision) : '-'}</TableCell>
-                        <TableCell title={point.reasoning}>{point.ruleFired}</TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                      return (
+                        <TableRow
+                          key={`${point.eventId || 'event'}-${point.timestamp}-${point.index}`}
+                          className={decisionChanged ? 'bg-amber-50/80' : undefined}
+                        >
+                          <TableCell className="font-mono text-xs">{point.index}</TableCell>
+                          <TableCell className="font-mono text-xs">{elapsedSeconds}</TableCell>
+                          <TableCell className="whitespace-nowrap">{formatEventType(point.eventType)}</TableCell>
+                          <TableCell className="whitespace-nowrap">{formatSubtype(point.errorSubtypeId)}</TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {point.context.errorCount}/{point.context.retryCount}/{point.context.currentHintLevel}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={point.decision === 'show_explanation' ? 'secondary' : 'outline'}>
+                              {formatDecision(point.decision)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap">{baseline ? formatDecision(baseline.decision) : '-'}</TableCell>
+                          <TableCell title={point.reasoning}>
+                            <span className="font-mono text-xs">{point.ruleFired}</span>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             ) : (
               <p className="text-gray-500 text-center py-8">
                 No trace events for this learner/problem slice.

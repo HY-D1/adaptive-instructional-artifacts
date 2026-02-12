@@ -18,6 +18,13 @@ const isLearnerId = (value: string | null): value is LearnerId =>
 const getSubtypeLabel = (interaction: InteractionEvent) =>
   interaction.sqlEngageSubtype || interaction.errorSubtypeId || 'unknown-subtype';
 
+const TRACE_ATTEMPT_EVENT_TYPES: InteractionEvent['eventType'][] = [
+  'execution',
+  'error',
+  'hint_view',
+  'explanation_view'
+];
+
 export function TextbookPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -83,12 +90,18 @@ export function TextbookPage() {
     return `/textbook?${next.toString()}#trace-attempts`;
   }, [searchParams, learnerId, selectedUnitId]);
 
-  const learnerInteractions = useMemo(
+  const learnerInteractionsAll = useMemo(
     () => storage
       .getInteractionsByLearner(learnerId)
       .sort((a, b) => b.timestamp - a.timestamp),
     [learnerId]
   );
+  const learnerInteractions = useMemo(
+    () => learnerInteractionsAll.filter((interaction) => TRACE_ATTEMPT_EVENT_TYPES.includes(interaction.eventType)),
+    [learnerInteractionsAll]
+  );
+  const selectedAttemptExists = !selectedAttemptId
+    || learnerInteractionsAll.some((interaction) => interaction.id === selectedAttemptId);
 
   const subtypeOptions = useMemo(
     () => Array.from(new Set(learnerInteractions.map(getSubtypeLabel))).sort(),
@@ -155,6 +168,11 @@ export function TextbookPage() {
               <p className="text-xs text-gray-600">Filterable attempt log for evidence link targets</p>
             </div>
             <div className="flex items-center gap-2">
+              {selectedAttemptId && !selectedAttemptExists && (
+                <Badge variant="outline" className="text-xs text-amber-800 border-amber-300">
+                  Selected evidence reference not found
+                </Badge>
+              )}
               {selectedAttemptId && (
                 <Badge variant="secondary" className="text-xs">
                   Attempt: {selectedAttemptId}

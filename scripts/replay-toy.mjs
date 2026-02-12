@@ -11,8 +11,9 @@ const FIXTURE_PATH = path.join(REPO_ROOT, 'apps/web/src/app/data/toy-replay-fixt
 const SQL_ENGAGE_TS_PATH = path.join(REPO_ROOT, 'apps/web/src/app/data/sql-engage.ts');
 const SQL_ENGAGE_CSV_PATH = path.join(REPO_ROOT, 'apps/web/src/app/data/sql_engage_dataset.csv');
 const OUTPUT_PATH = path.join(REPO_ROOT, 'dist/replay/toy-replay-output.json');
-const REPLAY_HARNESS_VERSION = 'toy-replay-harness-v2';
-const REPLAY_POLICY_SEMANTICS_VERSION = 'orchestrator-aligned-v1';
+const REPLAY_HARNESS_VERSION = 'toy-replay-harness-v3';
+const REPLAY_POLICY_SEMANTICS_VERSION = 'orchestrator-aligned-v2';
+const POLICY_ATTEMPT_OUTCOMES = new Set(['error', 'success']);
 
 const ALIASES = {
   'unknown column': 'undefined column',
@@ -71,7 +72,6 @@ const POLICIES = [
 
 const STRATEGY_THRESHOLDS = {
   'hint-only': { escalate: Number.POSITIVE_INFINITY, aggregate: Number.POSITIVE_INFINITY },
-  adaptive: { escalate: 3, aggregate: 6 },
   'adaptive-low': { escalate: 5, aggregate: 10 },
   'adaptive-medium': { escalate: 3, aggregate: 6 },
   'adaptive-high': { escalate: 2, aggregate: 4 }
@@ -87,6 +87,36 @@ function stableHash(input) {
 
 function deterministicId(prefix, seed) {
   return `${prefix}-${stableHash(seed).toString(16).padStart(8, '0')}`;
+}
+
+function stableSerialize(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableSerialize(item)).join(',')}]`;
+  }
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value).sort(([a], [b]) => a.localeCompare(b));
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableSerialize(item)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function stableChecksum(value) {
+  const normalized = JSON.parse(JSON.stringify(value));
+  return crypto.createHash('sha256').update(stableSerialize(normalized)).digest('hex');
+}
+
+function normalizeFixtureForPolicyReplay(fixture) {
+  const learners = (fixture.learners || []).map((learner) => ({
+    ...learner,
+    attempts: (learner.attempts || [])
+      .filter((attempt) => POLICY_ATTEMPT_OUTCOMES.has(attempt?.outcome))
+      .sort((a, b) => {
+        const offsetDelta = a.offsetMs - b.offsetMs;
+        if (offsetDelta !== 0) return offsetDelta;
+        return String(a.attemptId || '').localeCompare(String(b.attemptId || ''));
+      })
+  }));
+  return { ...fixture, learners };
 }
 
 function parseCsvLine(line) {
@@ -218,9 +248,6 @@ function parseSqlEngagePolicyVersion(sqlEngageTsRaw) {
 
 function analyzeContext(problemInteractions, nowTimestamp) {
   const errorInteractions = problemInteractions.filter((i) => i.eventType === 'error');
-  const executionAttempts = problemInteractions.filter(
-    (i) => i.eventType === 'execution' || i.eventType === 'error'
-  );
   const hintViews = problemInteractions.filter((i) => i.eventType === 'hint_view');
   const recentErrors = errorInteractions
     .slice(-5)
@@ -233,7 +260,7 @@ function analyzeContext(problemInteractions, nowTimestamp) {
 
   return {
     errorCount: errorInteractions.length,
-    retryCount: Math.max(0, executionAttempts.length - 1),
+    retryCount: Math.max(0, errorInteractions.length - 1),
     timeSpent,
     currentHintLevel: Math.min(hintViews.length, 3),
     recentErrors
@@ -333,8 +360,15 @@ function replayForPolicy(policy, fixture, sqlEngagePolicyVersion, subtypeIndex, 
     hint_shown: 0,
     escalations: 0,
     notes_recommended: 0,
-    successful_attempts: 0
+    successful_attempts: 0,
+    time_to_first_success_ms: null,
+    units_added: 0,
+    textbook_updates: 0,
+    dedup_rate: 0
   };
+  const firstSuccessTimes = [];
+  const noteDedupKeys = new Set();
+  let noteWriteAttempts = 0;
 
   for (const learnerTrace of fixture.learners) {
     const policyEvents = [];
@@ -356,6 +390,12 @@ function replayForPolicy(policy, fixture, sqlEngagePolicyVersion, subtypeIndex, 
 
         const context = analyzeContext(policyEvents, timestamp);
         summaries.successful_attempts += 1;
+        if (!firstSuccessTimes.some((entry) => entry.learnerId === learnerTrace.learnerId)) {
+          firstSuccessTimes.push({
+            learnerId: learnerTrace.learnerId,
+            ms: context.timeSpent
+          });
+        }
         interventions.push({
           event_id: attempt.attemptId,
           learner_id: learnerTrace.learnerId,
@@ -442,6 +482,14 @@ function replayForPolicy(policy, fixture, sqlEngagePolicyVersion, subtypeIndex, 
           `${policy.id}|${learnerTrace.learnerId}|${learnerTrace.problemId}|${attempt.attemptId}|${subtype}`
         );
         summaries.notes_recommended += 1;
+        noteWriteAttempts += 1;
+        const dedupKey = `${learnerTrace.learnerId}|${learnerTrace.problemId}|${subtype}|notebook_unit.v1`;
+        if (noteDedupKeys.has(dedupKey)) {
+          summaries.textbook_updates += 1;
+        } else {
+          noteDedupKeys.add(dedupKey);
+          summaries.units_added += 1;
+        }
       }
 
       interventions.push({
@@ -475,6 +523,13 @@ function replayForPolicy(policy, fixture, sqlEngagePolicyVersion, subtypeIndex, 
     }
   }
 
+  summaries.time_to_first_success_ms = firstSuccessTimes.length > 0
+    ? Math.round(firstSuccessTimes.reduce((acc, entry) => acc + entry.ms, 0) / firstSuccessTimes.length)
+    : null;
+  summaries.dedup_rate = noteWriteAttempts > 0
+    ? Number((summaries.textbook_updates / noteWriteAttempts).toFixed(4))
+    : 0;
+
   return {
     policy_id: policy.id,
     strategy: policy.strategy,
@@ -491,7 +546,7 @@ async function main() {
     readFile(SQL_ENGAGE_CSV_PATH, 'utf8')
   ]);
 
-  const fixture = JSON.parse(fixtureRaw);
+  const fixture = normalizeFixtureForPolicyReplay(JSON.parse(fixtureRaw));
   const sqlEngagePolicyVersion = parseSqlEngagePolicyVersion(sqlEngageTsRaw);
   const rows = parseSqlEngageRows(sqlEngageCsvRaw);
   const subtypeIndex = buildSubtypeIndex(rows);
@@ -505,6 +560,9 @@ async function main() {
     fixture_id: fixture.fixtureId,
     replay_harness_version: REPLAY_HARNESS_VERSION,
     replay_policy_semantics_version: REPLAY_POLICY_SEMANTICS_VERSION,
+    replay_input_filter: {
+      include_attempt_outcomes: ['error', 'success']
+    },
     semantic_alignment: {
       aligned_with: {
         decision_layer: 'apps/web/src/app/lib/adaptive-orchestrator.ts',
@@ -514,7 +572,7 @@ async function main() {
       intentional_divergences: [
         {
           id: 'replay-001-note-write-is-not-mutating',
-          description: 'The app requires a user action to add/update notes; replay logs deterministic note_id recommendations for add_to_textbook decisions but does not mutate textbook state.'
+          description: 'The app can add/update notes in live mode, but replay remains counterfactual and logs deterministic note_id actions without mutating textbook state.'
         },
         {
           id: 'replay-002-attempt-boundary-evaluation',
@@ -527,12 +585,21 @@ async function main() {
     policy_results: replayResults
   };
 
+  const policyOnlyChecksum = stableChecksum({
+    fixture_id: exportPayload.fixture_id,
+    replay_policy_semantics_version: exportPayload.replay_policy_semantics_version,
+    sql_engage_policy_version: exportPayload.sql_engage_policy_version,
+    policy_results: exportPayload.policy_results
+  });
+  exportPayload.policy_only_checksum_sha256 = policyOnlyChecksum;
+
   const outputJson = `${JSON.stringify(exportPayload, null, 2)}\n`;
   await mkdir(path.dirname(OUTPUT_PATH), { recursive: true });
   await writeFile(OUTPUT_PATH, outputJson, 'utf8');
 
   const checksum = crypto.createHash('sha256').update(outputJson).digest('hex');
   console.log(`Replay export written: ${OUTPUT_PATH}`);
+  console.log(`Policy-only checksum sha256: ${policyOnlyChecksum}`);
   console.log(`Replay export sha256: ${checksum}`);
 }
 

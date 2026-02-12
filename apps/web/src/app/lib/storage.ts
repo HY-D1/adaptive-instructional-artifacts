@@ -1,14 +1,32 @@
-import { InteractionEvent, LearnerProfile, InstructionalUnit, SaveTextbookUnitResult } from '../types';
-import { getConceptIdsForSqlEngageSubtype } from '../data/sql-engage';
+import {
+  InteractionEvent,
+  LearnerProfile,
+  InstructionalUnit,
+  SaveTextbookUnitResult,
+  LLMCacheRecord,
+  PdfIndexDocument,
+  PdfCitation,
+  UnitProvenance
+} from '../types';
+import {
+  canonicalizeSqlEngageSubtype,
+  getConceptIdsForSqlEngageSubtype,
+  getDeterministicSqlEngageAnchor,
+  getSqlEngagePolicyVersion
+} from '../data/sql-engage';
 
 /**
  * Local storage manager for interaction traces and learner state
  */
 class StorageManager {
+  private readonly EXPORT_POLICY_VERSION = 'week2-export-sanitize-v1';
   private readonly INTERACTIONS_KEY = 'sql-learning-interactions';
   private readonly PROFILES_KEY = 'sql-learning-profiles';
   private readonly TEXTBOOK_KEY = 'sql-learning-textbook';
   private readonly ACTIVE_SESSION_KEY = 'sql-learning-active-session';
+  private readonly LLM_CACHE_KEY = 'sql-learning-llm-cache';
+  private readonly REPLAY_MODE_KEY = 'sql-learning-policy-replay-mode';
+  private readonly PDF_INDEX_KEY = 'sql-learning-pdf-index';
 
   startSession(learnerId: string): string {
     const sessionId = `session-${learnerId}-${Date.now()}`;
@@ -23,6 +41,68 @@ class StorageManager {
     const fallback = 'session-unknown';
     localStorage.setItem(this.ACTIVE_SESSION_KEY, fallback);
     return fallback;
+  }
+
+  clearActiveSession() {
+    localStorage.removeItem(this.ACTIVE_SESSION_KEY);
+  }
+
+  setActiveSessionId(sessionId: string) {
+    const normalized = sessionId.trim();
+    if (!normalized) {
+      this.clearActiveSession();
+      return;
+    }
+    localStorage.setItem(this.ACTIVE_SESSION_KEY, normalized);
+  }
+
+  setPolicyReplayMode(enabled: boolean) {
+    localStorage.setItem(this.REPLAY_MODE_KEY, JSON.stringify(Boolean(enabled)));
+  }
+
+  getPolicyReplayMode(): boolean {
+    const raw = localStorage.getItem(this.REPLAY_MODE_KEY);
+    if (!raw) return false;
+    try {
+      return Boolean(JSON.parse(raw));
+    } catch {
+      return false;
+    }
+  }
+
+  saveLLMCacheRecord(record: LLMCacheRecord) {
+    const cache = this.getLLMCache();
+    cache[record.cacheKey] = record;
+    localStorage.setItem(this.LLM_CACHE_KEY, JSON.stringify(cache));
+  }
+
+  getLLMCacheRecord(cacheKey: string): LLMCacheRecord | null {
+    const cache = this.getLLMCache();
+    return cache[cacheKey] || null;
+  }
+
+  getLLMCache(): Record<string, LLMCacheRecord> {
+    const raw = localStorage.getItem(this.LLM_CACHE_KEY);
+    if (!raw) return {};
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return {};
+    }
+  }
+
+  savePdfIndex(document: PdfIndexDocument) {
+    localStorage.setItem(this.PDF_INDEX_KEY, JSON.stringify(document));
+  }
+
+  getPdfIndex(): PdfIndexDocument | null {
+    const raw = localStorage.getItem(this.PDF_INDEX_KEY);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
   }
 
   // Interaction traces
@@ -66,7 +146,18 @@ class StorageManager {
         if (sessionId && interaction.sessionId !== sessionId) return false;
         return true;
       })
-      .sort((a, b) => a.timestamp - b.timestamp);
+      .sort((a, b) => {
+        const timestampDelta = a.timestamp - b.timestamp;
+        if (timestampDelta !== 0) return timestampDelta;
+
+        const problemDelta = (a.problemId || '').localeCompare(b.problemId || '');
+        if (problemDelta !== 0) return problemDelta;
+
+        const typeDelta = (a.eventType || '').localeCompare(b.eventType || '');
+        if (typeDelta !== 0) return typeDelta;
+
+        return (a.id || '').localeCompare(b.id || '');
+      });
 
     if (!limit || limit <= 0 || filtered.length <= limit) {
       return filtered;
@@ -101,6 +192,7 @@ class StorageManager {
     // Convert Sets and Maps to arrays for storage
     const serializable = {
       ...profile,
+      currentStrategy: this.normalizeStrategy(profile.currentStrategy),
       conceptsCovered: Array.from(profile.conceptsCovered),
       errorHistory: Array.from(profile.errorHistory.entries())
     };
@@ -124,7 +216,8 @@ class StorageManager {
     return {
       ...profile,
       conceptsCovered: new Set((profile.conceptsCovered || []) as any),
-      errorHistory: new Map((profile.errorHistory || []) as any)
+      errorHistory: new Map((profile.errorHistory || []) as any),
+      currentStrategy: this.normalizeStrategy(profile.currentStrategy)
     };
   }
 
@@ -140,7 +233,7 @@ class StorageManager {
       conceptsCovered: new Set(),
       errorHistory: new Map(),
       interactionCount: 0,
-      currentStrategy: strategy,
+      currentStrategy: this.normalizeStrategy(strategy),
       preferences: {
         escalationThreshold: 3,
         aggregationDelay: 300000 // 5 minutes
@@ -157,22 +250,27 @@ class StorageManager {
       textbooks[learnerId] = [];
     }
     const activeSessionId = unit.sessionId || this.getActiveSessionId();
-    const normalizedSourceIds = Array.from(new Set([
-      ...(unit.sourceInteractionIds || []),
-      ...(unit.sourceInteractions || [])
-    ]));
-    const dedupKey = `${unit.type}::${unit.conceptId}::${unit.title}`;
-    const existing = textbooks[learnerId].find(u => `${u.type}::${u.conceptId}::${u.title}` === dedupKey);
+    const normalizedSourceIds = this.mergeIds(unit.sourceInteractionIds, unit.sourceInteractions);
+    const dedupKeyByHash = unit.provenance?.inputHash;
+    const dedupKeyFallback = this.buildUnitFallbackDedupKey(unit);
+    const existing = textbooks[learnerId].find((candidate) => {
+      const candidateHash = candidate.provenance?.inputHash;
+      if (dedupKeyByHash && candidateHash && candidateHash === dedupKeyByHash) {
+        return true;
+      }
+      const candidateFallback = this.buildUnitFallbackDedupKey(candidate);
+      return candidateFallback === dedupKeyFallback;
+    });
 
     if (existing) {
-      const existingSourceIds = Array.from(new Set([
-        ...(existing.sourceInteractionIds || []),
-        ...(existing.sourceInteractions || [])
-      ]));
-      existing.sourceInteractionIds = Array.from(new Set([...existingSourceIds, ...normalizedSourceIds]));
+      const existingSourceIds = this.mergeIds(existing.sourceInteractionIds, existing.sourceInteractions);
+      existing.sourceInteractionIds = this.mergeIds(existingSourceIds, normalizedSourceIds);
       existing.addedTimestamp = Date.now();
       existing.content = unit.content;
+      existing.title = unit.title;
       existing.sessionId = existing.sessionId || activeSessionId;
+      existing.provenance = this.mergeProvenance(existing.provenance, unit.provenance);
+      existing.lastErrorSubtypeId = unit.lastErrorSubtypeId || existing.lastErrorSubtypeId;
       existing.updatedSessionIds = Array.from(new Set([
         ...(existing.updatedSessionIds || []),
         activeSessionId
@@ -183,10 +281,7 @@ class StorageManager {
         action: 'updated',
         unit: {
           ...existing,
-          sourceInteractionIds: Array.from(new Set([
-            ...(existing.sourceInteractionIds || []),
-            ...(existing.sourceInteractions || [])
-          ]))
+          sourceInteractionIds: this.mergeIds(existing.sourceInteractionIds, existing.sourceInteractions)
         }
       };
     } else {
@@ -211,11 +306,81 @@ class StorageManager {
     const units = textbooks[learnerId] || [];
     return units.map(unit => ({
       ...unit,
-      sourceInteractionIds: Array.from(new Set([
-        ...(unit.sourceInteractionIds || []),
-        ...(unit.sourceInteractions || [])
-      ]))
+      sourceInteractionIds: this.mergeIds(unit.sourceInteractionIds, unit.sourceInteractions)
     }));
+  }
+
+  private mergeIds(...sources: Array<string[] | undefined>): string[] {
+    return Array.from(
+      new Set(
+        sources
+          .flatMap((source) => source || [])
+          .map((value) => value?.trim())
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+  }
+
+  private buildUnitFallbackDedupKey(unit: InstructionalUnit): string {
+    const conceptId = (unit.conceptId || 'unknown-concept').trim().toLowerCase();
+    const errorSubtype = (unit.lastErrorSubtypeId || 'unknown').trim().toLowerCase();
+    const templateId = (unit.provenance?.templateId || 'template-unknown').trim().toLowerCase();
+    const unitType = (unit.type || 'summary').trim().toLowerCase();
+    return `${conceptId}::${errorSubtype}::${templateId}::${unitType}`;
+  }
+
+  private mergeProvenance(
+    existing?: UnitProvenance,
+    incoming?: UnitProvenance
+  ): UnitProvenance | undefined {
+    if (!existing && !incoming) {
+      return undefined;
+    }
+
+    const mergedRetrievedSourceIds = this.mergeIds(
+      existing?.retrievedSourceIds,
+      incoming?.retrievedSourceIds
+    );
+    const createdAtCandidates = [existing?.createdAt, incoming?.createdAt].filter(
+      (value): value is number => typeof value === 'number' && Number.isFinite(value)
+    );
+    const createdAt = createdAtCandidates.length > 0
+      ? Math.min(...createdAtCandidates)
+      : Date.now();
+    const retrievedPdfCitations = this.mergePdfCitations(
+      existing?.retrievedPdfCitations,
+      incoming?.retrievedPdfCitations
+    );
+
+    return {
+      ...(existing || incoming!),
+      ...(incoming || {}),
+      createdAt,
+      retrievedSourceIds: mergedRetrievedSourceIds,
+      ...(retrievedPdfCitations.length > 0 ? { retrievedPdfCitations } : {})
+    };
+  }
+
+  private mergePdfCitations(...sources: Array<PdfCitation[] | undefined>): PdfCitation[] {
+    const bestByChunkId = new Map<string, PdfCitation>();
+    for (const source of sources) {
+      for (const citation of source || []) {
+        if (!citation || !citation.chunkId) continue;
+        const page = Number(citation.page);
+        if (!Number.isFinite(page)) continue;
+        const score = Number.isFinite(Number(citation.score)) ? Number(citation.score) : 0;
+        const normalized: PdfCitation = {
+          chunkId: citation.chunkId,
+          page,
+          score
+        };
+        const existing = bestByChunkId.get(normalized.chunkId);
+        if (!existing || normalized.score > existing.score) {
+          bestByChunkId.set(normalized.chunkId, normalized);
+        }
+      }
+    }
+    return Array.from(bestByChunkId.values());
   }
 
   getAllTextbooks(): Record<string, InstructionalUnit[]> {
@@ -231,15 +396,12 @@ class StorageManager {
 
   // Export data for research
   exportData(options?: { allHistory?: boolean }) {
-    const allHistory = options?.allHistory ?? false;
+    const allHistory = options?.allHistory === true;
     const activeSessionId = this.getActiveSessionId();
     const interactions = this.getAllInteractions().filter(i => {
       if (allHistory) return true;
       return i.sessionId === activeSessionId;
-    }).map(i => ({
-      ...i,
-      sessionId: i.sessionId || activeSessionId || 'session-unknown'
-    }));
+    }).map((interaction) => this.normalizeInteractionForExport(interaction, activeSessionId));
     const allTextbooks = this.getAllTextbooks();
     const textbooks = Object.fromEntries(
       Object.entries(allTextbooks).map(([learnerId, units]) => [
@@ -271,8 +433,12 @@ class StorageManager {
       interactions,
       profiles: serializableProfiles,
       textbooks,
+      llmCache: this.getLLMCache(),
+      replayMode: this.getPolicyReplayMode(),
+      pdfIndex: this.getPdfIndex(),
       activeSessionId,
       exportScope: allHistory ? 'all-history' : 'active-session',
+      exportPolicyVersion: this.EXPORT_POLICY_VERSION,
       exportedAt: new Date().toISOString()
     };
   }
@@ -291,12 +457,45 @@ class StorageManager {
     if (data.textbooks) {
       localStorage.setItem(this.TEXTBOOK_KEY, JSON.stringify(data.textbooks));
     }
+    if (data.llmCache) {
+      localStorage.setItem(this.LLM_CACHE_KEY, JSON.stringify(data.llmCache));
+    }
+    if (typeof data.replayMode === 'boolean') {
+      this.setPolicyReplayMode(data.replayMode);
+    }
+    if (data.pdfIndex) {
+      this.savePdfIndex(data.pdfIndex);
+    }
+
+    const importedActiveSessionId = typeof data.activeSessionId === 'string'
+      ? data.activeSessionId.trim()
+      : '';
+    if (importedActiveSessionId) {
+      this.setActiveSessionId(importedActiveSessionId);
+      return;
+    }
+
+    const interactions = Array.isArray(data.interactions) ? data.interactions : [];
+    const fallbackActiveSessionId = [...interactions]
+      .sort((a, b) => Number(b?.timestamp || 0) - Number(a?.timestamp || 0))
+      .map((interaction) => (typeof interaction?.sessionId === 'string' ? interaction.sessionId.trim() : ''))
+      .find((session): session is string => Boolean(session));
+    if (fallbackActiveSessionId) {
+      this.setActiveSessionId(fallbackActiveSessionId);
+      return;
+    }
+
+    this.clearActiveSession();
   }
 
   clearAll() {
     this.clearInteractions();
+    this.clearActiveSession();
     localStorage.removeItem(this.PROFILES_KEY);
     localStorage.removeItem(this.TEXTBOOK_KEY);
+    localStorage.removeItem(this.LLM_CACHE_KEY);
+    localStorage.removeItem(this.REPLAY_MODE_KEY);
+    localStorage.removeItem(this.PDF_INDEX_KEY);
   }
 
   private updateProfileStatsFromEvent(event: InteractionEvent) {
@@ -312,6 +511,68 @@ class StorageManager {
     }
 
     this.saveProfile(profile);
+  }
+
+  private normalizeStrategy(strategy: unknown): LearnerProfile['currentStrategy'] {
+    if (
+      strategy === 'hint-only' ||
+      strategy === 'adaptive-low' ||
+      strategy === 'adaptive-medium' ||
+      strategy === 'adaptive-high'
+    ) {
+      return strategy;
+    }
+    return 'adaptive-medium';
+  }
+
+  private normalizeInteractionForExport(
+    interaction: InteractionEvent,
+    activeSessionId: string
+  ): InteractionEvent {
+    const normalizedSessionId = interaction.sessionId || activeSessionId || 'session-unknown';
+    const withSession = {
+      ...interaction,
+      sessionId: normalizedSessionId
+    };
+
+    if (withSession.eventType !== 'hint_view') {
+      return withSession;
+    }
+
+    return this.normalizeHintViewForExport(withSession);
+  }
+
+  private normalizeHintViewForExport(interaction: InteractionEvent): InteractionEvent {
+    const canonicalSubtype = canonicalizeSqlEngageSubtype(
+      interaction.sqlEngageSubtype || interaction.errorSubtypeId || 'incomplete query'
+    );
+    const hintLevel = this.clampHintLevel(interaction.hintLevel);
+    const rowSeed = `${interaction.learnerId}|${interaction.problemId}|${canonicalSubtype}`;
+    const fallbackAnchor = getDeterministicSqlEngageAnchor(canonicalSubtype, rowSeed);
+    const sqlEngageRowId = interaction.sqlEngageRowId?.trim() || fallbackAnchor.rowId;
+    const policyVersion = interaction.policyVersion?.trim() || getSqlEngagePolicyVersion();
+    const { hintId: _legacyHintId, ...withoutLegacyHintId } = interaction;
+
+    return {
+      ...withoutLegacyHintId,
+      eventType: 'hint_view',
+      hintLevel,
+      sqlEngageSubtype: canonicalSubtype,
+      sqlEngageRowId,
+      policyVersion
+    };
+  }
+
+  private clampHintLevel(value: unknown): 1 | 2 | 3 {
+    if (value === 1 || value === 2 || value === 3) {
+      return value;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      if (value <= 1) return 1;
+      if (value >= 3) return 3;
+      return 2;
+    }
+    return 1;
   }
 }
 

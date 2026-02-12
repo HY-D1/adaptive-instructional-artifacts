@@ -17,6 +17,38 @@ interface AdaptiveTextbookProps {
   buildEvidenceHref?: (interaction: InteractionEvent) => string;
 }
 
+function getMergedInteractionIds(unit: InstructionalUnit): string[] {
+  return Array.from(new Set([
+    ...(unit.sourceInteractionIds || []),
+    ...(unit.sourceInteractions || [])
+  ].filter(Boolean)));
+}
+
+function getMergedRetrievedSourceIds(unit: InstructionalUnit): string[] {
+  return Array.from(new Set((unit.provenance?.retrievedSourceIds || []).filter(Boolean)));
+}
+
+function getMergedPdfCitationLabels(unit: InstructionalUnit): string[] {
+  return Array.from(
+    new Set(
+      (unit.provenance?.retrievedPdfCitations || [])
+        .filter((citation) => citation?.chunkId && Number.isFinite(citation?.page))
+        .map((citation) => `${citation.chunkId} (p.${citation.page})`)
+    )
+  );
+}
+
+function getCompactHash(value: string): string {
+  return value.length <= 20 ? value : `${value.slice(0, 8)}...${value.slice(-8)}`;
+}
+
+function toCompactList(values: string[], limit = 3): string {
+  if (values.length === 0) return 'none';
+  const preview = values.slice(0, limit).join(', ');
+  const remaining = values.length - limit;
+  return remaining > 0 ? `${preview} +${remaining} more` : preview;
+}
+
 export function AdaptiveTextbook({
   learnerId,
   selectedUnitId,
@@ -60,18 +92,47 @@ export function AdaptiveTextbook({
   );
 
   const selectedUnitEvidence = useMemo(() => {
-    if (!selectedUnit) return [];
+    if (!selectedUnit) {
+      return {
+        requestedIds: [] as string[],
+        resolved: [] as InteractionEvent[],
+        missingIds: [] as string[]
+      };
+    }
 
-    const sourceIds = Array.from(new Set([
-      ...(selectedUnit.sourceInteractionIds || []),
-      ...(selectedUnit.sourceInteractions || [])
-    ]));
+    const requestedIds = getMergedInteractionIds(selectedUnit);
+    const resolved = storage.getInteractionsByIds(requestedIds, learnerId);
+    const resolvedIdSet = new Set(resolved.map((interaction) => interaction.id));
+    const missingIds = requestedIds.filter((interactionId) => !resolvedIdSet.has(interactionId));
 
-    return storage.getInteractionsByIds(sourceIds, learnerId);
+    return {
+      requestedIds,
+      resolved,
+      missingIds
+    };
   }, [selectedUnit, learnerId]);
 
   const getSubtypeLabel = (interaction: InteractionEvent) =>
     interaction.sqlEngageSubtype || interaction.errorSubtypeId || 'unknown-subtype';
+
+  const getEvidenceLabel = (interaction: InteractionEvent) => {
+    if (interaction.eventType === 'hint_view') {
+      const level = interaction.hintLevel || 1;
+      const helpIndex = interaction.helpRequestIndex ? `help #${interaction.helpRequestIndex}` : 'help';
+      return `Hint L${level} (${helpIndex})`;
+    }
+    if (interaction.eventType === 'explanation_view') {
+      const helpIndex = interaction.helpRequestIndex ? ` #${interaction.helpRequestIndex}` : '';
+      return `Explanation${helpIndex}`;
+    }
+    if (interaction.eventType === 'error') {
+      return 'Error';
+    }
+    if (interaction.eventType === 'execution') {
+      return interaction.successful ? 'Execution (success)' : 'Execution';
+    }
+    return interaction.eventType.replace(/_/g, ' ');
+  };
 
   const handleUnitSelect = (unit: InstructionalUnit) => {
     setSelectedUnit(unit);
@@ -98,7 +159,7 @@ export function AdaptiveTextbook({
   }, {} as Record<string, InstructionalUnit[]>);
 
   const getSourceCount = (unit: InstructionalUnit) =>
-    (unit.sourceInteractionIds || unit.sourceInteractions || []).length;
+    getMergedInteractionIds(unit).length;
 
   if (textbookUnits.length === 0) {
     return (
@@ -200,14 +261,51 @@ export function AdaptiveTextbook({
               }}
             />
 
-            {selectedUnitEvidence.length > 0 && (
+            {selectedUnit.provenance && (
+              <details className="not-prose mt-4 rounded border bg-gray-50 p-3">
+                <summary className="cursor-pointer text-sm font-medium">Provenance</summary>
+                <div className="mt-2 text-xs text-gray-700 space-y-1">
+                  <p><span className="font-medium">Template:</span> {selectedUnit.provenance.templateId}</p>
+                  <p><span className="font-medium">Model:</span> {selectedUnit.provenance.model}</p>
+                  <p>
+                    <span className="font-medium">Input hash:</span>{' '}
+                    <span className="font-mono" title={selectedUnit.provenance.inputHash}>
+                      {getCompactHash(selectedUnit.provenance.inputHash)}
+                    </span>
+                  </p>
+                  <p data-testid="provenance-retrieved-sources">
+                    Retrieved sources: <span className="font-medium">{getMergedRetrievedSourceIds(selectedUnit).length} merged</span>
+                  </p>
+                  <p data-testid="provenance-source-ids">
+                    <span className="font-medium">Source IDs:</span>{' '}
+                    {toCompactList(getMergedRetrievedSourceIds(selectedUnit))}
+                  </p>
+                  <p data-testid="provenance-pdf-citations">
+                    <span className="font-medium">PDF citations:</span>{' '}
+                    {toCompactList(getMergedPdfCitationLabels(selectedUnit))}
+                  </p>
+                  <p><span className="font-medium">Created:</span> {new Date(selectedUnit.provenance.createdAt).toLocaleString()}</p>
+                </div>
+              </details>
+            )}
+
+            {selectedUnitEvidence.requestedIds.length > 0 && (
               <div className="not-prose mt-6 pt-4 border-t">
                 <p className="text-xs text-gray-500 mb-2">
-                  This content was generated from {getSourceCount(selectedUnit)} interaction(s)
+                  This content was generated from {getSourceCount(selectedUnit)} interaction(s):{' '}
+                  {selectedUnitEvidence.resolved.length} resolved, {selectedUnitEvidence.missingIds.length} missing
                 </p>
+                {selectedUnitEvidence.missingIds.length > 0 && (
+                  <div
+                    className="mb-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900"
+                    data-testid="textbook-missing-evidence"
+                  >
+                    Missing interaction IDs: {toCompactList(selectedUnitEvidence.missingIds, 4)}
+                  </div>
+                )}
                 <h3 className="font-semibold text-sm mb-2">Evidence Links</h3>
                 <div className="space-y-2">
-                  {selectedUnitEvidence.map((interaction) => {
+                  {selectedUnitEvidence.resolved.map((interaction) => {
                     const subtype = getSubtypeLabel(interaction);
                     const href = buildEvidenceHref?.(interaction);
                     const className = `block rounded border p-2 text-sm transition-colors ${
@@ -219,8 +317,9 @@ export function AdaptiveTextbook({
                     const content = (
                       <>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">Attempt {interaction.id}</span>
+                          <span className="font-medium">{getEvidenceLabel(interaction)}</span>
                           <Badge variant="outline" className="text-xs">{subtype}</Badge>
+                          <span className="text-[11px] text-gray-500">{interaction.id}</span>
                         </div>
                         <p className="text-xs text-gray-600 mt-1">
                           {new Date(interaction.timestamp).toLocaleString()}

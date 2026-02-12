@@ -143,6 +143,21 @@ const subtypeIndex = sqlEngageRecords.reduce((acc, row) => {
 }, {} as Record<string, SqlEngageRecord[]>);
 
 const CANONICAL_SUBTYPES = new Set<string>(Object.keys(subtypeIndex));
+const CANONICAL_SUBTYPE_LIST = [...CANONICAL_SUBTYPES].sort((a, b) => a.localeCompare(b));
+const DEFAULT_SUBTYPE_FALLBACK = 'incomplete query';
+const SYNTHETIC_FALLBACK_ROW_ID = 'sql-engage:fallback-synthetic';
+
+function getDatasetBackedFallbackSubtype(): string {
+  if (CANONICAL_SUBTYPES.has(DEFAULT_SUBTYPE_FALLBACK)) {
+    return DEFAULT_SUBTYPE_FALLBACK;
+  }
+  if (CANONICAL_SUBTYPE_LIST.length > 0) {
+    return CANONICAL_SUBTYPE_LIST[0];
+  }
+  return DEFAULT_SUBTYPE_FALLBACK;
+}
+
+const DATASET_BACKED_FALLBACK_SUBTYPE = getDatasetBackedFallbackSubtype();
 
 const SUBTYPE_ALIASES: Record<string, string> = {
   'unknown column': 'undefined column',
@@ -227,40 +242,78 @@ export function getKnownSqlEngageSubtypes(): string[] {
 
 export function canonicalizeSqlEngageSubtype(subtype?: string): string {
   const raw = subtype?.trim().toLowerCase() || '';
-  if (!raw) return 'incomplete query';
+  if (!raw) return DATASET_BACKED_FALLBACK_SUBTYPE;
 
   const aliased = SUBTYPE_ALIASES[raw] || raw;
   if (CANONICAL_SUBTYPES.has(aliased)) return aliased;
 
   // Keep only canonical labels for logging/replay.
-  return 'incomplete query';
+  return DATASET_BACKED_FALLBACK_SUBTYPE;
 }
 
 export function getSqlEngageRowsBySubtype(subtype: string): SqlEngageRecord[] {
   return subtypeIndex[canonicalizeSqlEngageSubtype(subtype)] || [];
 }
 
+function getFallbackSqlEngageRow(): SqlEngageRecord {
+  const fallbackRows = subtypeIndex[DATASET_BACKED_FALLBACK_SUBTYPE];
+  if (fallbackRows && fallbackRows.length > 0) {
+    return fallbackRows[0];
+  }
+
+  const firstRow = sqlEngageRecords[0];
+  if (firstRow) {
+    return {
+      ...firstRow,
+      error_subtype: canonicalizeSqlEngageSubtype(firstRow.error_subtype) || DATASET_BACKED_FALLBACK_SUBTYPE,
+      rowId: firstRow.rowId || SYNTHETIC_FALLBACK_ROW_ID
+    };
+  }
+
+  return {
+    rowId: SYNTHETIC_FALLBACK_ROW_ID,
+    query: '',
+    error_type: 'construction',
+    error_subtype: DATASET_BACKED_FALLBACK_SUBTYPE,
+    emotion: 'neutral',
+    feedback_target: 'Complete the query structure before execution.',
+    intended_learning_outcome: 'Build valid SQL statements incrementally.'
+  };
+}
+
+function ensureSqlEngageRow(row: SqlEngageRecord | undefined, canonicalSubtype: string): SqlEngageRecord {
+  const fallback = getFallbackSqlEngageRow();
+  const candidate = row || fallback;
+  return {
+    ...candidate,
+    rowId: candidate.rowId?.trim() || fallback.rowId || SYNTHETIC_FALLBACK_ROW_ID,
+    error_subtype: canonicalizeSqlEngageSubtype(
+      candidate.error_subtype || canonicalSubtype || DATASET_BACKED_FALLBACK_SUBTYPE
+    )
+  };
+}
+
 export function getDeterministicSqlEngageHint(
   subtype: string,
   hintLevel: number,
   seed: string
-): SqlEngageRecord | undefined {
+): SqlEngageRecord {
   const canonicalSubtype = canonicalizeSqlEngageSubtype(subtype);
   const rows = getSqlEngageRowsBySubtype(canonicalSubtype);
-  if (rows.length === 0) return undefined;
-  const index = stableHash(`${canonicalSubtype}|${hintLevel}|${seed}`) % rows.length;
-  return rows[index];
+  const sourceRows = rows.length > 0 ? rows : [getFallbackSqlEngageRow()];
+  const index = stableHash(`${canonicalSubtype}|${hintLevel}|${seed}`) % sourceRows.length;
+  return ensureSqlEngageRow(sourceRows[index], canonicalSubtype);
 }
 
 export function getDeterministicSqlEngageAnchor(
   subtype: string,
   seed: string
-): SqlEngageRecord | undefined {
+): SqlEngageRecord {
   const canonicalSubtype = canonicalizeSqlEngageSubtype(subtype);
   const rows = getSqlEngageRowsBySubtype(canonicalSubtype);
-  if (rows.length === 0) return undefined;
-  const index = stableHash(`${canonicalSubtype}|${seed}`) % rows.length;
-  return rows[index];
+  const sourceRows = rows.length > 0 ? rows : [getFallbackSqlEngageRow()];
+  const index = stableHash(`${canonicalSubtype}|${seed}`) % sourceRows.length;
+  return ensureSqlEngageRow(sourceRows[index], canonicalSubtype);
 }
 
 export function getProgressiveSqlEngageHintText(
@@ -341,7 +394,7 @@ export function normalizeSqlErrorSubtype(errorMessage: string, query: string = '
   }
 
   // Safe fallback to a canonical subtype guaranteed in the SQL-Engage dataset.
-  return canonicalizeSqlEngageSubtype('incomplete query');
+  return canonicalizeSqlEngageSubtype(DEFAULT_SUBTYPE_FALLBACK);
 }
 
 // Error subtypes mapped to concepts

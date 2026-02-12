@@ -7,9 +7,19 @@
     "build": "vite build --config apps/web/vite.config.ts",
     "dev": "vite --config apps/web/vite.config.ts",
     "test:e2e": "playwright test -c playwright.config.ts",
-    "test:e2e:week2": "playwright test -c playwright.config.ts --grep @week2",
+    "test:e2e:week2": "CI=1 playwright test -c playwright.config.ts --grep @week2",
+    "demo:week2": "playwright test -c playwright.config.ts apps/web/tests/week2-demo-artifacts.spec.ts",
+    "verify:week2": "npm run build && npm run replay:gate && npm run test:e2e:week2",
+    "test:e2e:parser-batch": "playwright test -c playwright.config.ts --grep @parser-batch",
+    "llm:health:capture": "node scripts/capture-llm-health-message.mjs",
     "replay:toy": "node scripts/replay-toy.mjs",
-    "replay": "node scripts/replay-toy.mjs"
+    "replay:gate": "node scripts/replay-checksum-gate.mjs",
+    "replay:gate:update": "node scripts/replay-checksum-gate.mjs --update",
+    "replay": "node scripts/replay-toy.mjs",
+    "hintwise:convert": "node scripts/convert-hintwise.mjs",
+    "test:hintwise:convert": "node scripts/verify-hintwise-converter.mjs",
+    "pdf:index": "node scripts/build-pdf-index.mjs",
+    "pdf:search": "node scripts/search-index.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
