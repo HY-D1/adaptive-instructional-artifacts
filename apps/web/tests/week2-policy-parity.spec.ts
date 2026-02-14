@@ -13,17 +13,24 @@ type NormalizedDecisionEvent = {
 };
 
 async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedErrorCount: number) {
-  const marker = page.getByText(new RegExp(`\\b${expectedErrorCount} errors\\b`));
+  const marker = page.getByText(new RegExp(`\\b${expectedErrorCount}\\s+error(s)?\\b`));
 
-  for (let i = 0; i < 12; i += 1) {
+  for (let i = 0; i < 24; i += 1) {
     await runQueryButton.click();
     if (await marker.first().isVisible().catch(() => false)) {
       return;
     }
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(500);
   }
 
   throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
+}
+
+async function replaceEditorText(page: Page, text: string) {
+  const editorSurface = page.locator('.monaco-editor .view-lines').first();
+  await editorSurface.click({ position: { x: 8, y: 8 } });
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await page.keyboard.type(text);
 }
 
 async function collectDecisionTrace(page: Page): Promise<NormalizedDecisionEvent[]> {
@@ -64,6 +71,7 @@ async function runScenario(browser: Browser, replayMode: boolean): Promise<Norma
   const runQueryButton = page.getByRole('button', { name: 'Run Query' });
   await expect(runQueryButton).toBeVisible();
 
+  await replaceEditorText(page, 'SELECT FROM users;');
   await runUntilErrorCount(page, runQueryButton, 1);
 
   await page.getByRole('button', { name: 'Request Hint' }).click();
@@ -80,7 +88,7 @@ async function runScenario(browser: Browser, replayMode: boolean): Promise<Norma
       if (!Array.isArray(parsed)) return 0;
       return parsed.filter((event) => event?.eventType === 'explanation_view').length;
     }, INTERACTIONS_KEY)
-  )).toBeGreaterThan(0);
+  )).toBe(1);
 
   const replayModeStored = await page.evaluate((replayModeKey) => (
     window.localStorage.getItem(replayModeKey)
