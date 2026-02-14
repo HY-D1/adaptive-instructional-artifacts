@@ -6,6 +6,7 @@ import { Lightbulb } from 'lucide-react';
 import { HelpEventType, InteractionEvent } from '../types';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { storage } from '../lib/storage';
+import { createEventId } from '../lib/event-id';
 import {
   canonicalizeSqlEngageSubtype
 } from '../data/sql-engage';
@@ -36,7 +37,6 @@ export function HintSystem({
   const [hints, setHints] = useState<string[]>([]);
   const [showExplanation, setShowExplanation] = useState(false);
   const [activeHintSubtype, setActiveHintSubtype] = useState<string | null>(null);
-  const lastAutoEscalatedErrorId = useRef<string | null>(null);
   const helpFlowKeyRef = useRef('');
   const nextHelpRequestIndexRef = useRef(1);
   const emittedHelpEventKeysRef = useRef<Set<string>>(new Set());
@@ -48,8 +48,6 @@ export function HintSystem({
       interaction.learnerId === learnerId &&
       (!sessionId || interaction.sessionId === sessionId)
   );
-  const autoEscalation = orchestrator.getAutoEscalationState(scopedInteractions, problemId);
-  const autoEscalationAllowed = Boolean(profile) && Boolean(sessionId) && profile.currentStrategy !== 'hint-only';
   const canonicalOverrideSubtype = knownSubtypeOverride
     ? canonicalizeSqlEngageSubtype(knownSubtypeOverride)
     : undefined;
@@ -59,7 +57,6 @@ export function HintSystem({
     setHints([]);
     setShowExplanation(false);
     setActiveHintSubtype(null);
-    lastAutoEscalatedErrorId.current = null;
   };
 
   useEffect(() => {
@@ -107,16 +104,29 @@ export function HintSystem({
   };
   const buildHelpEventId = (prefix: 'hint' | 'explanation', helpRequestIndex: number, suffix?: string) => {
     helpEventSequenceRef.current += 1;
-    const parts = [
+    return createEventId(
       prefix,
-      Date.now().toString(),
       helpRequestIndex.toString(),
-      helpEventSequenceRef.current.toString()
-    ];
-    if (suffix) {
-      parts.push(suffix);
-    }
-    return parts.join('-');
+      helpEventSequenceRef.current.toString(),
+      suffix
+    );
+  };
+  const buildStableHintId = (selection: {
+    sqlEngageSubtype: string;
+    sqlEngageRowId: string;
+    hintLevel: 1 | 2 | 3;
+  }) => {
+    const subtype = selection.sqlEngageSubtype.trim() || 'incomplete query';
+    const rowId = selection.sqlEngageRowId.trim() || 'sql-engage:fallback-synthetic';
+    return `sql-engage:${subtype}:L${selection.hintLevel}:${rowId}`;
+  };
+  const buildStableExplanationId = (selection: {
+    sqlEngageSubtype: string;
+    sqlEngageRowId: string;
+  }) => {
+    const subtype = selection.sqlEngageSubtype.trim() || 'incomplete query';
+    const rowId = selection.sqlEngageRowId.trim() || 'sql-engage:fallback-synthetic';
+    return `sql-engage:${subtype}:explain:${rowId}`;
   };
   useEffect(() => {
     syncHelpFlowIndex(getProblemTrace());
@@ -168,9 +178,6 @@ export function HintSystem({
 
     setHints((currentHints) => [...currentHints, hintSelection.hintText]);
     setActiveHintSubtype(hintSelection.sqlEngageSubtype);
-    if (hintSelection.shouldEscalate) {
-      setShowExplanation(true);
-    }
     const errorCount = problemTrace.filter((interaction) => interaction.eventType === 'error').length;
     const hintCount = problemTrace.filter((interaction) => interaction.eventType === 'hint_view').length;
     const timeSpent = problemTrace.length > 0
@@ -185,6 +192,7 @@ export function HintSystem({
       timestamp: Date.now(),
       eventType: 'hint_view',
       problemId,
+      hintId: buildStableHintId(hintSelection),
       hintText: hintSelection.hintText,
       hintLevel: hintSelection.hintLevel,
       helpRequestIndex: nextHelpRequestIndex,
@@ -207,7 +215,7 @@ export function HintSystem({
     storage.saveInteraction(hintEvent);
     onInteractionLogged?.(hintEvent);
 
-    // Escalation happens automatically after level 3 hint (recorded as help request 4).
+    // Escalate automatically after Hint 3 (recorded as help request 4).
     if (hintSelection.shouldEscalate) {
       setShowExplanation(true);
       handleShowExplanation('auto', nextHelpRequestIndex + 1, [...problemTrace, hintEvent]);
@@ -215,7 +223,7 @@ export function HintSystem({
   };
 
   const handleShowExplanation = (
-    source: 'auto' = 'auto',
+    source: 'auto' | 'manual' = 'auto',
     forcedHelpRequestIndex?: number,
     traceOverride?: InteractionEvent[]
   ) => {
@@ -223,7 +231,8 @@ export function HintSystem({
       return;
     }
     const problemTrace = traceOverride || getProblemTrace();
-    const nextHelpRequestIndex = forcedHelpRequestIndex ?? allocateNextHelpRequestIndex(problemTrace);
+    const requestedHelpRequestIndex = forcedHelpRequestIndex ?? allocateNextHelpRequestIndex(problemTrace);
+    const nextHelpRequestIndex = Math.max(requestedHelpRequestIndex, 4);
     nextHelpRequestIndexRef.current = Math.max(nextHelpRequestIndexRef.current, nextHelpRequestIndex + 1);
     const helpSelection = getHelpSelectionForIndex(nextHelpRequestIndex);
     if (!helpSelection) {
@@ -237,11 +246,9 @@ export function HintSystem({
       .reverse()
       .find((interaction) => interaction.problemId === problemId && interaction.eventType === 'error');
     const sourceInteractionIds =
-      autoEscalation.triggerErrorId
-        ? [autoEscalation.triggerErrorId]
-        : latestProblemError
-          ? [latestProblemError.id]
-          : [];
+      latestProblemError
+        ? [latestProblemError.id]
+        : [];
     onEscalate?.(sourceInteractionIds);
 
     // Log interaction
@@ -252,6 +259,7 @@ export function HintSystem({
       timestamp: Date.now(),
       eventType: 'explanation_view',
       problemId,
+      explanationId: buildStableExplanationId(helpSelection),
       errorSubtypeId: helpSelection.sqlEngageSubtype,
       helpRequestIndex: nextHelpRequestIndex,
       sqlEngageSubtype: helpSelection.sqlEngageSubtype,
@@ -277,17 +285,6 @@ export function HintSystem({
   const decision = profile
     ? orchestrator.makeDecision(profile, scopedInteractions, problemId)
     : { decision: 'show_hint' as const, reasoning: 'Learner profile unavailable' };
-
-  useEffect(() => {
-    if (!profile || !sessionId || !autoEscalationAllowed || !autoEscalation.shouldEscalate || !autoEscalation.triggerErrorId) {
-      return;
-    }
-    if (lastAutoEscalatedErrorId.current === autoEscalation.triggerErrorId) {
-      return;
-    }
-    lastAutoEscalatedErrorId.current = autoEscalation.triggerErrorId;
-    handleShowExplanation('auto');
-  }, [profile, sessionId, autoEscalationAllowed, autoEscalation.shouldEscalate, autoEscalation.triggerErrorId]);
 
   if (!profile) return null;
   const nextHelpRequestIndex = Math.max(
@@ -355,11 +352,20 @@ export function HintSystem({
           <Lightbulb className="size-4 mr-2" />
           {primaryActionLabel}
         </Button>
+        <Button
+          onClick={() => handleShowExplanation('manual')}
+          variant="secondary"
+          size="sm"
+          className="w-full sm:flex-1"
+          disabled={!profile || !sessionId || !errorSubtypeId}
+        >
+          Show Explanation
+        </Button>
       </div>
 
       {showExplanation && (
         <p className="text-xs text-emerald-700">
-          Escalation is automatic after Hint 3. Explanation has been generated.
+          Explanation has been generated for this help flow.
         </p>
       )}
 
