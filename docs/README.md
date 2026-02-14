@@ -1,20 +1,16 @@
 # Documentation Index
 
-Canonical Week 2 runbook:
+Canonical:
 
-- `docs/week2_progress.md` (project-mandated canonical checkpoint file)
-- `docs/week2-demo.md` (demo script + acceptance checks)
+- `docs/progress.md` (master)
+- `docs/week2_progress.md` (Week 2 runbook + checkpoint log)
 
-Compatibility pointers:
+Optional:
 
-- `docs/week2-repro-compat.md`
-- `docs/guidelines/project-guidelines.md`
-- `docs/guidelines/week2-reproducibility.md`
+- `docs/week2-demo.md` (demo-only clickpath/artifact steps)
 
-Project references:
+Reference:
 
 - `docs/attributions.md`
-- `docs/reviews/hintwise-inventory.md`
-- `docs/reviews/sql-engage-inventory.md`
-- `docs/reviews/paper-quick-review.md`
-- `docs/reviews/paper-full-review.md`
+- `docs/reviews/`
+- `docs/literature/`

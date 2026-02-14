@@ -26,9 +26,11 @@ import {
 } from 'recharts';
 import { Download, Play, RefreshCw, Users, Activity } from 'lucide-react';
 import { storage } from '../lib/storage';
-import { InteractionEvent, LearnerProfile, ExperimentCondition } from '../types';
-import { orchestrator, ReplayDecisionPoint } from '../lib/adaptive-orchestrator';
+import { InteractionEvent, LearnerProfile, ExperimentCondition, PdfIndexDocument } from '../types';
+import { orchestrator, ReplayDecisionPoint, AutoEscalationMode } from '../lib/adaptive-orchestrator';
 import { checkOllamaHealth, OLLAMA_MODEL } from '../lib/llm-client';
+import { loadOrBuildPdfIndex } from '../lib/pdf-index-loader';
+import { createEventId } from '../lib/event-id';
 
 const experimentConditions: ExperimentCondition[] = [
   {
@@ -68,6 +70,7 @@ export function ResearchDashboard() {
   const [selectedTraceLearner, setSelectedTraceLearner] = useState<string>('');
   const [selectedTraceProblem, setSelectedTraceProblem] = useState<string>('all');
   const [selectedReplayStrategy, setSelectedReplayStrategy] = useState<ExperimentCondition['strategy']>('adaptive-medium');
+  const [selectedAutoEscalationMode, setSelectedAutoEscalationMode] = useState<AutoEscalationMode>('always-after-hint-threshold');
   const [traceWindow, setTraceWindow] = useState<string>('40');
   const [isReplaying, setIsReplaying] = useState(false);
   const [replayNonce, setReplayNonce] = useState(0);
@@ -77,6 +80,8 @@ export function ResearchDashboard() {
   const [llmHealthOk, setLlmHealthOk] = useState<boolean | null>(null);
   const [policyReplayMode, setPolicyReplayMode] = useState(storage.getPolicyReplayMode());
   const [pdfIndexSummary, setPdfIndexSummary] = useState<string>('No PDF index loaded');
+  const [pdfIndexStatus, setPdfIndexStatus] = useState<'idle' | 'loading' | 'ready' | 'error' | 'warning'>('idle');
+  const [pdfIndexError, setPdfIndexError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -96,9 +101,12 @@ export function ResearchDashboard() {
     setPolicyReplayMode(storage.getPolicyReplayMode());
     const pdfIndex = storage.getPdfIndex();
     if (pdfIndex) {
-      setPdfIndexSummary(`${pdfIndex.sourceName} (${pdfIndex.chunks.length} chunks)`);
+      setPdfIndexSummary(formatPdfIndexSummary(pdfIndex));
+      setPdfIndexStatus('ready');
+      setPdfIndexError(null);
     } else {
       setPdfIndexSummary('No PDF index loaded');
+      setPdfIndexStatus('idle');
     }
     if (!selectedTraceLearner && loadedProfiles[0]) {
       setSelectedTraceLearner(loadedProfiles[0].id);
@@ -167,25 +175,58 @@ export function ResearchDashboard() {
     reader.readAsText(file);
   };
 
-  const handlePdfIndexImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleLoadPdfIndex = async () => {
+    setPdfIndexStatus('loading');
+    setPdfIndexError(null);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const data = JSON.parse(e.target?.result as string);
-        if (!data || !Array.isArray(data.chunks)) {
-          throw new Error('Invalid PDF index format');
-        }
-        storage.savePdfIndex(data);
-        const sourceName = data.sourceName || file.name;
-        setPdfIndexSummary(`${sourceName} (${data.chunks.length} chunks)`);
-      } catch {
-        alert('Error importing PDF index JSON');
+    try {
+      const result = await loadOrBuildPdfIndex();
+      const saveResult = storage.savePdfIndex(result.document);
+      setPdfIndexSummary(formatPdfIndexSummary(result.document));
+      
+      if (saveResult.quotaExceeded) {
+        setPdfIndexStatus('warning');
+        setPdfIndexError(
+          `Warning: PDF index is too large for LocalStorage (${(JSON.stringify(result.document).length / 1024 / 1024).toFixed(1)} MB). ` +
+          'The index is loaded in memory and will work for this session, but will be lost on page refresh. ' +
+          'Consider reducing PDF file sizes or number of documents.'
+        );
+      } else {
+        setPdfIndexStatus('ready');
       }
-    };
-    reader.readAsText(file);
+
+      if (result.status === 'built' && result.rebuiltFrom) {
+        const rebuildEvent: InteractionEvent = {
+          id: createEventId('pdf-index', 'rebuild'),
+          sessionId: storage.getActiveSessionId(),
+          learnerId: 'system',
+          timestamp: Date.now(),
+          eventType: 'pdf_index_rebuilt',
+          problemId: 'pdf-index',
+          inputs: {
+            old_schema_version: result.rebuiltFrom.schemaVersion || null,
+            old_embedding_model_id: result.rebuiltFrom.embeddingModelId || null,
+            old_chunker_version: result.rebuiltFrom.chunkerVersion || null
+          },
+          outputs: {
+            pdf_index_id: result.document.indexId,
+            pdf_schema_version: result.document.schemaVersion,
+            pdf_embedding_model_id: result.document.embeddingModelId,
+            pdf_chunker_version: result.document.chunkerVersion,
+            pdf_doc_count: result.document.docCount,
+            pdf_chunk_count: result.document.chunkCount
+          }
+        };
+        storage.saveInteraction(rebuildEvent);
+        setInteractions((previous) => [...previous, rebuildEvent]);
+      }
+
+      loadData();
+    } catch (error) {
+      setPdfIndexSummary('No PDF index loaded');
+      setPdfIndexStatus('error');
+      setPdfIndexError((error as Error).message || 'Failed to load PDF index.');
+    }
   };
 
   // Analytics
@@ -325,14 +366,24 @@ export function ResearchDashboard() {
     return orchestrator.replayDecisionTrace(
       selectedTraceProfile,
       replayPolicyTrace,
-      selectedReplayStrategy
+      selectedReplayStrategy,
+      {
+        autoEscalationMode: selectedAutoEscalationMode
+      }
     );
-  }, [selectedTraceProfile, replayPolicyTrace, selectedReplayStrategy]);
+  }, [selectedTraceProfile, replayPolicyTrace, selectedReplayStrategy, selectedAutoEscalationMode]);
 
   const hintOnlyDecisions = useMemo<ReplayDecisionPoint[]>(() => {
     if (!selectedTraceProfile || replayPolicyTrace.length === 0) return [];
-    return orchestrator.replayDecisionTrace(selectedTraceProfile, replayPolicyTrace, 'hint-only');
-  }, [selectedTraceProfile, replayPolicyTrace]);
+    return orchestrator.replayDecisionTrace(
+      selectedTraceProfile,
+      replayPolicyTrace,
+      'hint-only',
+      {
+        autoEscalationMode: selectedAutoEscalationMode
+      }
+    );
+  }, [selectedTraceProfile, replayPolicyTrace, selectedAutoEscalationMode]);
 
   const hintOnlyByIndex = useMemo(() => {
     return hintOnlyDecisions.reduce((acc, point) => {
@@ -346,6 +397,7 @@ export function ResearchDashboard() {
     return baseline && baseline.decision !== point.decision ? count + 1 : count;
   }, 0);
   const replayPolicyVersion = replayDecisions[0]?.policyVersion || 'n/a';
+  const replayPolicySemanticsVersion = replayDecisions[0]?.policySemanticsVersion || orchestrator.getPolicySemanticsVersion();
 
   const activeThresholds = orchestrator.getThresholds(selectedReplayStrategy);
   const traceStartTime = replayPolicyTrace[0]?.timestamp;
@@ -360,6 +412,21 @@ export function ResearchDashboard() {
     setReplayNonce((prev) => prev + 1);
     window.setTimeout(() => setIsReplaying(false), 150);
   };
+
+  const pdfIndexStatusLabel = (() => {
+    switch (pdfIndexStatus) {
+      case 'loading':
+        return 'loading';
+      case 'ready':
+        return 'ready';
+      case 'warning':
+        return 'ready (in-memory only)';
+      case 'error':
+        return 'error';
+      default:
+        return 'idle';
+    }
+  })();
 
   return (
     <div className="space-y-6">
@@ -440,19 +507,31 @@ export function ResearchDashboard() {
               <div>
                 <p className="text-sm font-medium">PDF Retrieval Index</p>
                 <p className="text-xs text-gray-600" data-testid="pdf-index-summary">{pdfIndexSummary}</p>
+                <p className="text-[11px] text-gray-500" data-testid="pdf-index-status">
+                  Status: {pdfIndexStatusLabel}
+                </p>
+                {pdfIndexError && (
+                  <div 
+                    className={`text-[11px] mt-2 p-2 rounded border ${
+                      pdfIndexStatus === 'warning'
+                        ? 'text-amber-800 bg-amber-50 border-amber-200'
+                        : 'text-red-700 bg-red-50 border-red-200'
+                    }`}
+                    data-testid="pdf-index-error"
+                  >
+                    <PdfIndexErrorDisplay error={pdfIndexError} />
+                  </div>
+                )}
               </div>
-              <label>
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={handlePdfIndexImport}
-                  data-testid="pdf-index-file-input"
-                  className="hidden"
-                />
-                <Button variant="outline" size="sm" asChild>
-                  <span>Load Index</span>
-                </Button>
-              </label>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLoadPdfIndex}
+                data-testid="pdf-index-load-button"
+                disabled={pdfIndexStatus === 'loading'}
+              >
+                {pdfIndexStatus === 'loading' ? 'Loading...' : 'Load Index'}
+              </Button>
             </div>
           </Card>
         </div>
@@ -642,7 +721,7 @@ export function ResearchDashboard() {
               </Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div>
                 <p className="text-xs text-gray-500 mb-2">Trace learner</p>
                 <Select value={selectedTraceLearner} onValueChange={setSelectedTraceLearner}>
@@ -702,6 +781,21 @@ export function ResearchDashboard() {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-2">Auto escalation mode</p>
+                <Select
+                  value={selectedAutoEscalationMode}
+                  onValueChange={(value) => setSelectedAutoEscalationMode(value as AutoEscalationMode)}
+                >
+                  <SelectTrigger data-testid="trace-auto-escalation-mode-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="always-after-hint-threshold">Always after hint threshold</SelectItem>
+                    <SelectItem value="threshold-gated">Threshold-gated auto escalation</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -726,6 +820,9 @@ export function ResearchDashboard() {
             </div>
             <p className="text-xs text-gray-500" data-testid="trace-policy-version">
               Replay policy version: <span className="font-mono">{replayPolicyVersion}</span>
+            </p>
+            <p className="text-xs text-gray-500" data-testid="trace-policy-semantics-version">
+              Replay policy semantics: <span className="font-mono">{replayPolicySemanticsVersion}</span> ({selectedAutoEscalationMode})
             </p>
 
             {replayDecisions.length > 0 ? (
@@ -787,5 +884,43 @@ export function ResearchDashboard() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function formatPdfIndexSummary(pdfIndex: PdfIndexDocument): string {
+  return `${pdfIndex.docCount} doc(s), ${pdfIndex.chunkCount} chunk(s) · ${pdfIndex.indexId}`;
+}
+
+function isCommandLine(line: string): boolean {
+  const trimmed = line.trim();
+  return (
+    trimmed.startsWith('brew ') ||
+    trimmed.startsWith('sudo ') ||
+    trimmed.startsWith('choco ') ||
+    /^\d+\./.test(trimmed)
+  );
+}
+
+function PdfIndexErrorDisplay({ error }: { error: string }): JSX.Element {
+  const lines = error.split('\n');
+  return (
+    <>
+      {lines.map((line, index) => {
+        if (line.trim() === '') {
+          return <div key={index} className="h-1" />;
+        }
+        if (isCommandLine(line)) {
+          return (
+            <div
+              key={index}
+              className="font-mono text-red-800 bg-red-100 px-1.5 py-0.5 rounded my-1 text-[10px]"
+            >
+              {line}
+            </div>
+          );
+        }
+        return <div key={index}>{line}</div>;
+      })}
+    </>
   );
 }

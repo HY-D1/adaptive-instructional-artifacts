@@ -1,4 +1,4 @@
-import { SQLProblem, InteractionEvent, PdfIndexChunk } from '../types';
+import { SQLProblem, InteractionEvent, PdfIndexProvenance } from '../types';
 import {
   canonicalizeSqlEngageSubtype,
   getConceptById,
@@ -7,7 +7,7 @@ import {
   getProgressiveSqlEngageHintText,
   getSqlEngageRowsBySubtype
 } from '../data/sql-engage';
-import { storage } from './storage';
+import { getActivePdfIndexProvenance, retrievePdfChunks } from './pdf-retrieval';
 
 export type RetrievalHintHistory = {
   hintLevel: 1 | 2 | 3;
@@ -26,6 +26,7 @@ export type RetrievalSqlEngageAnchor = {
 
 export type RetrievalPdfPassage = {
   chunkId: string;
+  docId: string;
   page: number;
   text: string;
   score: number;
@@ -49,6 +50,7 @@ export type RetrievalBundle = {
   retrievedSourceIds: string[];
   triggerInteractionIds: string[];
   pdfPassages: RetrievalPdfPassage[];
+  pdfIndexProvenance: PdfIndexProvenance | null;
 };
 
 export function buildRetrievalBundle(options: {
@@ -145,6 +147,7 @@ export function buildRetrievalBundle(options: {
     },
     pdfTopK
   );
+  const pdfIndexProvenance = getActivePdfIndexProvenance();
 
   const retrievedSourceIds = Array.from(new Set([
     ...(anchor ? [anchor.rowId] : []),
@@ -179,7 +182,8 @@ export function buildRetrievalBundle(options: {
     },
     retrievedSourceIds,
     triggerInteractionIds,
-    pdfPassages
+    pdfPassages,
+    pdfIndexProvenance
   };
 }
 
@@ -191,29 +195,6 @@ function resolveHintSourceId(event: InteractionEvent, fallbackRowId?: string): s
   return fallbackRowId;
 }
 
-function tokenize(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 3);
-}
-
-function scoreChunk(chunk: PdfIndexChunk, keywords: Set<string>): number {
-  const tokens = tokenize(chunk.text);
-  if (tokens.length === 0 || keywords.size === 0) return 0;
-
-  let matches = 0;
-  for (const token of tokens) {
-    if (keywords.has(token)) {
-      matches += 1;
-    }
-  }
-
-  return matches / Math.sqrt(tokens.length);
-}
-
 function findTopPdfPassages(
   input: {
     subtype: string;
@@ -222,23 +203,16 @@ function findTopPdfPassages(
   },
   topK: number
 ): RetrievalPdfPassage[] {
-  const pdfIndex = storage.getPdfIndex();
-  if (!pdfIndex) return [];
+  const query = [input.subtype, input.problemTitle, ...input.conceptNames]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(' ');
 
-  const keywords = new Set<string>([
-    ...tokenize(input.subtype),
-    ...tokenize(input.problemTitle),
-    ...input.conceptNames.flatMap(tokenize)
-  ]);
-
-  return pdfIndex.chunks
-    .map((chunk) => ({
-      chunkId: chunk.chunkId,
-      page: chunk.page,
-      text: chunk.text,
-      score: scoreChunk(chunk, keywords)
-    }))
-    .filter((chunk) => chunk.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, topK);
+  return retrievePdfChunks(query, topK).map((chunk) => ({
+    chunkId: chunk.chunkId,
+    docId: chunk.docId,
+    page: chunk.page,
+    text: chunk.text,
+    score: chunk.score
+  }));
 }

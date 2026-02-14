@@ -62,11 +62,14 @@ practice failed attempt -> hint ladder (1/2/3) -> escalation -> add/update note 
 
 ## Week 2 reproducibility
 
-Use `docs/week2-repro-compat.md` for a teammate-ready runbook covering:
+Use `docs/week2_progress.md` as the canonical Week 2 runbook/progress source:
 - clickpath verification
 - logging fields to validate
 - replay mode behavior
 - model defaults/params
+
+Project master doc:
+- `docs/progress.md`
 
 For professor-ready demo artifacts (export JSON + screenshots), run:
 
@@ -80,8 +83,89 @@ Demo script and acceptance checks:
 
 Note: `dist/week2-clickpath-*` folders are archived snapshots and can be stale. Use `npm run test:e2e:week2` + `test-results/.last-run.json` for current verification status.
 
+## PDF Textbook Indexing (RAG)
+
+The system supports converting PDF textbooks into searchable retrieval indexes for RAG-style lookups during SQL learning.
+
+### Prerequisites
+
+Install Poppler (includes `pdftotext`):
+- **macOS**: `brew install poppler`
+- **Ubuntu/Debian**: `sudo apt-get install poppler-utils`
+- **Fedora/RHEL**: `sudo dnf install poppler-utils`
+- **Windows**: `choco install poppler` or download from [poppler-windows](https://github.com/oschwartz10612/poppler-windows/releases)
+
+### Build Index from PDF
+
+Convert a PDF into a searchable index (chunks + embeddings + metadata):
+
+```bash
+# Build index with automatic checksum-based incremental detection
+npm run pdf:convert docs/pdf-sources/my-textbook.pdf
+
+# Custom output directory
+npm run pdf:convert path/to/textbook.pdf --output-dir dist/my-index
+
+# Custom chunking parameters
+npm run pdf:convert textbook.pdf --chunk-size 200 --overlap 40
+
+# Force rebuild even if index exists
+npm run pdf:convert textbook.pdf --force
+```
+
+Features:
+- **Incremental**: Skips rebuild if PDF checksum matches existing index
+- **Page-aware**: Chunks preserve page numbers and extract headings
+- **Local only**: No uploads; all processing stays on your machine
+- **Logged**: Shows timing, checksum, pages, chunks, and index path
+
+### Query Index
+
+Search the index and retrieve top-k passages with page citations:
+
+```bash
+# Query with default top-5 results
+npm run pdf:query dist/pdf-index "SELECT statements and WHERE clauses"
+
+# Query with custom top-k
+npm run pdf:query dist/pdf-index "JOIN operations" --top-k 10
+
+# Environment variables
+TOP_K=10 SIMILARITY=0.2 npm run pdf:query dist/pdf-index "GROUP BY aggregation"
+```
+
+Output includes:
+- Ranked results with relevance scores
+- Page numbers for citations
+- Text snippets (200 chars)
+- Extracted headings (if available)
+- Query latency
+
+### Smoke Test
+
+Run the full indexing + retrieval test suite:
+
+```bash
+npm run test:pdf-index
+```
+
+This tests:
+1. First-time index build
+2. Incremental skip (same checksum)
+3. Force rebuild
+4. Query with various options
+5. Result citations
+
+### UI Integration
+
+Once indexed, load the PDF index in the Research dashboard:
+1. Go to **Research** tab
+2. Click **Load Index** in the "PDF Retrieval Index" card
+3. The index loads from `dist/pdf-index` and persists to LocalStorage
+4. When generating explanations/notes, the system retrieves relevant PDF passages automatically
+
 ## Notes
 
 - App config is at `apps/web/vite.config.ts`.
 - Replay fixture and SQL-Engage resources are under `apps/web/src/app/data/`.
-- Reproducibility contract is documented in `docs/guidelines/week2-reproducibility.md`.
+- Week 2 runbook/progress is documented in `docs/week2_progress.md`; demo flow is in `docs/week2-demo.md`.
