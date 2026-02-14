@@ -101,6 +101,7 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
       conceptCandidates: options.bundle.conceptCandidates,
       recentInteractionsSummary: options.bundle.recentInteractionsSummary,
       pdfPassages: options.bundle.pdfPassages.map((passage) => ({
+        docId: passage.docId,
         chunkId: passage.chunkId,
         page: passage.page,
         text: passage.text
@@ -134,37 +135,38 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
     };
   }
 
-  const replayMode = storage.getPolicyReplayMode();
-  if (replayMode) {
-    const parseTelemetry: TemplateParseTelemetry = {
-      status: 'not_attempted',
-      attempts: 0,
-      rawLength: 0,
-      failureReason: 'replay_mode'
-    };
-    const fallbackReason: FallbackReason = 'replay_mode';
-    const fallback = buildFallbackUnit(options, model, params, inputHash, fallbackReason, parseTelemetry);
-    saveCache({
-      cacheKey,
-      learnerId: options.learnerId,
-      templateId: options.templateId,
-      inputHash,
-      unit: fallback,
-      createdAt: Date.now()
-    });
-
-    return {
-      unit: fallback,
-      inputHash,
-      cacheKey,
-      fromCache: false,
-      usedFallback: true,
-      fallbackReason,
-      model,
-      params,
-      parseTelemetry
-    };
-  }
+  // REPLAY MODE BYPASSED FOR DEMO - Force LLM generation
+  // const replayMode = storage.getPolicyReplayMode();
+  // if (replayMode) {
+  //   const parseTelemetry: TemplateParseTelemetry = {
+  //     status: 'not_attempted',
+  //     attempts: 0,
+  //     rawLength: 0,
+  //     failureReason: 'replay_mode'
+  //   };
+  //   const fallbackReason: FallbackReason = 'replay_mode';
+  //   const fallback = buildFallbackUnit(options, model, params, inputHash, fallbackReason, parseTelemetry);
+  //   saveCache({
+  //     cacheKey,
+  //     learnerId: options.learnerId,
+  //     templateId: options.templateId,
+  //     inputHash,
+  //     unit: fallback,
+  //     createdAt: Date.now()
+  //   });
+  //
+  //   return {
+  //     unit: fallback,
+  //     inputHash,
+  //     cacheKey,
+  //     fromCache: false,
+  //     usedFallback: true,
+  //     fallbackReason,
+  //     model,
+  //     params,
+  //     parseTelemetry
+  //   };
+  // }
 
   const prompt = renderPrompt(options.templateId, stableStringify(options.bundle));
 
@@ -327,6 +329,7 @@ function selectPdfCitations(bundle: RetrievalBundle, sourceIds: string[]): PdfCi
       const existing = acc.get(passage.chunkId);
       if (!existing || passage.score > existing.score) {
         acc.set(passage.chunkId, {
+          docId: passage.docId,
           chunkId: passage.chunkId,
           page: passage.page,
           score: passage.score
@@ -349,7 +352,7 @@ function normalizeRetrievedSourceIds(sourceIds: string[]): string[] {
   return unique.sort((a, b) => {
     const group = (value: string) => {
       if (value.startsWith('sql-engage:')) return 0;
-      if (value.startsWith('pdf:')) return 1;
+      if (value.startsWith('pdf:') || /:p\d+:c\d+$/i.test(value)) return 1;
       return 2;
     };
     const groupDelta = group(a) - group(b);

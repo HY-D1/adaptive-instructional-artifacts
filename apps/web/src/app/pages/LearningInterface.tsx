@@ -3,16 +3,25 @@ import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
-import { SQLEditor } from '../components/SQLEditor';
+import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/SQLEditor';
 import { HintSystem } from '../components/HintSystem';
 import { ConceptCoverage } from '../components/ConceptCoverage';
 import { Clock, CheckCircle2, AlertCircle } from 'lucide-react';
-import { SQLProblem, InteractionEvent, InstructionalUnit, LearnerProfile, LearningInterfaceMode } from '../types';
+import {
+  SQLProblem,
+  InteractionEvent,
+  InstructionalUnit,
+  LearnerProfile,
+  LearningInterfaceMode,
+  PdfIndexProvenance,
+  RetrievedChunkInfo
+} from '../types';
 import { sqlProblems } from '../data/problems';
 import { storage } from '../lib/storage';
 import { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content-generator';
+import { createEventId } from '../lib/event-id';
 import {
   canonicalizeSqlEngageSubtype,
   getKnownSqlEngageSubtypes,
@@ -33,6 +42,7 @@ export function LearningInterface() {
   const [mode, setMode] = useState<LearningInterfaceMode>('student');
   const [sessionId, setSessionId] = useState('');
   const [currentProblem, setCurrentProblem] = useState<SQLProblem>(sqlProblems[0]);
+  const [sqlDraft, setSqlDraft] = useState(DEFAULT_SQL_EDITOR_CODE);
   const [startTime, setStartTime] = useState(Date.now());
   const [interactions, setInteractions] = useState<InteractionEvent[]>([]);
   const [lastError, setLastError] = useState<string | undefined>();
@@ -54,10 +64,14 @@ export function LearningInterface() {
     setStrategyOverride(profile.currentStrategy);
     setSubtypeOverride('auto');
 
-    // Reset and start a new active session on app load / learner switch.
-    storage.clearActiveSession();
-    const newSessionId = storage.startSession(learnerId);
+    const activeSessionId = storage.getActiveSessionId();
+    const belongsToLearner = activeSessionId.startsWith(`session-${learnerId}-`);
+    const newSessionId = belongsToLearner
+      ? activeSessionId
+      : storage.startSession(learnerId);
+    const restoredDraft = storage.getPracticeDraft(learnerId, newSessionId, currentProblem.id);
     setSessionId(newSessionId);
+    setSqlDraft(restoredDraft ?? DEFAULT_SQL_EDITOR_CODE);
     setInteractions(
       storage
         .getInteractionsByLearner(learnerId)
@@ -85,6 +99,7 @@ export function LearningInterface() {
     setNotesActionMessage(undefined);
     setGenerationError(undefined);
     setLatestGeneratedUnit(null);
+    setSqlDraft(DEFAULT_SQL_EDITOR_CODE);
     setStartTime(Date.now());
     setLearnerId(nextLearnerId);
   };
@@ -106,7 +121,7 @@ export function LearningInterface() {
 
   const handleCodeChange = (code: string) => {
     const event: InteractionEvent = {
-      id: `event-${Date.now()}`,
+      id: createEventId('event', 'code-change'),
       sessionId,
       learnerId,
       timestamp: Date.now(),
@@ -116,6 +131,37 @@ export function LearningInterface() {
     };
     storage.saveInteraction(event);
     setInteractions((previousInteractions) => [...previousInteractions, event]);
+  };
+
+  const handleEditorCodeChange = (code: string) => {
+    setSqlDraft(code);
+    if (sessionId) {
+      storage.savePracticeDraft(learnerId, sessionId, currentProblem.id, code);
+    }
+    handleCodeChange(code);
+  };
+
+  const handleEditorReset = () => {
+    setSqlDraft(DEFAULT_SQL_EDITOR_CODE);
+    if (sessionId) {
+      storage.clearPracticeDraft(learnerId, sessionId, currentProblem.id);
+    }
+  };
+
+  const handleProblemChange = (id: string) => {
+    const problem = sqlProblems.find(p => p.id === id)!;
+    setCurrentProblem(problem);
+    const restoredDraft = sessionId
+      ? storage.getPracticeDraft(learnerId, sessionId, problem.id)
+      : null;
+    setSqlDraft(restoredDraft ?? DEFAULT_SQL_EDITOR_CODE);
+    setStartTime(Date.now());
+    setLastError(undefined);
+    setLastErrorEventId(undefined);
+    setEscalationTriggered(false);
+    setNotesActionMessage(undefined);
+    setGenerationError(undefined);
+    setLatestGeneratedUnit(null);
   };
 
   const collectNoteEvidenceIds = (
@@ -143,6 +189,21 @@ export function LearningInterface() {
       ...boundedSessionInteractions,
       ...extraIds
     ]));
+  };
+
+  const resolveLatestProblemErrorSubtype = (): string | undefined => {
+    const latestErrorInteraction = storage
+      .getInteractionsByLearner(learnerId)
+      .filter(
+        (interaction) =>
+          interaction.sessionId === sessionId &&
+          interaction.problemId === currentProblem.id &&
+          interaction.eventType === 'error'
+      )
+      .sort((a, b) => b.timestamp - a.timestamp)[0];
+
+    const subtype = latestErrorInteraction?.sqlEngageSubtype || latestErrorInteraction?.errorSubtypeId;
+    return subtype ? canonicalizeSqlEngageSubtype(subtype) : undefined;
   };
 
   const persistGeneratedUnit = async (
@@ -179,9 +240,10 @@ export function LearningInterface() {
     const parseSuccess = generation.parseTelemetry.status === 'success';
     const parseMode = generation.parseTelemetry.mode || null;
     const parseFailureReason = generation.parseTelemetry.failureReason || null;
+    const pdfIndexOutputFields = buildPdfIndexOutputFields(bundle.pdfIndexProvenance);
 
     const llmEvent: InteractionEvent = {
-      id: `llm-${Date.now()}-${templateId}`,
+      id: createEventId('llm', templateId),
       sessionId,
       learnerId,
       timestamp: Date.now(),
@@ -209,27 +271,41 @@ export function LearningInterface() {
         parse_attempts: generation.parseTelemetry.attempts,
         parse_failure_reason: parseFailureReason,
         fallback_used: generation.usedFallback,
-        fallback_reason: generation.fallbackReason
+        fallback_reason: generation.fallbackReason,
+        ...pdfIndexOutputFields
       }
     };
     storage.saveInteraction(llmEvent);
     setInteractions((previousInteractions) => [...previousInteractions, llmEvent]);
 
+    // Build retrieved chunks info for RAG provenance
+    const retrievedChunks: RetrievedChunkInfo[] = textbookResult.unit.provenance?.retrievedPdfCitations?.map(c => ({
+      docId: c.docId,
+      page: c.page,
+      chunkId: c.chunkId,
+      score: c.score
+    })) || [];
+
     const textbookEvent: InteractionEvent = {
-      id: `textbook-${Date.now()}-${templateId}`,
+      id: createEventId('textbook', templateId),
       sessionId,
       learnerId,
       timestamp: Date.now(),
       eventType: textbookResult.action === 'created' ? 'textbook_add' : 'textbook_update',
       problemId: currentProblem.id,
       noteId: textbookResult.unit.id,
+      noteTitle: textbookResult.unit.title,
+      noteContent: textbookResult.unit.content,
       templateId,
       inputHash: generation.inputHash,
       model: generation.model,
       policyVersion: getSqlEngagePolicyVersion(),
       ruleFired,
+      conceptIds: [textbookResult.unit.conceptId],
       retrievedSourceIds: textbookResult.unit.provenance?.retrievedSourceIds || bundle.retrievedSourceIds,
+      retrievedChunks: retrievedChunks.length > 0 ? retrievedChunks : undefined,
       triggerInteractionIds: sourceInteractionIds,
+      evidenceInteractionIds: sourceInteractionIds,
       inputs: {
         retry_count: bundle.recentInteractionsSummary.retries,
         hint_count: bundle.recentInteractionsSummary.hintCount,
@@ -237,6 +313,9 @@ export function LearningInterface() {
       },
       outputs: {
         note_id: textbookResult.unit.id,
+        note_title: textbookResult.unit.title,
+        note_content_length: textbookResult.unit.content?.length || 0,
+        concept_id: textbookResult.unit.conceptId,
         textbook_action: textbookResult.action,
         template_id: templateId,
         parse_success: parseSuccess,
@@ -244,7 +323,9 @@ export function LearningInterface() {
         parse_attempts: generation.parseTelemetry.attempts,
         parse_failure_reason: parseFailureReason,
         fallback_used: generation.usedFallback,
-        fallback_reason: generation.fallbackReason
+        fallback_reason: generation.fallbackReason,
+        has_real_content: !generation.usedFallback && parseSuccess,
+        ...pdfIndexOutputFields
       }
     };
     storage.saveInteraction(textbookEvent);
@@ -258,7 +339,7 @@ export function LearningInterface() {
       ? canonicalizeSqlEngageSubtype(instructorSubtypeOverride || result.errorSubtypeId)
       : undefined;
     const event: InteractionEvent = {
-      id: `event-${Date.now()}`,
+      id: createEventId('event', 'execution'),
       sessionId,
       learnerId,
       timestamp: Date.now(),
@@ -270,7 +351,8 @@ export function LearningInterface() {
       sqlEngageSubtype: resolvedSubtype,
       policyVersion: getSqlEngagePolicyVersion(),
       successful: result.success,
-      timeSpent: Date.now() - startTime
+      timeSpent: Date.now() - startTime,
+      conceptIds: result.success ? [...currentProblem.concepts] : undefined
     };
 
     storage.saveInteraction(event);
@@ -339,13 +421,17 @@ export function LearningInterface() {
       setLastErrorEventId(sourceInteractionIds[sourceInteractionIds.length - 1]);
     }
 
-    if (!lastError) {
+    const escalationSubtype = lastError || resolveLatestProblemErrorSubtype();
+    if (!escalationSubtype) {
       return;
+    }
+    if (!lastError) {
+      setLastError(escalationSubtype);
     }
 
     setIsGeneratingUnit(true);
     setGenerationError(undefined);
-    void persistGeneratedUnit('explanation.v1', sourceIds, lastError, 'show-explanation-escalation')
+    void persistGeneratedUnit('explanation.v1', sourceIds, escalationSubtype, 'show-explanation-escalation')
       .then(({ textbookResult }) => {
         setNotesActionMessage(
           textbookResult.action === 'created'
@@ -377,7 +463,11 @@ export function LearningInterface() {
   };
 
   const handleAddToNotes = async () => {
-    if (!lastError) return;
+    const noteSubtype = lastError || resolveLatestProblemErrorSubtype();
+    if (!noteSubtype) return;
+    if (!lastError) {
+      setLastError(noteSubtype);
+    }
 
     const sourceIds = collectNoteEvidenceIds([], { maxInteractions: 12 });
     setIsGeneratingUnit(true);
@@ -386,7 +476,7 @@ export function LearningInterface() {
       const { textbookResult } = await persistGeneratedUnit(
         'notebook_unit.v1',
         sourceIds,
-        lastError,
+        noteSubtype,
         'manual-add-to-notes'
       );
       setNotesActionMessage(
@@ -407,7 +497,12 @@ export function LearningInterface() {
       (!sessionId || interaction.sessionId === sessionId)
   );
   const problemInteractions = learnerSessionInteractions.filter(i => i.problemId === currentProblem.id);
-  const showAddToNotes = escalationTriggered && !!lastError;
+  const latestProblemErrorEvent = [...problemInteractions]
+    .reverse()
+    .find((interaction) => interaction.eventType === 'error');
+  const latestProblemErrorSubtype = latestProblemErrorEvent?.sqlEngageSubtype || latestProblemErrorEvent?.errorSubtypeId;
+  const effectiveLastError = lastError || latestProblemErrorSubtype;
+  const showAddToNotes = escalationTriggered && !!effectiveLastError;
   const errorCount = problemInteractions.filter(i => i.eventType === 'error').length;
   const totalAttempts = problemInteractions.filter(
     (interaction) => interaction.eventType === 'execution' || interaction.eventType === 'error'
@@ -479,17 +574,7 @@ export function LearningInterface() {
                 </div>
                 <Select 
                   value={currentProblem.id} 
-                  onValueChange={(id) => {
-                    const problem = sqlProblems.find(p => p.id === id)!;
-                    setCurrentProblem(problem);
-                    setStartTime(Date.now());
-                    setLastError(undefined);
-                    setLastErrorEventId(undefined);
-                    setEscalationTriggered(false);
-                    setNotesActionMessage(undefined);
-                    setGenerationError(undefined);
-                    setLatestGeneratedUnit(null);
-                  }}
+                  onValueChange={handleProblemChange}
                 >
                   <SelectTrigger className="w-full lg:w-[220px]">
                     <SelectValue />
@@ -570,8 +655,10 @@ export function LearningInterface() {
             <div className="h-[500px]">
               <SQLEditor
                 problem={currentProblem}
+                code={sqlDraft}
                 onExecute={handleExecute}
-                onCodeChange={handleCodeChange}
+                onCodeChange={handleEditorCodeChange}
+                onReset={handleEditorReset}
               />
             </div>
           </div>
@@ -583,7 +670,7 @@ export function LearningInterface() {
               sessionId={sessionId}
               learnerId={learnerId}
               problemId={currentProblem.id}
-              errorSubtypeId={lastError}
+              errorSubtypeId={effectiveLastError}
               isSubtypeOverrideActive={Boolean(instructorSubtypeOverride)}
               knownSubtypeOverride={instructorSubtypeOverride}
               recentInteractions={problemInteractions}
@@ -661,4 +748,28 @@ export function LearningInterface() {
       </div>
     </div>
   );
+}
+
+function buildPdfIndexOutputFields(
+  provenance: PdfIndexProvenance | null
+): Record<string, string | number | boolean | null> {
+  if (!provenance) {
+    return {
+      pdf_index_id: null,
+      pdf_schema_version: null,
+      pdf_embedding_model_id: null,
+      pdf_chunker_version: null,
+      pdf_doc_count: 0,
+      pdf_chunk_count: 0
+    };
+  }
+
+  return {
+    pdf_index_id: provenance.indexId,
+    pdf_schema_version: provenance.schemaVersion,
+    pdf_embedding_model_id: provenance.embeddingModelId,
+    pdf_chunker_version: provenance.chunkerVersion,
+    pdf_doc_count: provenance.docCount,
+    pdf_chunk_count: provenance.chunkCount
+  };
 }
