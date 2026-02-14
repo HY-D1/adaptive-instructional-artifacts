@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Editor from '@monaco-editor/react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -6,28 +6,61 @@ import { Play, RotateCcw, CheckCircle, XCircle } from 'lucide-react';
 import { SQLExecutor, QueryResult } from '../lib/sql-executor';
 import { SQLProblem } from '../types';
 
+export const DEFAULT_SQL_EDITOR_CODE = '-- Write your SQL query here\nSELECT ';
+
 interface SQLEditorProps {
   problem: SQLProblem;
+  code: string;
   onExecute: (query: string, result: QueryResult) => void;
-  onCodeChange?: (code: string) => void;
+  onCodeChange: (code: string) => void;
+  onReset?: () => void;
 }
 
-export function SQLEditor({ problem, onExecute, onCodeChange }: SQLEditorProps) {
-  const [code, setCode] = useState('-- Write your SQL query here\nSELECT ');
+type CorrectnessState = {
+  match: boolean;
+  differences: string[];
+  mode: 'result' | 'exec-only';
+};
+
+export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: SQLEditorProps) {
   const [result, setResult] = useState<QueryResult | null>(null);
   const [executor, setExecutor] = useState<SQLExecutor | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
+  const activeExecutorRef = useRef<SQLExecutor | null>(null);
 
   useEffect(() => {
+    let isCancelled = false;
+    setExecutor(null);
+
     const initExecutor = async () => {
       const exec = new SQLExecutor();
-      await exec.initialize(problem.schema);
-      setExecutor(exec);
+      activeExecutorRef.current = exec;
+      try {
+        await exec.initialize(problem.schema);
+        if (isCancelled) {
+          exec.close();
+          if (activeExecutorRef.current === exec) {
+            activeExecutorRef.current = null;
+          }
+          return;
+        }
+        setExecutor(exec);
+      } catch {
+        exec.close();
+        if (activeExecutorRef.current === exec) {
+          activeExecutorRef.current = null;
+        }
+        setExecutor(null);
+      }
     };
     initExecutor();
 
     return () => {
-      executor?.close();
+      isCancelled = true;
+      if (activeExecutorRef.current) {
+        activeExecutorRef.current.close();
+        activeExecutorRef.current = null;
+      }
     };
   }, [problem.id]);
 
@@ -45,14 +78,13 @@ export function SQLEditor({ problem, onExecute, onCodeChange }: SQLEditorProps) 
   };
 
   const handleReset = () => {
-    setCode('-- Write your SQL query here\nSELECT ');
     setResult(null);
+    onReset?.();
   };
 
   const handleCodeChange = (value: string | undefined) => {
     const newCode = value || '';
-    setCode(newCode);
-    onCodeChange?.(newCode);
+    onCodeChange(newCode);
   };
 
   const formatResults = (result: QueryResult) => {
@@ -60,13 +92,22 @@ export function SQLEditor({ problem, onExecute, onCodeChange }: SQLEditorProps) 
     return executor.formatResults(result);
   };
 
-  const checkCorrectness = () => {
+  const checkCorrectness = (): CorrectnessState | null => {
     if (!result || !result.success || !executor) return null;
+
+    const gradingMode = problem.gradingMode ?? 'result';
+    if (gradingMode === 'exec-only' || !problem.expectedResult) {
+      return {
+        match: true,
+        differences: [],
+        mode: 'exec-only'
+      };
+    }
     
     const actualResults = formatResults(result);
     const comparison = executor.compareResults(actualResults, problem.expectedResult);
     
-    return comparison;
+    return { ...comparison, mode: 'result' };
   };
 
   const correctness = checkCorrectness();
@@ -96,7 +137,7 @@ export function SQLEditor({ problem, onExecute, onCodeChange }: SQLEditorProps) 
                   <>
                     <CheckCircle className="size-5 text-green-600" />
                     <span className="text-sm font-medium text-green-600">
-                      Correct!
+                      {correctness.mode === 'exec-only' ? 'Ran successfully' : 'Correct!'}
                     </span>
                   </>
                 ) : (
@@ -177,7 +218,7 @@ export function SQLEditor({ problem, onExecute, onCodeChange }: SQLEditorProps) 
                   <p className="text-gray-500">Query executed successfully. No results returned.</p>
                 )}
 
-                {correctness && !correctness.match && (
+                {correctness && correctness.mode === 'result' && !correctness.match && (
                   <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded">
                     <p className="text-sm font-medium text-amber-800 mb-2">
                       Your query returned different results:

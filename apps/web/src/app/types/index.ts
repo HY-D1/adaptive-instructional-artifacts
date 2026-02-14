@@ -29,6 +29,14 @@ export type HintTemplate = {
   nextAction: 'stay' | 'escalate' | 'aggregate';
 };
 
+export type RetrievedChunkInfo = {
+  docId: string;
+  page?: number;
+  chunkId?: string;
+  score?: number;
+  snippet?: string;
+};
+
 export type InteractionEvent = {
   id: string;
   sessionId?: string;
@@ -41,13 +49,16 @@ export type InteractionEvent = {
     | 'hint_request'
     | HelpEventType
     | 'llm_generate'
+    | 'pdf_index_rebuilt'
     | 'textbook_add'
-    | 'textbook_update';
+    | 'textbook_update'
+    | 'coverage_change';
   problemId: string;
   code?: string;
   error?: string;
   errorSubtypeId?: string;
   hintId?: string;
+  explanationId?: string;
   hintText?: string;
   hintLevel?: 1 | 2 | 3;
   helpRequestIndex?: number;
@@ -61,16 +72,38 @@ export type InteractionEvent = {
   inputHash?: string;
   model?: string;
   noteId?: string;
+  noteTitle?: string;
+  noteContent?: string;
   retrievedSourceIds?: string[];
+  retrievedChunks?: RetrievedChunkInfo[];
   triggerInteractionIds?: string[];
+  evidenceInteractionIds?: string[];
   inputs?: Record<string, string | number | boolean | null>;
   outputs?: Record<string, string | number | boolean | null>;
+  conceptIds?: string[];
+};
+
+export type ConceptCoverageEvidence = {
+  conceptId: string;
+  score: number; // 0-100 cumulative score
+  confidence: 'low' | 'medium' | 'high'; // based on evidence quality and quantity
+  lastUpdated: number;
+  evidenceCounts: {
+    successfulExecution: number;
+    hintViewed: number;
+    explanationViewed: number;
+    errorEncountered: number;
+    notesAdded: number;
+  };
+  streakCorrect: number; // consecutive successful executions
+  streakIncorrect: number; // consecutive errors
 };
 
 export type LearnerProfile = {
   id: string;
   name: string;
   conceptsCovered: Set<string>;
+  conceptCoverageEvidence: Map<string, ConceptCoverageEvidence>; // conceptId -> evidence
   errorHistory: Map<string, number>; // errorSubtypeId -> count
   interactionCount: number;
   currentStrategy: 'hint-only' | 'adaptive-low' | 'adaptive-medium' | 'adaptive-high';
@@ -88,9 +121,26 @@ export type LLMGenerationParams = {
 };
 
 export type PdfCitation = {
+  docId: string;
   chunkId: string;
   page: number;
   score: number;
+};
+
+export type PdfSourceDoc = {
+  docId: string;
+  filename: string;
+  sha256: string;
+  pageCount: number;
+};
+
+export type PdfIndexProvenance = {
+  indexId: string;
+  schemaVersion: string;
+  embeddingModelId: string;
+  chunkerVersion: string;
+  docCount: number;
+  chunkCount: number;
 };
 
 export type UnitProvenance = {
@@ -140,13 +190,22 @@ export type LLMCacheRecord = {
 
 export type PdfIndexChunk = {
   chunkId: string;
+  docId: string;
   page: number;
   text: string;
+  embedding?: number[];
 };
 
 export type PdfIndexDocument = {
+  indexId: string;
   sourceName: string;
   createdAt: string;
+  schemaVersion: string;
+  chunkerVersion: string;
+  embeddingModelId: string;
+  sourceDocs: PdfSourceDoc[];
+  docCount: number;
+  chunkCount: number;
   chunks: PdfIndexChunk[];
 };
 
@@ -183,7 +242,8 @@ export type SQLProblem = {
   concepts: string[];
   schema: string; // SQL schema for the problem
   expectedQuery: string;
-  expectedResult: any[];
+  expectedResult?: any[];
+  gradingMode?: 'result' | 'exec-only';
   hints?: string[];
 };
 

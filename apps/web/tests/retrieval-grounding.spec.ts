@@ -29,16 +29,32 @@ test('@week2 retrieval grounding: same learner/problem/subtype resolves stable a
     };
 
     storage.savePdfIndex({
+      indexId: 'pdf-index-grounding-v1',
       sourceName: 'synthetic-rag.pdf',
       createdAt: new Date().toISOString(),
+      schemaVersion: 'pdf-index-schema-v1',
+      chunkerVersion: 'word-window-180-overlap-30-v1',
+      embeddingModelId: 'hash-embedding-v1',
+      sourceDocs: [
+        {
+          docId: 'doc-synthetic',
+          filename: 'synthetic-rag.pdf',
+          sha256: 'synthetic-sha',
+          pageCount: 12
+        }
+      ],
+      docCount: 1,
+      chunkCount: 2,
       chunks: [
         {
-          chunkId: 'pdf:7:1',
+          chunkId: 'doc-synthetic:p7:c1',
+          docId: 'doc-synthetic',
           page: 7,
           text: 'Undefined column errors require checking schema column names and aliases carefully.'
         },
         {
-          chunkId: 'pdf:12:1',
+          chunkId: 'doc-synthetic:p12:c1',
+          docId: 'doc-synthetic',
           page: 12,
           text: 'SELECT and FROM clauses must reference valid columns that exist in the schema.'
         }
@@ -100,10 +116,12 @@ test('@week2 retrieval grounding: same learner/problem/subtype resolves stable a
       sourceIdsA: bundleRunA.retrievedSourceIds,
       sourceIdsB: bundleRunB.retrievedSourceIds,
       bundlePdfPassages: bundleRunA.pdfPassages.map((passage) => ({
+        docId: passage.docId,
         chunkId: passage.chunkId,
         page: passage.page
       })),
       unitPdfCitations: (generation.unit.provenance?.retrievedPdfCitations || []).map((citation) => ({
+        docId: citation.docId,
         chunkId: citation.chunkId,
         page: citation.page
       }))
@@ -117,11 +135,21 @@ test('@week2 retrieval grounding: same learner/problem/subtype resolves stable a
   expect(audit.sourceIdsA).toContain(audit.anchorA);
   expect(audit.sourceIdsA.some((sourceId: string) => sourceId.startsWith('hint-run-'))).toBeFalsy();
   expect(audit.bundlePdfPassages.length).toBeGreaterThan(0);
+  expect(audit.bundlePdfPassages).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        docId: 'doc-synthetic',
+        chunkId: expect.stringMatching(/^doc-synthetic:/),
+        page: expect.any(Number)
+      })
+    ])
+  );
   expect(audit.unitPdfCitations.length).toBeGreaterThan(0);
   expect(audit.unitPdfCitations).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
-        chunkId: expect.stringMatching(/^pdf:/),
+        docId: 'doc-synthetic',
+        chunkId: expect.stringMatching(/^doc-synthetic:/),
         page: expect.any(Number)
       })
     ])

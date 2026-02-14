@@ -20,6 +20,7 @@ const POLICY_REPLAY_EVENT_TYPES: InteractionEvent['eventType'][] = [
   'hint_view',
   'explanation_view'
 ];
+const POLICY_SEMANTICS_VERSION = 'orchestrator-auto-escalation-variant-v2';
 
 export type DecisionRuleFired =
   | 'no-errors-show-hint'
@@ -32,6 +33,8 @@ export type StrategyThresholds = {
   escalate: number;
   aggregate: number;
 };
+
+export type AutoEscalationMode = 'always-after-hint-threshold' | 'threshold-gated';
 
 export type ReplayDecisionPoint = {
   index: number;
@@ -47,6 +50,8 @@ export type ReplayDecisionPoint = {
   decision: AdaptiveDecision['decision'];
   ruleFired: DecisionRuleFired;
   policyVersion: string;
+  policySemanticsVersion: string;
+  autoEscalationMode: AutoEscalationMode;
   reasoning: string;
 };
 
@@ -71,19 +76,27 @@ export class AdaptiveOrchestrator {
     return { ...this.errorThresholds[strategy] };
   }
 
+  getPolicySemanticsVersion(): string {
+    return POLICY_SEMANTICS_VERSION;
+  }
+
   /**
    * Main decision function: analyzes interaction context and decides next action
    */
   makeDecision(
     profile: LearnerProfile,
     recentInteractions: InteractionEvent[],
-    currentProblemId: string
+    currentProblemId: string,
+    options?: {
+      autoEscalationMode?: AutoEscalationMode;
+    }
   ): AdaptiveDecision {
     const now = Date.now();
     const context = this.analyzeContext(recentInteractions, currentProblemId, now);
     const thresholds = this.getThresholds(profile.currentStrategy);
     const autoEscalation = this.getAutoEscalationState(recentInteractions, currentProblemId);
-    const selection = this.selectDecision(context, thresholds, autoEscalation);
+    const autoEscalationMode = options?.autoEscalationMode || 'always-after-hint-threshold';
+    const selection = this.selectDecision(context, thresholds, autoEscalation, autoEscalationMode);
 
     return {
       timestamp: now,
@@ -98,11 +111,16 @@ export class AdaptiveOrchestrator {
   replayDecisionTrace(
     profile: LearnerProfile,
     traceSlice: InteractionEvent[],
-    strategyOverride: LearnerProfile['currentStrategy']
+    strategyOverride: LearnerProfile['currentStrategy'],
+    options?: {
+      autoEscalationMode?: AutoEscalationMode;
+    }
   ): ReplayDecisionPoint[] {
     const sortedTrace = this.getPolicyReplayTrace(traceSlice);
     const thresholds = this.getThresholds(strategyOverride);
     const policyVersion = getSqlEngagePolicyVersion();
+    const policySemanticsVersion = this.getPolicySemanticsVersion();
+    const autoEscalationMode = options?.autoEscalationMode || 'always-after-hint-threshold';
     const runningInteractions: InteractionEvent[] = [];
 
     return sortedTrace
@@ -110,7 +128,12 @@ export class AdaptiveOrchestrator {
         runningInteractions.push(event);
         const context = this.analyzeContext(runningInteractions, event.problemId, event.timestamp);
         const autoEscalation = this.getAutoEscalationState(runningInteractions, event.problemId);
-        const selection = this.selectDecision(context, thresholds, autoEscalation);
+        const selection = this.selectDecision(
+          context,
+          thresholds,
+          autoEscalation,
+          autoEscalationMode
+        );
 
         return {
           index: index + 1,
@@ -126,6 +149,8 @@ export class AdaptiveOrchestrator {
           decision: selection.decision,
           ruleFired: selection.ruleFired,
           policyVersion,
+          policySemanticsVersion,
+          autoEscalationMode,
           reasoning: selection.reasoning
         };
       });
@@ -140,7 +165,8 @@ export class AdaptiveOrchestrator {
   private selectDecision(
     context: AdaptiveDecision['context'],
     thresholds: StrategyThresholds,
-    autoEscalation: ReturnType<AdaptiveOrchestrator['getAutoEscalationState']>
+    autoEscalation: ReturnType<AdaptiveOrchestrator['getAutoEscalationState']>,
+    autoEscalationMode: AutoEscalationMode
   ): {
     decision: AdaptiveDecision['decision'];
     ruleFired: DecisionRuleFired;
@@ -154,15 +180,24 @@ export class AdaptiveOrchestrator {
       };
     }
 
-    if (Number.isFinite(thresholds.escalate) && autoEscalation.shouldEscalate) {
+    const thresholdMet = context.errorCount >= thresholds.escalate && context.retryCount >= 2;
+    const shouldAutoEscalate =
+      Number.isFinite(thresholds.escalate) &&
+      autoEscalation.shouldEscalate &&
+      (autoEscalationMode === 'always-after-hint-threshold' || thresholdMet);
+
+    if (shouldAutoEscalate) {
       return {
         decision: 'show_explanation',
         ruleFired: 'auto-escalation-after-hints',
-        reasoning: `Auto-escalation triggered after ${autoEscalation.hintCount} hints and another failed run`
+        reasoning:
+          autoEscalationMode === 'threshold-gated'
+            ? `Threshold-gated auto-escalation triggered after ${autoEscalation.hintCount} hints and threshold match`
+            : `Auto-escalation triggered after ${autoEscalation.hintCount} hints with no explanation yet`
       };
     }
 
-    if (context.errorCount >= thresholds.escalate && context.retryCount >= 2) {
+    if (thresholdMet) {
       return {
         decision: 'show_explanation',
         ruleFired: 'escalation-threshold-met',
@@ -236,31 +271,23 @@ export class AdaptiveOrchestrator {
     }
 
     const thresholdHint = hintViews[hintThreshold - 1];
-    const errorsAfterThreshold = problemInteractions.filter(
-      (interaction) =>
-        interaction.eventType === 'error' &&
-        interaction.timestamp > thresholdHint.timestamp
-    );
-    const latestErrorAfterThreshold = errorsAfterThreshold[errorsAfterThreshold.length - 1];
-    const latestInteraction = problemInteractions[problemInteractions.length - 1];
-
-    if (!latestErrorAfterThreshold || !latestInteraction || latestInteraction.id !== latestErrorAfterThreshold.id) {
-      return {
-        shouldEscalate: false,
-        triggerErrorId: latestErrorAfterThreshold?.id,
-        hintCount: hintViews.length
-      };
-    }
-
-    const explanationAfterError = problemInteractions.some(
+    const explanationAfterThreshold = problemInteractions.some(
       (interaction) =>
         interaction.eventType === 'explanation_view' &&
-        interaction.timestamp >= latestErrorAfterThreshold.timestamp
+        interaction.timestamp >= thresholdHint.timestamp
     );
+    const latestErrorAfterThreshold = [...problemInteractions]
+      .reverse()
+      .find(
+        (interaction) =>
+          interaction.eventType === 'error' &&
+          interaction.timestamp >= thresholdHint.timestamp
+      );
+    const triggerInteractionId = latestErrorAfterThreshold?.id || thresholdHint.id;
 
     return {
-      shouldEscalate: !explanationAfterError,
-      triggerErrorId: latestErrorAfterThreshold.id,
+      shouldEscalate: !explanationAfterThreshold,
+      triggerErrorId: triggerInteractionId,
       hintCount: hintViews.length
     };
   }

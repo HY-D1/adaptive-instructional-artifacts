@@ -12,7 +12,8 @@ const SQL_ENGAGE_TS_PATH = path.join(REPO_ROOT, 'apps/web/src/app/data/sql-engag
 const SQL_ENGAGE_CSV_PATH = path.join(REPO_ROOT, 'apps/web/src/app/data/sql_engage_dataset.csv');
 const OUTPUT_PATH = path.join(REPO_ROOT, 'dist/replay/toy-replay-output.json');
 const REPLAY_HARNESS_VERSION = 'toy-replay-harness-v3';
-const REPLAY_POLICY_SEMANTICS_VERSION = 'orchestrator-aligned-v2';
+const REPLAY_POLICY_SEMANTICS_VERSION = 'orchestrator-auto-escalation-variant-v2';
+const AUTO_ESCALATION_MODE = 'always-after-hint-threshold';
 const POLICY_ATTEMPT_OUTCOMES = new Set(['error', 'success']);
 
 const ALIASES = {
@@ -276,36 +277,28 @@ function getAutoEscalationState(problemInteractions, hintThreshold = 3) {
   }
 
   const thresholdHint = hintViews[hintThreshold - 1];
-  const errorsAfterThreshold = sorted.filter(
-    (interaction) =>
-      interaction.eventType === 'error' &&
-      interaction.timestamp > thresholdHint.timestamp
-  );
-  const latestErrorAfterThreshold = errorsAfterThreshold[errorsAfterThreshold.length - 1];
-  const latestInteraction = sorted[sorted.length - 1];
-
-  if (!latestErrorAfterThreshold || !latestInteraction || latestInteraction.id !== latestErrorAfterThreshold.id) {
-    return {
-      shouldEscalate: false,
-      triggerErrorId: latestErrorAfterThreshold?.id,
-      hintCount: hintViews.length
-    };
-  }
-
-  const explanationAfterError = sorted.some(
+  const explanationAfterThreshold = sorted.some(
     (interaction) =>
       interaction.eventType === 'explanation_view' &&
-      interaction.timestamp >= latestErrorAfterThreshold.timestamp
+      interaction.timestamp >= thresholdHint.timestamp
   );
+  const latestErrorAfterThreshold = [...sorted]
+    .reverse()
+    .find(
+      (interaction) =>
+        interaction.eventType === 'error' &&
+        interaction.timestamp >= thresholdHint.timestamp
+    );
+  const triggerInteractionId = latestErrorAfterThreshold?.id || thresholdHint.id;
 
   return {
-    shouldEscalate: !explanationAfterError,
-    triggerErrorId: latestErrorAfterThreshold.id,
+    shouldEscalate: !explanationAfterThreshold,
+    triggerErrorId: triggerInteractionId,
     hintCount: hintViews.length
   };
 }
 
-function selectDecision(context, thresholds, autoEscalation) {
+function selectDecision(context, thresholds, autoEscalation, autoEscalationMode) {
   if (context.errorCount === 0) {
     return {
       decision: 'show_hint',
@@ -314,15 +307,24 @@ function selectDecision(context, thresholds, autoEscalation) {
     };
   }
 
-  if (Number.isFinite(thresholds.escalate) && autoEscalation.shouldEscalate) {
+  const thresholdMet = context.errorCount >= thresholds.escalate && context.retryCount >= 2;
+  const shouldAutoEscalate =
+    Number.isFinite(thresholds.escalate) &&
+    autoEscalation.shouldEscalate &&
+    (autoEscalationMode === 'always-after-hint-threshold' || thresholdMet);
+
+  if (shouldAutoEscalate) {
     return {
       decision: 'show_explanation',
       ruleFired: 'auto-escalation-after-hints',
-      reasoning: `Auto-escalation triggered after ${autoEscalation.hintCount} hints and another failed run`
+      reasoning:
+        autoEscalationMode === 'threshold-gated'
+          ? `Threshold-gated auto-escalation triggered after ${autoEscalation.hintCount} hints and threshold match`
+          : `Auto-escalation triggered after ${autoEscalation.hintCount} hints with no explanation yet`
     };
   }
 
-  if (context.errorCount >= thresholds.escalate && context.retryCount >= 2) {
+  if (thresholdMet) {
     return {
       decision: 'show_explanation',
       ruleFired: 'escalation-threshold-met',
@@ -437,7 +439,7 @@ function replayForPolicy(policy, fixture, sqlEngagePolicyVersion, subtypeIndex, 
 
       const context = analyzeContext(policyEvents, timestamp);
       const autoEscalation = getAutoEscalationState(policyEvents);
-      const selection = selectDecision(context, thresholds, autoEscalation);
+      const selection = selectDecision(context, thresholds, autoEscalation, AUTO_ESCALATION_MODE);
 
       let action = selection.decision;
       let hintLevel = null;
@@ -502,6 +504,8 @@ function replayForPolicy(policy, fixture, sqlEngagePolicyVersion, subtypeIndex, 
         thresholds: serializeThresholds(thresholds),
         policy_version: policy.policyVersion,
         knowledge_policy_version: sqlEngagePolicyVersion,
+        policy_semantics_version: REPLAY_POLICY_SEMANTICS_VERSION,
+        auto_escalation_mode: AUTO_ESCALATION_MODE,
         rule_fired: selection.ruleFired,
         reasoning: selection.reasoning,
         inputs: {
@@ -534,6 +538,8 @@ function replayForPolicy(policy, fixture, sqlEngagePolicyVersion, subtypeIndex, 
     policy_id: policy.id,
     strategy: policy.strategy,
     policy_version: policy.policyVersion,
+    policy_semantics_version: REPLAY_POLICY_SEMANTICS_VERSION,
+    auto_escalation_mode: AUTO_ESCALATION_MODE,
     decisions: interventions,
     summary: summaries
   };
@@ -560,6 +566,7 @@ async function main() {
     fixture_id: fixture.fixtureId,
     replay_harness_version: REPLAY_HARNESS_VERSION,
     replay_policy_semantics_version: REPLAY_POLICY_SEMANTICS_VERSION,
+    auto_escalation_mode: AUTO_ESCALATION_MODE,
     replay_input_filter: {
       include_attempt_outcomes: ['error', 'success']
     },

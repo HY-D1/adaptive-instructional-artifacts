@@ -20,5 +20,5 @@ jobs:
         run: npm ci
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
-      - name: Run week2 verification gate
+      - name: Run week2 verification gate (demo + acceptance checks)
         run: npm run verify:week2

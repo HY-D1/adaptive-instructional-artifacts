@@ -1,5 +1,5 @@
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { readFile, stat } from 'node:fs/promises';
+import { resolve, join } from 'node:path';
 
 const indexPath = process.argv[2];
 const query = process.argv.slice(3).join(' ').trim();
@@ -11,8 +11,8 @@ if (!indexPath || !query) {
 }
 
 async function main() {
-  const raw = await readFile(resolve(process.cwd(), indexPath), 'utf8');
-  const index = JSON.parse(raw);
+  const resolvedPath = resolve(process.cwd(), indexPath);
+  const index = await loadIndexPayload(resolvedPath);
   const keywords = tokenize(query);
 
   const ranked = (index.chunks || [])
@@ -36,6 +36,27 @@ async function main() {
     .slice(0, topK);
 
   console.log(JSON.stringify({ query, topK, results: ranked }, null, 2));
+}
+
+async function loadIndexPayload(resolvedPath) {
+  const targetStat = await stat(resolvedPath);
+  if (targetStat.isFile()) {
+    const raw = await readFile(resolvedPath, 'utf8');
+    return JSON.parse(raw);
+  }
+
+  const [indexRaw, chunksRaw] = await Promise.all([
+    readFile(join(resolvedPath, 'index.json'), 'utf8').catch(() => null),
+    readFile(join(resolvedPath, 'chunks.json'), 'utf8').catch(() => null)
+  ]);
+  if (indexRaw) {
+    return JSON.parse(indexRaw);
+  }
+  if (chunksRaw) {
+    return { chunks: JSON.parse(chunksRaw) };
+  }
+
+  throw new Error(`No index payload found in ${resolvedPath}`);
 }
 
 function tokenize(text) {

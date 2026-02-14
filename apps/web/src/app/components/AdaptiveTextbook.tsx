@@ -5,9 +5,12 @@ import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { Book, Trash2 } from 'lucide-react';
 import { Link } from 'react-router';
+import DOMPurify from 'dompurify';
+import { marked } from 'marked';
 import { InstructionalUnit, InteractionEvent } from '../types';
 import { storage } from '../lib/storage';
 import { getConceptById } from '../data/sql-engage';
+import { buildTextbookInsights } from '../lib/textbook-insights';
 
 interface AdaptiveTextbookProps {
   learnerId: string;
@@ -68,8 +71,21 @@ export function AdaptiveTextbook({
     setTextbookUnits(units);
   };
 
+  const learnerInteractions = useMemo(
+    () => storage.getInteractionsByLearner(learnerId),
+    [learnerId, textbookUnits]
+  );
+  const textbookInsights = useMemo(
+    () => buildTextbookInsights({
+      units: textbookUnits,
+      interactions: learnerInteractions
+    }),
+    [textbookUnits, learnerInteractions]
+  );
+  const orderedUnits = textbookInsights.orderedUnits;
+
   useEffect(() => {
-    if (textbookUnits.length === 0) {
+    if (orderedUnits.length === 0) {
       if (selectedUnit) {
         setSelectedUnit(null);
         onSelectedUnitChange?.(undefined);
@@ -77,14 +93,14 @@ export function AdaptiveTextbook({
       return;
     }
 
-    const selectedId = selectedUnitId || selectedUnit?.id || textbookUnits[0].id;
-    const resolvedUnit = textbookUnits.find((unit) => unit.id === selectedId) || textbookUnits[0];
+    const selectedId = selectedUnitId || selectedUnit?.id || orderedUnits[0].id;
+    const resolvedUnit = orderedUnits.find((unit) => unit.id === selectedId) || orderedUnits[0];
 
     if (resolvedUnit.id !== selectedUnit?.id) {
       setSelectedUnit(resolvedUnit);
       onSelectedUnitChange?.(resolvedUnit.id);
     }
-  }, [textbookUnits, selectedUnitId, selectedUnit, onSelectedUnitChange]);
+  }, [orderedUnits, selectedUnitId, selectedUnit, onSelectedUnitChange]);
 
   const selectedConcept = useMemo(
     () => (selectedUnit ? getConceptById(selectedUnit.conceptId) : null),
@@ -148,7 +164,7 @@ export function AdaptiveTextbook({
     }
   };
 
-  const groupedUnits = textbookUnits.reduce((acc, unit) => {
+  const groupedUnits = orderedUnits.reduce((acc, unit) => {
     const concept = getConceptById(unit.conceptId);
     const conceptName = concept?.name || 'Other';
     if (!acc[conceptName]) {
@@ -161,7 +177,21 @@ export function AdaptiveTextbook({
   const getSourceCount = (unit: InstructionalUnit) =>
     getMergedInteractionIds(unit).length;
 
-  if (textbookUnits.length === 0) {
+  const renderedUnitContent = useMemo(() => {
+    if (!selectedUnit) {
+      return '';
+    }
+
+    const rawMarkdown = selectedUnit.content || '';
+    const renderedMarkdown = marked.parse(rawMarkdown, {
+      gfm: true,
+      breaks: true
+    }) as string;
+
+    return DOMPurify.sanitize(renderedMarkdown);
+  }, [selectedUnit]);
+
+  if (orderedUnits.length === 0) {
     return (
       <Card className="p-8 text-center">
         <Book className="size-12 mx-auto text-gray-400 mb-4" />
@@ -222,11 +252,46 @@ export function AdaptiveTextbook({
           ))}
         </div>
 
+        {textbookInsights.misconceptionCards.length > 0 && (
+          <div className="mt-4 rounded border border-amber-200 bg-amber-50 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">You Keep Hitting</p>
+            <div className="mt-2 space-y-2">
+              {textbookInsights.misconceptionCards.map((card) => (
+                <div key={card.id} className="rounded border border-amber-200 bg-white p-2" data-testid="misconception-card">
+                  <p className="text-sm font-medium text-amber-900">{card.subtype}</p>
+                  <p className="text-xs text-amber-800">
+                    {card.count} related interactions • last seen {new Date(card.lastSeenAt).toLocaleString()}
+                  </p>
+                  {card.conceptNames.length > 0 && (
+                    <p className="text-[11px] text-amber-700 mt-1">
+                      Concepts: {card.conceptNames.join(', ')}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {textbookInsights.spacedReviewPrompts.length > 0 && (
+          <div className="mt-4 rounded border border-blue-200 bg-blue-50 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-800">Spaced Review</p>
+            <div className="mt-2 space-y-2">
+              {textbookInsights.spacedReviewPrompts.map((prompt) => (
+                <div key={prompt.id} className="rounded border border-blue-200 bg-white p-2" data-testid="spaced-review-prompt">
+                  <p className="text-sm font-medium text-blue-900">{prompt.title}</p>
+                  <p className="text-xs text-blue-800">{prompt.message}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <Separator className="my-4" />
 
         <div className="text-xs text-gray-500">
           <p className="font-medium mb-1">Coverage</p>
-          <p>{textbookUnits.length} instructional units</p>
+          <p>{orderedUnits.length} instructional units</p>
           <p>{Object.keys(groupedUnits).length} concepts covered</p>
         </div>
       </Card>
@@ -257,7 +322,7 @@ export function AdaptiveTextbook({
             <div 
               className="space-y-4"
               dangerouslySetInnerHTML={{ 
-                __html: selectedUnit.content.replace(/\n/g, '<br />') 
+                __html: renderedUnitContent 
               }}
             />
 

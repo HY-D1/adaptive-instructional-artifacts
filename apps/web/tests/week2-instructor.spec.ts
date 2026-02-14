@@ -52,7 +52,8 @@ test('@week2 instructor: trace table shows events and policy knob changes decisi
   // Adaptive baseline validation.
   await expectNumericValue(page.getByTestId('trace-threshold-escalate'), 3);
   await expectNumericValue(page.getByTestId('trace-threshold-aggregate'), 6);
-  await expect(page.getByTestId('trace-policy-version')).toContainText('sql-engage-index-v2-progressive');
+  await expect(page.getByTestId('trace-policy-version')).toContainText(/sql-engage-index-v\d+-/);
+  await expect(page.getByTestId('trace-policy-semantics-version')).toContainText('orchestrator-auto-escalation-variant-v2');
 
   const adaptiveChangedDecisionCount = Number((await page.getByTestId('trace-changed-decision-count').textContent())?.trim() || '0');
   expect(adaptiveChangedDecisionCount).toBeGreaterThan(0);
@@ -75,4 +76,10 @@ test('@week2 instructor: trace table shows events and policy knob changes decisi
   await expect(page.getByTestId('trace-events-table-body').getByText('escalation-threshold-met').first()).toBeVisible();
   const changedAfterSwitchBack = Number((await page.getByTestId('trace-changed-decision-count').textContent())?.trim() || '0');
   expect(changedAfterSwitchBack).toBeGreaterThan(0);
+
+  // Auto-escalation mode is explicit and replayable.
+  await selectRadixOption(page, 'trace-auto-escalation-mode-select', 'Threshold-gated auto escalation');
+  await page.getByTestId('trace-replay-button').click();
+  await expect(page.getByTestId('trace-policy-semantics-version')).toContainText('threshold-gated');
+  await expect(tableBodyRows.first()).toBeVisible();
 });

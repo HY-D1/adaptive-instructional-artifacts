@@ -5,8 +5,12 @@ import {
   SaveTextbookUnitResult,
   LLMCacheRecord,
   PdfIndexDocument,
+  PdfIndexChunk,
+  PdfIndexProvenance,
+  PdfSourceDoc,
   PdfCitation,
-  UnitProvenance
+  UnitProvenance,
+  ConceptCoverageEvidence
 } from '../types';
 import {
   canonicalizeSqlEngageSubtype,
@@ -14,6 +18,11 @@ import {
   getDeterministicSqlEngageAnchor,
   getSqlEngagePolicyVersion
 } from '../data/sql-engage';
+import {
+  PDF_CHUNKER_VERSION,
+  PDF_EMBEDDING_MODEL_ID,
+  PDF_INDEX_SCHEMA_VERSION
+} from './pdf-index-config';
 
 /**
  * Local storage manager for interaction traces and learner state
@@ -24,9 +33,55 @@ class StorageManager {
   private readonly PROFILES_KEY = 'sql-learning-profiles';
   private readonly TEXTBOOK_KEY = 'sql-learning-textbook';
   private readonly ACTIVE_SESSION_KEY = 'sql-learning-active-session';
+  private readonly PRACTICE_DRAFTS_KEY = 'sql-learning-practice-drafts';
   private readonly LLM_CACHE_KEY = 'sql-learning-llm-cache';
   private readonly REPLAY_MODE_KEY = 'sql-learning-policy-replay-mode';
   private readonly PDF_INDEX_KEY = 'sql-learning-pdf-index';
+
+  // In-memory fallback for PDF index when LocalStorage quota is exceeded
+  private pdfIndexMemory: PdfIndexDocument | null = null;
+
+  private readParsedStorage<T>(key: string, fallback: T): T {
+    const raw = localStorage.getItem(key);
+    if (!raw) {
+      return fallback;
+    }
+
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      // Corrupted localStorage payloads should never crash runtime code paths.
+      localStorage.removeItem(key);
+      return fallback;
+    }
+  }
+
+  /**
+   * Safely sets a LocalStorage item, detecting quota exceeded errors.
+   * Returns true if successful, false if quota exceeded.
+   */
+  private safeSetItem(key: string, value: string): { success: boolean; quotaExceeded?: boolean } {
+    try {
+      localStorage.setItem(key, value);
+      return { success: true };
+    } catch (error) {
+      // Check for quota exceeded errors (varies by browser)
+      const isQuotaError = 
+        error instanceof DOMException &&
+        (error.name === 'QuotaExceededError' ||
+         error.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+         error.code === 22 || // Chrome/Safari
+         error.code === 1014); // Firefox
+      
+      if (isQuotaError) {
+        console.warn(`LocalStorage quota exceeded for key '${key}'. Value size: ${value.length} chars.`);
+        return { success: false, quotaExceeded: true };
+      }
+      
+      // Re-throw non-quota errors
+      throw error;
+    }
+  }
 
   startSession(learnerId: string): string {
     const sessionId = `session-${learnerId}-${Date.now()}`;
@@ -56,18 +111,35 @@ class StorageManager {
     localStorage.setItem(this.ACTIVE_SESSION_KEY, normalized);
   }
 
+  savePracticeDraft(learnerId: string, sessionId: string, problemId: string, code: string) {
+    const key = this.buildPracticeDraftKey(learnerId, sessionId, problemId);
+    const drafts = this.readParsedStorage<Record<string, string>>(this.PRACTICE_DRAFTS_KEY, {});
+    drafts[key] = code;
+    localStorage.setItem(this.PRACTICE_DRAFTS_KEY, JSON.stringify(drafts));
+  }
+
+  getPracticeDraft(learnerId: string, sessionId: string, problemId: string): string | null {
+    const key = this.buildPracticeDraftKey(learnerId, sessionId, problemId);
+    const drafts = this.readParsedStorage<Record<string, string>>(this.PRACTICE_DRAFTS_KEY, {});
+    return drafts[key] ?? null;
+  }
+
+  clearPracticeDraft(learnerId: string, sessionId: string, problemId: string) {
+    const key = this.buildPracticeDraftKey(learnerId, sessionId, problemId);
+    const drafts = this.readParsedStorage<Record<string, string>>(this.PRACTICE_DRAFTS_KEY, {});
+    if (!(key in drafts)) {
+      return;
+    }
+    delete drafts[key];
+    localStorage.setItem(this.PRACTICE_DRAFTS_KEY, JSON.stringify(drafts));
+  }
+
   setPolicyReplayMode(enabled: boolean) {
     localStorage.setItem(this.REPLAY_MODE_KEY, JSON.stringify(Boolean(enabled)));
   }
 
   getPolicyReplayMode(): boolean {
-    const raw = localStorage.getItem(this.REPLAY_MODE_KEY);
-    if (!raw) return false;
-    try {
-      return Boolean(JSON.parse(raw));
-    } catch {
-      return false;
-    }
+    return Boolean(this.readParsedStorage<boolean>(this.REPLAY_MODE_KEY, false));
   }
 
   saveLLMCacheRecord(record: LLMCacheRecord) {
@@ -82,27 +154,61 @@ class StorageManager {
   }
 
   getLLMCache(): Record<string, LLMCacheRecord> {
-    const raw = localStorage.getItem(this.LLM_CACHE_KEY);
-    if (!raw) return {};
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return {};
-    }
+    return this.readParsedStorage<Record<string, LLMCacheRecord>>(this.LLM_CACHE_KEY, {});
   }
 
-  savePdfIndex(document: PdfIndexDocument) {
-    localStorage.setItem(this.PDF_INDEX_KEY, JSON.stringify(document));
+  savePdfIndex(document: PdfIndexDocument): { success: boolean; quotaExceeded?: boolean } {
+    const normalized = this.normalizePdfIndexDocument(document);
+    if (!normalized) {
+      return { success: false };
+    }
+    
+    const serialized = JSON.stringify(normalized);
+    const result = this.safeSetItem(this.PDF_INDEX_KEY, serialized);
+    
+    if (result.quotaExceeded) {
+      // Fall back to in-memory storage
+      this.pdfIndexMemory = normalized;
+      console.warn('PDF index stored in memory only (LocalStorage quota exceeded). The index will be lost on page refresh.');
+    } else if (result.success) {
+      // Clear memory fallback if LocalStorage succeeds
+      this.pdfIndexMemory = null;
+    }
+    
+    return result;
   }
 
   getPdfIndex(): PdfIndexDocument | null {
-    const raw = localStorage.getItem(this.PDF_INDEX_KEY);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw);
-    } catch {
+    // First try LocalStorage
+    const raw = this.readParsedStorage<unknown>(this.PDF_INDEX_KEY, null);
+    const normalized = this.normalizePdfIndexDocument(raw);
+    if (normalized) {
+      return normalized;
+    }
+    
+    // Fall back to in-memory if available
+    if (this.pdfIndexMemory) {
+      return this.pdfIndexMemory;
+    }
+
+    localStorage.setItem(this.PDF_INDEX_KEY, JSON.stringify(normalized));
+    return normalized;
+  }
+
+  getPdfIndexProvenance(): PdfIndexProvenance | null {
+    const index = this.getPdfIndex();
+    if (!index) {
       return null;
     }
+
+    return {
+      indexId: index.indexId,
+      schemaVersion: index.schemaVersion,
+      embeddingModelId: index.embeddingModelId,
+      chunkerVersion: index.chunkerVersion,
+      docCount: index.docCount,
+      chunkCount: index.chunkCount
+    };
   }
 
   // Interaction traces
@@ -115,9 +221,53 @@ class StorageManager {
     this.updateProfileStatsFromEvent(normalizedEvent);
   }
 
+  /**
+   * Log a coverage change event when a concept is newly covered.
+   * This creates an auditable trace of concept coverage progression.
+   */
+  saveCoverageChangeEvent(params: {
+    learnerId: string;
+    problemId: string;
+    conceptId: string;
+    score: number;
+    confidence: 'low' | 'medium' | 'high';
+    evidenceCounts: ConceptCoverageEvidence['evidenceCounts'];
+    triggerEventId?: string;
+    triggerEventType?: string;
+  }): void {
+    const sessionId = this.getActiveSessionId();
+    const timestamp = Date.now();
+    const event: InteractionEvent = {
+      id: `evt-coverage-${params.learnerId}-${params.conceptId}-${timestamp}`,
+      sessionId,
+      learnerId: params.learnerId,
+      timestamp,
+      eventType: 'coverage_change',
+      problemId: params.problemId,
+      conceptIds: [params.conceptId],
+      inputs: {
+        previousScore: Math.max(0, params.score - 25), // Approximate previous state
+        triggerEventType: params.triggerEventType || 'unknown'
+      },
+      outputs: {
+        score: params.score,
+        confidence: params.confidence,
+        successfulExecution: params.evidenceCounts.successfulExecution,
+        hintViewed: params.evidenceCounts.hintViewed,
+        explanationViewed: params.evidenceCounts.explanationViewed,
+        errorEncountered: params.evidenceCounts.errorEncountered,
+        notesAdded: params.evidenceCounts.notesAdded,
+        triggerEventId: params.triggerEventId || 'unknown'
+      }
+    };
+
+    const interactions = this.getAllInteractions();
+    interactions.push(event);
+    localStorage.setItem(this.INTERACTIONS_KEY, JSON.stringify(interactions));
+  }
+
   getAllInteractions(): InteractionEvent[] {
-    const data = localStorage.getItem(this.INTERACTIONS_KEY);
-    return data ? JSON.parse(data) : [];
+    return this.readParsedStorage<InteractionEvent[]>(this.INTERACTIONS_KEY, []);
   }
 
   getInteractionsByLearner(learnerId: string): InteractionEvent[] {
@@ -194,6 +344,7 @@ class StorageManager {
       ...profile,
       currentStrategy: this.normalizeStrategy(profile.currentStrategy),
       conceptsCovered: Array.from(profile.conceptsCovered),
+      conceptCoverageEvidence: Array.from((profile.conceptCoverageEvidence || new Map()).entries()),
       errorHistory: Array.from(profile.errorHistory.entries())
     };
     
@@ -213,17 +364,30 @@ class StorageManager {
     if (!profile) return null;
     
     // Convert arrays back to Sets and Maps
+    const evidenceMap = new Map<string, ConceptCoverageEvidence>(
+      (profile.conceptCoverageEvidence || []) as [string, ConceptCoverageEvidence][]
+    );
+    
+    // Ensure all covered concepts have evidence entries
+    const conceptsCovered = new Set((profile.conceptsCovered || []) as any);
+    const now = Date.now();
+    for (const conceptId of conceptsCovered) {
+      if (!evidenceMap.has(conceptId)) {
+        evidenceMap.set(conceptId, this.createDefaultEvidence(conceptId, now));
+      }
+    }
+    
     return {
       ...profile,
-      conceptsCovered: new Set((profile.conceptsCovered || []) as any),
+      conceptsCovered,
+      conceptCoverageEvidence: evidenceMap,
       errorHistory: new Map((profile.errorHistory || []) as any),
       currentStrategy: this.normalizeStrategy(profile.currentStrategy)
     };
   }
 
   getAllProfiles(): any[] {
-    const data = localStorage.getItem(this.PROFILES_KEY);
-    return data ? JSON.parse(data) : [];
+    return this.readParsedStorage<any[]>(this.PROFILES_KEY, []);
   }
 
   createDefaultProfile(learnerId: string, strategy: LearnerProfile['currentStrategy'] = 'adaptive-medium'): LearnerProfile {
@@ -231,6 +395,7 @@ class StorageManager {
       id: learnerId,
       name: `Learner ${learnerId}`,
       conceptsCovered: new Set(),
+      conceptCoverageEvidence: new Map(),
       errorHistory: new Map(),
       interactionCount: 0,
       currentStrategy: this.normalizeStrategy(strategy),
@@ -242,6 +407,41 @@ class StorageManager {
     this.saveProfile(profile);
     return profile;
   }
+
+  private createDefaultEvidence(conceptId: string, timestamp: number): ConceptCoverageEvidence {
+    return {
+      conceptId,
+      score: 0,
+      confidence: 'low',
+      lastUpdated: timestamp,
+      evidenceCounts: {
+        successfulExecution: 0,
+        hintViewed: 0,
+        explanationViewed: 0,
+        errorEncountered: 0,
+        notesAdded: 0
+      },
+      streakCorrect: 0,
+      streakIncorrect: 0
+    };
+  }
+
+  // Evidence scoring weights for coverage calculation
+  private readonly EVIDENCE_WEIGHTS = {
+    successfulExecution: 25,    // Strong positive evidence
+    notesAdded: 15,             // Good positive evidence (engagement)
+    explanationViewed: 5,       // Weak positive (needed help)
+    hintViewed: 2,              // Minimal positive (just viewed hint)
+    errorEncountered: -5        // Negative evidence
+  };
+
+  // Thresholds for coverage and confidence
+  private readonly COVERAGE_THRESHOLD = 50;      // Score >= 50 = concept covered
+  private readonly CONFIDENCE_THRESHOLDS = {
+    high: { score: 75, minExecutions: 2 },
+    medium: { score: 40, minExecutions: 1 },
+    low: { score: 0, minExecutions: 0 }
+  };
 
   // Textbook/instructional units
   saveTextbookUnit(learnerId: string, unit: InstructionalUnit): SaveTextbookUnitResult {
@@ -369,7 +569,11 @@ class StorageManager {
         const page = Number(citation.page);
         if (!Number.isFinite(page)) continue;
         const score = Number.isFinite(Number(citation.score)) ? Number(citation.score) : 0;
+        const docId = this.asNonEmptyString(citation.docId)
+          || this.asNonEmptyString(citation.chunkId.split(':')[0])
+          || 'legacy-doc';
         const normalized: PdfCitation = {
+          docId,
           chunkId: citation.chunkId,
           page,
           score
@@ -384,8 +588,7 @@ class StorageManager {
   }
 
   getAllTextbooks(): Record<string, InstructionalUnit[]> {
-    const data = localStorage.getItem(this.TEXTBOOK_KEY);
-    return data ? JSON.parse(data) : {};
+    return this.readParsedStorage<Record<string, InstructionalUnit[]>>(this.TEXTBOOK_KEY, {});
   }
 
   clearTextbook(learnerId: string) {
@@ -416,16 +619,38 @@ class StorageManager {
     const serializableProfiles = this.getAllProfiles().map(profile => {
       const learnerInteractions = interactions.filter(i => i.learnerId === profile.id);
       const errors = learnerInteractions.filter(i => i.eventType === 'error').length;
-      const conceptsCoveredSet = new Set<string>(profile.conceptsCovered || []);
-      learnerInteractions.forEach(i => {
-        getConceptIdsForSqlEngageSubtype(i.sqlEngageSubtype || i.errorSubtypeId).forEach(c => conceptsCoveredSet.add(c));
+      
+      // Get full profile with evidence data
+      const fullProfile = this.getProfile(profile.id);
+      const conceptsCoveredSet = fullProfile?.conceptsCovered || new Set<string>(profile.conceptsCovered || []);
+      const coverageEvidence = fullProfile?.conceptCoverageEvidence;
+
+      // Build evidence summary for export
+      const conceptCoverageWithEvidence = Array.from(conceptsCoveredSet).map(conceptId => {
+        const evidence = coverageEvidence?.get(conceptId);
+        return {
+          conceptId,
+          score: evidence?.score || 0,
+          confidence: evidence?.confidence || 'low',
+          evidenceCounts: evidence?.evidenceCounts || {
+            successfulExecution: 0,
+            hintViewed: 0,
+            explanationViewed: 0,
+            errorEncountered: 0,
+            notesAdded: 0
+          }
+        };
       });
 
       return {
         ...profile,
         interactionCount: learnerInteractions.length,
         errors,
-        conceptsCovered: Array.from(conceptsCoveredSet)
+        conceptsCovered: Array.from(conceptsCoveredSet),
+        conceptCoverageEvidence: coverageEvidence 
+          ? Array.from(coverageEvidence.entries())
+          : [],
+        conceptCoverageSummary: conceptCoverageWithEvidence
       };
     });
 
@@ -436,6 +661,7 @@ class StorageManager {
       llmCache: this.getLLMCache(),
       replayMode: this.getPolicyReplayMode(),
       pdfIndex: this.getPdfIndex(),
+      pdfIndexProvenance: this.getPdfIndexProvenance(),
       activeSessionId,
       exportScope: allHistory ? 'all-history' : 'active-session',
       exportPolicyVersion: this.EXPORT_POLICY_VERSION,
@@ -488,14 +714,62 @@ class StorageManager {
     this.clearActiveSession();
   }
 
+  getConceptCoverageEvidence(learnerId: string): Map<string, ConceptCoverageEvidence> {
+    const profile = this.getProfile(learnerId);
+    return profile?.conceptCoverageEvidence || new Map();
+  }
+
+  getCoverageStats(learnerId: string): {
+    totalConcepts: number;
+    coveredCount: number;
+    coveragePercentage: number;
+    byConfidence: Record<'low' | 'medium' | 'high', number>;
+    averageScore: number;
+  } {
+    const profile = this.getProfile(learnerId);
+    const evidenceMap = profile?.conceptCoverageEvidence || new Map();
+    const totalConcepts = 6; // Based on conceptNodes array length
+    
+    let coveredCount = 0;
+    let totalScore = 0;
+    const byConfidence: Record<'low' | 'medium' | 'high', number> = {
+      low: 0,
+      medium: 0,
+      high: 0
+    };
+
+    for (const evidence of evidenceMap.values()) {
+      if (evidence.score >= this.COVERAGE_THRESHOLD) {
+        coveredCount++;
+      }
+      totalScore += evidence.score;
+      byConfidence[evidence.confidence]++;
+    }
+
+    const validEvidenceCount = evidenceMap.size || 1; // Avoid division by zero
+    
+    return {
+      totalConcepts,
+      coveredCount,
+      coveragePercentage: (coveredCount / totalConcepts) * 100,
+      byConfidence,
+      averageScore: Math.round(totalScore / validEvidenceCount)
+    };
+  }
+
   clearAll() {
     this.clearInteractions();
     this.clearActiveSession();
     localStorage.removeItem(this.PROFILES_KEY);
     localStorage.removeItem(this.TEXTBOOK_KEY);
+    localStorage.removeItem(this.PRACTICE_DRAFTS_KEY);
     localStorage.removeItem(this.LLM_CACHE_KEY);
     localStorage.removeItem(this.REPLAY_MODE_KEY);
     localStorage.removeItem(this.PDF_INDEX_KEY);
+  }
+
+  private buildPracticeDraftKey(learnerId: string, sessionId: string, problemId: string): string {
+    return [learnerId, sessionId, problemId].map((value) => value.trim()).join('::');
   }
 
   private updateProfileStatsFromEvent(event: InteractionEvent) {
@@ -504,13 +778,176 @@ class StorageManager {
 
     profile.interactionCount += 1;
 
-    const subtype = event.sqlEngageSubtype || event.errorSubtypeId;
-    if (subtype) {
-      profile.errorHistory.set(subtype, (profile.errorHistory.get(subtype) || 0) + 1);
-      getConceptIdsForSqlEngageSubtype(subtype).forEach(conceptId => profile.conceptsCovered.add(conceptId));
+    if (event.eventType === 'error') {
+      const subtype = event.sqlEngageSubtype || event.errorSubtypeId;
+      if (subtype) {
+        const canonicalSubtype = canonicalizeSqlEngageSubtype(subtype);
+        profile.errorHistory.set(
+          canonicalSubtype,
+          (profile.errorHistory.get(canonicalSubtype) || 0) + 1
+        );
+      }
+    }
+
+    // Update evidence-based coverage for all concept IDs in the event
+    const conceptIds = this.extractConceptIdsFromEvent(event);
+    for (const conceptId of conceptIds) {
+      this.updateConceptEvidence(profile, conceptId, event);
     }
 
     this.saveProfile(profile);
+  }
+
+  private extractConceptIdsFromEvent(event: InteractionEvent): string[] {
+    const conceptIds = new Set<string>();
+
+    if (event.eventType === 'error') {
+      const subtype = event.sqlEngageSubtype || event.errorSubtypeId;
+      if (subtype) {
+        const canonicalSubtype = canonicalizeSqlEngageSubtype(subtype);
+        getConceptIdsForSqlEngageSubtype(canonicalSubtype).forEach((conceptId) => {
+          conceptIds.add(conceptId);
+        });
+      }
+    }
+
+    for (const conceptId of event.conceptIds || []) {
+      const normalized = conceptId.trim();
+      if (normalized) {
+        conceptIds.add(normalized);
+      }
+    }
+
+    return Array.from(conceptIds);
+  }
+
+  private updateConceptEvidence(
+    profile: LearnerProfile,
+    conceptId: string,
+    event: InteractionEvent
+  ): void {
+    const evidenceMap = profile.conceptCoverageEvidence || new Map();
+    const existing = evidenceMap.get(conceptId);
+    const now = Date.now();
+    
+    // Track if concept was already covered before this update
+    const wasAlreadyCovered = profile.conceptsCovered.has(conceptId);
+    
+    const evidence: ConceptCoverageEvidence = existing
+      ? { ...existing }
+      : this.createDefaultEvidence(conceptId, now);
+
+    // Update evidence counts based on event type
+    switch (event.eventType) {
+      case 'execution':
+        if (event.successful) {
+          evidence.evidenceCounts.successfulExecution++;
+          evidence.streakCorrect++;
+          evidence.streakIncorrect = 0;
+        } else {
+          evidence.evidenceCounts.errorEncountered++;
+          evidence.streakIncorrect++;
+          evidence.streakCorrect = 0;
+        }
+        break;
+      case 'error':
+        evidence.evidenceCounts.errorEncountered++;
+        evidence.streakIncorrect++;
+        evidence.streakCorrect = 0;
+        break;
+      case 'hint_view':
+        evidence.evidenceCounts.hintViewed++;
+        break;
+      case 'explanation_view':
+        evidence.evidenceCounts.explanationViewed++;
+        break;
+      case 'textbook_add':
+      case 'textbook_update':
+        evidence.evidenceCounts.notesAdded++;
+        break;
+    }
+
+    // Recalculate score based on evidence
+    evidence.score = this.calculateEvidenceScore(evidence);
+    evidence.confidence = this.calculateConfidenceLevel(evidence);
+    evidence.lastUpdated = now;
+
+    // Add to covered set if threshold reached
+    const newlyCovered = evidence.score >= this.COVERAGE_THRESHOLD && !wasAlreadyCovered;
+    if (evidence.score >= this.COVERAGE_THRESHOLD) {
+      profile.conceptsCovered.add(conceptId);
+    }
+
+    evidenceMap.set(conceptId, evidence);
+    profile.conceptCoverageEvidence = evidenceMap;
+    
+    // Log coverage change event if concept is newly covered
+    if (newlyCovered) {
+      this.saveCoverageChangeEvent({
+        learnerId: profile.id,
+        problemId: event.problemId,
+        conceptId,
+        score: evidence.score,
+        confidence: evidence.confidence,
+        evidenceCounts: { ...evidence.evidenceCounts },
+        triggerEventId: event.id,
+        triggerEventType: event.eventType
+      });
+    }
+  }
+
+  private calculateEvidenceScore(evidence: ConceptCoverageEvidence): number {
+    const counts = evidence.evidenceCounts;
+    const weights = this.EVIDENCE_WEIGHTS;
+
+    // Base score from weighted evidence
+    let score = 
+      counts.successfulExecution * weights.successfulExecution +
+      counts.notesAdded * weights.notesAdded +
+      counts.explanationViewed * weights.explanationViewed +
+      counts.hintViewed * weights.hintViewed +
+      counts.errorEncountered * weights.errorEncountered;
+
+    // Streak bonuses/penalties
+    if (evidence.streakCorrect >= 3) {
+      score += 15; // Bonus for consistent success
+    } else if (evidence.streakCorrect >= 2) {
+      score += 5;
+    }
+
+    if (evidence.streakIncorrect >= 3) {
+      score -= 10; // Penalty for consistent struggle
+    }
+
+    // Clamp to 0-100 range
+    return Math.max(0, Math.min(100, score));
+  }
+
+  private calculateConfidenceLevel(evidence: ConceptCoverageEvidence): 'low' | 'medium' | 'high' {
+    const totalEvidence = 
+      evidence.evidenceCounts.successfulExecution +
+      evidence.evidenceCounts.notesAdded +
+      evidence.evidenceCounts.explanationViewed +
+      evidence.evidenceCounts.hintViewed;
+
+    // High confidence requires good score and multiple successful executions
+    if (evidence.score >= this.CONFIDENCE_THRESHOLDS.high.score &&
+        evidence.evidenceCounts.successfulExecution >= this.CONFIDENCE_THRESHOLDS.high.minExecutions) {
+      return 'high';
+    }
+
+    // Medium confidence requires decent score or some successful execution
+    if (evidence.score >= this.CONFIDENCE_THRESHOLDS.medium.score &&
+        (evidence.evidenceCounts.successfulExecution >= this.CONFIDENCE_THRESHOLDS.medium.minExecutions ||
+         totalEvidence >= 3)) {
+      return 'medium';
+    }
+
+    return 'low';
+  }
+
+  private getCoverageConceptIds(event: InteractionEvent): string[] {
+    return this.extractConceptIdsFromEvent(event);
   }
 
   private normalizeStrategy(strategy: unknown): LearnerProfile['currentStrategy'] {
@@ -535,11 +972,15 @@ class StorageManager {
       sessionId: normalizedSessionId
     };
 
-    if (withSession.eventType !== 'hint_view') {
-      return withSession;
+    if (withSession.eventType === 'hint_view') {
+      return this.normalizeHintViewForExport(withSession);
     }
 
-    return this.normalizeHintViewForExport(withSession);
+    if (withSession.eventType === 'textbook_add' || withSession.eventType === 'textbook_update') {
+      return this.normalizeTextbookEventForExport(withSession);
+    }
+
+    return withSession;
   }
 
   private normalizeHintViewForExport(interaction: InteractionEvent): InteractionEvent {
@@ -551,15 +992,51 @@ class StorageManager {
     const fallbackAnchor = getDeterministicSqlEngageAnchor(canonicalSubtype, rowSeed);
     const sqlEngageRowId = interaction.sqlEngageRowId?.trim() || fallbackAnchor.rowId;
     const policyVersion = interaction.policyVersion?.trim() || getSqlEngagePolicyVersion();
-    const { hintId: _legacyHintId, ...withoutLegacyHintId } = interaction;
+    
+    // Generate stable hintId if not present: sql-engage:<subtype>:L<level>:<rowId>
+    const stableHintId = interaction.hintId?.trim() || `sql-engage:${canonicalSubtype}:L${hintLevel}:${sqlEngageRowId}`;
 
     return {
-      ...withoutLegacyHintId,
+      ...interaction,
       eventType: 'hint_view',
       hintLevel,
       sqlEngageSubtype: canonicalSubtype,
       sqlEngageRowId,
-      policyVersion
+      policyVersion,
+      hintId: stableHintId
+    };
+  }
+
+  private normalizeTextbookEventForExport(interaction: InteractionEvent): InteractionEvent {
+    // Ensure textbook events have all required fields for a "working prototype"
+    const policyVersion = interaction.policyVersion?.trim() || 'unknown';
+    const templateId = interaction.templateId?.trim() || 'unknown';
+    
+    // Ensure evidenceInteractionIds is set (mirror of triggerInteractionIds for clarity)
+    const evidenceIds = interaction.evidenceInteractionIds 
+      || interaction.triggerInteractionIds 
+      || [];
+    
+    // Check for placeholder content
+    const outputs = interaction.outputs || {};
+    const hasRealContent = outputs['has_real_content'] === true || 
+      (outputs['fallback_used'] === false && outputs['parse_success'] === true);
+    
+    // Log warning if placeholder content detected
+    if (!hasRealContent) {
+      console.warn(`[Export] Textbook event ${interaction.id} may contain placeholder content:`, {
+        fallback_reason: outputs['fallback_reason'],
+        parse_success: outputs['parse_success']
+      });
+    }
+
+    return {
+      ...interaction,
+      eventType: interaction.eventType,
+      policyVersion,
+      templateId,
+      evidenceInteractionIds: evidenceIds,
+      triggerInteractionIds: interaction.triggerInteractionIds || evidenceIds
     };
   }
 
@@ -573,6 +1050,145 @@ class StorageManager {
       return 2;
     }
     return 1;
+  }
+
+  private normalizePdfIndexDocument(raw: unknown): PdfIndexDocument | null {
+    if (!raw || typeof raw !== 'object') {
+      return null;
+    }
+
+    const candidate = raw as Partial<PdfIndexDocument> & {
+      sourceDocs?: unknown;
+      chunks?: unknown;
+    };
+    const sourceDocs = this.normalizePdfSourceDocs(candidate.sourceDocs, candidate.sourceName);
+    if (sourceDocs.length === 0) {
+      return null;
+    }
+
+    const chunks = this.normalizePdfChunks(candidate.chunks, sourceDocs[0].docId);
+    if (chunks.length === 0) {
+      return null;
+    }
+
+    const indexId = this.asNonEmptyString(candidate.indexId)
+      || `pdf-index-${sourceDocs[0].docId}-${chunks.length}`;
+    const createdAt = this.asNonEmptyString(candidate.createdAt) || new Date().toISOString();
+    const schemaVersion = this.asNonEmptyString(candidate.schemaVersion) || PDF_INDEX_SCHEMA_VERSION;
+    const chunkerVersion = this.asNonEmptyString(candidate.chunkerVersion) || PDF_CHUNKER_VERSION;
+    const embeddingModelId = this.asNonEmptyString(candidate.embeddingModelId) || PDF_EMBEDDING_MODEL_ID;
+    const sourceName = this.asNonEmptyString(candidate.sourceName)
+      || (sourceDocs.length === 1 ? sourceDocs[0].filename : `${sourceDocs.length} documents`);
+
+    return {
+      indexId,
+      sourceName,
+      createdAt,
+      schemaVersion,
+      chunkerVersion,
+      embeddingModelId,
+      sourceDocs,
+      docCount: sourceDocs.length,
+      chunkCount: chunks.length,
+      chunks
+    };
+  }
+
+  private normalizePdfSourceDocs(rawSourceDocs: unknown, fallbackSourceName?: string): PdfSourceDoc[] {
+    if (Array.isArray(rawSourceDocs) && rawSourceDocs.length > 0) {
+      const normalized = rawSourceDocs
+        .map((doc, index) => this.normalizePdfSourceDoc(doc, index))
+        .filter((doc): doc is PdfSourceDoc => Boolean(doc));
+      if (normalized.length > 0) {
+        return normalized;
+      }
+    }
+
+    const fallbackName = this.asNonEmptyString(fallbackSourceName) || 'unknown.pdf';
+    const fallbackDocId = `legacy-${this.simpleHash(fallbackName)}`;
+    return [
+      {
+        docId: fallbackDocId,
+        filename: fallbackName,
+        sha256: `legacy-${this.simpleHash(`${fallbackName}::sha`)}`,
+        pageCount: 0
+      }
+    ];
+  }
+
+  private normalizePdfSourceDoc(rawDoc: unknown, index: number): PdfSourceDoc | null {
+    if (!rawDoc || typeof rawDoc !== 'object') {
+      return null;
+    }
+
+    const candidate = rawDoc as Partial<PdfSourceDoc>;
+    const filename = this.asNonEmptyString(candidate.filename) || `document-${index + 1}.pdf`;
+    const docId = this.asNonEmptyString(candidate.docId) || `doc-${this.simpleHash(filename)}-${index + 1}`;
+    const sha256 = this.asNonEmptyString(candidate.sha256) || `legacy-${this.simpleHash(`${filename}::sha`)}`;
+    const pageCount = Number(candidate.pageCount);
+
+    return {
+      docId,
+      filename,
+      sha256,
+      pageCount: Number.isFinite(pageCount) && pageCount >= 0 ? pageCount : 0
+    };
+  }
+
+  private normalizePdfChunks(rawChunks: unknown, defaultDocId: string): PdfIndexChunk[] {
+    if (!Array.isArray(rawChunks) || rawChunks.length === 0) {
+      return [];
+    }
+
+    return rawChunks
+      .map((chunk, index) => this.normalizePdfChunk(chunk, defaultDocId, index))
+      .filter((chunk): chunk is PdfIndexChunk => Boolean(chunk));
+  }
+
+  private normalizePdfChunk(rawChunk: unknown, defaultDocId: string, index: number): PdfIndexChunk | null {
+    if (!rawChunk || typeof rawChunk !== 'object') {
+      return null;
+    }
+
+    const candidate = rawChunk as Partial<PdfIndexChunk>;
+    const text = this.asNonEmptyString(candidate.text);
+    if (!text) {
+      return null;
+    }
+
+    const page = Number(candidate.page);
+    const normalizedPage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+    const docId = this.asNonEmptyString(candidate.docId) || defaultDocId;
+    const chunkId = this.asNonEmptyString(candidate.chunkId)
+      || `${docId}:p${normalizedPage}:c${index + 1}`;
+    const embedding = Array.isArray(candidate.embedding)
+      ? candidate.embedding
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value))
+      : undefined;
+
+    return {
+      chunkId,
+      docId,
+      page: normalizedPage,
+      text,
+      embedding
+    };
+  }
+
+  private asNonEmptyString(value: unknown): string {
+    if (typeof value !== 'string') {
+      return '';
+    }
+    return value.trim();
+  }
+
+  private simpleHash(value: string): string {
+    let hash = 0;
+    for (let index = 0; index < value.length; index += 1) {
+      hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+    }
+    return hash.toString(16);
   }
 }
 

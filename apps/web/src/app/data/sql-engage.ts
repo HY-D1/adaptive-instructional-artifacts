@@ -63,7 +63,7 @@ export type SqlEngageRecord = {
   intended_learning_outcome: string;
 };
 
-const SQL_ENGAGE_POLICY_VERSION = 'sql-engage-index-v2-progressive';
+const SQL_ENGAGE_POLICY_VERSION = 'sql-engage-index-v3-hintid-contract';
 
 function parseCsvLine(line: string): string[] {
   const values: string[] = [];
@@ -220,8 +220,8 @@ function normalizeSpacing(text: string): string {
 function scrubSpecificIdentifiers(text: string): string {
   return normalizeSpacing(
     text
-      .replace(/'[^']+'/g, 'the referenced item')
-      .replace(/"[^"]+"/g, 'the referenced item')
+      .replace(/'[\w\s._]+'/g, 'the referenced item')
+      .replace(/"[\w\s._]+"/g, 'the referenced item')
   );
 }
 
@@ -336,21 +336,78 @@ export function getProgressiveSqlEngageHintText(
   return appendSupportSentence(ladder[2], feedback);
 }
 
-const subtypeToConceptMap: Record<string, string[]> = {
+const conceptNodeIds = new Set(conceptNodes.map((concept) => concept.id));
+
+const explicitSubtypeConceptMap: Record<string, string[]> = {
+  'aggregation misuse': ['aggregation'],
+  'ambiguous reference': ['joins'],
+  'data type mismatch': ['where-clause'],
   'incomplete query': ['select-basic'],
-  'undefined column': ['select-basic'],
-  'undefined table': ['select-basic'],
-  'wrong positioning': ['select-basic'],
-  'incorrect join': ['joins'],
+  'incorrect distinct usage': ['select-basic'],
   'incorrect group by usage': ['aggregation'],
   'incorrect having clause': ['aggregation'],
-  'ambiguous reference': ['joins']
+  'incorrect join usage': ['joins'],
+  'incorrect order by usage': ['order-by'],
+  'incorrect select usage': ['select-basic'],
+  'incorrect wildcard usage': ['select-basic'],
+  'inefficient query': ['select-basic'],
+  'missing commas': ['select-basic'],
+  'missing quotes': ['select-basic'],
+  'missing semicolons': ['select-basic'],
+  misspelling: ['select-basic'],
+  'non-standard operators': ['where-clause'],
+  'operator misuse': ['where-clause'],
+  'undefined column': ['select-basic'],
+  'undefined function': ['select-basic'],
+  'undefined table': ['select-basic'],
+  'unmatched brackets': ['select-basic'],
+  'wrong positioning': ['select-basic']
 };
+
+const conceptInferenceRules: Array<{ conceptId: string; pattern: RegExp }> = [
+  { conceptId: 'subqueries', pattern: /\bsubquery\b|\bnested query\b|\bexists\s*\(|\bin\s*\(\s*select\b|\(\s*select\b/i },
+  { conceptId: 'joins', pattern: /\bjoin\b|\bjoined\b|\bforeign key\b|\bambiguous\b|\btable alias\b/i },
+  { conceptId: 'aggregation', pattern: /\bgroup by\b|\bhaving\b|\baggregate\b|\bcount\s*\(|\bsum\s*\(|\bavg\s*\(|\bmax\s*\(|\bmin\s*\(/i },
+  { conceptId: 'order-by', pattern: /\border by\b|\bsort\b|\bascending\b|\bdescending\b/i },
+  { conceptId: 'where-clause', pattern: /\bwhere\b|\bfilter\b|\bcondition\b|\boperator\b|\bpredicate\b|\bcomparison\b/i }
+];
+
+function inferConceptIdsFromSubtypeCorpus(subtype: string): string[] {
+  const rows = subtypeIndex[subtype] || [];
+  const corpus = [
+    subtype,
+    ...rows.map((row) => `${row.query} ${row.feedback_target} ${row.intended_learning_outcome}`)
+  ].join(' ');
+
+  return conceptInferenceRules
+    .filter((rule) => rule.pattern.test(corpus))
+    .map((rule) => rule.conceptId)
+    .filter((conceptId) => conceptNodeIds.has(conceptId));
+}
+
+function buildSubtypeConceptMap(): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
+
+  for (const subtype of CANONICAL_SUBTYPE_LIST) {
+    const explicit = explicitSubtypeConceptMap[subtype] || [];
+    const inferred = inferConceptIdsFromSubtypeCorpus(subtype);
+    const merged = [...new Set([...explicit, ...inferred])].filter((conceptId) => conceptNodeIds.has(conceptId));
+    map[subtype] = merged.length > 0 ? merged : ['select-basic'];
+  }
+
+  return map;
+}
+
+const subtypeToConceptMap: Record<string, string[]> = buildSubtypeConceptMap();
 
 export function getConceptIdsForSqlEngageSubtype(subtype?: string): string[] {
   if (!subtype) return [];
   const normalized = canonicalizeSqlEngageSubtype(subtype);
   return subtypeToConceptMap[normalized] || [];
+}
+
+export function getMappedSqlEngageSubtypes(): string[] {
+  return Object.keys(subtypeToConceptMap).sort((a, b) => a.localeCompare(b));
 }
 
 function isLikelyWrongPositioning(query: string): boolean {

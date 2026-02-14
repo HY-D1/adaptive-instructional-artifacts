@@ -14,6 +14,41 @@ async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedE
   throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
 }
 
+async function replaceEditorText(page: Page, text: string) {
+  const editorSurface = page.locator('.monaco-editor .view-lines').first();
+  await editorSurface.click({ position: { x: 8, y: 8 } });
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await page.keyboard.type(text);
+}
+
+async function getEditorText(page: Page): Promise<string> {
+  return page.locator('.monaco-editor .view-lines').first().innerText();
+}
+
+test('@week2 smoke: practice editor draft persists across textbook navigation', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+  });
+
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
+
+  const marker = 'keep-me-week2-draft-persistence';
+  const sql = `-- ${marker}\nSELECT * FROM users;`;
+  await replaceEditorText(page, sql);
+  await expect.poll(() => getEditorText(page)).toContain(marker);
+
+  await page.getByRole('link', { name: 'My Textbook' }).first().click();
+  await expect(page).toHaveURL(/\/textbook/);
+
+  await page.getByRole('link', { name: 'Practice' }).first().click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
+  await expect.poll(() => getEditorText(page)).toContain(marker);
+});
+
 test('@week2 smoke: hint ladder -> escalate -> add/update note -> textbook evidence', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
@@ -45,9 +80,9 @@ test('@week2 smoke: hint ladder -> escalate -> add/update note -> textbook evide
       const interactions = rawInteractions ? JSON.parse(rawInteractions) : [];
       return interactions.filter((interaction: any) => interaction.eventType === 'explanation_view').length;
     })
-  )).toBeGreaterThan(0);
+  )).toBe(1);
 
-  // Escalation is automatic after hint 3 and recorded as explanation_view.
+  // Escalation is logged on help request 4+ as explanation_view.
   const helpFlowSnapshot = await page.evaluate(() => {
     const activeSessionId = window.localStorage.getItem('sql-learning-active-session');
     const rawInteractions = window.localStorage.getItem('sql-learning-interactions');
@@ -75,10 +110,25 @@ test('@week2 smoke: hint ladder -> escalate -> add/update note -> textbook evide
 
   const addToNotesButton = page.getByRole('button', { name: 'Add to My Notes' });
   await expect(addToNotesButton).toBeVisible({ timeout: 30000 });
+  await expect(addToNotesButton).toBeEnabled({ timeout: 30000 });
   await addToNotesButton.click();
-  await expect(page.getByText(/Added to My Notes|Updated existing My Notes entry/)).toBeVisible({ timeout: 30000 });
+  await expect.poll(async () => (
+    page.evaluate(() => {
+      const raw = window.localStorage.getItem('sql-learning-textbook');
+      const textbooks = raw ? JSON.parse(raw) : {};
+      const learnerUnits = Array.isArray(textbooks['learner-1']) ? textbooks['learner-1'] : [];
+      return learnerUnits.filter((unit: any) => unit?.provenance?.templateId === 'notebook_unit.v1').length;
+    })
+  ), { timeout: 30000 }).toBeGreaterThan(0);
   await addToNotesButton.click();
-  await expect(page.getByText(/Updated existing My Notes entry/)).toBeVisible({ timeout: 30000 });
+  await expect.poll(async () => (
+    page.evaluate(() => {
+      const raw = window.localStorage.getItem('sql-learning-textbook');
+      const textbooks = raw ? JSON.parse(raw) : {};
+      const learnerUnits = Array.isArray(textbooks['learner-1']) ? textbooks['learner-1'] : [];
+      return learnerUnits.filter((unit: any) => unit?.provenance?.templateId === 'notebook_unit.v1').length;
+    })
+  ), { timeout: 30000 }).toBe(1);
 
   const notebookUnitSnapshot = await page.evaluate(() => {
     const raw = window.localStorage.getItem('sql-learning-textbook');
@@ -124,7 +174,15 @@ test('@week2 textbook provenance readability: merged source IDs and PDF citation
       type: 'summary',
       conceptId: 'select-basic',
       title: 'Seeded Provenance Unit',
-      content: 'Seeded content for provenance readability checks.',
+      content: [
+        '## Seeded markdown content',
+        '',
+        'Safe paragraph for rendering checks.',
+        '',
+        '<script>window.__INJECT_ME__ = true;</script>',
+        '',
+        '[Unsafe link](javascript:alert(\"xss\"))'
+      ].join('\\n'),
       prerequisites: [],
       addedTimestamp: Date.now(),
       sourceInteractionIds: ['evt-1', 'evt-2'],
@@ -157,14 +215,60 @@ test('@week2 textbook provenance readability: merged source IDs and PDF citation
       }
     };
 
+    const now = Date.now();
+    const seededInteractions = [
+      {
+        id: 'evt-1',
+        sessionId: 'session-learner-1-seeded',
+        learnerId: 'learner-1',
+        timestamp: now - 120000,
+        eventType: 'error',
+        problemId: 'problem-1',
+        errorSubtypeId: 'incomplete query',
+        sqlEngageSubtype: 'incomplete query'
+      },
+      {
+        id: 'evt-2',
+        sessionId: 'session-learner-1-seeded',
+        learnerId: 'learner-1',
+        timestamp: now - 90000,
+        eventType: 'hint_view',
+        problemId: 'problem-1',
+        errorSubtypeId: 'incomplete query',
+        sqlEngageSubtype: 'incomplete query',
+        hintLevel: 1,
+        helpRequestIndex: 1,
+        sqlEngageRowId: 'sql-engage:787',
+        policyVersion: 'sql-engage-index-v3-hintid-contract'
+      },
+      {
+        id: 'evt-3',
+        sessionId: 'session-learner-1-seeded',
+        learnerId: 'learner-1',
+        timestamp: now - 45000,
+        eventType: 'explanation_view',
+        problemId: 'problem-1',
+        errorSubtypeId: 'incomplete query',
+        sqlEngageSubtype: 'incomplete query',
+        helpRequestIndex: 4,
+        sqlEngageRowId: 'sql-engage:787',
+        policyVersion: 'sql-engage-index-v3-hintid-contract'
+      }
+    ];
+
     window.localStorage.setItem(
       'sql-learning-textbook',
       JSON.stringify({ 'learner-1': [seededUnit] })
     );
+    window.localStorage.setItem(
+      'sql-learning-interactions',
+      JSON.stringify(seededInteractions)
+    );
   });
 
-  await page.goto('/textbook?learnerId=learner-1');
-  await expect(page.getByRole('heading', { name: 'My Textbook', level: 1 })).toBeVisible();
+  await page.goto('/textbook?learnerId=learner-1', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL(/\/textbook\?learnerId=learner-1/);
+  await expect(page.getByRole('heading', { name: 'My Textbook', level: 1 })).toBeVisible({ timeout: 30000 });
   await expect(page.getByRole('heading', { name: 'Seeded Provenance Unit', level: 2 })).toBeVisible();
 
   await page.locator('summary', { hasText: 'Provenance' }).first().click();
@@ -175,4 +279,9 @@ test('@week2 textbook provenance readability: merged source IDs and PDF citation
   await expect(page.getByTestId('provenance-pdf-citations')).toContainText(
     'PDF citations: pdf:chunk-10 (p.4), pdf:chunk-11 (p.7), pdf:chunk-12 (p.9) +1 more'
   );
+  await expect(page.getByTestId('misconception-card').first()).toBeVisible();
+  await expect(page.getByTestId('spaced-review-prompt').first()).toBeVisible();
+  await expect(page.getByText('__INJECT_ME__')).toHaveCount(0);
+  const hasUnsafeHref = await page.evaluate(() => Boolean(document.querySelector('a[href^=\"javascript:\"]')));
+  expect(hasUnsafeHref).toBeFalsy();
 });

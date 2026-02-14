@@ -151,6 +151,12 @@ export function TextbookPage() {
       </div>
 
       <div className="container mx-auto px-4 py-6 h-[calc(100vh-120px)] flex flex-col gap-4">
+        <Card className="p-3">
+          <p className="text-xs text-gray-700">
+            Units are ordered by concept prerequisites, with misconception and spaced-review insights derived from your trace evidence.
+          </p>
+        </Card>
+
         <div className="flex-1 min-h-0">
           <AdaptiveTextbook
             learnerId={learnerId}
