@@ -19,3 +19,9 @@ coverage/
 __pycache__/
 *.pyc
 .venv/
+
+# Agent instructions and local docs (keep local-only)
+AGENTS.md
+docs/week2_progress.md
+docs/progress.md
+docs/week2-demo.md
