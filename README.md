@@ -10,8 +10,6 @@ ALGL project workspace for:
 - `apps/web/` - Vite React application (student, textbook, research views)
 - `scripts/` - reproducible replay and utility scripts
 - `docs/README.md` - documentation index and canonical links
-- `docs/reviews/` - paper/codebase review notes
-- `docs/guidelines/` - project/process guidelines
 - `dist/` - build and replay outputs
 
 ## Run
@@ -78,10 +76,23 @@ npm run demo:week2
 ```
 
 Demo script and acceptance checks:
-- `docs/week2-demo.md`
 - HintWise converter stability checks (`test:hintwise:convert`)
 
 Note: `dist/week2-clickpath-*` folders are archived snapshots and can be stale. Use `npm run test:e2e:week2` + `test-results/.last-run.json` for current verification status.
+
+### HintWise Dataset (Optional)
+
+The HintWise converter (`npm run test:hintwise:convert`) generates structured hint ladders from the HintWise dataset. This is an optional dependency:
+
+- **If the dataset is present**: The converter runs and the verifier checks stability
+- **If the dataset is absent**: The converter skips with a warning and exits 0 (Week 2 gates are not blocked)
+
+**To enable HintWise conversion**, place one of the following in the repo root:
+1. `dist/HintWise.zip` — the repository ZIP file (containing `HintWise-main/hints_dataset.json`)
+2. `HintWise-main/hints_dataset.json` — the extracted JSON file
+3. `HintWise-main/app/api/hints/hints_dataset.json` — alternative path from extracted repo
+
+The converter searches these locations in order and uses the first match found.
 
 ## PDF Textbook Indexing (RAG)
 
@@ -101,7 +112,7 @@ Convert a PDF into a searchable index (chunks + embeddings + metadata):
 
 ```bash
 # Build index with automatic checksum-based incremental detection
-npm run pdf:convert docs/pdf-sources/my-textbook.pdf
+npm run pdf:convert docs/pdf-sources/sample.pdf
 
 # Custom output directory
 npm run pdf:convert path/to/textbook.pdf --output-dir dist/my-index
@@ -164,8 +175,154 @@ Once indexed, load the PDF index in the Research dashboard:
 3. The index loads from `dist/pdf-index` and persists to LocalStorage
 4. When generating explanations/notes, the system retrieves relevant PDF passages automatically
 
+## System Prerequisites
+
+The following external tools are required by certain npm scripts:
+
+| Tool | Required By | Purpose | Install Commands |
+|------|-------------|---------|------------------|
+| **jq** | `npm run verify:week2`, `npm run gate:week2:acceptance`, `npm run gate:textbook:content` | JSON validation in acceptance gates | macOS: `brew install jq`<br>Ubuntu/Debian: `sudo apt-get install jq`<br>Windows: `choco install jq` or `winget install jqlang.jq` |
+| **unzip** | `npm run hintwise:convert` | Extract HintWise dataset from ZIP archives | macOS: pre-installed<br>Ubuntu/Debian: `sudo apt-get install unzip`<br>Windows: `choco install unzip` or use Git Bash |
+
+**Note:** Without these tools, the Week 2 acceptance gates and HintWise converter will fail with "command not found" errors. The core app (`npm run dev`, `npm run build`) works without them.
+
 ## Notes
 
 - App config is at `apps/web/vite.config.ts`.
 - Replay fixture and SQL-Engage resources are under `apps/web/src/app/data/`.
-- Week 2 runbook/progress is documented in `docs/week2_progress.md`; demo flow is in `docs/week2-demo.md`.
+- Week 2 runbook/progress is documented in `docs/week2_progress.md`.
+
+---
+
+## Project Documentation
+
+### Technology Stack
+
+#### Core Framework
+- **Frontend**: React 18.3.1 + TypeScript
+- **Build Tool**: Vite 6.3.5 with custom plugins
+- **Styling**: Tailwind CSS 4.1.12
+- **UI Components**: Radix UI primitives + shadcn/ui components
+- **Icons**: Lucide React
+- **Routing**: React Router 7.13.0
+
+#### Key Dependencies
+- **SQL Execution**: `sql.js` (SQLite in WebAssembly)
+- **Code Editor**: `@monaco-editor/react` (Monaco Editor)
+- **Charts**: `recharts` (for concept coverage visualization)
+- **Date Handling**: `date-fns`
+- **Form Handling**: `react-hook-form`
+
+#### LLM Integration
+- **Local LLM**: Ollama with `qwen2.5:1.5b-instruct` (default)
+- **API Proxy**: Vite dev server proxies `/ollama` to local Ollama instance
+- **Fallback**: Deterministic grounded content when LLM unavailable
+
+#### Testing
+- **E2E Framework**: Playwright 1.53.0
+- **Browser**: Chromium (headless)
+- **Test Location**: `apps/web/tests/*.spec.ts`
+
+### Code Organization
+
+```
+/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/
+├── apps/
+│   └── web/                      # Main Vite React application
+│       ├── src/
+│       │   ├── app/
+│       │   │   ├── components/   # React components
+│       │   │   │   ├── ui/      # shadcn/ui components
+│       │   │   │   ├── HintSystem.tsx
+│       │   │   │   ├── SQLEditor.tsx
+│       │   │   │   ├── ResearchDashboard.tsx
+│       │   │   │   ├── AdaptiveTextbook.tsx
+│       │   │   │   └── ConceptCoverage.tsx
+│       │   │   ├── pages/        # Route pages
+│       │   │   │   ├── LearningInterface.tsx
+│       │   │   │   ├── TextbookPage.tsx
+│       │   │   │   ├── ResearchPage.tsx
+│       │   │   │   └── RootLayout.tsx
+│       │   │   ├── lib/          # Business logic
+│       │   │   │   ├── storage.ts
+│       │   │   │   ├── adaptive-orchestrator.ts
+│       │   │   │   ├── content-generator.ts
+│       │   │   │   ├── sql-executor.ts
+│       │   │   │   ├── llm-client.ts
+│       │   │   │   ├── retrieval-bundle.ts
+│       │   │   │   └── pdf-retrieval.ts
+│       │   │   ├── data/         # Static data
+│       │   │   │   ├── problems.ts
+│       │   │   │   ├── sql-engage.ts
+│       │   │   │   └── sql_engage_dataset.csv
+│       │   │   └── types/        # TypeScript types
+│       │   ├── tests/            # Playwright E2E tests
+│       │   └── vite.config.ts
+├── scripts/                      # Utility scripts
+├── dist/                         # Build outputs
+└── docs/                         # Documentation
+```
+
+### Key Module Descriptions
+
+| Module | Path | Purpose |
+|--------|------|---------|
+| `storage.ts` | `apps/web/src/app/lib/storage.ts` | LocalStorage persistence |
+| `adaptive-orchestrator.ts` | `apps/web/src/app/lib/adaptive-orchestrator.ts` | Policy decision engine |
+| `sql-engage.ts` | `apps/web/src/app/data/sql-engage.ts` | SQL-Engage dataset integration |
+| `content-generator.ts` | `apps/web/src/app/lib/content-generator.ts` | LLM-powered content generation |
+
+### Data Contracts
+
+#### SQL-Engage Integration
+- **Source**: `apps/web/src/app/data/sql_engage_dataset.csv` (382KB, 23 error subtypes)
+- **Policy Version**: Retrieved via `getSqlEngagePolicyVersion()`
+- **Subtype Mapping**: All 23 canonical subtypes mapped to concepts
+
+#### Hint Ladder (HintWise)
+- **Levels**: 3 progressive hint levels per error subtype
+- **Escalation**: Auto-escalate to explanation after hint level 3
+- **Help Request Index**: Tracks total help requests per session
+
+#### Export Schema (Week 2 Acceptance)
+See `AGENTS.md` section 5 for the full jq acceptance checks required on `dist/week2-demo/export.json`.
+
+### Security Considerations
+
+- **NO API KEYS** are committed to the repository
+- Ollama runs locally; no external API calls by default
+- LocalStorage keys are prefixed: `sql-learning-*`
+- SQL execution uses `sql.js` WebAssembly sandbox
+
+### Code Style Guidelines
+
+- Strict TypeScript enabled
+- Components: PascalCase (e.g., `HintSystem.tsx`)
+- Utilities: camelCase (e.g., `storage.ts`)
+- Types: PascalCase with descriptive names
+- Use `type` over `interface` for object shapes
+
+### Policy Versions and Traceability
+
+Current active policy versions (as of Week 2):
+
+| Component | Version |
+|-----------|---------|
+| SQL-Engage Policy | `sql-engage-index-v3-hintid-contract` |
+| Orchestrator Semantics | `orchestrator-auto-escalation-variant-v2` |
+| Export Policy | `week2-export-sanitize-v1` |
+| Replay Harness | `toy-replay-harness-v3` |
+
+### Offline Replay Limitations
+
+**What replay supports:**
+- Shows differences in what the system **WOULD** do on the same interaction traces
+- Demonstrates policy behavior changes
+- Validates concept coverage evolution under different policies
+
+**What replay does NOT support:**
+- Claims about "learner improvement" or "learning gains"
+- Causal conclusions about educational effectiveness
+
+**Making valid claims:**
+To claim learning outcomes, you need a study design that supports causal inference (e.g., randomized A/B experiment). Replay alone shows policy behavior, not educational impact.
