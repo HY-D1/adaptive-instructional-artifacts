@@ -237,9 +237,11 @@ async function ensureOutputParent(outputPath) {
 async function main() {
   const datasets = await loadAvailableDatasets();
   if (datasets.length === 0) {
-    throw new Error(
-      'No local HintWise dataset found. Expected dist/HintWise.zip or extracted HintWise-main JSON assets.'
+    console.warn(
+      '[hintwise-converter] SKIP: No local HintWise dataset found. Expected dist/HintWise.zip or extracted HintWise-main JSON assets. Skipping conversion (exit 0).'
     );
+    process.exitCode = 0;
+    return;
   }
 
   const normalizedRecords = normalizeRecords(datasets);

@@ -253,7 +253,13 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['select-basic', 'order-by'],
     schema: usersPracticeSchema,
     expectedQuery: 'SELECT name, age FROM users ORDER BY age DESC;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { name: 'Evan', age: 35 },
+      { name: 'Bob', age: 30 },
+      { name: 'Diana', age: 28 },
+      { name: 'Alice', age: 25 },
+      { name: 'Charlie', age: 22 }
+    ]
   },
   {
     id: 'problem-7',
@@ -263,7 +269,11 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['select-basic'],
     schema: usersPracticeSchema,
     expectedQuery: 'SELECT DISTINCT city FROM users;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { city: 'Seattle' },
+      { city: 'Portland' },
+      { city: 'San Jose' }
+    ]
   },
   {
     id: 'problem-8',
@@ -273,7 +283,13 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['select-basic'],
     schema: usersPracticeSchema,
     expectedQuery: 'SELECT * FROM users;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { id: 1, name: 'Alice', email: 'alice@email.com', age: 25, city: 'Seattle' },
+      { id: 2, name: 'Bob', email: 'bob@email.com', age: 30, city: 'Portland' },
+      { id: 3, name: 'Charlie', email: 'charlie@email.com', age: 22, city: 'Seattle' },
+      { id: 4, name: 'Diana', email: 'diana@email.com', age: 28, city: 'San Jose' },
+      { id: 5, name: 'Evan', email: 'evan@email.com', age: 35, city: 'Portland' }
+    ]
   },
   {
     id: 'problem-9',
@@ -283,7 +299,13 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['select-basic'],
     schema: usersPracticeSchema,
     expectedQuery: 'SELECT name, email FROM users;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { name: 'Alice', email: 'alice@email.com' },
+      { name: 'Bob', email: 'bob@email.com' },
+      { name: 'Charlie', email: 'charlie@email.com' },
+      { name: 'Diana', email: 'diana@email.com' },
+      { name: 'Evan', email: 'evan@email.com' }
+    ]
   },
   {
     id: 'problem-10',
@@ -293,7 +315,11 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['subqueries', 'where-clause'],
     schema: usersOrdersPracticeSchema,
     expectedQuery: 'SELECT name FROM users WHERE id IN (SELECT user_id FROM orders);',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { name: 'Alice' },
+      { name: 'Bob' },
+      { name: 'Diana' }
+    ]
   },
   {
     id: 'problem-11',
@@ -303,7 +329,10 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['subqueries', 'where-clause'],
     schema: usersOrdersPracticeSchema,
     expectedQuery: 'SELECT name FROM users WHERE id IN (SELECT user_id FROM orders WHERE amount > 200);',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { name: 'Alice' },
+      { name: 'Diana' }
+    ]
   },
   {
     id: 'problem-12',
@@ -313,7 +342,9 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['aggregation'],
     schema: usersOrdersPracticeSchema,
     expectedQuery: 'SELECT user_id, COUNT(*) AS order_count FROM orders GROUP BY user_id HAVING COUNT(*) >= 2;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { user_id: 1, order_count: 2 }
+    ]
   },
   {
     id: 'problem-13',
@@ -323,7 +354,9 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['aggregation'],
     schema: productsPracticeSchema,
     expectedQuery: 'SELECT category, AVG(price) AS avg_price FROM products GROUP BY category HAVING AVG(price) > 200;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { category: 'Electronics', avg_price: 369.66 }
+    ]
   },
   {
     id: 'problem-14',
@@ -333,7 +366,12 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['select-basic', 'order-by'],
     schema: usersOrdersPracticeSchema,
     expectedQuery: 'SELECT DISTINCT product FROM orders ORDER BY product;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { product: 'Keyboard' },
+      { product: 'Laptop' },
+      { product: 'Monitor' },
+      { product: 'Mouse' }
+    ]
   },
   {
     id: 'problem-15',
@@ -343,7 +381,11 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['order-by'],
     schema: productsPracticeSchema,
     expectedQuery: 'SELECT name, price FROM products ORDER BY price DESC LIMIT 3;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { name: 'Laptop', price: 999.99 },
+      { name: 'Desk', price: 299.99 },
+      { name: 'Chair', price: 199.99 }
+    ]
   },
   {
     id: 'problem-16',
@@ -353,7 +395,14 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['joins', 'order-by'],
     schema: usersOrdersPracticeSchema,
     expectedQuery: 'SELECT u.name, o.product, o.amount FROM users u JOIN orders o ON u.id = o.user_id ORDER BY o.amount DESC;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { name: 'Diana', product: 'Laptop', amount: 1099.00 },
+      { name: 'Alice', product: 'Laptop', amount: 999.99 },
+      { name: 'Bob', product: 'Monitor', amount: 219.99 },
+      { name: 'Bob', product: 'Keyboard', amount: 79.99 },
+      { name: 'Alice', product: 'Mouse', amount: 29.99 },
+      { name: 'Diana', product: 'Mouse', amount: 24.99 }
+    ]
   },
   {
     id: 'problem-17',
@@ -363,7 +412,10 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['aggregation'],
     schema: productsPracticeSchema,
     expectedQuery: 'SELECT category, COUNT(*) AS product_count FROM products GROUP BY category HAVING COUNT(*) >= 2;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { category: 'Electronics', product_count: 3 },
+      { category: 'Furniture', product_count: 2 }
+    ]
   },
   {
     id: 'problem-18',
@@ -373,7 +425,7 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['insert'],
     schema: usersPracticeSchema,
     expectedQuery: "INSERT INTO users VALUES (6, 'Frank', 'frank@email.com', 40, 'Austin');",
-    gradingMode: 'exec-only'
+    expectedResult: []
   },
   {
     id: 'problem-19',
@@ -383,7 +435,7 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['update', 'where-clause'],
     schema: usersPracticeSchema,
     expectedQuery: "UPDATE users SET age = 26 WHERE name = 'Alice';",
-    gradingMode: 'exec-only'
+    expectedResult: []
   },
   {
     id: 'problem-20',
@@ -393,7 +445,7 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['delete', 'where-clause'],
     schema: usersPracticeSchema,
     expectedQuery: "DELETE FROM users WHERE city = 'Portland';",
-    gradingMode: 'exec-only'
+    expectedResult: []
   },
   {
     id: 'problem-21',
@@ -403,7 +455,14 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['case-expressions', 'select-basic'],
     schema: employeesDepartmentsSchema,
     expectedQuery: "SELECT emp_name, CASE WHEN salary >= 80000 THEN 'High' WHEN salary >= 50000 THEN 'Medium' ELSE 'Low' END AS salary_grade FROM employees;",
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { emp_name: 'Alice', salary_grade: 'High' },
+      { emp_name: 'Bob', salary_grade: 'Medium' },
+      { emp_name: 'Carol', salary_grade: 'Medium' },
+      { emp_name: 'David', salary_grade: 'Medium' },
+      { emp_name: 'Eve', salary_grade: 'Medium' },
+      { emp_name: 'Frank', salary_grade: 'Medium' }
+    ]
   },
   {
     id: 'problem-22',
@@ -413,7 +472,12 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['subqueries', 'exists'],
     schema: employeesDepartmentsSchema,
     expectedQuery: 'SELECT dept_name FROM departments d WHERE EXISTS (SELECT 1 FROM employees e WHERE e.dept_id = d.dept_id);',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { dept_name: 'Engineering' },
+      { dept_name: 'Sales' },
+      { dept_name: 'Marketing' },
+      { dept_name: 'HR' }
+    ]
   },
   {
     id: 'problem-23',
@@ -423,7 +487,10 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['subqueries', 'correlated-subqueries'],
     schema: employeesDepartmentsSchema,
     expectedQuery: 'SELECT emp_name, salary FROM employees e WHERE salary > (SELECT AVG(salary) FROM employees WHERE dept_id = e.dept_id);',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { emp_name: 'Alice', salary: 90000 },
+      { emp_name: 'Carol', salary: 80000 }
+    ]
   },
   {
     id: 'problem-24',
@@ -433,7 +500,14 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['window-functions', 'subqueries'],
     schema: employeesDepartmentsSchema,
     expectedQuery: 'SELECT emp_name, dept_id, salary FROM (SELECT emp_name, dept_id, salary, ROW_NUMBER() OVER (PARTITION BY dept_id ORDER BY salary DESC) as rn FROM employees) WHERE rn <= 2;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { emp_name: 'Alice', dept_id: 1, salary: 90000 },
+      { emp_name: 'Bob', dept_id: 1, salary: 75000 },
+      { emp_name: 'Carol', dept_id: 2, salary: 80000 },
+      { emp_name: 'David', dept_id: 2, salary: 65000 },
+      { emp_name: 'Eve', dept_id: 3, salary: 70000 },
+      { emp_name: 'Frank', dept_id: 4, salary: 55000 }
+    ]
   },
   {
     id: 'problem-25',
@@ -443,7 +517,14 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['window-functions'],
     schema: employeesDepartmentsSchema,
     expectedQuery: 'SELECT emp_name, salary, RANK() OVER (ORDER BY salary DESC) as salary_rank FROM employees;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { emp_name: 'Alice', salary: 90000, salary_rank: 1 },
+      { emp_name: 'Carol', salary: 80000, salary_rank: 2 },
+      { emp_name: 'Eve', salary: 70000, salary_rank: 3 },
+      { emp_name: 'Bob', salary: 75000, salary_rank: 4 },
+      { emp_name: 'David', salary: 65000, salary_rank: 5 },
+      { emp_name: 'Frank', salary: 55000, salary_rank: 6 }
+    ]
   },
   {
     id: 'problem-26',
@@ -453,7 +534,14 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['string-functions'],
     schema: employeesDepartmentsSchema,
     expectedQuery: 'SELECT UPPER(emp_name) as name_upper FROM employees;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { name_upper: 'ALICE' },
+      { name_upper: 'BOB' },
+      { name_upper: 'CAROL' },
+      { name_upper: 'DAVID' },
+      { name_upper: 'EVE' },
+      { name_upper: 'FRANK' }
+    ]
   },
   {
     id: 'problem-27',
@@ -463,7 +551,10 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['date-functions', 'where-clause'],
     schema: employeesDepartmentsSchema,
     expectedQuery: "SELECT emp_name, hire_date FROM employees WHERE strftime('%Y', hire_date) = '2021';",
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { emp_name: 'Bob', hire_date: '2021-03-20' },
+      { emp_name: 'Eve', hire_date: '2021-09-15' }
+    ]
   },
   {
     id: 'problem-28',
@@ -473,7 +564,13 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['null-handling', 'coalesce'],
     schema: tasksSchema,
     expectedQuery: 'SELECT task_name, COALESCE(priority, 0) as effective_priority FROM tasks;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { task_name: 'Fix login bug', effective_priority: 1 },
+      { task_name: 'Update documentation', effective_priority: 2 },
+      { task_name: 'Code review', effective_priority: 1 },
+      { task_name: 'Deploy to prod', effective_priority: 3 },
+      { task_name: 'Write tests', effective_priority: 0 }
+    ]
   },
   {
     id: 'problem-29',
@@ -483,7 +580,11 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['pagination', 'limit-offset'],
     schema: productsPracticeSchema,
     expectedQuery: 'SELECT * FROM products LIMIT 3 OFFSET 2;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { id: 3, name: 'Keyboard', category: 'Electronics', price: 79.99 },
+      { id: 4, name: 'Desk', category: 'Furniture', price: 299.99 },
+      { id: 5, name: 'Chair', category: 'Furniture', price: 199.99 }
+    ]
   },
   {
     id: 'problem-30',
@@ -493,7 +594,12 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['union'],
     schema: salesSchema,
     expectedQuery: 'SELECT region FROM sales UNION SELECT region FROM sales;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { region: 'East' },
+      { region: 'North' },
+      { region: 'South' },
+      { region: 'West' }
+    ]
   },
   {
     id: 'problem-31',
@@ -503,7 +609,14 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['self-joins', 'joins'],
     schema: employeesDepartmentsSchema,
     expectedQuery: 'SELECT e.emp_name as employee, m.emp_name as manager FROM employees e LEFT JOIN employees m ON e.manager_id = m.emp_id;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { employee: 'Alice', manager: null },
+      { employee: 'Bob', manager: 'Alice' },
+      { employee: 'Carol', manager: null },
+      { employee: 'David', manager: 'Carol' },
+      { employee: 'Eve', manager: null },
+      { employee: 'Frank', manager: null }
+    ]
   },
   {
     id: 'problem-32',
@@ -513,7 +626,12 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['joins', 'aggregation'],
     schema: employeesDepartmentsSchema,
     expectedQuery: 'SELECT d.dept_name, COUNT(e.emp_id) as emp_count, SUM(e.salary) as total_salary, AVG(e.salary) as avg_salary FROM departments d LEFT JOIN employees e ON d.dept_id = e.dept_id GROUP BY d.dept_name;',
-    gradingMode: 'exec-only'
+    expectedResult: [
+      { dept_name: 'Engineering', emp_count: 2, total_salary: 165000, avg_salary: 82500 },
+      { dept_name: 'HR', emp_count: 1, total_salary: 55000, avg_salary: 55000 },
+      { dept_name: 'Marketing', emp_count: 1, total_salary: 70000, avg_salary: 70000 },
+      { dept_name: 'Sales', emp_count: 2, total_salary: 145000, avg_salary: 72500 }
+    ]
   }
 ];
 

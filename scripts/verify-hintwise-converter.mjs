@@ -29,15 +29,22 @@ function runConverter() {
     encoding: 'utf8'
   });
 
+  const combined = `${result.stdout}\n${result.stderr}`;
+  
+  // Detect skip condition: converter exited 0 with SKIP message
+  if (result.status === 0 && combined.includes('SKIP: No local HintWise dataset found')) {
+    return { skipped: true, stdout: result.stdout.trim(), loggedSha: null };
+  }
+
   if (result.status !== 0) {
     throw new Error(
       `convert-hintwise failed with exit ${result.status}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`
     );
   }
 
-  const combined = `${result.stdout}\n${result.stderr}`;
   const shaMatch = combined.match(/sha256=([a-f0-9]{64})/i);
   return {
+    skipped: false,
     stdout: result.stdout.trim(),
     loggedSha: shaMatch?.[1]?.toLowerCase()
   };
@@ -64,6 +71,14 @@ async function main() {
   accessSync(CONVERTER_PATH, fsConstants.R_OK);
 
   const run1 = runConverter();
+  
+  // Handle skip case: dataset not available, skip verification gracefully
+  if (run1.skipped) {
+    console.log('[hintwise-verify] SKIP: No local HintWise dataset found. Skipping verification (exit 0).');
+    console.log('[hintwise-verify] To enable: place dist/HintWise.zip or extract HintWise-main/ JSON assets.');
+    return;
+  }
+  
   const outputRaw1 = await readFile(OUTPUT_PATH, 'utf8');
   const fileSha1 = sha256(outputRaw1);
 

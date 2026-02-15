@@ -199,7 +199,7 @@ export function HintSystem({
       sqlEngageSubtype: hintSelection.sqlEngageSubtype,
       sqlEngageRowId: hintSelection.sqlEngageRowId,
       policyVersion: hintSelection.policyVersion,
-      ruleFired: decision.ruleFired,
+      ruleFired: 'progressive-hint',
       inputs: {
         retry_count: Math.max(0, errorCount - 1),
         hint_count: hintCount,
@@ -265,7 +265,7 @@ export function HintSystem({
       sqlEngageSubtype: helpSelection.sqlEngageSubtype,
       sqlEngageRowId: helpSelection.sqlEngageRowId,
       policyVersion: helpSelection.policyVersion,
-      ruleFired: decision.ruleFired,
+      ruleFired: 'escalation',
       inputs: {
         retry_count: Math.max(0, problemTrace.filter((interaction) => interaction.eventType === 'error').length - 1),
         hint_count: problemTrace.filter((interaction) => interaction.eventType === 'hint_view').length,
