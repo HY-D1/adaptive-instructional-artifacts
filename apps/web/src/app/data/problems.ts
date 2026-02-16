@@ -91,7 +91,7 @@ INSERT INTO tasks VALUES (1, 'Fix login bug', 'completed', 1, '2024-01-15');
 INSERT INTO tasks VALUES (2, 'Update documentation', 'pending', 2, '2024-01-20');
 INSERT INTO tasks VALUES (3, 'Code review', 'in_progress', 1, '2024-01-18');
 INSERT INTO tasks VALUES (4, 'Deploy to prod', 'pending', 3, '2024-01-25');
-INSERT INTO tasks VALUES (5, 'Write tests', NULL, 2, '2024-01-22');`;
+INSERT INTO tasks VALUES (5, 'Write tests', NULL, NULL, '2024-01-22');`;
 
 const salesSchema = `CREATE TABLE sales (
   sale_id INTEGER PRIMARY KEY,
@@ -331,6 +331,7 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     expectedQuery: 'SELECT name FROM users WHERE id IN (SELECT user_id FROM orders WHERE amount > 200);',
     expectedResult: [
       { name: 'Alice' },
+      { name: 'Bob' },
       { name: 'Diana' }
     ]
   },
@@ -343,7 +344,9 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     schema: usersOrdersPracticeSchema,
     expectedQuery: 'SELECT user_id, COUNT(*) AS order_count FROM orders GROUP BY user_id HAVING COUNT(*) >= 2;',
     expectedResult: [
-      { user_id: 1, order_count: 2 }
+      { user_id: 1, order_count: 2 },
+      { user_id: 2, order_count: 2 },
+      { user_id: 4, order_count: 2 }
     ]
   },
   {
@@ -355,7 +358,8 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     schema: productsPracticeSchema,
     expectedQuery: 'SELECT category, AVG(price) AS avg_price FROM products GROUP BY category HAVING AVG(price) > 200;',
     expectedResult: [
-      { category: 'Electronics', avg_price: 369.66 }
+      { category: 'Electronics', avg_price: 369.66 },
+      { category: 'Furniture', avg_price: 249.99 }
     ]
   },
   {
@@ -458,7 +462,7 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     expectedResult: [
       { emp_name: 'Alice', salary_grade: 'High' },
       { emp_name: 'Bob', salary_grade: 'Medium' },
-      { emp_name: 'Carol', salary_grade: 'Medium' },
+      { emp_name: 'Carol', salary_grade: 'High' },
       { emp_name: 'David', salary_grade: 'Medium' },
       { emp_name: 'Eve', salary_grade: 'Medium' },
       { emp_name: 'Frank', salary_grade: 'Medium' }
@@ -520,8 +524,8 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     expectedResult: [
       { emp_name: 'Alice', salary: 90000, salary_rank: 1 },
       { emp_name: 'Carol', salary: 80000, salary_rank: 2 },
-      { emp_name: 'Eve', salary: 70000, salary_rank: 3 },
-      { emp_name: 'Bob', salary: 75000, salary_rank: 4 },
+      { emp_name: 'Bob', salary: 75000, salary_rank: 3 },
+      { emp_name: 'Eve', salary: 70000, salary_rank: 4 },
       { emp_name: 'David', salary: 65000, salary_rank: 5 },
       { emp_name: 'Frank', salary: 55000, salary_rank: 6 }
     ]

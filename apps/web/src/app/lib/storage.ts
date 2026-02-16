@@ -111,11 +111,17 @@ class StorageManager {
     localStorage.setItem(this.ACTIVE_SESSION_KEY, normalized);
   }
 
-  savePracticeDraft(learnerId: string, sessionId: string, problemId: string, code: string) {
+  savePracticeDraft(learnerId: string, sessionId: string, problemId: string, code: string): { success: boolean; quotaExceeded?: boolean } {
     const key = this.buildPracticeDraftKey(learnerId, sessionId, problemId);
     const drafts = this.readParsedStorage<Record<string, string>>(this.PRACTICE_DRAFTS_KEY, {});
     drafts[key] = code;
-    localStorage.setItem(this.PRACTICE_DRAFTS_KEY, JSON.stringify(drafts));
+    
+    // Use safeSetItem to handle quota exceeded errors
+    const result = this.safeSetItem(this.PRACTICE_DRAFTS_KEY, JSON.stringify(drafts));
+    if (!result.success && result.quotaExceeded) {
+      console.warn(`Failed to save practice draft for ${key}: LocalStorage quota exceeded`);
+    }
+    return result;
   }
 
   getPracticeDraft(learnerId: string, sessionId: string, problemId: string): string | null {
@@ -124,14 +130,20 @@ class StorageManager {
     return drafts[key] ?? null;
   }
 
-  clearPracticeDraft(learnerId: string, sessionId: string, problemId: string) {
+  clearPracticeDraft(learnerId: string, sessionId: string, problemId: string): { success: boolean; quotaExceeded?: boolean } {
     const key = this.buildPracticeDraftKey(learnerId, sessionId, problemId);
     const drafts = this.readParsedStorage<Record<string, string>>(this.PRACTICE_DRAFTS_KEY, {});
     if (!(key in drafts)) {
-      return;
+      return { success: true };
     }
     delete drafts[key];
-    localStorage.setItem(this.PRACTICE_DRAFTS_KEY, JSON.stringify(drafts));
+    
+    // Use safeSetItem to handle quota exceeded errors
+    const result = this.safeSetItem(this.PRACTICE_DRAFTS_KEY, JSON.stringify(drafts));
+    if (!result.success && result.quotaExceeded) {
+      console.warn(`Failed to clear practice draft for ${key}: LocalStorage quota exceeded`);
+    }
+    return result;
   }
 
   setPolicyReplayMode(enabled: boolean) {
@@ -142,9 +154,26 @@ class StorageManager {
     return Boolean(this.readParsedStorage<boolean>(this.REPLAY_MODE_KEY, false));
   }
 
+  private readonly MAX_LLM_CACHE_SIZE = 100;
+
   saveLLMCacheRecord(record: LLMCacheRecord) {
     const cache = this.getLLMCache();
     cache[record.cacheKey] = record;
+    
+    // Enforce max cache size with LRU eviction
+    const cacheKeys = Object.keys(cache);
+    if (cacheKeys.length > this.MAX_LLM_CACHE_SIZE) {
+      const entries = cacheKeys
+        .map(key => ({ key, createdAt: cache[key].createdAt || 0 }))
+        .sort((a, b) => a.createdAt - b.createdAt);
+      
+      const toEvict = entries.slice(0, cacheKeys.length - this.MAX_LLM_CACHE_SIZE);
+      for (const { key } of toEvict) {
+        delete cache[key];
+      }
+      console.warn(`[Storage] LLM cache exceeded ${this.MAX_LLM_CACHE_SIZE} entries. Evicted ${toEvict.length} oldest entries.`);
+    }
+    
     localStorage.setItem(this.LLM_CACHE_KEY, JSON.stringify(cache));
   }
 
@@ -191,8 +220,8 @@ class StorageManager {
       return this.pdfIndexMemory;
     }
 
-    localStorage.setItem(this.PDF_INDEX_KEY, JSON.stringify(normalized));
-    return normalized;
+    // Return null without corrupting localStorage - don't write null back
+    return null;
   }
 
   getPdfIndexProvenance(): PdfIndexProvenance | null {
@@ -212,24 +241,39 @@ class StorageManager {
   }
 
   // Interaction traces
-  saveInteraction(event: InteractionEvent) {
+  saveInteraction(event: InteractionEvent): { success: boolean; quotaExceeded?: boolean } {
     const sessionId = event.sessionId || this.getActiveSessionId();
     const normalizedEvent = { ...event, sessionId };
     const interactions = this.getAllInteractions();
     interactions.push(normalizedEvent);
-    localStorage.setItem(this.INTERACTIONS_KEY, JSON.stringify(interactions));
-    this.updateProfileStatsFromEvent(normalizedEvent);
+    
+    // Use safeSetItem to handle quota exceeded errors
+    const result = this.safeSetItem(this.INTERACTIONS_KEY, JSON.stringify(interactions));
+    
+    // Only update profile if interaction save succeeded
+    if (result.success) {
+      this.updateProfileStatsFromEvent(normalizedEvent);
+    }
+    
+    return result;
   }
 
   /**
    * Log a coverage change event when a concept is newly covered.
    * This creates an auditable trace of concept coverage progression.
+   * 
+   * Enhanced logging includes:
+   * - Score delta for tracking progress magnitude
+   * - Confidence level changes
+   * - Evidence summary for debugging coverage decisions
+   * - Timestamp for replay/analysis
    */
   saveCoverageChangeEvent(params: {
     learnerId: string;
     problemId: string;
     conceptId: string;
     score: number;
+    previousScore: number;
     confidence: 'low' | 'medium' | 'high';
     evidenceCounts: ConceptCoverageEvidence['evidenceCounts'];
     triggerEventId?: string;
@@ -237,6 +281,16 @@ class StorageManager {
   }): void {
     const sessionId = this.getActiveSessionId();
     const timestamp = Date.now();
+    const scoreDelta = params.score - params.previousScore;
+    
+    // Calculate total evidence count for summary
+    const totalEvidence = 
+      params.evidenceCounts.successfulExecution +
+      params.evidenceCounts.notesAdded +
+      params.evidenceCounts.explanationViewed +
+      params.evidenceCounts.hintViewed +
+      params.evidenceCounts.errorEncountered;
+    
     const event: InteractionEvent = {
       id: `evt-coverage-${params.learnerId}-${params.conceptId}-${timestamp}`,
       sessionId,
@@ -246,24 +300,46 @@ class StorageManager {
       problemId: params.problemId,
       conceptIds: [params.conceptId],
       inputs: {
-        previousScore: Math.max(0, params.score - 25), // Approximate previous state
+        previousScore: params.previousScore,
+        previousConfidence: this.inferPreviousConfidence(params.previousScore),
         triggerEventType: params.triggerEventType || 'unknown'
       },
       outputs: {
         score: params.score,
+        scoreDelta,
         confidence: params.confidence,
         successfulExecution: params.evidenceCounts.successfulExecution,
         hintViewed: params.evidenceCounts.hintViewed,
         explanationViewed: params.evidenceCounts.explanationViewed,
         errorEncountered: params.evidenceCounts.errorEncountered,
         notesAdded: params.evidenceCounts.notesAdded,
-        triggerEventId: params.triggerEventId || 'unknown'
+        totalEvidence,
+        triggerEventId: params.triggerEventId || 'unknown',
+        coverageThreshold: this.COVERAGE_THRESHOLD,
+        policyVersion: 'coverage-v1-score-and-executions'
       }
     };
 
     const interactions = this.getAllInteractions();
     interactions.push(event);
     localStorage.setItem(this.INTERACTIONS_KEY, JSON.stringify(interactions));
+    
+    // Log to console for debugging coverage progression
+    console.log(`[Coverage] ${params.conceptId}: ${params.previousScore} → ${params.score} (${scoreDelta >= 0 ? '+' : ''}${scoreDelta}), confidence=${params.confidence}, executions=${params.evidenceCounts.successfulExecution}`);
+  }
+
+  /**
+   * Infer previous confidence level based on previous score.
+   * Used for logging confidence transitions in coverage events.
+   */
+  private inferPreviousConfidence(previousScore: number): 'low' | 'medium' | 'high' {
+    if (previousScore >= this.CONFIDENCE_THRESHOLDS.high.score) {
+      return 'high';
+    }
+    if (previousScore >= this.CONFIDENCE_THRESHOLDS.medium.score) {
+      return 'medium';
+    }
+    return 'low';
   }
 
   getAllInteractions(): InteractionEvent[] {
@@ -334,18 +410,58 @@ class StorageManager {
     localStorage.removeItem(this.INTERACTIONS_KEY);
   }
 
-  // Learner profiles
+  // Learner profiles with optimistic locking to prevent race conditions
   saveProfile(profile: LearnerProfile) {
+    // Re-read profiles from storage each time to minimize race condition window
     const profiles = this.getAllProfiles();
     const index = profiles.findIndex(p => p.id === profile.id);
+    
+    // Get existing version or start at 0
+    const existingVersion = index >= 0 ? (profiles[index].version || 0) : 0;
+    const incomingVersion = (profile as any).version || 0;
+    
+    // Simple merge strategy: if incoming has lower version, merge data
+    let mergedConceptsCovered = profile.conceptsCovered;
+    let mergedEvidence = profile.conceptCoverageEvidence || new Map();
+    let mergedErrorHistory = profile.errorHistory;
+    
+    if (index >= 0 && incomingVersion < existingVersion) {
+      // Race condition detected: merge with existing data instead of overwriting
+      const existing = profiles[index];
+      const existingProfile = this.getProfile(profile.id);
+      
+      if (existingProfile) {
+        // Merge conceptsCovered: union of both sets
+        mergedConceptsCovered = new Set([
+          ...Array.from(existingProfile.conceptsCovered),
+          ...Array.from(profile.conceptsCovered)
+        ]);
+        
+        // Merge conceptCoverageEvidence: keep higher scores
+        mergedEvidence = new Map(existingProfile.conceptCoverageEvidence);
+        for (const [conceptId, newEvidence] of (profile.conceptCoverageEvidence || new Map()).entries()) {
+          const existingEvidence = mergedEvidence.get(conceptId);
+          if (!existingEvidence || newEvidence.score > existingEvidence.score) {
+            mergedEvidence.set(conceptId, newEvidence);
+          }
+        }
+        
+        // Merge errorHistory: sum the counts
+        mergedErrorHistory = new Map(existingProfile.errorHistory);
+        for (const [errorType, count] of profile.errorHistory.entries()) {
+          mergedErrorHistory.set(errorType, (mergedErrorHistory.get(errorType) || 0) + count);
+        }
+      }
+    }
     
     // Convert Sets and Maps to arrays for storage
     const serializable = {
       ...profile,
+      version: existingVersion + 1, // Increment version for optimistic locking
       currentStrategy: this.normalizeStrategy(profile.currentStrategy),
-      conceptsCovered: Array.from(profile.conceptsCovered),
-      conceptCoverageEvidence: Array.from((profile.conceptCoverageEvidence || new Map()).entries()),
-      errorHistory: Array.from(profile.errorHistory.entries())
+      conceptsCovered: Array.from(mergedConceptsCovered),
+      conceptCoverageEvidence: Array.from(mergedEvidence.entries()),
+      errorHistory: Array.from(mergedErrorHistory.entries())
     };
     
     if (index >= 0) {
@@ -358,32 +474,66 @@ class StorageManager {
   }
 
   getProfile(learnerId: string): LearnerProfile | null {
-    const profiles = this.getAllProfiles();
-    const profile = profiles.find(p => p.id === learnerId);
-    
-    if (!profile) return null;
-    
-    // Convert arrays back to Sets and Maps
-    const evidenceMap = new Map<string, ConceptCoverageEvidence>(
-      (profile.conceptCoverageEvidence || []) as [string, ConceptCoverageEvidence][]
-    );
-    
-    // Ensure all covered concepts have evidence entries
-    const conceptsCovered = new Set((profile.conceptsCovered || []) as any);
-    const now = Date.now();
-    for (const conceptId of conceptsCovered) {
-      if (!evidenceMap.has(conceptId)) {
-        evidenceMap.set(conceptId, this.createDefaultEvidence(conceptId, now));
+    try {
+      const profiles = this.getAllProfiles();
+      const profile = profiles.find(p => p.id === learnerId);
+      
+      if (!profile) return null;
+      
+      // Convert arrays back to Sets and Maps
+      // Handle both Array<Array<[string, ConceptCoverageEvidence]>> and Array<[string, ConceptCoverageEvidence]>
+      const rawEvidence = profile.conceptCoverageEvidence;
+      const evidenceMap = new Map<string, ConceptCoverageEvidence>();
+      const now = Date.now();
+      
+      if (Array.isArray(rawEvidence)) {
+        for (const item of rawEvidence) {
+          if (!Array.isArray(item) || item.length < 2) continue;
+          const [key, value] = item;
+          if (typeof key !== 'string' || typeof value !== 'object' || value === null) continue;
+          
+          // Ensure evidence has all required fields with defaults
+          const defaultEvidence = this.createDefaultEvidence(key, now);
+          const mergedEvidence: ConceptCoverageEvidence = {
+            ...defaultEvidence,
+            ...value,
+            conceptId: key,
+            evidenceCounts: {
+              ...defaultEvidence.evidenceCounts,
+              ...(value.evidenceCounts || {})
+            }
+          };
+          evidenceMap.set(key, mergedEvidence);
+        }
       }
+      
+      // Ensure all covered concepts have evidence entries
+      const conceptsCovered = new Set((profile.conceptsCovered || []) as any);
+      for (const conceptId of conceptsCovered) {
+        if (!evidenceMap.has(conceptId)) {
+          evidenceMap.set(conceptId, this.createDefaultEvidence(conceptId, now));
+        }
+      }
+      
+      return {
+        ...profile,
+        conceptsCovered,
+        conceptCoverageEvidence: evidenceMap,
+        errorHistory: new Map((profile.errorHistory || []) as any),
+        currentStrategy: this.normalizeStrategy(profile.currentStrategy)
+      };
+    } catch (error) {
+      // Handle corrupted profile data gracefully
+      console.error(`Failed to parse profile for learner ${learnerId}:`, error);
+      // Clear corrupted profile to allow fresh start
+      try {
+        const profiles = this.getAllProfiles().filter(p => p?.id !== learnerId);
+        localStorage.setItem(this.PROFILES_KEY, JSON.stringify(profiles));
+      } catch (cleanupError) {
+        console.error('Failed to clean up corrupted profile:', cleanupError);
+      }
+      return null;
     }
-    
-    return {
-      ...profile,
-      conceptsCovered,
-      conceptCoverageEvidence: evidenceMap,
-      errorHistory: new Map((profile.errorHistory || []) as any),
-      currentStrategy: this.normalizeStrategy(profile.currentStrategy)
-    };
   }
 
   getAllProfiles(): any[] {
@@ -443,6 +593,16 @@ class StorageManager {
     low: { score: 0, minExecutions: 0 }
   };
 
+  // Valid concept IDs from SQL-Engage knowledge graph (used for validation)
+  private readonly VALID_CONCEPT_IDS = new Set([
+    'select-basic',
+    'where-clause',
+    'joins',
+    'aggregation',
+    'subqueries',
+    'order-by'
+  ]);
+
   // Textbook/instructional units
   saveTextbookUnit(learnerId: string, unit: InstructionalUnit): SaveTextbookUnitResult {
     const textbooks = this.getAllTextbooks();
@@ -465,7 +625,8 @@ class StorageManager {
     if (existing) {
       const existingSourceIds = this.mergeIds(existing.sourceInteractionIds, existing.sourceInteractions);
       existing.sourceInteractionIds = this.mergeIds(existingSourceIds, normalizedSourceIds);
-      existing.addedTimestamp = Date.now();
+      // BUG FIX: Don't overwrite addedTimestamp - use updatedTimestamp instead
+      existing.updatedTimestamp = Date.now();
       existing.content = unit.content;
       existing.title = unit.title;
       existing.sessionId = existing.sessionId || activeSessionId;
@@ -476,13 +637,19 @@ class StorageManager {
         activeSessionId
       ]));
 
-      localStorage.setItem(this.TEXTBOOK_KEY, JSON.stringify(textbooks));
+      // Use safeSetItem for quota handling
+      const result = this.safeSetItem(this.TEXTBOOK_KEY, JSON.stringify(textbooks));
+      if (!result.success) {
+        console.warn('Failed to save textbook unit update: quota exceeded or other error');
+      }
       return {
         action: 'updated',
         unit: {
           ...existing,
           sourceInteractionIds: this.mergeIds(existing.sourceInteractionIds, existing.sourceInteractions)
-        }
+        },
+        success: result.success,
+        quotaExceeded: result.quotaExceeded
       };
     } else {
       const created = {
@@ -493,10 +660,16 @@ class StorageManager {
       };
       textbooks[learnerId].push(created);
 
-      localStorage.setItem(this.TEXTBOOK_KEY, JSON.stringify(textbooks));
+      // Use safeSetItem for quota handling
+      const result = this.safeSetItem(this.TEXTBOOK_KEY, JSON.stringify(textbooks));
+      if (!result.success) {
+        console.warn('Failed to save new textbook unit: quota exceeded or other error');
+      }
       return {
         action: 'created',
-        unit: created
+        unit: created,
+        success: result.success,
+        quotaExceeded: result.quotaExceeded
       };
     }
   }
@@ -552,12 +725,20 @@ class StorageManager {
       incoming?.retrievedPdfCitations
     );
 
+    const mergedPdfCitations = this.mergePdfCitations(
+      existing?.retrievedPdfCitations,
+      incoming?.retrievedPdfCitations
+    );
+
     return {
-      ...(existing || incoming!),
+      ...(existing || {}),
       ...(incoming || {}),
       createdAt,
       retrievedSourceIds: mergedRetrievedSourceIds,
-      ...(retrievedPdfCitations.length > 0 ? { retrievedPdfCitations } : {})
+      retrievedPdfCitations: mergedPdfCitations.length > 0 ? mergedPdfCitations : (existing?.retrievedPdfCitations || incoming?.retrievedPdfCitations),
+      // Don't let null/empty incoming overwrite valid existing data
+      parserStatus: incoming?.parserStatus || existing?.parserStatus,
+      parserFailureReason: incoming?.parserFailureReason || existing?.parserFailureReason,
     };
   }
 
@@ -566,8 +747,9 @@ class StorageManager {
     for (const source of sources) {
       for (const citation of source || []) {
         if (!citation || !citation.chunkId) continue;
-        const page = Number(citation.page);
-        if (!Number.isFinite(page)) continue;
+        const rawPage = Number(citation.page);
+        // Fix: Default to page 1 instead of dropping citations with invalid pages
+        const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
         const score = Number.isFinite(Number(citation.score)) ? Number(citation.score) : 0;
         const docId = this.asNonEmptyString(citation.docId)
           || this.asNonEmptyString(citation.chunkId.split(':')[0])
@@ -674,22 +856,83 @@ class StorageManager {
   }
 
   importData(data: any) {
-    if (data.interactions) {
+    // Basic validation: data must be an object
+    if (!data || typeof data !== 'object') {
+      console.error('Import failed: data must be an object');
+      throw new Error('Invalid import data: must be an object');
+    }
+    
+    // Validate interactions array if provided
+    if (data.interactions !== undefined) {
+      if (!Array.isArray(data.interactions)) {
+        console.error('Import failed: interactions must be an array');
+        throw new Error('Invalid import data: interactions must be an array');
+      }
+      // Validate each interaction has required fields
+      for (const interaction of data.interactions) {
+        if (!interaction || typeof interaction !== 'object') {
+          console.error('Import failed: each interaction must be an object');
+          throw new Error('Invalid import data: each interaction must be an object');
+        }
+        if (typeof interaction.id !== 'string') {
+          console.error('Import failed: interaction.id must be a string');
+          throw new Error('Invalid import data: interaction.id must be a string');
+        }
+        if (typeof interaction.learnerId !== 'string') {
+          console.error('Import failed: interaction.learnerId must be a string');
+          throw new Error('Invalid import data: interaction.learnerId must be a string');
+        }
+      }
       localStorage.setItem(this.INTERACTIONS_KEY, JSON.stringify(data.interactions));
     }
-    if (data.profiles) {
+    
+    // Validate profiles array if provided
+    if (data.profiles !== undefined) {
+      if (!Array.isArray(data.profiles)) {
+        console.error('Import failed: profiles must be an array');
+        throw new Error('Invalid import data: profiles must be an array');
+      }
+      for (const profile of data.profiles) {
+        if (!profile || typeof profile !== 'object') {
+          console.error('Import failed: each profile must be an object');
+          throw new Error('Invalid import data: each profile must be an object');
+        }
+        if (typeof profile.id !== 'string') {
+          console.error('Import failed: profile.id must be a string');
+          throw new Error('Invalid import data: profile.id must be a string');
+        }
+      }
       localStorage.setItem(this.PROFILES_KEY, JSON.stringify(data.profiles));
     }
-    if (data.textbooks) {
+    
+    // Validate textbooks object if provided
+    if (data.textbooks !== undefined) {
+      if (!data.textbooks || typeof data.textbooks !== 'object' || Array.isArray(data.textbooks)) {
+        console.error('Import failed: textbooks must be an object (learnerId -> units map)');
+        throw new Error('Invalid import data: textbooks must be an object');
+      }
       localStorage.setItem(this.TEXTBOOK_KEY, JSON.stringify(data.textbooks));
     }
-    if (data.llmCache) {
+    
+    // Validate LLM cache if provided
+    if (data.llmCache !== undefined) {
+      if (!data.llmCache || typeof data.llmCache !== 'object' || Array.isArray(data.llmCache)) {
+        console.error('Import failed: llmCache must be an object');
+        throw new Error('Invalid import data: llmCache must be an object');
+      }
       localStorage.setItem(this.LLM_CACHE_KEY, JSON.stringify(data.llmCache));
     }
+    
     if (typeof data.replayMode === 'boolean') {
       this.setPolicyReplayMode(data.replayMode);
     }
-    if (data.pdfIndex) {
+    
+    // Validate PDF index if provided
+    if (data.pdfIndex !== undefined) {
+      if (!data.pdfIndex || typeof data.pdfIndex !== 'object') {
+        console.error('Import failed: pdfIndex must be an object');
+        throw new Error('Invalid import data: pdfIndex must be an object');
+      }
       this.savePdfIndex(data.pdfIndex);
     }
 
@@ -725,10 +968,26 @@ class StorageManager {
     coveragePercentage: number;
     byConfidence: Record<'low' | 'medium' | 'high', number>;
     averageScore: number;
+    // Enhanced coverage metrics
+    scoreDistribution: {
+      '0-25': number;
+      '26-50': number;
+      '51-75': number;
+      '76-100': number;
+    };
+    totalEvidenceCount: number;
+    evidenceBreakdown: {
+      successfulExecution: number;
+      notesAdded: number;
+      explanationViewed: number;
+      hintViewed: number;
+      errorEncountered: number;
+    };
   } {
     const profile = this.getProfile(learnerId);
     const evidenceMap = profile?.conceptCoverageEvidence || new Map();
     const totalConcepts = 6; // Based on conceptNodes array length
+    const allConceptIds = ['select-basic', 'where-clause', 'joins', 'aggregation', 'subqueries', 'order-by'];
     
     let coveredCount = 0;
     let totalScore = 0;
@@ -738,22 +997,68 @@ class StorageManager {
       high: 0
     };
 
-    for (const evidence of evidenceMap.values()) {
-      if (evidence.score >= this.COVERAGE_THRESHOLD) {
-        coveredCount++;
+    // Score distribution buckets
+    const scoreDistribution = {
+      '0-25': 0,
+      '26-50': 0,
+      '51-75': 0,
+      '76-100': 0
+    };
+
+    // Evidence breakdown totals
+    const evidenceBreakdown = {
+      successfulExecution: 0,
+      notesAdded: 0,
+      explanationViewed: 0,
+      hintViewed: 0,
+      errorEncountered: 0
+    };
+
+    // Include ALL concepts in stats calculation, even those with no evidence
+    for (const conceptId of allConceptIds) {
+      const evidence = evidenceMap.get(conceptId);
+      if (evidence) {
+        if (evidence.score >= this.COVERAGE_THRESHOLD) {
+          coveredCount++;
+        }
+        totalScore += evidence.score;
+        byConfidence[evidence.confidence]++;
+        
+        // Score distribution
+        if (evidence.score <= 25) scoreDistribution['0-25']++;
+        else if (evidence.score <= 50) scoreDistribution['26-50']++;
+        else if (evidence.score <= 75) scoreDistribution['51-75']++;
+        else scoreDistribution['76-100']++;
+        
+        // Evidence breakdown
+        evidenceBreakdown.successfulExecution += evidence.evidenceCounts.successfulExecution;
+        evidenceBreakdown.notesAdded += evidence.evidenceCounts.notesAdded;
+        evidenceBreakdown.explanationViewed += evidence.evidenceCounts.explanationViewed;
+        evidenceBreakdown.hintViewed += evidence.evidenceCounts.hintViewed;
+        evidenceBreakdown.errorEncountered += evidence.evidenceCounts.errorEncountered;
+      } else {
+        // Uncovered concepts count as low confidence with 0 score
+        byConfidence.low++;
+        scoreDistribution['0-25']++;
       }
-      totalScore += evidence.score;
-      byConfidence[evidence.confidence]++;
     }
 
-    const validEvidenceCount = evidenceMap.size || 1; // Avoid division by zero
-    
+    const totalEvidenceCount = 
+      evidenceBreakdown.successfulExecution +
+      evidenceBreakdown.notesAdded +
+      evidenceBreakdown.explanationViewed +
+      evidenceBreakdown.hintViewed +
+      evidenceBreakdown.errorEncountered;
+
     return {
       totalConcepts,
       coveredCount,
       coveragePercentage: (coveredCount / totalConcepts) * 100,
       byConfidence,
-      averageScore: Math.round(totalScore / validEvidenceCount)
+      averageScore: Math.round(totalScore / totalConcepts),
+      scoreDistribution,
+      totalEvidenceCount,
+      evidenceBreakdown
     };
   }
 
@@ -773,31 +1078,51 @@ class StorageManager {
   }
 
   private updateProfileStatsFromEvent(event: InteractionEvent) {
-    const profile = this.getProfile(event.learnerId);
-    if (!profile) return;
+    try {
+      const profile = this.getProfile(event.learnerId);
+      if (!profile) return;
 
-    profile.interactionCount += 1;
+      profile.interactionCount += 1;
 
-    if (event.eventType === 'error') {
-      const subtype = event.sqlEngageSubtype || event.errorSubtypeId;
-      if (subtype) {
-        const canonicalSubtype = canonicalizeSqlEngageSubtype(subtype);
-        profile.errorHistory.set(
-          canonicalSubtype,
-          (profile.errorHistory.get(canonicalSubtype) || 0) + 1
-        );
+      if (event.eventType === 'error') {
+        const subtype = event.sqlEngageSubtype || event.errorSubtypeId;
+        if (subtype) {
+          const canonicalSubtype = canonicalizeSqlEngageSubtype(subtype);
+          profile.errorHistory.set(
+            canonicalSubtype,
+            (profile.errorHistory.get(canonicalSubtype) || 0) + 1
+          );
+        }
+      }
+
+      // Update evidence-based coverage for all valid concept IDs in the event
+      const conceptIds = this.extractConceptIdsFromEvent(event);
+      if (conceptIds.length === 0) {
+        console.warn(`[Storage] No valid concept IDs found for event ${event.id} (type: ${event.eventType})`);
+      }
+      for (const conceptId of conceptIds) {
+        this.updateConceptEvidence(profile, conceptId, event);
+      }
+
+      this.saveProfile(profile);
+    } catch (error) {
+      // Log error but don't crash - profile stats are non-critical
+      console.error('Failed to update profile stats from event:', error);
+      // If profile save fails, at least log the error for debugging
+      if (typeof error === 'object' && error instanceof Error) {
+        console.error('Profile update error details:', {
+          learnerId: event.learnerId,
+          eventType: event.eventType,
+          error: error.message
+        });
       }
     }
-
-    // Update evidence-based coverage for all concept IDs in the event
-    const conceptIds = this.extractConceptIdsFromEvent(event);
-    for (const conceptId of conceptIds) {
-      this.updateConceptEvidence(profile, conceptId, event);
-    }
-
-    this.saveProfile(profile);
   }
 
+  /**
+   * Extract and validate concept IDs from an interaction event.
+   * Only returns concept IDs that exist in the SQL-Engage knowledge graph.
+   */
   private extractConceptIdsFromEvent(event: InteractionEvent): string[] {
     const conceptIds = new Set<string>();
 
@@ -806,15 +1131,20 @@ class StorageManager {
       if (subtype) {
         const canonicalSubtype = canonicalizeSqlEngageSubtype(subtype);
         getConceptIdsForSqlEngageSubtype(canonicalSubtype).forEach((conceptId) => {
-          conceptIds.add(conceptId);
+          if (this.VALID_CONCEPT_IDS.has(conceptId)) {
+            conceptIds.add(conceptId);
+          }
         });
       }
     }
 
     for (const conceptId of event.conceptIds || []) {
       const normalized = conceptId.trim();
-      if (normalized) {
+      if (normalized && this.VALID_CONCEPT_IDS.has(normalized)) {
         conceptIds.add(normalized);
+      } else if (normalized && !this.VALID_CONCEPT_IDS.has(normalized)) {
+        // Log invalid concept IDs for debugging but skip them
+        console.warn(`[Storage] Skipping invalid concept ID: ${normalized}`);
       }
     }
 
@@ -833,8 +1163,12 @@ class StorageManager {
     // Track if concept was already covered before this update
     const wasAlreadyCovered = profile.conceptsCovered.has(conceptId);
     
+    // Deep clone to avoid mutating the original evidence object
     const evidence: ConceptCoverageEvidence = existing
-      ? { ...existing }
+      ? { 
+          ...existing, 
+          evidenceCounts: { ...existing.evidenceCounts }
+        }
       : this.createDefaultEvidence(conceptId, now);
 
     // Update evidence counts based on event type
@@ -888,6 +1222,7 @@ class StorageManager {
         problemId: event.problemId,
         conceptId,
         score: evidence.score,
+        previousScore: existing?.score ?? 0,
         confidence: evidence.confidence,
         evidenceCounts: { ...evidence.evidenceCounts },
         triggerEventId: event.id,
@@ -908,15 +1243,26 @@ class StorageManager {
       counts.hintViewed * weights.hintViewed +
       counts.errorEncountered * weights.errorEncountered;
 
-    // Streak bonuses/penalties
+    // Streak bonuses/penalties for consistent performance
+    const STREAK_BONUSES = {
+      correct3Plus: 15,  // +15 for 3+ consecutive correct
+      correct2: 5        // +5 for 2 consecutive correct
+    };
+    const STREAK_PENALTIES = {
+      incorrect3Plus: -10,  // -10 for 3+ consecutive incorrect
+      incorrect2: -5        // -5 for 2 consecutive incorrect (fixed missing penalty)
+    };
+
     if (evidence.streakCorrect >= 3) {
-      score += 15; // Bonus for consistent success
+      score += STREAK_BONUSES.correct3Plus;
     } else if (evidence.streakCorrect >= 2) {
-      score += 5;
+      score += STREAK_BONUSES.correct2;
     }
 
     if (evidence.streakIncorrect >= 3) {
-      score -= 10; // Penalty for consistent struggle
+      score += STREAK_PENALTIES.incorrect3Plus;
+    } else if (evidence.streakIncorrect >= 2) {
+      score += STREAK_PENALTIES.incorrect2;
     }
 
     // Clamp to 0-100 range
@@ -936,18 +1282,13 @@ class StorageManager {
       return 'high';
     }
 
-    // Medium confidence requires decent score or some successful execution
+    // Medium confidence requires both decent score AND successful execution
     if (evidence.score >= this.CONFIDENCE_THRESHOLDS.medium.score &&
-        (evidence.evidenceCounts.successfulExecution >= this.CONFIDENCE_THRESHOLDS.medium.minExecutions ||
-         totalEvidence >= 3)) {
+        evidence.evidenceCounts.successfulExecution >= this.CONFIDENCE_THRESHOLDS.medium.minExecutions) {
       return 'medium';
     }
 
     return 'low';
-  }
-
-  private getCoverageConceptIds(event: InteractionEvent): string[] {
-    return this.extractConceptIdsFromEvent(event);
   }
 
   private normalizeStrategy(strategy: unknown): LearnerProfile['currentStrategy'] {
@@ -966,21 +1307,55 @@ class StorageManager {
     interaction: InteractionEvent,
     activeSessionId: string
   ): InteractionEvent {
-    const normalizedSessionId = interaction.sessionId || activeSessionId || 'session-unknown';
-    const withSession = {
+    // Validate required fields and provide defaults for corrupted data
+    const normalizedId = typeof interaction.id === 'string' && interaction.id.trim() 
+      ? interaction.id.trim() 
+      : `evt-fallback-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    
+    const normalizedLearnerId = typeof interaction.learnerId === 'string' && interaction.learnerId.trim()
+      ? interaction.learnerId.trim()
+      : 'learner-unknown';
+    
+    const normalizedTimestamp = typeof interaction.timestamp === 'number' && Number.isFinite(interaction.timestamp)
+      ? interaction.timestamp
+      : Date.now();
+    
+    const normalizedSessionId = typeof interaction.sessionId === 'string' && interaction.sessionId.trim()
+      ? interaction.sessionId.trim()
+      : (activeSessionId || 'session-unknown');
+    
+    const normalizedProblemId = typeof interaction.problemId === 'string' && interaction.problemId.trim()
+      ? interaction.problemId.trim()
+      : 'problem-unknown';
+    
+    const validEventTypes: InteractionEvent['eventType'][] = [
+      'code_change', 'execution', 'error', 'hint_request', 'hint_view', 
+      'explanation_view', 'llm_generate', 'pdf_index_rebuilt', 
+      'textbook_add', 'textbook_update', 'coverage_change'
+    ];
+    const normalizedEventType = validEventTypes.includes(interaction.eventType)
+      ? interaction.eventType
+      : 'execution';
+    
+    const sanitized = {
       ...interaction,
-      sessionId: normalizedSessionId
+      id: normalizedId,
+      learnerId: normalizedLearnerId,
+      timestamp: normalizedTimestamp,
+      sessionId: normalizedSessionId,
+      problemId: normalizedProblemId,
+      eventType: normalizedEventType
     };
 
-    if (withSession.eventType === 'hint_view') {
-      return this.normalizeHintViewForExport(withSession);
+    if (sanitized.eventType === 'hint_view') {
+      return this.normalizeHintViewForExport(sanitized);
     }
 
-    if (withSession.eventType === 'textbook_add' || withSession.eventType === 'textbook_update') {
-      return this.normalizeTextbookEventForExport(withSession);
+    if (sanitized.eventType === 'textbook_add' || sanitized.eventType === 'textbook_update') {
+      return this.normalizeTextbookEventForExport(sanitized);
     }
 
-    return withSession;
+    return sanitized;
   }
 
   private normalizeHintViewForExport(interaction: InteractionEvent): InteractionEvent {

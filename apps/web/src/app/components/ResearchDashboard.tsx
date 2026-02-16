@@ -1,9 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { Skeleton } from './ui/skeleton';
+import { Progress } from './ui/progress';
 import {
   Table,
   TableBody,
@@ -18,13 +21,32 @@ import {
   XAxis, 
   YAxis, 
   CartesianGrid, 
-  Tooltip, 
+  Tooltip as RechartsTooltip, 
   Legend, 
   ResponsiveContainer,
   LineChart,
-  Line
+  Line,
+  PieChart,
+  Pie,
+  Cell
 } from 'recharts';
-import { Download, Play, RefreshCw, Users, Activity } from 'lucide-react';
+import { 
+  Download, 
+  Play, 
+  RefreshCw, 
+  Users, 
+  Activity, 
+  Calendar,
+  Clock,
+  AlertCircle,
+  CheckCircle2,
+  FileUp,
+  Loader2,
+  BarChart3,
+  PieChart as PieChartIcon,
+  TrendingUp,
+  Lightbulb
+} from 'lucide-react';
 import { storage } from '../lib/storage';
 import { InteractionEvent, LearnerProfile, ExperimentCondition, PdfIndexDocument } from '../types';
 import { orchestrator, ReplayDecisionPoint, AutoEscalationMode } from '../lib/adaptive-orchestrator';
@@ -63,6 +85,27 @@ const experimentConditions: ExperimentCondition[] = [
   }
 ];
 
+// Time range options for filtering
+const TIME_RANGES = [
+  { value: 'all', label: 'All Time', days: null },
+  { value: '24h', label: 'Last 24 Hours', days: 1 },
+  { value: '7d', label: 'Last 7 Days', days: 7 },
+  { value: '30d', label: 'Last 30 Days', days: 30 },
+  { value: '90d', label: 'Last 90 Days', days: 90 }
+];
+
+// Chart colors
+const CHART_COLORS = {
+  primary: '#3b82f6',
+  secondary: '#6366f1',
+  success: '#22c55e',
+  warning: '#eab308',
+  error: '#ef4444',
+  info: '#0ea5e9',
+  purple: '#8b5cf6',
+  orange: '#f97316'
+};
+
 export function ResearchDashboard() {
   const [interactions, setInteractions] = useState<InteractionEvent[]>([]);
   const [profiles, setProfiles] = useState<LearnerProfile[]>([]);
@@ -82,6 +125,24 @@ export function ResearchDashboard() {
   const [pdfIndexSummary, setPdfIndexSummary] = useState<string>('No PDF index loaded');
   const [pdfIndexStatus, setPdfIndexStatus] = useState<'idle' | 'loading' | 'ready' | 'error' | 'warning'>('idle');
   const [pdfIndexError, setPdfIndexError] = useState<string | null>(null);
+  
+  // Time range filter
+  const [timeRange, setTimeRange] = useState<string>('all');
+  
+  // Export/Import states
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importSuccess, setImportSuccess] = useState(false);
+  
+  // Loading state
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -129,17 +190,49 @@ export function ResearchDashboard() {
     }
   }, [profiles, selectedTraceLearner]);
 
-  const handleExport = () => {
-    const data = exportAllHistory
-      ? storage.exportAllData()
-      : storage.exportData();
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `sql-learning-data-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  // Filter interactions by time range
+  const getFilteredByTimeRange = useCallback((data: InteractionEvent[]) => {
+    const range = TIME_RANGES.find(r => r.value === timeRange);
+    if (!range?.days) return data;
+    
+    const cutoff = Date.now() - (range.days * 24 * 60 * 60 * 1000);
+    return data.filter(i => i.timestamp >= cutoff);
+  }, [timeRange]);
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    setExportProgress(0);
+    
+    // Simulate progress for large exports
+    const progressInterval = setInterval(() => {
+      setExportProgress(prev => Math.min(prev + 10, 90));
+    }, 100);
+    
+    try {
+      const data = exportAllHistory
+        ? storage.exportAllData()
+        : storage.exportData();
+      
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sql-learning-data-${Date.now()}.json`;
+      a.click();
+      
+      setExportProgress(100);
+      setTimeout(() => {
+        setIsExporting(false);
+        setExportProgress(0);
+      }, 500);
+      
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+    } catch (error) {
+      setImportError(`Export failed: ${(error as Error).message}`);
+      setIsExporting(false);
+    } finally {
+      clearInterval(progressInterval);
+    }
   };
 
   const handleLLMHealthCheck = async () => {
@@ -157,22 +250,65 @@ export function ResearchDashboard() {
     }
   };
 
+  const fileReaderRef = useRef<FileReader | null>(null);
+
+  useEffect(() => {
+    return () => {
+      // Abort any pending file read on unmount
+      if (fileReaderRef.current) {
+        fileReaderRef.current.abort();
+        fileReaderRef.current = null;
+      }
+    };
+  }, []);
+
   const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    setIsImporting(true);
+    setImportError(null);
+    setImportSuccess(false);
+
+    // Abort any existing reader before starting new one
+    if (fileReaderRef.current) {
+      fileReaderRef.current.abort();
+    }
+
     const reader = new FileReader();
+    fileReaderRef.current = reader;
+
     reader.onload = (e) => {
       try {
         const data = JSON.parse(e.target?.result as string);
         storage.importData(data);
         setExportAllHistory(false);
         loadData();
+        setImportSuccess(true);
+        setTimeout(() => setImportSuccess(false), 3000);
       } catch (error) {
-        alert('Error importing data');
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        setImportError(`Import failed: ${errorMsg}`);
+      } finally {
+        setIsImporting(false);
+        fileReaderRef.current = null;
       }
     };
+
+    reader.onerror = () => {
+      setImportError('Failed to read file. Please try again.');
+      setIsImporting(false);
+      fileReaderRef.current = null;
+    };
+
+    reader.onabort = () => {
+      setIsImporting(false);
+      fileReaderRef.current = null;
+    };
+
     reader.readAsText(file);
+    // Reset input so same file can be selected again
+    event.target.value = '';
   };
 
   const handleLoadPdfIndex = async () => {
@@ -230,9 +366,12 @@ export function ResearchDashboard() {
   };
 
   // Analytics
-  const filteredInteractions = selectedLearner === 'all'
-    ? interactions
-    : interactions.filter(i => i.learnerId === selectedLearner);
+  const filteredInteractions = useMemo(() => {
+    const baseFiltered = selectedLearner === 'all'
+      ? interactions
+      : interactions.filter(i => i.learnerId === selectedLearner);
+    return getFilteredByTimeRange(baseFiltered);
+  }, [interactions, selectedLearner, getFilteredByTimeRange]);
 
   const errorsByType = filteredInteractions
     .filter(i => i.eventType === 'error' && i.errorSubtypeId)
@@ -243,8 +382,9 @@ export function ResearchDashboard() {
     }, {} as Record<string, number>);
 
   const errorChartData = Object.entries(errorsByType).map(([name, count]) => ({
-    name: name.replace(/-/g, ' '),
-    count
+    name: name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+    count,
+    fullName: name
   }));
 
   const interactionsByType = filteredInteractions.reduce((acc, i) => {
@@ -253,9 +393,33 @@ export function ResearchDashboard() {
   }, {} as Record<string, number>);
 
   const interactionChartData = Object.entries(interactionsByType).map(([name, count]) => ({
-    name: name.replace(/_/g, ' '),
-    count
+    name: name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+    count,
+    type: name
   }));
+
+  // Pie chart data for event distribution
+  const eventDistributionData = useMemo(() => {
+    const data = Object.entries(interactionsByType)
+      .map(([name, value]) => ({
+        name: name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        value,
+        type: name
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+    
+    const colors = [
+      CHART_COLORS.primary,
+      CHART_COLORS.secondary,
+      CHART_COLORS.success,
+      CHART_COLORS.warning,
+      CHART_COLORS.error,
+      CHART_COLORS.info
+    ];
+    
+    return data.map((item, idx) => ({ ...item, color: colors[idx % colors.length] }));
+  }, [interactionsByType]);
 
   // Strategy comparison
   const strategyComparison = profiles.reduce((acc, profile) => {
@@ -295,12 +459,12 @@ export function ResearchDashboard() {
     count > 0 ? (total / count).toFixed(digits) : (0).toFixed(digits)
   );
   const comparisonData = Object.values(strategyComparison).map((s: any) => ({
-    strategy: s.strategy.replace(/-/g, ' '),
-    avgErrors: safeAverage(s.totalErrors, s.learnerCount),
-    avgHints: safeAverage(s.totalHints, s.learnerCount),
-    avgSuccess: safeAverage(s.totalSuccess, s.learnerCount),
-    avgEscalations: safeAverage(s.totalEscalations, s.learnerCount),
-    avgUnitsAdded: safeAverage(s.totalUnitsAdded, s.learnerCount),
+    strategy: s.strategy.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+    avgErrors: Number(safeAverage(s.totalErrors, s.learnerCount)),
+    avgHints: Number(safeAverage(s.totalHints, s.learnerCount)),
+    avgSuccess: Number(safeAverage(s.totalSuccess, s.learnerCount)),
+    avgEscalations: Number(safeAverage(s.totalEscalations, s.learnerCount)),
+    avgUnitsAdded: Number(safeAverage(s.totalUnitsAdded, s.learnerCount)),
     avgDedupRate: s.totalUnitsAdded + s.totalUnitUpdates > 0
       ? (s.totalUnitUpdates / (s.totalUnitsAdded + s.totalUnitUpdates)).toFixed(2)
       : '0.00'
@@ -428,462 +592,708 @@ export function ResearchDashboard() {
     }
   })();
 
-  return (
-    <div className="space-y-6">
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-2xl font-bold">Research Dashboard</h2>
-            <p className="text-gray-600 mt-1">
-              Analyze interaction traces and compare adaptive strategies
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button onClick={handleExport} variant="outline" size="sm">
-              <Download className="size-4 mr-2" />
-              Export Data
-            </Button>
-            <label className="flex items-center gap-2 px-2 text-sm text-gray-600">
-              <input
-                type="checkbox"
-                checked={exportAllHistory}
-                onChange={(e) => setExportAllHistory(e.target.checked)}
-              />
-              Include all history
-            </label>
-            <label>
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleImport}
-                className="hidden"
-              />
-              <Button variant="outline" size="sm" asChild>
-                <span>Import Data</span>
-              </Button>
-            </label>
-            <Button onClick={loadData} variant="outline" size="sm">
-              <RefreshCw className="size-4" />
-            </Button>
-          </div>
-        </div>
-        <p
-          className="mb-4 text-xs text-gray-600"
-          data-testid="export-scope-label"
-        >
-          Export scope: {exportAllHistory ? 'all history' : 'active session (default)'}
-        </p>
-
-        <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-          <Card className="p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium">LLM Health Check</p>
-                <p className="text-xs text-gray-500">Target model: {OLLAMA_MODEL}</p>
-                <p className={`text-xs ${llmHealthOk === null ? 'text-gray-600' : llmHealthOk ? 'text-emerald-700' : 'text-red-700'}`}>
-                  {llmHealthMessage}
-                </p>
-              </div>
-              <Button size="sm" variant="outline" onClick={handleLLMHealthCheck} disabled={isCheckingLLM}>
-                {isCheckingLLM ? 'Checking...' : 'Test LLM'}
-              </Button>
-            </div>
-          </Card>
-          <Card className="p-3">
-            <label className="flex items-center justify-between gap-2 text-sm">
-              <div>
-                <p className="font-medium">Policy Replay Mode</p>
-                <p className="text-xs text-gray-600">Disables live LLM calls and uses cache/fallback only.</p>
-              </div>
-              <input
-                type="checkbox"
-                checked={policyReplayMode}
-                onChange={(event) => setPolicyReplayMode(event.target.checked)}
-              />
-            </label>
-          </Card>
-          <Card className="p-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium">PDF Retrieval Index</p>
-                <p className="text-xs text-gray-600" data-testid="pdf-index-summary">{pdfIndexSummary}</p>
-                <p className="text-[11px] text-gray-500" data-testid="pdf-index-status">
-                  Status: {pdfIndexStatusLabel}
-                </p>
-                {pdfIndexError && (
-                  <div 
-                    className={`text-[11px] mt-2 p-2 rounded border ${
-                      pdfIndexStatus === 'warning'
-                        ? 'text-amber-800 bg-amber-50 border-amber-200'
-                        : 'text-red-700 bg-red-50 border-red-200'
-                    }`}
-                    data-testid="pdf-index-error"
-                  >
-                    <PdfIndexErrorDisplay error={pdfIndexError} />
-                  </div>
-                )}
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLoadPdfIndex}
-                data-testid="pdf-index-load-button"
-                disabled={pdfIndexStatus === 'loading'}
-              >
-                {pdfIndexStatus === 'loading' ? 'Loading...' : 'Load Index'}
-              </Button>
-            </div>
-          </Card>
-        </div>
-
+  if (isLoading) {
+    return (
+      <div className="space-y-6 p-6">
+        <Skeleton className="h-32" />
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Users className="size-4 text-blue-600" />
-              <span className="text-sm font-medium">Learners</span>
-            </div>
-            <p className="text-3xl font-bold">{profiles.length}</p>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Activity className="size-4 text-green-600" />
-              <span className="text-sm font-medium">Interactions</span>
-            </div>
-            <p className="text-3xl font-bold">{interactions.length}</p>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Activity className="size-4 text-red-600" />
-              <span className="text-sm font-medium">Errors</span>
-            </div>
-            <p className="text-3xl font-bold">
-              {interactions.filter(i => i.eventType === 'error').length}
-            </p>
-          </Card>
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Activity className="size-4 text-yellow-600" />
-              <span className="text-sm font-medium">Hints</span>
-            </div>
-            <p className="text-3xl font-bold">
-              {interactions.filter(i => i.eventType === 'hint_view').length}
-            </p>
-          </Card>
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
         </div>
-      </Card>
+        <Skeleton className="h-96" />
+      </div>
+    );
+  }
 
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-semibold">Filter by Learner</h3>
-          <Select value={selectedLearner} onValueChange={setSelectedLearner}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Learners</SelectItem>
-              {profiles.map(p => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name} ({p.currentStrategy})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </Card>
+  return (
+    <TooltipProvider delayDuration={100}>
+      <div className="space-y-6">
+        <Card className="p-6">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
+            <div>
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                <BarChart3 className="size-6 text-blue-600" />
+                Research Dashboard
+              </h2>
+              <p className="text-gray-600 mt-1">
+                Analyze interaction traces and compare adaptive strategies
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    onClick={handleExport} 
+                    variant="outline" 
+                    size="sm"
+                    disabled={isExporting}
+                  >
+                    {isExporting ? (
+                      <Loader2 className="size-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="size-4 mr-2" />
+                    )}
+                    {isExporting ? `Exporting ${exportProgress}%` : 'Export Data'}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Export all learning data as JSON</p>
+                </TooltipContent>
+              </Tooltip>
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <label>
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleImport}
+                      className="hidden"
+                      disabled={isImporting}
+                    />
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      asChild
+                      disabled={isImporting}
+                    >
+                      <span>
+                        {isImporting ? (
+                          <Loader2 className="size-4 mr-2 animate-spin" />
+                        ) : (
+                          <FileUp className="size-4 mr-2" />
+                        )}
+                        {isImporting ? 'Importing...' : 'Import Data'}
+                      </span>
+                    </Button>
+                  </label>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Import learning data from JSON file</p>
+                </TooltipContent>
+              </Tooltip>
+              
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    onClick={loadData} 
+                    variant="outline" 
+                    size="sm"
+                    disabled={isImporting || isExporting}
+                  >
+                    <RefreshCw className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Refresh data</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+          
+          {/* Export scope and status */}
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <label className="flex items-center gap-2 px-2 text-sm text-gray-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={exportAllHistory}
+                  onChange={(e) => setExportAllHistory(e.target.checked)}
+                  className="rounded border-gray-300"
+                />
+                Include all history
+              </label>
+              
+              {/* Time range selector */}
+              <div className="flex items-center gap-2">
+                <Calendar className="size-4 text-gray-400" />
+                <Select value={timeRange} onValueChange={setTimeRange}>
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TIME_RANGES.map(range => (
+                      <SelectItem key={range.value} value={range.value}>
+                        {range.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <p
+              className="text-xs text-gray-600"
+              data-testid="export-scope-label"
+            >
+              Export scope: {exportAllHistory ? 'all history' : 'active session (default)'} 
+              {timeRange !== 'all' && ` • Filtered to ${TIME_RANGES.find(r => r.value === timeRange)?.label.toLowerCase()}`}
+            </p>
+            
+            {/* Import status messages */}
+            {importError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+                <AlertCircle className="size-4 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-red-800">Import Error</p>
+                  <p className="text-sm text-red-700">{importError}</p>
+                </div>
+              </div>
+            )}
+            
+            {importSuccess && (
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+                <CheckCircle2 className="size-4 text-green-600" />
+                <p className="text-sm text-green-800">Data imported successfully!</p>
+              </div>
+            )}
+          </div>
 
-      <Tabs defaultValue="interactions">
-        <TabsList>
-          <TabsTrigger value="interactions">Interaction Analysis</TabsTrigger>
-          <TabsTrigger value="errors">Error Analysis</TabsTrigger>
-          <TabsTrigger value="comparison">Strategy Comparison</TabsTrigger>
-          <TabsTrigger value="timeline">Timeline</TabsTrigger>
-          <TabsTrigger value="trace" data-testid="instructor-trace-tab">
-            Instructor Trace View
-          </TabsTrigger>
-        </TabsList>
+          <div className="mb-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Card className="p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">LLM Health Check</p>
+                  <p className="text-xs text-gray-500">Target model: {OLLAMA_MODEL}</p>
+                  <p className={`text-xs ${llmHealthOk === null ? 'text-gray-600' : llmHealthOk ? 'text-emerald-700' : 'text-red-700'}`}>
+                    {llmHealthMessage}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={handleLLMHealthCheck} disabled={isCheckingLLM}>
+                  {isCheckingLLM ? 'Checking...' : 'Test LLM'}
+                </Button>
+              </div>
+            </Card>
+            <Card className="p-3">
+              <label className="flex items-center justify-between gap-2 text-sm">
+                <div>
+                  <p className="font-medium">Policy Replay Mode</p>
+                  <p className="text-xs text-gray-600">Disables live LLM calls and uses cache/fallback only.</p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={policyReplayMode}
+                  onChange={(event) => setPolicyReplayMode(event.target.checked)}
+                />
+              </label>
+            </Card>
+            <Card className="p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">PDF Retrieval Index</p>
+                  <p className="text-xs text-gray-600" data-testid="pdf-index-summary">{pdfIndexSummary}</p>
+                  <p className="text-[11px] text-gray-500" data-testid="pdf-index-status">
+                    Status: {pdfIndexStatusLabel}
+                  </p>
+                  {pdfIndexError && (
+                    <div 
+                      className={`text-[11px] mt-2 p-2 rounded border ${
+                        pdfIndexStatus === 'warning'
+                          ? 'text-amber-800 bg-amber-50 border-amber-200'
+                          : 'text-red-700 bg-red-50 border-red-200'
+                      }`}
+                      data-testid="pdf-index-error"
+                    >
+                      <PdfIndexErrorDisplay error={pdfIndexError} />
+                    </div>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLoadPdfIndex}
+                  data-testid="pdf-index-load-button"
+                  disabled={pdfIndexStatus === 'loading'}
+                >
+                  {pdfIndexStatus === 'loading' ? 'Loading...' : 'Load Index'}
+                </Button>
+              </div>
+            </Card>
+          </div>
 
-        <TabsContent value="interactions" className="space-y-4">
-          <Card className="p-6">
-            <h3 className="font-semibold mb-4">Interactions by Type</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={interactionChartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="count" fill="#3b82f6" />
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
-        </TabsContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="size-4 text-blue-600" />
+                <span className="text-sm font-medium text-gray-600">Learners</span>
+              </div>
+              <p className="text-3xl font-bold">{profiles.length}</p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Activity className="size-4 text-green-600" />
+                <span className="text-sm font-medium text-gray-600">Interactions</span>
+              </div>
+              <p className="text-3xl font-bold">{filteredInteractions.length}</p>
+              <p className="text-xs text-gray-500 mt-1">
+                {timeRange !== 'all' ? TIME_RANGES.find(r => r.value === timeRange)?.label : 'all time'}
+              </p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <AlertCircle className="size-4 text-red-600" />
+                <span className="text-sm font-medium text-gray-600">Errors</span>
+              </div>
+              <p className="text-3xl font-bold">
+                {filteredInteractions.filter(i => i.eventType === 'error').length}
+              </p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Lightbulb className="size-4 text-yellow-600" />
+                <span className="text-sm font-medium text-gray-600">Hints</span>
+              </div>
+              <p className="text-3xl font-bold">
+                {filteredInteractions.filter(i => i.eventType === 'hint_view').length}
+              </p>
+            </Card>
+          </div>
+        </Card>
 
-        <TabsContent value="errors" className="space-y-4">
-          <Card className="p-6">
-            <h3 className="font-semibold mb-4">Errors by Subtype</h3>
-            {errorChartData.length > 0 ? (
+        <Card className="p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <h3 className="font-semibold">Filter by Learner</h3>
+            <div className="flex items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Clock className="size-4 text-gray-400" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Time range filter applied to all analytics</p>
+                </TooltipContent>
+              </Tooltip>
+              <span className="text-sm text-gray-500">{TIME_RANGES.find(r => r.value === timeRange)?.label}</span>
+            </div>
+            <Select value={selectedLearner} onValueChange={setSelectedLearner}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Learners</SelectItem>
+                {profiles.map(p => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name} ({p.currentStrategy})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </Card>
+
+        <Tabs defaultValue="interactions">
+          <TabsList className="flex flex-wrap h-auto">
+            <TabsTrigger value="interactions" className="flex items-center gap-1.5">
+              <Activity className="size-4" />
+              Interactions
+            </TabsTrigger>
+            <TabsTrigger value="errors" className="flex items-center gap-1.5">
+              <AlertCircle className="size-4" />
+              Errors
+            </TabsTrigger>
+            <TabsTrigger value="comparison" className="flex items-center gap-1.5">
+              <TrendingUp className="size-4" />
+              Strategies
+            </TabsTrigger>
+            <TabsTrigger value="distribution" className="flex items-center gap-1.5">
+              <PieChartIcon className="size-4" />
+              Distribution
+            </TabsTrigger>
+            <TabsTrigger value="timeline" className="flex items-center gap-1.5">
+              <Clock className="size-4" />
+              Timeline
+            </TabsTrigger>
+            <TabsTrigger value="trace" data-testid="instructor-trace-tab" className="flex items-center gap-1.5">
+              <BarChart3 className="size-4" />
+              Trace View
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="interactions" className="space-y-4">
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Activity className="size-5" />
+                Interactions by Type
+              </h3>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={errorChartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
+                <BarChart data={interactionChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis 
+                    dataKey="name" 
+                    tick={{ fontSize: 12 }}
+                    interval={0}
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                  />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <RechartsTooltip 
+                    contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                  />
                   <Legend />
-                  <Bar dataKey="count" fill="#ef4444" />
+                  <Bar dataKey="count" fill={CHART_COLORS.primary} name="Count" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
-            ) : (
-              <p className="text-gray-500 text-center py-8">No error data available</p>
-            )}
-          </Card>
-        </TabsContent>
+            </Card>
+          </TabsContent>
 
-        <TabsContent value="comparison" className="space-y-4">
-          <Card className="p-6">
-            <h3 className="font-semibold mb-4">Strategy Comparison</h3>
-            <div className="mb-4 space-y-2">
-              {experimentConditions.map(cond => (
-                <div key={cond.id} className="p-3 border rounded">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge>{cond.name}</Badge>
-                    <span className="text-sm font-medium">{cond.description}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {comparisonData.length > 0 ? (
-              <>
+          <TabsContent value="errors" className="space-y-4">
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <AlertCircle className="size-5" />
+                Errors by Subtype
+              </h3>
+              {errorChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={comparisonData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="strategy" />
-                    <YAxis />
-                    <Tooltip />
+                  <BarChart data={errorChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis 
+                      dataKey="name" 
+                      tick={{ fontSize: 12 }}
+                      interval={0}
+                      angle={-45}
+                      textAnchor="end"
+                      height={80}
+                    />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <RechartsTooltip 
+                      contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                    />
                     <Legend />
-                    <Bar dataKey="avgErrors" fill="#ef4444" name="Avg Errors" />
-                    <Bar dataKey="avgHints" fill="#eab308" name="Avg Hints" />
-                    <Bar dataKey="avgSuccess" fill="#22c55e" name="Avg Success" />
-                    <Bar dataKey="avgEscalations" fill="#6366f1" name="Avg Escalations" />
-                    <Bar dataKey="avgUnitsAdded" fill="#0ea5e9" name="Avg Units Added" />
+                    <Bar dataKey="count" fill={CHART_COLORS.error} name="Error Count" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
-                <div className="mt-4 text-sm text-gray-700 space-y-1">
-                  {comparisonData.map((row: any) => (
-                    <p key={row.strategy}>
-                      {row.strategy}: dedup rate {row.avgDedupRate}
-                    </p>
-                  ))}
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <AlertCircle className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>No error data available for the selected time range</p>
                 </div>
-              </>
-            ) : (
-              <p className="text-gray-500 text-center py-8">
-                No comparison data available. Add more learners with different strategies.
-              </p>
-            )}
-          </Card>
-        </TabsContent>
+              )}
+            </Card>
+          </TabsContent>
 
-        <TabsContent value="timeline" className="space-y-4">
-          <Card className="p-6">
-            <h3 className="font-semibold mb-4">Interaction Timeline</h3>
-            {timelineChartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={timelineChartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="minute" label={{ value: 'Minutes', position: 'insideBottom', offset: -5 }} />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="events" stroke="#3b82f6" name="Total Events" />
-                  <Line type="monotone" dataKey="errors" stroke="#ef4444" name="Errors" />
-                  <Line type="monotone" dataKey="hints" stroke="#eab308" name="Hints" />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-gray-500 text-center py-8">No timeline data available</p>
-            )}
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="trace" className="space-y-4">
-          <Card className="p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Trace Replay With Policy Knob</h3>
-              <Button
-                onClick={handleReplay}
-                size="sm"
-                variant="outline"
-                disabled={!selectedTraceLearner}
-                data-testid="trace-replay-button"
-              >
-                <Play className="size-4 mr-2" />
-                {isReplaying ? 'Replaying...' : 'Replay Trace Slice'}
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-              <div>
-                <p className="text-xs text-gray-500 mb-2">Trace learner</p>
-                <Select value={selectedTraceLearner} onValueChange={setSelectedTraceLearner}>
-                  <SelectTrigger data-testid="trace-learner-select">
-                    <SelectValue placeholder="Select learner" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {profiles.map((profile) => (
-                      <SelectItem key={profile.id} value={profile.id}>
-                        {profile.name} ({profile.currentStrategy})
-                      </SelectItem>
+          <TabsContent value="comparison" className="space-y-4">
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <TrendingUp className="size-5" />
+                Strategy Comparison
+              </h3>
+              <div className="mb-4 space-y-2">
+                {experimentConditions.map(cond => (
+                  <div key={cond.id} className="p-3 border rounded-lg bg-gray-50/50">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Badge>{cond.name}</Badge>
+                      <span className="text-sm font-medium">{cond.description}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {comparisonData.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={comparisonData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis dataKey="strategy" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <RechartsTooltip 
+                        contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                      />
+                      <Legend />
+                      <Bar dataKey="avgErrors" fill={CHART_COLORS.error} name="Avg Errors" radius={[2, 2, 0, 0]} />
+                      <Bar dataKey="avgHints" fill={CHART_COLORS.warning} name="Avg Hints" radius={[2, 2, 0, 0]} />
+                      <Bar dataKey="avgSuccess" fill={CHART_COLORS.success} name="Avg Success" radius={[2, 2, 0, 0]} />
+                      <Bar dataKey="avgEscalations" fill={CHART_COLORS.secondary} name="Avg Escalations" radius={[2, 2, 0, 0]} />
+                      <Bar dataKey="avgUnitsAdded" fill={CHART_COLORS.info} name="Avg Units Added" radius={[2, 2, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <div className="mt-4 text-sm text-gray-700 space-y-1">
+                    {comparisonData.map((row: any) => (
+                      <p key={row.strategy}>
+                        <span className="font-medium">{row.strategy}:</span> dedup rate {row.avgDedupRate}
+                      </p>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-2">Trace problem</p>
-                <Select value={selectedTraceProblem} onValueChange={setSelectedTraceProblem}>
-                  <SelectTrigger data-testid="trace-problem-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All problems</SelectItem>
-                    {traceProblemOptions.map((problemId) => (
-                      <SelectItem key={problemId} value={problemId}>
-                        {problemId}
-                      </SelectItem>
+                  </div>
+                </>
+              ) : (
+                <p className="text-gray-500 text-center py-8">
+                  No comparison data available. Add more learners with different strategies.
+                </p>
+              )}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="distribution" className="space-y-4">
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <PieChartIcon className="size-5" />
+                Event Distribution
+              </h3>
+              {eventDistributionData.length > 0 ? (
+                <div className="flex flex-col md:flex-row items-center gap-6">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={eventDistributionData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={100}
+                        paddingAngle={2}
+                        dataKey="value"
+                        label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                      >
+                        {eventDistributionData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="w-full md:w-1/3 space-y-2">
+                    {eventDistributionData.map((item) => (
+                      <div key={item.name} className="flex items-center justify-between p-2 rounded bg-gray-50">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                          <span className="text-sm">{item.name}</span>
+                        </div>
+                        <Badge variant="outline">{item.value}</Badge>
+                      </div>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-2">Policy strategy</p>
-                <Select
-                  value={selectedReplayStrategy}
-                  onValueChange={(value) => setSelectedReplayStrategy(value as ExperimentCondition['strategy'])}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <PieChartIcon className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>No distribution data available</p>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="timeline" className="space-y-4">
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Clock className="size-5" />
+                Interaction Timeline
+              </h3>
+              {timelineChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={timelineChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis 
+                      dataKey="minute" 
+                      label={{ value: 'Minutes from start', position: 'insideBottom', offset: -5 }}
+                      tick={{ fontSize: 12 }}
+                    />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <RechartsTooltip 
+                      contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                    />
+                    <Legend />
+                    <Line type="monotone" dataKey="events" stroke={CHART_COLORS.primary} name="Total Events" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="errors" stroke={CHART_COLORS.error} name="Errors" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="hints" stroke={CHART_COLORS.warning} name="Hints" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <Clock className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>No timeline data available for the selected time range</p>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="trace" className="space-y-4">
+            <Card className="p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <BarChart3 className="size-5" />
+                  Trace Replay With Policy Knob
+                </h3>
+                <Button
+                  onClick={handleReplay}
+                  size="sm"
+                  variant="outline"
+                  disabled={!selectedTraceLearner || isReplaying}
+                  data-testid="trace-replay-button"
                 >
-                  <SelectTrigger data-testid="trace-policy-strategy-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="hint-only">Hint-only baseline</SelectItem>
-                    <SelectItem value="adaptive-medium">Adaptive textbook policy</SelectItem>
-                  </SelectContent>
-                </Select>
+                  {isReplaying ? (
+                    <Loader2 className="size-4 mr-2 animate-spin" />
+                  ) : (
+                    <Play className="size-4 mr-2" />
+                  )}
+                  {isReplaying ? 'Replaying...' : 'Replay Trace Slice'}
+                </Button>
               </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-2">Window size</p>
-                <Select value={traceWindow} onValueChange={setTraceWindow}>
-                  <SelectTrigger data-testid="trace-window-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="20">20 events</SelectItem>
-                    <SelectItem value="40">40 events</SelectItem>
-                    <SelectItem value="80">80 events</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-2">Auto escalation mode</p>
-                <Select
-                  value={selectedAutoEscalationMode}
-                  onValueChange={(value) => setSelectedAutoEscalationMode(value as AutoEscalationMode)}
-                >
-                  <SelectTrigger data-testid="trace-auto-escalation-mode-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="always-after-hint-threshold">Always after hint threshold</SelectItem>
-                    <SelectItem value="threshold-gated">Threshold-gated auto escalation</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="p-4">
-                <p className="text-sm text-gray-600">Escalation threshold</p>
-                <p className="text-2xl font-bold" data-testid="trace-threshold-escalate">
-                  {formatThreshold(activeThresholds.escalate)}
-                </p>
-              </Card>
-              <Card className="p-4">
-                <p className="text-sm text-gray-600">Aggregation threshold</p>
-                <p className="text-2xl font-bold" data-testid="trace-threshold-aggregate">
-                  {formatThreshold(activeThresholds.aggregate)}
-                </p>
-              </Card>
-              <Card className="p-4">
-                <p className="text-sm text-gray-600">Decision points changed vs hint-only</p>
-                <p className="text-2xl font-bold" data-testid="trace-changed-decision-count">
-                  {changedDecisionCount}
-                </p>
-              </Card>
-            </div>
-            <p className="text-xs text-gray-500" data-testid="trace-policy-version">
-              Replay policy version: <span className="font-mono">{replayPolicyVersion}</span>
-            </p>
-            <p className="text-xs text-gray-500" data-testid="trace-policy-semantics-version">
-              Replay policy semantics: <span className="font-mono">{replayPolicySemanticsVersion}</span> ({selectedAutoEscalationMode})
-            </p>
-
-            {replayDecisions.length > 0 ? (
-              <div className="overflow-x-auto rounded border">
-                <Table data-testid="trace-events-table">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>#</TableHead>
-                      <TableHead>t(s)</TableHead>
-                      <TableHead>event</TableHead>
-                      <TableHead>error subtype</TableHead>
-                      <TableHead>context (E/R/H)</TableHead>
-                      <TableHead>decision</TableHead>
-                      <TableHead>hint-only</TableHead>
-                      <TableHead>rule fired</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody data-testid="trace-events-table-body">
-                    {replayDecisions.map((point) => {
-                      const baseline = hintOnlyByIndex[point.index];
-                      const decisionChanged = baseline && baseline.decision !== point.decision;
-                      const elapsedSeconds = typeof traceStartTime === 'number'
-                        ? Math.max(0, Math.round((point.timestamp - traceStartTime) / 1000))
-                        : 0;
-
-                      return (
-                        <TableRow
-                          key={`${point.eventId || 'event'}-${point.timestamp}-${point.index}`}
-                          className={decisionChanged ? 'bg-amber-50/80' : undefined}
-                        >
-                          <TableCell className="font-mono text-xs">{point.index}</TableCell>
-                          <TableCell className="font-mono text-xs">{elapsedSeconds}</TableCell>
-                          <TableCell className="whitespace-nowrap">{formatEventType(point.eventType)}</TableCell>
-                          <TableCell className="whitespace-nowrap">{formatSubtype(point.errorSubtypeId)}</TableCell>
-                          <TableCell className="font-mono text-xs">
-                            {point.context.errorCount}/{point.context.retryCount}/{point.context.currentHintLevel}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant={point.decision === 'show_explanation' ? 'secondary' : 'outline'}>
-                              {formatDecision(point.decision)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="whitespace-nowrap">{baseline ? formatDecision(baseline.decision) : '-'}</TableCell>
-                          <TableCell title={point.reasoning}>
-                            <span className="font-mono text-xs">{point.ruleFired}</span>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div>
+                  <p className="text-xs text-gray-500 mb-2">Trace learner</p>
+                  <Select value={selectedTraceLearner} onValueChange={setSelectedTraceLearner}>
+                    <SelectTrigger data-testid="trace-learner-select">
+                      <SelectValue placeholder="Select learner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {profiles.map((profile) => (
+                        <SelectItem key={profile.id} value={profile.id}>
+                          {profile.name} ({profile.currentStrategy})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-2">Trace problem</p>
+                  <Select value={selectedTraceProblem} onValueChange={setSelectedTraceProblem}>
+                    <SelectTrigger data-testid="trace-problem-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All problems</SelectItem>
+                      {traceProblemOptions.map((problemId) => (
+                        <SelectItem key={problemId} value={problemId}>
+                          {problemId}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-2">Policy strategy</p>
+                  <Select
+                    value={selectedReplayStrategy}
+                    onValueChange={(value) => setSelectedReplayStrategy(value as ExperimentCondition['strategy'])}
+                  >
+                    <SelectTrigger data-testid="trace-policy-strategy-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="hint-only">Hint-only baseline</SelectItem>
+                      <SelectItem value="adaptive-medium">Adaptive textbook policy</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-2">Window size</p>
+                  <Select value={traceWindow} onValueChange={setTraceWindow}>
+                    <SelectTrigger data-testid="trace-window-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="20">20 events</SelectItem>
+                      <SelectItem value="40">40 events</SelectItem>
+                      <SelectItem value="80">80 events</SelectItem>
+                      <SelectItem value="160">160 events</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 mb-2">Auto escalation mode</p>
+                  <Select
+                    value={selectedAutoEscalationMode}
+                    onValueChange={(value) => setSelectedAutoEscalationMode(value as AutoEscalationMode)}
+                  >
+                    <SelectTrigger data-testid="trace-auto-escalation-mode-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="always-after-hint-threshold">Always after hint threshold</SelectItem>
+                      <SelectItem value="threshold-gated">Threshold-gated auto escalation</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            ) : (
-              <p className="text-gray-500 text-center py-8">
-                No trace events for this learner/problem slice.
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className="p-4">
+                  <p className="text-sm text-gray-600">Escalation threshold</p>
+                  <p className="text-2xl font-bold" data-testid="trace-threshold-escalate">
+                    {formatThreshold(activeThresholds.escalate)}
+                  </p>
+                </Card>
+                <Card className="p-4">
+                  <p className="text-sm text-gray-600">Aggregation threshold</p>
+                  <p className="text-2xl font-bold" data-testid="trace-threshold-aggregate">
+                    {formatThreshold(activeThresholds.aggregate)}
+                  </p>
+                </Card>
+                <Card className="p-4">
+                  <p className="text-sm text-gray-600">Decision points changed vs hint-only</p>
+                  <p className="text-2xl font-bold" data-testid="trace-changed-decision-count">
+                    {changedDecisionCount}
+                  </p>
+                </Card>
+              </div>
+              <p className="text-xs text-gray-500" data-testid="trace-policy-version">
+                Replay policy version: <span className="font-mono">{replayPolicyVersion}</span>
               </p>
-            )}
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
+              <p className="text-xs text-gray-500" data-testid="trace-policy-semantics-version">
+                Replay policy semantics: <span className="font-mono">{replayPolicySemanticsVersion}</span> ({selectedAutoEscalationMode})
+              </p>
+
+              {replayDecisions.length > 0 ? (
+                <div className="overflow-x-auto rounded border">
+                  <Table data-testid="trace-events-table">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>#</TableHead>
+                        <TableHead>t(s)</TableHead>
+                        <TableHead>event</TableHead>
+                        <TableHead>error subtype</TableHead>
+                        <TableHead>context (E/R/H)</TableHead>
+                        <TableHead>decision</TableHead>
+                        <TableHead>hint-only</TableHead>
+                        <TableHead>rule fired</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody data-testid="trace-events-table-body">
+                      {replayDecisions.map((point) => {
+                        const baseline = hintOnlyByIndex[point.index];
+                        const decisionChanged = baseline && baseline.decision !== point.decision;
+                        const elapsedSeconds = typeof traceStartTime === 'number'
+                          ? Math.max(0, Math.round((point.timestamp - traceStartTime) / 1000))
+                          : 0;
+
+                        return (
+                          <TableRow
+                            key={`${point.eventId || 'event'}-${point.timestamp}-${point.index}`}
+                            className={decisionChanged ? 'bg-amber-50/80' : undefined}
+                          >
+                            <TableCell className="font-mono text-xs">{point.index}</TableCell>
+                            <TableCell className="font-mono text-xs">{elapsedSeconds}</TableCell>
+                            <TableCell className="whitespace-nowrap">{formatEventType(point.eventType)}</TableCell>
+                            <TableCell className="whitespace-nowrap">{formatSubtype(point.errorSubtypeId)}</TableCell>
+                            <TableCell className="font-mono text-xs">
+                              {point.context.errorCount}/{point.context.retryCount}/{point.context.currentHintLevel}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={point.decision === 'show_explanation' ? 'secondary' : 'outline'}>
+                                {formatDecision(point.decision)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">{baseline ? formatDecision(baseline.decision) : '-'}</TableCell>
+                            <TableCell title={point.reasoning}>
+                              <span className="font-mono text-xs">{point.ruleFired}</span>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <p className="text-gray-500 text-center py-8">
+                  No trace events for this learner/problem slice.
+                </p>
+              )}
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </TooltipProvider>
   );
 }
 

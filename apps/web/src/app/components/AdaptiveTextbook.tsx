@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -61,6 +61,7 @@ export function AdaptiveTextbook({
 }: AdaptiveTextbookProps) {
   const [textbookUnits, setTextbookUnits] = useState<InstructionalUnit[]>([]);
   const [selectedUnit, setSelectedUnit] = useState<InstructionalUnit | null>(null);
+  const pendingUnitIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     loadTextbook();
@@ -90,7 +91,19 @@ export function AdaptiveTextbook({
         setSelectedUnit(null);
         onSelectedUnitChange?.(undefined);
       }
+      pendingUnitIdRef.current = null;
       return;
+    }
+
+    // If we have a pending selection from user click, check if parent has confirmed
+    if (pendingUnitIdRef.current) {
+      if (selectedUnitId === pendingUnitIdRef.current) {
+        // Parent confirmed, clear pending
+        pendingUnitIdRef.current = null;
+      } else {
+        // Still waiting for parent to update prop, don't override user's selection
+        return;
+      }
     }
 
     const selectedId = selectedUnitId || selectedUnit?.id || orderedUnits[0].id;
@@ -151,6 +164,7 @@ export function AdaptiveTextbook({
   };
 
   const handleUnitSelect = (unit: InstructionalUnit) => {
+    pendingUnitIdRef.current = unit.id;
     setSelectedUnit(unit);
     onSelectedUnitChange?.(unit.id);
   };

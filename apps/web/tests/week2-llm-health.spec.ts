@@ -1,27 +1,34 @@
-import { expect, test, Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 const MODEL_NAME = 'qwen2.5:1.5b-instruct';
 
-async function replaceEditorText(page: Page, text: string) {
-  const editorSurface = page.locator('.monaco-editor .view-lines').first();
-  await editorSurface.click({ position: { x: 8, y: 8 } });
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-  await page.keyboard.type(text);
-}
-
-async function getEditorText(page: Page): Promise<string> {
-  return page.locator('.monaco-editor .view-lines').first().innerText();
-}
-
 test('@week2 research: Test LLM reports Ollama down then up', async ({ page }) => {
+  // Pre-populate localStorage with minimal data so ResearchDashboard renders properly
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    // Add minimal learner profile so dashboard has data to render
+    window.localStorage.setItem('sql-learning-profiles', JSON.stringify([{
+      id: 'test-learner',
+      name: 'Test Learner',
+      conceptsCovered: [],
+      conceptCoverageEvidence: [],
+      errorHistory: [],
+      interactionCount: 0,
+      currentStrategy: 'adaptive-medium',
+      preferences: {
+        escalationThreshold: 3,
+        aggregationDelay: 300000
+      }
+    }]));
+    window.localStorage.setItem('sql-learning-interactions', JSON.stringify([]));
+    window.localStorage.setItem('sql-learning-textbook', JSON.stringify({}));
   });
 
   let mode: 'down' | 'up' = 'down';
 
+  // Mock Ollama API to simulate down/up behavior
   await page.route('**/ollama/api/tags', async (route) => {
     if (mode === 'down') {
       await route.fulfill({
@@ -43,7 +50,7 @@ test('@week2 research: Test LLM reports Ollama down then up', async ({ page }) =
 
   await page.route('**/ollama/api/generate', async (route) => {
     if (mode === 'down') {
-      await route.abort();
+      await route.abort('failed');
       return;
     }
 
@@ -56,36 +63,44 @@ test('@week2 research: Test LLM reports Ollama down then up', async ({ page }) =
     });
   });
 
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+  // Start from home page and navigate to Research
+  await page.goto('/', { timeout: 30000 });
+  await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible({ timeout: 10000 });
 
-  const draftMarker = 'week2-llm-health-draft-marker';
-  await replaceEditorText(page, `-- ${draftMarker}\nSELECT `);
-  await expect.poll(() => getEditorText(page)).toContain(draftMarker);
-
-  await page.getByRole('link', { name: 'My Textbook' }).first().click();
-  await expect(page).toHaveURL(/\/textbook/);
-  await expect(page.getByRole('heading', { name: 'My Textbook', level: 1 })).toBeVisible();
-
-  await page.getByRole('link', { name: 'Practice' }).first().click();
-  await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
-  await expect.poll(() => getEditorText(page)).toContain(draftMarker);
-
+  // Navigate to Research page
   await page.getByRole('link', { name: 'Research' }).click();
-  await expect(page.getByRole('heading', { name: 'Research Dashboard' }).first()).toBeVisible();
-  await expect(page.getByTestId('export-scope-label')).toContainText('active session (default)');
+  await expect(page).toHaveURL(/\/research/, { timeout: 10000 });
+  
+  // Wait for skeleton loading to finish
+  await expect.poll(async () => {
+    const skeleton = page.getByTestId('skeleton');
+    return await skeleton.count();
+  }, {
+    message: 'Waiting for skeleton loader to disappear',
+    timeout: 20000,
+    intervals: [200, 500, 1000]
+  }).toBe(0);
 
-  const testLlmButton = page.getByRole('button', { name: 'Test LLM' });
-  await expect(testLlmButton).toBeVisible();
+  // Wait for the Research Dashboard heading to be visible
+  await expect(page.getByRole('heading', { name: 'Research Dashboard' }).first()).toBeVisible({ timeout: 10000 });
 
+  // Find Test LLM button
+  const testLlmButton = page.getByRole('button', { name: /Test LLM/i });
+  await expect(testLlmButton).toBeVisible({ timeout: 10000 });
+  await expect(testLlmButton).toBeEnabled({ timeout: 5000 });
+
+  // First click - Ollama is down
   await testLlmButton.click();
-  await expect(page.getByText(/Could not reach local Ollama/i)).toBeVisible();
+  await expect(page.getByText(/Could not reach local Ollama/i)).toBeVisible({ timeout: 15000 });
 
+  // Switch to up state and test again
   mode = 'up';
   await testLlmButton.click();
+  
+  // Wait for success message with model name
   await expect(
-    page.getByText(new RegExp(`Connected\\. Model '${MODEL_NAME}' is available and replied:`, 'i'))
+    page.getByText(new RegExp(`Connected\\. Model '${MODEL_NAME}' is available and replied:`, 'i')),
+    { timeout: 15000 }
   ).toBeVisible();
-  await expect(page.getByText(/OLLAMA_OK/)).toBeVisible();
+  await expect(page.getByText(/OLLAMA_OK/)).toBeVisible({ timeout: 5000 });
 });

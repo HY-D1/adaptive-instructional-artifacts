@@ -37,10 +37,13 @@ export function HintSystem({
   const [hints, setHints] = useState<string[]>([]);
   const [showExplanation, setShowExplanation] = useState(false);
   const [activeHintSubtype, setActiveHintSubtype] = useState<string | null>(null);
+  const MAX_DEDUPE_KEYS = 1000; // Prevent unbounded set growth
+  
   const helpFlowKeyRef = useRef('');
   const nextHelpRequestIndexRef = useRef(1);
   const emittedHelpEventKeysRef = useRef<Set<string>>(new Set());
   const helpEventSequenceRef = useRef(0);
+  const isProcessingHintRef = useRef(false);
 
   const profile = storage.getProfile(learnerId);
   const scopedInteractions = recentInteractions.filter(
@@ -63,20 +66,40 @@ export function HintSystem({
     resetHintFlow();
   }, [learnerId, problemId, sessionId]);
 
+  // BUG FIX #3: Only reset hint flow if subtype actually changed AND problem changed
+  // Track previous override to detect actual changes
+  const prevOverrideRef = useRef<{ subtype: string | undefined; problemId: string } | null>(null);
+  
   useEffect(() => {
-    resetHintFlow();
-  }, [isCanonicalOverrideActive, canonicalOverrideSubtype]);
+    const currentOverride = canonicalOverrideSubtype;
+    const prev = prevOverrideRef.current;
+    
+    // Only reset if:
+    // 1. We had a previous override with a different subtype AND we're on a different problem, OR
+    // 2. The override state changed from inactive to active with a different subtype on same problem
+    const shouldReset = prev !== null && 
+      prev.problemId === problemId &&
+      prev.subtype !== currentOverride;
+    
+    if (shouldReset) {
+      resetHintFlow();
+    }
+    
+    prevOverrideRef.current = { subtype: currentOverride, problemId };
+  }, [isCanonicalOverrideActive, canonicalOverrideSubtype, problemId]);
 
   const getProblemTrace = () => scopedInteractions.filter((interaction) => interaction.problemId === problemId);
   const getHelpFlowKey = () => `${sessionId || 'no-session'}|${learnerId}|${problemId}`;
-  const getNextHelpRequestIndex = (problemTrace: InteractionEvent[]) =>
+  
+  // BUG FIX #4: Consolidated help request index calculation into single function
+  const calculateHelpRequestIndex = (problemTrace: InteractionEvent[]) =>
     problemTrace.filter(
       (interaction) =>
         interaction.eventType === 'hint_view' || interaction.eventType === 'explanation_view'
     ).length + 1;
   const syncHelpFlowIndex = (problemTrace: InteractionEvent[]) => {
     const flowKey = getHelpFlowKey();
-    const persistedNextHelpRequestIndex = getNextHelpRequestIndex(problemTrace);
+    const persistedNextHelpRequestIndex = calculateHelpRequestIndex(problemTrace);
     if (helpFlowKeyRef.current !== flowKey) {
       helpFlowKeyRef.current = flowKey;
       nextHelpRequestIndexRef.current = persistedNextHelpRequestIndex;
@@ -99,6 +122,17 @@ export function HintSystem({
     if (emittedHelpEventKeysRef.current.has(dedupeKey)) {
       return false;
     }
+    
+    // Limit deduplication set size to prevent memory growth
+    if (emittedHelpEventKeysRef.current.size >= MAX_DEDUPE_KEYS) {
+      // Clear oldest half of the set when limit reached
+      const keys = Array.from(emittedHelpEventKeysRef.current);
+      const toRemove = keys.slice(0, Math.floor(MAX_DEDUPE_KEYS / 2));
+      for (const key of toRemove) {
+        emittedHelpEventKeysRef.current.delete(key);
+      }
+    }
+    
     emittedHelpEventKeysRef.current.add(dedupeKey);
     return true;
   };
@@ -132,6 +166,17 @@ export function HintSystem({
     syncHelpFlowIndex(getProblemTrace());
   }, [sessionId, learnerId, problemId, recentInteractions]);
 
+  /**
+   * Get the hint selection for a specific help request index.
+   * 
+   * NOTE: This function always returns hints at levels L1-3 regardless of helpRequestIndex.
+   * This is by design - after L3, learners are escalated to explanations. Higher helpRequestIndex
+   * values (4+) are clamped to 3 to ensure consistent hint levels within the progressive hint ladder.
+   * The helpRequestIndex is still passed through to enable escalation detection via will_escalate.
+   * 
+   * @param helpRequestIndex - The current help request number (1-3 for hints, 4+ for escalation)
+   * @returns The hint selection for the given help request index
+   */
   const getHelpSelectionForIndex = (helpRequestIndex: number) => {
     if (!profile) {
       return null;
@@ -140,6 +185,8 @@ export function HintSystem({
     const fallbackSubtype = errorSubtypeId || 'incomplete query';
     const effectiveSubtype = activeHintSubtype ||
       canonicalizeSqlEngageSubtype(overrideSubtype || fallbackSubtype);
+    // Clamp level to 1-3 range - this is intentional as we only have 3 hint levels
+    // before escalating to explanations (help request 4+)
     const levelForSelection = Math.max(1, Math.min(3, helpRequestIndex)) as 1 | 2 | 3;
 
     return orchestrator.getNextHint(
@@ -162,17 +209,25 @@ export function HintSystem({
     if (!sessionId) {
       return;
     }
+    // Prevent race conditions from double-clicks
+    if (isProcessingHintRef.current) {
+      return;
+    }
+    isProcessingHintRef.current = true;
     const problemTrace = getProblemTrace();
     const nextHelpRequestIndex = allocateNextHelpRequestIndex(problemTrace);
     if (nextHelpRequestIndex >= 4) {
       handleShowExplanation('auto', nextHelpRequestIndex, problemTrace);
+      isProcessingHintRef.current = false;
       return;
     }
     const hintSelection = getHelpSelectionForIndex(nextHelpRequestIndex);
     if (!hintSelection) {
+      isProcessingHintRef.current = false;
       return;
     }
     if (!registerHelpEvent('hint_view', nextHelpRequestIndex)) {
+      isProcessingHintRef.current = false;
       return;
     }
 
@@ -184,7 +239,11 @@ export function HintSystem({
       ? Date.now() - problemTrace[0].timestamp
       : 0;
 
-    // Log interaction
+    // Log interaction with escalation metadata
+    // will_escalate indicates that viewing this hint will trigger auto-escalation
+    // This happens at hint level 3 when no explanation has been shown yet
+    const willEscalate = hintSelection.hintLevel === 3 && !showExplanation;
+    
     const hintEvent: InteractionEvent = {
       id: buildHelpEventId('hint', nextHelpRequestIndex),
       sessionId,
@@ -209,14 +268,17 @@ export function HintSystem({
         hint_level: hintSelection.hintLevel,
         help_request_index: nextHelpRequestIndex,
         sql_engage_subtype: hintSelection.sqlEngageSubtype,
-        sql_engage_row_id: hintSelection.sqlEngageRowId
+        sql_engage_row_id: hintSelection.sqlEngageRowId,
+        will_escalate: willEscalate,
+        rule_fired: willEscalate ? 'progressive-hint-will-escalate' : 'progressive-hint'
       }
     };
     storage.saveInteraction(hintEvent);
     onInteractionLogged?.(hintEvent);
+    isProcessingHintRef.current = false;
 
     // Escalate automatically after Hint 3 (recorded as help request 4).
-    if (hintSelection.shouldEscalate) {
+    if (hintSelection.hintLevel === 3 && !showExplanation) {
       setShowExplanation(true);
       handleShowExplanation('auto', nextHelpRequestIndex + 1, [...problemTrace, hintEvent]);
     }
@@ -239,6 +301,7 @@ export function HintSystem({
       return;
     }
     if (!registerHelpEvent('explanation_view', nextHelpRequestIndex)) {
+      isProcessingHintRef.current = false;
       return;
     }
     setShowExplanation(true);
@@ -286,9 +349,20 @@ export function HintSystem({
     ? orchestrator.makeDecision(profile, scopedInteractions, problemId)
     : { decision: 'show_hint' as const, reasoning: 'Learner profile unavailable' };
 
-  if (!profile) return null;
+  // Empty state when no profile exists
+  if (!profile) {
+    return (
+      <Card className="p-6 text-center" data-testid="hint-panel">
+        <Lightbulb className="size-12 mx-auto text-gray-300 mb-4" aria-hidden="true" />
+        <h3 className="font-semibold text-lg mb-2">Hints Unavailable</h3>
+        <p className="text-gray-600 text-sm">
+          Create a learner profile to access personalized hints and explanations.
+        </p>
+      </Card>
+    );
+  }
   const nextHelpRequestIndex = Math.max(
-    getNextHelpRequestIndex(getProblemTrace()),
+    calculateHelpRequestIndex(getProblemTrace()),
     nextHelpRequestIndexRef.current
   );
   const primaryActionLabel = nextHelpRequestIndex >= 4

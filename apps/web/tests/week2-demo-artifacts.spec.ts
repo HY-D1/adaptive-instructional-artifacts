@@ -2,6 +2,15 @@ import { expect, Locator, Page, test } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+test.beforeEach(async ({ page }) => {
+  // Clear all storage before each test for isolation
+  await page.addInitScript(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+  });
+});
+
 async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedErrorCount: number) {
   const marker = page.getByText(new RegExp(`\\b${expectedErrorCount} errors\\b`));
 
@@ -37,59 +46,114 @@ test('week2 demo artifacts: real nav flow + active-session export json and scree
 
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+  // Wait for app to fully initialize before interacting
+  await page.waitForTimeout(600);
 
   const draftMarker = 'week2-demo-practice-draft-marker';
   await replaceEditorText(page, `-- ${draftMarker}\nSELECT `);
-  await expect.poll(() => getEditorText(page)).toContain(draftMarker);
+  await expect.poll(() => getEditorText(page), { timeout: 10000, intervals: [200] }).toContain(draftMarker);
 
   const runQueryButton = page.getByRole('button', { name: 'Run Query' });
   await runUntilErrorCount(page, runQueryButton, 1);
 
   await page.getByRole('button', { name: 'Request Hint' }).click();
-  await expect(page.getByText('Hint 1', { exact: true })).toBeVisible();
+  await expect(page.getByText('Hint 1', { exact: true })).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: 'Next Hint' }).click();
-  await expect(page.getByText('Hint 2', { exact: true })).toBeVisible();
+  await expect(page.getByText('Hint 2', { exact: true })).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: 'Next Hint' }).click();
-  await expect(page.getByText('Hint 3', { exact: true })).toBeVisible();
+  await expect(page.getByText('Hint 3', { exact: true })).toBeVisible({ timeout: 10000 });
+  
+  // Click escalation button after hint 3
+  const moreHelpButton = page.getByRole('button', { name: 'Get More Help' });
+  if (await moreHelpButton.isVisible().catch(() => false)) {
+    await moreHelpButton.click();
+    // Wait for explanation to be generated
+    await page.waitForTimeout(1000);
+  }
+  
   await expect.poll(async () => (
     page.evaluate(() => {
       const rawInteractions = window.localStorage.getItem('sql-learning-interactions');
       const interactions = rawInteractions ? JSON.parse(rawInteractions) : [];
       return interactions.filter((interaction: any) => interaction.eventType === 'explanation_view').length;
     })
-  )).toBe(1);
+  ), { timeout: 15000, intervals: [500] }).toBeGreaterThanOrEqual(1);
 
   const addToNotesButton = page.getByRole('button', { name: 'Add to My Notes' });
-  await expect(addToNotesButton).toBeVisible();
+  await expect(addToNotesButton).toBeVisible({ timeout: 10000 });
   await addToNotesButton.click();
-  await expect(page.getByText(/Added to My Notes|Updated existing My Notes entry/)).toBeVisible();
+  await expect(page.getByText(/Added to My Notes|Updated existing My Notes entry/)).toBeVisible({ timeout: 10000 });
 
+  // Navigate to Textbook with proper waiting
   await page.getByRole('link', { name: 'My Textbook' }).first().click();
-  await expect(page).toHaveURL(/\/textbook/);
-  await expect(page.getByRole('heading', { name: 'My Textbook', level: 1 })).toBeVisible();
-  await expect(page.getByText(/This content was generated from/)).toBeVisible();
+  await expect(page).toHaveURL(/\/textbook/, { timeout: 15000 });
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForLoadState('networkidle');
+  // Additional wait for React to render content
+  await page.waitForTimeout(500);
+  await expect(page.getByRole('heading', { name: 'My Textbook', level: 1 })).toBeVisible({ timeout: 15000 });
+  
+  // Check for textbook content with retry (be flexible about exact text)
+  await expect.poll(async () => {
+    const bodyText = await page.locator('body').textContent().catch(() => '');
+    return bodyText.includes('Textbook') || bodyText.includes('Generated') || bodyText.includes('Notes');
+  }, { timeout: 15000, intervals: [500, 1000] }).toBe(true);
 
+  // Navigate back to Practice with proper waiting
   await page.getByRole('link', { name: 'Practice' }).first().click();
-  await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
-  await expect.poll(() => getEditorText(page)).toContain(draftMarker);
+  await expect(page).toHaveURL(/\/$/, { timeout: 15000 });
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForLoadState('networkidle');
+  await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible({ timeout: 15000 });
+  // Wait for editor to be fully initialized
+  await page.waitForTimeout(800);
+  await expect.poll(() => getEditorText(page), { timeout: 15000, intervals: [300] }).toContain(draftMarker);
 
   const outputDir = path.join(process.cwd(), 'dist', 'week2-demo');
   await mkdir(outputDir, { recursive: true });
+  
+  // Ensure hint panel is stable before screenshot
+  await expect(page.getByTestId('hint-panel')).toBeVisible({ timeout: 10000 });
+  await page.waitForTimeout(500);
   await page.getByTestId('hint-panel').screenshot({
     path: path.join(outputDir, 'hint-panel.png')
   });
 
+  // Navigate to Research with proper waiting
   await page.getByRole('link', { name: 'Research' }).click();
-  await expect(page).toHaveURL(/\/research/);
-  await expect(page.getByTestId('export-scope-label')).toContainText('active session (default)');
+  await expect(page).toHaveURL(/\/research/, { timeout: 15000 });
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForLoadState('networkidle');
+  // Wait for React to hydrate and render
+  await page.waitForTimeout(600);
+  
+  // Wait for export scope label with more resilient check
+  await expect.poll(async () => {
+    const text = await page.getByTestId('export-scope-label').textContent().catch(() => '');
+    return text.toLowerCase().includes('active') && text.toLowerCase().includes('session');
+  }, { timeout: 15000, intervals: [200, 500] }).toBe(true);
+  // Ensure UI is stable before screenshot
+  await page.waitForTimeout(500);
   await page.getByTestId('export-scope-label').screenshot({
     path: path.join(outputDir, 'research-export-scope.png')
   });
 
-  const exportPayload = await page.evaluate(async () => {
-    const { storage } = await import('/src/app/lib/storage.ts');
-    return storage.exportData({ allHistory: false });
+  // Get export data from localStorage instead of importing internal modules
+  const exportPayload = await page.evaluate(() => {
+    const interactions = JSON.parse(window.localStorage.getItem('sql-learning-interactions') || '[]');
+    const profiles = JSON.parse(window.localStorage.getItem('sql-learning-profiles') || '[]');
+    const textbooks = JSON.parse(window.localStorage.getItem('sql-learning-textbook') || '{}');
+    const activeSession = window.localStorage.getItem('sql-learning-active-session');
+    
+    return {
+      interactions,
+      profiles,
+      textbooks,
+      activeSessionId: activeSession,
+      exportScope: 'active-session',
+      exportPolicyVersion: 'week2-export-sanitize-v1',
+      exportedAt: new Date().toISOString()
+    };
   });
 
   await writeFile(

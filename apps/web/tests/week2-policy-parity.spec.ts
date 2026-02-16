@@ -96,6 +96,9 @@ async function runScenario(browser: Browser, replayMode: boolean): Promise<Norma
   expect(replayModeStored).toBe(JSON.stringify(replayMode));
 
   const trace = await collectDecisionTrace(page);
+  // Small delay to allow Playwright trace to finish writing before closing context
+  // This prevents race conditions in trace file handling
+  await page.waitForTimeout(300);
   await context.close();
   return trace;
 }

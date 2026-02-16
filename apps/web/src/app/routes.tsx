@@ -1,6 +1,5 @@
 import { createBrowserRouter } from 'react-router';
 import { RootLayout } from './pages/RootLayout';
-import { LearningInterface } from './pages/LearningInterface';
 import { TextbookPage } from './pages/TextbookPage';
 import { ResearchPage } from './pages/ResearchPage';
 
@@ -10,8 +9,9 @@ export const router = createBrowserRouter([
     Component: RootLayout,
     children: [
       {
+        // Practice page is rendered directly in RootLayout to preserve state
         index: true,
-        Component: LearningInterface,
+        element: null,
       },
       {
         path: 'textbook',

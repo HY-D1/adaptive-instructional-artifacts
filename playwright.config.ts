@@ -23,7 +23,9 @@ export default defineConfig({
     command: `npm run dev -- --host ${HOST} --port ${PORT}`,
     url: BASE_URL,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000
+    timeout: 120_000,
+    stdout: 'pipe',
+    stderr: 'pipe'
   },
   projects: [
     {

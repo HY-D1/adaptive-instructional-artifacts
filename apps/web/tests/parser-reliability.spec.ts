@@ -1,5 +1,141 @@
 import { expect, Page, test } from '@playwright/test';
 
+/**
+ * Test cases for CSV parsing edge cases with quoted commas and escaped quotes.
+ * These patterns occur in SQL query datasets where queries contain commas within quoted strings.
+ */
+const CSV_EDGE_CASE_TESTS = [
+  // Basic comma within quoted field
+  { input: 'col1,"val,ue",col3', expected: ['col1', 'val,ue', 'col3'], desc: 'comma within quotes' },
+  // Escaped quotes (doubled quotes) within field
+  { input: 'col1,"val""ue",col3', expected: ['col1', 'val"ue', 'col3'], desc: 'escaped quotes' },
+  // Multiple commas within quoted field
+  { input: 'col1,"a,b,c,d",col3', expected: ['col1', 'a,b,c,d', 'col3'], desc: 'multiple commas in quotes' },
+  // Empty quoted field
+  { input: 'col1,"",col3', expected: ['col1', '', 'col3'], desc: 'empty quoted field' },
+  // Quotes at start/end of field
+  { input: '"col1","col2","col3"', expected: ['col1', 'col2', 'col3'], desc: 'all fields quoted' },
+  // Mixed quoted and unquoted
+  { input: 'unquoted,"quoted, with, commas",unquoted', expected: ['unquoted', 'quoted, with, commas', 'unquoted'], desc: 'mixed quoted/unquoted' },
+  // SQL-like query with commas
+  { input: 'SELECT * FROM t,"error, message",subtype', expected: ['SELECT * FROM t', 'error, message', 'subtype'], desc: 'SQL query pattern' },
+  // Nested quotes scenario
+  { input: 'id,"feedback: ""help, me""",outcome', expected: ['id', 'feedback: "help, me"', 'outcome'], desc: 'nested quotes with comma' },
+  // Trailing comma edge case
+  { input: 'col1,col2,', expected: ['col1', 'col2', ''], desc: 'trailing comma' },
+  // Leading/trailing spaces in quoted field
+  { input: 'col1,"  spaced value  ",col3', expected: ['col1', 'spaced value', 'col3'], desc: 'spaces in quoted field' }
+];
+
+/**
+ * Unit test for CSV parsing logic - tests the parseCsvLine function behavior.
+ * This mirrors the logic in sql-engage.ts:68-96
+ */
+test.describe('@parser CSV Parsing Edge Cases', () => {
+  test('parses CSV lines with quoted commas correctly', () => {
+    // Replicate the parseCsvLine function logic for testing
+    function parseCsvLine(line: string): string[] {
+      const values: string[] = [];
+      let current = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        const next = line[i + 1];
+
+        // Handle escaped quotes ("") within quoted fields
+        if (ch === '"' && inQuotes && next === '"') {
+          current += '"';
+          i += 1; // Skip the next quote
+          continue;
+        }
+        // Toggle quote state
+        if (ch === '"') {
+          inQuotes = !inQuotes;
+          continue;
+        }
+        // Only split on commas outside of quotes
+        if (ch === ',' && !inQuotes) {
+          values.push(current.trim());
+          current = '';
+          continue;
+        }
+        current += ch;
+      }
+
+      // Push the last value
+      values.push(current.trim());
+      
+      // Remove surrounding quotes from each value if present
+      return values.map(v => {
+        if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) {
+          return v.slice(1, -1).replace(/""/g, '"');
+        }
+        return v;
+      });
+    }
+
+    // Run all edge case tests
+    for (const testCase of CSV_EDGE_CASE_TESTS) {
+      const result = parseCsvLine(testCase.input);
+      expect(result, `Failed for: ${testCase.desc}`).toEqual(testCase.expected);
+    }
+  });
+
+  test('handles SQL-Engage dataset query patterns with commas', () => {
+    // Simulate realistic SQL-Engage CSV row with complex query
+    // The query is wrapped in quotes to protect the comma within it
+    const sqlEngageRow = '"SELECT DISTINCT Level_of_Access, COUNT(*) AS Access_Count FROM Access_Codes GROUP BY Level_of_Access HAVING COUNT(*) > 1;",construction,inefficient query,sadness,"Don\'t worry, I\'m here to help! Just remove DISTINCT because GROUP BY already ensures one row per Level_of_Access.",Learning to avoid unnecessary DISTINCT';
+    
+    function parseCsvLine(line: string): string[] {
+      const values: string[] = [];
+      let current = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        const next = line[i + 1];
+
+        if (ch === '"' && inQuotes && next === '"') {
+          current += '"';
+          i += 1;
+          continue;
+        }
+        if (ch === '"') {
+          inQuotes = !inQuotes;
+          continue;
+        }
+        if (ch === ',' && !inQuotes) {
+          values.push(current.trim());
+          current = '';
+          continue;
+        }
+        current += ch;
+      }
+      values.push(current.trim());
+      return values.map(v => {
+        if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) {
+          return v.slice(1, -1).replace(/""/g, '"');
+        }
+        return v;
+      });
+    }
+
+    const result = parseCsvLine(sqlEngageRow);
+    // The parser returns 6 fields when the query is properly quoted
+    expect(result.length).toBe(6);
+    // Check key fields are present (first field should contain the full SELECT query)
+    expect(result[0]).toContain('SELECT DISTINCT Level_of_Access, COUNT(*)');
+    expect(result[1]).toBe('construction');
+    expect(result[2]).toBe('inefficient query');
+    expect(result[3]).toBe('sadness');
+    // The feedback message with comma should be properly parsed
+    expect(result[4]).toContain("Don't worry");
+    expect(result[4]).toContain("GROUP BY already ensures");
+    expect(result[5]).toBe('Learning to avoid unnecessary DISTINCT');
+  });
+});
+
 const MOCK_RESPONSES = [
   '{"title":"T1","content_markdown":"Grounded explanation.","key_points":["k1"],"common_pitfall":"p1","next_steps":["n1"],"source_ids":["sql-engage:2"]}',
   '```json\n{"title":"T2","content_markdown":"Wrapped JSON.","key_points":["k2"],"common_pitfall":"p2","next_steps":["n2"],"source_ids":["sql-engage:3"]}\n```',

@@ -14,15 +14,6 @@ An **"automatic adaptive textbook"** that:
 
 ---
 
-## Documentation Structure
-
-| File | Purpose |
-|------|---------|
-| `docs/progress.md` | Project master: 6 research components, architecture, milestones |
-| `docs/week2_progress.md` | Week 2 runbook: features, acceptance gates, checkpoints |
-
----
-
 ## Core Research Components
 
 ### 1. Adaptive Content Orchestration
@@ -101,10 +92,4 @@ npm run replay:gate
 npm run check:concept-map
 ```
 
----
 
-## Canonical References
-
-- **Project Master**: `docs/progress.md`
-- **Week 2 Runbook**: `docs/week2_progress.md`
-- **Agent Instructions**: `AGENTS.md`

@@ -11,6 +11,7 @@ import { generateWithOllama, OLLAMA_MODEL } from './llm-client';
 import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
 import { renderPrompt, TemplateId } from '../prompts/templates';
 import { storage } from './storage';
+import DOMPurify from 'dompurify';
 
 export type GenerateUnitOptions = {
   learnerId: string;
@@ -32,6 +33,8 @@ export type GenerateUnitResult = {
   model: string;
   params: LLMGenerationParams;
   parseTelemetry: TemplateParseTelemetry;
+  // Additional telemetry for monitoring
+  generationTimeMs?: number;
 };
 
 type StructuredTemplateOutput = {
@@ -51,6 +54,15 @@ export type TemplateParseTelemetry = {
   attempts: number;
   rawLength: number;
   failureReason?: string;
+  // Additional LLM telemetry fields
+  tokensUsed?: number;
+  generationTimeMs?: number;
+  cacheHit?: boolean;
+  retrievalMetrics?: {
+    pdfChunksRetrieved: number;
+    sqlEngageRowsUsed: number;
+    hintHistoryCount: number;
+  };
 };
 
 type TemplateParseResult = {
@@ -77,6 +89,7 @@ const DEFAULT_PARAMS: LLMGenerationParams = {
 };
 
 export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise<GenerateUnitResult> {
+  const startTime = performance.now();
   const model = options.model || OLLAMA_MODEL;
   const params: LLMGenerationParams = {
     ...DEFAULT_PARAMS,
@@ -109,21 +122,25 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
     }
   };
   const inputHash = createInputHash(payloadForHash);
-  const cacheKey = `${options.templateId}::${inputHash}`;
+  const cacheKey = `${options.learnerId}::${options.templateId}::${inputHash}`;
 
   const cached = storage.getLLMCacheRecord(cacheKey);
   if (cached?.unit) {
     const cachedParseTelemetry = getParseTelemetryFromUnit(cached.unit);
     const cachedFallbackReason = getFallbackReasonFromUnit(cached.unit);
+    const mergedIds = Array.from(new Set([
+      ...(cached.unit.sourceInteractionIds || []),
+      ...options.triggerInteractionIds
+    ]));
+    const mergedUnit = { ...cached.unit, sourceInteractionIds: mergedIds };
+    // Save back the merged provenance to cache
+    storage.saveLLMCacheRecord({ ...cached, unit: mergedUnit });
+
+    // Log cache hit for telemetry
+    console.log(`[LLM Cache] Hit for key ${cacheKey.slice(0, 32)}... (${Math.round(performance.now() - startTime)}ms)`);
 
     return {
-      unit: {
-        ...cached.unit,
-        sourceInteractionIds: Array.from(new Set([
-          ...(cached.unit.sourceInteractionIds || []),
-          ...options.triggerInteractionIds
-        ]))
-      },
+      unit: mergedUnit,
       inputHash,
       cacheKey,
       fromCache: true,
@@ -131,7 +148,12 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
       fallbackReason: cachedFallbackReason,
       model,
       params,
-      parseTelemetry: cachedParseTelemetry
+      parseTelemetry: {
+        ...cachedParseTelemetry,
+        cacheHit: true,
+        generationTimeMs: Math.round(performance.now() - startTime)
+      },
+      generationTimeMs: Math.round(performance.now() - startTime)
     };
   }
 
@@ -172,7 +194,18 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
 
   try {
     const response = await generateWithOllama(prompt, { model, params });
+    const llmTimeMs = Math.round(performance.now() - startTime);
     const parsed = parseTemplateJson(response.text);
+    
+    // Build retrieval metrics for telemetry
+    const retrievalMetrics = {
+      pdfChunksRetrieved: options.bundle.pdfPassages.length,
+      sqlEngageRowsUsed: options.bundle.sqlEngageAnchor ? 1 : 0,
+      hintHistoryCount: options.bundle.hintHistory.length
+    };
+    
+    // Log generation metrics
+    console.log(`[LLM Generation] Model: ${model}, Parse: ${parsed.telemetry.status}, Time: ${llmTimeMs}ms, PDF chunks: ${retrievalMetrics.pdfChunksRetrieved}`);
 
     if (!parsed.output) {
       const fallbackReason: FallbackReason = 'parse_failure';
@@ -206,13 +239,24 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
       };
     }
 
+    const enrichedTelemetry: TemplateParseTelemetry = {
+      ...parsed.telemetry,
+      generationTimeMs: Math.round(performance.now() - startTime),
+      cacheHit: false,
+      retrievalMetrics: {
+        pdfChunksRetrieved: options.bundle.pdfPassages.length,
+        sqlEngageRowsUsed: options.bundle.sqlEngageAnchor ? 1 : 0,
+        hintHistoryCount: options.bundle.hintHistory.length
+      }
+    };
+
     const unit = buildUnitFromStructuredOutput(
       options,
       parsed.output,
       response.model,
       response.params,
       inputHash,
-      parsed.telemetry
+      enrichedTelemetry
     );
     saveCache({
       cacheKey,
@@ -232,14 +276,22 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
       fallbackReason: 'none',
       model: response.model,
       params: response.params,
-      parseTelemetry: parsed.telemetry
+      parseTelemetry: enrichedTelemetry,
+      generationTimeMs: Math.round(performance.now() - startTime)
     };
   } catch (error) {
     const parseTelemetry: TemplateParseTelemetry = {
       status: 'not_attempted',
       attempts: 0,
       rawLength: 0,
-      failureReason: (error as Error).message || 'llm_request_failed'
+      failureReason: (error as Error).message || 'llm_request_failed',
+      generationTimeMs: Math.round(performance.now() - startTime),
+      cacheHit: false,
+      retrievalMetrics: {
+        pdfChunksRetrieved: options.bundle.pdfPassages.length,
+        sqlEngageRowsUsed: options.bundle.sqlEngageAnchor ? 1 : 0,
+        hintHistoryCount: options.bundle.hintHistory.length
+      }
     };
     const fallbackReason: FallbackReason = 'llm_error';
     const fallback = buildFallbackUnit(options, model, params, inputHash, fallbackReason, parseTelemetry);
@@ -301,7 +353,7 @@ function getParseTelemetryFromUnit(unit: InstructionalUnit): TemplateParseTeleme
     status: provenance.parserStatus || 'not_attempted',
     mode: provenance.parserMode,
     attempts: typeof provenance.parserAttempts === 'number' ? provenance.parserAttempts : 0,
-    rawLength: 0,
+    rawLength: typeof provenance.parserRawLength === 'number' ? provenance.parserRawLength : 0,
     failureReason: provenance.parserFailureReason
   };
 }
@@ -357,7 +409,8 @@ function normalizeRetrievedSourceIds(sourceIds: string[]): string[] {
     };
     const groupDelta = group(a) - group(b);
     if (groupDelta !== 0) return groupDelta;
-    return a.localeCompare(b);
+    // Use stable comparison with index fallback to ensure deterministic ordering
+    return a === b ? 0 : a < b ? -1 : 1;
   });
 }
 
@@ -371,7 +424,13 @@ function buildUnitFromStructuredOutput(
 ): InstructionalUnit {
   const retrievedSet = new Set(options.bundle.retrievedSourceIds);
   const sourceIds = output.source_ids
-    .filter((sourceId) => retrievedSet.has(sourceId));
+    .filter((sourceId) => {
+      const isValid = retrievedSet.has(sourceId);
+      if (!isValid) {
+        console.warn(`[ContentGenerator] Source ID "${sourceId}" from LLM output not found in retrieved sources. Filtered out.`);
+      }
+      return isValid;
+    });
   const normalizedSourceIds = normalizeRetrievedSourceIds(
     sourceIds.length > 0 ? sourceIds : options.bundle.retrievedSourceIds
   );
@@ -389,14 +448,21 @@ function buildUnitFromStructuredOutput(
     `Common pitfall: ${output.common_pitfall || 'Not found in provided sources.'}`
   ].join('\n');
 
+  // Sanitize markdown content to prevent XSS
+  const sanitizedContent = DOMPurify.sanitize(markdown);
+
+  const genericTitle = `Help with ${options.bundle.problemTitle}`;
+  const title = output.title?.trim() || genericTitle;
+
   return {
     id: `unit-${options.templateId}-${inputHash}`,
     sessionId: options.sessionId,
     updatedSessionIds: options.sessionId ? [options.sessionId] : [],
     type: options.templateId === 'explanation.v1' ? 'explanation' : 'summary',
     conceptId: options.bundle.conceptCandidates[0]?.id || 'select-basic',
-    title: `Help with ${options.bundle.problemTitle}`,
-    content: markdown,
+    conceptIds: options.bundle.conceptCandidates.map(c => c.id),
+    title,
+    content: sanitizedContent,
     prerequisites: [],
     addedTimestamp: Date.now(),
     sourceInteractionIds: Array.from(new Set(options.triggerInteractionIds)),
@@ -412,6 +478,7 @@ function buildUnitFromStructuredOutput(
       parserStatus: parseTelemetry.status,
       parserMode: parseTelemetry.mode,
       parserAttempts: parseTelemetry.attempts,
+      parserRawLength: parseTelemetry.rawLength,
       parserFailureReason: parseTelemetry.failureReason,
       fallbackReason: 'none'
     }
@@ -454,14 +521,18 @@ function buildFallbackUnit(
     '3. If schema details are missing, use only the provided schema text.'
   ].join('\n');
 
+  // Sanitize content to prevent XSS
+  const sanitizedContent = DOMPurify.sanitize(content);
+
   return {
     id: `unit-${options.templateId}-${inputHash}`,
     sessionId: options.sessionId,
     updatedSessionIds: options.sessionId ? [options.sessionId] : [],
     type: options.templateId === 'explanation.v1' ? 'explanation' : 'summary',
     conceptId: concept?.id || 'select-basic',
+    conceptIds: options.bundle.conceptCandidates.map(c => c.id),
     title: `Help with ${options.bundle.problemTitle}`,
-    content,
+    content: sanitizedContent,
     prerequisites: [],
     addedTimestamp: Date.now(),
     sourceInteractionIds: Array.from(new Set(options.triggerInteractionIds)),
@@ -477,13 +548,14 @@ function buildFallbackUnit(
       parserStatus: parseTelemetry.status,
       parserMode: parseTelemetry.mode,
       parserAttempts: parseTelemetry.attempts,
+      parserRawLength: parseTelemetry.rawLength,
       parserFailureReason: parseTelemetry.failureReason,
       fallbackReason
     }
   };
 }
 
-function parseTemplateJson(raw: string): TemplateParseResult {
+export function parseTemplateJson(raw: string): TemplateParseResult {
   const normalizedRaw = normalizeRawText(raw);
   if (!normalizedRaw) {
     return {

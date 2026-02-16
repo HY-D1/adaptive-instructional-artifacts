@@ -452,7 +452,7 @@ ${c?.examples.map((ex, i) => `${i + 1}. Review this pattern: \`${ex}\``).join('\
       sqlEngageRowId: rowId,
       hintLevel: nextLevel,
       policyVersion,
-      shouldEscalate: nextLevel >= 3
+      shouldEscalate: nextLevel > 3
     };
   }
 }

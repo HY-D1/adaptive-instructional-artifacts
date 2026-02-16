@@ -80,13 +80,22 @@ function scoreChunk(chunk: PdfIndexChunk, queryVector: number[], queryTokens: Se
   }
 
   let matches = 0;
+  let weightedMatches = 0;
   for (const token of tokens) {
     if (queryTokens.has(token)) {
       matches += 1;
+      // Give higher weight to short SQL keywords (they're more specific)
+      const weight = token.length <= 2 ? 1.5 : 1.0;
+      weightedMatches += weight;
     }
   }
 
-  return matches / Math.sqrt(tokens.size);
+  // Normalize by query size for fair comparison across different query lengths
+  const coverage = weightedMatches / queryTokens.size;
+  const density = weightedMatches / Math.sqrt(tokens.size);
+  
+  // Combine coverage (how much of the query is matched) with density (how relevant the chunk is)
+  return (coverage * 0.6 + density * 0.4);
 }
 
 function buildEmbedding(text: string): number[] {
@@ -100,6 +109,11 @@ function buildEmbedding(text: string): number[] {
   return normalizeVector(vector);
 }
 
+// SQL keywords that should be preserved even if short
+const SQL_KEYWORD_ALLOWLIST = new Set([
+  'as', 'or', 'id', 'by', 'in', 'on', 'is', 'to', 'no', 'if', 'up', 'go'
+]);
+
 function tokenize(text: string): Set<string> {
   return new Set(
     text
@@ -107,7 +121,7 @@ function tokenize(text: string): Set<string> {
       .replace(/[^a-z0-9\s]/g, ' ')
       .split(/\s+/)
       .map((token) => token.trim())
-      .filter((token) => token.length >= 3)
+      .filter((token) => token.length >= 3 || SQL_KEYWORD_ALLOWLIST.has(token))
   );
 }
 

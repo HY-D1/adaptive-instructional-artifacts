@@ -9,7 +9,7 @@ ALGL project workspace for:
 
 - `apps/web/` - Vite React application (student, textbook, research views)
 - `scripts/` - reproducible replay and utility scripts
-- `docs/README.md` - documentation index and canonical links
+- `docs/` - documentation
 - `dist/` - build and replay outputs
 
 ## Run
@@ -58,41 +58,11 @@ practice failed attempt -> hint ladder (1/2/3) -> escalation -> add/update note 
 3. Run smoke only: `npm run test:e2e:week2`
 4. Run all E2E specs: `npm run test:e2e`
 
-## Week 2 reproducibility
-
-Use `docs/week2_progress.md` as the canonical Week 2 runbook/progress source:
-- clickpath verification
-- logging fields to validate
-- replay mode behavior
-- model defaults/params
-
-Project master doc:
-- `docs/progress.md`
-
-For professor-ready demo artifacts (export JSON + screenshots), run:
+For demo artifacts (export JSON + screenshots), run:
 
 ```bash
 npm run demo:week2
 ```
-
-Demo script and acceptance checks:
-- HintWise converter stability checks (`test:hintwise:convert`)
-
-Note: `dist/week2-clickpath-*` folders are archived snapshots and can be stale. Use `npm run test:e2e:week2` + `test-results/.last-run.json` for current verification status.
-
-### HintWise Dataset (Optional)
-
-The HintWise converter (`npm run test:hintwise:convert`) generates structured hint ladders from the HintWise dataset. This is an optional dependency:
-
-- **If the dataset is present**: The converter runs and the verifier checks stability
-- **If the dataset is absent**: The converter skips with a warning and exits 0 (Week 2 gates are not blocked)
-
-**To enable HintWise conversion**, place one of the following in the repo root:
-1. `dist/HintWise.zip` — the repository ZIP file (containing `HintWise-main/hints_dataset.json`)
-2. `HintWise-main/hints_dataset.json` — the extracted JSON file
-3. `HintWise-main/app/api/hints/hints_dataset.json` — alternative path from extracted repo
-
-The converter searches these locations in order and uses the first match found.
 
 ## PDF Textbook Indexing (RAG)
 
@@ -190,7 +160,7 @@ The following external tools are required by certain npm scripts:
 
 - App config is at `apps/web/vite.config.ts`.
 - Replay fixture and SQL-Engage resources are under `apps/web/src/app/data/`.
-- Week 2 runbook/progress is documented in `docs/week2_progress.md`.
+
 
 ---
 
@@ -284,8 +254,8 @@ The following external tools are required by certain npm scripts:
 - **Escalation**: Auto-escalate to explanation after hint level 3
 - **Help Request Index**: Tracks total help requests per session
 
-#### Export Schema (Week 2 Acceptance)
-See `AGENTS.md` section 5 for the full jq acceptance checks required on `dist/week2-demo/export.json`.
+#### Export Schema
+The demo export (`dist/week2-demo/export.json`) contains interaction traces for analysis.
 
 ### Security Considerations
 
@@ -301,17 +271,6 @@ See `AGENTS.md` section 5 for the full jq acceptance checks required on `dist/we
 - Utilities: camelCase (e.g., `storage.ts`)
 - Types: PascalCase with descriptive names
 - Use `type` over `interface` for object shapes
-
-### Policy Versions and Traceability
-
-Current active policy versions (as of Week 2):
-
-| Component | Version |
-|-----------|---------|
-| SQL-Engage Policy | `sql-engage-index-v3-hintid-contract` |
-| Orchestrator Semantics | `orchestrator-auto-escalation-variant-v2` |
-| Export Policy | `week2-export-sanitize-v1` |
-| Replay Harness | `toy-replay-harness-v3` |
 
 ### Offline Replay Limitations
 

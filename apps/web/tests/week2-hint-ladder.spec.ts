@@ -196,7 +196,11 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
       expect(event.hintLevel).toBeLessThanOrEqual(3);
     }
 
-    // After level 3, next help request triggers escalation (explanation_view)
+    // After level 3, click "Get More Help" (help request 4) to trigger escalation
+    await page.getByRole('button', { name: 'Get More Help' }).click();
+    await expect(page.getByText('Explanation has been generated')).toBeVisible();
+    
+    // Verify explanation_view event was logged
     await expect.poll(async () => {
       const interactions = await getAllInteractionsFromStorage(page);
       return interactions.filter((i: any) => i.eventType === 'explanation_view').length;
@@ -788,8 +792,11 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
     await page.getByRole('button', { name: 'Next Hint' }).click();
     await expect(page.getByText('Hint 3', { exact: true })).toBeVisible();
 
-    // After level 3, the 4th help request triggers escalation
-    // This may happen automatically or require another click
+    // After level 3, click "Get More Help" (help request 4) to trigger escalation
+    await page.getByRole('button', { name: 'Get More Help' }).click();
+    await expect(page.getByText('Explanation has been generated')).toBeVisible();
+
+    // Verify explanation_view event was logged
     await expect.poll(async () => {
       const interactions = await getAllInteractionsFromStorage(page);
       return interactions.filter((i: any) => i.eventType === 'explanation_view').length;

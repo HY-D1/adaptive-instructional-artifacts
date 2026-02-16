@@ -154,6 +154,7 @@ export type UnitProvenance = {
   parserStatus?: 'success' | 'failure' | 'not_attempted';
   parserMode?: 'strict-json' | 'code-fence-json' | 'brace-extract' | 'json-repair';
   parserAttempts?: number;
+  parserRawLength?: number;
   parserFailureReason?: string;
   fallbackReason?: 'none' | 'replay_mode' | 'parse_failure' | 'llm_error';
 };
@@ -164,10 +165,12 @@ export type InstructionalUnit = {
   updatedSessionIds?: string[];
   type: 'hint' | 'explanation' | 'example' | 'summary';
   conceptId: string;
+  conceptIds?: string[]; // Multi-concept support for notes
   title: string;
   content: string;
   prerequisites: string[];
   addedTimestamp: number;
+  updatedTimestamp?: number; // Set when the unit is updated (preserves original creation time)
   sourceInteractionIds: string[]; // IDs of interactions that triggered this
   sourceInteractions?: string[]; // Legacy compatibility
   provenance?: UnitProvenance;
@@ -177,6 +180,8 @@ export type InstructionalUnit = {
 export type SaveTextbookUnitResult = {
   action: 'created' | 'updated';
   unit: InstructionalUnit;
+  success?: boolean;
+  quotaExceeded?: boolean;
 };
 
 export type LLMCacheRecord = {

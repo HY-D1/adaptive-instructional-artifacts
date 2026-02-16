@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
+import { Skeleton } from '../components/ui/skeleton';
 import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/SQLEditor';
 import { HintSystem } from '../components/HintSystem';
 import { ConceptCoverage } from '../components/ConceptCoverage';
-import { Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Clock, CheckCircle2, AlertCircle, Play, Pause, Sparkles, BookOpen } from 'lucide-react';
 import {
   SQLProblem,
   InteractionEvent,
@@ -25,7 +27,8 @@ import { createEventId } from '../lib/event-id';
 import {
   canonicalizeSqlEngageSubtype,
   getKnownSqlEngageSubtypes,
-  getSqlEngagePolicyVersion
+  getSqlEngagePolicyVersion,
+  getConceptById
 } from '../data/sql-engage';
 
 const INSTRUCTOR_SUBTYPE_OPTIONS = getKnownSqlEngageSubtypes();
@@ -37,6 +40,26 @@ const STRATEGY_OPTIONS: Array<{ value: LearnerProfile['currentStrategy']; label:
   { value: 'adaptive-high', label: 'Adaptive High' }
 ];
 
+// Difficulty color mapping
+const difficultyColors = {
+  beginner: 'bg-green-100 text-green-800 border-green-200',
+  intermediate: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  advanced: 'bg-red-100 text-red-800 border-red-200'
+};
+
+// Format time helper
+function formatTime(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const hours = Math.floor(minutes / 60);
+  
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
 export function LearningInterface() {
   const [learnerId, setLearnerId] = useState('learner-1');
   const [mode, setMode] = useState<LearningInterfaceMode>('student');
@@ -44,6 +67,9 @@ export function LearningInterface() {
   const [currentProblem, setCurrentProblem] = useState<SQLProblem>(sqlProblems[0]);
   const [sqlDraft, setSqlDraft] = useState(DEFAULT_SQL_EDITOR_CODE);
   const [startTime, setStartTime] = useState(Date.now());
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const [isTimerPaused, setIsTimerPaused] = useState(false);
+  const [totalTimeAcrossSessions, setTotalTimeAcrossSessions] = useState(0);
   const [interactions, setInteractions] = useState<InteractionEvent[]>([]);
   const [lastError, setLastError] = useState<string | undefined>();
   const [lastErrorEventId, setLastErrorEventId] = useState<string | undefined>();
@@ -54,6 +80,72 @@ export function LearningInterface() {
   const [isGeneratingUnit, setIsGeneratingUnit] = useState(false);
   const [generationError, setGenerationError] = useState<string | undefined>();
   const [latestGeneratedUnit, setLatestGeneratedUnit] = useState<InstructionalUnit | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  const timerRef = useRef<number | null>(null);
+
+  // Load initial data
+  useEffect(() => {
+    const timer = window.setTimeout(() => setIsLoading(false), 500);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  // Calculate total time across sessions
+  useEffect(() => {
+    const learnerInteractions = storage.getInteractionsByLearner(learnerId);
+    const totalMs = learnerInteractions.reduce((total, interaction) => {
+      return total + (interaction.timeSpent || 0);
+    }, 0);
+    setTotalTimeAcrossSessions(totalMs);
+  }, [learnerId, interactions]);
+
+  // Timer effect with tab visibility handling
+  useEffect(() => {
+    const updateTimer = () => {
+      if (!isTimerPaused) {
+        setElapsedTime(Date.now() - startTime);
+      }
+    };
+
+    timerRef.current = window.setInterval(updateTimer, 1000);
+
+    return () => {
+      if (timerRef.current) {
+        window.clearInterval(timerRef.current);
+      }
+    };
+  }, [startTime, isTimerPaused]);
+
+  // Handle tab visibility change
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setIsTimerPaused(true);
+      } else {
+        setIsTimerPaused(false);
+        // Adjust start time to account for paused period
+        setStartTime(prev => Date.now() - elapsedTime);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [elapsedTime]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+Enter to run query
+      if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        const runButton = document.querySelector('[data-testid="run-query-btn"]') as HTMLButtonElement;
+        runButton?.click();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     // Initialize learner profile if doesn't exist
@@ -84,7 +176,9 @@ export function LearningInterface() {
     setGenerationError(undefined);
     setLatestGeneratedUnit(null);
     setStartTime(Date.now());
-  }, [learnerId]);
+    setElapsedTime(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [learnerId, currentProblem.id]);
 
   const handleLearnerChange = (nextLearnerId: string) => {
     if (nextLearnerId === learnerId) {
@@ -101,6 +195,7 @@ export function LearningInterface() {
     setLatestGeneratedUnit(null);
     setSqlDraft(DEFAULT_SQL_EDITOR_CODE);
     setStartTime(Date.now());
+    setElapsedTime(0);
     setLearnerId(nextLearnerId);
   };
 
@@ -156,6 +251,7 @@ export function LearningInterface() {
       : null;
     setSqlDraft(restoredDraft ?? DEFAULT_SQL_EDITOR_CODE);
     setStartTime(Date.now());
+    setElapsedTime(0);
     setLastError(undefined);
     setLastErrorEventId(undefined);
     setEscalationTriggered(false);
@@ -451,7 +547,9 @@ export function LearningInterface() {
     if (event.learnerId !== learnerId) {
       return;
     }
-    if (sessionId && event.sessionId && event.sessionId !== sessionId) {
+    // Use storage.getActiveSessionId() to avoid stale closure issue
+    const activeSessionId = storage.getActiveSessionId();
+    if (activeSessionId && event.sessionId && event.sessionId !== activeSessionId) {
       return;
     }
     setInteractions((previousInteractions) => {
@@ -513,240 +611,353 @@ export function LearningInterface() {
   ).length;
   const timeSpent = Date.now() - startTime;
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="border-b bg-white">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h1 className="text-2xl font-bold">SQL Learning Lab</h1>
-              <p className="text-gray-600 text-sm">Adaptive instructional system with HintWise</p>
+  // Group problems by difficulty
+  const problemsByDifficulty = sqlProblems.reduce((acc, problem) => {
+    if (!acc[problem.difficulty]) {
+      acc[problem.difficulty] = [];
+    }
+    acc[problem.difficulty].push(problem);
+    return acc;
+  }, {} as Record<string, SQLProblem[]>);
+
+  const difficultyOrder = ['beginner', 'intermediate', 'advanced'];
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="container mx-auto px-4 py-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-4">
+              <Card className="p-6">
+                <Skeleton className="h-8 w-3/4 mb-4" />
+                <Skeleton className="h-4 w-full mb-2" />
+                <Skeleton className="h-4 w-2/3" />
+              </Card>
+              <Skeleton className="h-[500px]" />
             </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-              <div className="flex items-center gap-2">
-                <Clock className="size-4 text-gray-500" />
-                <span className="text-sm">
-                  {Math.floor(timeSpent / 60000)}:{String(Math.floor((timeSpent % 60000) / 1000)).padStart(2, '0')}
-                </span>
-              </div>
-              <Select value={mode} onValueChange={(value) => setMode(value as LearningInterfaceMode)}>
-                <SelectTrigger className="w-full sm:w-[150px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="student">Student</SelectItem>
-                  <SelectItem value="instructor">Instructor</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={learnerId} onValueChange={handleLearnerChange}>
-                <SelectTrigger className="w-full sm:w-[200px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="learner-1">Learner 1</SelectItem>
-                  <SelectItem value="learner-2">Learner 2</SelectItem>
-                  <SelectItem value="learner-3">Learner 3</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="space-y-4">
+              <Skeleton className="h-48" />
+              <Skeleton className="h-48" />
             </div>
           </div>
         </div>
       </div>
+    );
+  }
 
-      <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main problem area */}
-          <div className="lg:col-span-2 space-y-4 min-w-0">
-            <Card className="p-6">
-              <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                    <h2 className="text-xl font-bold">{currentProblem.title}</h2>
-                    <Badge variant={
-                      currentProblem.difficulty === 'beginner' ? 'default' :
-                      currentProblem.difficulty === 'intermediate' ? 'secondary' :
-                      'destructive'
-                    } className="w-fit">
-                      {currentProblem.difficulty}
-                    </Badge>
-                  </div>
-                  <p className="text-gray-700">{currentProblem.description}</p>
-                </div>
-                <Select 
-                  value={currentProblem.id} 
-                  onValueChange={handleProblemChange}
-                >
-                  <SelectTrigger className="w-full lg:w-[220px]">
+  return (
+    <TooltipProvider delayDuration={100}>
+      <div className="min-h-screen bg-gray-50">
+        <div className="border-b bg-white">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h1 className="text-2xl font-bold">SQL Learning Lab</h1>
+                <p className="text-gray-600 text-sm">Adaptive instructional system with HintWise</p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                {/* Enhanced Session Timer */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
+                      {isTimerPaused ? (
+                        <Pause className="size-4 text-amber-500" />
+                      ) : (
+                        <Clock className="size-4 text-gray-500" />
+                      )}
+                      <span className="text-sm font-medium tabular-nums">
+                        {formatTime(elapsedTime)}
+                      </span>
+                      {totalTimeAcrossSessions > 0 && (
+                        <span className="text-xs text-gray-500">
+                          (total: {formatTime(totalTimeAcrossSessions + elapsedTime)})
+                        </span>
+                      )}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Session time (pauses when tab is inactive)</p>
+                    {totalTimeAcrossSessions > 0 && (
+                      <p className="text-xs text-gray-400">
+                        Total across all sessions: {formatTime(totalTimeAcrossSessions + elapsedTime)}
+                      </p>
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+
+                <Select value={mode} onValueChange={(value) => setMode(value as LearningInterfaceMode)}>
+                  <SelectTrigger className="w-full sm:w-[150px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {sqlProblems.map(p => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.title}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="student">Student</SelectItem>
+                    <SelectItem value="instructor">Instructor</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={learnerId} onValueChange={handleLearnerChange}>
+                  <SelectTrigger className="w-full sm:w-[200px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="learner-1">Learner 1</SelectItem>
+                    <SelectItem value="learner-2">Learner 2</SelectItem>
+                    <SelectItem value="learner-3">Learner 3</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+          </div>
+        </div>
 
-              <div className="mb-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
-                <div className="flex items-center gap-1">
-                  <AlertCircle className="size-4" />
-                  <span>{errorCount} errors</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <CheckCircle2 className="size-4" />
-                  <span>
-                    {problemInteractions.filter(i => i.successful).length} successful runs
-                  </span>
-                </div>
-              </div>
-
-              {isInstructorMode && (
-                <Card className="p-4 mb-4 bg-amber-50 border-amber-200">
-                  <h3 className="font-semibold text-sm mb-3">Instructor Controls</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <p className="text-xs text-gray-700 mb-1">Error subtype override</p>
-                      <Select value={subtypeOverride} onValueChange={setSubtypeOverride}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="auto">Auto-detect</SelectItem>
-                          {INSTRUCTOR_SUBTYPE_OPTIONS.map((subtype) => (
-                            <SelectItem key={subtype} value={subtype}>
-                              {subtype}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-700 mb-1">Strategy</p>
-                      <Select
-                        value={strategyOverride}
-                        onValueChange={(value) => handleStrategyChange(value as LearnerProfile['currentStrategy'])}
+        <div className="container mx-auto px-4 py-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Main problem area */}
+            <div className="lg:col-span-2 space-y-4 min-w-0">
+              <Card className="p-6">
+                <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <h2 className="text-xl font-bold">{currentProblem.title}</h2>
+                      <Badge 
+                        variant="outline"
+                        className={`w-fit ${difficultyColors[currentProblem.difficulty]}`}
                       >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {STRATEGY_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        {currentProblem.difficulty}
+                      </Badge>
+                    </div>
+                    <p className="text-gray-700">{currentProblem.description}</p>
+                    
+                    {/* Concept tags */}
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      {currentProblem.concepts.map(conceptId => {
+                        const concept = getConceptById(conceptId);
+                        return (
+                          <Tooltip key={conceptId}>
+                            <TooltipTrigger asChild>
+                              <Badge variant="secondary" className="text-xs cursor-help">
+                                <BookOpen className="size-3 mr-1" />
+                                {concept?.name || conceptId}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="font-medium">{concept?.name || conceptId}</p>
+                              {concept?.description && (
+                                <p className="text-xs text-gray-400 max-w-xs">{concept.description}</p>
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      })}
                     </div>
                   </div>
+                  
+                  {/* Enhanced Problem Selector with difficulty and concepts */}
+                  <Select 
+                    value={currentProblem.id} 
+                    onValueChange={handleProblemChange}
+                  >
+                    <SelectTrigger className="w-full lg:w-[280px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[400px]">
+                      {difficultyOrder.map(difficulty => {
+                        const problems = problemsByDifficulty[difficulty];
+                        if (!problems?.length) return null;
+                        return (
+                          <div key={difficulty}>
+                            <div className={`px-2 py-1.5 text-xs font-semibold uppercase tracking-wide ${
+                              difficulty === 'beginner' ? 'text-green-700 bg-green-50' :
+                              difficulty === 'intermediate' ? 'text-yellow-700 bg-yellow-50' :
+                              'text-red-700 bg-red-50'
+                            }`}>
+                              {difficulty}
+                            </div>
+                            {problems.map(problem => (
+                              <SelectItem key={problem.id} value={problem.id} className="pl-4 py-2">
+                                <div className="flex flex-col items-start">
+                                  <span className="font-medium">{problem.title}</span>
+                                  <span className="text-xs text-gray-500">
+                                    {problem.concepts.length} concept{problem.concepts.length !== 1 ? 's' : ''}
+                                  </span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="mb-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-1 cursor-help">
+                        <AlertCircle className="size-4" />
+                        <span>{errorCount} errors</span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Number of errors in this session</p>
+                    </TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-1 cursor-help">
+                        <CheckCircle2 className="size-4" />
+                        <span>
+                          {problemInteractions.filter(i => i.successful).length} successful runs
+                        </span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Number of successful query executions</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+
+                {isInstructorMode && (
+                  <Card className="p-4 mb-4 bg-amber-50 border-amber-200">
+                    <h3 className="font-semibold text-sm mb-3">Instructor Controls</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-xs text-gray-700 mb-1">Error subtype override</p>
+                        <Select value={subtypeOverride} onValueChange={setSubtypeOverride}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto">Auto-detect</SelectItem>
+                            {INSTRUCTOR_SUBTYPE_OPTIONS.map((subtype) => (
+                              <SelectItem key={subtype} value={subtype}>
+                                {subtype}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-700 mb-1">Strategy</p>
+                        <Select
+                          value={strategyOverride}
+                          onValueChange={(value) => handleStrategyChange(value as LearnerProfile['currentStrategy'])}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {STRATEGY_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+
+                <div className="mb-4">
+                  <h3 className="font-semibold text-sm mb-2">Database Schema:</h3>
+                  <pre className="bg-gray-100 p-3 rounded text-xs overflow-x-auto">
+                    {currentProblem.schema}
+                  </pre>
+                </div>
+              </Card>
+
+              <div className="h-[500px]">
+                <SQLEditor
+                  problem={currentProblem}
+                  code={sqlDraft}
+                  onExecute={handleExecute}
+                  onCodeChange={handleEditorCodeChange}
+                  onReset={handleEditorReset}
+                />
+              </div>
+            </div>
+
+            {/* Sidebar with hints */}
+            <div className="space-y-4 min-w-0">
+              <HintSystem
+                key={`${learnerId}:${sessionId}:${currentProblem.id}:${instructorSubtypeOverride || 'auto'}`}
+                sessionId={sessionId}
+                learnerId={learnerId}
+                problemId={currentProblem.id}
+                errorSubtypeId={effectiveLastError}
+                isSubtypeOverrideActive={Boolean(instructorSubtypeOverride)}
+                knownSubtypeOverride={instructorSubtypeOverride}
+                recentInteractions={problemInteractions}
+                onEscalate={handleEscalate}
+                onInteractionLogged={handleHintSystemInteraction}
+              />
+
+              {showAddToNotes && (
+                <Card className="p-4 space-y-3">
+                  <div>
+                    <h3 className="font-semibold">Escalation</h3>
+                    <p className="text-sm text-gray-600">
+                      Explanations are generated automatically after Hint 3. Add to My Notes to save a reflective notebook unit.
+                    </p>
+                  </div>
+                  <Button onClick={handleAddToNotes} size="sm" className="w-full" disabled={isGeneratingUnit}>
+                    {isGeneratingUnit ? (
+                      <>
+                        <Sparkles className="size-4 mr-2 animate-pulse" />
+                        Generating...
+                      </>
+                    ) : (
+                      'Add to My Notes'
+                    )}
+                  </Button>
+                  {isGeneratingUnit && (
+                    <p className="text-xs text-gray-500">Generating grounded content from retrieved sources...</p>
+                  )}
+                  {generationError && (
+                    <p className="text-xs text-amber-700">{generationError}</p>
+                  )}
+                  {notesActionMessage && (
+                    <p className="text-xs text-gray-600">{notesActionMessage}</p>
+                  )}
+                  {latestGeneratedUnit && (
+                    <div className="rounded border bg-slate-50 p-2">
+                      <p className="text-xs font-medium text-slate-700">{latestGeneratedUnit.title}</p>
+                      {latestGeneratedUnit.provenance && (
+                        <p className="text-[11px] text-slate-600 mt-1">
+                          {latestGeneratedUnit.provenance.templateId} • {latestGeneratedUnit.provenance.model}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </Card>
               )}
 
-              <div className="mb-4">
-                <h3 className="font-semibold text-sm mb-2">Database Schema:</h3>
-                <pre className="bg-gray-100 p-3 rounded text-xs overflow-x-auto">
-                  {currentProblem.schema}
-                </pre>
-              </div>
-            </Card>
+              <ConceptCoverage learnerId={learnerId} />
 
-            <div className="h-[500px]">
-              <SQLEditor
-                problem={currentProblem}
-                code={sqlDraft}
-                onExecute={handleExecute}
-                onCodeChange={handleEditorCodeChange}
-                onReset={handleEditorReset}
-              />
-            </div>
-          </div>
-
-          {/* Sidebar with hints */}
-          <div className="space-y-4 min-w-0">
-            <HintSystem
-              key={`${learnerId}:${sessionId}:${currentProblem.id}:${instructorSubtypeOverride || 'auto'}`}
-              sessionId={sessionId}
-              learnerId={learnerId}
-              problemId={currentProblem.id}
-              errorSubtypeId={effectiveLastError}
-              isSubtypeOverrideActive={Boolean(instructorSubtypeOverride)}
-              knownSubtypeOverride={instructorSubtypeOverride}
-              recentInteractions={problemInteractions}
-              onEscalate={handleEscalate}
-              onInteractionLogged={handleHintSystemInteraction}
-            />
-
-            {showAddToNotes && (
-              <Card className="p-4 space-y-3">
-                <div>
-                  <h3 className="font-semibold">Escalation</h3>
-                  <p className="text-sm text-gray-600">
-                    Explanations are generated automatically after Hint 3. Add to My Notes to save a reflective notebook unit.
-                  </p>
-                </div>
-                <Button onClick={handleAddToNotes} size="sm" className="w-full" disabled={isGeneratingUnit}>
-                  {isGeneratingUnit ? 'Generating...' : 'Add to My Notes'}
-                </Button>
-                {isGeneratingUnit && (
-                  <p className="text-xs text-gray-500">Generating grounded content from retrieved sources...</p>
-                )}
-                {generationError && (
-                  <p className="text-xs text-amber-700">{generationError}</p>
-                )}
-                {notesActionMessage && (
-                  <p className="text-xs text-gray-600">{notesActionMessage}</p>
-                )}
-                {latestGeneratedUnit && (
-                  <div className="rounded border bg-slate-50 p-2">
-                    <p className="text-xs font-medium text-slate-700">{latestGeneratedUnit.title}</p>
-                    {latestGeneratedUnit.provenance && (
-                      <p className="text-[11px] text-slate-600 mt-1">
-                        {latestGeneratedUnit.provenance.templateId} • {latestGeneratedUnit.provenance.model}
-                      </p>
-                    )}
+              <Card className="p-4">
+                <h3 className="font-semibold mb-3">Session Stats</h3>
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 text-sm">
+                  <div className="text-gray-600">Total attempts:</div>
+                  <div className="font-medium text-right">{totalAttempts}</div>
+                  <div className="text-gray-600">Hints viewed:</div>
+                  <div className="font-medium text-right">{hintViewsCount}</div>
+                  <div className="text-gray-600">Help requests:</div>
+                  <div className="font-medium text-right">{helpRequestsCount}</div>
+                  <div className="text-gray-600">Session ID:</div>
+                  <div className="max-w-[180px] break-all text-right text-[11px] font-medium text-gray-700 sm:max-w-[220px] sm:text-xs">
+                    {sessionId || 'pending'}
                   </div>
-                )}
+                  <div className="text-gray-600">Time spent:</div>
+                  <div className="font-medium text-right">
+                    {formatTime(timeSpent)}
+                  </div>
+                </div>
               </Card>
-            )}
-
-            <ConceptCoverage learnerId={learnerId} />
-
-            <Card className="p-4">
-              <h3 className="font-semibold mb-3">Concepts</h3>
-              <div className="flex flex-wrap gap-2">
-                {currentProblem.concepts.map(concept => (
-                  <Badge key={concept} variant="outline">
-                    {concept.replace(/-/g, ' ')}
-                  </Badge>
-                ))}
-              </div>
-            </Card>
-
-            <Card className="p-4">
-              <h3 className="font-semibold mb-3">Session Stats</h3>
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 text-sm">
-                <div className="text-gray-600">Total attempts:</div>
-                <div className="font-medium text-right">{totalAttempts}</div>
-                <div className="text-gray-600">Hints viewed:</div>
-                <div className="font-medium text-right">{hintViewsCount}</div>
-                <div className="text-gray-600">Help requests:</div>
-                <div className="font-medium text-right">{helpRequestsCount}</div>
-                <div className="text-gray-600">Session ID:</div>
-                <div className="max-w-[180px] break-all text-right text-[11px] font-medium text-gray-700 sm:max-w-[220px] sm:text-xs">
-                  {sessionId || 'pending'}
-                </div>
-                <div className="text-gray-600">Time spent:</div>
-                <div className="font-medium text-right">
-                  {Math.floor(timeSpent / 60000)}m {Math.floor((timeSpent % 60000) / 1000)}s
-                </div>
-              </div>
-            </Card>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }
 

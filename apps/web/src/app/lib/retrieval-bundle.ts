@@ -208,11 +208,22 @@ function findTopPdfPassages(
     .filter(Boolean)
     .join(' ');
 
-  return retrievePdfChunks(query, topK).map((chunk) => ({
-    chunkId: chunk.chunkId,
-    docId: chunk.docId,
-    page: chunk.page,
-    text: chunk.text,
-    score: chunk.score
-  }));
+  const chunks = retrievePdfChunks(query, topK);
+  
+  // Deduplicate chunks by chunkId, keeping the highest score
+  const seenChunkIds = new Map<string, RetrievalPdfPassage>();
+  for (const chunk of chunks) {
+    const existing = seenChunkIds.get(chunk.chunkId);
+    if (!existing || chunk.score > existing.score) {
+      seenChunkIds.set(chunk.chunkId, {
+        chunkId: chunk.chunkId,
+        docId: chunk.docId,
+        page: chunk.page,
+        text: chunk.text,
+        score: chunk.score
+      });
+    }
+  }
+  
+  return Array.from(seenChunkIds.values());
 }

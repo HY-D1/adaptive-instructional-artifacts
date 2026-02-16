@@ -20,8 +20,8 @@ __pycache__/
 *.pyc
 .venv/
 
-# Agent instructions and local docs (keep local-only)
-AGENTS.md
-docs/week2_progress.md
+# Local/agent-only documentation (not in git)
 docs/progress.md
+docs/week2_progress.md
 docs/week2-demo.md
+AGENTS.md

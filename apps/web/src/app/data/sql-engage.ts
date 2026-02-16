@@ -74,15 +74,18 @@ function parseCsvLine(line: string): string[] {
     const ch = line[i];
     const next = line[i + 1];
 
+    // Handle escaped quotes ("") within quoted fields
     if (ch === '"' && inQuotes && next === '"') {
       current += '"';
-      i += 1;
+      i += 1; // Skip the next quote
       continue;
     }
+    // Toggle quote state
     if (ch === '"') {
       inQuotes = !inQuotes;
       continue;
     }
+    // Only split on commas outside of quotes
     if (ch === ',' && !inQuotes) {
       values.push(current.trim());
       current = '';
@@ -91,8 +94,16 @@ function parseCsvLine(line: string): string[] {
     current += ch;
   }
 
+  // Push the last value
   values.push(current.trim());
-  return values;
+  
+  // Remove surrounding quotes from each value if present
+  return values.map(v => {
+    if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) {
+      return v.slice(1, -1).replace(/""/g, '"');
+    }
+    return v;
+  });
 }
 
 function parseSqlEngageCsv(csv: string): SqlEngageRecord[] {
@@ -162,10 +173,16 @@ const DATASET_BACKED_FALLBACK_SUBTYPE = getDatasetBackedFallbackSubtype();
 const SUBTYPE_ALIASES: Record<string, string> = {
   'unknown column': 'undefined column',
   'no such column': 'undefined column',
+  'column not found': 'undefined column',
   'unknown table': 'undefined table',
   'no such table': 'undefined table',
+  'table not found': 'undefined table',
   'unknown function': 'undefined function',
-  'ambiguous column': 'ambiguous reference'
+  'no such function': 'undefined function',
+  'function not found': 'undefined function',
+  'ambiguous column': 'ambiguous reference',
+  'ambiguous table': 'ambiguous reference',
+  'ambiguous identifier': 'ambiguous reference'
 };
 
 function stableHash(input: string): number {
@@ -206,6 +223,92 @@ const SUBTYPE_LADDER_GUIDANCE: Record<string, [string, string, string]> = {
     'A clause appears in the wrong order.',
     'Reorder clauses to standard SQL order.',
     'Use a fixed skeleton (SELECT -> FROM -> JOIN -> WHERE -> GROUP BY -> HAVING -> ORDER BY).'
+  ],
+  // Additional subtypes to complete coverage for all 23 canonical subtypes
+  'aggregation misuse': [
+    'Your aggregate function or grouping logic needs adjustment.',
+    'Check that all non-aggregated columns in SELECT appear in GROUP BY.',
+    'Apply aggregates only to values you want to summarize, and ensure GROUP BY includes all other selected columns.'
+  ],
+  'data type mismatch': [
+    'A value does not match the expected data type for this operation.',
+    'Compare the column type with the value you are providing.',
+    'Convert values to the correct type before comparison or insertion.'
+  ],
+  'incorrect distinct usage': [
+    'DISTINCT may be unnecessary or incorrectly applied.',
+    'Check if the columns are already unique or if DISTINCT duplicates removal is actually needed.',
+    'Remove redundant DISTINCT and rely on unique keys or GROUP BY when appropriate.'
+  ],
+  'incorrect group by usage': [
+    'The GROUP BY clause is missing or contains incorrect columns.',
+    'Ensure every non-aggregated column in SELECT is included in GROUP BY.',
+    'Refactor the query to group by the exact set of non-aggregated columns.'
+  ],
+  'incorrect having clause': [
+    'HAVING is being used incorrectly or filters are in the wrong place.',
+    'Use HAVING only for conditions on aggregate results; move row filters to WHERE.',
+    'Validate that aggregate conditions reference grouped data correctly.'
+  ],
+  'incorrect join usage': [
+    'The JOIN condition or type is incorrect.',
+    'Verify the join keys exist in both tables and the join type matches your intent.',
+    'Specify explicit ON conditions and prefer explicit JOIN syntax over comma joins.'
+  ],
+  'incorrect order by usage': [
+    'ORDER BY columns or direction are incorrect.',
+    'Check that the sorting columns exist in the result set and ASC/DESC is intended.',
+    'Limit sorting to necessary columns and ensure the order aligns with the requirement.'
+  ],
+  'incorrect select usage': [
+    'The SELECT clause is missing required columns or includes invalid ones.',
+    'List only columns needed and ensure they exist in the source tables.',
+    'Build the column list incrementally, validating each against the schema.'
+  ],
+  'incorrect wildcard usage': [
+    'Wildcards (*) are used incorrectly or too broadly.',
+    'Replace * with explicit column names for clarity and performance.',
+    'Select only the columns your application actually needs.'
+  ],
+  'inefficient query': [
+    'The query can be rewritten for better performance.',
+    'Look for unnecessary subqueries, redundant joins, or missing indexes.',
+    'Simplify the query structure and ensure filters are applied as early as possible.'
+  ],
+  'missing commas': [
+    'A comma is missing between columns or table references.',
+    'Review the SELECT or FROM list and insert commas between items.',
+    'Format lists with one item per line to make missing commas obvious.'
+  ],
+  'missing quotes': [
+    'String literals are missing required quotes.',
+    'Wrap text values in single quotes and escape embedded quotes properly.',
+    'Consistently quote all string literals and verify special characters are escaped.'
+  ],
+  'missing semicolons': [
+    'A statement terminator may be missing.',
+    'End each SQL statement with a semicolon for clarity.',
+    'Use semicolons consistently, especially in multi-statement batches.'
+  ],
+  'misspelling': [
+    'A keyword or identifier appears to be misspelled.',
+    'Compare the spelling against the schema and SQL keywords.',
+    'Use consistent naming conventions and verify against the database catalog.'
+  ],
+  'non-standard operators': [
+    'An operator is not recognized or is non-standard.',
+    'Replace with standard SQL operators (e.g., = instead of ==).',
+    'Verify operator syntax in the target SQL dialect documentation.'
+  ],
+  'operator misuse': [
+    'An operator is being used incorrectly for this context.',
+    'Check that the operator fits the data types and logic of the comparison.',
+    'Review operator precedence and use parentheses to clarify intent.'
+  ],
+  'unmatched brackets': [
+    'Opening and closing brackets or parentheses do not match.',
+    'Count brackets to locate the mismatch and ensure proper nesting.',
+    'Balance every opening bracket with a corresponding closing bracket.'
   ]
 };
 
@@ -354,14 +457,14 @@ const explicitSubtypeConceptMap: Record<string, string[]> = {
   'missing commas': ['select-basic'],
   'missing quotes': ['select-basic'],
   'missing semicolons': ['select-basic'],
-  misspelling: ['select-basic'],
+  misspelling: ['where-clause'],
   'non-standard operators': ['where-clause'],
   'operator misuse': ['where-clause'],
   'undefined column': ['select-basic'],
-  'undefined function': ['select-basic'],
-  'undefined table': ['select-basic'],
-  'unmatched brackets': ['select-basic'],
-  'wrong positioning': ['select-basic']
+  'undefined function': ['aggregation'],
+  'undefined table': ['joins'],
+  'unmatched brackets': ['where-clause'],
+  'wrong positioning': ['order-by']
 };
 
 const conceptInferenceRules: Array<{ conceptId: string; pattern: RegExp }> = [
@@ -428,26 +531,80 @@ function isLikelyIncompleteQuery(query: string): boolean {
   return /(\bselect\b|\bfrom\b|\bwhere\b|\bgroup by\b|\border by\b|\bjoin\b)\s*$/.test(compact);
 }
 
+/**
+ * Normalizes SQLite/sql.js error messages to SQL-Engage error subtypes.
+ * This function maps various error patterns to canonical subtypes for consistent
+ * hint generation and error categorization.
+ * 
+ * Coverage includes:
+ * - Column errors (undefined column, ambiguous reference)
+ * - Table errors (undefined table)
+ * - Function errors (undefined function)
+ * - Syntax errors (incomplete query, wrong positioning, missing commas, unmatched brackets)
+ * - Data errors (type mismatch, constraint violation)
+ * 
+ * @param errorMessage - The raw error message from SQLite/sql.js
+ * @param query - The SQL query that caused the error (for context-based detection)
+ * @returns The canonical SQL-Engage error subtype
+ */
 export function normalizeSqlErrorSubtype(errorMessage: string, query: string = ''): string {
   const error = errorMessage.toLowerCase();
 
-  if (/no such column|unknown column|has no column named/.test(error)) {
+  // Column-related errors - expanded pattern coverage
+  if (/no such column|unknown column|has no column named|column not found|does not exist.*column|invalid column|referenced column/i.test(error)) {
     return canonicalizeSqlEngageSubtype('undefined column');
   }
-  if (/no such table|unknown table|no such relation/.test(error)) {
+  // Table-related errors - expanded pattern coverage
+  if (/no such table|unknown table|no such relation|table not found|does not exist.*table|invalid table|referenced table/i.test(error)) {
     return canonicalizeSqlEngageSubtype('undefined table');
   }
-  if (/no such function|unknown function|undefined function/.test(error)) {
+  // Function-related errors - expanded pattern coverage
+  if (/no such function|unknown function|undefined function|function not found|does not exist.*function/i.test(error)) {
     return canonicalizeSqlEngageSubtype('undefined function');
   }
-  if (/ambiguous column|ambiguous reference|is ambiguous/.test(error)) {
+  // Ambiguity errors - expanded pattern coverage
+  if (/ambiguous column|ambiguous table|ambiguous reference|is ambiguous|ambiguous identifier/i.test(error)) {
     return canonicalizeSqlEngageSubtype('ambiguous reference');
   }
-  if (/incomplete input|unterminated|unexpected end/.test(error) || isLikelyIncompleteQuery(query)) {
+  // Incomplete query patterns
+  if (/incomplete input|unterminated|unexpected end|unexpected eof|missing keyword|incomplete sql/i.test(error) || isLikelyIncompleteQuery(query)) {
     return canonicalizeSqlEngageSubtype('incomplete query');
   }
-  if (/near .*syntax error|syntax error/.test(error) && isLikelyWrongPositioning(query)) {
+  // Wrong positioning / syntax order patterns
+  if (/near .*syntax error|syntax error|unexpected token|wrong order/i.test(error) && isLikelyWrongPositioning(query)) {
     return canonicalizeSqlEngageSubtype('wrong positioning');
+  }
+  // Data type mismatch patterns
+  if (/datatype mismatch|type mismatch|cannot convert|incompatible types|invalid.*type/i.test(error)) {
+    return canonicalizeSqlEngageSubtype('data type mismatch');
+  }
+  // Constraint violation patterns
+  if (/constraint failed|unique constraint|foreign key constraint|check constraint|not null constraint/i.test(error)) {
+    return canonicalizeSqlEngageSubtype('constraint violation');
+  }
+  // Division by zero and arithmetic errors
+  if (/division by zero|divide by zero|arithmetic error|numeric overflow/i.test(error)) {
+    return canonicalizeSqlEngageSubtype('operator misuse');
+  }
+  // LIKE pattern errors
+  if (/like pattern|escape sequence|invalid escape/i.test(error)) {
+    return canonicalizeSqlEngageSubtype('operator misuse');
+  }
+  // Index-related errors
+  if (/index.*already exists|index.*not found|no such index/i.test(error)) {
+    return canonicalizeSqlEngageSubtype('misspelling');
+  }
+  // View-related errors
+  if (/no such view|view.*not found|invalid view/i.test(error)) {
+    return canonicalizeSqlEngageSubtype('undefined table');
+  }
+  // Missing comma patterns
+  if (/near\s*"[^"]*"\s*: syntax error|missing comma|expected comma/i.test(error)) {
+    return canonicalizeSqlEngageSubtype('missing commas');
+  }
+  // Unmatched brackets/parentheses
+  if (/unmatched.*bracket|unmatched.*parenthes|unclosed.*paren|mismatched.*bracket/i.test(error)) {
+    return canonicalizeSqlEngageSubtype('unmatched brackets');
   }
 
   // Safe fallback to a canonical subtype guaranteed in the SQL-Engage dataset.

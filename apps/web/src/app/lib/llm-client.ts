@@ -128,16 +128,47 @@ async function runHealthProbe(model: string): Promise<{
   }
 }
 
+function validateLLMParams(params: LLMGenerationParams): LLMGenerationParams {
+  const validated = { ...params };
+  
+  // Clamp temperature to valid range [0, 2]
+  if (typeof validated.temperature !== 'number' || !Number.isFinite(validated.temperature)) {
+    validated.temperature = DEFAULT_PARAMS.temperature;
+  } else {
+    validated.temperature = Math.max(0, Math.min(2, validated.temperature));
+  }
+  
+  // Clamp top_p to valid range [0, 1]
+  if (typeof validated.top_p !== 'number' || !Number.isFinite(validated.top_p)) {
+    validated.top_p = DEFAULT_PARAMS.top_p;
+  } else {
+    validated.top_p = Math.max(0, Math.min(1, validated.top_p));
+  }
+  
+  // Ensure timeout is a positive integer
+  if (typeof validated.timeoutMs !== 'number' || !Number.isFinite(validated.timeoutMs) || validated.timeoutMs <= 0) {
+    validated.timeoutMs = DEFAULT_PARAMS.timeoutMs;
+  }
+  
+  // Ensure stream is boolean
+  if (typeof validated.stream !== 'boolean') {
+    validated.stream = DEFAULT_PARAMS.stream;
+  }
+  
+  return validated;
+}
+
 export async function generateWithOllama(prompt: string, options?: OllamaGenerateOptions): Promise<{
   text: string;
   model: string;
   params: LLMGenerationParams;
 }> {
   const model = options?.model || OLLAMA_MODEL;
-  const params: LLMGenerationParams = {
+  const rawParams: LLMGenerationParams = {
     ...DEFAULT_PARAMS,
     ...(options?.params || {})
   };
+  const params = validateLLMParams(rawParams);
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), params.timeoutMs);
