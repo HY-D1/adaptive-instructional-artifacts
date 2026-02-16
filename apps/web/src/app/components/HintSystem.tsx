@@ -2,14 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Lightbulb } from 'lucide-react';
-import { HelpEventType, InteractionEvent } from '../types';
+import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
+import { HelpEventType, InteractionEvent, SQLProblem } from '../types';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { storage } from '../lib/storage';
 import { createEventId } from '../lib/event-id';
 import {
   canonicalizeSqlEngageSubtype
 } from '../data/sql-engage';
+import { buildRetrievalBundle, RetrievalPdfPassage } from '../lib/retrieval-bundle';
+import { getProblemById } from '../data/problems';
 
 interface HintSystemProps {
   sessionId?: string;
@@ -35,6 +37,8 @@ export function HintSystem({
   onInteractionLogged
 }: HintSystemProps) {
   const [hints, setHints] = useState<string[]>([]);
+  const [hintPdfPassages, setHintPdfPassages] = useState<RetrievalPdfPassage[][]>([]);
+  const [expandedHintIndex, setExpandedHintIndex] = useState<number | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [activeHintSubtype, setActiveHintSubtype] = useState<string | null>(null);
   const MAX_DEDUPE_KEYS = 1000; // Prevent unbounded set growth
@@ -58,6 +62,8 @@ export function HintSystem({
 
   const resetHintFlow = () => {
     setHints([]);
+    setHintPdfPassages([]);
+    setExpandedHintIndex(null);
     setShowExplanation(false);
     setActiveHintSubtype(null);
   };
@@ -202,6 +208,29 @@ export function HintSystem({
     );
   };
 
+  const retrievePdfPassagesForHint = (subtype: string): RetrievalPdfPassage[] => {
+    const problem = getProblemById(problemId);
+    if (!problem) return [];
+
+    const problemInteractions = getProblemTrace();
+    const latestError = [...problemInteractions]
+      .reverse()
+      .find((interaction) => interaction.eventType === 'error');
+
+    try {
+      const bundle = buildRetrievalBundle({
+        learnerId,
+        problem,
+        interactions: recentInteractions,
+        lastErrorSubtypeId: subtype || latestError?.errorSubtypeId,
+        pdfTopK: 3
+      });
+      return bundle.pdfPassages;
+    } catch {
+      return [];
+    }
+  };
+
   const handleRequestHint = () => {
     if (!profile) {
       return;
@@ -231,7 +260,11 @@ export function HintSystem({
       return;
     }
 
+    // Retrieve PDF passages for this hint
+    const pdfPassages = retrievePdfPassagesForHint(hintSelection.sqlEngageSubtype);
+
     setHints((currentHints) => [...currentHints, hintSelection.hintText]);
+    setHintPdfPassages((current) => [...current, pdfPassages]);
     setActiveHintSubtype(hintSelection.sqlEngageSubtype);
     const errorCount = problemTrace.filter((interaction) => interaction.eventType === 'error').length;
     const hintCount = problemTrace.filter((interaction) => interaction.eventType === 'hint_view').length;
@@ -402,16 +435,71 @@ export function HintSystem({
         </div>
       ) : (
         <div className="space-y-3">
-          {hints.map((hint, idx) => (
-            <div key={idx} className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-                <Badge variant="outline" className="w-fit shrink-0">
-                  Hint {idx + 1}
-                </Badge>
-                <p className="text-sm leading-relaxed text-blue-900 break-words">{hint}</p>
+          {hints.map((hint, idx) => {
+            const pdfPassages = hintPdfPassages[idx] || [];
+            const hasPdfSources = pdfPassages.length > 0;
+            const isExpanded = expandedHintIndex === idx;
+            
+            return (
+              <div key={idx} className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                  <Badge variant="outline" className="w-fit shrink-0">
+                    Hint {idx + 1}
+                  </Badge>
+                  <p className="text-sm leading-relaxed text-blue-900 break-words">{hint}</p>
+                </div>
+                
+                {hasPdfSources && (
+                  <div className="mt-3 border-t border-blue-200 pt-2">
+                    <button
+                      onClick={() => setExpandedHintIndex(isExpanded ? null : idx)}
+                      className="flex items-center gap-2 text-xs text-blue-700 hover:text-blue-900 transition-colors"
+                      aria-expanded={isExpanded}
+                    >
+                      {isExpanded ? (
+                        <ChevronUp className="size-3.5" />
+                      ) : (
+                        <ChevronDown className="size-3.5" />
+                      )}
+                      <BookOpen className="size-3.5" />
+                      <span>
+                        {isExpanded ? 'Hide source passages' : `View source passages (${pdfPassages.length})`}
+                      </span>
+                    </button>
+                    
+                    {isExpanded && (
+                      <div className="mt-2 space-y-2">
+                        <p className="text-[11px] text-blue-600 italic">
+                          The following passages from your uploaded PDF were used to generate this hint:
+                        </p>
+                        {pdfPassages.map((passage, pidx) => (
+                          <div 
+                            key={passage.chunkId} 
+                            className="p-2 bg-white border border-blue-100 rounded text-xs"
+                          >
+                            <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mb-1">
+                              <FileText className="size-3" />
+                              <span className="font-medium">{passage.docId}</span>
+                              <span>·</span>
+                              <span>Page {passage.page}</span>
+                              {passage.score > 0 && (
+                                <span className="text-gray-400">
+                                  (relevance: {(passage.score * 100).toFixed(0)}%)
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-gray-700 leading-relaxed line-clamp-4">
+                              {passage.text}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
