@@ -9,3 +9,4 @@ export const PDF_EMBEDDING_DIMENSION = 24;
 export const PDF_INDEX_MANIFEST_FILENAME = 'manifest.json';
 export const PDF_INDEX_CHUNKS_FILENAME = 'chunks.json';
 export const PDF_INDEX_LOAD_ENDPOINT = '/api/pdf-index/load';
+export const PDF_INDEX_UPLOAD_ENDPOINT = '/api/pdf-index/upload';

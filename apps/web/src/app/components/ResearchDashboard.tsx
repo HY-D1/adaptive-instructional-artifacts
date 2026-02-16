@@ -51,7 +51,7 @@ import { storage } from '../lib/storage';
 import { InteractionEvent, LearnerProfile, ExperimentCondition, PdfIndexDocument } from '../types';
 import { orchestrator, ReplayDecisionPoint, AutoEscalationMode } from '../lib/adaptive-orchestrator';
 import { checkOllamaHealth, OLLAMA_MODEL } from '../lib/llm-client';
-import { loadOrBuildPdfIndex } from '../lib/pdf-index-loader';
+import { loadOrBuildPdfIndex, uploadPdfAndBuildIndex } from '../lib/pdf-index-loader';
 import { createEventId } from '../lib/event-id';
 
 const experimentConditions: ExperimentCondition[] = [
@@ -363,6 +363,70 @@ export function ResearchDashboard() {
       setPdfIndexStatus('error');
       setPdfIndexError((error as Error).message || 'Failed to load PDF index.');
     }
+  };
+
+  const handlePdfUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      setPdfIndexStatus('error');
+      setPdfIndexError('Please select a PDF file.');
+      event.target.value = '';
+      return;
+    }
+
+    setPdfIndexStatus('loading');
+    setPdfIndexError(null);
+
+    try {
+      const result = await uploadPdfAndBuildIndex(file);
+      const saveResult = storage.savePdfIndex(result.document);
+      setPdfIndexSummary(formatPdfIndexSummary(result.document));
+      
+      if (saveResult.quotaExceeded) {
+        setPdfIndexStatus('warning');
+        setPdfIndexError(
+          `Warning: PDF index is too large for LocalStorage (${(JSON.stringify(result.document).length / 1024 / 1024).toFixed(1)} MB). ` +
+          'The index is loaded in memory and will work for this session, but will be lost on page refresh. ' +
+          'Consider reducing PDF file sizes or number of documents.'
+        );
+      } else {
+        setPdfIndexStatus('ready');
+      }
+
+      // Log upload event
+      const uploadEvent: InteractionEvent = {
+        id: createEventId('pdf-index', 'upload'),
+        sessionId: storage.getActiveSessionId(),
+        learnerId: 'system',
+        timestamp: Date.now(),
+        eventType: 'pdf_index_uploaded',
+        problemId: 'pdf-index',
+        inputs: {
+          filename: file.name,
+          file_size: file.size
+        },
+        outputs: {
+          pdf_index_id: result.document.indexId,
+          pdf_schema_version: result.document.schemaVersion,
+          pdf_embedding_model_id: result.document.embeddingModelId,
+          pdf_chunker_version: result.document.chunkerVersion,
+          pdf_doc_count: result.document.docCount,
+          pdf_chunk_count: result.document.chunkCount
+        }
+      };
+      storage.saveInteraction(uploadEvent);
+      setInteractions((previous) => [...previous, uploadEvent]);
+
+      loadData();
+    } catch (error) {
+      setPdfIndexSummary('No PDF index loaded');
+      setPdfIndexStatus('error');
+      setPdfIndexError((error as Error).message || 'Failed to upload and process PDF.');
+    }
+
+    event.target.value = '';
   };
 
   // Analytics
@@ -781,7 +845,7 @@ export function ResearchDashboard() {
             </Card>
             <Card className="p-3">
               <div className="flex items-center justify-between gap-3">
-                <div>
+                <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">PDF Retrieval Index</p>
                   <p className="text-xs text-gray-600" data-testid="pdf-index-summary">{pdfIndexSummary}</p>
                   <p className="text-[11px] text-gray-500" data-testid="pdf-index-status">
@@ -800,15 +864,39 @@ export function ResearchDashboard() {
                     </div>
                   )}
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleLoadPdfIndex}
-                  data-testid="pdf-index-load-button"
-                  disabled={pdfIndexStatus === 'loading'}
-                >
-                  {pdfIndexStatus === 'loading' ? 'Loading...' : 'Load Index'}
-                </Button>
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={handlePdfUpload}
+                    id="pdf-upload-input"
+                    className="hidden"
+                    disabled={pdfIndexStatus === 'loading'}
+                  />
+                  <label htmlFor="pdf-upload-input">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      asChild
+                      disabled={pdfIndexStatus === 'loading'}
+                    >
+                      <span className="cursor-pointer">
+                        <FileUp className="size-3 mr-1" />
+                        {pdfIndexStatus === 'loading' ? 'Processing...' : 'Upload PDF'}
+                      </span>
+                    </Button>
+                  </label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleLoadPdfIndex}
+                    data-testid="pdf-index-load-button"
+                    disabled={pdfIndexStatus === 'loading'}
+                    className="text-xs"
+                  >
+                    Load from Disk
+                  </Button>
+                </div>
               </div>
             </Card>
           </div>

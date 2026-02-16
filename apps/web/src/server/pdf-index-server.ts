@@ -516,6 +516,118 @@ function uniqueDocId(baseId: string, usedDocIds: Set<string>): string {
   return uniqueId;
 }
 
+export async function buildPdfIndexFromBuffer(
+  pdfBuffer: Buffer,
+  filename: string,
+  config: PdfIndexDiskConfig
+): Promise<{
+  manifest: PdfIndexManifestDisk;
+  chunks: PdfIndexChunk[];
+  document: PdfIndexDocument;
+}> {
+  const chunkSizeWords = config.chunkSizeWords ?? PDF_CHUNK_WORDS;
+  const chunkOverlapWords = config.chunkOverlapWords ?? PDF_CHUNK_OVERLAP_WORDS;
+  const embeddingDimension = config.embeddingDimension ?? PDF_EMBEDDING_DIMENSION;
+
+  if (chunkOverlapWords >= chunkSizeWords) {
+    throw new Error('Invalid chunker config: overlap must be smaller than chunk size.');
+  }
+
+  // Write buffer to temp file for pdftotext processing
+  const tempDir = path.join(config.indexDir, '.temp');
+  await fs.mkdir(tempDir, { recursive: true });
+  const tempPdfPath = path.join(tempDir, `upload-${Date.now()}-${filename}`);
+  
+  try {
+    await fs.writeFile(tempPdfPath, pdfBuffer);
+    
+    const sha256 = createHash('sha256').update(pdfBuffer).digest('hex');
+    const docId = `doc-${sha256.slice(0, 12)}`;
+    const pages = await extractPagesFromPdf(tempPdfPath);
+
+    if (pages.length === 0) {
+      throw new Error(`No text content extracted from PDF '${filename}'. The PDF may be scanned images or corrupted.`);
+    }
+
+    const sourceDoc: PdfSourceDoc = {
+      docId,
+      filename,
+      sha256,
+      pageCount: pages.length
+    };
+
+    const chunks: PdfIndexChunk[] = [];
+    for (const page of pages) {
+      const pageChunks = chunkPageWords({
+        docId,
+        page: page.page,
+        text: page.text,
+        chunkSizeWords,
+        chunkOverlapWords,
+        embeddingDimension
+      });
+      chunks.push(...pageChunks);
+    }
+
+    chunks.sort((left, right) => {
+      const pageDelta = left.page - right.page;
+      if (pageDelta !== 0) return pageDelta;
+      return left.chunkId.localeCompare(right.chunkId);
+    });
+
+    const createdAt = new Date().toISOString();
+    const indexId = `pdf-index-${createHash('sha256')
+      .update(
+        JSON.stringify({
+          schemaVersion: config.schemaVersion,
+          chunkerVersion: config.chunkerVersion,
+          embeddingModelId: config.embeddingModelId,
+          sourceDocs: [{
+            docId: sourceDoc.docId,
+            sha256: sourceDoc.sha256,
+            pageCount: sourceDoc.pageCount,
+            filename: sourceDoc.filename
+          }],
+          chunkCount: chunks.length
+        })
+      )
+      .digest('hex')
+      .slice(0, 16)}`;
+
+    const manifest: PdfIndexManifestDisk = {
+      indexId,
+      createdAt,
+      schemaVersion: config.schemaVersion,
+      chunkerVersion: config.chunkerVersion,
+      embeddingModelId: config.embeddingModelId,
+      sourceDocs: [sourceDoc],
+      docCount: 1,
+      chunkCount: chunks.length
+    };
+
+    // Save to disk
+    await writePdfIndexToDisk(config.indexDir, manifest, chunks);
+    
+    // Copy PDF to source dir for persistence
+    const persistentPdfPath = path.join(config.sourcePdfDir, filename);
+    await fs.mkdir(config.sourcePdfDir, { recursive: true });
+    await fs.copyFile(tempPdfPath, persistentPdfPath);
+
+    return {
+      manifest,
+      chunks,
+      document: createDocument(manifest, chunks)
+    };
+  } finally {
+    // Clean up temp file
+    try {
+      await fs.unlink(tempPdfPath);
+    } catch {
+      // Ignore cleanup errors
+    }
+  }
+}
+
 function toPosixPath(value: string): string {
   return value.split(path.sep).join('/');
 }

@@ -50,6 +50,7 @@ export type InteractionEvent = {
     | HelpEventType
     | 'llm_generate'
     | 'pdf_index_rebuilt'
+    | 'pdf_index_uploaded'
     | 'textbook_add'
     | 'textbook_update'
     | 'coverage_change';

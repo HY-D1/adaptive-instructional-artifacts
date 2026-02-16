@@ -2,6 +2,7 @@ import {
   PDF_CHUNKER_VERSION,
   PDF_EMBEDDING_MODEL_ID,
   PDF_INDEX_LOAD_ENDPOINT,
+  PDF_INDEX_UPLOAD_ENDPOINT,
   PDF_INDEX_SCHEMA_VERSION
 } from './pdf-index-config';
 import { PdfIndexDocument } from '../types';
@@ -40,6 +41,42 @@ export async function loadOrBuildPdfIndex(): Promise<PdfIndexLoadResponse> {
 
   if (!response.ok) {
     const errorMessage = (payload as { error?: string }).error || 'Unknown PDF index load failure.';
+    throw new Error(errorMessage);
+  }
+
+  const typedPayload = payload as PdfIndexLoadResponse;
+  assertPdfIndexContract(typedPayload.document);
+
+  return typedPayload;
+}
+
+export async function uploadPdfAndBuildIndex(file: File): Promise<PdfIndexLoadResponse> {
+  const formData = new FormData();
+  formData.append('pdf', file);
+
+  let response: Response;
+  try {
+    response = await fetch(PDF_INDEX_UPLOAD_ENDPOINT, {
+      method: 'POST',
+      body: formData
+    });
+  } catch (error) {
+    throw new Error(
+      `Unable to reach PDF index upload service at ${PDF_INDEX_UPLOAD_ENDPOINT}. ` +
+      `Run the app with 'npm run dev' and ensure the Vite server is up. ` +
+      `Details: ${(error as Error).message}`
+    );
+  }
+
+  let payload: PdfIndexLoadResponse | { error?: string };
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error('PDF index upload service returned a non-JSON response.');
+  }
+
+  if (!response.ok) {
+    const errorMessage = (payload as { error?: string }).error || 'Unknown PDF index upload failure.';
     throw new Error(errorMessage);
   }
 
