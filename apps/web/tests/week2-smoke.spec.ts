@@ -204,8 +204,8 @@ test('@week2 smoke: hint ladder -> escalate -> add/update note -> textbook evide
     return bodyText.includes('Help with') || bodyText.includes('Note:') || bodyText.includes('SELECT');
   }, { timeout: 10000 }).toBe(true);
   // Verify provenance section exists
-  await page.locator('summary').first().click();
-  await expect(page.getByText(/Retrieved sources|Provenance|Sources/)).toBeVisible();
+  await page.locator('summary').filter({ hasText: 'Provenance' }).click();
+  await expect(page.getByTestId('provenance-retrieved-sources')).toBeVisible();
 });
 
 test('@week2 textbook provenance readability: merged source IDs and PDF citations are compact', async ({ page }) => {
