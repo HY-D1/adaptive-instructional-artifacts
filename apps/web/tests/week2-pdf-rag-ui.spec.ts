@@ -2,9 +2,14 @@ import { expect, Locator, Page, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
   // Clear all storage before each test for isolation
+  // Use sessionStorage guard to prevent clearing on page.reload() during the test
   await page.addInitScript(() => {
-    window.localStorage.clear();
-    window.sessionStorage.clear();
+    const beforeEachKey = '__week2_pdf_rag_beforeeach_done__';
+    if (!window.sessionStorage.getItem(beforeEachKey)) {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+      window.sessionStorage.setItem(beforeEachKey, 'true');
+    }
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
   });
 });
