@@ -7,54 +7,24 @@ An intelligent SQL learning environment that adapts to your mistakes, providing 
 ![Vite](https://img.shields.io/badge/Vite-6.3-646CFF)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-## 🎯 What It Does
-
-SQL-Adapt is a research prototype for adaptive SQL instruction:
+## 🎯 Features
 
 - **Practice** SQL problems with immediate feedback
 - **Get Hints** - 3-level progressive hint system (HintWise)
+- **View Sources** - See PDF passages used to generate hints
 - **Auto-Escalate** to explanations when hints aren't enough
 - **Build Your Textbook** - automatically generated notes from your struggles
-- **Track Coverage** - visual concept mastery dashboard
-- **Research Mode** - policy comparison and interaction analysis
+- **Upload PDFs** - Import reference materials for personalized hints
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
-- **Node.js** 18+ and **npm**
-- **Git**
-
-### Installation
-
-#### macOS
-
 ```bash
-# Clone repository
+# Clone and install
 git clone <repo-url>
 cd adaptive-instructional-artifacts
-
-# Install dependencies
 npm install
 
-# Install Playwright browsers (for testing)
-npx playwright install chromium
-
-# Start development server
-npm run dev
-```
-
-#### Windows
-
-```powershell
-# Clone repository
-git clone <repo-url>
-cd adaptive-instructional-artifacts
-
-# Install dependencies
-npm install
-
-# Install Playwright browsers (for testing)
+# Install Playwright browsers for testing
 npx playwright install chromium
 
 # Start development server
@@ -63,59 +33,40 @@ npm run dev
 
 Open [http://localhost:4173](http://localhost:4173) in your browser.
 
-## 🏗️ Interface Hierarchy
+## 📁 Project Structure
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    RootLayout (Navigation)                  │
-├──────────────┬──────────────────────────────┬───────────────┤
-│   Practice   │         My Textbook          │    Research   │
-│      /       │           /textbook          │   /research   │
-├──────────────┴──────────────────────────────┴───────────────┤
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │              LearningInterface                      │   │
-│  │  ┌───────────────┐    ┌─────────────────────────┐  │   │
-│  │  │  SQLEditor    │    │      HintSystem         │  │   │
-│  │  │  (Monaco)     │    │  ┌───────────────────┐  │  │   │
-│  │  │               │    │  │  Hint Ladder 1-3  │  │  │   │
-│  │  │  ┌─────────┐  │    │  │  → Escalation     │  │  │   │
-│  │  │  │ Schema  │  │    │  │  → Explanation    │  │  │   │
-│  │  │  │ Results │  │    │  └───────────────────┘  │  │   │
-│  │  │  └─────────┘  │    └─────────────────────────┘  │   │
-│  │  └───────────────┘                                 │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │                 TextbookPage                        │   │
-│  │         (AdaptiveTextbook + Notes)                  │   │
-│  └─────────────────────────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │              ResearchDashboard                      │   │
-│  │  ┌───────────┐ ┌───────────┐ ┌─────────────────┐   │   │
-│  │  │  Stats    │ │  Charts   │ │  Export/Import  │   │   │
-│  │  └───────────┘ └───────────┘ └─────────────────┘   │   │
-│  └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
+apps/web/
+├── src/
+│   ├── components/      # UI components (HintSystem, AdaptiveTextbook, etc.)
+│   ├── pages/           # Route pages (Practice, Textbook, Research)
+│   ├── lib/             # Business logic (storage, retrieval-bundle, PDF processing)
+│   └── data/            # SQL problems & SQL-Engage dataset
+└── tests/               # Playwright E2E tests
+
+scripts/                 # Utility scripts (PDF indexing, analysis)
+docs/                    # Documentation
+dist/                    # Build outputs (PDF storage, index)
 ```
 
-## 📦 Project Structure
+## 📖 User Guide
 
-```
-.
-├── apps/web/               # Main React application
-│   ├── src/
-│   │   ├── components/     # UI components
-│   │   ├── pages/          # Route pages
-│   │   ├── lib/            # Business logic
-│   │   └── data/           # SQL problems & datasets
-│   └── tests/              # Playwright E2E tests
-├── scripts/                # Utility scripts
-├── docs/                   # Documentation
-└── dist/                   # Build outputs
-```
+### Practice Mode
+1. Write SQL queries in the editor
+2. Run queries to get immediate feedback
+3. Request hints when stuck (up to 3 levels)
+4. Click **"View source passages"** to see which PDF content informed the hint
+5. Escalate to explanations for deeper understanding
+
+### My Textbook
+- Automatically generated notes from your learning sessions
+- Provenance tracking - see which sources contributed to each note
+- Concept coverage visualization
+
+### Research Dashboard
+- Upload PDFs directly to build a retrieval index
+- Track learning analytics and progress
+- Export/Import learning data
 
 ## 🧪 Testing
 
@@ -123,38 +74,18 @@ Open [http://localhost:4173](http://localhost:4173) in your browser.
 # Run all E2E tests
 npm run test:e2e
 
-# Run Week 2 smoke tests only
-npm run test:e2e:week2
+# Run specific test suites
+npx playwright test apps/web/tests/week2-hint-ladder.spec.ts
+npx playwright test apps/web/tests/pdf-upload.spec.ts
+npx playwright test apps/web/tests/hint-source-passages.spec.ts
 
 # Run with UI
 npm run test:e2e:ui
 ```
 
-## 🤖 Optional: Local LLM Setup (Ollama)
-
-For live explanation generation:
-
-**macOS:**
-```bash
-brew install ollama
-brew services start ollama
-ollama pull qwen2.5:1.5b-instruct
-```
-
-**Windows:**
-```powershell
-winget install Ollama.Ollama
-ollama serve
-ollama pull qwen2.5:1.5b-instruct
-```
-
-*If Ollama is not running, the app falls back to deterministic content generation.*
-
 ## 📚 Documentation
 
 - [docs/README.md](docs/README.md) - Documentation index
-- [docs/week2_progress.md](docs/week2_progress.md) - Week 2 implementation details
-- [docs/week2-demo.md](docs/week2-demo.md) - Demo walkthrough
 
 ## 🛠️ Technology Stack
 
@@ -165,21 +96,15 @@ ollama pull qwen2.5:1.5b-instruct
 | **UI Components** | Radix UI + shadcn/ui |
 | **SQL Engine** | sql.js (SQLite WASM) |
 | **Editor** | Monaco Editor |
-| **Charts** | Recharts |
 | **Testing** | Playwright |
-| **LLM** | Ollama (local) |
+| **PDF Processing** | pdftotext + custom chunker |
 
 ## 🔒 Security
 
-- No API keys committed
-- Local-only processing (no external APIs)
+- No API keys required
+- Local-only processing
 - SQL execution in WebAssembly sandbox
-- XSS protection via DOMPurify
 
 ## 📄 License
 
 MIT License - see [LICENSE](LICENSE)
-
----
-
-**Research Project**: Adaptive Instructional Artifacts for SQL Learning
