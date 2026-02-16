@@ -54,23 +54,17 @@ test.describe('@week2 pdf-rag ui', () => {
   test('imported index contributes chunk/page provenance in generated note', async ({ page }) => {
     // Track chunk IDs for verification
     const expectedChunkIds = ['chunk-1', 'chunk-2', 'chunk-3'];
-    // Use a session-based reset key to ensure localStorage is only cleared once
-    // This allows the PDF index to persist across page reloads during the test
-    await page.addInitScript(() => {
-      const resetKey = '__week2_pdf_rag_reset_done__';
-      if (!window.sessionStorage.getItem(resetKey)) {
-        window.localStorage.clear();
-        window.sessionStorage.clear();
-        window.sessionStorage.setItem(resetKey, 'true');
-      }
+
+    // Navigate to Research page first (storage already cleared by guarded beforeEach)
+    await page.goto('/research', { timeout: 30000 });
+    await expect(page).toHaveURL(/\/research/, { timeout: 10000 });
+
+    // Set up post-navigation state (does not clear storage, only sets flags)
+    await page.evaluate(() => {
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
       // Explicitly ensure replay mode is OFF - this test needs real LLM generation
       window.localStorage.removeItem('sql-learning-policy-replay-mode');
     });
-
-    // Navigate to Research page first
-    await page.goto('/research', { timeout: 30000 });
-    await expect(page).toHaveURL(/\/research/, { timeout: 10000 });
 
     const pdfIndexPayload = {
       indexId: 'pdf-index-synthetic-v1',
