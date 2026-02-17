@@ -6,7 +6,7 @@
 |-----------|--------|------|
 | Week 2 MVP | ✅ Complete | 2026-02-16 |
 | Build Gate | ✅ Pass | dist/app/ ready |
-| E2E Tests | ✅ 140 tests | All @week2 tagged |
+| E2E Tests | ✅ 140 tests | All @weekly tagged |
 | Demo Artifacts | ✅ Generated | dist/week2-demo/ |
 | Documentation | ✅ Consolidated | 3 canonical files + AGENTS.md |
 | Deployment | 📋 Local only | No CI/CD yet |
@@ -29,9 +29,9 @@ npm run dev                      # Start dev server
 npm run build                    # Production build → dist/app/
 
 # Testing
-npm run test:e2e:week2          # Run 140 Week 2 E2E tests
-npm run demo:week2              # Generate demo artifacts
-npm run verify:week2            # Full verification gate
+npm run test:e2e:weekly          # Run 140 Week 2 E2E tests
+npm run demo:weekly              # Generate demo artifacts
+npm run verify:weekly            # Full verification gate
 
 # Data/Index
 npm run pdf:index               # Build PDF search index
@@ -48,7 +48,7 @@ npm run replay:gate             # Verify replay checksums
 When adding/modifying any feature, you **MUST**:
 
 1. **Add tests for the new feature** in `apps/web/tests/`
-2. **Tag with `@week2`** for Week 2 scope features
+2. **Tag with `@weekly`** for Week 2 scope features
 3. **Cover these cases**:
    - Happy path (normal usage)
    - Edge cases (empty input, boundary values)
@@ -68,7 +68,7 @@ critical-bugs-fixed.spec.ts      # Regression tests
 ```typescript
 import { expect, test } from '@playwright/test';
 
-test.describe('@week2 Feature Name', () => {
+test.describe('@weekly Feature Name', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
   });
@@ -137,8 +137,8 @@ Refs: week2-progress.md
 
 ```bash
 npm run build                    # Must pass
-npm run test:e2e:week2          # Should pass (or note known failures)
-npm run demo:week2              # Artifacts generated
+npm run test:e2e:weekly          # Should pass (or note known failures)
+npm run demo:weekly              # Artifacts generated
 ```
 
 ---
@@ -336,7 +336,7 @@ When chat context is compacted with `/compact`:
 2. Identify next task from "Next Steps" section
 3. **Write/update tests first** (TDD approach)
 4. Implement feature
-5. Run verification: `npm run verify:week2`
+5. Run verification: `npm run verify:weekly`
 6. **Update progress docs** (REQUIRED — see below)
 7. Commit with clean message
 
@@ -365,7 +365,7 @@ After every task/feature/fix:
 
 ### Before Asking for Help
 
-- Run: `npm run build && npm run test:e2e:week2`
+- Run: `npm run build && npm run test:e2e:weekly`
 - Check: `docs/week2_progress.md` for known issues
 - Check: This file for current status
 - Note: Specific test failures with error messages
