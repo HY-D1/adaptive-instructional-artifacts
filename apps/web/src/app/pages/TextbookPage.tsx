@@ -5,7 +5,7 @@ import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { Skeleton } from '../components/ui/skeleton';
 import { ArrowLeft, Search, Filter, BookOpen, X, Clock, Tag } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -203,8 +203,7 @@ export function TextbookPage() {
   }
 
   return (
-    <TooltipProvider delayDuration={100}>
-      <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
         <div className="border-b bg-white">
           <div className="container mx-auto px-4 py-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -242,7 +241,7 @@ export function TextbookPage() {
           </div>
         </div>
 
-        <div className="container mx-auto px-4 py-6 h-[calc(100vh-120px)] flex flex-col gap-4">
+        <div className="container mx-auto px-4 py-6 flex-1 min-h-0 flex flex-col gap-4">
           <Card className="p-3">
             <p className="text-xs text-gray-700">
               Units are ordered by concept prerequisites, with misconception and spaced-review insights derived from your trace evidence.
@@ -419,7 +418,7 @@ export function TextbookPage() {
                         <span className="font-medium">{interaction.problemId}</span>
                         <span className="text-gray-400">•</span>
                         <Badge variant="secondary" className="text-[10px]">
-                          {interaction.eventType.replace(/_/g, ' ')}
+                          {interaction.eventType.replace(new RegExp('_', 'g'), ' ')}
                         </Badge>
                         {interaction.successful && (
                           <Badge variant="outline" className="text-[10px] text-green-600 border-green-200">
@@ -435,6 +434,5 @@ export function TextbookPage() {
           </Card>
         </div>
       </div>
-    </TooltipProvider>
   );
 }

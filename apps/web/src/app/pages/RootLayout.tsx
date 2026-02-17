@@ -135,7 +135,7 @@ export function RootLayout() {
                       <Menu className="size-5" />
                     </Button>
                   </SheetTrigger>
-                  <SheetContent side="right" className="w-[280px] sm:w-[350px]">
+                  <SheetContent side="right" className="w-[85vw] max-w-[350px]">
                     <div className="flex flex-col h-full">
                       <div className="flex items-center justify-between py-4 border-b">
                         <span className="font-bold text-lg">Menu</span>

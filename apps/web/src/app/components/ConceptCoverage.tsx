@@ -1,7 +1,7 @@
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { Skeleton } from './ui/skeleton';
 import { 
   CheckCircle2, 
@@ -221,8 +221,7 @@ export function ConceptCoverage({ learnerId }: ConceptCoverageProps) {
   )).slice(0, 3);
 
   return (
-    <TooltipProvider delayDuration={100}>
-      <Card className="p-4">
+    <Card className="p-4">
         <div className="space-y-4">
           {/* Header with overall progress */}
           <div>
@@ -457,6 +456,5 @@ export function ConceptCoverage({ learnerId }: ConceptCoverageProps) {
           </div>
         </div>
       </Card>
-    </TooltipProvider>
   );
 }
