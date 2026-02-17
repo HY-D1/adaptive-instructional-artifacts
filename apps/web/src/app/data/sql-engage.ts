@@ -107,10 +107,46 @@ function parseCsvLine(line: string): string[] {
 }
 
 function parseSqlEngageCsv(csv: string): SqlEngageRecord[] {
-  const lines = csv
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(Boolean);
+  // Parse CSV handling newlines within quoted fields
+  const lines: string[] = [];
+  let currentLine = '';
+  let inQuotes = false;
+  
+  for (let i = 0; i < csv.length; i++) {
+    const ch = csv[i];
+    const next = csv[i + 1];
+    
+    // Handle escaped quotes ("") within quoted fields
+    if (ch === '"' && inQuotes && next === '"') {
+      currentLine += '"';
+      i += 1; // Skip next quote
+      continue;
+    }
+    
+    // Toggle quote state
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      currentLine += ch;
+      continue;
+    }
+    
+    // Only split on newlines outside of quotes
+    if ((ch === '\n' || (ch === '\r' && next === '\n')) && !inQuotes) {
+      if (ch === '\r') i += 1; // Skip \n in \r\n
+      if (currentLine.trim()) {
+        lines.push(currentLine.trim());
+      }
+      currentLine = '';
+      continue;
+    }
+    
+    currentLine += ch;
+  }
+  
+  // Don't forget the last line
+  if (currentLine.trim()) {
+    lines.push(currentLine.trim());
+  }
 
   if (lines.length === 0) return [];
 

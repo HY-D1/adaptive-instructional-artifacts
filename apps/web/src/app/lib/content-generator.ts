@@ -11,7 +11,6 @@ import { generateWithOllama, OLLAMA_MODEL } from './llm-client';
 import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
 import { renderPrompt, TemplateId } from '../prompts/templates';
 import { storage } from './storage';
-import DOMPurify from 'dompurify';
 
 export type GenerateUnitOptions = {
   learnerId: string;
@@ -156,39 +155,6 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
       generationTimeMs: Math.round(performance.now() - startTime)
     };
   }
-
-  // REPLAY MODE BYPASSED FOR DEMO - Force LLM generation
-  // const replayMode = storage.getPolicyReplayMode();
-  // if (replayMode) {
-  //   const parseTelemetry: TemplateParseTelemetry = {
-  //     status: 'not_attempted',
-  //     attempts: 0,
-  //     rawLength: 0,
-  //     failureReason: 'replay_mode'
-  //   };
-  //   const fallbackReason: FallbackReason = 'replay_mode';
-  //   const fallback = buildFallbackUnit(options, model, params, inputHash, fallbackReason, parseTelemetry);
-  //   saveCache({
-  //     cacheKey,
-  //     learnerId: options.learnerId,
-  //     templateId: options.templateId,
-  //     inputHash,
-  //     unit: fallback,
-  //     createdAt: Date.now()
-  //   });
-  //
-  //   return {
-  //     unit: fallback,
-  //     inputHash,
-  //     cacheKey,
-  //     fromCache: false,
-  //     usedFallback: true,
-  //     fallbackReason,
-  //     model,
-  //     params,
-  //     parseTelemetry
-  //   };
-  // }
 
   const prompt = renderPrompt(options.templateId, stableStringify(options.bundle));
 
@@ -448,8 +414,10 @@ function buildUnitFromStructuredOutput(
     `Common pitfall: ${output.common_pitfall || 'Not found in provided sources.'}`
   ].join('\n');
 
-  // Sanitize markdown content to prevent XSS
-  const sanitizedContent = DOMPurify.sanitize(markdown);
+  // Note: DOMPurify should be applied to HTML output, not markdown.
+  // Markdown itself doesn't execute JavaScript. Sanitization happens at render time
+  // when markdown is converted to HTML in the TextbookPage component.
+  const content = markdown;
 
   const genericTitle = `Help with ${options.bundle.problemTitle}`;
   const title = output.title?.trim() || genericTitle;
@@ -462,7 +430,7 @@ function buildUnitFromStructuredOutput(
     conceptId: options.bundle.conceptCandidates[0]?.id || 'select-basic',
     conceptIds: options.bundle.conceptCandidates.map(c => c.id),
     title,
-    content: sanitizedContent,
+    content,
     prerequisites: [],
     addedTimestamp: Date.now(),
     sourceInteractionIds: Array.from(new Set(options.triggerInteractionIds)),
@@ -521,8 +489,10 @@ function buildFallbackUnit(
     '3. If schema details are missing, use only the provided schema text.'
   ].join('\n');
 
-  // Sanitize content to prevent XSS
-  const sanitizedContent = DOMPurify.sanitize(content);
+  // Note: DOMPurify should be applied to HTML output, not markdown.
+  // Markdown itself doesn't execute JavaScript. Sanitization happens at render time
+  // when markdown is converted to HTML in the TextbookPage component.
+  const fallbackContent = content;
 
   return {
     id: `unit-${options.templateId}-${inputHash}`,
@@ -532,7 +502,7 @@ function buildFallbackUnit(
     conceptId: concept?.id || 'select-basic',
     conceptIds: options.bundle.conceptCandidates.map(c => c.id),
     title: `Help with ${options.bundle.problemTitle}`,
-    content: sanitizedContent,
+    content: fallbackContent,
     prerequisites: [],
     addedTimestamp: Date.now(),
     sourceInteractionIds: Array.from(new Set(options.triggerInteractionIds)),

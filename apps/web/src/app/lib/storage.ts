@@ -413,8 +413,8 @@ class StorageManager {
   // Learner profiles with optimistic locking to prevent race conditions
   saveProfile(profile: LearnerProfile) {
     // Re-read profiles from storage each time to minimize race condition window
-    const profiles = this.getAllProfiles();
-    const index = profiles.findIndex(p => p.id === profile.id);
+    let profiles = this.getAllProfiles();
+    let index = profiles.findIndex(p => p.id === profile.id);
     
     // Get existing version or start at 0
     const existingVersion = index >= 0 ? (profiles[index].version || 0) : 0;
@@ -427,7 +427,6 @@ class StorageManager {
     
     if (index >= 0 && incomingVersion < existingVersion) {
       // Race condition detected: merge with existing data instead of overwriting
-      const existing = profiles[index];
       const existingProfile = this.getProfile(profile.id);
       
       if (existingProfile) {
@@ -454,10 +453,16 @@ class StorageManager {
       }
     }
     
+    // Re-read profiles right before writing to minimize race condition window
+    // This is a best-effort approach since localStorage is not atomic
+    profiles = this.getAllProfiles();
+    index = profiles.findIndex(p => p.id === profile.id);
+    const currentVersion = index >= 0 ? (profiles[index].version || 0) : 0;
+    
     // Convert Sets and Maps to arrays for storage
     const serializable = {
       ...profile,
-      version: existingVersion + 1, // Increment version for optimistic locking
+      version: currentVersion + 1, // Always increment from current storage version
       currentStrategy: this.normalizeStrategy(profile.currentStrategy),
       conceptsCovered: Array.from(mergedConceptsCovered),
       conceptCoverageEvidence: Array.from(mergedEvidence.entries()),
@@ -636,6 +641,12 @@ class StorageManager {
         ...(existing.updatedSessionIds || []),
         activeSessionId
       ]));
+      // BUG FIX: Merge conceptIds array to preserve all concepts
+      if (unit.conceptIds && unit.conceptIds.length > 0) {
+        const existingConceptIds = existing.conceptIds || [existing.conceptId];
+        const mergedConceptIds = Array.from(new Set([...existingConceptIds, ...unit.conceptIds]));
+        existing.conceptIds = mergedConceptIds;
+      }
 
       // Use safeSetItem for quota handling
       const result = this.safeSetItem(this.TEXTBOOK_KEY, JSON.stringify(textbooks));
@@ -720,11 +731,6 @@ class StorageManager {
     const createdAt = createdAtCandidates.length > 0
       ? Math.min(...createdAtCandidates)
       : Date.now();
-    const retrievedPdfCitations = this.mergePdfCitations(
-      existing?.retrievedPdfCitations,
-      incoming?.retrievedPdfCitations
-    );
-
     const mergedPdfCitations = this.mergePdfCitations(
       existing?.retrievedPdfCitations,
       incoming?.retrievedPdfCitations
@@ -750,7 +756,9 @@ class StorageManager {
         const rawPage = Number(citation.page);
         // Fix: Default to page 1 instead of dropping citations with invalid pages
         const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
-        const score = Number.isFinite(Number(citation.score)) ? Number(citation.score) : 0;
+        // Fix: Ensure score is a valid number (not NaN)
+        const rawScore = Number(citation.score);
+        const score = Number.isFinite(rawScore) ? rawScore : 0;
         const docId = this.asNonEmptyString(citation.docId)
           || this.asNonEmptyString(citation.chunkId.split(':')[0])
           || 'legacy-doc';

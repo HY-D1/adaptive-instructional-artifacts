@@ -157,7 +157,10 @@ export function LearningInterface() {
     setSubtypeOverride('auto');
 
     const activeSessionId = storage.getActiveSessionId();
-    const belongsToLearner = activeSessionId.startsWith(`session-${learnerId}-`);
+    // Validate session belongs to current learner using exact pattern match
+    const expectedPrefix = `session-${learnerId}-`;
+    const belongsToLearner = activeSessionId.startsWith(expectedPrefix) && 
+      activeSessionId.length > expectedPrefix.length;
     const newSessionId = belongsToLearner
       ? activeSessionId
       : storage.startSession(learnerId);

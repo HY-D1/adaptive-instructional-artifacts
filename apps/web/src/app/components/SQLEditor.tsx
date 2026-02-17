@@ -70,6 +70,11 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
     return () => {
       // Dispose Monaco editor instance on unmount
       if (editorRef.current) {
+        // Remove all event listeners before disposal to prevent memory leaks
+        const model = editorRef.current.getModel();
+        if (model) {
+          model.dispose();
+        }
         editorRef.current.dispose();
         editorRef.current = null;
       }

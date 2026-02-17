@@ -58,7 +58,8 @@ export function HintSystem({
   const canonicalOverrideSubtype = knownSubtypeOverride
     ? canonicalizeSqlEngageSubtype(knownSubtypeOverride)
     : undefined;
-  const isCanonicalOverrideActive = isSubtypeOverrideActive && Boolean(canonicalOverrideSubtype);
+  // Simplified: override is active when we have a valid canonical subtype from instructor mode
+  const isCanonicalOverrideActive = Boolean(canonicalOverrideSubtype);
 
   const resetHintFlow = () => {
     setHints([]);
@@ -66,14 +67,22 @@ export function HintSystem({
     setExpandedHintIndex(null);
     setShowExplanation(false);
     setActiveHintSubtype(null);
+    // Reset refs to ensure clean state for new problem
+    helpFlowKeyRef.current = '';
+    nextHelpRequestIndexRef.current = 1;
+    emittedHelpEventKeysRef.current = new Set();
+    helpEventSequenceRef.current = 0;
+    isProcessingHintRef.current = false;
   };
 
   useEffect(() => {
     resetHintFlow();
+    // Reset the override tracking ref when problem/learner/session changes
+    prevOverrideRef.current = null;
   }, [learnerId, problemId, sessionId]);
 
-  // BUG FIX #3: Only reset hint flow if subtype actually changed AND problem changed
-  // Track previous override to detect actual changes
+  // BUG FIX #3: Only reset hint flow if subtype override changed on the SAME problem
+  // This handles instructor mode when error subtype is manually changed
   const prevOverrideRef = useRef<{ subtype: string | undefined; problemId: string } | null>(null);
   
   useEffect(() => {
@@ -81,8 +90,9 @@ export function HintSystem({
     const prev = prevOverrideRef.current;
     
     // Only reset if:
-    // 1. We had a previous override with a different subtype AND we're on a different problem, OR
-    // 2. The override state changed from inactive to active with a different subtype on same problem
+    // - We had a previous override value (not initial mount)
+    // - We're still on the same problem
+    // - The subtype override value actually changed
     const shouldReset = prev !== null && 
       prev.problemId === problemId &&
       prev.subtype !== currentOverride;
@@ -207,7 +217,7 @@ export function HintSystem({
         setShowExplanation(true);
       }
     }
-  }, [problemId, learnerId, sessionId]); // Only re-run when problem/learner/session changes
+  }, [problemId, learnerId, sessionId, recentInteractions]); // Include recentInteractions to avoid stale closure
 
   /**
    * Get the hint selection for a specific help request index.

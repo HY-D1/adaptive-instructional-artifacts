@@ -224,6 +224,11 @@ function findTopPdfPassages(
     .filter(Boolean)
     .join(' ');
 
+  // Guard against empty query
+  if (!query) {
+    return [];
+  }
+
   const chunks = retrievePdfChunks(query, topK);
   
   // Deduplicate chunks by chunkId, keeping the highest score

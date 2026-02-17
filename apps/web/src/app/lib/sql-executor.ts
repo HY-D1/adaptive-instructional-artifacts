@@ -34,7 +34,7 @@ function valuesEqual(actual: unknown, expected: unknown): boolean {
       return actualNum === expectedNum;
     }
     // Use epsilon for floating point comparison
-    return Math.abs(actualNum - expectedNum) <= FLOAT_EPSILON;
+    return Math.abs(actualNum - expectedNum) < FLOAT_EPSILON;
   }
 
   // Fall back to string normalization
@@ -74,18 +74,72 @@ export class SQLExecutor {
   private db: Database | null = null;
 
   /**
-   * SQL comment removal regex patterns
-   * - Single-line comments: -- comment
+   * SQL comment removal
+   * - Single-line comments: -- comment (but not inside string literals)
    * - Multi-line comments: /* comment *\/
    */
   private stripComments(sql: string): string {
-    return sql
-      // Remove multi-line comments /* ... */
-      .replace(/\/\*[\s\S]*?\*\//g, '')
-      // Remove single-line comments -- ...
-      .replace(/--[^\n]*\n?/g, '\n')
-      // Clean up extra whitespace
-      .trim();
+    let result = '';
+    let i = 0;
+    
+    while (i < sql.length) {
+      // Check for string literals
+      if (sql[i] === "'" || sql[i] === '"') {
+        const quote = sql[i];
+        result += sql[i];
+        i++;
+        // Copy everything until closing quote (handling escaped quotes)
+        while (i < sql.length) {
+          if (sql[i] === quote) {
+            // Check for escaped quote (e.g., '')
+            if (i + 1 < sql.length && sql[i + 1] === quote) {
+              result += sql[i];
+              i++;
+            } else {
+              break;
+            }
+          }
+          result += sql[i];
+          i++;
+        }
+        if (i < sql.length) {
+          result += sql[i]; // closing quote
+          i++;
+        }
+        continue;
+      }
+      
+      // Check for multi-line comment start
+      if (sql[i] === '/' && i + 1 < sql.length && sql[i + 1] === '*') {
+        // Skip until */
+        i += 2;
+        while (i < sql.length - 1) {
+          if (sql[i] === '*' && sql[i + 1] === '/') {
+            i += 2;
+            result += ' '; // Replace comment with space
+            break;
+          }
+          i++;
+        }
+        continue;
+      }
+      
+      // Check for single-line comment (only if not in string)
+      if (sql[i] === '-' && i + 1 < sql.length && sql[i + 1] === '-') {
+        // Skip until end of line
+        while (i < sql.length && sql[i] !== '\n') {
+          i++;
+        }
+        result += '\n';
+        if (i < sql.length) i++;
+        continue;
+      }
+      
+      result += sql[i];
+      i++;
+    }
+    
+    return result.trim();
   }
 
   async initialize(schema: string) {
