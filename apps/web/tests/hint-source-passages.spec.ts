@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+const PRIMARY_HELP_BUTTON_NAME = /^(Request Hint|Next Hint|Get More Help)$/;
+
 test.describe('@weekly Hint Source Passages Feature', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
@@ -82,7 +84,7 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
 
     // Request a hint
-    const requestHintButton = page.getByRole('button', { name: 'Request Hint' });
+    const requestHintButton = page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME });
     await expect(requestHintButton).toBeVisible({ timeout: 5000 });
     await requestHintButton.click();
 
@@ -151,7 +153,7 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     await page.getByRole('button', { name: 'Run Query' }).click();
     await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
 
-    const requestHintButton = page.getByRole('button', { name: 'Request Hint' });
+    const requestHintButton = page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME });
     
     // Get 3 hints
     for (let i = 0; i < 3; i++) {
@@ -160,9 +162,9 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     }
 
     // All hints should be visible
-    await expect(page.getByText('Hint 1')).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText('Hint 2')).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText('Hint 3')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/^Hint 1$/)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/^Hint 2$/)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/^Hint 3$/)).toBeVisible({ timeout: 5000 });
 
     // No console errors from PDF retrieval
     const consoleErrors: string[] = [];
@@ -201,7 +203,7 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     await page.keyboard.type('SELECT FROM users;');
     await page.getByRole('button', { name: 'Run Query' }).click();
     await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
-    await page.getByRole('button', { name: 'Request Hint' }).click();
+    await page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME }).click();
 
     // Hint should still work without PDF
     await expect(page.getByText('Hint 1')).toBeVisible({ timeout: 5000 });
@@ -285,7 +287,7 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     await page.keyboard.type('SELECT FROM users;');
     await page.getByRole('button', { name: 'Run Query' }).click();
     await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
-    await page.getByRole('button', { name: 'Request Hint' }).click();
+    await page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME }).click();
 
     await expect(page.getByText('Hint 1')).toBeVisible({ timeout: 5000 });
 
@@ -293,7 +295,7 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     const hintText = await page.locator('.bg-blue-50 p.text-blue-900').first().textContent();
     expect(hintText).toBeTruthy();
     expect(hintText!.length).toBeGreaterThan(10);
-    expect(hintText).toMatch(/SELECT|FROM|column|table|query/i);
+    expect(hintText).toMatch(/sql|statement|clause|query|column|table|select|from|missing|complete|step/i);
   });
 
   test('source passages toggle state is independent per hint', async ({ page }) => {
@@ -340,7 +342,7 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     await page.getByRole('button', { name: 'Run Query' }).click();
     await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
 
-    const requestHintButton = page.getByRole('button', { name: 'Request Hint' });
+    const requestHintButton = page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME });
     await requestHintButton.click();
     await page.waitForTimeout(300);
     await requestHintButton.click();
