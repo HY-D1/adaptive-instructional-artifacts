@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, type Editor as MonacoEditorType } from 're
 import Editor from '@monaco-editor/react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import { Badge } from './ui/badge';
 import { Play, RotateCcw, CheckCircle, XCircle, AlertCircle, Terminal } from 'lucide-react';
 import { SQLExecutor, QueryResult } from '../lib/sql-executor';
@@ -199,8 +199,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
   const parsedError = result?.error ? parseSqlError(result.error) : null;
 
   return (
-    <TooltipProvider delayDuration={100}>
-      <div className="flex flex-col h-full gap-4">
+    <div className="flex flex-col h-full gap-4">
         <Card className="flex-1 overflow-hidden">
           <div className="h-full flex flex-col">
             <div className="flex items-center justify-between p-4 border-b bg-gray-50/50">
@@ -380,6 +379,5 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
           </Card>
         )}
       </div>
-    </TooltipProvider>
   );
 }

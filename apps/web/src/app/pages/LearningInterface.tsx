@@ -3,7 +3,7 @@ import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { Skeleton } from '../components/ui/skeleton';
 import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/SQLEditor';
 import { HintSystem } from '../components/HintSystem';
@@ -663,8 +663,7 @@ export function LearningInterface() {
   }
 
   return (
-    <TooltipProvider delayDuration={100}>
-      <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50">
         <div className="border-b bg-white">
           <div className="container mx-auto px-4 py-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -907,7 +906,7 @@ export function LearningInterface() {
                 </div>
               </Card>
 
-              <div className="h-[500px]">
+              <div className="h-[350px] sm:h-[450px] lg:h-[550px]">
                 <SQLEditor
                   problem={currentProblem}
                   code={sqlDraft}
@@ -998,7 +997,6 @@ export function LearningInterface() {
           </div>
         </div>
       </div>
-    </TooltipProvider>
   );
 }
 
