@@ -143,6 +143,7 @@ export function buildRetrievalBundle(options: {
     {
       subtype: normalizedSubtype,
       problemTitle: problem.title,
+      problemDescription: problem.description,
       conceptNames: conceptCandidates.map((concept) => concept.name)
     },
     pdfTopK
@@ -199,12 +200,27 @@ function findTopPdfPassages(
   input: {
     subtype: string;
     problemTitle: string;
+    problemDescription?: string;
     conceptNames: string[];
   },
   topK: number
 ): RetrievalPdfPassage[] {
-  const query = [input.subtype, input.problemTitle, ...input.conceptNames]
-    .map((value) => value.trim())
+  // Build a more comprehensive query that includes:
+  // 1. Error subtype (e.g., "incomplete query")
+  // 2. Problem title (e.g., "Select All Users")
+  // 3. Problem description if available
+  // 4. Concept names (e.g., "Basic SELECT", "WHERE Clause")
+  // 5. SQL keywords extracted from concepts
+  const sqlKeywords = extractSqlKeywordsFromConcepts(input.conceptNames);
+  
+  const query = [
+    input.subtype,
+    input.problemTitle,
+    input.problemDescription,
+    ...input.conceptNames,
+    ...sqlKeywords
+  ]
+    .map((value) => value?.trim())
     .filter(Boolean)
     .join(' ');
 
@@ -226,4 +242,61 @@ function findTopPdfPassages(
   }
   
   return Array.from(seenChunkIds.values());
+}
+
+/**
+ * Extract SQL keywords from concept names to improve PDF retrieval
+ */
+function extractSqlKeywordsFromConcepts(conceptNames: string[]): string[] {
+  const keywords: string[] = [];
+  
+  for (const name of conceptNames) {
+    const lowerName = name.toLowerCase();
+    
+    // Map concept names to likely SQL keywords in the PDF
+    if (lowerName.includes('select')) {
+      keywords.push('SELECT', 'FROM', 'columns');
+    }
+    if (lowerName.includes('where')) {
+      keywords.push('WHERE', 'condition', 'filter');
+    }
+    if (lowerName.includes('join')) {
+      keywords.push('JOIN', 'INNER JOIN', 'LEFT JOIN', 'ON', 'tables');
+    }
+    if (lowerName.includes('aggregation')) {
+      keywords.push('COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'GROUP BY', 'aggregate');
+    }
+    if (lowerName.includes('order')) {
+      keywords.push('ORDER BY', 'ASC', 'DESC', 'sort');
+    }
+    if (lowerName.includes('subquery')) {
+      keywords.push('subquery', 'nested', 'IN', 'EXISTS');
+    }
+    if (lowerName.includes('insert')) {
+      keywords.push('INSERT INTO', 'VALUES');
+    }
+    if (lowerName.includes('update')) {
+      keywords.push('UPDATE', 'SET');
+    }
+    if (lowerName.includes('delete')) {
+      keywords.push('DELETE FROM');
+    }
+    if (lowerName.includes('window')) {
+      keywords.push('ROW_NUMBER', 'RANK', 'OVER', 'PARTITION BY');
+    }
+    if (lowerName.includes('case')) {
+      keywords.push('CASE', 'WHEN', 'THEN', 'ELSE', 'END');
+    }
+    if (lowerName.includes('null')) {
+      keywords.push('NULL', 'IS NULL', 'COALESCE');
+    }
+    if (lowerName.includes('string')) {
+      keywords.push('UPPER', 'LOWER', 'LENGTH', 'concatenation');
+    }
+    if (lowerName.includes('date')) {
+      keywords.push('date', 'strftime', 'timestamp');
+    }
+  }
+  
+  return [...new Set(keywords)]; // Remove duplicates
 }
