@@ -68,6 +68,31 @@ jq '[.interactions[] | select(.eventType=="hint_view" or .eventType=="explanatio
 
 ## Progress Checkpoint Log
 
+### 2026-02-17T01:10:00-08:00 - UI Collision Cleanup and Layout Fixes
+
+- Current status: `PASS` (Build passes, all 25 critical tests pass)
+- Evidence (build/tests):
+  - `npm run build` -> `PASS` (1.65 MB, no TypeScript errors)
+  - `npm run test:e2e -- apps/web/tests/critical-bugs-fixed.spec.ts` -> `25 passed`
+- Evidence (code changes):
+  - `LearningInterface.tsx` -> Removed nested TooltipProvider (lines 6, 666, 1001)
+  - `TextbookPage.tsx` -> Removed nested TooltipProvider + fixed height calculation
+  - `SQLEditor.tsx` -> Removed nested TooltipProvider + improved disposal cleanup
+  - `ConceptCoverage.tsx` -> Removed nested TooltipProvider
+  - `RootLayout.tsx` -> Fixed mobile menu width: `w-[85vw] max-w-[350px]`
+  - `LearningInterface.tsx` -> Responsive SQLEditor height: `h-[350px] sm:h-[450px] lg:h-[550px]`
+  - `TextbookPage.tsx` -> Flex layout: `flex-1 min-h-0` instead of `calc(100vh-120px)`
+- UI Fixes Applied:
+  - **TooltipProvider Deduplication**: Removed 4 nested providers, kept only RootLayout
+  - **Responsive Heights**: SQLEditor now uses responsive breakpoints
+  - **Flex Layout**: TextbookPage uses proper flexbox instead of hardcoded calc()
+  - **Mobile Menu**: Width now 85vw with max-width constraint
+- Bug Fixes Applied: None (UI refactoring only)
+- Next smallest fix:
+  - Continue Week 3-4 planning: Full replay system, LLM refinements
+
+---
+
 ### 2026-02-14T09:00:00-08:00 - Initial Week 2 Setup
 
 - Current status: `PASS` (Week 2 acceptance gates on latest active export)
@@ -318,5 +343,6 @@ jq '[.interactions[] | select(.eventType=="textbook_add") | has("evidenceInterac
 6. ✅ Rename week2 to weekly (test files, scripts, tags)
 7. ✅ Document Week 2 accomplishments in progress.md
 8. ✅ **BUG FIX AUDIT: Fixed 17 bugs (5 Critical + 3 High + 4 Medium + 5 Low)**
-9. 📋 Week 3-4: Full replay system, LLM refinements
-10. 📋 Week 5-6: Comparative analysis, publication figures
+9. ✅ **UI COLLISION CLEANUP: Fixed TooltipProvider nesting, responsive heights, mobile layout**
+10. 📋 Week 3-4: Full replay system, LLM refinements
+11. 📋 Week 5-6: Comparative analysis, publication figures

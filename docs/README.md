@@ -78,11 +78,11 @@ Dynamic assembly system:
 # Build
 npm run build
 
-# Week 2 E2E tests
-npm run test:e2e:week2
+# Weekly E2E tests
+npm run test:e2e:weekly
 
 # Generate demo artifacts
-npm run demo:week2
+npm run demo:weekly
 
 # Run replay
 npm run replay:toy

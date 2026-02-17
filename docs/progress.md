@@ -2,7 +2,7 @@
 
 **Project**: Adaptive Instructional Artifacts (SQL)  
 **Vision**: Automatic adaptive textbook that assembles instructional content dynamically from learner interactions  
-**Last Updated**: 2026-02-16T16:20:00-08:00
+**Last Updated**: 2026-02-17T01:10:00-08:00
 
 ---
 
@@ -287,8 +287,9 @@ npm run llm:health:capture
 ### Key Commits
 
 ```
-[PENDING] fix: comprehensive bug audit - 17 bugs fixed across all severity levels
-[PENDING] refactor: extract shared test helpers to reduce code duplication
+✅ fix: comprehensive bug audit — 17 bugs fixed across all severity levels
+✅ refactor: extract shared test helpers to reduce code duplication
+✅ fix: UI collision cleanup — TooltipProvider deduplication, responsive heights
 306cb4a docs(AGENTS): add progress update policy and docs reference
 e551ff7 docs: add AGENTS.md with project status and guidelines  
 17391a7 feat: improve PDF retrieval with SQL keywords
@@ -310,6 +311,11 @@ d2eb3ba feat: add expandable PDF source passages to hints
   - 3 High: Monaco disposal, SQL comment parsing, hint flow reset
   - 4 Medium: CSV newlines, PDF citation NaN, hint refs reset, conceptIds merge
   - 5 Low: Code duplication, simplification, dead code removal, test helpers
+- **UI Improvements 2026-02-17**: Fixed layout and nesting issues
+  - TooltipProvider deduplication: Removed 4 nested providers (kept only RootLayout)
+  - Responsive SQLEditor height: 350px/450px/550px for mobile/tablet/desktop
+  - TextbookPage flex layout: Replaced calc(100vh-120px) with flex-1
+  - Mobile menu width: Changed to 85vw with max-w-[350px]
 - Problem validation: All 32 problems now have `expectedResult` arrays
 - Export policy: `weekly-export-sanitize-v1` with session sanitization
 - Error boundaries: Added to prevent total app crashes
