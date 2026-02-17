@@ -15,6 +15,7 @@
 
 | Commit | Description |
 |--------|-------------|
+| `[PENDING]` | fix: comprehensive bug audit - 17 bugs fixed (5 critical + 3 high + 4 medium + 5 low) |
 | `17391a7` | Improve PDF retrieval with SQL keywords |
 | `1a3b268` | Persist hints when navigating between pages |
 | `16e3a5c` | Track problem correctness and show solved status |
@@ -93,14 +94,17 @@ test.describe('@weekly Feature Name', () => {
 
 | Test File | Count | Coverage |
 |-----------|-------|----------|
-| week2-hint-ladder.spec.ts | 20 | Hint escalation L1→L2→L3→Explanation |
-| week2-textbook.spec.ts | 24 | My Notes generation, concept tracking |
-| week2-concept-coverage.spec.ts | 24 | Concept map UI, mastery tracking |
-| week2-policy-comparison.spec.ts | 14 | A/B policy replay, session export |
-| week2-data-integrity.spec.ts | 46 | Event logging, localStorage, validation |
+| critical-bugs-fixed.spec.ts | 25 | 14 critical bug regression tests |
+| high-priority-bugs-fixed.spec.ts | 29 | 12 high priority bug regression tests |
+| medium-priority-bugs-fixed.spec.ts | 33 | 23 medium priority bug regression tests |
+| weekly-hint-ladder.spec.ts | 20 | Hint escalation L1→L2→L3→Explanation |
+| weekly-textbook.spec.ts | 24 | My Notes generation, concept tracking |
+| weekly-concept-coverage.spec.ts | 24 | Concept map UI, mastery tracking |
+| weekly-policy-comparison.spec.ts | 14 | A/B policy replay, session export |
+| weekly-data-integrity.spec.ts | 46 | Event logging, localStorage, validation |
 | hint-persistence.spec.ts | 4 | Hint state across navigation |
-| week2-*.spec.ts (others) | 8+ | PDF upload, LLM health, smoke tests |
-| **Total** | **140** | — |
+| weekly-*.spec.ts (others) | 8+ | PDF upload, LLM health, smoke tests |
+| **Total** | **140+** | — |
 
 ---
 
@@ -377,6 +381,124 @@ After every task/feature/fix:
 ## ⚠️ CRITICAL RULES
 
 ### 1. Agent Files Stay Out of Git
+
+**AGENTS.md and all agent/LLM files are in `.gitignore` and must NEVER be committed.**
+
+This file (`AGENTS.md`) contains:
+- Temporary context summaries
+- Agent-specific instructions  
+- Working notes not intended for the repo
+
+**If you see this file shown as modified in `git status`, DO NOT commit it.**
+
+### 2. NEVER Auto-Commit — Suggest Only
+
+**I will NEVER run `git commit` automatically.**
+
+When work is ready:
+1. I will show you a **commit suggestion** (message + files)
+2. You review and decide if/what to commit
+3. You run the commit yourself
+
+**Example suggestion format:**
+```bash
+# Suggested commit:
+git add <files>
+git commit -m "type: description
+
+- Change 1
+- Change 2"
+
+# Or run this to see diff first:
+git diff --staged
+```
+
+### 3. Code Style — Match Existing Patterns
+
+**Follow existing code style — match patterns in surrounding code.**
+
+- Read nearby code before writing new code
+- Match indentation, naming conventions, and structure
+- When in doubt, follow the dominant pattern in the file
+- Don't introduce new style without explicit user direction
+
+### 4. Dependencies — Ask First
+
+**Check with user before adding new npm packages.**
+
+- Always ask permission before installing new dependencies
+- Explain why the package is needed
+- Suggest alternatives if applicable
+- Prefer built-in solutions when possible
+
+### 5. Test Data — Never Commit Secrets
+
+**Don't commit real user data or API keys.**
+
+- Use mock/fake data in tests and examples
+- Keep API keys and secrets in environment variables (`.env` files, never committed)
+- Sanitize any data exports before committing
+- If unsure, ask the user
+
+### 6. Parallel Subagent Execution — Divide and Conquer
+
+**Divide large problems into independent sub-parts and run subagents in parallel.**
+
+When facing a large or complex task:
+
+1. **Decompose the Problem**
+   - Break into small, independent sub-tasks
+   - Each sub-task should be solvable without coordination
+   - Avoid dependencies between sub-tasks where possible
+
+2. **Assign to Subagents in Parallel**
+   - Spawn multiple `coder` subagents simultaneously
+   - Give each subagent a single, focused task
+   - Include all necessary context in the prompt
+   - Don't assume subagents can see each other's work
+
+3. **Prevent Collisions**
+   - Ensure subagents work on different files/modules
+   - If working on same file, assign non-overlapping line ranges
+   - Use clear file naming to avoid conflicts
+   - Coordinate through this file (AGENTS.md), not through git
+
+4. **Merge Results**
+   - Collect results from all subagents
+   - Integrate changes sequentially in main context
+   - Verify no conflicts after integration
+   - Run tests to ensure parallel work didn't break anything
+
+**Example pattern:**
+```
+Large Task: Refactor 3 modules
+├── Subagent 1: Refactor module A
+├── Subagent 2: Refactor module B  
+└── Subagent 3: Refactor module C
+     
+↓ (parallel execution)
+     
+Main context: Merge results, run tests
+```
+
+---
+
+*Last updated: 2026-02-16T17:00:00-08:00*
+
+---
+
+## Bug Fix Audit Summary (2026-02-16)
+
+### Severity Breakdown
+
+| Level | Count | Issues Fixed |
+|-------|-------|--------------|
+| 🔴 Critical | 5 | Floating-point epsilon, stale closure, session validation, empty query, race condition |
+| 🟠 High | 3 | Monaco disposal, SQL comment parsing, hint flow reset |
+| 🟡 Medium | 4 | CSV newlines, PDF citation NaN, hint refs reset, conceptIds merge |
+| 🟢 Low | 5 | Duplicate code, simplification, dead code, test helpers |
+| **Total** | **17** | All tests passing (116/116) |
+
 
 **AGENTS.md and all agent/LLM files are in `.gitignore` and must NEVER be committed.**
 
