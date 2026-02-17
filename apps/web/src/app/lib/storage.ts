@@ -28,7 +28,7 @@ import {
  * Local storage manager for interaction traces and learner state
  */
 class StorageManager {
-  private readonly EXPORT_POLICY_VERSION = 'week2-export-sanitize-v1';
+  private readonly EXPORT_POLICY_VERSION = 'weekly-export-sanitize-v1';
   private readonly INTERACTIONS_KEY = 'sql-learning-interactions';
   private readonly PROFILES_KEY = 'sql-learning-profiles';
   private readonly TEXTBOOK_KEY = 'sql-learning-textbook';
