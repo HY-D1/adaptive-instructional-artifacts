@@ -248,7 +248,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
       expect(event.sessionId).toBeDefined();
       expect(event.learnerId).toBeDefined();
       expect(event.timestamp).toBeDefined();
-      expect(event.hintId).toBeDefined();
+      expect(Object.prototype.hasOwnProperty.call(event, 'hintId')).toBeFalsy();
       expect(event.hintText).toBeDefined();
     }
   });
@@ -367,10 +367,8 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     // Verify all required fields exist
     expect(hintEvent.eventType).toBe('hint_view');
     
-    // hintId: format "sql-engage:<subtype>:L<level>:<rowId>"
-    expect(hintEvent.hintId).toBeDefined();
-    expect(typeof hintEvent.hintId).toBe('string');
-    expect(hintEvent.hintId).toMatch(/^sql-engage:.+:L[123]:sql-engage:/);
+    // hintId is intentionally omitted in Week 2 exports/events.
+    expect(Object.prototype.hasOwnProperty.call(hintEvent, 'hintId')).toBeFalsy();
     
     // hintLevel: 1, 2, or 3
     expect(hintEvent.hintLevel).toBeDefined();
@@ -422,7 +420,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     expect(hintEvent.timestamp).toBeGreaterThan(0);
   });
 
-  test('@weekly hint event logging: hintId format validation', async ({ page }) => {
+  test('@weekly hint event logging: hint_view omits hintId across levels', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -437,7 +435,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
       await expect(page.getByText(`Hint ${level}`, { exact: true })).toBeVisible();
       
       const hintEvent = await getLastHintEvent(page);
-      expect(hintEvent.hintId).toMatch(new RegExp(`^sql-engage:.+:L${level}:sql-engage:`));
+      expect(Object.prototype.hasOwnProperty.call(hintEvent, 'hintId')).toBeFalsy();
     }
   });
 

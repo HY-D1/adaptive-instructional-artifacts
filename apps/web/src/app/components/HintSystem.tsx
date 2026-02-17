@@ -161,15 +161,6 @@ export function HintSystem({
       suffix
     );
   };
-  const buildStableHintId = (selection: {
-    sqlEngageSubtype: string;
-    sqlEngageRowId: string;
-    hintLevel: 1 | 2 | 3;
-  }) => {
-    const subtype = selection.sqlEngageSubtype.trim() || 'incomplete query';
-    const rowId = selection.sqlEngageRowId.trim() || 'sql-engage:fallback-synthetic';
-    return `sql-engage:${subtype}:L${selection.hintLevel}:${rowId}`;
-  };
   const buildStableExplanationId = (selection: {
     sqlEngageSubtype: string;
     sqlEngageRowId: string;
@@ -331,7 +322,6 @@ export function HintSystem({
       timestamp: Date.now(),
       eventType: 'hint_view',
       problemId,
-      hintId: buildStableHintId(hintSelection),
       hintText: hintSelection.hintText,
       hintLevel: hintSelection.hintLevel,
       helpRequestIndex: nextHelpRequestIndex,

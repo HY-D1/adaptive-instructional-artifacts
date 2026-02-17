@@ -412,3 +412,297 @@ jq '[.interactions[] | select(.eventType=="textbook_add") | has("evidenceInterac
   - None in this checkpoint (verification-only).
 - Next smallest fix:
   - Review whether `scripts/replay-checksum-gate.mjs` fixture/policy drift is expected, then run `npm run replay:gate:update` if approved.
+
+---
+
+## Week2 Progress
+
+> Migrated from `docs/week2_progress.md` on 2026-02-17T09:18:05-0800.
+
+
+### 2026-02-17T08:34:00-08:00 - Help/Welcome UI audit (pre-fix)
+
+- Current status: `FAIL`
+- Evidence (latest exported session dataset): `dist/weekly-demo/export.json`
+
+```bash
+jq '[.interactions[] | select(.eventType=="hint_view") | .hintLevel] | max' export.json
+# => 3
+
+jq '[.interactions[] | select(.eventType=="hint_view") | has("hintId")] | any' export.json
+# => true
+
+jq '[.interactions[] | has("sessionId") and (.sessionId!="")] | all' export.json
+# => true
+
+jq '[.interactions[] | select(.eventType=="hint_view") |
+      (has("sqlEngageSubtype") and has("sqlEngageRowId") and has("policyVersion")
+       and (.sqlEngageSubtype!="") and (.sqlEngageRowId!="") and (.policyVersion!=""))
+    ] | all' export.json
+# => true
+
+jq '[.interactions[] | select(.eventType=="explanation_view")] | length' export.json
+# => 2
+
+jq '[.interactions[] | select(.eventType=="hint_view" or .eventType=="explanation_view")] | length' export.json
+# => 5
+```
+
+- Gate summary:
+  - 1) max hintLevel = 3: `PASS`
+  - 2) no hintId in hint_view: `FAIL` (found `true`)
+  - 3) all interactions have non-empty sessionId: `PASS`
+  - 4) hint_view has required sqlEngage metadata fields: `PASS`
+  - 5) explanation_view count >= 1: `PASS`
+  - 6) total help requests >= 4: `PASS`
+
+- Next smallest fix:
+  - Diagnose and fix help/welcome UI display regressions where the `Next` icon can become invisible; verify in desktop and mobile breakpoints.
+
+### 2026-02-17T08:42:45-08:00 - Fix welcome/help modal Next icon visibility
+
+- Current status: `FAIL` (Week 2 Gate 2 still failing in latest export; UI display fix is complete)
+- Evidence (what changed):
+  - `/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/src/app/components/WelcomeModal.tsx` -> fixed modal layout so footer remains visible across breakpoints, added stronger Next chevron visibility, and enforced high-contrast primary actions for light/dark modes.
+  - `/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/tests/weekly-welcome-modal.spec.ts` -> added `@weekly` regression tests for mobile footer bounds + dark-mode Next button/icon visibility.
+  - Test: `npx playwright test -c playwright.config.ts apps/web/tests/weekly-welcome-modal.spec.ts` -> `2 passed (2.7s)`.
+  - Build: `npm run build` -> `PASS`.
+
+```bash
+jq '[.interactions[] | select(.eventType=="hint_view") | .hintLevel] | max' export.json
+# => 3
+
+jq '[.interactions[] | select(.eventType=="hint_view") | has("hintId")] | any' export.json
+# => true
+
+jq '[.interactions[] | has("sessionId") and (.sessionId!="")] | all' export.json
+# => true
+
+jq '[.interactions[] | select(.eventType=="hint_view") |
+      (has("sqlEngageSubtype") and has("sqlEngageRowId") and has("policyVersion")
+       and (.sqlEngageSubtype!="") and (.sqlEngageRowId!="") and (.policyVersion!=""))
+    ] | all' export.json
+# => true
+
+jq '[.interactions[] | select(.eventType=="explanation_view")] | length' export.json
+# => 2
+
+jq '[.interactions[] | select(.eventType=="hint_view" or .eventType=="explanation_view")] | length' export.json
+# => 5
+```
+
+- Next smallest fix:
+  - Remove `hintId` from `hint_view` event payload generation, regenerate active-session export, and rerun the Week 2 gate checks.
+
+### 2026-02-17T09:10:20-08:00 - Pre-change checkpoint for hintId removal
+
+- Current status: `FAIL`
+- Evidence (latest exported session dataset): `dist/weekly-demo/export.json`
+
+```bash
+jq '[.interactions[] | select(.eventType=="hint_view") | .hintLevel] | max' export.json
+# => 3
+
+jq '[.interactions[] | select(.eventType=="hint_view") | has("hintId")] | any' export.json
+# => true
+
+jq '[.interactions[] | has("sessionId") and (.sessionId!="")] | all' export.json
+# => true
+
+jq '[.interactions[] | select(.eventType=="hint_view") |
+      (has("sqlEngageSubtype") and has("sqlEngageRowId") and has("policyVersion")
+       and (.sqlEngageSubtype!="") and (.sqlEngageRowId!="") and (.policyVersion!=""))
+    ] | all' export.json
+# => true
+
+jq '[.interactions[] | select(.eventType=="explanation_view")] | length' export.json
+# => 2
+
+jq '[.interactions[] | select(.eventType=="hint_view" or .eventType=="explanation_view")] | length' export.json
+# => 5
+```
+
+- Gate summary:
+  - 1) max hintLevel = 3: `PASS`
+  - 2) no hintId in hint_view: `FAIL`
+  - 3) all interactions have non-empty sessionId: `PASS`
+  - 4) hint_view has required sqlEngage metadata fields: `PASS`
+  - 5) explanation_view count >= 1: `PASS`
+  - 6) total help requests >= 4: `PASS`
+
+- Next smallest fix:
+  - Remove `hintId` from `hint_view` generation/sanitization, regenerate `dist/weekly-demo/export.json`, and re-run all Week 2 gate jq checks.
+
+### 2026-02-17T09:14:39-08:00 - Remove hintId from hint_view and regenerate export
+
+- Current status: `PASS`
+- Evidence (code + regenerated dataset):
+  - `/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/src/app/components/HintSystem.tsx` -> removed `hintId` from `hint_view` event creation.
+  - `/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/src/app/lib/storage.ts` -> removed `hintId` normalization for `hint_view` exports and explicitly deletes legacy `hintId` when present.
+  - `/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/tests/weekly-demo-artifacts.spec.ts` -> now asserts `hint_view` omits `hintId`.
+  - `/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/tests/weekly-hint-ladder.spec.ts` -> updated assertions/tests to enforce omission of `hintId`.
+  - `/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/tests/weekly-data-integrity.spec.ts` -> updated schema checks and fixtures to remove `hintId` from `hint_view` requirements.
+  - `/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/package.json` -> updated `gate:weekly:acceptance` to require `has("hintId") | any == false` for `hint_view`.
+  - Regenerated: `dist/weekly-demo/export.json` (timestamp `2026-02-17 09:13:20`).
+
+```bash
+jq '[.interactions[] | select(.eventType=="hint_view") | .hintLevel] | max' export.json
+# => 3
+
+jq '[.interactions[] | select(.eventType=="hint_view") | has("hintId")] | any' export.json
+# => false
+
+jq '[.interactions[] | has("sessionId") and (.sessionId!="")] | all' export.json
+# => true
+
+jq '[.interactions[] | select(.eventType=="hint_view") |
+      (has("sqlEngageSubtype") and has("sqlEngageRowId") and has("policyVersion")
+       and (.sqlEngageSubtype!="") and (.sqlEngageRowId!="") and (.policyVersion!=""))
+    ] | all' export.json
+# => true
+
+jq '[.interactions[] | select(.eventType=="explanation_view")] | length' export.json
+# => 2
+
+jq '[.interactions[] | select(.eventType=="hint_view" or .eventType=="explanation_view")] | length' export.json
+# => 5
+```
+
+- Validation runs:
+  - `npm run demo:weekly` -> `1 passed` and regenerated `dist/weekly-demo/export.json`.
+  - `npm run gate:weekly:acceptance` -> all checks `true`.
+  - `npx playwright test -c playwright.config.ts apps/web/tests/weekly-hint-ladder.spec.ts -g "all required fields present|omits hintId across levels"` -> `2 passed`.
+  - `npx playwright test -c playwright.config.ts apps/web/tests/weekly-data-integrity.spec.ts -g "hint_view events have all SQL-Engage fields"` -> `1 passed`.
+  - `npm run build` -> `PASS`.
+
+- Next smallest fix:
+  - Run full `npm run test:e2e:weekly` to confirm no other weekly regressions from the `hint_view` schema change.
+
+### 2026-02-17T09:17:37-08:00 - Pre-migration checkpoint to weekly-progress
+
+- Current status: `PASS`
+- Evidence (latest exported session dataset): `dist/weekly-demo/export.json`
+
+```bash
+jq '[.interactions[] | select(.eventType=="hint_view") | .hintLevel] | max' export.json
+# => 3
+
+jq '[.interactions[] | select(.eventType=="hint_view") | has("hintId")] | any' export.json
+# => false
+
+jq '[.interactions[] | has("sessionId") and (.sessionId!="")] | all' export.json
+# => true
+
+jq '[.interactions[] | select(.eventType=="hint_view") |
+      (has("sqlEngageSubtype") and has("sqlEngageRowId") and has("policyVersion")
+       and (.sqlEngageSubtype!="") and (.sqlEngageRowId!="") and (.policyVersion!=""))
+    ] | all' export.json
+# => true
+
+jq '[.interactions[] | select(.eventType=="explanation_view")] | length' export.json
+# => 2
+
+jq '[.interactions[] | select(.eventType=="hint_view" or .eventType=="explanation_view")] | length' export.json
+# => 5
+```
+
+- Next smallest fix:
+  - Migrate this Week 2 checkpoint log into `docs/weekly-progress.md` under a dedicated "Week2 Progress" section.
+
+### 2026-02-17T09:28:39-0800 - Architecture + Bug Audit (No Code Changes)
+
+- Current status: `FAIL` (Week 2 gates pass, but one export integrity bug found in event type normalization)
+- Evidence (gates/tests):
+  - `jq '[.interactions[] | select(.eventType=="hint_view") | .hintLevel] | max' dist/weekly-demo/export.json` -> `3`
+  - `jq '[.interactions[] | select(.eventType=="hint_view") | has("hintId")] | any' dist/weekly-demo/export.json` -> `false`
+  - `jq '[.interactions[] | has("sessionId") and (.sessionId!="")] | all' dist/weekly-demo/export.json` -> `true`
+  - `jq '[.interactions[] | select(.eventType=="hint_view") | (has("sqlEngageSubtype") and has("sqlEngageRowId") and has("policyVersion") and (.sqlEngageSubtype!="") and (.sqlEngageRowId!="") and (.policyVersion!="")) ] | all' dist/weekly-demo/export.json` -> `true`
+  - `jq '[.interactions[] | select(.eventType=="explanation_view")] | length' dist/weekly-demo/export.json` -> `2`
+  - `jq '[.interactions[] | select(.eventType=="hint_view" or .eventType=="explanation_view")] | length' dist/weekly-demo/export.json` -> `5`
+  - `npm run verify:weekly` -> `PASS` (`156 passed` + demo/gates pass)
+- Evidence (bug found):
+  - `apps/web/src/app/types/index.ts` includes `eventType: 'pdf_index_uploaded'`.
+  - `apps/web/src/app/components/ResearchDashboard.tsx` logs `eventType: 'pdf_index_uploaded'` on upload.
+  - `apps/web/src/app/lib/storage.ts` export sanitizer `validEventTypes` omits `'pdf_index_uploaded'`, so those events are normalized to `'execution'` in export.
+- Next smallest fix:
+  - Add `'pdf_index_uploaded'` to `validEventTypes` in `apps/web/src/app/lib/storage.ts` and add a regression test to verify export preserves this event type.
+
+
+### 2026-02-17T09:32:59-0800 - Fix export mislabeling of pdf_index_uploaded
+
+- Current status: `PASS`
+- Evidence (code changes):
+  - `apps/web/src/app/lib/storage.ts:1339` -> Added `'pdf_index_uploaded'` to export sanitizer `validEventTypes` allowlist.
+  - `apps/web/tests/weekly-policy-comparison.spec.ts:553` -> Added regression test `@weekly policy-comparison: export preserves pdf_index_uploaded event type`.
+- Evidence (verification):
+  - `npx playwright test -c playwright.config.ts apps/web/tests/weekly-policy-comparison.spec.ts -g "export preserves pdf_index_uploaded event type"` -> `1 passed`.
+  - `npm run build` -> `PASS`.
+  - `jq '[.interactions[] | select(.eventType=="hint_view") | .hintLevel] | max' dist/weekly-demo/export.json` -> `3`.
+  - `jq '[.interactions[] | select(.eventType=="hint_view") | has("hintId")] | any' dist/weekly-demo/export.json` -> `false`.
+  - `jq '[.interactions[] | has("sessionId") and (.sessionId!="")] | all' dist/weekly-demo/export.json` -> `true`.
+  - `jq '[.interactions[] | select(.eventType=="hint_view") | (has("sqlEngageSubtype") and has("sqlEngageRowId") and has("policyVersion") and (.sqlEngageSubtype!="") and (.sqlEngageRowId!="") and (.policyVersion!="")) ] | all' dist/weekly-demo/export.json` -> `true`.
+  - `jq '[.interactions[] | select(.eventType=="explanation_view")] | length' dist/weekly-demo/export.json` -> `2`.
+  - `jq '[.interactions[] | select(.eventType=="hint_view" or .eventType=="explanation_view")] | length' dist/weekly-demo/export.json` -> `5`.
+- Next smallest fix:
+  - Align Research Dashboard export scope messaging with actual export behavior (time-range label currently implies filtering that export path does not apply).
+
+
+### 2026-02-17T09:35:13-0800 - Clarify export scope label vs time-range filter
+
+- Current status: `PASS`
+- Evidence (code changes):
+  - `apps/web/src/app/components/ResearchDashboard.tsx:795` -> Updated export label copy to: `Export scope: ... Time range filters analytics views only.`
+  - `apps/web/tests/weekly-policy-comparison.spec.ts:1007` -> Added regression assertion that export scope label includes analytics-only note and does not include `filtered to` wording.
+- Evidence (verification):
+  - `npx playwright test -c playwright.config.ts apps/web/tests/weekly-policy-comparison.spec.ts -g "export scope toggle works correctly"` -> `1 passed`.
+  - `npm run build` -> `PASS`.
+  - `jq '[.interactions[] | select(.eventType=="hint_view") | .hintLevel] | max' dist/weekly-demo/export.json` -> `3`.
+  - `jq '[.interactions[] | select(.eventType=="hint_view") | has("hintId")] | any' dist/weekly-demo/export.json` -> `false`.
+  - `jq '[.interactions[] | has("sessionId") and (.sessionId!="")] | all' dist/weekly-demo/export.json` -> `true`.
+  - `jq '[.interactions[] | select(.eventType=="hint_view") | (has("sqlEngageSubtype") and has("sqlEngageRowId") and has("policyVersion") and (.sqlEngageSubtype!="") and (.sqlEngageRowId!="") and (.policyVersion!="")) ] | all' dist/weekly-demo/export.json` -> `true`.
+  - `jq '[.interactions[] | select(.eventType=="explanation_view")] | length' dist/weekly-demo/export.json` -> `2`.
+  - `jq '[.interactions[] | select(.eventType=="hint_view" or .eventType=="explanation_view")] | length' dist/weekly-demo/export.json` -> `5`.
+- Next smallest fix:
+  - Add explicit `aria-label` attributes for icon-only Help/Close buttons in `RootLayout` and `WelcomeModal` to reduce ambiguity on mobile/accessibility surfaces.
+
+
+### 2026-02-17T09:36:59-0800 - Add explicit labels for icon-only Help/Close controls
+
+- Current status: `PASS`
+- Evidence (code changes):
+  - `apps/web/src/app/pages/RootLayout.tsx:115` -> Added `aria-label="Open help and keyboard shortcuts"` to the help button that becomes icon-only on mobile.
+  - `apps/web/src/app/components/WelcomeModal.tsx:127` -> Added `aria-label="Close welcome dialog"` to the icon-only close button.
+  - `apps/web/tests/weekly-welcome-modal.spec.ts:74` -> Added regression test `icon-only controls expose explicit accessible names on mobile`.
+- Evidence (verification):
+  - `npx playwright test -c playwright.config.ts apps/web/tests/weekly-welcome-modal.spec.ts` -> `3 passed`.
+  - `npm run build` -> `PASS`.
+  - `jq '[.interactions[] | select(.eventType=="hint_view") | .hintLevel] | max' dist/weekly-demo/export.json` -> `3`.
+  - `jq '[.interactions[] | select(.eventType=="hint_view") | has("hintId")] | any' dist/weekly-demo/export.json` -> `false`.
+  - `jq '[.interactions[] | has("sessionId") and (.sessionId!="")] | all' dist/weekly-demo/export.json` -> `true`.
+  - `jq '[.interactions[] | select(.eventType=="hint_view") | (has("sqlEngageSubtype") and has("sqlEngageRowId") and has("policyVersion") and (.sqlEngageSubtype!="") and (.sqlEngageRowId!="") and (.policyVersion!="")) ] | all' dist/weekly-demo/export.json` -> `true`.
+  - `jq '[.interactions[] | select(.eventType=="explanation_view")] | length' dist/weekly-demo/export.json` -> `2`.
+  - `jq '[.interactions[] | select(.eventType=="hint_view" or .eventType=="explanation_view")] | length' dist/weekly-demo/export.json` -> `5`.
+- Next smallest fix:
+  - Run a focused navigation accessibility pass for other icon-only controls (menu trigger, filter clear buttons) and add explicit labels where names rely only on visual context.
+
+
+### 2026-02-17T09:39:50-0800 - Strengthen regression tests for recent fixes
+
+- Current status: `PASS`
+- Evidence (test updates):
+  - `apps/web/tests/weekly-policy-comparison.spec.ts:553` -> Expanded `export preserves pdf_index_uploaded event type` to assert both `all-history` and `active-session` exports preserve `eventType: pdf_index_uploaded`.
+  - `apps/web/tests/weekly-policy-comparison.spec.ts:1017` -> Enhanced `export scope toggle works correctly` to change time range to `Last 7 Days` and assert export label still says analytics-only note (and does not imply export filtering with `filtered to`).
+  - `apps/web/tests/weekly-welcome-modal.spec.ts:84` -> Enhanced accessibility regression to assert explicit `aria-label` attributes exist for icon-only close/help controls.
+- Evidence (verification):
+  - `npx playwright test -c playwright.config.ts apps/web/tests/weekly-policy-comparison.spec.ts -g "export preserves pdf_index_uploaded event type|export scope toggle works correctly"` -> `2 passed`.
+  - `npx playwright test -c playwright.config.ts apps/web/tests/weekly-welcome-modal.spec.ts -g "icon-only controls expose explicit accessible names on mobile"` -> `1 passed`.
+  - `npm run build` -> `PASS`.
+  - `jq '[.interactions[] | select(.eventType=="hint_view") | .hintLevel] | max' dist/weekly-demo/export.json` -> `3`.
+  - `jq '[.interactions[] | select(.eventType=="hint_view") | has("hintId")] | any' dist/weekly-demo/export.json` -> `false`.
+  - `jq '[.interactions[] | has("sessionId") and (.sessionId!="")] | all' dist/weekly-demo/export.json` -> `true`.
+  - `jq '[.interactions[] | select(.eventType=="hint_view") | (has("sqlEngageSubtype") and has("sqlEngageRowId") and has("policyVersion") and (.sqlEngageSubtype!="") and (.sqlEngageRowId!="") and (.policyVersion!="")) ] | all' dist/weekly-demo/export.json` -> `true`.
+  - `jq '[.interactions[] | select(.eventType=="explanation_view")] | length' dist/weekly-demo/export.json` -> `2`.
+  - `jq '[.interactions[] | select(.eventType=="hint_view" or .eventType=="explanation_view")] | length' dist/weekly-demo/export.json` -> `5`.
+- Next smallest fix:
+  - Add a compact accessibility smoke test in nav/research pages for other icon-only controls (menu trigger, clear-filter icon buttons) to enforce explicit labels consistently.
+

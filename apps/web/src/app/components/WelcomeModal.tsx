@@ -129,6 +129,7 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                   size="sm"
                   onClick={handleClose}
                   className="shrink-0 text-slate-600 hover:text-slate-900"
+                  aria-label="Close welcome dialog"
                 >
                   <X className="size-4" />
                 </Button>

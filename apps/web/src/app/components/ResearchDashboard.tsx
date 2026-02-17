@@ -792,8 +792,8 @@ export function ResearchDashboard() {
               className="text-xs text-gray-600"
               data-testid="export-scope-label"
             >
-              Export scope: {exportAllHistory ? 'all history' : 'active session (default)'} 
-              {timeRange !== 'all' && ` • Filtered to ${TIME_RANGES.find(r => r.value === timeRange)?.label.toLowerCase()}`}
+              Export scope: {exportAllHistory ? 'all history' : 'active session (default)'}.
+              {' '}Time range filters analytics views only.
             </p>
             
             {/* Import status messages */}

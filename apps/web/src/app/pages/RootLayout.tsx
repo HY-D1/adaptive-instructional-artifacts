@@ -117,6 +117,7 @@ export function RootLayout() {
                       size="sm"
                       onClick={() => setShowWelcome(true)}
                       className="touch-manipulation"
+                      aria-label="Open help and keyboard shortcuts"
                     >
                       <HelpCircle className="size-4 mr-2 hidden sm:block" />
                       <span className="hidden sm:inline">Help</span>

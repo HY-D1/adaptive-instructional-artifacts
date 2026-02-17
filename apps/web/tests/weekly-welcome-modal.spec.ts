@@ -70,4 +70,27 @@ test.describe('@weekly welcome modal ui', () => {
     expect(styles.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
     expect(styles.backgroundColor).not.toBe(styles.color);
   });
+
+  test('icon-only controls expose explicit accessible names on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+    });
+
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Welcome to SQL-Adapt' })).toBeVisible();
+
+    const closeButton = page.getByRole('button', { name: 'Close welcome dialog' });
+    await expect(closeButton).toBeVisible();
+    await expect(closeButton).toHaveAttribute('aria-label', 'Close welcome dialog');
+    await closeButton.click();
+
+    const helpButton = page.getByRole('button', { name: 'Open help and keyboard shortcuts' });
+    await expect(helpButton).toBeVisible();
+    await expect(helpButton).toHaveAttribute('aria-label', 'Open help and keyboard shortcuts');
+    await helpButton.click();
+
+    await expect(page.getByRole('heading', { name: 'Welcome to SQL-Adapt' })).toBeVisible();
+  });
 });

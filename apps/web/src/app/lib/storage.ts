@@ -1337,8 +1337,8 @@ class StorageManager {
       : 'problem-unknown';
     
     const validEventTypes: InteractionEvent['eventType'][] = [
-      'code_change', 'execution', 'error', 'hint_request', 'hint_view', 
-      'explanation_view', 'llm_generate', 'pdf_index_rebuilt', 
+      'code_change', 'execution', 'error', 'hint_request', 'hint_view',
+      'explanation_view', 'llm_generate', 'pdf_index_rebuilt', 'pdf_index_uploaded',
       'textbook_add', 'textbook_update', 'coverage_change'
     ];
     const normalizedEventType = validEventTypes.includes(interaction.eventType)
@@ -1375,19 +1375,19 @@ class StorageManager {
     const fallbackAnchor = getDeterministicSqlEngageAnchor(canonicalSubtype, rowSeed);
     const sqlEngageRowId = interaction.sqlEngageRowId?.trim() || fallbackAnchor.rowId;
     const policyVersion = interaction.policyVersion?.trim() || getSqlEngagePolicyVersion();
-    
-    // Generate stable hintId if not present: sql-engage:<subtype>:L<level>:<rowId>
-    const stableHintId = interaction.hintId?.trim() || `sql-engage:${canonicalSubtype}:L${hintLevel}:${sqlEngageRowId}`;
 
-    return {
+    const normalizedHintView: InteractionEvent = {
       ...interaction,
       eventType: 'hint_view',
       hintLevel,
       sqlEngageSubtype: canonicalSubtype,
       sqlEngageRowId,
-      policyVersion,
-      hintId: stableHintId
+      policyVersion
     };
+
+    // Week 2 gate requires hint_view events to omit hintId.
+    delete normalizedHintView.hintId;
+    return normalizedHintView;
   }
 
   private normalizeTextbookEventForExport(interaction: InteractionEvent): InteractionEvent {

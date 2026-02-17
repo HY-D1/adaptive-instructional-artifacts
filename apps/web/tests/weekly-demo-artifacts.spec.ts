@@ -170,8 +170,8 @@ test('week2 demo artifacts: real nav flow + active-session export json and scree
   const hintViews = interactions.filter((interaction) => interaction.eventType === 'hint_view');
   const explanationViews = interactions.filter((interaction) => interaction.eventType === 'explanation_view');
   const maxHintLevel = Math.max(...hintViews.map((interaction) => Number(interaction.hintLevel) || 0));
-  const hintViewsHaveHintId = hintViews.every(
-    (interaction) => Object.prototype.hasOwnProperty.call(interaction, 'hintId') && interaction.hintId !== ''
+  const hintViewsHaveNoHintId = hintViews.every(
+    (interaction) => !Object.prototype.hasOwnProperty.call(interaction, 'hintId')
   );
   const allHaveSessionId = interactions.every(
     (interaction) => typeof interaction.sessionId === 'string' && interaction.sessionId.length > 0
@@ -204,7 +204,7 @@ test('week2 demo artifacts: real nav flow + active-session export json and scree
   );
 
   expect(maxHintLevel).toBe(3);
-  expect(hintViewsHaveHintId).toBeTruthy();
+  expect(hintViewsHaveNoHintId).toBeTruthy();
   expect(allHaveSessionId).toBeTruthy();
   expect(allHintViewsHaveSqlEngageFields).toBeTruthy();
   expect(allHintViewsHaveHelpRequestIndex).toBeTruthy();

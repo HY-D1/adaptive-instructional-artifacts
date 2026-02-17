@@ -112,7 +112,6 @@ async function seedValidSessionData(page: Page, learnerId: string = 'learner-tes
         sqlEngageSubtype: 'incomplete query',
         sqlEngageRowId: 'sql-engage:787',
         hintLevel: 1,
-        hintId: 'sql-engage:incomplete query:L1:sql-engage:787',
         helpRequestIndex: 1,
         policyVersion: 'sql-engage-index-v3-hintid-contract',
         conceptIds: ['select-basic']
@@ -128,7 +127,6 @@ async function seedValidSessionData(page: Page, learnerId: string = 'learner-tes
         sqlEngageSubtype: 'incomplete query',
         sqlEngageRowId: 'sql-engage:787',
         hintLevel: 2,
-        hintId: 'sql-engage:incomplete query:L2:sql-engage:787',
         helpRequestIndex: 2,
         policyVersion: 'sql-engage-index-v3-hintid-contract',
         conceptIds: ['select-basic']
@@ -144,7 +142,6 @@ async function seedValidSessionData(page: Page, learnerId: string = 'learner-tes
         sqlEngageSubtype: 'incomplete query',
         sqlEngageRowId: 'sql-engage:787',
         hintLevel: 3,
-        hintId: 'sql-engage:incomplete query:L3:sql-engage:787',
         helpRequestIndex: 3,
         policyVersion: 'sql-engage-index-v3-hintid-contract',
         conceptIds: ['select-basic']
@@ -433,19 +430,19 @@ test.describe('@weekly data-integrity: Event schema validation', () => {
       const interactions = raw ? JSON.parse(raw) : [];
       const hintViews = interactions.filter((e: any) => e.eventType === 'hint_view');
       
-      const requiredFields = ['hintLevel', 'hintId', 'sqlEngageSubtype', 'sqlEngageRowId', 'policyVersion', 'helpRequestIndex'];
+      const requiredFields = ['hintLevel', 'sqlEngageSubtype', 'sqlEngageRowId', 'policyVersion', 'helpRequestIndex'];
       
       return hintViews.map((event: any) => ({
         id: event.id,
         hasAllFields: requiredFields.every(field => event[field] !== undefined && event[field] !== null && event[field] !== ''),
         hintLevel: event.hintLevel,
-        hintIdValid: event.hintId?.startsWith('sql-engage:')
+        hasNoHintId: !Object.prototype.hasOwnProperty.call(event, 'hintId')
       }));
     });
     
     for (const result of hintValidation) {
       expect(result.hasAllFields).toBeTruthy();
-      expect(result.hintIdValid).toBeTruthy();
+      expect(result.hasNoHintId).toBeTruthy();
     }
   });
 

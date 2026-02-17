@@ -550,6 +550,74 @@ test('@weekly policy-comparison: export JSON has all required schema fields', as
   expect(exportedDate.toISOString()).toBe(exportData.exportedAt);
 });
 
+test('@weekly policy-comparison: export preserves pdf_index_uploaded event type', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+  });
+
+  await page.goto('/research');
+
+  const eventId = `evt-pdf-upload-${Date.now()}`;
+  await page.evaluate((payload) => {
+    const now = Date.now();
+    const sessionId = `session-pdf-upload-${now}`;
+    const profile = {
+      id: 'learner-pdf-upload',
+      name: 'Learner PDF Upload',
+      conceptsCovered: [],
+      conceptCoverageEvidence: [],
+      errorHistory: [],
+      interactionCount: 1,
+      currentStrategy: 'adaptive-medium',
+      preferences: {
+        escalationThreshold: 3,
+        aggregationDelay: 300000
+      }
+    };
+    const uploadEvent = {
+      id: payload.eventId,
+      sessionId,
+      learnerId: 'learner-pdf-upload',
+      timestamp: now,
+      eventType: 'pdf_index_uploaded',
+      problemId: 'pdf-index',
+      inputs: {
+        filename: 'sample.pdf',
+        file_size: 1024
+      },
+      outputs: {
+        pdf_index_id: 'pdf-index-test',
+        pdf_schema_version: 'v1',
+        pdf_embedding_model_id: 'test-model',
+        pdf_chunker_version: 'test-chunker',
+        pdf_doc_count: 1,
+        pdf_chunk_count: 2
+      }
+    };
+
+    window.localStorage.setItem(payload.activeSessionKey, sessionId);
+    window.localStorage.setItem(payload.profilesKey, JSON.stringify([profile]));
+    window.localStorage.setItem(payload.interactionsKey, JSON.stringify([uploadEvent]));
+  }, {
+    eventId,
+    activeSessionKey: ACTIVE_SESSION_KEY,
+    profilesKey: PROFILES_KEY,
+    interactionsKey: INTERACTIONS_KEY
+  });
+
+  const exportData = await exportSession(page, { allHistory: true });
+  const exportedEvent = exportData.interactions.find((event: any) => event.id === eventId);
+  const activeSessionExport = await exportSession(page, { allHistory: false });
+  const activeSessionEvent = activeSessionExport.interactions.find((event: any) => event.id === eventId);
+
+  expect(exportedEvent).toBeTruthy();
+  expect(exportedEvent.eventType).toBe('pdf_index_uploaded');
+  expect(activeSessionEvent).toBeTruthy();
+  expect(activeSessionEvent.eventType).toBe('pdf_index_uploaded');
+});
+
 // Test 4: Policy Strategy Selection via Orchestrator
 test('@weekly policy-comparison: policy strategy selection is available', async ({ page }) => {
   await page.addInitScript(() => {
@@ -948,6 +1016,34 @@ test('@weekly policy-comparison: export scope toggle works correctly', async ({ 
     message: 'Waiting for default export scope label',
     timeout: 10000,
     intervals: [100, 200, 500]
+  }).toBe(true);
+
+  await expect.poll(async () => {
+    const label = page.getByTestId('export-scope-label');
+    const text = (await label.textContent().catch(() => ''))?.toLowerCase() || '';
+    return text.includes('time range filters analytics views only') && !text.includes('filtered to');
+  }, {
+    message: 'Waiting for analytics-only time-range export note',
+    timeout: 5000,
+    intervals: [100, 200]
+  }).toBe(true);
+
+  const timeRangeTrigger = page
+    .locator('button[role="combobox"]')
+    .filter({ hasText: /All Time|Last 24 Hours|Last 7 Days|Last 30 Days|Last 90 Days/i })
+    .first();
+  await expect(timeRangeTrigger).toBeVisible();
+  await timeRangeTrigger.click();
+  await page.getByRole('option', { name: 'Last 7 Days' }).click();
+
+  await expect.poll(async () => {
+    const label = page.getByTestId('export-scope-label');
+    const text = (await label.textContent().catch(() => ''))?.toLowerCase() || '';
+    return text.includes('time range filters analytics views only') && !text.includes('filtered to');
+  }, {
+    message: 'Waiting for analytics-only note after changing time range',
+    timeout: 5000,
+    intervals: [100, 200]
   }).toBe(true);
   
   // Toggle to all history with retry
