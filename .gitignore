@@ -26,6 +26,8 @@ docs/weekly-progress.md
 docs/weekly-demo.md
 AGENTS.md
 docs/pdf-sources
+docs/week2_progress.md
+docs/
 
 # Agent/LLM conversation files (temporary context)
 *.llm-context.md

@@ -115,6 +115,7 @@ test.describe('@weekly Feature Name', () => {
 1. **One logical change per commit**
 2. **Include tests with the feature** (same commit or immediate follow-up)
 3. **Use conventional commits format**:
+4. **Default commit suggestions to clean + simple** unless user asks for detailed body/trailers.
 
 ```
 feat: add hint ladder escalation logic
@@ -246,6 +247,7 @@ Explanation View → textbook_add Event → My Notes
 ### File Usage Guidelines
 
 - **weekly-progress.md** — Daily working log. Add checkpoint entries for every completed task, bug fix, or feature.
+- **week2_progress.md** — Redirect-only stub. **Do not append checkpoints here**.
 - **progress.md** — System architecture. Update when components change or new subsystems added.
 - **README.md** (root) — User-facing. Update for setup changes or user workflow changes.
 - **docs/README.md** — Research narrative. Update for vision changes or milestone completions.
@@ -263,6 +265,8 @@ Explanation View → textbook_add Event → My Notes
 - ✅ Passing/failing a gate (update gate status)
 - ✅ Changing test count or coverage
 - ✅ Updating dependencies or tooling
+
+**Never write progress checkpoints to `docs/week2_progress.md`.**
 
 ### Checkpoint Log Entry Template
 
@@ -394,6 +398,7 @@ This file (`AGENTS.md`) contains:
 ### 2. NEVER Auto-Commit — Suggest Only
 
 **I will NEVER run `git commit` automatically.**
+I will default commit suggestions to concise, clean messages.
 
 When work is ready:
 1. I will show you a **commit suggestion** (message + files)
