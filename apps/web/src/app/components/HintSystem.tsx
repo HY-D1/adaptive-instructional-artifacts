@@ -174,7 +174,22 @@ export function HintSystem({
   }, [sessionId, learnerId, problemId, recentInteractions]);
 
   // Reconstruct hints from interaction history when component mounts or problem changes
+  // Use ref to track if reconstruction has already happened for this problem/session
+  const hasReconstructedRef = useRef(false);
+  const prevProblemLearnerSessionRef = useRef('');
+  
   useEffect(() => {
+    // Create a unique key for this problem/learner/session combination
+    const currentKey = `${problemId}-${learnerId}-${sessionId}`;
+    
+    // Only reconstruct if the key changed (prevents infinite loops from recentInteractions)
+    if (prevProblemLearnerSessionRef.current === currentKey) {
+      return;
+    }
+    
+    prevProblemLearnerSessionRef.current = currentKey;
+    hasReconstructedRef.current = true;
+    
     const problemTrace = getProblemTrace();
     const hintEvents = problemTrace.filter(
       (interaction) => interaction.eventType === 'hint_view'
@@ -208,7 +223,7 @@ export function HintSystem({
         setShowExplanation(true);
       }
     }
-  }, [problemId, learnerId, sessionId, recentInteractions]); // Include recentInteractions to avoid stale closure
+  }, [problemId, learnerId, sessionId]); // Remove recentInteractions to prevent infinite loops
 
   /**
    * Get the hint selection for a specific help request index.

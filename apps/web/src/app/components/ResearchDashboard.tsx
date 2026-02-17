@@ -166,11 +166,19 @@ export function ResearchDashboard() {
       setPdfIndexStatus('ready');
       setPdfIndexError(null);
     } else {
-      setPdfIndexSummary('No PDF index loaded');
-      setPdfIndexStatus('idle');
+      resetPdfIndexState('idle');
     }
     if (!selectedTraceLearner && loadedProfiles[0]) {
       setSelectedTraceLearner(loadedProfiles[0].id);
+    }
+  };
+
+  // Helper to reset PDF index state (extracted to avoid duplication)
+  const resetPdfIndexState = (status: 'idle' | 'error', errorMessage?: string) => {
+    setPdfIndexSummary('No PDF index loaded');
+    setPdfIndexStatus(status);
+    if (errorMessage) {
+      setPdfIndexError(errorMessage);
     }
   };
 
@@ -199,14 +207,33 @@ export function ResearchDashboard() {
     return data.filter(i => i.timestamp >= cutoff);
   }, [timeRange]);
 
+  // Ref to track export progress interval for cleanup
+  const exportIntervalRef = useRef<number | null>(null);
+  const exportTimeoutRef = useRef<number | null>(null);
+
   const handleExport = async () => {
     setIsExporting(true);
     setExportProgress(0);
     
+    // Clear any existing interval/timeout first
+    if (exportIntervalRef.current) {
+      clearInterval(exportIntervalRef.current);
+    }
+    if (exportTimeoutRef.current) {
+      clearTimeout(exportTimeoutRef.current);
+    }
+    
     // Simulate progress for large exports
-    const progressInterval = setInterval(() => {
+    exportIntervalRef.current = window.setInterval(() => {
+      if (!isMountedRef.current) {
+        clearInterval(exportIntervalRef.current!);
+        exportIntervalRef.current = null;
+        return;
+      }
       setExportProgress(prev => Math.min(prev + 10, 90));
     }, 100);
+    
+    let url: string | null = null;
     
     try {
       const data = exportAllHistory
@@ -214,24 +241,46 @@ export function ResearchDashboard() {
         : storage.exportData();
       
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
+      url = URL.createObjectURL(blob);
+      blobUrlRef.current = url;  // Track for cleanup on unmount
+      
       const a = document.createElement('a');
       a.href = url;
       a.download = `sql-learning-data-${Date.now()}.json`;
+      document.body.appendChild(a);  // Append to ensure click works
       a.click();
+      document.body.removeChild(a);
       
-      setExportProgress(100);
-      setTimeout(() => {
-        setIsExporting(false);
-        setExportProgress(0);
-      }, 500);
+      if (isMountedRef.current) {
+        setExportProgress(100);
+        exportTimeoutRef.current = window.setTimeout(() => {
+          if (isMountedRef.current) {
+            setIsExporting(false);
+            setExportProgress(0);
+          }
+          exportTimeoutRef.current = null;
+        }, 500);
+      }
       
-      setTimeout(() => URL.revokeObjectURL(url), 100);
+      // Delay revoke to ensure download starts, but track for unmount cleanup
+      window.setTimeout(() => {
+        if (url) {
+          URL.revokeObjectURL(url);
+          if (blobUrlRef.current === url) {
+            blobUrlRef.current = null;
+          }
+        }
+      }, 5000);
     } catch (error) {
-      setImportError(`Export failed: ${(error as Error).message}`);
-      setIsExporting(false);
+      if (isMountedRef.current) {
+        setImportError(`Export failed: ${(error as Error).message}`);
+        setIsExporting(false);
+      }
     } finally {
-      clearInterval(progressInterval);
+      if (exportIntervalRef.current) {
+        clearInterval(exportIntervalRef.current);
+        exportIntervalRef.current = null;
+      }
     }
   };
 
@@ -251,21 +300,47 @@ export function ResearchDashboard() {
   };
 
   const fileReaderRef = useRef<FileReader | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
     return () => {
+      isMountedRef.current = false;
       // Abort any pending file read on unmount
       if (fileReaderRef.current) {
         fileReaderRef.current.abort();
         fileReaderRef.current = null;
       }
+      // Clean up any pending blob URL
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+      // Clean up export interval and timeout
+      if (exportIntervalRef.current) {
+        clearInterval(exportIntervalRef.current);
+        exportIntervalRef.current = null;
+      }
+      if (exportTimeoutRef.current) {
+        clearTimeout(exportTimeoutRef.current);
+        exportTimeoutRef.current = null;
+      }
     };
   }, []);
+
+  const isImportingRef = useRef(false);
 
   const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Prevent concurrent imports
+    if (isImportingRef.current) {
+      event.target.value = '';
+      return;
+    }
+
+    isImportingRef.current = true;
     setIsImporting(true);
     setImportError(null);
     setImportSuccess(false);
@@ -277,32 +352,50 @@ export function ResearchDashboard() {
 
     const reader = new FileReader();
     fileReaderRef.current = reader;
+    let isAborted = false;
 
     reader.onload = (e) => {
+      if (isAborted) return;
       try {
         const data = JSON.parse(e.target?.result as string);
         storage.importData(data);
-        setExportAllHistory(false);
-        loadData();
-        setImportSuccess(true);
-        setTimeout(() => setImportSuccess(false), 3000);
+        if (isMountedRef.current) {
+          setExportAllHistory(false);
+          loadData();
+          setImportSuccess(true);
+          setTimeout(() => {
+            if (isMountedRef.current) {
+              setImportSuccess(false);
+            }
+          }, 3000);
+        }
       } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        setImportError(`Import failed: ${errorMsg}`);
+        if (isMountedRef.current && !isAborted) {
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          setImportError(`Import failed: ${errorMsg}`);
+        }
       } finally {
-        setIsImporting(false);
+        if (isMountedRef.current) {
+          setIsImporting(false);
+        }
+        isImportingRef.current = false;
         fileReaderRef.current = null;
       }
     };
 
     reader.onerror = () => {
-      setImportError('Failed to read file. Please try again.');
-      setIsImporting(false);
+      if (isMountedRef.current && !isAborted) {
+        setImportError('Failed to read file. Please try again.');
+        setIsImporting(false);
+      }
+      isImportingRef.current = false;
       fileReaderRef.current = null;
     };
 
     reader.onabort = () => {
+      isAborted = true;
       setIsImporting(false);
+      isImportingRef.current = false;
       fileReaderRef.current = null;
     };
 
@@ -317,7 +410,11 @@ export function ResearchDashboard() {
 
     try {
       const result = await loadOrBuildPdfIndex();
+      if (!isMountedRef.current) return;  // Check mount status after async
+      
       const saveResult = storage.savePdfIndex(result.document);
+      if (!isMountedRef.current) return;  // Check mount status after async
+      
       setPdfIndexSummary(formatPdfIndexSummary(result.document));
       
       if (saveResult.quotaExceeded) {
@@ -354,14 +451,18 @@ export function ResearchDashboard() {
           }
         };
         storage.saveInteraction(rebuildEvent);
-        setInteractions((previous) => [...previous, rebuildEvent]);
+        if (isMountedRef.current) {
+          setInteractions((previous) => [...previous, rebuildEvent]);
+        }
       }
 
-      loadData();
+      if (isMountedRef.current) {
+        loadData();
+      }
     } catch (error) {
-      setPdfIndexSummary('No PDF index loaded');
-      setPdfIndexStatus('error');
-      setPdfIndexError((error as Error).message || 'Failed to load PDF index.');
+      if (isMountedRef.current) {
+        resetPdfIndexState('error', (error as Error).message || 'Failed to load PDF index.');
+      }
     }
   };
 
@@ -381,7 +482,11 @@ export function ResearchDashboard() {
 
     try {
       const result = await uploadPdfAndBuildIndex(file);
+      if (!isMountedRef.current) return;  // Check mount status after async
+      
       const saveResult = storage.savePdfIndex(result.document);
+      if (!isMountedRef.current) return;
+      
       setPdfIndexSummary(formatPdfIndexSummary(result.document));
       
       if (saveResult.quotaExceeded) {
@@ -417,13 +522,17 @@ export function ResearchDashboard() {
         }
       };
       storage.saveInteraction(uploadEvent);
-      setInteractions((previous) => [...previous, uploadEvent]);
+      if (isMountedRef.current) {
+        setInteractions((previous) => [...previous, uploadEvent]);
+      }
 
-      loadData();
+      if (isMountedRef.current) {
+        loadData();
+      }
     } catch (error) {
-      setPdfIndexSummary('No PDF index loaded');
-      setPdfIndexStatus('error');
-      setPdfIndexError((error as Error).message || 'Failed to upload and process PDF.');
+      if (isMountedRef.current) {
+        resetPdfIndexState('error', (error as Error).message || 'Failed to upload and process PDF.');
+      }
     }
 
     event.target.value = '';
@@ -630,10 +739,14 @@ export function ResearchDashboard() {
   const activeThresholds = orchestrator.getThresholds(selectedReplayStrategy);
   const traceStartTime = replayPolicyTrace[0]?.timestamp;
 
+  // Helper to format labels consistently (extracted to reduce duplication)
+  const formatLabel = (str: string, separator: '_' | '-' = '_') => 
+    str.replace(new RegExp(separator, 'g'), ' ');
+  
   const formatThreshold = (value: number) => (Number.isFinite(value) ? String(value) : 'never');
-  const formatDecision = (decision: ReplayDecisionPoint['decision']) => decision.replace(/_/g, ' ');
-  const formatEventType = (eventType: InteractionEvent['eventType']) => eventType.replace(/_/g, ' ');
-  const formatSubtype = (subtype?: string) => subtype ? subtype.replace(/-/g, ' ') : '-';
+  const formatDecision = (decision: ReplayDecisionPoint['decision']) => formatLabel(decision, '_');
+  const formatEventType = (eventType: InteractionEvent['eventType']) => formatLabel(eventType, '_');
+  const formatSubtype = (subtype?: string) => subtype ? formatLabel(subtype, '-') : '-';
 
   const handleReplay = () => {
     setIsReplaying(true);

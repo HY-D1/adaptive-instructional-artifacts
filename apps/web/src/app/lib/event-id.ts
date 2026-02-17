@@ -13,7 +13,11 @@ function randomSuffix(): string {
   if (typeof globalThis !== 'undefined' && globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
     return globalThis.crypto.randomUUID().slice(0, 8);
   }
-  return Math.random().toString(36).slice(2, 10);
+  // Fallback: use high-entropy timestamp + random for collision resistance
+  const timeEntropy = Date.now().toString(36);
+  const randomPart = Math.random().toString(36).slice(2, 6);
+  const extraRandom = Math.random().toString(36).slice(2, 6);
+  return `${timeEntropy}-${randomPart}-${extraRandom}`;
 }
 
 export function createEventId(prefix: string, ...parts: Array<string | number | undefined | null>): string {

@@ -414,9 +414,7 @@ function buildUnitFromStructuredOutput(
     `Common pitfall: ${output.common_pitfall || 'Not found in provided sources.'}`
   ].join('\n');
 
-  // Note: DOMPurify should be applied to HTML output, not markdown.
-  // Markdown itself doesn't execute JavaScript. Sanitization happens at render time
-  // when markdown is converted to HTML in the TextbookPage component.
+  // DOMPurify is applied at render time in TextbookPage, not here
   const content = markdown;
 
   const genericTitle = `Help with ${options.bundle.problemTitle}`;
@@ -489,9 +487,6 @@ function buildFallbackUnit(
     '3. If schema details are missing, use only the provided schema text.'
   ].join('\n');
 
-  // Note: DOMPurify should be applied to HTML output, not markdown.
-  // Markdown itself doesn't execute JavaScript. Sanitization happens at render time
-  // when markdown is converted to HTML in the TextbookPage component.
   const fallbackContent = content;
 
   return {

@@ -83,6 +83,9 @@ export function LearningInterface() {
   const [isLoading, setIsLoading] = useState(true);
   
   const timerRef = useRef<number | null>(null);
+  const startTimeRef = useRef(startTime);
+  const isTimerPausedRef = useRef(isTimerPaused);
+  const elapsedTimeRef = useRef(elapsedTime);
 
   // Load initial data
   useEffect(() => {
@@ -99,11 +102,24 @@ export function LearningInterface() {
     setTotalTimeAcrossSessions(totalMs);
   }, [learnerId, interactions]);
 
-  // Timer effect with tab visibility handling
+  // Keep refs in sync with state
+  useEffect(() => {
+    startTimeRef.current = startTime;
+  }, [startTime]);
+
+  useEffect(() => {
+    isTimerPausedRef.current = isTimerPaused;
+  }, [isTimerPaused]);
+
+  useEffect(() => {
+    elapsedTimeRef.current = elapsedTime;
+  }, [elapsedTime]);
+
+  // Timer effect with tab visibility handling - uses refs to avoid stale closures
   useEffect(() => {
     const updateTimer = () => {
-      if (!isTimerPaused) {
-        setElapsedTime(Date.now() - startTime);
+      if (!isTimerPausedRef.current) {
+        setElapsedTime(Date.now() - startTimeRef.current);
       }
     };
 
@@ -114,27 +130,41 @@ export function LearningInterface() {
         window.clearInterval(timerRef.current);
       }
     };
-  }, [startTime, isTimerPaused]);
+  }, []); // Empty deps - uses refs for mutable values
 
-  // Handle tab visibility change
+  // Handle tab visibility change - uses ref to avoid stale closure
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
         setIsTimerPaused(true);
       } else {
         setIsTimerPaused(false);
-        // Adjust start time to account for paused period
-        setStartTime(prev => Date.now() - elapsedTime);
+        // Adjust start time to account for paused period using ref for current value
+        setStartTime(Date.now() - elapsedTimeRef.current);
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [elapsedTime]);
+  }, []); // Empty deps - uses ref for mutable value
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if in input/textarea or modal is open
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      // Don't trigger if a modal/dialog is open
+      const isModalOpen = document.querySelector('[role="dialog"]') !== null;
+      if (isModalOpen) {
+        return;
+      }
+
       // Ctrl+Enter to run query
       if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();

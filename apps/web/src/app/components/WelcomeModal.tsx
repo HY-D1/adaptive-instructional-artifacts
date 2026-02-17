@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -49,13 +49,23 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
   const [showDemo, setShowDemo] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [dontShowAgain, setDontShowAgain] = useState(false);
+  const timeoutRef = useRef<number | null>(null);
 
   const hasData = storage.getAllInteractions().length > 0;
+
+  useEffect(() => {
+    return () => {
+      // Clear timeout on unmount to prevent state update on unmounted component
+      if (timeoutRef.current) {
+        window.clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleGenerateDemo = () => {
     generateDemoData();
     setShowDemo(true);
-    setTimeout(() => {
+    timeoutRef.current = window.setTimeout(() => {
       handleClose();
     }, 2000);
   };

@@ -157,11 +157,23 @@ function EvidenceTooltip({ evidence }: { evidence: ConceptCoverageEvidence }) {
 }
 
 export function ConceptCoverage({ learnerId }: ConceptCoverageProps) {
-  const profile = storage.getProfile(learnerId);
-  const coverageStats = storage.getCoverageStats(learnerId);
+  const [profile, setProfile] = useState<LearnerProfile | null>(null);
+  const [coverageStats, setCoverageStats] = useState<CoverageStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Load data in effect to avoid blocking render with expensive localStorage parsing
+    setIsLoading(true);
+    const loadedProfile = storage.getProfile(learnerId);
+    const loadedStats = storage.getCoverageStats(learnerId);
+    setProfile(loadedProfile);
+    setCoverageStats(loadedStats);
+    setIsLoading(false);
+  }, [learnerId]);
+
   const evidenceMap = profile?.conceptCoverageEvidence || new Map();
   
-  if (!profile) {
+  if (isLoading || !profile) {
     return (
       <Card className="p-4">
         <Skeleton className="h-4 w-32 mb-4" />

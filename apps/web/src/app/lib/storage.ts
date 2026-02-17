@@ -322,7 +322,11 @@ class StorageManager {
 
     const interactions = this.getAllInteractions();
     interactions.push(event);
-    localStorage.setItem(this.INTERACTIONS_KEY, JSON.stringify(interactions));
+    const result = this.safeSetItem(this.INTERACTIONS_KEY, JSON.stringify(interactions));
+    
+    if (!result.success) {
+      console.warn(`[Coverage] Failed to save coverage change event: ${result.quotaExceeded ? 'quota exceeded' : 'unknown error'}`);
+    }
     
     // Log to console for debugging coverage progression
     console.log(`[Coverage] ${params.conceptId}: ${params.previousScore} → ${params.score} (${scoreDelta >= 0 ? '+' : ''}${scoreDelta}), confidence=${params.confidence}, executions=${params.evidenceCounts.successfulExecution}`);

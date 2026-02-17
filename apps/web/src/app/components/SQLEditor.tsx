@@ -62,58 +62,67 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
   const activeExecutorRef = useRef<SQLExecutor | null>(null);
   const editorRef = useRef<MonacoEditorType | null>(null);
 
+  const isMountedRef = useRef(true);
+
   const handleEditorDidMount = (editor: MonacoEditorType) => {
+    if (!isMountedRef.current) {
+      // Component unmounted, dispose immediately
+      const model = editor.getModel();
+      if (model) model.dispose();
+      editor.dispose();
+      return;
+    }
     editorRef.current = editor;
   };
 
   useEffect(() => {
     return () => {
+      isMountedRef.current = false;
       // Dispose Monaco editor instance on unmount
-      if (editorRef.current) {
-        // Remove all event listeners before disposal to prevent memory leaks
-        const model = editorRef.current.getModel();
-        if (model) {
-          model.dispose();
+      // Small delay to ensure any in-progress mount completes
+      window.setTimeout(() => {
+        if (editorRef.current) {
+          // Remove all event listeners before disposal to prevent memory leaks
+          const model = editorRef.current.getModel();
+          if (model) {
+            model.dispose();
+          }
+          editorRef.current.dispose();
+          editorRef.current = null;
         }
-        editorRef.current.dispose();
-        editorRef.current = null;
-      }
+      }, 0);
     };
   }, []);
 
   useEffect(() => {
-    let isCancelled = false;
-    setExecutor(null);
+    const abortController = new AbortController();
+    let executorInstance: SQLExecutor | null = null;
 
     const initExecutor = async () => {
+      setExecutor(null);
       const exec = new SQLExecutor();
-      activeExecutorRef.current = exec;
+      executorInstance = exec;
+      
       try {
         await exec.initialize(problem.schema);
-        if (isCancelled) {
+        if (!abortController.signal.aborted) {
+          setExecutor(exec);
+        } else {
           exec.close();
-          if (activeExecutorRef.current === exec) {
-            activeExecutorRef.current = null;
-          }
-          return;
         }
-        setExecutor(exec);
       } catch {
         exec.close();
-        if (activeExecutorRef.current === exec) {
-          activeExecutorRef.current = null;
+        if (!abortController.signal.aborted) {
+          setExecutor(null);
         }
-        setExecutor(null);
       }
     };
+
     initExecutor();
 
     return () => {
-      isCancelled = true;
-      if (activeExecutorRef.current) {
-        activeExecutorRef.current.close();
-        activeExecutorRef.current = null;
-      }
+      abortController.abort();
+      executorInstance?.close();
     };
   }, [problem.id]);
 

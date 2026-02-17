@@ -42,14 +42,31 @@ function valuesEqual(actual: unknown, expected: unknown): boolean {
 }
 
 let SQL: any = null;
+let sqlInitializationPromise: Promise<any> | null = null;
 
 export async function initializeSQL() {
-  if (!SQL) {
-    SQL = await initSqlJs({
-      locateFile: file => `https://sql.js.org/dist/${file}`
-    });
+  // Return existing instance if available
+  if (SQL) {
+    return SQL;
   }
-  return SQL;
+  
+  // Return existing promise if initialization is in progress
+  if (sqlInitializationPromise) {
+    return sqlInitializationPromise;
+  }
+  
+  // Start new initialization and track the promise
+  sqlInitializationPromise = initSqlJs({
+    locateFile: file => `https://sql.js.org/dist/${file}`
+  }).then(sql => {
+    SQL = sql;
+    return sql;
+  }).finally(() => {
+    // Clear the promise so future calls can retry if needed
+    sqlInitializationPromise = null;
+  });
+  
+  return sqlInitializationPromise;
 }
 
 /** Result of executing a single SQL statement */
