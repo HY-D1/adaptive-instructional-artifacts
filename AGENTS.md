@@ -6,10 +6,18 @@
 |-----------|--------|------|
 | Week 2 MVP | ✅ Complete | 2026-02-16 |
 | Build Gate | ✅ Pass | dist/app/ ready |
-| E2E Tests | ✅ 136 tests | All @week2 tagged |
+| E2E Tests | ✅ 140 tests | All @week2 tagged |
 | Demo Artifacts | ✅ Generated | dist/week2-demo/ |
-| Documentation | ✅ Consolidated | 3 canonical files |
+| Documentation | ✅ Consolidated | 3 canonical files + AGENTS.md |
 | Deployment | 📋 Local only | No CI/CD yet |
+
+### Recent Commits
+
+| Commit | Description |
+|--------|-------------|
+| `17391a7` | Improve PDF retrieval with SQL keywords |
+| `1a3b268` | Persist hints when navigating between pages |
+| `16e3a5c` | Track problem correctness and show solved status |
 
 ---
 
@@ -21,7 +29,7 @@ npm run dev                      # Start dev server
 npm run build                    # Production build → dist/app/
 
 # Testing
-npm run test:e2e:week2          # Run 136 Week 2 E2E tests
+npm run test:e2e:week2          # Run 140 Week 2 E2E tests
 npm run demo:week2              # Generate demo artifacts
 npm run verify:week2            # Full verification gate
 
@@ -90,8 +98,9 @@ test.describe('@week2 Feature Name', () => {
 | week2-concept-coverage.spec.ts | 24 | Concept map UI, mastery tracking |
 | week2-policy-comparison.spec.ts | 14 | A/B policy replay, session export |
 | week2-data-integrity.spec.ts | 46 | Event logging, localStorage, validation |
+| hint-persistence.spec.ts | 4 | Hint state across navigation |
 | week2-*.spec.ts (others) | 8+ | PDF upload, LLM health, smoke tests |
-| **Total** | **136** | — |
+| **Total** | **140** | — |
 
 ---
 
