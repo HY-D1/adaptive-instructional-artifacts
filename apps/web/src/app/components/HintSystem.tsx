@@ -172,6 +172,43 @@ export function HintSystem({
     syncHelpFlowIndex(getProblemTrace());
   }, [sessionId, learnerId, problemId, recentInteractions]);
 
+  // Reconstruct hints from interaction history when component mounts or problem changes
+  useEffect(() => {
+    const problemTrace = getProblemTrace();
+    const hintEvents = problemTrace.filter(
+      (interaction) => interaction.eventType === 'hint_view'
+    );
+    
+    if (hintEvents.length > 0) {
+      // Reconstruct hints from saved hint events
+      const reconstructedHints = hintEvents.map(event => event.hintText || '');
+      setHints(reconstructedHints);
+      
+      // Restore active hint subtype from last hint
+      const lastHint = hintEvents[hintEvents.length - 1];
+      if (lastHint.sqlEngageSubtype) {
+        setActiveHintSubtype(lastHint.sqlEngageSubtype);
+      }
+      
+      // Reconstruct PDF passages for each hint
+      const reconstructedPassages: RetrievalPdfPassage[][] = hintEvents.map(event => {
+        if (event.sqlEngageSubtype) {
+          return retrievePdfPassagesForHint(event.sqlEngageSubtype);
+        }
+        return [];
+      });
+      setHintPdfPassages(reconstructedPassages);
+      
+      // Check if explanation was shown
+      const hasExplanation = problemTrace.some(
+        (interaction) => interaction.eventType === 'explanation_view'
+      );
+      if (hasExplanation) {
+        setShowExplanation(true);
+      }
+    }
+  }, [problemId, learnerId, sessionId]); // Only re-run when problem/learner/session changes
+
   /**
    * Get the hint selection for a specific help request index.
    * 
