@@ -81,6 +81,8 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
   };
 
   const StepIcon = WELCOME_STEPS[currentStep].icon;
+  const primaryActionClasses =
+    'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:text-white dark:hover:bg-blue-400';
 
   return (
     <motion.div 
@@ -96,8 +98,11 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
         exit={{ scale: 0.95, opacity: 0, y: 20 }}
         transition={{ type: 'spring', duration: 0.5 }}
       >
-        <Card className="max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
-          <div className="flex flex-col h-full">
+        <Card
+          className="max-w-4xl w-full h-[min(90vh,52rem)] max-h-[90vh] gap-0 overflow-hidden shadow-2xl"
+          data-testid="welcome-modal"
+        >
+          <div className="flex min-h-0 flex-1 flex-col">
             {/* Header */}
             <div className="p-6 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
               <div className="flex items-start justify-between">
@@ -119,7 +124,12 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                     </p>
                   </div>
                 </div>
-                <Button variant="ghost" size="sm" onClick={handleClose} className="shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClose}
+                  className="shrink-0 text-slate-600 hover:text-slate-900"
+                >
                   <X className="size-4" />
                 </Button>
               </div>
@@ -144,7 +154,7 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 min-h-0 overflow-y-auto p-6" data-testid="welcome-modal-content">
               <AnimatePresence mode="wait">
                 {showDemo && (
                   <motion.div 
@@ -371,7 +381,7 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
             </div>
 
             {/* Footer */}
-            <div className="p-6 border-t bg-gray-50">
+            <div className="p-6 border-t bg-gray-50" data-testid="welcome-modal-footer">
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -392,12 +402,17 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                       </Button>
                     )}
                     {currentStep < WELCOME_STEPS.length - 1 ? (
-                      <Button onClick={nextStep} size="sm">
+                      <Button
+                        onClick={nextStep}
+                        size="sm"
+                        className={primaryActionClasses}
+                        data-testid="welcome-next-button"
+                      >
                         Next
-                        <ChevronRight className="size-4 ml-1" />
+                        <ChevronRight className="ml-1 size-4 shrink-0 stroke-[2.5]" />
                       </Button>
                     ) : (
-                      <Button onClick={handleClose} size="sm">
+                      <Button onClick={handleClose} size="sm" className={primaryActionClasses}>
                         Get Started
                       </Button>
                     )}
@@ -411,7 +426,12 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                       Generate Demo Data
                     </Button>
                   )}
-                  <Button onClick={handleClose} variant={hasData ? 'default' : 'outline'} size="sm">
+                  <Button
+                    onClick={handleClose}
+                    variant={hasData ? 'default' : 'outline'}
+                    size="sm"
+                    className={hasData ? primaryActionClasses : undefined}
+                  >
                     {hasData ? 'Continue' : 'Start Fresh'}
                   </Button>
                 </div>
