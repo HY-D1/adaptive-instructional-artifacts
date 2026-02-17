@@ -21,51 +21,14 @@
  * 14. Error Boundary - errors are caught and displayed
  */
 
-import { expect, Locator, Page, test } from '@playwright/test';
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-async function replaceEditorText(page: Page, text: string) {
-  const editorSurface = page.locator('.monaco-editor .view-lines').first();
-  await editorSurface.click({ position: { x: 8, y: 8 } });
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-  await page.keyboard.type(text);
-}
-
-async function getEditorText(page: Page): Promise<string> {
-  return page.locator('.monaco-editor .view-lines').first().innerText();
-}
-
-async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedErrorCount: number) {
-  const marker = page.getByText(new RegExp(`\\b${expectedErrorCount}\\s+error(s)?\\b`, 'i'));
-  for (let i = 0; i < 12; i += 1) {
-    await runQueryButton.click();
-    if (await marker.first().isVisible().catch(() => false)) {
-      return;
-    }
-    await page.waitForTimeout(400);
-  }
-  throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
-}
-
-async function getAllInteractionsFromStorage(page: Page): Promise<any[]> {
-  return page.evaluate(() => {
-    const rawInteractions = window.localStorage.getItem('sql-learning-interactions');
-    return rawInteractions ? JSON.parse(rawInteractions) : [];
-  });
-}
-
-async function getHintEventsFromStorage(page: Page): Promise<any[]> {
-  const interactions = await getAllInteractionsFromStorage(page);
-  return interactions.filter((i: any) => i.eventType === 'hint_view');
-}
-
-async function getExplanationEventsFromStorage(page: Page): Promise<any[]> {
-  const interactions = await getAllInteractionsFromStorage(page);
-  return interactions.filter((i: any) => i.eventType === 'explanation_view');
-}
+import { expect, Locator, test } from '@playwright/test';
+import {
+  getAllInteractionsFromStorage,
+  getExplanationEventsFromStorage,
+  getHintEventsFromStorage,
+  replaceEditorText,
+  runUntilErrorCount
+} from './test-helpers';
 
 // =============================================================================
 // Test Suite: Critical Bug Fixes

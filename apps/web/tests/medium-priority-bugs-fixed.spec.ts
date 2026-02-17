@@ -31,32 +31,12 @@
  */
 
 import { expect, test } from '@playwright/test';
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-async function getAllInteractionsFromStorage(page: ReturnType<typeof test>): Promise<any[]> {
-  return page.evaluate(() => {
-    const raw = window.localStorage.getItem('sql-learning-interactions');
-    return raw ? JSON.parse(raw) : [];
-  });
-}
-
-async function getHintEventsFromStorage(page: ReturnType<typeof test>): Promise<any[]> {
-  const interactions = await getAllInteractionsFromStorage(page);
-  return interactions.filter((i: any) => i.eventType === 'hint_view');
-}
-
-async function getExplanationEventsFromStorage(page: ReturnType<typeof test>): Promise<any[]> {
-  const interactions = await getAllInteractionsFromStorage(page);
-  return interactions.filter((i: any) => i.eventType === 'explanation_view');
-}
-
-async function getCoverageEventsFromStorage(page: ReturnType<typeof test>): Promise<any[]> {
-  const interactions = await getAllInteractionsFromStorage(page);
-  return interactions.filter((i: any) => i.eventType === 'coverage_change');
-}
+import {
+  getAllInteractionsFromStorage,
+  getCoverageEventsFromStorage,
+  getExplanationEventsFromStorage,
+  getHintEventsFromStorage
+} from './test-helpers';
 
 // =============================================================================
 // Test Suite: Medium Priority Bug Fixes

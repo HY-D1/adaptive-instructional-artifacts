@@ -19,91 +19,18 @@
  * @tag @high-priority-bugs - All tests tagged for high priority bug verification
  */
 
-import { expect, Locator, Page, test } from '@playwright/test';
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-async function replaceEditorText(page: Page, text: string) {
-  const editorSurface = page.locator('.monaco-editor .view-lines').first();
-  await editorSurface.click({ position: { x: 8, y: 8 } });
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-  await page.keyboard.type(text);
-}
-
-async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedErrorCount: number) {
-  const marker = page.getByText(new RegExp(`\\b${expectedErrorCount}\\s+error(s)?\\b`, 'i'));
-  for (let i = 0; i < 12; i += 1) {
-    await runQueryButton.click();
-    if (await marker.first().isVisible().catch(() => false)) {
-      return;
-    }
-    await page.waitForTimeout(400);
-  }
-  throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
-}
-
-async function getAllInteractionsFromStorage(page: Page): Promise<any[]> {
-  return page.evaluate(() => {
-    const raw = window.localStorage.getItem('sql-learning-interactions');
-    return raw ? JSON.parse(raw) : [];
-  });
-}
-
-async function getHintEventsFromStorage(page: Page): Promise<any[]> {
-  const interactions = await getAllInteractionsFromStorage(page);
-  return interactions.filter((i: any) => i.eventType === 'hint_view');
-}
-
-async function getExplanationEventsFromStorage(page: Page): Promise<any[]> {
-  const interactions = await getAllInteractionsFromStorage(page);
-  return interactions.filter((i: any) => i.eventType === 'explanation_view');
-}
-
-async function getActiveSessionId(page: Page): Promise<string | null> {
-  return page.evaluate(() => {
-    return window.localStorage.getItem('sql-learning-active-session');
-  });
-}
-
-async function getProfileFromStorage(page: Page, learnerId: string): Promise<any | null> {
-  return page.evaluate((id) => {
-    const raw = window.localStorage.getItem('sql-learning-profiles');
-    if (!raw) return null;
-    const profiles = JSON.parse(raw);
-    return profiles.find((p: any) => p.id === id) || null;
-  }, learnerId);
-}
-
-async function getTextbookUnits(page: Page, learnerId: string): Promise<any[]> {
-  return page.evaluate((id) => {
-    const raw = window.localStorage.getItem('sql-learning-textbook');
-    if (!raw) return [];
-    const textbooks = JSON.parse(raw);
-    return textbooks[id] || [];
-  }, learnerId);
-}
-
-async function seedValidProfile(page: Page, learnerId: string) {
-  await page.evaluate((id) => {
-    const profile = {
-      id,
-      name: `Learner ${id}`,
-      conceptsCovered: [],
-      conceptCoverageEvidence: [],
-      errorHistory: [],
-      interactionCount: 0,
-      version: 1,
-      currentStrategy: 'adaptive-medium',
-      preferences: {
-        escalationThreshold: 3,
-        aggregationDelay: 300000
-      }
-    };
-    window.localStorage.setItem('sql-learning-profiles', JSON.stringify([profile]));
-  }, learnerId);
-}
+import { expect, test } from '@playwright/test';
+import {
+  getActiveSessionId,
+  getAllInteractionsFromStorage,
+  getExplanationEventsFromStorage,
+  getHintEventsFromStorage,
+  getProfileFromStorage,
+  getTextbookUnits,
+  replaceEditorText,
+  runUntilErrorCount,
+  seedValidProfile
+} from './test-helpers';
 
 // =============================================================================
 // Test Suite: High Priority Bug Fixes

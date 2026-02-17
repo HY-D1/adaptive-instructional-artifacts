@@ -287,6 +287,8 @@ npm run llm:health:capture
 ### Key Commits
 
 ```
+[PENDING] fix: comprehensive bug audit - 17 bugs fixed across all severity levels
+[PENDING] refactor: extract shared test helpers to reduce code duplication
 306cb4a docs(AGENTS): add progress update policy and docs reference
 e551ff7 docs: add AGENTS.md with project status and guidelines  
 17391a7 feat: improve PDF retrieval with SQL keywords
@@ -303,10 +305,16 @@ d2eb3ba feat: add expandable PDF source passages to hints
 
 ### Technical Debt Resolved
 
+- **Bug Audit 2026-02-16**: Fixed 17 bugs across all severity levels
+  - 5 Critical: Floating-point comparison, stale closure, session validation, empty query guard, race condition
+  - 3 High: Monaco disposal, SQL comment parsing, hint flow reset
+  - 4 Medium: CSV newlines, PDF citation NaN, hint refs reset, conceptIds merge
+  - 5 Low: Code duplication, simplification, dead code removal, test helpers
 - Problem validation: All 32 problems now have `expectedResult` arrays
 - Export policy: `weekly-export-sanitize-v1` with session sanitization
 - Error boundaries: Added to prevent total app crashes
 - Resource cleanup: Blob URL, FileReader, Monaco editor disposal
+- Test refactoring: Created `test-helpers.ts` shared module
 
 ### Next Phase (Week 3-4)
 
