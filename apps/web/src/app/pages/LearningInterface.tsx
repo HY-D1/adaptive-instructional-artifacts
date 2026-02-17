@@ -455,7 +455,9 @@ export function LearningInterface() {
       policyVersion: getSqlEngagePolicyVersion(),
       successful: actuallyCorrect,  // Now reflects correctness, not just execution success
       timeSpent: Date.now() - startTime,
-      conceptIds: actuallyCorrect ? [...currentProblem.concepts] : undefined
+      // Track attempted concepts for all executable submissions so incorrect
+      // (result-graded) runs can reduce mastery evidence.
+      conceptIds: result.success ? [...currentProblem.concepts] : undefined
     };
 
     storage.saveInteraction(event);

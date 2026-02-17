@@ -706,3 +706,46 @@ jq '[.interactions[] | select(.eventType=="hint_view" or .eventType=="explanatio
 - Next smallest fix:
   - Add a compact accessibility smoke test in nav/research pages for other icon-only controls (menu trigger, clear-filter icon buttons) to enforce explicit labels consistently.
 
+### 2026-02-17T10:10:17-08:00 - Practice mastery regression triage
+
+- Current status: `FAIL` (concept mastery could remain high after incorrect executable query)
+- Evidence:
+  - `apps/web/src/app/pages/LearningInterface.tsx:458` only assigned `conceptIds` when `actuallyCorrect` was true.
+  - `apps/web/src/app/lib/storage.ts:1183` penalizes failed `execution` events only when concept IDs are present.
+  - `apps/web/src/app/lib/storage.ts:1134` derives concepts from error subtype mapping or explicit `event.conceptIds`.
+  - `jq '[.interactions[] | select(.eventType=="execution")] | length' dist/weekly-demo/export.json` -> `0` (latest export did not cover this path; bug reproduced in UI).
+- Next smallest fix:
+  - Attribute problem concept IDs for executable submissions in `handleExecute` so incorrect attempts update concept evidence.
+
+### 2026-02-17T10:17:27-08:00 - Incorrect executable query now updates concept evidence
+
+- Current status: `PASS` (incorrect executable attempts now penalize attempted concept coverage)
+- Evidence:
+  - `apps/web/src/app/pages/LearningInterface.tsx:460` now sets `conceptIds` for executable submissions (`result.success`), including incorrect result-graded runs.
+  - Added regression helpers in `apps/web/tests/weekly-concept-coverage.spec.ts:200` and `apps/web/tests/weekly-concept-coverage.spec.ts:251` for stable Monaco input + failed execution retry.
+  - Added regression test at `apps/web/tests/weekly-concept-coverage.spec.ts:624` validating:
+    - incorrect execution logs `successful: false` with `conceptIds` present
+    - concept score decreases below 100
+    - `errorEncountered` increments for `select-basic`
+  - `CI=1 npx playwright test -c playwright.config.ts apps/web/tests/weekly-concept-coverage.spec.ts -g "incorrect executable query penalizes attempted concept coverage"` -> `1 passed`
+  - `npm run build` -> `PASS`
+- Next smallest fix:
+  - Add compact UI copy clarifying Concept Coverage is cumulative across attempts/sessions.
+
+### 2026-02-17T10:18:58-08:00 - Progress logging policy alignment
+
+- Current status: `PASS`
+- Evidence:
+  - `AGENTS.md` now explicitly states `docs/week2_progress.md` is redirect-only and all checkpoints must be written to `docs/weekly-progress.md`.
+  - Prior regression checkpoints for `10:10:17` and `10:17:27` are now recorded in this file under Week 2 progress history.
+- Next smallest fix:
+  - Keep `docs/week2_progress.md` as redirect-only and continue logging all future checkpoints here.
+
+### 2026-02-17T10:21:09-08:00 - Commit suggestion style preference
+
+- Current status: `PASS`
+- Evidence:
+  - `AGENTS.md:118` now states commit suggestions should default to clean + simple.
+  - `AGENTS.md:401` reinforces concise commit suggestion behavior under no-auto-commit policy.
+- Next smallest fix:
+  - Keep commit suggestions one logical change and concise by default unless a detailed format is requested.

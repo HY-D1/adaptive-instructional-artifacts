@@ -195,6 +195,40 @@ async function replaceEditorText(page: Page, text: string) {
 }
 
 /**
+ * Set editor value directly through Monaco model (with keyboard fallback).
+ */
+async function setEditorText(page: Page, text: string) {
+  const monacoReady = await expect
+    .poll(async () => (
+      page.evaluate(() => {
+        const maybeMonaco = (window as any).monaco;
+        const modelCount = maybeMonaco?.editor?.getModels?.()?.length ?? 0;
+        return modelCount > 0;
+      })
+    ), {
+      message: 'Waiting for Monaco model to initialize',
+      timeout: 5000,
+      intervals: [100, 200, 300]
+    })
+    .toBe(true)
+    .then(() => true)
+    .catch(() => false);
+
+  if (monacoReady) {
+    await page.evaluate((nextText) => {
+      const maybeMonaco = (window as any).monaco;
+      const model = maybeMonaco?.editor?.getModels?.()?.[0];
+      if (model) {
+        model.setValue(nextText);
+      }
+    }, text);
+    return;
+  }
+
+  await replaceEditorText(page, text);
+}
+
+/**
  * Run query until error count reaches expected
  */
 async function runUntilErrorCount(page: Page, expectedErrorCount: number) {
@@ -209,6 +243,32 @@ async function runUntilErrorCount(page: Page, expectedErrorCount: number) {
     await page.waitForTimeout(400);
   }
   throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
+}
+
+/**
+ * Run query until a failed execution event is captured.
+ */
+async function runUntilFailedExecution(page: Page): Promise<any> {
+  const runQueryButton = page.getByRole('button', { name: 'Run Query' });
+
+  for (let i = 0; i < 10; i += 1) {
+    await runQueryButton.click();
+    await page.waitForTimeout(400);
+
+    const failedExecution = await page.evaluate(() => {
+      const raw = window.localStorage.getItem('sql-learning-interactions');
+      const interactions = raw ? JSON.parse(raw) : [];
+      return interactions
+        .filter((i: any) => i.eventType === 'execution' && i.successful === false)
+        .sort((a: any, b: any) => b.timestamp - a.timestamp)[0] || null;
+    });
+
+    if (failedExecution) {
+      return failedExecution;
+    }
+  }
+
+  return null;
 }
 
 // ============================================================================
@@ -559,6 +619,44 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
     
     // Error count should have increased
     expect(updatedErrorCount).toBeGreaterThan(initialErrorCount);
+  });
+
+  test('incorrect executable query penalizes attempted concept coverage', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Select All Users' })).toBeVisible();
+
+    // Seed a mastered concept so we can verify score reduction after an incorrect run.
+    await seedCoverageData(page, 'learner-1', {
+      'select-basic': {
+        score: 100,
+        confidence: 'high',
+        evidenceCounts: {
+          successfulExecution: 4,
+          hintViewed: 0,
+          explanationViewed: 0,
+          errorEncountered: 0,
+          notesAdded: 0
+        },
+        streakCorrect: 4,
+        streakIncorrect: 0
+      }
+    });
+
+    await setEditorText(page, 'SELECT name FROM users;');
+    const latestIncorrectExecution = await runUntilFailedExecution(page);
+
+    expect(latestIncorrectExecution).not.toBeNull();
+    expect(latestIncorrectExecution.successful).toBe(false);
+    expect(latestIncorrectExecution.conceptIds).toContain('select-basic');
+
+    await expect.poll(async () => {
+      const coverage = await getConceptCoverage(page, 'learner-1');
+      return coverage.get('select-basic')?.score ?? 100;
+    }).toBeLessThan(100);
+
+    const updatedCoverage = await getConceptCoverage(page, 'learner-1');
+    expect(updatedCoverage.get('select-basic')?.evidenceCounts?.errorEncountered).toBeGreaterThanOrEqual(1);
   });
 
   // ============================================================================
