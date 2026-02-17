@@ -49,6 +49,40 @@ docs/                    # Documentation
 dist/                    # Build outputs (PDF storage, index)
 ```
 
+## 🔄 How It Works
+
+### Hint Ladder Flow
+
+```
+SQL Error
+    ↓
+normalizeSqlErrorSubtype() → error_subtype
+    ↓
+┌──────────────────────────────────────────┐
+│         SQL-Engage Hint Ladder           │
+├──────────────────────────────────────────┤
+│ L1: Static guidance (surface hint)       │
+│ L2: Guidance + intended_learning_outcome │
+│ L3: Guidance + feedback_target           │
+└──────────────────────────────────────────┘
+    ↓ (L3 exhausted)
+Generate Explanation → My Notes
+```
+
+**Escalation Rule**: After 3 hints (L1→L2→L3) → Show "Generate Explanation" button → LLM generates full explanation → Saved to My Notes
+
+### Component Flow
+
+| Step | Component | Action |
+|------|-----------|--------|
+| 1 | `sql-executor.ts` | Execute SQL, detect errors |
+| 2 | `sql-engage.ts` | Map error to subtype, retrieve hint |
+| 3 | `adaptive-orchestrator.ts` | Track hint level, decide escalation |
+| 4 | `HintSystem.tsx` | Display hint to user |
+| 5 | `content-generator.ts` | Generate explanation (when triggered) |
+| 6 | `storage.ts` | Save to My Notes |
+| 7 | `TextbookPage.tsx` | Display accumulated notes |
+
 ## 📖 User Guide
 
 ### Practice Mode
