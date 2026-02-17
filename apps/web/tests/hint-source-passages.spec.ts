@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test.describe('@week2 Hint Source Passages Feature', () => {
+test.describe('@weekly Hint Source Passages Feature', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();

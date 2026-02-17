@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('@week2 retrieval grounding: same learner/problem/subtype resolves stable anchor and source IDs', async ({ page }) => {
+test('@weekly retrieval grounding: same learner/problem/subtype resolves stable anchor and source IDs', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();

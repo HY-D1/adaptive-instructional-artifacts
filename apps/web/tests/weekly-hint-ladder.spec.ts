@@ -10,7 +10,7 @@
  * - Edge cases (no profile, no session, different subtypes)
  * - Hint content quality (progressive specificity, non-empty text)
  *
- * @tag @week2 - All tests tagged for Week 2 verification
+ * @tag @weekly - All tests tagged for Week 2 verification
  */
 
 import { expect, Locator, Page, test } from '@playwright/test';
@@ -112,13 +112,13 @@ test.beforeEach(async ({ page }) => {
 // TEST SUITE: Hint Ladder System (Feature 1)
 // =============================================================================
 
-test.describe('@week2 Hint Ladder System - Feature 1', () => {
+test.describe('@weekly Hint Ladder System - Feature 1', () => {
 
   // ===========================================================================
   // TEST 1: Hint Level Progression
   // ===========================================================================
 
-  test('@week2 hint level progression: 1→2→3 with sequential helpRequestIndex', async ({ page }) => {
+  test('@weekly hint level progression: 1→2→3 with sequential helpRequestIndex', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
 
@@ -166,7 +166,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
     expect(helpIndices).toEqual([1, 2, 3]);
   });
 
-  test('@week2 hint level progression: cannot exceed level 3', async ({ page }) => {
+  test('@weekly hint level progression: cannot exceed level 3', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -207,7 +207,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
     }).toBeGreaterThanOrEqual(1);
   });
 
-  test('@week2 hint level persistence: events are stored in localStorage', async ({ page }) => {
+  test('@weekly hint level persistence: events are stored in localStorage', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -257,7 +257,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
   // TEST 2: SQL-Engage Integration
   // ===========================================================================
 
-  test('@week2 sql-engage integration: error subtypes map to correct hint templates', async ({ page }) => {
+  test('@weekly sql-engage integration: error subtypes map to correct hint templates', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -288,7 +288,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
     expect(canonicalSubtypes).toContain(hintEvent.sqlEngageSubtype);
   });
 
-  test('@week2 sql-engage integration: sqlEngageSubtype captured correctly', async ({ page }) => {
+  test('@weekly sql-engage integration: sqlEngageSubtype captured correctly', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -306,7 +306,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
     expect(hintEvent.sqlEngageSubtype.length).toBeGreaterThan(0);
   });
 
-  test('@week2 sql-engage integration: sqlEngageRowId is logged', async ({ page }) => {
+  test('@weekly sql-engage integration: sqlEngageRowId is logged', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -325,7 +325,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
     expect(hintEvent.sqlEngageRowId).toMatch(/^sql-engage:/);
   });
 
-  test('@week2 sql-engage integration: policyVersion is correct', async ({ page }) => {
+  test('@weekly sql-engage integration: policyVersion is correct', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -351,7 +351,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
   // TEST 3: Hint Event Logging (hint_view)
   // ===========================================================================
 
-  test('@week2 hint event logging: all required fields present', async ({ page }) => {
+  test('@weekly hint event logging: all required fields present', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -422,7 +422,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
     expect(hintEvent.timestamp).toBeGreaterThan(0);
   });
 
-  test('@week2 hint event logging: hintId format validation', async ({ page }) => {
+  test('@weekly hint event logging: hintId format validation', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -445,7 +445,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
   // TEST 4: Hint Deduplication
   // ===========================================================================
 
-  test('@week2 hint deduplication: same helpRequestIndex cannot be logged twice', async ({ page }) => {
+  test('@weekly hint deduplication: same helpRequestIndex cannot be logged twice', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -476,7 +476,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
     expect(uniqueIndices.size).toBe(helpIndices.length);
   });
 
-  test('@week2 hint deduplication: rapid clicks do not create duplicates', async ({ page }) => {
+  test('@weekly hint deduplication: rapid clicks do not create duplicates', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -509,7 +509,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
   // TEST 5: Edge Cases
   // ===========================================================================
 
-  test('@week2 edge case: no profile available - graceful handling', async ({ page }) => {
+  test('@weekly edge case: no profile available - graceful handling', async ({ page }) => {
     // Seed storage with no learner profile
     await page.addInitScript(() => {
       window.localStorage.clear();
@@ -543,7 +543,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
     // If disabled, that's also acceptable behavior for no-profile state
   });
 
-  test('@week2 edge case: no session - button disabled', async ({ page }) => {
+  test('@weekly edge case: no session - button disabled', async ({ page }) => {
     // Seed storage with profile but no active session
     await page.addInitScript(() => {
       window.localStorage.clear();
@@ -583,7 +583,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
     await expect(hintButton).toBeEnabled();
   });
 
-  test('@week2 edge case: different error subtypes get different hints', async ({ page }) => {
+  test('@weekly edge case: different error subtypes get different hints', async ({ page }) => {
     // First error type test
     await page.goto('/');
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -635,7 +635,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
   // TEST 6: Hint Content Quality
   // ===========================================================================
 
-  test('@week2 hint content quality: hints are progressively more specific', async ({ page }) => {
+  test('@weekly hint content quality: hints are progressively more specific', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -670,7 +670,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
     expect(hintTexts[1]).not.toBe(hintTexts[2]);
   });
 
-  test('@week2 hint content quality: hint text is non-empty and meaningful', async ({ page }) => {
+  test('@weekly hint content quality: hint text is non-empty and meaningful', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -698,7 +698,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
     expect(hasActionableContent).toBe(true);
   });
 
-  test('@week2 hint content quality: hints reference the specific error', async ({ page }) => {
+  test('@weekly hint content quality: hints reference the specific error', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -723,7 +723,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
   // TEST 7: Session and Learner Association
   // ===========================================================================
 
-  test('@week2 session association: all hints linked to active session', async ({ page }) => {
+  test('@weekly session association: all hints linked to active session', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -749,7 +749,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
     }
   });
 
-  test('@week2 learner association: all hints linked to learner ID', async ({ page }) => {
+  test('@weekly learner association: all hints linked to learner ID', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -774,7 +774,7 @@ test.describe('@week2 Hint Ladder System - Feature 1', () => {
   // TEST 8: Integration with Escalation System
   // ===========================================================================
 
-  test('@week2 escalation integration: after level 3, next request triggers explanation', async ({ page }) => {
+  test('@weekly escalation integration: after level 3, next request triggers explanation', async ({ page }) => {
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });

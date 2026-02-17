@@ -312,7 +312,7 @@ async function getReplayDecisions(page: Page, strategy: string): Promise<any[]> 
 }
 
 // Test 1: Research Dashboard UI Components
-test('@week2 policy-comparison: research dashboard UI renders correctly', async ({ page }) => {
+test('@weekly policy-comparison: research dashboard UI renders correctly', async ({ page }) => {
   // Ensure completely clean state before test
   await page.goto('/');
   await page.evaluate(() => {
@@ -454,7 +454,7 @@ test('@week2 policy-comparison: research dashboard UI renders correctly', async 
 });
 
 // Test 2: Session Export Functionality
-test('@week2 policy-comparison: session export generates valid JSON', async ({ page }) => {
+test('@weekly policy-comparison: session export generates valid JSON', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -503,7 +503,7 @@ test('@week2 policy-comparison: session export generates valid JSON', async ({ p
 });
 
 // Test 3: Export JSON Schema Verification
-test('@week2 policy-comparison: export JSON has all required schema fields', async ({ page }) => {
+test('@weekly policy-comparison: export JSON has all required schema fields', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -551,7 +551,7 @@ test('@week2 policy-comparison: export JSON has all required schema fields', asy
 });
 
 // Test 4: Policy Strategy Selection via Orchestrator
-test('@week2 policy-comparison: policy strategy selection is available', async ({ page }) => {
+test('@weekly policy-comparison: policy strategy selection is available', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -590,7 +590,7 @@ test('@week2 policy-comparison: policy strategy selection is available', async (
 });
 
 // Test 5: Hint-Only Strategy Never Escalates (using orchestrator directly)
-test('@week2 policy-comparison: hint-only strategy never escalates to explanation', async ({ page }) => {
+test('@weekly policy-comparison: hint-only strategy never escalates to explanation', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -629,7 +629,7 @@ test('@week2 policy-comparison: hint-only strategy never escalates to explanatio
 });
 
 // Test 6: Adaptive-Medium Strategy Thresholds (using orchestrator directly)
-test('@week2 policy-comparison: adaptive-medium has correct thresholds', async ({ page }) => {
+test('@weekly policy-comparison: adaptive-medium has correct thresholds', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -667,7 +667,7 @@ test('@week2 policy-comparison: adaptive-medium has correct thresholds', async (
 });
 
 // Test 7: Auto-Escalation Modes Configuration via Orchestrator
-test('@week2 policy-comparison: auto-escalation modes are configurable', async ({ page }) => {
+test('@weekly policy-comparison: auto-escalation modes are configurable', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -722,7 +722,7 @@ test('@week2 policy-comparison: auto-escalation modes are configurable', async (
 });
 
 // Test 8: Decision Trace Structure Verification
-test('@week2 policy-comparison: decision trace structure is correct', async ({ page }) => {
+test('@weekly policy-comparison: decision trace structure is correct', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -780,7 +780,7 @@ test('@week2 policy-comparison: decision trace structure is correct', async ({ p
 });
 
 // Test 9: Policy Comparison - Decision Divergence Detection
-test('@week2 policy-comparison: decision divergence between strategies is detected', async ({ page }) => {
+test('@weekly policy-comparison: decision divergence between strategies is detected', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -838,7 +838,7 @@ test('@week2 policy-comparison: decision divergence between strategies is detect
 });
 
 // Test 10: Research Guardrails - "Would Do" Language
-test('@week2 policy-comparison: research guardrails use "would do" language', async ({ page }) => {
+test('@weekly policy-comparison: research guardrails use "would do" language', async ({ page }) => {
   // Ensure clean state
   await page.goto('/ ');
   await page.evaluate(() => {
@@ -924,7 +924,7 @@ test('@week2 policy-comparison: research guardrails use "would do" language', as
 });
 
 // Test 11: Export Scope Toggle
-test('@week2 policy-comparison: export scope toggle works correctly', async ({ page }) => {
+test('@weekly policy-comparison: export scope toggle works correctly', async ({ page }) => {
   // Ensure clean state
   await page.goto('/ ');
   await page.evaluate(() => {
@@ -1016,7 +1016,7 @@ test('@week2 policy-comparison: export scope toggle works correctly', async ({ p
 });
 
 // Test 12: Strategy Comparison Tab
-test('@week2 policy-comparison: strategy comparison tab shows experiment conditions', async ({ page }) => {
+test('@weekly policy-comparison: strategy comparison tab shows experiment conditions', async ({ page }) => {
   // Ensure clean state
   await page.goto('/ ');
   await page.evaluate(() => {
@@ -1123,7 +1123,7 @@ test('@week2 policy-comparison: strategy comparison tab shows experiment conditi
 });
 
 // Test 13: Policy Version in Decision Trace
-test('@week2 policy-comparison: policy version is recorded in decision trace', async ({ page }) => {
+test('@weekly policy-comparison: policy version is recorded in decision trace', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -1144,7 +1144,7 @@ test('@week2 policy-comparison: policy version is recorded in decision trace', a
 });
 
 // Test 14: Policy Version Constants
-test('@week2 policy-comparison: policy versions are consistent', async ({ page }) => {
+test('@weekly policy-comparison: policy versions are consistent', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();

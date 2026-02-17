@@ -49,7 +49,7 @@ test('week2 demo artifacts: real nav flow + active-session export json and scree
   // Wait for app to fully initialize before interacting
   await page.waitForTimeout(600);
 
-  const draftMarker = 'week2-demo-practice-draft-marker';
+  const draftMarker = 'weekly-demo-practice-draft-marker';
   await replaceEditorText(page, `-- ${draftMarker}\nSELECT `);
   await expect.poll(() => getEditorText(page), { timeout: 10000, intervals: [200] }).toContain(draftMarker);
 
@@ -109,7 +109,7 @@ test('week2 demo artifacts: real nav flow + active-session export json and scree
   await page.waitForTimeout(800);
   await expect.poll(() => getEditorText(page), { timeout: 15000, intervals: [300] }).toContain(draftMarker);
 
-  const outputDir = path.join(process.cwd(), 'dist', 'week2-demo');
+  const outputDir = path.join(process.cwd(), 'dist', 'weekly-demo');
   await mkdir(outputDir, { recursive: true });
   
   // Ensure hint panel is stable before screenshot

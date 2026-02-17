@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test('@week2 localStorage corruption does not crash app', async ({ page }) => {
+test('@weekly localStorage corruption does not crash app', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();

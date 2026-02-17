@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test.describe('@week2 Hint Persistence Across Navigation', () => {
+test.describe('@weekly Hint Persistence Across Navigation', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();

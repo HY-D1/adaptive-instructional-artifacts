@@ -223,7 +223,7 @@ async function seedValidSessionData(page: Page, learnerId: string = 'learner-tes
 // Test Suite: LocalStorage Corruption Handling
 // =============================================================================
 
-test.describe('@week2 data-integrity: LocalStorage corruption handling', () => {
+test.describe('@weekly data-integrity: LocalStorage corruption handling', () => {
   test('corrupt JSON in interactions gracefully handled', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
@@ -329,7 +329,7 @@ test.describe('@week2 data-integrity: LocalStorage corruption handling', () => {
 // Test Suite: Event Schema Validation
 // =============================================================================
 
-test.describe('@week2 data-integrity: Event schema validation', () => {
+test.describe('@weekly data-integrity: Event schema validation', () => {
   test('all events have required fields', async ({ page }) => {
     await seedValidSessionData(page, 'learner-schema-test');
     
@@ -485,7 +485,7 @@ test.describe('@week2 data-integrity: Event schema validation', () => {
 // Test Suite: Data Consistency
 // =============================================================================
 
-test.describe('@week2 data-integrity: Data consistency', () => {
+test.describe('@weekly data-integrity: Data consistency', () => {
   test('interactions match textbook entries', async ({ page }) => {
     await seedValidSessionData(page, 'learner-consistency-test');
     
@@ -670,7 +670,7 @@ test.describe('@week2 data-integrity: Data consistency', () => {
 // Test Suite: Export/Import Roundtrip
 // =============================================================================
 
-test.describe('@week2 data-integrity: Export/Import roundtrip', () => {
+test.describe('@weekly data-integrity: Export/Import roundtrip', () => {
   test('export data can be saved and restored', async ({ page }) => {
     await seedValidSessionData(page, 'learner-roundtrip-test');
     
@@ -825,7 +825,7 @@ test.describe('@week2 data-integrity: Export/Import roundtrip', () => {
 // Test Suite: Multi-Learner Isolation
 // =============================================================================
 
-test.describe('@week2 data-integrity: Multi-learner isolation', () => {
+test.describe('@weekly data-integrity: Multi-learner isolation', () => {
   test('learner A cannot see learner B data', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
@@ -1021,7 +1021,7 @@ test.describe('@week2 data-integrity: Multi-learner isolation', () => {
 // Test Suite: Session Management
 // =============================================================================
 
-test.describe('@week2 data-integrity: Session management', () => {
+test.describe('@weekly data-integrity: Session management', () => {
   test('session creation generates unique IDs', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
@@ -1139,7 +1139,7 @@ test.describe('@week2 data-integrity: Session management', () => {
 // Test Suite: Error Handling
 // =============================================================================
 
-test.describe('@week2 data-integrity: Error handling', () => {
+test.describe('@weekly data-integrity: Error handling', () => {
   test('network errors (LLM unavailable) handled gracefully', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
@@ -1252,7 +1252,7 @@ test.describe('@week2 data-integrity: Error handling', () => {
 // Test Suite: XSS Prevention
 // =============================================================================
 
-test.describe('@week2 data-integrity: XSS prevention', () => {
+test.describe('@weekly data-integrity: XSS prevention', () => {
   test('script injection in notes is sanitized', async ({ page }) => {
     const xssPayload = '<script>window.__XSS_INJECTED__ = true;</script>';
     
@@ -1473,7 +1473,7 @@ test.describe('@week2 data-integrity: XSS prevention', () => {
 // Test Suite: Performance
 // =============================================================================
 
-test.describe('@week2 data-integrity: Performance', () => {
+test.describe('@weekly data-integrity: Performance', () => {
   test('many interactions do not slow UI', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
@@ -1632,7 +1632,7 @@ test.describe('@week2 data-integrity: Performance', () => {
 // Test Suite: State Synchronization
 // =============================================================================
 
-test.describe('@week2 data-integrity: State synchronization', () => {
+test.describe('@weekly data-integrity: State synchronization', () => {
   test('page refresh preserves state', async ({ page }) => {
     const marker = 'refresh-test-marker-12345';
     
@@ -1760,7 +1760,7 @@ test.describe('@week2 data-integrity: State synchronization', () => {
 // Edge Cases
 // =============================================================================
 
-test.describe('@week2 data-integrity: Edge cases', () => {
+test.describe('@weekly data-integrity: Edge cases', () => {
   test('handles empty learner ID gracefully', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();

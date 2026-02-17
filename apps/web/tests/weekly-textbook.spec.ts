@@ -169,7 +169,7 @@ async function seedInteractions(page: Page, interactions: any[]) {
 // Test Suite: Note Creation (textbook_add events)
 // ============================================================================
 
-test('@week2 @textbook note creation: all 10+ required fields present', async ({ page }) => {
+test('@weekly @textbook note creation: all 10+ required fields present', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -264,7 +264,7 @@ test('@week2 @textbook note creation: all 10+ required fields present', async ({
 // Test Suite: Note Deduplication
 // ============================================================================
 
-test('@week2 @textbook deduplication: same concept does not create duplicate notes', async ({ page }) => {
+test('@weekly @textbook deduplication: same concept does not create duplicate notes', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -297,7 +297,7 @@ test('@week2 @textbook deduplication: same concept does not create duplicate not
   expect(addEvents.length).toBeGreaterThanOrEqual(1); // At least one add
 });
 
-test('@week2 @textbook deduplication: hash-based deduplication and content merging', async ({ page }) => {
+test('@weekly @textbook deduplication: hash-based deduplication and content merging', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -347,7 +347,7 @@ test('@week2 @textbook deduplication: hash-based deduplication and content mergi
   expect(unit.updatedSessionIds).toContain('session-test-1');
 });
 
-test('@week2 @textbook deduplication: timestamp updates on update', async ({ page }) => {
+test('@weekly @textbook deduplication: timestamp updates on update', async ({ page }) => {
   const now = Date.now();
   const oldTimestamp = now - 3600000; // 1 hour ago
   
@@ -389,7 +389,7 @@ test('@week2 @textbook deduplication: timestamp updates on update', async ({ pag
   expect(units[0].addedTimestamp).toBe(oldTimestamp);
 });
 
-test('@week2 @textbook deduplication: multi-session tracking via updatedSessionIds', async ({ page }) => {
+test('@weekly @textbook deduplication: multi-session tracking via updatedSessionIds', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -434,7 +434,7 @@ test('@week2 @textbook deduplication: multi-session tracking via updatedSessionI
 // Test Suite: Note Display (TextbookPage)
 // ============================================================================
 
-test('@week2 @textbook display: notes appear in textbook view', async ({ page }) => {
+test('@weekly @textbook display: notes appear in textbook view', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -502,7 +502,7 @@ test('@week2 @textbook display: notes appear in textbook view', async ({ page })
   await expect(page.getByRole('button', { name: /Note Two WHERE Clauses/ })).toBeVisible();
 });
 
-test('@week2 @textbook display: concept badges display correctly', async ({ page }) => {
+test('@weekly @textbook display: concept badges display correctly', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -543,7 +543,7 @@ test('@week2 @textbook display: concept badges display correctly', async ({ page
   await expect(page.getByText('Test content for concept badge')).toBeVisible();
 });
 
-test('@week2 @textbook display: evidence links work', async ({ page }) => {
+test('@weekly @textbook display: evidence links work', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -604,7 +604,7 @@ test('@week2 @textbook display: evidence links work', async ({ page }) => {
   await expect(page.getByText('Evidence Links')).toBeVisible();
 });
 
-test('@week2 @textbook display: learner switcher works', async ({ page }) => {
+test('@weekly @textbook display: learner switcher works', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -665,7 +665,7 @@ test('@week2 @textbook display: learner switcher works', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Learner 1 Note' })).not.toBeVisible();
 });
 
-test('@week2 @textbook display: coverage stats visible', async ({ page }) => {
+test('@weekly @textbook display: coverage stats visible', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -705,7 +705,7 @@ test('@week2 @textbook display: coverage stats visible', async ({ page }) => {
 // Test Suite: Note Content Generation
 // ============================================================================
 
-test('@week2 @textbook content: markdown rendering in note display', async ({ page }) => {
+test('@weekly @textbook content: markdown rendering in note display', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -765,7 +765,7 @@ SELECT * FROM users;
   await expect(page.getByText(/italic/)).toBeVisible();
 });
 
-test('@week2 @textbook content: title generation', async ({ page }) => {
+test('@weekly @textbook content: title generation', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -797,7 +797,7 @@ test('@week2 @textbook content: title generation', async ({ page }) => {
 // Test Suite: Provenance Tracking
 // ============================================================================
 
-test('@week2 @textbook provenance: source interaction IDs tracked', async ({ page }) => {
+test('@weekly @textbook provenance: source interaction IDs tracked', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -848,7 +848,7 @@ test('@week2 @textbook provenance: source interaction IDs tracked', async ({ pag
   await expect(page.getByText(/Input hash:/)).toBeVisible();
 });
 
-test('@week2 @textbook provenance: PDF citations displayed', async ({ page }) => {
+test('@weekly @textbook provenance: PDF citations displayed', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -893,7 +893,7 @@ test('@week2 @textbook provenance: PDF citations displayed', async ({ page }) =>
   await expect(page.getByTestId('provenance-pdf-citations')).toContainText('p.5');
 });
 
-test('@week2 @textbook provenance: SQL-Engage sources cited', async ({ page }) => {
+test('@weekly @textbook provenance: SQL-Engage sources cited', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -934,7 +934,7 @@ test('@week2 @textbook provenance: SQL-Engage sources cited', async ({ page }) =
   await expect(page.getByTestId('provenance-retrieved-sources')).toContainText('3 merged');
 });
 
-test('@week2 @textbook provenance: LLM metadata stored', async ({ page }) => {
+test('@weekly @textbook provenance: LLM metadata stored', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -971,7 +971,7 @@ test('@week2 @textbook provenance: LLM metadata stored', async ({ page }) => {
 // Test Suite: Note Update (textbook_update)
 // ============================================================================
 
-test('@week2 @textbook update: updating existing note logs textbook_update', async ({ page }) => {
+test('@weekly @textbook update: updating existing note logs textbook_update', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -999,7 +999,7 @@ test('@week2 @textbook update: updating existing note logs textbook_update', asy
   expect(updateEvents.length).toBeGreaterThanOrEqual(1);
 });
 
-test('@week2 @textbook update: content replacement on update', async ({ page }) => {
+test('@weekly @textbook update: content replacement on update', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -1064,7 +1064,7 @@ test('@week2 @textbook update: content replacement on update', async ({ page }) 
 // Test Suite: Edge Cases
 // ============================================================================
 
-test('@week2 @textbook edge: empty textbook view', async ({ page }) => {
+test('@weekly @textbook edge: empty textbook view', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -1078,7 +1078,7 @@ test('@week2 @textbook edge: empty textbook view', async ({ page }) => {
   await expect(page.getByText(/practice SQL/)).toBeVisible();
 });
 
-test('@week2 @textbook edge: many notes performance', async ({ page }) => {
+test('@weekly @textbook edge: many notes performance', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -1134,7 +1134,7 @@ test('@week2 @textbook edge: many notes performance', async ({ page }) => {
   expect(unitCount).toBe(20);
 });
 
-test('@week2 @textbook edge: special characters in note content', async ({ page }) => {
+test('@weekly @textbook edge: special characters in note content', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -1186,7 +1186,7 @@ SELECT * FROM users WHERE name = 'O''Brien';
   expect(pageContent).toContain('🎉');
 });
 
-test('@week2 @textbook edge: XSS prevention in note content', async ({ page }) => {
+test('@weekly @textbook edge: XSS prevention in note content', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -1252,7 +1252,7 @@ test('@week2 @textbook edge: XSS prevention in note content', async ({ page }) =
   expect(hasOnError).toBe(false);
 });
 
-test('@week2 @textbook edge: fallback content when LLM unavailable', async ({ page }) => {
+test('@weekly @textbook edge: fallback content when LLM unavailable', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -1293,7 +1293,7 @@ test('@week2 @textbook edge: fallback content when LLM unavailable', async ({ pa
   await expect(page.getByText(/Model:/i)).toBeVisible();
 });
 
-test('@week2 @textbook edge: misconception cards and spaced review prompts', async ({ page }) => {
+test('@weekly @textbook edge: misconception cards and spaced review prompts', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();

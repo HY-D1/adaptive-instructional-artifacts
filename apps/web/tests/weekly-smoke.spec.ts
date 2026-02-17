@@ -25,7 +25,7 @@ async function getEditorText(page: Page): Promise<string> {
   return page.locator('.monaco-editor .view-lines').first().innerText();
 }
 
-test('@week2 smoke: practice editor draft persists across textbook navigation', async ({ page }) => {
+test('@weekly smoke: practice editor draft persists across textbook navigation', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -49,7 +49,7 @@ test('@week2 smoke: practice editor draft persists across textbook navigation', 
   await expect.poll(() => getEditorText(page)).toContain(marker);
 });
 
-test('@week2 smoke: hint ladder -> escalate -> add/update note -> textbook evidence', async ({ page }) => {
+test('@weekly smoke: hint ladder -> escalate -> add/update note -> textbook evidence', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -208,7 +208,7 @@ test('@week2 smoke: hint ladder -> escalate -> add/update note -> textbook evide
   await expect(page.getByTestId('provenance-retrieved-sources')).toBeVisible();
 });
 
-test('@week2 textbook provenance readability: merged source IDs and PDF citations are compact', async ({ page }) => {
+test('@weekly textbook provenance readability: merged source IDs and PDF citations are compact', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();

@@ -215,7 +215,7 @@ async function runUntilErrorCount(page: Page, expectedErrorCount: number) {
 // Test Suite: Concept Coverage Tracking
 // ============================================================================
 
-test.describe('@week2 Feature 4: Concept Coverage Tracking', () => {
+test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
   
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {

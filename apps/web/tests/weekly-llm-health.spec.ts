@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 const MODEL_NAME = 'qwen2.5:1.5b-instruct';
 
-test('@week2 research: Test LLM reports Ollama down then up', async ({ page }) => {
+test('@weekly research: Test LLM reports Ollama down then up', async ({ page }) => {
   // Pre-populate localStorage with minimal data so ResearchDashboard renders properly
   await page.addInitScript(() => {
     window.localStorage.clear();

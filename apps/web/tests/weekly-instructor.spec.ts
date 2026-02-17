@@ -23,7 +23,7 @@ async function expectNumericValue(locator: Locator, expected: number) {
   await expect(locator).toHaveText(String(expected));
 }
 
-test('@week2 instructor: trace table shows events and policy knob changes decisions', async ({ page }) => {
+test('@weekly instructor: trace table shows events and policy knob changes decisions', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();

@@ -42,7 +42,7 @@ async function replaceEditorText(page: Page, text: string) {
   await page.keyboard.type(text);
 }
 
-test.describe('@week2 pdf-rag ui', () => {
+test.describe('@weekly pdf-rag ui', () => {
   // Clean up after each test to prevent state pollution
   test.afterEach(async ({ page }) => {
     await page.evaluate(() => {

@@ -103,7 +103,7 @@ async function runScenario(browser: Browser, replayMode: boolean): Promise<Norma
   return trace;
 }
 
-test('@week2 parity: policy decision trace is unchanged when replay mode toggles LLM path', async ({ browser }) => {
+test('@weekly parity: policy decision trace is unchanged when replay mode toggles LLM path', async ({ browser }) => {
   const normalModeTrace = await runScenario(browser, false);
   const replayModeTrace = await runScenario(browser, true);
 

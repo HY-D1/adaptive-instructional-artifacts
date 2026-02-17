@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test.describe('@week2 PDF Upload Feature', () => {
+test.describe('@weekly PDF Upload Feature', () => {
   test.beforeEach(async ({ page }) => {
     // Clear storage and set welcome seen
     await page.addInitScript(() => {
