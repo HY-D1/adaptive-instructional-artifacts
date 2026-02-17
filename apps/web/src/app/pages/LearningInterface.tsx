@@ -8,7 +8,7 @@ import { Skeleton } from '../components/ui/skeleton';
 import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/SQLEditor';
 import { HintSystem } from '../components/HintSystem';
 import { ConceptCoverage } from '../components/ConceptCoverage';
-import { Clock, CheckCircle2, AlertCircle, Play, Pause, Sparkles, BookOpen } from 'lucide-react';
+import { Clock, CheckCircle2, AlertCircle, Play, Pause, Sparkles, BookOpen, Check } from 'lucide-react';
 import {
   SQLProblem,
   InteractionEvent,
@@ -430,7 +430,11 @@ export function LearningInterface() {
     return { generation, textbookResult };
   };
 
-  const handleExecute = async (query: string, result: QueryResult) => {
+  const handleExecute = async (query: string, result: QueryResult, isCorrect?: boolean) => {
+    // isCorrect indicates if results match expected (for result-graded problems)
+    // If not provided, fall back to result.success (no SQL errors)
+    const actuallyCorrect = isCorrect ?? result.success;
+    
     const resolvedSubtype = !result.success
       ? canonicalizeSqlEngageSubtype(instructorSubtypeOverride || result.errorSubtypeId)
       : undefined;
@@ -446,9 +450,9 @@ export function LearningInterface() {
       errorSubtypeId: resolvedSubtype,
       sqlEngageSubtype: resolvedSubtype,
       policyVersion: getSqlEngagePolicyVersion(),
-      successful: result.success,
+      successful: actuallyCorrect,  // Now reflects correctness, not just execution success
       timeSpent: Date.now() - startTime,
-      conceptIds: result.success ? [...currentProblem.concepts] : undefined
+      conceptIds: actuallyCorrect ? [...currentProblem.concepts] : undefined
     };
 
     storage.saveInteraction(event);
@@ -622,6 +626,16 @@ export function LearningInterface() {
 
   const difficultyOrder = ['beginner', 'intermediate', 'advanced'];
 
+  // Helper to check if a problem has been solved (has successful execution)
+  const isProblemSolved = (problemId: string): boolean => {
+    return learnerSessionInteractions.some(
+      i => i.problemId === problemId && i.eventType === 'execution' && i.successful
+    );
+  };
+
+  // Get count of solved problems
+  const solvedCount = sqlProblems.filter(p => isProblemSolved(p.id)).length;
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -724,6 +738,12 @@ export function LearningInterface() {
                       >
                         {currentProblem.difficulty}
                       </Badge>
+                      {isProblemSolved(currentProblem.id) && (
+                        <Badge className="bg-green-100 text-green-800 border-green-200">
+                          <Check className="size-3 mr-1" />
+                          Solved
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-gray-700">{currentProblem.description}</p>
                     
@@ -751,18 +771,24 @@ export function LearningInterface() {
                     </div>
                   </div>
                   
-                  {/* Enhanced Problem Selector with difficulty and concepts */}
+                  {/* Enhanced Problem Selector with difficulty, concepts, and solved status */}
                   <Select 
                     value={currentProblem.id} 
                     onValueChange={handleProblemChange}
                   >
-                    <SelectTrigger className="w-full lg:w-[280px]">
-                      <SelectValue />
+                    <SelectTrigger className="w-full lg:w-[300px]">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <span className="truncate">{currentProblem.title}</span>
+                        <Badge variant="outline" className="text-[10px] px-1 shrink-0">
+                          {solvedCount}/{sqlProblems.length} solved
+                        </Badge>
+                      </div>
                     </SelectTrigger>
                     <SelectContent className="max-h-[400px]">
                       {difficultyOrder.map(difficulty => {
                         const problems = problemsByDifficulty[difficulty];
                         if (!problems?.length) return null;
+                        const solvedInDifficulty = problems.filter(p => isProblemSolved(p.id)).length;
                         return (
                           <div key={difficulty}>
                             <div className={`px-2 py-1.5 text-xs font-semibold uppercase tracking-wide ${
@@ -770,18 +796,30 @@ export function LearningInterface() {
                               difficulty === 'intermediate' ? 'text-yellow-700 bg-yellow-50' :
                               'text-red-700 bg-red-50'
                             }`}>
-                              {difficulty}
+                              {difficulty} ({solvedInDifficulty}/{problems.length} solved)
                             </div>
-                            {problems.map(problem => (
-                              <SelectItem key={problem.id} value={problem.id} className="pl-4 py-2">
-                                <div className="flex flex-col items-start">
-                                  <span className="font-medium">{problem.title}</span>
-                                  <span className="text-xs text-gray-500">
-                                    {problem.concepts.length} concept{problem.concepts.length !== 1 ? 's' : ''}
-                                  </span>
-                                </div>
-                              </SelectItem>
-                            ))}
+                            {problems.map(problem => {
+                              const solved = isProblemSolved(problem.id);
+                              return (
+                                <SelectItem key={problem.id} value={problem.id} className="pl-4 py-2">
+                                  <div className="flex items-center gap-2 w-full">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className={`font-medium truncate ${solved ? 'text-green-700' : ''}`}>
+                                          {problem.title}
+                                        </span>
+                                        {solved && (
+                                          <Check className="size-3.5 text-green-600 shrink-0" />
+                                        )}
+                                      </div>
+                                      <span className="text-xs text-gray-500">
+                                        {problem.concepts.length} concept{problem.concepts.length !== 1 ? 's' : ''}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </SelectItem>
+                              );
+                            })}
                           </div>
                         );
                       })}

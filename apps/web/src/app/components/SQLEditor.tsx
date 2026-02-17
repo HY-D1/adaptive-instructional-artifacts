@@ -13,7 +13,7 @@ export const DEFAULT_SQL_EDITOR_CODE = '-- Write your SQL query here\nSELECT ';
 interface SQLEditorProps {
   problem: SQLProblem;
   code: string;
-  onExecute: (query: string, result: QueryResult) => void;
+  onExecute: (query: string, result: QueryResult, isCorrect?: boolean) => void;
   onCodeChange: (code: string) => void;
   onReset?: () => void;
 }
@@ -112,6 +112,23 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
     };
   }, [problem.id]);
 
+  // Helper to check correctness given a result (used for immediate feedback)
+  const checkCorrectnessForResult = (result: QueryResult): { match: boolean; mode: 'result' | 'exec-only' } | null => {
+    if (!result.success || !executor) return null;
+
+    const hasExpectedResult = problem.expectedResult && problem.expectedResult.length > 0;
+    const gradingMode = problem.gradingMode ?? (hasExpectedResult ? 'result' : 'exec-only');
+    
+    if (gradingMode === 'exec-only') {
+      return { match: result.success, mode: 'exec-only' };
+    }
+    
+    const actualResults = executor.formatResults(result);
+    const comparison = executor.compareResults(actualResults, problem.expectedResult!);
+    
+    return { match: comparison.match, mode: 'result' };
+  };
+
   const handleExecute = async () => {
     if (!executor || !code.trim()) return;
 
@@ -119,7 +136,10 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
     try {
       const queryResult = await executor.executeQuery(code);
       setResult(queryResult);
-      onExecute(code, queryResult);
+      
+      // Calculate correctness to pass to parent
+      const correctness = checkCorrectnessForResult(queryResult);
+      onExecute(code, queryResult, correctness?.match ?? queryResult.success);
     } catch (error) {
       console.error('Query execution error:', error);
       const errorResult: QueryResult = {
@@ -127,7 +147,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
         error: error instanceof Error ? error.message : 'An unexpected error occurred during query execution'
       };
       setResult(errorResult);
-      onExecute(code, errorResult);
+      onExecute(code, errorResult, false);
     } finally {
       setIsExecuting(false);
     }
