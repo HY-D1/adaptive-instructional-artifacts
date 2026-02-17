@@ -1,4 +1,4 @@
-# Week 2 Runbook — Adaptive Instructional Artifacts
+# Weekly Progress Runbook — Adaptive Instructional Artifacts
 
 **Status**: In Progress  
 **Target Completion**: 2026-02-14  
@@ -31,7 +31,7 @@ npm run test:e2e:week2
 ```bash
 npm run demo:week2
 ```
-**Expected**: Creates `dist/week2-demo/export.json` with:
+**Expected**: Creates `dist/weekly-demo/export.json` with:
 - At least 4 help requests (hint_view + explanation_view)
 - Max hint level = 3
 - At least 1 explanation_view
@@ -40,7 +40,7 @@ npm run demo:week2
 
 ### Gate 3: jq Validation
 ```bash
-cd dist/week2-demo
+cd dist/weekly-demo
 
 # Max hint level reached = 3
 jq '[.interactions[] | select(.eventType=="hint_view") | .hintLevel] | max' export.json
@@ -71,7 +71,7 @@ jq '[.interactions[] | select(.eventType=="hint_view" or .eventType=="explanatio
 ### 2026-02-14T09:00:00-08:00 - Initial Week 2 Setup
 
 - Current status: `PASS` (Week 2 acceptance gates on latest active export)
-- Evidence (latest dataset: `dist/week2-demo/export.json`):
+- Evidence (latest dataset: `dist/weekly-demo/export.json`):
   - `jq '[.interactions[] | select(.eventType=="hint_view") | .hintLevel] | max' export.json` -> `3`
   - `jq '[.interactions[] | select(.eventType=="hint_view") | has("hintId")] | any' export.json` -> `true`
   - `jq '[.interactions[] | has("sessionId") and (.sessionId!="")] | all' export.json` -> `true`
@@ -87,8 +87,8 @@ jq '[.interactions[] | select(.eventType=="hint_view" or .eventType=="explanatio
   - `npm run demo:week2` -> `PASS`
 - Evidence (code changes):
   - `.gitignore` -> Removed ignore patterns for docs files
-  - `docs/week2_progress.md` -> Created Week 2 runbook
-  - `docs/week2-demo.md` -> Created demo clickpath steps
+  - `docs/weekly-progress.md` -> Created Week 2 runbook
+  - `docs/weekly-demo.md` -> Created demo clickpath steps
 - Next smallest fix:
   - Verify all documentation files are tracked by git
 
@@ -96,7 +96,7 @@ jq '[.interactions[] | select(.eventType=="hint_view" or .eventType=="explanatio
 
 ## Demo Clickpath
 
-See `docs/week2-demo.md` for detailed step-by-step demo instructions.
+See `docs/weekly-demo.md` for detailed step-by-step demo instructions.
 
 Quick summary:
 1. Open app → dismiss welcome modal

@@ -7,7 +7,7 @@
 | Week 2 MVP | ✅ Complete | 2026-02-16 |
 | Build Gate | ✅ Pass | dist/app/ ready |
 | E2E Tests | ✅ 140 tests | All @weekly tagged |
-| Demo Artifacts | ✅ Generated | dist/week2-demo/ |
+| Demo Artifacts | ✅ Generated | dist/weekly-demo/ |
 | Documentation | ✅ Consolidated | 3 canonical files + AGENTS.md |
 | Deployment | 📋 Local only | No CI/CD yet |
 
@@ -234,14 +234,14 @@ Explanation View → textbook_add Event → My Notes
 | File | Purpose | Update When |
 |------|---------|-------------|
 | `README.md` | Project overview, quick start, user guide | Public-facing changes, setup changes |
-| `AGENTS.md` | **This file** — Agent guidelines, current status, policies | Status changes, new policies, milestones |
+| `AGENTS.md` | **This file** — Agent guidelines (⚠️ DO NOT COMMIT) | Local context only — never commit to git |
 | `docs/README.md` | Research vision, 6 core components, weekly roadmap | Research direction changes, milestones |
 | `docs/progress.md` | Component architecture, implementation details | Architecture changes, component updates |
-| `docs/week2_progress.md` | **Detailed runbook** — tasks, gates, checkpoint log | **Every task/issue/feature** (see below) |
+| `docs/weekly-progress.md` | **Detailed runbook** — tasks, gates, checkpoint log | **Every task/issue/feature** (see below) |
 
 ### File Usage Guidelines
 
-- **week2_progress.md** — Daily working log. Add checkpoint entries for every completed task, bug fix, or feature.
+- **weekly-progress.md** — Daily working log. Add checkpoint entries for every completed task, bug fix, or feature.
 - **progress.md** — System architecture. Update when components change or new subsystems added.
 - **README.md** (root) — User-facing. Update for setup changes or user workflow changes.
 - **docs/README.md** — Research narrative. Update for vision changes or milestone completions.
@@ -252,7 +252,7 @@ Explanation View → textbook_add Event → My Notes
 
 ### Update After EVERY Change
 
-**You MUST update `docs/week2_progress.md` after:**
+**You MUST update `docs/weekly-progress.md` after:**
 - ✅ Completing a task from "Next Steps"
 - ✅ Fixing a bug (add checkpoint log entry)
 - ✅ Adding a feature (add checkpoint log entry)
@@ -291,7 +291,7 @@ Explanation View → textbook_add Event → My Notes
 
 When chat context is compacted with `/compact`:
 
-1. **Add a "Compact Summary" entry** to `docs/week2_progress.md` checkpoint log
+1. **Add a "Compact Summary" entry** to `docs/weekly-progress.md` checkpoint log
 2. **Summarize what was accomplished** before the compact
 3. **Note any ongoing work** that needs to continue
 4. **Update AGENTS.md** if status changed
@@ -322,7 +322,7 @@ When chat context is compacted with `/compact`:
 - **After running `/compact`** to summarize context
 
 **Keep in sync with:**
-- `docs/week2_progress.md` — detailed runbook with checkpoint logs
+- `docs/weekly-progress.md` — detailed runbook with checkpoint logs
 - `docs/README.md` — project overview and research vision
 - `docs/progress.md` — component architecture details
 
@@ -332,7 +332,7 @@ When chat context is compacted with `/compact`:
 
 ### Starting New Work
 
-1. Check `docs/week2_progress.md` for current status
+1. Check `docs/weekly-progress.md` for current status
 2. Identify next task from "Next Steps" section
 3. **Write/update tests first** (TDD approach)
 4. Implement feature
@@ -345,7 +345,7 @@ When chat context is compacted with `/compact`:
 After every task/feature/fix:
 
 ```bash
-# 1. Add checkpoint log entry to week2_progress.md
+# 1. Add checkpoint log entry to weekly-progress.md
 #    - Timestamp, status, evidence, next steps
 
 # 2. Update "Next Steps" section — mark completed, add new
@@ -366,9 +366,48 @@ After every task/feature/fix:
 ### Before Asking for Help
 
 - Run: `npm run build && npm run test:e2e:weekly`
-- Check: `docs/week2_progress.md` for known issues
+- Check: `docs/weekly-progress.md` for known issues
 - Check: This file for current status
 - Note: Specific test failures with error messages
+
+---
+
+---
+
+## ⚠️ CRITICAL RULES
+
+### 1. Agent Files Stay Out of Git
+
+**AGENTS.md and all agent/LLM files are in `.gitignore` and must NEVER be committed.**
+
+This file (`AGENTS.md`) contains:
+- Temporary context summaries
+- Agent-specific instructions  
+- Working notes not intended for the repo
+
+**If you see this file shown as modified in `git status`, DO NOT commit it.**
+
+### 2. NEVER Auto-Commit — Suggest Only
+
+**I will NEVER run `git commit` automatically.**
+
+When work is ready:
+1. I will show you a **commit suggestion** (message + files)
+2. You review and decide if/what to commit
+3. You run the commit yourself
+
+**Example suggestion format:**
+```bash
+# Suggested commit:
+git add <files>
+git commit -m "type: description
+
+- Change 1
+- Change 2"
+
+# Or run this to see diff first:
+git diff --staged
+```
 
 ---
 

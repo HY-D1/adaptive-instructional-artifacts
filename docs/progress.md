@@ -203,7 +203,7 @@ An adaptive instructional artifact that:
 ├── docs/                         # Documentation
 │   ├── README.md                 # Master index
 │   ├── progress.md               # This file
-│   └── week2_progress.md         # Week 2 runbook
+│   └── weekly-progress.md         # Week 2 runbook
 ├── package.json
 ├── playwright.config.ts
 └── AGENTS.md                     # Agent instructions
@@ -362,7 +362,7 @@ By project completion:
 
 - **Master Index**: `docs/README.md`
 - **Project Master**: `docs/progress.md` (this file)
-- **Week 2 Runbook**: `docs/week2_progress.md`
+- **Week 2 Runbook**: `docs/weekly-progress.md`
 - **Agent Instructions**: `AGENTS.md`
 
 ---

@@ -22,7 +22,17 @@ __pycache__/
 
 # Local/agent-only documentation (not in git)
 docs/progress.md
-docs/week2_progress.md
-docs/week2-demo.md
-# AGENTS.md - Now tracked for project status
+docs/weekly-progress.md
+docs/weekly-demo.md
+AGENTS.md
 docs/pdf-sources
+
+# Agent/LLM conversation files (temporary context)
+*.llm-context.md
+*.agent-session.md
+chat-history/
+.claude/
+.kimi/
+.cursor/
+.aider*
+prompt-history/
