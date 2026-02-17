@@ -229,6 +229,89 @@ Explanation View → textbook_add Event → My Notes
 
 ---
 
+## Documentation Files Reference
+
+| File | Purpose | Update When |
+|------|---------|-------------|
+| `README.md` | Project overview, quick start, user guide | Public-facing changes, setup changes |
+| `AGENTS.md` | **This file** — Agent guidelines, current status, policies | Status changes, new policies, milestones |
+| `docs/README.md` | Research vision, 6 core components, weekly roadmap | Research direction changes, milestones |
+| `docs/progress.md` | Component architecture, implementation details | Architecture changes, component updates |
+| `docs/week2_progress.md` | **Detailed runbook** — tasks, gates, checkpoint log | **Every task/issue/feature** (see below) |
+
+### File Usage Guidelines
+
+- **week2_progress.md** — Daily working log. Add checkpoint entries for every completed task, bug fix, or feature.
+- **progress.md** — System architecture. Update when components change or new subsystems added.
+- **README.md** (root) — User-facing. Update for setup changes or user workflow changes.
+- **docs/README.md** — Research narrative. Update for vision changes or milestone completions.
+
+---
+
+## Progress Update Policy
+
+### Update After EVERY Change
+
+**You MUST update `docs/week2_progress.md` after:**
+- ✅ Completing a task from "Next Steps"
+- ✅ Fixing a bug (add checkpoint log entry)
+- ✅ Adding a feature (add checkpoint log entry)
+- ✅ Passing/failing a gate (update gate status)
+- ✅ Changing test count or coverage
+- ✅ Updating dependencies or tooling
+
+### Checkpoint Log Entry Template
+
+```markdown
+### YYYY-MM-DDTHH:MM:SS-08:00 - Brief Description
+
+- Current status: `PASS` or `IN_PROGRESS` or `BLOCKED`
+- Evidence (what changed):
+  - `file/path.ts:line-range` -> What was done
+  - Build: `PASS` / `FAIL`
+  - Tests: `X passed` / `Y failed`
+- Bug Fixes Applied (if any):
+  - BUG N: Description
+- Next smallest fix:
+  - What to do next
+```
+
+### Update This File (AGENTS.md) When
+
+- Project status table changes (test count, deployment status)
+- New commit summaries to add
+- New architectural patterns or policies
+- After running `/compact` (add compacted summary)
+
+---
+
+## Compact Context Updates
+
+### After Running `/compact`
+
+When chat context is compacted with `/compact`:
+
+1. **Add a "Compact Summary" entry** to `docs/week2_progress.md` checkpoint log
+2. **Summarize what was accomplished** before the compact
+3. **Note any ongoing work** that needs to continue
+4. **Update AGENTS.md** if status changed
+
+### Compact Summary Template
+
+```markdown
+### YYYY-MM-DDTHH:MM:SS-08:00 - Compact Summary
+
+- **Context compacted** — Summary of work before compact:
+  - Features completed: X, Y, Z
+  - Bugs fixed: A, B
+  - Tests added: N tests
+  - Current blockers (if any)
+- **Continuing work on:** [what's next]
+- **Status:** [PASS / IN_PROGRESS / BLOCKED]
+```
+
+---
+
 ## Updating This File
 
 **When to update AGENTS.md:**
@@ -236,11 +319,12 @@ Explanation View → textbook_add Event → My Notes
 - When test count changes significantly
 - When deployment status changes
 - When new architectural patterns are introduced
+- **After running `/compact`** to summarize context
 
 **Keep in sync with:**
-- `docs/week2_progress.md` — detailed runbook
-- `docs/README.md` — project overview
-- `docs/progress.md` — component architecture
+- `docs/week2_progress.md` — detailed runbook with checkpoint logs
+- `docs/README.md` — project overview and research vision
+- `docs/progress.md` — component architecture details
 
 ---
 
@@ -253,8 +337,31 @@ Explanation View → textbook_add Event → My Notes
 3. **Write/update tests first** (TDD approach)
 4. Implement feature
 5. Run verification: `npm run verify:week2`
-6. Update relevant docs (this file, progress.md)
+6. **Update progress docs** (REQUIRED — see below)
 7. Commit with clean message
+
+### Progress Update Checklist (REQUIRED)
+
+After every task/feature/fix:
+
+```bash
+# 1. Add checkpoint log entry to week2_progress.md
+#    - Timestamp, status, evidence, next steps
+
+# 2. Update "Next Steps" section — mark completed, add new
+
+# 3. If architecture changed, update docs/progress.md
+
+# 4. If status changed, update AGENTS.md project status table
+
+# 5. Commit docs updates (can be combined with feature commit)
+```
+
+### Commit Order
+
+1. **Code + Tests** (feature implementation)
+2. **Progress docs** (checkpoint log entry)
+3. **AGENTS.md** (if status changed)
 
 ### Before Asking for Help
 
@@ -265,4 +372,4 @@ Explanation View → textbook_add Event → My Notes
 
 ---
 
-*Last updated: 2026-02-16*
+*Last updated: 2026-02-16T16:15:00-08:00*
