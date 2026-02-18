@@ -85,11 +85,14 @@ export function AskMyTextbookChat({
     // Get current problem's concepts
     const problemConceptIds = problem?.concepts || [];
     
-    // Get the last error subtype for context
+    // Get the last error subtype for context (includes failed executions)
     const lastError = [...recentInteractions]
       .reverse()
-      .find(i => i.eventType === 'error');
-    const errorSubtype = lastError?.sqlEngageSubtype || lastError?.errorSubtypeId;
+      .find(i => i.eventType === 'error' || 
+                 (i.eventType === 'execution' && i.successful === false));
+    const errorSubtype = lastError?.sqlEngageSubtype || 
+                        lastError?.errorSubtypeId ||
+                        (lastError?.successful === false ? 'incorrect_results' : undefined);
     
     // Filter units by problem concepts FIRST (most relevant)
     let relevantUnits = textbookUnits.filter(unit => 
@@ -249,10 +252,14 @@ export function AskMyTextbookChat({
       errorSubtype
     } = buildGroundingPayload(query, quickChip);
     
-    // Build source list for display - DEDUPLICATE by title
+    // Build source list for display - DEDUPLICATE by normalized title
     const seenTitles = new Set<string>();
     const sources = [
-      ...relevantUnits.map(u => ({ id: u.id, title: u.title, type: 'unit' as const })),
+      ...relevantUnits.map(u => ({ 
+        id: u.id, 
+        title: u.title?.trim() || 'Untitled', 
+        type: 'unit' as const 
+      })),
       ...bundleSources
         .filter(id => id.includes('doc-'))  // Only show PDF docs, not all SQL-Engage IDs
         .map(id => ({ 
@@ -261,8 +268,9 @@ export function AskMyTextbookChat({
           type: 'pdf' as const 
         }))
     ].filter(s => {
-      if (seenTitles.has(s.title)) return false;
-      seenTitles.add(s.title);
+      const normalizedTitle = s.title.toLowerCase().trim();
+      if (seenTitles.has(normalizedTitle)) return false;
+      seenTitles.add(normalizedTitle);
       return true;
     }).slice(0, 4); // MAX 4 sources displayed
     
@@ -270,26 +278,46 @@ export function AskMyTextbookChat({
     let response = '';
     
     if (quickChip === 'explain_error') {
+      // Find last error OR failed execution (wrong results)
       const lastError = [...recentInteractions]
         .reverse()
-        .find(i => i.eventType === 'error');
+        .find(i => i.eventType === 'error' || 
+                   (i.eventType === 'execution' && i.successful === false));
+      
       if (lastError) {
-        const errorType = lastError.errorSubtypeId || lastError.sqlEngageSubtype || 'unknown';
+        // Determine error type and message
+        const errorType = lastError.errorSubtypeId || 
+                         lastError.sqlEngageSubtype || 
+                         (lastError.successful === false ? 'incorrect_results' : 'unknown');
+        
+        const errorMessage = lastError.error || 
+                            (lastError.successful === false ? 'Query returned wrong results' : 'Unknown error');
         
         // ACTIONABLE fix first
-        response = `**Fix:** ${getActionableFix(errorType)}\n\n`;
+        if (errorType !== 'unknown' && errorType !== 'incorrect_results') {
+          response = `**Fix:** ${getActionableFix(errorType)}\n\n`;
+        } else if (lastError.successful === false) {
+          // Wrong results - give specific guidance
+          response = `**Issue:** Your query ran but returned incorrect results.\n\n`;
+          response += `**Check:**\n`;
+          response += `• Did you select all required columns?\n`;
+          response += `• Is your WHERE clause too restrictive?\n`;
+          response += `• Are you filtering out rows that should be included?\n\n`;
+        } else {
+          response = `**Error:** ${errorMessage}\n\n`;
+        }
         
         // Add context from PDF if relevant and short
         if (pdfPassages.length > 0) {
           const relevantText = pdfPassages[0].text.substring(0, 250);
           if (relevantText.length > 50) {
-            response += `**Why this works:** ${relevantText}...\n\n`;
+            response += `**From your textbook:** ${relevantText}...\n\n`;
           }
         }
         
         // Add unit reference if available
         if (relevantUnits.length > 0) {
-          response += `📚 See "${relevantUnits[0].title}" in your textbook for more details.`;
+          response += `📚 See "${relevantUnits[0].title}" in your textbook.`;
         }
       } else {
         response = 'No recent errors found. Try running a query first!';
