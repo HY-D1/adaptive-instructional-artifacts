@@ -14,6 +14,7 @@ export type GuidanceEscalationTrigger =
   | 'hint_reopened' 
   | 'auto_escalation_eligible';
 export type TextbookUnitAction = 'created' | 'updated';
+export type TextbookUnitStatus = 'primary' | 'alternative' | 'archived';
 
 export type ConceptNode = {
   id: string;
@@ -241,6 +242,13 @@ export type InstructionalUnit = {
   qualityScore?: number;
   // Usage metrics for quality calculation
   retrievalCount?: number; // How many times this unit was retrieved
+  // Week 3 Feature: Explanation Competition/Selection System
+  status?: TextbookUnitStatus; // 'primary' = best explanation, 'alternative' = similar quality, 'archived' = superseded
+  archivedReason?: 'superseded' | 'user_deleted' | 'quality_threshold'; // Why archived
+  archivedAt?: number; // Timestamp when archived
+  archivedByUnitId?: string; // ID of unit that superseded this one
+  // Proactive unit creation flag
+  autoCreated?: boolean; // True if unit was automatically created by trace analyzer
 };
 
 export type SaveTextbookUnitResult = {
@@ -388,6 +396,31 @@ export type AlignmentMap = {
 
 // Trace Analyzer types for continuous background concept extraction
 
+// Event-driven analysis types
+export type InteractionEventType = InteractionEvent['eventType'];
+
+export type EventSubscriptionCallback = (event: InteractionEvent) => void;
+
+export type EventSubscription = {
+  id: string;
+  eventTypes: InteractionEventType[];
+  callback: EventSubscriptionCallback;
+};
+
+export type AnalysisTriggerReason = 
+  | 'error_cluster' 
+  | 'help_request' 
+  | 'breakthrough' 
+  | 'scheduled' 
+  | 'manual';
+
+export type ImmediateAnalysisOptions = {
+  reason: AnalysisTriggerReason;
+  debounceMs?: number;
+  force?: boolean;
+  metadata?: Record<string, unknown>;
+};
+
 export type PatternType = 'error_subtype' | 'concept_struggle' | 'success_streak';
 
 export type PatternMatch = {
@@ -436,4 +469,33 @@ export type AnalysisResult = {
     recommendationsGenerated: number;
     highPriorityRecommendations: number;
   };
+  // Proactive unit creation results (populated when auto-creation is enabled)
+  autoCreation?: AutoCreationResult;
+};
+
+// Result of proactive unit creation from trace analysis
+export type AutoCreationResult = {
+  unitsCreated: AutoCreatedUnitInfo[];
+  unitsUpdated: AutoCreatedUnitInfo[];
+  skipped: AutoCreationSkipInfo[];
+  totalCreated: number;
+  totalUpdated: number;
+  totalSkipped: number;
+};
+
+// Information about an auto-created unit
+export type AutoCreatedUnitInfo = {
+  unitId: string;
+  conceptId: string;
+  title: string;
+  reason: string;
+  qualityScore: number;
+  timestamp: number;
+};
+
+// Information about why a unit creation was skipped
+export type AutoCreationSkipInfo = {
+  conceptId: string;
+  reason: 'existing_unit' | 'quality_threshold_not_met' | 'generation_failed' | 'pattern_not_strong';
+  details: string;
 };

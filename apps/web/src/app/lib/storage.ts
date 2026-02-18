@@ -33,6 +33,8 @@ import {
   buildUpdatedUnit,
   findExistingUnit,
   generateDedupeKey,
+  competeAndSelectBestUnit,
+  filterUnitsByStatus,
   type CreateUnitInput
 } from './textbook-units';
 
@@ -877,13 +879,16 @@ class StorageManager {
 
   // Week 3 D6: Enhanced upsert with dedupe and revision tracking
   // Week 3 D8: Added logging for textbook_unit_upsert events
+  // Week 3 Feature: Explanation Competition/Selection System
   saveTextbookUnitV2(
     learnerId: string, 
     input: CreateUnitInput,
-    problemId?: string
+    problemId?: string,
+    useCompetition = true // Enable competition by default
   ): SaveTextbookUnitResult & {
     action: 'created' | 'updated';
     why: string;
+    competitionResult?: ReturnType<typeof competeAndSelectBestUnit>['result'];
   } {
     const textbooks = this.getAllTextbooks();
     if (!textbooks[learnerId]) {
@@ -914,7 +919,88 @@ class StorageManager {
       }
     };
 
-    // Use the new upsert logic
+    // If competition is enabled, use the competition flow for new units
+    if (useCompetition) {
+      // First check if this is an update to an existing unit (dedupe)
+      const dedupeKey = generateDedupeKey({
+        conceptIds: input.conceptIds,
+        type: input.type
+      });
+      const existingUnit = findExistingUnit(textbooks[learnerId], dedupeKey);
+      
+      if (existingUnit) {
+        // Use existing upsert logic for updates
+        const result = upsertTextbookUnit(
+          textbooks[learnerId],
+          inputWithLogging,
+          () => this.generateEventId('unit')
+        );
+
+        if (result.action === 'updated') {
+          // Replace existing unit
+          const index = textbooks[learnerId].findIndex(
+            (u) => generateDedupeKey(u) === dedupeKey
+          );
+          if (index !== -1) {
+            // Preserve status when updating
+            const updatedUnit = {
+              ...result.unit,
+              status: existingUnit.status || 'primary'
+            };
+            textbooks[learnerId][index] = updatedUnit;
+          }
+        }
+
+        const saveResult = this.safeSetItem(this.TEXTBOOK_KEY, JSON.stringify(textbooks));
+        return {
+          ...result,
+          success: saveResult.success,
+          quotaExceeded: saveResult.quotaExceeded
+        };
+      }
+
+      // No existing unit - use competition to add new unit
+      const newUnit = buildNewUnit(inputWithLogging, this.generateEventId('unit'));
+      
+      // Ensure new units start with status to satisfy type constraints
+      const newUnitWithStatus = {
+        ...newUnit,
+        status: 'primary' as const
+      };
+      
+      const { updatedUnits, result: competitionResult } = competeAndSelectBestUnit(
+        textbooks[learnerId],
+        newUnitWithStatus
+      );
+
+      // Update storage with competition results
+      textbooks[learnerId] = updatedUnits;
+
+      // Log competition result
+      if (competitionResult.action !== 'no_competition') {
+        console.log(`[Textbook Competition] ${competitionResult.reason}`);
+      }
+
+      // Find the new/updated unit for return
+      const primaryUnit = competitionResult.primaryUnit;
+
+      // Save to storage
+      const saveResult = this.safeSetItem(this.TEXTBOOK_KEY, JSON.stringify(textbooks));
+      if (!saveResult.success) {
+        console.warn('Failed to save textbook unit: quota exceeded or other error');
+      }
+
+      return {
+        action: 'created',
+        unit: primaryUnit,
+        success: saveResult.success,
+        quotaExceeded: saveResult.quotaExceeded,
+        why: competitionResult.reason,
+        competitionResult
+      };
+    }
+
+    // Legacy upsert flow (competition disabled)
     const result = upsertTextbookUnit(
       textbooks[learnerId],
       inputWithLogging,
@@ -945,6 +1031,20 @@ class StorageManager {
       success: saveResult.success,
       quotaExceeded: saveResult.quotaExceeded
     };
+  }
+
+  /**
+   * Get textbook units with optional status filtering
+   */
+  getTextbookWithStatus(
+    learnerId: string,
+    statuses?: Array<'primary' | 'alternative' | 'archived'>
+  ): InstructionalUnit[] {
+    const units = this.getTextbook(learnerId);
+    if (!statuses || statuses.length === 0) {
+      return units;
+    }
+    return filterUnitsByStatus(units, statuses);
   }
 
   private mergeIds(...sources: Array<string[] | undefined>): string[] {

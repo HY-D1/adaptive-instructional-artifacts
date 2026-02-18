@@ -7,7 +7,7 @@
  * - Revision tracking
  */
 
-import type { InstructionalUnit, SaveTextbookUnitResult } from '../types';
+import type { InstructionalUnit, SaveTextbookUnitResult, TextbookUnitStatus } from '../types';
 import type { LLMGuidanceOutput } from './llm-contracts';
 
 // Quality score weights (must sum to 1.0)
@@ -23,6 +23,12 @@ export const MAX_SOURCE_COUNT = 5;
 
 // Quality threshold for "Best" badge
 export const BEST_QUALITY_THRESHOLD = 0.8;
+
+// Quality thresholds for competition
+const COMPETITION_THRESHOLDS = {
+  REPLACE_MARGIN: 0.2, // New unit must be 20% better to replace
+  SIMILAR_MARGIN: 0.1  // Within 10% is considered similar quality
+} as const;
 
 /**
  * Calculate quality score for an instructional unit (0-1 scale)
@@ -113,6 +119,8 @@ export type CreateUnitInput = {
   llmOutput?: LLMGuidanceOutput;
   // Provenance
   errorSubtypeId?: string;
+  // Proactive unit creation flag
+  autoCreated?: boolean;
   // Week 3 D8: Callback for logging upsert event
   onUpsert?: (params: {
     unitId: string;
@@ -249,7 +257,10 @@ export function buildUpdatedUnit(
     
     // Preserve provenance but add to it
     provenance: existing.provenance,
-    lastErrorSubtypeId: newInput.errorSubtypeId ?? existing.lastErrorSubtypeId
+    lastErrorSubtypeId: newInput.errorSubtypeId ?? existing.lastErrorSubtypeId,
+    
+    // Preserve autoCreated flag
+    autoCreated: existing.autoCreated ?? newInput.autoCreated ?? false
   };
   
   // Calculate and set quality score based on updated content
@@ -287,7 +298,8 @@ export function buildNewUnit(
     revisionCount: 0,
     updateHistory: [createUpdateHistoryEntry(input, 0)],
     lastErrorSubtypeId: input.errorSubtypeId,
-    retrievalCount: 0
+    retrievalCount: 0,
+    autoCreated: input.autoCreated ?? false
   };
   
   // Calculate and set quality score
@@ -440,6 +452,245 @@ function parseRung3Content(content: string): {
   return result;
 }
 
+/**
+ * Competition result from comparing a new unit against existing units
+ */
+export type CompetitionResult = {
+  action: 'replace' | 'keep_both' | 'mark_alternative' | 'no_competition';
+  primaryUnit: InstructionalUnit;
+  archivedUnit?: InstructionalUnit; // If replaced
+  reason: string;
+  qualityDiff: number;
+};
+
+/**
+ * Compare quality scores and determine competition outcome
+ */
+function determineCompetitionOutcome(
+  newScore: number,
+  existingScore: number
+): 'replace' | 'keep_both' | 'mark_alternative' {
+  const diff = newScore - existingScore;
+  
+  if (diff > COMPETITION_THRESHOLDS.REPLACE_MARGIN) {
+    return 'replace';
+  }
+  
+  if (Math.abs(diff) <= COMPETITION_THRESHOLDS.SIMILAR_MARGIN) {
+    return 'keep_both';
+  }
+  
+  return 'mark_alternative';
+}
+
+/**
+ * Find the primary unit for a concept
+ */
+function findPrimaryUnit(
+  units: InstructionalUnit[],
+  conceptId: string,
+  type?: InstructionalUnit['type']
+): InstructionalUnit | undefined {
+  return units.find(
+    (u) =>
+      u.conceptId === conceptId &&
+      (u.status === 'primary' || !u.status) &&
+      (type === undefined || u.type === type)
+  );
+}
+
+/**
+ * Archive a unit (mark as superseded)
+ */
+function archiveUnit(
+  unit: InstructionalUnit,
+  supersededById: string,
+  reason: 'superseded' | 'user_deleted' | 'quality_threshold'
+): InstructionalUnit {
+  return {
+    ...unit,
+    status: 'archived',
+    archivedReason: reason,
+    archivedAt: Date.now(),
+    archivedByUnitId: supersededById
+  };
+}
+
+/**
+ * Mark a unit as primary
+ */
+function markAsPrimary(unit: InstructionalUnit): InstructionalUnit {
+  return {
+    ...unit,
+    status: 'primary'
+  };
+}
+
+/**
+ * Compete a new unit against existing units for the same concept
+ * 
+ * Rules:
+ * 1. If new quality > existing quality by 0.2+: new becomes primary, existing archived
+ * 2. If similar quality (within 0.1): keep both, existing stays primary, new is alternative
+ * 3. If new quality < existing: new marked as alternative
+ * 
+ * Returns updated units array and competition result
+ */
+export function competeAndSelectBestUnit(
+  existingUnits: InstructionalUnit[],
+  newUnit: InstructionalUnit
+): {
+  updatedUnits: InstructionalUnit[];
+  result: CompetitionResult;
+} {
+  const primaryUnit = findPrimaryUnit(existingUnits, newUnit.conceptId, newUnit.type);
+  
+  // No competition - no existing primary unit
+  if (!primaryUnit) {
+    const markedNewUnit = markAsPrimary(newUnit);
+    return {
+      updatedUnits: [...existingUnits, markedNewUnit],
+      result: {
+        action: 'no_competition',
+        primaryUnit: markedNewUnit,
+        reason: 'No existing primary unit for this concept',
+        qualityDiff: 0
+      }
+    };
+  }
+  
+  const newScore = newUnit.qualityScore ?? 0;
+  const existingScore = primaryUnit.qualityScore ?? 0;
+  const outcome = determineCompetitionOutcome(newScore, existingScore);
+  const qualityDiff = newScore - existingScore;
+  
+  switch (outcome) {
+    case 'replace': {
+      // New unit wins - archive old primary, new becomes primary
+      const archivedPrimary = archiveUnit(primaryUnit, newUnit.id, 'superseded');
+      const markedNewUnit = markAsPrimary(newUnit);
+      
+      const updatedUnits = existingUnits.map((u) =>
+        u.id === primaryUnit.id ? archivedPrimary : u
+      );
+      updatedUnits.push(markedNewUnit);
+      
+      return {
+        updatedUnits,
+        result: {
+          action: 'replace',
+          primaryUnit: markedNewUnit,
+          archivedUnit: archivedPrimary,
+          reason: `New unit quality (${(newScore * 100).toFixed(0)}%) is significantly better than existing (${(existingScore * 100).toFixed(0)}%)`,
+          qualityDiff
+        }
+      };
+    }
+    
+    case 'keep_both': {
+      // Similar quality - keep both, mark new as alternative
+      const markedNewUnit: InstructionalUnit = {
+        ...newUnit,
+        status: 'alternative'
+      };
+      
+      return {
+        updatedUnits: [...existingUnits, markedNewUnit],
+        result: {
+          action: 'keep_both',
+          primaryUnit,
+          reason: `Similar quality (new: ${(newScore * 100).toFixed(0)}%, existing: ${(existingScore * 100).toFixed(0)}%) - keeping both`,
+          qualityDiff
+        }
+      };
+    }
+    
+    case 'mark_alternative':
+    default: {
+      // New unit is worse - mark as alternative
+      const markedNewUnit: InstructionalUnit = {
+        ...newUnit,
+        status: 'alternative'
+      };
+      
+      return {
+        updatedUnits: [...existingUnits, markedNewUnit],
+        result: {
+          action: 'mark_alternative',
+          primaryUnit,
+          reason: `New unit quality (${(newScore * 100).toFixed(0)}%) is lower than existing (${(existingScore * 100).toFixed(0)}%)`,
+          qualityDiff
+        }
+      };
+    }
+  }
+}
+
+/**
+ * Get the display status for a unit (for UI badges)
+ */
+export function getUnitDisplayStatus(unit: InstructionalUnit): {
+  status: TextbookUnitStatus;
+  badge: 'Best' | 'Alternative' | 'Archived' | 'New' | 'Auto-Created';
+  color: 'amber' | 'blue' | 'gray' | 'green' | 'purple';
+} {
+  const status = unit.status || 'primary';
+  
+  // Auto-created units get special badge
+  if (unit.autoCreated) {
+    return { status, badge: 'Auto-Created', color: 'purple' };
+  }
+  
+  switch (status) {
+    case 'primary':
+      return isBestQualityUnit(unit)
+        ? { status, badge: 'Best', color: 'amber' }
+        : { status, badge: 'New', color: 'green' };
+    case 'alternative':
+      return { status, badge: 'Alternative', color: 'blue' };
+    case 'archived':
+      return { status, badge: 'Archived', color: 'gray' };
+    default:
+      return { status: 'primary', badge: 'New', color: 'green' };
+  }
+}
+
+/**
+ * Filter units by status
+ */
+export function filterUnitsByStatus(
+  units: InstructionalUnit[],
+  statuses: TextbookUnitStatus[]
+): InstructionalUnit[] {
+  return units.filter((u) => {
+    const unitStatus = u.status || 'primary';
+    return statuses.includes(unitStatus);
+  });
+}
+
+/**
+ * Get primary units only (for default display)
+ */
+export function getPrimaryUnits(units: InstructionalUnit[]): InstructionalUnit[] {
+  return filterUnitsByStatus(units, ['primary']);
+}
+
+/**
+ * Get alternative units for a concept
+ */
+export function getAlternativeUnits(
+  units: InstructionalUnit[],
+  conceptId: string,
+  type?: InstructionalUnit['type']
+): InstructionalUnit[] {
+  return units.filter(
+    (u) =>
+      u.conceptId === conceptId &&
+      u.status === 'alternative' &&
+      (type === undefined || u.type === type)
+  );
+}
+
 // Get unit statistics for display
 export function getUnitStats(unit: InstructionalUnit): {
   age: number;
@@ -448,6 +699,7 @@ export function getUnitStats(unit: InstructionalUnit): {
   isFresh: boolean;
   qualityScore: number;
   qualityTier: 'best' | 'good' | 'average' | 'basic';
+  isAutoCreated: boolean;
 } {
   const now = Date.now();
   const age = now - unit.addedTimestamp;
@@ -455,6 +707,7 @@ export function getUnitStats(unit: InstructionalUnit): {
   const sourceCount = (unit.sourceRefIds || []).length;
   const isFresh = age < 7 * 24 * 60 * 60 * 1000; // Less than 7 days
   const qualityScore = unit.qualityScore ?? 0;
+  const isAutoCreated = unit.autoCreated ?? false;
   
   return { 
     age, 
@@ -462,6 +715,28 @@ export function getUnitStats(unit: InstructionalUnit): {
     sourceCount, 
     isFresh, 
     qualityScore,
-    qualityTier: getQualityTierLabel(unit)
+    qualityTier: getQualityTierLabel(unit),
+    isAutoCreated
   };
+}
+
+/**
+ * Check if a unit was auto-created by the trace analyzer
+ */
+export function isAutoCreatedUnit(unit: InstructionalUnit): boolean {
+  return unit.autoCreated ?? false;
+}
+
+/**
+ * Get all auto-created units from a list
+ */
+export function getAutoCreatedUnits(units: InstructionalUnit[]): InstructionalUnit[] {
+  return units.filter((u) => u.autoCreated === true);
+}
+
+/**
+ * Get the count of auto-created units
+ */
+export function getAutoCreatedUnitCount(units: InstructionalUnit[]): number {
+  return units.filter((u) => u.autoCreated === true).length;
 }

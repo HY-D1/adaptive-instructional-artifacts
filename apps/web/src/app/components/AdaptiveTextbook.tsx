@@ -3,7 +3,8 @@ import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
-import { Book, Trash2, ChevronRight, ChevronDown, Folder, FileText, Star, ArrowUpDown } from 'lucide-react';
+import { Book, Trash2, ChevronRight, ChevronDown, Folder, FileText, Star, ArrowUpDown, Layers, Archive } from 'lucide-react';
+import type { TextbookUnitStatus } from '../types';
 import { Link } from 'react-router';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
@@ -11,7 +12,14 @@ import { InstructionalUnit, InteractionEvent } from '../types';
 import { storage } from '../lib/storage';
 import { getConceptById } from '../data/sql-engage';
 import { buildTextbookInsights, SortMode } from '../lib/textbook-insights';
-import { isBestQualityUnit, BEST_QUALITY_THRESHOLD } from '../lib/textbook-units';
+import { 
+  isBestQualityUnit, 
+  BEST_QUALITY_THRESHOLD, 
+  getUnitDisplayStatus, 
+  getAlternativeUnits,
+  filterUnitsByStatus,
+  type CompetitionResult 
+} from '../lib/textbook-units';
 
 interface AdaptiveTextbookProps {
   learnerId: string;
@@ -53,6 +61,46 @@ function toCompactList(values: string[], limit = 3): string {
   return remaining > 0 ? `${preview} +${remaining} more` : preview;
 }
 
+/**
+ * Unit status badge component - shows Best/Alternative/Archived status
+ */
+function UnitStatusBadge({ 
+  unit, 
+  showLabel = false 
+}: { 
+  unit: InstructionalUnit; 
+  showLabel?: boolean;
+}) {
+  const displayStatus = getUnitDisplayStatus(unit);
+  
+  const colorClasses = {
+    amber: 'bg-amber-500 hover:bg-amber-600 text-white',
+    blue: 'bg-blue-500 hover:bg-blue-600 text-white',
+    gray: 'bg-gray-400 hover:bg-gray-500 text-white',
+    green: 'bg-green-500 hover:bg-green-600 text-white'
+  };
+  
+  const icons = {
+    amber: Star,
+    blue: Layers,
+    gray: Archive,
+    green: Star
+  };
+  
+  const Icon = icons[displayStatus.color];
+  
+  return (
+    <Badge 
+      variant="default" 
+      className={`text-[10px] h-5 ${colorClasses[displayStatus.color]}`}
+      title={`Status: ${displayStatus.status}${unit.qualityScore !== undefined ? ` • Quality: ${(unit.qualityScore * 100).toFixed(0)}%` : ''}`}
+    >
+      <Icon className="size-3 mr-0.5" />
+      {showLabel ? displayStatus.badge : displayStatus.badge}
+    </Badge>
+  );
+}
+
 export function AdaptiveTextbook({
   learnerId,
   selectedUnitId,
@@ -63,6 +111,8 @@ export function AdaptiveTextbook({
   const [textbookUnits, setTextbookUnits] = useState<InstructionalUnit[]>([]);
   const [selectedUnit, setSelectedUnit] = useState<InstructionalUnit | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>('quality');
+  const [showArchived, setShowArchived] = useState(false);
+  const [expandedAlternatives, setExpandedAlternatives] = useState<Record<string, boolean>>({});
   const pendingUnitIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -181,8 +231,17 @@ export function AdaptiveTextbook({
     }
   };
 
+  // Filter units based on showArchived state
+  const filteredUnits = useMemo(() => {
+    if (showArchived) {
+      return orderedUnits;
+    }
+    // By default, show only primary and alternative units (hide archived)
+    return filterUnitsByStatus(orderedUnits, ['primary', 'alternative']);
+  }, [orderedUnits, showArchived]);
+
   // Group units by concept, then by problem title (for folding)
-  const groupedUnits = orderedUnits.reduce((acc, unit) => {
+  const groupedUnits = filteredUnits.reduce((acc, unit) => {
     const concept = getConceptById(unit.conceptId);
     const conceptName = concept?.name || 'Other';
     if (!acc[conceptName]) {
@@ -215,6 +274,13 @@ export function AdaptiveTextbook({
     }));
   };
 
+  const toggleAlternatives = (conceptId: string) => {
+    setExpandedAlternatives(prev => ({
+      ...prev,
+      [conceptId]: !prev[conceptId]
+    }));
+  };
+
   // Auto-expand all concepts on load (for test compatibility)
   useEffect(() => {
     const concepts = Object.keys(groupedUnits);
@@ -226,6 +292,10 @@ export function AdaptiveTextbook({
       setExpandedConcepts(allExpanded);
     }
   }, [groupedUnits]);
+
+  const getAlternativeCount = (conceptId: string, type?: InstructionalUnit['type']) => {
+    return getAlternativeUnits(textbookUnits, conceptId, type).length;
+  };
 
   const getSourceCount = (unit: InstructionalUnit) =>
     getMergedInteractionIds(unit).length;
@@ -383,16 +453,7 @@ export function AdaptiveTextbook({
                                   >
                                     <div className="flex items-center gap-2">
                                       <span className="capitalize">{unit.type}</span>
-                                      {isBest && (
-                                        <Badge 
-                                          variant="default" 
-                                          className="text-[10px] h-5 bg-amber-500 hover:bg-amber-600"
-                                          title={`Quality score: ${((unit.qualityScore ?? 0) * 100).toFixed(0)}%`}
-                                        >
-                                          <Star className="size-3 mr-0.5" />
-                                          Best
-                                        </Badge>
-                                      )}
+                                      <UnitStatusBadge unit={unit} />
                                     </div>
                                     <span className="block truncate mt-0.5">{unit.title}</span>
                                     {unit.qualityScore !== undefined && (
@@ -452,12 +513,42 @@ export function AdaptiveTextbook({
 
         <Separator className="my-4" />
 
+        {/* Status filter toggle */}
+        <div className="flex items-center justify-between mb-3">
+          <Badge 
+            variant={showArchived ? 'default' : 'outline'} 
+            className="cursor-pointer text-[10px]"
+            onClick={() => setShowArchived(!showArchived)}
+          >
+            {showArchived ? 'Showing All' : 'Primary Only'}
+          </Badge>
+          <span className="text-xs text-gray-500">
+            {showArchived ? 'Click to hide archived' : 'Click to show archived'}
+          </span>
+        </div>
+
         <div className="text-xs text-gray-500">
           <p className="font-medium mb-1">Coverage</p>
           <p>{orderedUnits.length} instructional units</p>
           <p>{Object.keys(groupedUnits).length} concepts</p>
           <p>
             {Object.values(groupedUnits).reduce((sum, problems) => sum + Object.keys(problems).length, 0)} problems
+          </p>
+          <p className="mt-1 pt-1 border-t">
+            <span className="inline-flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+              {textbookUnits.filter(u => u.status === 'primary' || !u.status).length} primary
+            </span>
+            <span className="inline-flex items-center gap-1 ml-2">
+              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+              {textbookUnits.filter(u => u.status === 'alternative').length} alternative
+            </span>
+            {showArchived && (
+              <span className="inline-flex items-center gap-1 ml-2">
+                <span className="w-2 h-2 rounded-full bg-gray-400"></span>
+                {textbookUnits.filter(u => u.status === 'archived').length} archived
+              </span>
+            )}
           </p>
         </div>
       </Card>
@@ -468,10 +559,11 @@ export function AdaptiveTextbook({
           <div className="prose prose-sm max-w-none">
             <div className="flex items-center gap-2 mb-4">
               <Badge>{selectedUnit.type}</Badge>
+              <UnitStatusBadge unit={selectedUnit} showLabel />
               {isBestQualityUnit(selectedUnit) && (
                 <Badge className="bg-amber-500 hover:bg-amber-600">
                   <Star className="size-3 mr-1" />
-                  Best Explanation
+                  Best Quality
                 </Badge>
               )}
               <span className="text-xs text-gray-500">

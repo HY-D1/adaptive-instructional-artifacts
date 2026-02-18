@@ -17,7 +17,8 @@ import {
   LearnerProfile,
   LearningInterfaceMode,
   PdfIndexProvenance,
-  RetrievedChunkInfo
+  RetrievedChunkInfo,
+  AutoCreationResult
 } from '../types';
 import { sqlProblems } from '../data/problems';
 import { storage } from '../lib/storage';
@@ -29,6 +30,7 @@ import {
   startBackgroundAnalysis,
   stopBackgroundAnalysis,
   runAnalysisOnce,
+  publishInteraction,
   AnalysisResult
 } from '../lib/trace-analyzer';
 import {
@@ -92,6 +94,14 @@ export function LearningInterface() {
     isRunning: boolean;
     lastResult?: AnalysisResult;
   }>({ isRunning: false });
+  
+  // Auto-creation notification state
+  const [autoCreationNotifications, setAutoCreationNotifications] = useState<Array<{
+    id: string;
+    message: string;
+    unitId: string;
+    timestamp: number;
+  }>>([]);
   
   const timerRef = useRef<number | null>(null);
   const stopAnalysisRef = useRef<(() => void) | null>(null);
@@ -241,8 +251,27 @@ export function LearningInterface() {
     
     const stopAnalysis = startBackgroundAnalysis(learnerId, newSessionId, {
       intervalMs: 5 * 60 * 1000, // 5 minutes
+      enableAutoCreation: true, // Enable proactive unit creation
       onAnalysisComplete: (result) => {
         setAnalysisStatus({ isRunning: true, lastResult: result });
+      },
+      onAutoCreationComplete: (autoResult) => {
+        // Show notifications for auto-created units
+        if (autoResult.totalCreated > 0) {
+          const newNotifications = autoResult.unitsCreated.map((unit) => ({
+            id: `auto-notif-${unit.unitId}-${Date.now()}`,
+            message: `New help article added: "${unit.title}"`,
+            unitId: unit.unitId,
+            timestamp: Date.now()
+          }));
+          setAutoCreationNotifications((prev) => [...prev, ...newNotifications]);
+          // Auto-dismiss after 10 seconds
+          setTimeout(() => {
+            setAutoCreationNotifications((prev) => 
+              prev.filter((n) => !newNotifications.find((nn) => nn.id === n.id))
+            );
+          }, 10000);
+        }
       }
     });
     
