@@ -51,7 +51,8 @@ export function requireRole(role: UserRole): string | null {
   const profile = storage.getUserProfile();
   
   if (!profile) {
-    return ROUTES.LOGIN;
+    // Redirect to home (start page) since there's no dedicated login page
+    return ROUTES.HOME;
   }
   
   if (profile.role !== role) {
@@ -118,9 +119,9 @@ export function protectRoute(options: {
 } = {}): GuardResult {
   const profile = storage.getUserProfile();
   
-  // Not authenticated
+  // Not authenticated - redirect to home (start page)
   if (!profile) {
-    return { allowed: false, redirect: ROUTES.LOGIN };
+    return { allowed: false, redirect: ROUTES.HOME };
   }
   
   // Specific role required
@@ -147,9 +148,9 @@ export function checkRouteAccess(
 ): boolean {
   const profile = storage.getUserProfile();
   
-  // No profile - redirect to login
+  // No profile - redirect to home (start page)
   if (!profile) {
-    navigate(ROUTES.LOGIN);
+    navigate(ROUTES.HOME);
     return false;
   }
   
@@ -172,11 +173,11 @@ export function loaderGuard(
 ): Response | null {
   const profile = storage.getUserProfile();
   
-  // Not authenticated
+  // Not authenticated - redirect to home (start page)
   if (!profile) {
     return new Response(null, {
       status: 302,
-      headers: { Location: ROUTES.LOGIN },
+      headers: { Location: ROUTES.HOME },
     });
   }
   

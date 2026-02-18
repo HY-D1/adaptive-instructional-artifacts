@@ -9,7 +9,7 @@ on:
 jobs:
   verify-week3:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       
@@ -18,17 +18,29 @@ jobs:
           node-version: 20
           cache: npm
       
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      
       - name: Install dependencies
         run: npm ci
       
-      - name: Install Playwright browser
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
+      
+      - name: Verify Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
       
       - name: Build application
         run: npm run build
       
       - name: Run core E2E tests
-        run: npx playwright test -c playwright.config.ts --grep '@weekly' --project=chromium --workers=2
+        run: npm run test:e2e:weekly
         env:
           CI: 1
         continue-on-error: false
@@ -52,3 +64,11 @@ jobs:
           name: demo-artifacts
           path: dist/weekly-demo/
           retention-days: 7
+      
+      - name: Upload build output
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-output
+          path: dist/app/
+          retention-days: 3

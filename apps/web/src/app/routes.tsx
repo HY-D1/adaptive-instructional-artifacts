@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate, type LoaderFunction } from 'react-router';
+import { createBrowserRouter, Navigate, redirect, type LoaderFunction } from 'react-router';
 import { RootLayout } from './pages/RootLayout';
 import { TextbookPage } from './pages/TextbookPage';
 import { ResearchPage } from './pages/ResearchPage';
@@ -18,17 +18,20 @@ import {
 /**
  * Protected route loader factory
  * Creates a loader function that checks authentication and role
+ * Returns redirect response if access denied, null if allowed
  */
 function createProtectedLoader(options?: { 
   requiredRole?: 'student' | 'instructor';
   allowAuthenticated?: boolean;
 }): LoaderFunction {
-  return (): GuardResult | null => {
+  return () => {
     const result = protectRoute(options);
     
-    if (!result.allowed) {
-      // Return guard result for the component to handle
-      return result;
+    if (!result.allowed && result.redirect) {
+      // Use React Router's redirect for proper navigation
+      // If redirecting to login and no login route exists, go to home
+      const redirectTo = result.redirect === ROUTES.LOGIN ? ROUTES.HOME : result.redirect;
+      return redirect(redirectTo);
     }
     
     return null;
@@ -38,6 +41,7 @@ function createProtectedLoader(options?: {
 /**
  * Component wrapper that enforces role-based access
  * Redirects if not authorized
+ * Note: Loader should handle redirects, this is a fallback
  */
 function ProtectedRoute({ 
   children, 
@@ -48,7 +52,7 @@ function ProtectedRoute({
 }) {
   const profile = storage.getUserProfile();
   
-  // Not authenticated - redirect to login (start page)
+  // Not authenticated - redirect to home (start page)
   if (!profile) {
     return <Navigate to={ROUTES.HOME} replace />;
   }

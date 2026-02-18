@@ -4,15 +4,20 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { BookOpen, BarChart3, Database, GraduationCap } from 'lucide-react';
+import { BookOpen, BarChart3, Database, GraduationCap, Lock } from 'lucide-react';
 import { cn } from '../components/ui/utils';
 import type { UserRole, UserProfile } from '../types';
 import { storage } from '../lib/storage';
+
+// Hardcoded instructor passcode
+const INSTRUCTOR_PASSCODE = 'TeachSQL2024';
 
 export function StartPage() {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
+  const [passcode, setPasscode] = useState('');
+  const [passcodeError, setPasscodeError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Check for existing profile on mount
@@ -30,10 +35,26 @@ export function StartPage() {
     setIsLoading(false);
   }, [navigate]);
 
+  // Clear passcode error when role changes
+  useEffect(() => {
+    setPasscodeError(null);
+    if (selectedRole !== 'instructor') {
+      setPasscode('');
+    }
+  }, [selectedRole]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!username.trim() || !selectedRole) return;
+
+    // Validate passcode for instructor role
+    if (selectedRole === 'instructor') {
+      if (passcode !== INSTRUCTOR_PASSCODE) {
+        setPasscodeError('Incorrect passcode. Please try again.');
+        return;
+      }
+    }
 
     const profile: UserProfile = {
       id: `user-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
@@ -52,7 +73,8 @@ export function StartPage() {
     }
   };
 
-  const isFormValid = username.trim().length > 0 && selectedRole !== null;
+  const isFormValid = username.trim().length > 0 && selectedRole !== null && 
+    (selectedRole !== 'instructor' || passcode.length > 0);
 
   if (isLoading) {
     return (
@@ -189,6 +211,35 @@ export function StartPage() {
                 </Card>
               </div>
             </div>
+
+            {/* Passcode Input - Only shown for instructor */}
+            {selectedRole === 'instructor' && (
+              <div className="space-y-2">
+                <Label htmlFor="passcode" className="text-base font-medium flex items-center gap-2">
+                  <Lock className="w-4 h-4" />
+                  Instructor Passcode
+                </Label>
+                <Input
+                  id="passcode"
+                  type="password"
+                  placeholder="Enter instructor passcode"
+                  value={passcode}
+                  onChange={(e) => {
+                    setPasscode(e.target.value);
+                    setPasscodeError(null);
+                  }}
+                  className={cn(
+                    'h-12 text-lg',
+                    passcodeError && 'border-red-500 focus-visible:ring-red-500'
+                  )}
+                />
+                {passcodeError && (
+                  <p className="text-sm text-red-600 font-medium">
+                    {passcodeError}
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Submit Button */}
             <Button
