@@ -2,7 +2,7 @@
  * @file week2-hint-ladder.spec.ts
  * @description Comprehensive test suite for Feature 1: Hint Ladder System (3 levels)
  *
- * This test file covers all functionality of the HintWise-based progressive hint system:
+ * This test file covers all functionality of the Guidance Ladder progressive hint system:
  * - Hint level progression (1→2→3)
  * - SQL-Engage integration (subtype mapping, metadata capture)
  * - Hint event logging (hint_view events with all required fields)

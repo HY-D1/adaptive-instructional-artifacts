@@ -59,7 +59,7 @@ test('@weekly smoke: hint ladder -> escalate -> add/update note -> textbook evid
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'HintWise' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Guidance Ladder' })).toBeVisible();
 
   const runQueryButton = page.getByRole('button', { name: 'Run Query' });
   await expect(runQueryButton).toBeVisible();

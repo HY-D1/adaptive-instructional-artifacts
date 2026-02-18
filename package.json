@@ -9,6 +9,7 @@
     "test:e2e": "npx playwright test -c playwright.config.ts",
     "test:e2e:weekly": "CI=1 npx playwright test -c playwright.config.ts --grep @weekly",
     "demo:weekly": "npx playwright test -c playwright.config.ts apps/web/tests/weekly-demo-artifacts.spec.ts",
+    "demo:week3": "npm run build && npm run demo:weekly && echo 'Week 3 demo complete. Run: node scripts/replay-metrics.mjs dist/weekly-demo/export.json'",
     "verify:weekly": "npm run build && npm run replay:gate && npm run test:e2e:weekly && npm run demo:weekly && npm run check:concept-map && npm run gate:weekly:acceptance && npm run gate:textbook:content",
     "test:e2e:parser-batch": "npx playwright test -c playwright.config.ts --grep @parser-batch",
     "llm:health:capture": "node scripts/capture-llm-health-message.mjs",
