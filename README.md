@@ -5,16 +5,19 @@ An intelligent SQL learning environment that adapts to your mistakes, providing 
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)
 ![React](https://img.shields.io/badge/React-18.3-61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-6.3-646CFF)
+![Tests](https://img.shields.io/badge/Tests-159%20passing-success)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## 🎯 Features
 
 - **Practice** SQL problems with immediate feedback
-- **Get Hints** - 3-level progressive hint system (HintWise)
-- **View Sources** - See PDF passages used to generate hints
+- **Guidance Ladder** - 3-level progressive help (Rung 1→2→3)
+- **Ask My Textbook** - Chat with your accumulated learning materials
+- **View Sources** - See PDF passages grounding the hints
 - **Auto-Escalate** to explanations when hints aren't enough
-- **Build Your Textbook** - automatically generated notes from your struggles
+- **Build Your Textbook** - Automatically generated notes from your struggles
 - **Upload PDFs** - Import reference materials for personalized hints
+- **Replay & Metrics** - Export sessions and analyze learning patterns
 
 ## 🚀 Quick Start
 
@@ -31,76 +34,63 @@ npx playwright install chromium
 npm run dev
 ```
 
-Open [http://localhost:4173](http://localhost:4173) in your browser.
+Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ## 📁 Project Structure
 
 ```
 apps/web/
 ├── src/
-│   ├── components/      # UI components (HintSystem, AdaptiveTextbook, etc.)
+│   ├── components/      # UI components (HintSystem, AskMyTextbookChat, etc.)
 │   ├── pages/           # Route pages (Practice, Textbook, Research)
-│   ├── lib/             # Business logic (storage, retrieval-bundle, PDF processing)
-│   └── data/            # SQL problems & SQL-Engage dataset
-└── tests/               # Playwright E2E tests
+│   ├── lib/             # Business logic (guidance-ladder, storage, retrieval)
+│   └── data/            # SQL problems, concept registry, alignment maps
+├── tests/               # Playwright E2E tests (159 tests)
+└── public/              # Static assets
 
-scripts/                 # Utility scripts (PDF indexing, analysis)
-docs/                    # Documentation
-dist/                    # Build outputs (PDF storage, index)
+scripts/                 # Utility scripts (replay-metrics, PDF indexing)
+docs/                    # Documentation (see docs/README.md)
+dist/                    # Build outputs
 ```
 
 ## 🔄 How It Works
 
-### Hint Ladder Flow
+### Guidance Ladder Flow
 
 ```
-SQL Error
+SQL Error or Wrong Results
     ↓
 normalizeSqlErrorSubtype() → error_subtype
     ↓
 ┌──────────────────────────────────────────┐
-│         SQL-Engage Hint Ladder           │
+│         Guidance Ladder (Rung 1→2→3)     │
 ├──────────────────────────────────────────┤
-│ L1: Static guidance (surface hint)       │
-│ L2: Guidance + intended_learning_outcome │
-│ L3: Guidance + feedback_target           │
+│ Rung 1: Micro-hint (~100 chars)          │
+│ Rung 2: Explanation with source grounding│
+│ Rung 3: Reflective note → My Textbook    │
 └──────────────────────────────────────────┘
-    ↓ (L3 exhausted)
-Generate Explanation → My Notes
+    ↓ (Rung 3 reached)
+Generate Unit → Upsert to My Textbook
 ```
 
-**Escalation Rule**: After 3 hints (L1→L2→L3) → Show "Generate Explanation" button → LLM generates full explanation → Saved to My Notes
+### Ask My Textbook Chat
 
-### Component Flow
+Ask questions grounded in your learning history:
+- "Explain my last error" — Actionable fix based on recent mistakes
+- "Show a minimal example" — Clean SQL pattern from your textbook
+- "What concept is this?" — Current problem's key concepts
+- "Give me a hint" — Contextual guidance
 
-| Step | Component | Action |
-|------|-----------|--------|
-| 1 | `sql-executor.ts` | Execute SQL, detect errors |
-| 2 | `sql-engage.ts` | Map error to subtype, retrieve hint |
-| 3 | `adaptive-orchestrator.ts` | Track hint level, decide escalation |
-| 4 | `HintSystem.tsx` | Display hint to user |
-| 5 | `content-generator.ts` | Generate explanation (when triggered) |
-| 6 | `storage.ts` | Save to My Notes |
-| 7 | `TextbookPage.tsx` | Display accumulated notes |
+### Key Components
 
-## 📖 User Guide
-
-### Practice Mode
-1. Write SQL queries in the editor
-2. Run queries to get immediate feedback
-3. Request hints when stuck (up to 3 levels)
-4. Click **"View source passages"** to see which PDF content informed the hint
-5. Escalate to explanations for deeper understanding
-
-### My Textbook
-- Automatically generated notes from your learning sessions
-- Provenance tracking - see which sources contributed to each note
-- Concept coverage visualization
-
-### Research Dashboard
-- Upload PDFs directly to build a retrieval index
-- Track learning analytics and progress
-- Export/Import learning data
+| Component | Purpose |
+|-----------|---------|
+| `guidance-ladder.ts` | State machine for Rung 1→2→3 progression |
+| `AskMyTextbookChat.tsx` | Sidebar chat with source grounding |
+| `SourceViewer.tsx` | Modal for viewing PDF passages |
+| `retrieval-bundle.ts` | Assembles relevant content for responses |
+| `textbook-units.ts` | Unit deduplication and upsert logic |
+| `replay-metrics.mjs` | Offline analysis of learning sessions |
 
 ## 🧪 Testing
 
@@ -108,18 +98,25 @@ Generate Explanation → My Notes
 # Run all E2E tests
 npm run test:e2e
 
-# Run specific test suites
-npx playwright test apps/web/tests/week2-hint-ladder.spec.ts
-npx playwright test apps/web/tests/pdf-upload.spec.ts
-npx playwright test apps/web/tests/hint-source-passages.spec.ts
+# Run Week 2/3 tests
+npm run test:e2e:weekly
 
 # Run with UI
 npm run test:e2e:ui
+
+# Build verification
+npm run build
 ```
 
 ## 📚 Documentation
 
-- [docs/README.md](docs/README.md) - Documentation index
+| File | Purpose |
+|------|---------|
+| [docs/README.md](docs/README.md) | Documentation index & Week 3 deliverables |
+| [docs/week3-report.md](docs/week3-report.md) | Week 3 shipped features, schema, metrics |
+| [docs/week3-demo.md](docs/week3-demo.md) | 3-5 minute demo script |
+| [docs/progress.md](docs/progress.md) | Architecture & research vision |
+| [AGENTS.md](AGENTS.md) | Agent workflow guidelines (local only) |
 
 ## 🛠️ Technology Stack
 
@@ -132,6 +129,20 @@ npm run test:e2e:ui
 | **Editor** | Monaco Editor |
 | **Testing** | Playwright |
 | **PDF Processing** | pdftotext + custom chunker |
+
+## 📊 Week 3 Status
+
+**All D0-D10 Deliverables Complete** (2026-02-17)
+
+| Deliverable | Status | Description |
+|-------------|--------|-------------|
+| D0 | ✅ | Naming cleanup (HintWise → Guidance Ladder) |
+| D1 | ✅ | 30 verified concepts in registry |
+| D2-D3 | ✅ | Source indexing + alignment maps |
+| D4-D6 | ✅ | Ladder state machine + LLM contracts |
+| D7 | ✅ | Source viewer + Ask My Textbook chat |
+| D8-D9 | ✅ | Logging schema + replay metrics |
+| D10 | ✅ | Demo package + report |
 
 ## 🔒 Security
 

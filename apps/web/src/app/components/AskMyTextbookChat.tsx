@@ -115,8 +115,8 @@ export function AskMyTextbookChat({
       });
     }
     
-    // Take top 3 most relevant
-    relevantUnits = relevantUnits.slice(0, 3);
+    // Take top 2 most relevant units (reduce clutter)
+    relevantUnits = relevantUnits.slice(0, 2);
 
     // Build retrieval bundle with PDF sources for THIS problem
     let bundleSources: string[] = [];
@@ -129,43 +129,111 @@ export function AskMyTextbookChat({
           problem,
           interactions: recentInteractions,
           lastErrorSubtypeId: errorSubtype,
-          pdfTopK: 3
+          pdfTopK: 2  // Reduce to top 2 most relevant passages
         });
-        bundleSources = bundle.retrievedSourceIds;
-        pdfPassages = bundle.pdfPassages.map(p => ({
-          docId: p.docId,
-          page: p.page,
-          text: cleanText(p.text)
-        })).filter(p => p.text.length > 50); // Filter out short/irrelevant passages
+        
+        // Filter bundle sources to only most relevant ones matching error subtype
+        bundleSources = bundle.retrievedSourceIds.filter(id => {
+          // Keep SQL-Engage sources that match error subtype
+          if (id.includes('sql-engage') && errorSubtype) {
+            return true; // Keep all SQL-Engage matches
+          }
+          // Keep PDF sources (limited below)
+          return id.includes('doc-');
+        }).slice(0, 3); // Max 3 bundle sources
+        
+        pdfPassages = bundle.pdfPassages
+          .map(p => ({
+            docId: p.docId,
+            page: p.page,
+            text: cleanText(p.text)
+          }))
+          .filter(p => {
+            // Must be substantial content
+            if (p.text.length < 100) return false;
+            // Prefer content matching error subtype
+            if (errorSubtype) {
+              const textLower = p.text.toLowerCase();
+              const errorLower = errorSubtype.toLowerCase();
+              return textLower.includes(errorLower) || 
+                     textLower.includes(errorLower.replace(/_/g, ' '));
+            }
+            return true;
+          })
+          .slice(0, 2); // Max 2 PDF passages
       } catch {
         // Bundle building failed
       }
     }
 
+    // Build curated source list - MAX 5 total for display
+    const curatedSourceIds = [
+      ...relevantUnits.map(u => u.id),
+      ...bundleSources
+    ].slice(0, 5);
+
     return {
       relevantUnits,
       bundleSources,
       pdfPassages,
-      allSourceIds: [
-        ...relevantUnits.map(u => u.id),
-        ...bundleSources
-      ],
+      allSourceIds: curatedSourceIds, // Only return curated list
       problemConceptIds,
       errorSubtype
     };
   }, [learnerId, problemId, recentInteractions, getTextbookUnits]);
 
-  // Clean up text for better readability
+  // Clean up text for better readability - more aggressive cleaning
   const cleanText = useCallback((text: string): string => {
     return text
       .replace(/_/g, '')
+      .replace(/@\w+/g, '')  // Remove @variables
+      .replace(/\/\/\s*/g, '')  // Remove // comments
+      .replace(/END\/\//gi, '')  // Remove END//
+      .replace(/DEALLOCATE\s+PREPARE[^;]*/gi, '')  // Remove DEALLOCATE statements
+      .replace(/EXECUTE[^;]*/gi, '')  // Remove EXECUTE statements
       .replace(/\n+/g, ' ')
       .replace(/\s+/g, ' ')
-      .replace(/Figure \d+-\d+[^.]*/g, '')
+      .replace(/Figure \d+-\d+[^.]*/gi, '')
+      .replace(/Description\s*•/gi, '')
       .trim();
   }, []);
+  
+  // Extract a clean SQL example from text
+  const extractSqlExample = useCallback((text: string): string | null => {
+    // Look for SELECT statements
+    const selectMatch = text.match(/SELECT\s+.+?FROM\s+\w+[^;]*/i);
+    if (selectMatch) {
+      let sql = selectMatch[0]
+        .replace(/@\w+/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      // Limit length
+      if (sql.length > 200) {
+        sql = sql.substring(0, 200) + '...';
+      }
+      return sql;
+    }
+    return null;
+  }, []);
+  
+  // Get actionable fix based on error subtype
+  const getActionableFix = useCallback((errorSubtype: string): string => {
+    const fixes: Record<string, string> = {
+      'incomplete_query': 'Your query is missing the FROM clause. Try: SELECT column_name FROM table_name;',
+      'missing_from': 'Add FROM followed by the table name: SELECT * FROM your_table;',
+      'missing_where': 'If you need to filter, add WHERE: SELECT * FROM table WHERE condition;',
+      'syntax_error': 'Check for missing commas, quotes, or semicolons at the end.',
+      'unknown_column': 'Check the column name spelling. Use DESC table_name to see available columns.',
+      'unknown_table': 'Check the table name. Use SHOW TABLES to see available tables.',
+      'unmatched_parenthesis': 'Count your opening ( and closing ) parentheses - they must match.',
+      'missing_select': 'Start with SELECT: SELECT column_name FROM table_name;',
+    };
+    return fixes[errorSubtype.toLowerCase()] || 
+           fixes[errorSubtype.toLowerCase().replace(/_/g, ' ')] || 
+           'Check your query syntax carefully. Start with SELECT, then column names, then FROM table_name;';
+  }, []);
 
-  // Generate grounded response using retrieved sources
+  // Generate grounded response using retrieved sources - FOCUSED & ACTIONABLE
   const generateResponse = useCallback((query: string, quickChip?: string): { 
     response: string; 
     sourceIds: string[];
@@ -181,11 +249,22 @@ export function AskMyTextbookChat({
       errorSubtype
     } = buildGroundingPayload(query, quickChip);
     
-    // Build source list for display
+    // Build source list for display - DEDUPLICATE by title
+    const seenTitles = new Set<string>();
     const sources = [
       ...relevantUnits.map(u => ({ id: u.id, title: u.title, type: 'unit' as const })),
-      ...bundleSources.map(id => ({ id, title: id.split('-p')[0] || id, type: 'pdf' as const }))
-    ];
+      ...bundleSources
+        .filter(id => id.includes('doc-'))  // Only show PDF docs, not all SQL-Engage IDs
+        .map(id => ({ 
+          id, 
+          title: `Textbook ${id.match(/p\d+/)?.[0] || ''}`, 
+          type: 'pdf' as const 
+        }))
+    ].filter(s => {
+      if (seenTitles.has(s.title)) return false;
+      seenTitles.add(s.title);
+      return true;
+    }).slice(0, 4); // MAX 4 sources displayed
     
     // Generate response based on quick chip or query
     let response = '';
@@ -196,92 +275,91 @@ export function AskMyTextbookChat({
         .find(i => i.eventType === 'error');
       if (lastError) {
         const errorType = lastError.errorSubtypeId || lastError.sqlEngageSubtype || 'unknown';
-        response = `**Error Type:** ${errorType}\n\n`;
         
-        // Prioritize PDF passages for error explanation (most relevant)
+        // ACTIONABLE fix first
+        response = `**Fix:** ${getActionableFix(errorType)}\n\n`;
+        
+        // Add context from PDF if relevant and short
         if (pdfPassages.length > 0) {
-          response += `**From your textbook:**\n\n${pdfPassages[0].text.substring(0, 400)}...\n\n`;
+          const relevantText = pdfPassages[0].text.substring(0, 250);
+          if (relevantText.length > 50) {
+            response += `**Why this works:** ${relevantText}...\n\n`;
+          }
         }
         
+        // Add unit reference if available
         if (relevantUnits.length > 0) {
-          const unit = relevantUnits[0];
-          const content = cleanText(unit.summary || unit.content || '');
-          if (!response.includes(content.substring(0, 100))) {
-            response += `**Explanation:**\n${content}`;
-          }
-        } else if (pdfPassages.length === 0) {
-          response += `Based on your error, check your query structure. Make sure table names and column names are spelled correctly.`;
+          response += `📚 See "${relevantUnits[0].title}" in your textbook for more details.`;
         }
       } else {
-        response = 'I don\'t see any recent errors. Try running a query first!';
+        response = 'No recent errors found. Try running a query first!';
       }
     } else if (quickChip === 'minimal_example') {
-      // Try to find example from PDF passages first, then units
-      const passageWithCode = pdfPassages.find(p => 
-        p.text.toLowerCase().includes('select') || 
-        p.text.toLowerCase().includes('from')
-      );
+      // Try to find a clean SQL example
+      let example: string | null = null;
       
-      if (passageWithCode) {
-        response = `**Example from textbook:**\n\n\`\`\`sql\n${passageWithCode.text.substring(0, 300)}\n\`\`\``;
-      } else {
+      // Check PDF passages for SELECT examples
+      for (const passage of pdfPassages) {
+        example = extractSqlExample(passage.text);
+        if (example) break;
+      }
+      
+      // Check units for minimalExample
+      if (!example) {
         const unitWithExample = relevantUnits.find(u => u.minimalExample);
         if (unitWithExample?.minimalExample) {
-          response = `**Example:**\n\n\`\`\`sql\n${cleanText(unitWithExample.minimalExample)}\n\`\`\``;
-        } else {
-          response = '**Example:**\n\n```sql\nSELECT * FROM table_name;\n```';
+          example = cleanText(unitWithExample.minimalExample);
         }
+      }
+      
+      if (example) {
+        response = `**Try this pattern:**\n\n\`\`\`sql\n${example}\n\`\`\`\n\nAdapt the column and table names to your problem.`;
+      } else {
+        response = `**Basic pattern:**\n\n\`\`\`sql\nSELECT column_name\nFROM table_name\nWHERE condition;\n\`\`\`\n\nReplace with your actual columns, table, and filter.`;
       }
     } else if (quickChip === 'what_concept') {
       const problem = getProblemById(problemId);
       if (problem?.concepts.length || problemConceptIds.length) {
         const concepts = problem?.concepts || problemConceptIds;
-        response = `**This problem involves:** ${concepts.join(', ')}\n\n`;
+        response = `**Key concept${concepts.length > 1 ? 's' : ''}:** ${concepts.join(', ')}\n\n`;
         
         if (relevantUnits.length) {
-          response += `**From your textbook:**\n${relevantUnits.map(u => `• ${u.title}`).join('\n')}`;
-        } else if (pdfPassages.length > 0) {
-          response += `**Related material:**\n${pdfPassages[0].text.substring(0, 250)}...`;
+          response += `**Review:** "${relevantUnits[0].title}"\n\n`;
+          if (relevantUnits[0].summary) {
+            response += cleanText(relevantUnits[0].summary).substring(0, 200);
+          }
         } else {
-          response += 'Work through this by identifying which tables and columns you need.';
+          response += 'Focus on which table has the data you need and what columns to select.';
         }
       } else {
-        response = 'This problem involves SQL query construction. Check your syntax and table references.';
+        response = 'This problem tests SQL SELECT basics. Identify the table, then pick the right columns.';
       }
     } else if (quickChip === 'hint_response') {
-      // Check PDF passages first for hints
-      const hintPassage = pdfPassages.find(p => 
-        p.text.toLowerCase().includes('hint') ||
-        p.text.toLowerCase().includes('remember') ||
-        p.text.toLowerCase().includes('note')
-      );
+      // Get the most practical hint
+      const unit = relevantUnits[0];
       
-      if (hintPassage) {
-        response = `**Hint from textbook:**\n\n${hintPassage.text.substring(0, 300)}`;
-      } else if (relevantUnits.length && relevantUnits[0]?.summary) {
-        response = `**Hint:**\n\n${cleanText(relevantUnits[0].summary)}`;
-      } else if (relevantUnits.length) {
-        response = `**Hint:** Check the explanation in "${relevantUnits[0].title}" from your textbook.`;
+      if (unit?.commonMistakes?.length) {
+        response = `**Common mistake:** ${unit.commonMistakes[0]}\n\n**Try:** ${getActionableFix(errorSubtype || 'syntax_error')}`;
+      } else if (unit?.summary) {
+        const summary = cleanText(unit.summary);
+        response = `**Hint:** ${summary.substring(0, 200)}${summary.length > 200 ? '...' : ''}`;
+      } else if (errorSubtype) {
+        response = `**Hint:** ${getActionableFix(errorSubtype)}`;
       } else {
-        response = '**Hint:** Start by identifying the tables you need, then build your SELECT clause.';
+        response = '**Hint:** Break it down: 1) Which table? 2) Which columns? 3) Any filters needed?';
       }
     } else {
-      // Custom query response - synthesize from multiple sources
+      // Custom query - concise answer
       const unitContent = relevantUnits[0];
-      const pdfContent = pdfPassages[0];
       
-      if (relevantUnits.length && unitContent) {
+      if (unitContent) {
         const content = cleanText(unitContent.summary || unitContent.content || '');
-        response = `**${unitContent.title}**\n\n${content}`;
-        
-        // Add PDF excerpt if different from unit content
-        if (pdfContent && !content.includes(pdfContent.text.substring(0, 100))) {
-          response += `\n\n**Also from textbook (page ${pdfContent.page}):**\n${pdfContent.text.substring(0, 250)}...`;
-        }
-      } else if (pdfContent) {
-        response = `**From your textbook (page ${pdfContent.page}):**\n\n${pdfContent.text.substring(0, 500)}`;
+        response = content.substring(0, 400);
+        if (content.length > 400) response += '...';
+      } else if (pdfPassages.length > 0) {
+        response = pdfPassages[0].text.substring(0, 350) + '...';
       } else {
-        response = `I don't have specific notes about that in your textbook yet. Try using the Guidance Ladder for hints, or ask a more specific question.`;
+        response = 'I don\'t have specific notes on that yet. Try the quick chips above for common questions.';
       }
     }
 
@@ -291,7 +369,7 @@ export function AskMyTextbookChat({
       unitIds: relevantUnits.map(u => u.id),
       sources
     };
-  }, [buildGroundingPayload, recentInteractions, problemId, cleanText]);
+  }, [buildGroundingPayload, recentInteractions, problemId, cleanText, extractSqlExample, getActionableFix]);
 
   // Log chat interaction
   const logChatInteraction = useCallback((
