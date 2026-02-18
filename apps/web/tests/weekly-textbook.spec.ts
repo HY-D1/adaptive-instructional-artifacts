@@ -533,11 +533,11 @@ test('@weekly @textbook display: concept badges display correctly', async ({ pag
   await page.goto('/textbook?learnerId=learner-1');
   await expect(page.getByRole('heading', { name: 'My Textbook', level: 1 })).toBeVisible();
   
-  // Verify the note title appears as a button in the sidebar
-  await expect(page.getByRole('button', { name: /Concept Badge Test/ })).toBeVisible();
+  // Verify the note title appears as a button in the sidebar (format: "type title")
+  await expect(page.getByRole('button', { name: 'summary Concept Badge Test Note' })).toBeVisible();
   
   // Click on the note button in sidebar
-  await page.getByRole('button', { name: /Concept Badge Test/ }).click();
+  await page.getByRole('button', { name: 'summary Concept Badge Test Note' }).click();
   
   // Verify note content is displayed in content area
   await expect(page.getByText('Test content for concept badge')).toBeVisible();
@@ -1119,11 +1119,11 @@ test('@weekly @textbook edge: many notes performance', async ({ page }) => {
   // Verify page loaded within reasonable time (under 5 seconds)
   expect(loadTime).toBeLessThan(5000);
   
-  // Verify first note is accessible (format: "type title")
-  await expect(page.getByRole('button', { name: /summary Perf Note 1/ })).toBeVisible();
+  // Verify first note is accessible (format: "type title", exact match)
+  await expect(page.getByRole('button', { name: 'summary Perf Note 1' })).toBeVisible();
   
-  // Verify last note is also accessible
-  await expect(page.getByRole('button', { name: /explanation Perf Note 20/ })).toBeVisible();
+  // Verify last note is also accessible (exact match)
+  await expect(page.getByRole('button', { name: 'explanation Perf Note 20' })).toBeVisible();
   
   // Verify the count via localStorage
   const unitCount = await page.evaluate(() => {
