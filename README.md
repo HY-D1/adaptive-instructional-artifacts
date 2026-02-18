@@ -5,7 +5,7 @@ An intelligent SQL learning environment that adapts to your mistakes, providing 
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)
 ![React](https://img.shields.io/badge/React-18.3-61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-6.3-646CFF)
-![Tests](https://img.shields.io/badge/Tests-159%20passing-success)
+![Tests](https://img.shields.io/badge/Tests-195%2B%20passing-success)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## 🎯 Features
@@ -45,7 +45,7 @@ apps/web/
 │   ├── pages/           # Route pages (Practice, Textbook, Research)
 │   ├── lib/             # Business logic (guidance-ladder, storage, retrieval)
 │   └── data/            # SQL problems, concept registry, alignment maps
-├── tests/               # Playwright E2E tests (159 tests)
+├── tests/               # Playwright E2E tests (195+ tests)
 └── public/              # Static assets
 
 scripts/                 # Utility scripts (replay-metrics, PDF indexing)
@@ -129,20 +129,6 @@ npm run build
 | **Editor** | Monaco Editor |
 | **Testing** | Playwright |
 | **PDF Processing** | pdftotext + custom chunker |
-
-## 📊 Week 3 Status
-
-**All D0-D10 Deliverables Complete** (2026-02-17)
-
-| Deliverable | Status | Description |
-|-------------|--------|-------------|
-| D0 | ✅ | Naming cleanup (HintWise → Guidance Ladder) |
-| D1 | ✅ | 30 verified concepts in registry |
-| D2-D3 | ✅ | Source indexing + alignment maps |
-| D4-D6 | ✅ | Ladder state machine + LLM contracts |
-| D7 | ✅ | Source viewer + Ask My Textbook chat |
-| D8-D9 | ✅ | Logging schema + replay metrics |
-| D10 | ✅ | Demo package + report |
 
 ## 🔒 Security
 
