@@ -8,10 +8,36 @@ import { expect, test } from '@playwright/test';
 
 test.describe('@weekly Week 3 Ask My Textbook', () => {
   test.beforeEach(async ({ page }) => {
+    // Set up localStorage BEFORE page loads using addInitScript
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      
+      // Set up NEW format profile for authentication (Required by ProtectedRoute)
+      const userProfile = {
+        id: 'learner-1',
+        name: 'Test Learner',
+        role: 'student',
+        createdAt: Date.now()
+      };
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(userProfile));
+      
+      // Set up OLD format profile for LearningInterface data
+      const profiles = [{
+        id: 'learner-1',
+        name: 'Test Learner',
+        currentStrategy: 'adaptive-medium',
+        createdAt: Date.now(),
+        interactionCount: 0,
+        conceptsCovered: [],
+        conceptCoverageEvidence: [],
+        errorHistory: []
+      }];
+      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
+      
+      // Session ID must follow format: session-${learnerId}-${timestamp}
+      window.localStorage.setItem('sql-learning-active-session', 'session-learner-1-1234567890');
     });
   });
 
@@ -25,16 +51,8 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
   test('chat panel opens and shows quick chips', async ({ page }) => {
     await page.goto('/');
     
-    await page.evaluate(() => {
-      const profiles = [{
-        id: 'test-learner',
-        name: 'Test Learner',
-        createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
-      window.localStorage.setItem('sql-learning-active-session', 'test-session');
-    });
-    await page.reload();
+    // Wait for React to render
+    await page.waitForTimeout(1000);
 
     await expect(page.getByRole('button', { name: 'Explain my last error' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Show a minimal example' })).toBeVisible();
@@ -44,17 +62,7 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
 
   test('explain my last error - detects SQL errors', async ({ page }) => {
     await page.goto('/');
-    
-    await page.evaluate(() => {
-      const profiles = [{
-        id: 'test-learner',
-        name: 'Test Learner',
-        createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
-      window.localStorage.setItem('sql-learning-active-session', 'test-session');
-    });
-    await page.reload();
+    await page.waitForTimeout(1000);
 
     await page.locator('.monaco-editor .view-lines').first().click();
     await page.keyboard.type('SELECT FROM users;');
@@ -69,17 +77,7 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
 
   test('what concept - shows current problem concepts', async ({ page }) => {
     await page.goto('/');
-    
-    await page.evaluate(() => {
-      const profiles = [{
-        id: 'test-learner',
-        name: 'Test Learner',
-        createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
-      window.localStorage.setItem('sql-learning-active-session', 'test-session');
-    });
-    await page.reload();
+    await page.waitForTimeout(1000);
 
     await page.getByRole('button', { name: 'What concept is this?' }).click();
 
@@ -89,17 +87,7 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
 
   test('give me a hint - provides contextual hint', async ({ page }) => {
     await page.goto('/');
-    
-    await page.evaluate(() => {
-      const profiles = [{
-        id: 'test-learner',
-        name: 'Test Learner',
-        createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
-      window.localStorage.setItem('sql-learning-active-session', 'test-session');
-    });
-    await page.reload();
+    await page.waitForTimeout(1000);
 
     await page.getByRole('button', { name: 'Give me a hint' }).click();
 
@@ -109,19 +97,12 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
 
   test('chat interaction events logged', async ({ page }) => {
     await page.goto('/');
-    
-    await page.evaluate(() => {
-      const profiles = [{
-        id: 'test-learner',
-        name: 'Test Learner',
-        createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
-      window.localStorage.setItem('sql-learning-active-session', 'test-session');
-    });
-    await page.reload();
+    await page.waitForTimeout(1000);
 
     await page.getByRole('button', { name: 'What concept is this?' }).click();
+    
+    // Wait for the response to be generated and event to be logged
+    await page.waitForTimeout(1000);
 
     const events = await page.evaluate(() => {
       const interactions = JSON.parse(
@@ -135,17 +116,7 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
 
   test('save to notes button appears on responses', async ({ page }) => {
     await page.goto('/');
-    
-    await page.evaluate(() => {
-      const profiles = [{
-        id: 'test-learner',
-        name: 'Test Learner',
-        createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
-      window.localStorage.setItem('sql-learning-active-session', 'test-session');
-    });
-    await page.reload();
+    await page.waitForTimeout(1000);
 
     await page.getByRole('button', { name: 'What concept is this?' }).click();
 

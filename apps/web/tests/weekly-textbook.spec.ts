@@ -486,20 +486,26 @@ test('@weekly @textbook display: notes appear in textbook view', async ({ page }
   // Verify page structure
   await expect(page.getByRole('heading', { name: 'My Textbook', level: 1 })).toBeVisible();
   
-  // First note should be visible by default - check by heading in content area
-  await expect(page.getByRole('heading', { name: 'Note One SELECT Basics', level: 2 })).toBeVisible();
+  // Click first note by its title in the sidebar (problem title button)
+  await page.getByRole('button', { name: 'Note One SELECT Basics' }).click();
   
-  // Click second note in sidebar (format: "type title")
-  await page.getByRole('button', { name: /explanation Note Two WHERE Clauses/ }).click();
+  // Verify first note content is displayed
+  await expect(page.getByRole('heading', { name: 'Note One SELECT Basics', level: 2 })).toBeVisible();
+  // Verify the type badge is shown in content area
+  await expect(page.locator('.prose').getByText('summary', { exact: false }).first()).toBeVisible();
+  
+  // Click second note by its title in the sidebar
+  await page.getByRole('button', { name: 'Note Two WHERE Clauses' }).click();
   
   // Wait for URL to update with unitId parameter (indicates selection changed)
   await expect(page).toHaveURL(/unitId=unit-2/);
   
   // Wait for content to load and verify the clicked note's heading is visible
-  // Use a specific selector to find the note content heading (not Trace Attempts)
   await expect(page.getByRole('heading', { name: 'Note Two WHERE Clauses', level: 2 })).toBeVisible();
-  // Verify the button is still visible (sidebar intact)
-  await expect(page.getByRole('button', { name: /explanation Note Two WHERE Clauses/ })).toBeVisible();
+  // Verify the type badge shows 'explanation' in content area
+  await expect(page.locator('.prose').getByText('explanation', { exact: false }).first()).toBeVisible();
+  // Verify the sidebar button is still visible
+  await expect(page.getByRole('button', { name: 'Note Two WHERE Clauses' })).toBeVisible();
 });
 
 test('@weekly @textbook display: concept badges display correctly', async ({ page }) => {
@@ -533,14 +539,16 @@ test('@weekly @textbook display: concept badges display correctly', async ({ pag
   await page.goto('/textbook?learnerId=learner-1');
   await expect(page.getByRole('heading', { name: 'My Textbook', level: 1 })).toBeVisible();
   
-  // Verify the note title appears as a button in the sidebar (format: "type title")
-  await expect(page.getByRole('button', { name: 'summary Concept Badge Test Note' })).toBeVisible();
+  // Verify the note title appears as a button in the sidebar (problem title button)
+  await expect(page.getByRole('button', { name: 'Concept Badge Test Note' })).toBeVisible();
   
   // Click on the note button in sidebar
-  await page.getByRole('button', { name: 'summary Concept Badge Test Note' }).click();
+  await page.getByRole('button', { name: 'Concept Badge Test Note' }).click();
   
   // Verify note content is displayed in content area
   await expect(page.getByText('Test content for concept badge')).toBeVisible();
+  // Verify the type badge shows 'summary' in the content area
+  await expect(page.locator('.prose').getByText('summary', { exact: false }).first()).toBeVisible();
 });
 
 test('@weekly @textbook display: evidence links work', async ({ page }) => {
@@ -1119,11 +1127,15 @@ test('@weekly @textbook edge: many notes performance', async ({ page }) => {
   // Verify page loaded within reasonable time (under 5 seconds)
   expect(loadTime).toBeLessThan(5000);
   
-  // Verify first note is accessible (format: "type title", exact match)
-  await expect(page.getByRole('button', { name: 'summary Perf Note 1' })).toBeVisible();
+  // Verify first note is accessible by its title (problem title button)
+  await expect(page.getByRole('button', { name: 'Perf Note 1' })).toBeVisible();
   
-  // Verify last note is also accessible (exact match)
-  await expect(page.getByRole('button', { name: 'explanation Perf Note 20' })).toBeVisible();
+  // Verify last note is also accessible by its title
+  await expect(page.getByRole('button', { name: 'Perf Note 20' })).toBeVisible();
+  
+  // Click on first note to verify it can be selected
+  await page.getByRole('button', { name: 'Perf Note 1' }).click();
+  await expect(page.getByRole('heading', { name: 'Perf Note 1', level: 2 })).toBeVisible();
   
   // Verify the count via localStorage
   const unitCount = await page.evaluate(() => {

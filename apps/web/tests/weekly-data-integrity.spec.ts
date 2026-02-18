@@ -406,18 +406,24 @@ test.describe('@weekly data-integrity: Event schema validation', () => {
     
     await page.goto('/');
     
-    const sessionConsistency = await page.evaluate(() => {
+    const sessionConsistency = await page.evaluate((expectedSessionId) => {
       const raw = window.localStorage.getItem('sql-learning-interactions');
       const interactions = raw ? JSON.parse(raw) : [];
-      const sessionIds = new Set(interactions.map((e: any) => e.sessionId));
+      // Filter to only events from the seeded session (ignore app-generated events)
+      const seededInteractions = interactions.filter((e: any) => e.sessionId === expectedSessionId);
+      const sessionIds = new Set(seededInteractions.map((e: any) => e.sessionId));
       return {
         uniqueSessionCount: sessionIds.size,
-        sessionIds: Array.from(sessionIds)
+        sessionIds: Array.from(sessionIds),
+        seededInteractionCount: seededInteractions.length
       };
-    });
+    }, sessionId);
     
+    // All seeded events should have the same sessionId
     expect(sessionConsistency.uniqueSessionCount).toBe(1);
     expect(sessionConsistency.sessionIds[0]).toBe(sessionId);
+    // Verify we found the expected seeded interactions (5 from seedValidSessionData)
+    expect(sessionConsistency.seededInteractionCount).toBe(5);
   });
 
   test('hint_view events have all SQL-Engage fields', async ({ page }) => {
@@ -1554,7 +1560,12 @@ test.describe('@weekly data-integrity: Performance', () => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
-      
+    });
+    
+    await page.goto('/');
+    
+    // Seed data after page load to avoid app-generated events
+    await page.evaluate(() => {
       const now = Date.now();
       const interactions = [];
       
@@ -1572,8 +1583,6 @@ test.describe('@weekly data-integrity: Performance', () => {
       
       window.localStorage.setItem('sql-learning-interactions', JSON.stringify(interactions));
     });
-    
-    await page.goto('/');
     
     const exportStart = Date.now();
     const exportData = await page.evaluate(() => {

@@ -33,12 +33,13 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
     
     // Setup learner
     await page.evaluate(() => {
-      const profiles = [{
+      const profile = {
         id: 'test-learner',
         name: 'Test Learner',
+        role: 'student',
         createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
+      };
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(profile));
       window.localStorage.setItem('sql-learning-active-session', 'test-session');
     });
     await page.reload();
@@ -65,12 +66,13 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
     await page.goto('/');
     
     await page.evaluate(() => {
-      const profiles = [{
+      const profile = {
         id: 'test-learner',
         name: 'Test Learner',
+        role: 'student',
         createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
+      };
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(profile));
       window.localStorage.setItem('sql-learning-active-session', 'test-session');
     });
     await page.reload();
@@ -81,25 +83,32 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
     await page.getByRole('button', { name: 'Run Query' }).click();
     await expect(page.locator('text=SQL Error')).toBeVisible();
 
-    // Request hints to reach rung 2
+    // Request hints to reach rung 2 (3 hints triggers escalation)
     await page.getByRole('button', { name: HELP_BUTTON }).click();
+    await expect(page.getByText('Hint 1')).toBeVisible();
     await page.getByRole('button', { name: HELP_BUTTON }).click();
+    await expect(page.getByText('Hint 2')).toBeVisible();
     await page.getByRole('button', { name: HELP_BUTTON }).click();
+    await expect(page.getByText('Hint 3')).toBeVisible();
 
-    // Verify escalation to rung 2
-    await expect(page.getByText(/Explanation|Rung 2/)).toBeVisible();
+    // Verify escalation to rung 2 - check for specific rung indicator text
+    // The RungIndicator shows "Explain" at rung 2
+    await expect(page.getByText('Explain')).toBeVisible();
+    // Also verify the rung counter shows "2/3"
+    await expect(page.getByText(/2\/3/)).toBeVisible();
   });
 
   test('escalation events logged correctly', async ({ page }) => {
     await page.goto('/');
     
     await page.evaluate(() => {
-      const profiles = [{
+      const profile = {
         id: 'test-learner',
         name: 'Test Learner',
+        role: 'student',
         createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
+      };
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(profile));
       window.localStorage.setItem('sql-learning-active-session', 'test-session');
     });
     await page.reload();
@@ -132,12 +141,13 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
     
     // Setup with PDF index
     await page.evaluate(() => {
-      const profiles = [{
+      const profile = {
         id: 'test-learner',
         name: 'Test Learner',
+        role: 'student',
         createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
+      };
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(profile));
       window.localStorage.setItem('sql-learning-active-session', 'test-session');
       
       // Mock PDF index
@@ -167,12 +177,13 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
     await page.goto('/');
     
     await page.evaluate(() => {
-      const profiles = [{
+      const profile = {
         id: 'test-learner',
         name: 'Test Learner',
+        role: 'student',
         createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
+      };
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(profile));
       window.localStorage.setItem('sql-learning-active-session', 'test-session');
     });
     await page.reload();
@@ -189,22 +200,28 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
     const problemSelector = page.getByRole('combobox').first();
     await problemSelector.click();
     await page.getByRole('option').nth(1).click();
+    
+    // Wait for the problem to change and UI to update
+    await page.waitForTimeout(500);
 
-    // Verify hints reset
-    await expect(page.getByText('Request a hint to get started')).toBeVisible();
-    await expect(page.getByText('Hint 1')).not.toBeVisible();
+    // Verify hints reset - hint panel shows empty state
+    const hintPanel = page.locator('[data-testid="hint-panel"]');
+    await expect(hintPanel.getByText('Request a hint to get started')).toBeVisible();
+    // Verify previous hints are not shown
+    await expect(page.getByText('Hint 1')).toHaveCount(0);
   });
 
   test('guidance ladder state persists across navigation', async ({ page }) => {
     await page.goto('/');
     
     await page.evaluate(() => {
-      const profiles = [{
+      const profile = {
         id: 'test-learner',
         name: 'Test Learner',
+        role: 'student',
         createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
+      };
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(profile));
       window.localStorage.setItem('sql-learning-active-session', 'test-session');
     });
     await page.reload();
