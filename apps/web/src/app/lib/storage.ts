@@ -10,7 +10,11 @@ import {
   PdfSourceDoc,
   PdfCitation,
   UnitProvenance,
-  ConceptCoverageEvidence
+  ConceptCoverageEvidence,
+  GuidanceRequestType,
+  RungLevel,
+  GuidanceEscalationTrigger,
+  TextbookUnitAction
 } from '../types';
 import {
   canonicalizeSqlEngageSubtype,
@@ -23,6 +27,14 @@ import {
   PDF_EMBEDDING_MODEL_ID,
   PDF_INDEX_SCHEMA_VERSION
 } from './pdf-index-config';
+import {
+  upsertTextbookUnit,
+  buildNewUnit,
+  buildUpdatedUnit,
+  findExistingUnit,
+  generateDedupeKey,
+  type CreateUnitInput
+} from './textbook-units';
 
 /**
  * Local storage manager for interaction traces and learner state
@@ -585,6 +597,171 @@ class StorageManager {
     };
   }
 
+  // Week 3 D8: Guidance Ladder event logging helpers
+
+  /**
+   * Log a guidance request event when learner requests help.
+   * Enables replay reconstruction of help-seeking behavior.
+   */
+  logGuidanceRequest(params: {
+    learnerId: string;
+    problemId: string;
+    requestType: GuidanceRequestType;
+    currentRung: RungLevel;
+    sessionId?: string;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const event: InteractionEvent = {
+      id: this.generateEventId('guidance-req'),
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
+      timestamp: Date.now(),
+      eventType: 'guidance_request',
+      problemId: params.problemId,
+      requestType: params.requestType,
+      currentRung: params.currentRung
+    };
+    return this.saveInteraction(event);
+  }
+
+  /**
+   * Log a guidance view event when guidance is displayed.
+   * Captures rung, concept IDs, and grounding information for replay.
+   */
+  logGuidanceView(params: {
+    learnerId: string;
+    problemId: string;
+    rung: RungLevel;
+    conceptIds: string[];
+    sourceRefIds?: string[];
+    grounded: boolean;
+    contentLength: number;
+    sessionId?: string;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const event: InteractionEvent = {
+      id: this.generateEventId('guidance-view'),
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
+      timestamp: Date.now(),
+      eventType: 'guidance_view',
+      problemId: params.problemId,
+      rung: params.rung,
+      conceptIds: params.conceptIds,
+      retrievedSourceIds: params.sourceRefIds,
+      grounded: params.grounded,
+      contentLength: params.contentLength
+    };
+    return this.saveInteraction(event);
+  }
+
+  /**
+   * Log a guidance escalation event when escalation happens.
+   * Captures trigger reason and evidence for replay analysis.
+   */
+  logGuidanceEscalate(params: {
+    learnerId: string;
+    problemId: string;
+    fromRung: RungLevel;
+    toRung: RungLevel;
+    trigger: GuidanceEscalationTrigger;
+    evidence: {
+      errorCount: number;
+      retryCount: number;
+      hintCount: number;
+      timeSpentMs: number;
+    };
+    sourceInteractionIds?: string[];
+    sessionId?: string;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const event: InteractionEvent = {
+      id: this.generateEventId('guidance-esc'),
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
+      timestamp: Date.now(),
+      eventType: 'guidance_escalate',
+      problemId: params.problemId,
+      fromRung: params.fromRung,
+      toRung: params.toRung,
+      trigger: params.trigger,
+      inputs: {
+        error_count: params.evidence.errorCount,
+        retry_count: params.evidence.retryCount,
+        hint_count: params.evidence.hintCount,
+        time_spent_ms: params.evidence.timeSpentMs
+      },
+      triggerInteractionIds: params.sourceInteractionIds
+    };
+    return this.saveInteraction(event);
+  }
+
+  /**
+   * Log a textbook unit upsert event when My Textbook unit is created or updated.
+   * Captures dedupe key and revision count for replay.
+   */
+  logTextbookUnitUpsert(params: {
+    learnerId: string;
+    problemId: string;
+    unitId: string;
+    conceptIds: string[];
+    action: TextbookUnitAction;
+    dedupeKey: string;
+    revisionCount: number;
+    sourceRefIds?: string[];
+    sourceInteractionIds?: string[];
+    sessionId?: string;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const event: InteractionEvent = {
+      id: this.generateEventId('unit-upsert'),
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
+      timestamp: Date.now(),
+      eventType: 'textbook_unit_upsert',
+      problemId: params.problemId,
+      unitId: params.unitId,
+      conceptIds: params.conceptIds,
+      action: params.action,
+      dedupeKey: params.dedupeKey,
+      revisionCount: params.revisionCount,
+      retrievedSourceIds: params.sourceRefIds,
+      triggerInteractionIds: params.sourceInteractionIds
+    };
+    return this.saveInteraction(event);
+  }
+
+  /**
+   * Log a source view event when learner opens source viewer.
+   * Captures passage count and concept coverage for replay.
+   */
+  logSourceView(params: {
+    learnerId: string;
+    problemId: string;
+    passageCount: number;
+    conceptIds: string[];
+    expanded: boolean;
+    sessionId?: string;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const event: InteractionEvent = {
+      id: this.generateEventId('source-view'),
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
+      timestamp: Date.now(),
+      eventType: 'source_view',
+      problemId: params.problemId,
+      passageCount: params.passageCount,
+      conceptIds: params.conceptIds,
+      expanded: params.expanded
+    };
+    return this.saveInteraction(event);
+  }
+
+  /**
+   * Generate a unique event ID for Guidance Ladder events.
+   */
+  private generateEventId(prefix: string): string {
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 8);
+    return `evt-${prefix}-${timestamp}-${random}`;
+  }
+
   // Evidence scoring weights for coverage calculation
   private readonly EVIDENCE_WEIGHTS = {
     successfulExecution: 25,    // Strong positive evidence
@@ -696,6 +873,78 @@ class StorageManager {
       ...unit,
       sourceInteractionIds: this.mergeIds(unit.sourceInteractionIds, unit.sourceInteractions)
     }));
+  }
+
+  // Week 3 D6: Enhanced upsert with dedupe and revision tracking
+  // Week 3 D8: Added logging for textbook_unit_upsert events
+  saveTextbookUnitV2(
+    learnerId: string, 
+    input: CreateUnitInput,
+    problemId?: string
+  ): SaveTextbookUnitResult & {
+    action: 'created' | 'updated';
+    why: string;
+  } {
+    const textbooks = this.getAllTextbooks();
+    if (!textbooks[learnerId]) {
+      textbooks[learnerId] = [];
+    }
+
+    // Create input with logging callback for upsert tracking
+    const inputWithLogging: CreateUnitInput = {
+      ...input,
+      onUpsert: (params) => {
+        // Week 3 D8: Log textbook_unit_upsert event
+        if (problemId) {
+          this.logTextbookUnitUpsert({
+            learnerId,
+            problemId,
+            unitId: params.unitId,
+            conceptIds: input.conceptIds,
+            action: params.action,
+            dedupeKey: params.dedupeKey,
+            revisionCount: params.revisionCount,
+            sourceRefIds: input.sourceRefIds,
+            sourceInteractionIds: input.sourceInteractionIds,
+            sessionId: input.sessionId
+          });
+        }
+        // Call original callback if provided
+        input.onUpsert?.(params);
+      }
+    };
+
+    // Use the new upsert logic
+    const result = upsertTextbookUnit(
+      textbooks[learnerId],
+      inputWithLogging,
+      () => this.generateEventId('unit')
+    );
+
+    if (result.action === 'created') {
+      textbooks[learnerId].push(result.unit);
+    } else {
+      // Replace existing unit with updated version
+      const dedupeKey = generateDedupeKey(result.unit);
+      const index = textbooks[learnerId].findIndex(
+        (u) => generateDedupeKey(u) === dedupeKey
+      );
+      if (index !== -1) {
+        textbooks[learnerId][index] = result.unit;
+      }
+    }
+
+    // Save to storage
+    const saveResult = this.safeSetItem(this.TEXTBOOK_KEY, JSON.stringify(textbooks));
+    if (!saveResult.success) {
+      console.warn('Failed to save textbook unit: quota exceeded or other error');
+    }
+
+    return {
+      ...result,
+      success: saveResult.success,
+      quotaExceeded: saveResult.quotaExceeded
+    };
   }
 
   private mergeIds(...sources: Array<string[] | undefined>): string[] {
@@ -1343,7 +1592,10 @@ class StorageManager {
     const validEventTypes: InteractionEvent['eventType'][] = [
       'code_change', 'execution', 'error', 'hint_request', 'hint_view',
       'explanation_view', 'llm_generate', 'pdf_index_rebuilt', 'pdf_index_uploaded',
-      'textbook_add', 'textbook_update', 'coverage_change'
+      'textbook_add', 'textbook_update', 'coverage_change',
+      // Week 3 D8: Guidance Ladder events
+      'guidance_request', 'guidance_view', 'guidance_escalate',
+      'textbook_unit_upsert', 'source_view'
     ];
     const normalizedEventType = validEventTypes.includes(interaction.eventType)
       ? interaction.eventType

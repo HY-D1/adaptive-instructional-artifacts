@@ -7,6 +7,10 @@ import {
   getProgressiveSqlEngageHintText,
   getSqlEngageRowsBySubtype
 } from '../data/sql-engage';
+import {
+  getConceptFromRegistry,
+  getSourceRefsForConcept
+} from '../data';
 import { getActivePdfIndexProvenance, retrievePdfChunks } from './pdf-retrieval';
 
 export type RetrievalHintHistory = {
@@ -32,6 +36,31 @@ export type RetrievalPdfPassage = {
   score: number;
 };
 
+// Week 3 D2: Source passages from Concept Registry
+export type RetrievalSourcePassage = {
+  passageId: string;
+  conceptId: string;
+  docId: string;
+  chunkId: string;
+  page: number;
+  text: string;
+  whyIncluded: string;
+};
+
+// Week 3 D2: Why sources were retrieved
+export type WhyRetrieved = {
+  trigger: 'error_subtype_match' | 'concept_mapping' | 'learner_request' | 'escalation';
+  errorSubtypeId?: string;
+  conceptIds: string[];
+  traceEvidence: {
+    errorCount: number;
+    retryCount: number;
+    hintCount: number;
+    timeSpentMs: number;
+    lastInteractionTypes: string[];
+  };
+};
+
 export type RetrievalBundle = {
   learnerId: string;
   problemId: string;
@@ -51,6 +80,13 @@ export type RetrievalBundle = {
   triggerInteractionIds: string[];
   pdfPassages: RetrievalPdfPassage[];
   pdfIndexProvenance: PdfIndexProvenance | null;
+  // Week 3 D2: Source grounding fields
+  sourcePassages: RetrievalSourcePassage[];
+  whyRetrieved: WhyRetrieved;
+  conceptSourceRefs: Array<{
+    conceptId: string;
+    sourceRefIds: string[];
+  }>;
 };
 
 export function buildRetrievalBundle(options: {
@@ -159,6 +195,56 @@ export function buildRetrievalBundle(options: {
     ...getSqlEngageRowsBySubtype(normalizedSubtype).slice(0, 2).map((row) => row.rowId)
   ]));
 
+  // Week 3 D2: Build whyRetrieved with trace evidence
+  const lastInteractionTypes = problemInteractions
+    .slice(-5)
+    .map((i) => i.eventType);
+  
+  const whyRetrieved: WhyRetrieved = {
+    trigger: determineRetrievalTrigger(errors, hintCount, normalizedSubtype, lastInteractionTypes),
+    errorSubtypeId: normalizedSubtype,
+    conceptIds,
+    traceEvidence: {
+      errorCount: errors,
+      retryCount: Math.max(0, errors - 1),
+      hintCount,
+      timeSpentMs: timeSpent,
+      lastInteractionTypes
+    }
+  };
+
+  // Week 3 D2: Build conceptSourceRefs from concept registry
+  const conceptSourceRefs = conceptIds.map((conceptId) => {
+    const registryConcept = getConceptFromRegistry(conceptId);
+    const sourceRefIds = registryConcept?.sourceRefs.map(
+      (ref) => `${ref.docId}:${ref.chunkId}:${ref.passageId || ref.page}`
+    ) ?? [];
+    return {
+      conceptId,
+      sourceRefIds
+    };
+  });
+
+  // Week 3 D2: Build sourcePassages from concept registry (placeholder for actual text retrieval)
+  // In a full implementation, this would fetch actual passage text from the PDF/textbook
+  const sourcePassages: RetrievalSourcePassage[] = [];
+  for (const conceptId of conceptIds) {
+    const registryConcept = getConceptFromRegistry(conceptId);
+    if (registryConcept?.sourceRefs) {
+      for (const ref of registryConcept.sourceRefs.slice(0, 2)) { // Top 2 refs per concept
+        sourcePassages.push({
+          passageId: ref.passageId || `${ref.chunkId}-p${ref.page}`,
+          conceptId,
+          docId: ref.docId,
+          chunkId: ref.chunkId,
+          page: ref.page,
+          text: `[Source: ${ref.docId}, Page ${ref.page}]`, // Placeholder - actual text would come from PDF/chunk store
+          whyIncluded: `Concept registry source for ${conceptId}`
+        });
+      }
+    }
+  }
+
   return {
     learnerId,
     problemId: problem.id,
@@ -181,11 +267,39 @@ export function buildRetrievalBundle(options: {
       timeSpent,
       hintCount
     },
-    retrievedSourceIds,
+    retrievedSourceIds: Array.from(new Set([
+      ...retrievedSourceIds,
+      ...conceptSourceRefs.flatMap((csr) => csr.sourceRefIds)
+    ])),
     triggerInteractionIds,
     pdfPassages,
-    pdfIndexProvenance
+    pdfIndexProvenance,
+    // Week 3 D2: New source grounding fields
+    sourcePassages,
+    whyRetrieved,
+    conceptSourceRefs
   };
+}
+
+// Week 3 D2: Determine why sources were retrieved
+function determineRetrievalTrigger(
+  errors: number,
+  hintCount: number,
+  errorSubtypeId: string,
+  lastInteractionTypes: string[]
+): WhyRetrieved['trigger'] {
+  const lastType = lastInteractionTypes[lastInteractionTypes.length - 1];
+  
+  if (lastType === 'hint_request' || lastType === 'explanation_view') {
+    return 'learner_request';
+  }
+  if (hintCount >= 3) {
+    return 'escalation';
+  }
+  if (errors > 0 && errorSubtypeId && errorSubtypeId !== 'incomplete query') {
+    return 'error_subtype_match';
+  }
+  return 'concept_mapping';
 }
 
 function resolveHintSourceId(event: InteractionEvent, fallbackRowId?: string): string | undefined {
