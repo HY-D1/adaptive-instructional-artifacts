@@ -693,7 +693,7 @@ export const errorSubtypes: ErrorSubtype[] = [
   }
 ];
 
-// HintWise: Progressive hint templates
+// Guidance Ladder: Progressive hint templates
 export const hintTemplates: HintTemplate[] = [
   // Basic SELECT hints
   {

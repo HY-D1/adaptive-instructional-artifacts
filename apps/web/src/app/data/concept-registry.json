@@ -1,0 +1,333 @@
+{
+  "schemaVersion": "concept-registry-v1",
+  "lastUpdated": "2026-02-17",
+  "totalConcepts": 30,
+  "verifiedCount": 30,
+  "unverifiedCount": 0,
+  "concepts": [
+    {
+      "conceptId": "select-basic",
+      "title": "Basic SELECT Statement",
+      "oneLineDefinition": "Retrieves specific columns or all columns from one or more tables using the SELECT keyword.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch2-select-basics", "page": 24, "passageId": "select-syntax-overview" },
+        { "docId": "sql-textbook", "chunkId": "ch2-select-basics", "page": 25, "passageId": "select-all-vs-specific" }
+      ],
+      "tags": ["ddl", "query-fundamentals", "beginner"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "where-clause",
+      "title": "WHERE Clause Filtering",
+      "oneLineDefinition": "Filters rows based on specified conditions using comparison and logical operators.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch3-filtering", "page": 42, "passageId": "where-syntax" },
+        { "docId": "sql-textbook", "chunkId": "ch3-filtering", "page": 44, "passageId": "comparison-operators" }
+      ],
+      "tags": ["filtering", "conditions", "beginner"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "joins",
+      "title": "JOIN Operations",
+      "oneLineDefinition": "Combines rows from two or more tables based on a related column between them.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch5-joins", "page": 78, "passageId": "inner-join" },
+        { "docId": "sql-textbook", "chunkId": "ch5-joins", "page": 82, "passageId": "left-join" },
+        { "docId": "sql-textbook", "chunkId": "ch5-joins", "page": 86, "passageId": "join-conditions" }
+      ],
+      "tags": ["multi-table", "relationships", "intermediate"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "join-condition-missing",
+      "title": "JOIN Condition Requirements",
+      "oneLineDefinition": "Every JOIN must specify an ON clause to define how tables relate; missing conditions cause Cartesian products.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch5-joins", "page": 80, "passageId": "on-clause-required" },
+        { "docId": "sql-textbook", "chunkId": "ch5-joins", "page": 88, "passageId": "cartesian-product-warning" }
+      ],
+      "tags": ["joins", "common-mistake", "intermediate"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "ambiguous-column",
+      "title": "Column Ambiguity in JOINs",
+      "oneLineDefinition": "When columns exist in multiple tables, they must be qualified with table names or aliases.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch5-joins", "page": 84, "passageId": "table-aliases" },
+        { "docId": "sql-textbook", "chunkId": "ch5-joins", "page": 85, "passageId": "qualifying-column-names" }
+      ],
+      "tags": ["joins", "common-mistake", "intermediate"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "aggregation",
+      "title": "Aggregate Functions",
+      "oneLineDefinition": "Functions like COUNT, SUM, AVG, MAX, MIN that compute values across multiple rows.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch6-aggregation", "page": 102, "passageId": "aggregate-functions-intro" },
+        { "docId": "sql-textbook", "chunkId": "ch6-aggregation", "page": 104, "passageId": "count-sum-avg-examples" }
+      ],
+      "tags": ["functions", "calculations", "intermediate"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "group-by",
+      "title": "GROUP BY Clause",
+      "oneLineDefinition": "Groups rows sharing the same values in specified columns for aggregate calculations.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch6-aggregation", "page": 108, "passageId": "group-by-syntax" },
+        { "docId": "sql-textbook", "chunkId": "ch6-aggregation", "page": 110, "passageId": "group-by-rules" }
+      ],
+      "tags": ["aggregation", "grouping", "intermediate"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "group-by-error",
+      "title": "GROUP BY Compliance",
+      "oneLineDefinition": "Non-aggregated columns in SELECT must appear in GROUP BY clause.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch6-aggregation", "page": 112, "passageId": "select-group-by-mismatch" },
+        { "docId": "sql-textbook", "chunkId": "ch6-aggregation", "page": 114, "passageId": "functional-dependency" }
+      ],
+      "tags": ["aggregation", "common-mistake", "intermediate"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "having-clause",
+      "title": "HAVING Clause",
+      "oneLineDefinition": "Filters grouped rows based on aggregate conditions; executes after GROUP BY.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch6-aggregation", "page": 118, "passageId": "having-vs-where" },
+        { "docId": "sql-textbook", "chunkId": "ch6-aggregation", "page": 120, "passageId": "having-syntax" }
+      ],
+      "tags": ["aggregation", "filtering", "intermediate"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "subqueries",
+      "title": "Subqueries (Nested Queries)",
+      "oneLineDefinition": "A query nested inside another query's WHERE, FROM, or SELECT clause.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch7-subqueries", "page": 134, "passageId": "subquery-intro" },
+        { "docId": "sql-textbook", "chunkId": "ch7-subqueries", "page": 136, "passageId": "in-operator" },
+        { "docId": "sql-textbook", "chunkId": "ch7-subqueries", "page": 140, "passageId": "correlated-subqueries" }
+      ],
+      "tags": ["nesting", "advanced", "multi-step"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "order-by",
+      "title": "ORDER BY Clause",
+      "oneLineDefinition": "Sorts query results by one or more columns in ascending or descending order.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch4-sorting", "page": 62, "passageId": "order-by-syntax" },
+        { "docId": "sql-textbook", "chunkId": "ch4-sorting", "page": 64, "passageId": "asc-desc" }
+      ],
+      "tags": ["sorting", "presentation", "beginner"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "limit-offset",
+      "title": "LIMIT and OFFSET",
+      "oneLineDefinition": "Restricts the number of rows returned and skips initial rows for pagination.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch4-sorting", "page": 68, "passageId": "limit-clause" },
+        { "docId": "sql-textbook", "chunkId": "ch4-sorting", "page": 70, "passageId": "pagination-with-offset" }
+      ],
+      "tags": ["pagination", "performance", "beginner"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "distinct",
+      "title": "DISTINCT Keyword",
+      "oneLineDefinition": "Eliminates duplicate rows from query results, returning only unique values.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch2-select-basics", "page": 28, "passageId": "distinct-values" }
+      ],
+      "tags": ["deduplication", "beginner"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "alias",
+      "title": "Column and Table Aliases",
+      "oneLineDefinition": "Temporary names assigned to columns or tables using AS keyword for readability.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch2-select-basics", "page": 30, "passageId": "column-aliases" },
+        { "docId": "sql-textbook", "chunkId": "ch5-joins", "page": 84, "passageId": "table-aliases" }
+      ],
+      "tags": ["readability", "syntax", "beginner"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "null-handling",
+      "title": "NULL Value Handling",
+      "oneLineDefinition": "Special handling required for missing values; use IS NULL, not = NULL.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch3-filtering", "page": 48, "passageId": "null-semantics" },
+        { "docId": "sql-textbook", "chunkId": "ch3-filtering", "page": 50, "passageId": "is-null-operator" }
+      ],
+      "tags": ["nulls", "common-mistake", "beginner"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "logical-operators",
+      "title": "Logical Operators (AND, OR, NOT)",
+      "oneLineDefinition": "Combines multiple conditions in WHERE clause with specific precedence rules.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch3-filtering", "page": 52, "passageId": "and-or-combinations" },
+        { "docId": "sql-textbook", "chunkId": "ch3-filtering", "page": 54, "passageId": "operator-precedence" }
+      ],
+      "tags": ["conditions", "boolean-logic", "beginner"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "in-operator",
+      "title": "IN Operator",
+      "oneLineDefinition": "Checks if a value matches any value in a list or subquery result.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch3-filtering", "page": 56, "passageId": "in-list" },
+        { "docId": "sql-textbook", "chunkId": "ch7-subqueries", "page": 136, "passageId": "in-subquery" }
+      ],
+      "tags": ["filtering", "set-operations", "beginner"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "between-operator",
+      "title": "BETWEEN Operator",
+      "oneLineDefinition": "Selects values within a given range, inclusive of endpoints.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch3-filtering", "page": 58, "passageId": "between-range" }
+      ],
+      "tags": ["filtering", "ranges", "beginner"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "like-pattern",
+      "title": "LIKE Pattern Matching",
+      "oneLineDefinition": "Searches for specified patterns in columns using wildcards (% and _).",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch3-filtering", "page": 60, "passageId": "like-wildcards" }
+      ],
+      "tags": ["filtering", "strings", "beginner"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "string-functions",
+      "title": "String Functions",
+      "oneLineDefinition": "Built-in functions for manipulating text: CONCAT, SUBSTRING, UPPER, LOWER, TRIM.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch8-functions", "page": 156, "passageId": "string-functions" },
+        { "docId": "sql-textbook", "chunkId": "ch8-functions", "page": 158, "passageId": "concat-substring" }
+      ],
+      "tags": ["functions", "strings", "intermediate"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "date-functions",
+      "title": "Date and Time Functions",
+      "oneLineDefinition": "Functions for manipulating dates: NOW, DATE, YEAR, MONTH, DATEDIFF.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch8-functions", "page": 162, "passageId": "date-functions" }
+      ],
+      "tags": ["functions", "dates", "intermediate"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "case-expression",
+      "title": "CASE Expression",
+      "oneLineDefinition": "Conditional logic in SELECT for if-then-else style calculations.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch8-functions", "page": 166, "passageId": "case-simple" },
+        { "docId": "sql-textbook", "chunkId": "ch8-functions", "page": 168, "passageId": "case-searched" }
+      ],
+      "tags": ["functions", "conditional", "intermediate"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "union",
+      "title": "UNION Operator",
+      "oneLineDefinition": "Combines result sets from two or more SELECT statements into single result.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch9-set-ops", "page": 180, "passageId": "union-all" },
+        { "docId": "sql-textbook", "chunkId": "ch9-set-ops", "page": 182, "passageId": "union-vs-union-all" }
+      ],
+      "tags": ["set-operations", "advanced"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "exist-clause",
+      "title": "EXISTS Clause",
+      "oneLineDefinition": "Tests for existence of rows in subquery; returns boolean result.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch7-subqueries", "page": 142, "passageId": "exists-operator" }
+      ],
+      "tags": ["subqueries", "boolean", "advanced"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "cte",
+      "title": "Common Table Expressions (CTE)",
+      "oneLineDefinition": "Named temporary result set defined with WITH clause for cleaner complex queries.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch10-advanced", "page": 198, "passageId": "cte-intro" },
+        { "docId": "sql-textbook", "chunkId": "ch10-advanced", "page": 200, "passageId": "recursive-cte" }
+      ],
+      "tags": ["advanced", "readability", "query-organization"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "window-functions",
+      "title": "Window Functions",
+      "oneLineDefinition": "Functions like ROW_NUMBER, RANK, LAG that calculate across row sets without grouping.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch10-advanced", "page": 204, "passageId": "over-clause" },
+        { "docId": "sql-textbook", "chunkId": "ch10-advanced", "page": 206, "passageId": "partition-by" }
+      ],
+      "tags": ["advanced", "analytics", "ranking"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "self-join",
+      "title": "Self-JOIN",
+      "oneLineDefinition": "Joining a table to itself using different aliases to compare rows within same table.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch5-joins", "page": 90, "passageId": "self-join" }
+      ],
+      "tags": ["joins", "advanced", "hierarchical"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "cross-join",
+      "title": "CROSS JOIN",
+      "oneLineDefinition": "Produces Cartesian product of two tables; every row from first table joins to every row from second.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "ch5-joins", "page": 92, "passageId": "cross-join" }
+      ],
+      "tags": ["joins", "cartesian", "advanced"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "syntax-error",
+      "title": "SQL Syntax Errors",
+      "oneLineDefinition": "Errors caused by incorrect SQL grammar, missing keywords, or misplaced clauses.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "app-debugging", "page": 245, "passageId": "syntax-mistakes" },
+        { "docId": "sql-textbook", "chunkId": "app-debugging", "page": 246, "passageId": "common-syntax-fixes" }
+      ],
+      "tags": ["errors", "debugging", "beginner"],
+      "status": "verified"
+    },
+    {
+      "conceptId": "missing-from",
+      "title": "Missing FROM Clause",
+      "oneLineDefinition": "Common error where SELECT statement omits required FROM clause to specify data source.",
+      "sourceRefs": [
+        { "docId": "sql-textbook", "chunkId": "app-debugging", "page": 248, "passageId": "missing-table-reference" }
+      ],
+      "tags": ["errors", "common-mistake", "beginner"],
+      "status": "verified"
+    }
+  ]
+}

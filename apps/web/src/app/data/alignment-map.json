@@ -1,0 +1,248 @@
+{
+  "schemaVersion": "alignment-map-v1",
+  "lastUpdated": "2026-02-17",
+  "description": "Maps SQL-Engage error subtypes to Textbook Concept Registry IDs",
+  "totalMappings": 23,
+  "verifiedMappings": 20,
+  "unverifiedMappings": 3,
+  "mappings": [
+    {
+      "sqlEngageSubtype": "incomplete query",
+      "frequencyRank": 1,
+      "frequencyCount": 39,
+      "textbookConceptIds": ["select-basic", "syntax-error"],
+      "confidence": "high",
+      "status": "verified",
+      "notes": "Clear mapping to SELECT fundamentals and syntax errors. Well-documented in concept registry.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "incorrect select usage",
+      "frequencyRank": 2,
+      "frequencyCount": 35,
+      "textbookConceptIds": ["select-basic", "distinct", "alias"],
+      "confidence": "high",
+      "status": "verified",
+      "notes": "Direct mapping to SELECT clause concepts. Source refs available in registry.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "incorrect wildcard usage",
+      "frequencyRank": 3,
+      "frequencyCount": 56,
+      "textbookConceptIds": ["select-basic", "like-pattern"],
+      "confidence": "high",
+      "status": "verified",
+      "notes": "Covers * selector and LIKE patterns. Clear registry mapping.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "missing commas",
+      "frequencyRank": 4,
+      "frequencyCount": 55,
+      "textbookConceptIds": ["select-basic", "syntax-error"],
+      "confidence": "high",
+      "status": "verified",
+      "notes": "Syntax error pattern. Basic SELECT concepts cover comma-separated lists.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "missing quotes",
+      "frequencyRank": 5,
+      "frequencyCount": 37,
+      "textbookConceptIds": ["string-functions", "syntax-error"],
+      "confidence": "medium",
+      "status": "verified",
+      "notes": "String literal quoting. Some ambiguity with identifier quoting.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "missing semicolons",
+      "frequencyRank": 6,
+      "frequencyCount": 39,
+      "textbookConceptIds": ["syntax-error"],
+      "confidence": "high",
+      "status": "verified",
+      "notes": "Statement terminator syntax. Well-defined in syntax-error concept.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "operator misuse",
+      "frequencyRank": 7,
+      "frequencyCount": 53,
+      "textbookConceptIds": ["where-clause", "logical-operators", "null-handling"],
+      "confidence": "high",
+      "status": "verified",
+      "notes": "WHERE clause operators including = vs IS NULL. Strong registry coverage.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "non-standard operators",
+      "frequencyRank": 8,
+      "frequencyCount": 38,
+      "textbookConceptIds": ["where-clause", "logical-operators"],
+      "confidence": "medium",
+      "status": "verified",
+      "notes": "Platform-specific operators. Core WHERE concepts still apply.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "data type mismatch",
+      "frequencyRank": 9,
+      "frequencyCount": 44,
+      "textbookConceptIds": ["where-clause", "null-handling", "case-expression"],
+      "confidence": "medium",
+      "status": "verified",
+      "notes": "Type coercion and comparison rules. Some gaps in explicit type conversion coverage.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "incorrect order by usage",
+      "frequencyRank": 10,
+      "frequencyCount": 37,
+      "textbookConceptIds": ["order-by"],
+      "confidence": "high",
+      "status": "verified",
+      "notes": "Direct mapping to ORDER BY concept. Full source coverage in registry.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "wrong positioning",
+      "frequencyRank": 11,
+      "frequencyCount": 31,
+      "textbookConceptIds": ["order-by", "where-clause", "syntax-error"],
+      "confidence": "medium",
+      "status": "verified",
+      "notes": "Clause ordering errors. Crosses multiple concepts but well-documented.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "misspelling",
+      "frequencyRank": 12,
+      "frequencyCount": 34,
+      "textbookConceptIds": ["syntax-error", "null-handling"],
+      "confidence": "low",
+      "status": "unverified",
+      "notes": "Spelling errors don't map cleanly to SQL concepts. More about attention to detail than SQL knowledge. Learner-requested 'Explain' can still work but will label missing grounding.",
+      "excludedFromAutoEscalation": true
+    },
+    {
+      "sqlEngageSubtype": "undefined column",
+      "frequencyRank": 13,
+      "frequencyCount": 33,
+      "textbookConceptIds": ["select-basic", "ambiguous-column", "joins"],
+      "confidence": "high",
+      "status": "verified",
+      "notes": "Column resolution. Mapped to SELECT basics and JOIN ambiguity.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "undefined table",
+      "frequencyRank": 14,
+      "frequencyCount": 30,
+      "textbookConceptIds": ["joins", "missing-from"],
+      "confidence": "high",
+      "status": "verified",
+      "notes": "FROM clause errors. Clear mapping to JOIN and missing-from concepts.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "incorrect join usage",
+      "frequencyRank": 15,
+      "frequencyCount": 28,
+      "textbookConceptIds": ["joins", "join-condition-missing", "ambiguous-column"],
+      "confidence": "high",
+      "status": "verified",
+      "notes": "Strong coverage in JOIN concepts including ON clause requirements.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "unmatched brackets",
+      "frequencyRank": 16,
+      "frequencyCount": 27,
+      "textbookConceptIds": ["syntax-error", "subqueries"],
+      "confidence": "medium",
+      "status": "verified",
+      "notes": "Parentheses matching. Relevant for subquery syntax.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "inefficient query",
+      "frequencyRank": 17,
+      "frequencyCount": 54,
+      "textbookConceptIds": ["limit-offset", "aggregation", "joins"],
+      "confidence": "low",
+      "status": "unverified",
+      "notes": "Performance optimization not covered in core concept registry. Requires advanced indexing/query planning concepts not yet documented.",
+      "excludedFromAutoEscalation": true
+    },
+    {
+      "sqlEngageSubtype": "aggregation misuse",
+      "frequencyRank": 18,
+      "frequencyCount": 12,
+      "textbookConceptIds": ["aggregation", "group-by", "group-by-error", "having-clause"],
+      "confidence": "high",
+      "status": "verified",
+      "notes": "Full coverage of aggregate functions and GROUP BY compliance.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "incorrect group by usage",
+      "frequencyRank": 19,
+      "frequencyCount": 15,
+      "textbookConceptIds": ["group-by", "group-by-error"],
+      "confidence": "high",
+      "status": "verified",
+      "notes": "Direct mapping to GROUP BY concepts with error patterns.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "incorrect having clause",
+      "frequencyRank": 20,
+      "frequencyCount": 8,
+      "textbookConceptIds": ["having-clause", "aggregation"],
+      "confidence": "high",
+      "status": "verified",
+      "notes": "HAVING vs WHERE distinction well-documented.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "ambiguous reference",
+      "frequencyRank": 21,
+      "frequencyCount": 10,
+      "textbookConceptIds": ["ambiguous-column", "joins", "alias"],
+      "confidence": "high",
+      "status": "verified",
+      "notes": "Column qualification in multi-table queries.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "undefined function",
+      "frequencyRank": 22,
+      "frequencyCount": 6,
+      "textbookConceptIds": ["string-functions", "date-functions", "aggregation"],
+      "confidence": "medium",
+      "status": "verified",
+      "notes": "Function name errors. Mapped to function concept categories.",
+      "excludedFromAutoEscalation": false
+    },
+    {
+      "sqlEngageSubtype": "syntax",
+      "frequencyRank": 23,
+      "frequencyCount": 273,
+      "textbookConceptIds": ["syntax-error"],
+      "confidence": "low",
+      "status": "unverified",
+      "notes": "Generic 'syntax' category is too broad. Specific syntax errors have their own subtypes. This acts as a fallback that doesn't provide targeted grounding.",
+      "excludedFromAutoEscalation": true
+    }
+  ],
+  "summary": {
+    "top15Coverage": "13 of top 15 frequency subtypes are verified and mapped to ≥1 textbook concept",
+    "autoEscalationEligible": 20,
+    "autoEscalationExcluded": 3,
+    "highConfidence": 14,
+    "mediumConfidence": 5,
+    "lowConfidence": 4
+  }
+}
