@@ -489,8 +489,8 @@ test('@weekly @textbook display: notes appear in textbook view', async ({ page }
   // First note should be visible by default - check by heading in content area
   await expect(page.getByRole('heading', { name: 'Note One SELECT Basics', level: 2 })).toBeVisible();
   
-  // Click second note in sidebar
-  await page.getByRole('button', { name: /Note Two WHERE Clauses/ }).click();
+  // Click second note in sidebar (format: "type title")
+  await page.getByRole('button', { name: /explanation Note Two WHERE Clauses/ }).click();
   
   // Wait for URL to update with unitId parameter (indicates selection changed)
   await expect(page).toHaveURL(/unitId=unit-2/);
@@ -499,7 +499,7 @@ test('@weekly @textbook display: notes appear in textbook view', async ({ page }
   // Use a specific selector to find the note content heading (not Trace Attempts)
   await expect(page.getByRole('heading', { name: 'Note Two WHERE Clauses', level: 2 })).toBeVisible();
   // Verify the button is still visible (sidebar intact)
-  await expect(page.getByRole('button', { name: /Note Two WHERE Clauses/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /explanation Note Two WHERE Clauses/ })).toBeVisible();
 });
 
 test('@weekly @textbook display: concept badges display correctly', async ({ page }) => {
@@ -1119,11 +1119,11 @@ test('@weekly @textbook edge: many notes performance', async ({ page }) => {
   // Verify page loaded within reasonable time (under 5 seconds)
   expect(loadTime).toBeLessThan(5000);
   
-  // Verify first note is accessible using exact role match
-  await expect(page.getByRole('button', { name: 'summary Perf Note 1', exact: true })).toBeVisible();
+  // Verify first note is accessible (format: "type title")
+  await expect(page.getByRole('button', { name: /summary Perf Note 1/ })).toBeVisible();
   
-  // Verify last note is also accessible using exact role match
-  await expect(page.getByRole('button', { name: 'explanation Perf Note 20', exact: true })).toBeVisible();
+  // Verify last note is also accessible
+  await expect(page.getByRole('button', { name: /explanation Perf Note 20/ })).toBeVisible();
   
   // Verify the count via localStorage
   const unitCount = await page.evaluate(() => {

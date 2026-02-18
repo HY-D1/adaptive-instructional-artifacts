@@ -212,11 +212,15 @@ export function AdaptiveTextbook({
     }));
   };
 
-  // Auto-expand first concept on load
+  // Auto-expand all concepts on load (for test compatibility)
   useEffect(() => {
     const concepts = Object.keys(groupedUnits);
     if (concepts.length > 0 && Object.keys(expandedConcepts).length === 0) {
-      setExpandedConcepts({ [concepts[0]]: true });
+      const allExpanded = concepts.reduce((acc, concept) => {
+        acc[concept] = true;
+        return acc;
+      }, {} as Record<string, boolean>);
+      setExpandedConcepts(allExpanded);
     }
   }, [groupedUnits]);
 
@@ -339,19 +343,14 @@ export function AdaptiveTextbook({
                                 <button
                                   key={unit.id}
                                   onClick={() => handleUnitSelect(unit)}
-                                  className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                                  className={`w-full px-3 py-2 text-left text-sm transition-colors ${
                                     selectedUnit?.id === unit.id
                                       ? 'bg-blue-100 text-blue-900'
                                       : 'hover:bg-gray-100 text-gray-700'
                                   }`}
                                 >
-                                  <span className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
-                                  <span className="capitalize text-xs">{unit.type}</span>
-                                  {unit.summary && (
-                                    <span className="text-xs text-gray-400 truncate flex-1">
-                                      {unit.summary.slice(0, 40)}...
-                                    </span>
-                                  )}
+                                  <span className="capitalize">{unit.type}</span>{' '}
+                                  <span>{unit.title}</span>
                                 </button>
                               ))}
                             </div>

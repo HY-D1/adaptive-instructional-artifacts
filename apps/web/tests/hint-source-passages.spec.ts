@@ -291,8 +291,8 @@ test.describe('@weekly Hint Source Passages Feature', () => {
 
     await expect(page.getByText('Hint 1')).toBeVisible({ timeout: 5000 });
 
-    // Get hint text content
-    const hintText = await page.locator('.bg-blue-50 p.text-blue-900').first().textContent();
+    // Get hint text content (using data-testid for stability)
+    const hintText = await page.locator('[data-testid="hint-card-0"] p').textContent();
     expect(hintText).toBeTruthy();
     expect(hintText!.length).toBeGreaterThan(10);
     expect(hintText).toMatch(/sql|statement|clause|query|column|table|select|from|missing|complete|step/i);
@@ -352,8 +352,8 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     // Give time for PDF retrieval
     await page.waitForTimeout(1000);
 
-    // Test passes if hints work - toggle state test would require the UI to be visible
-    const hintElements = page.locator('.bg-blue-50');
+    // Test passes if hints work - using data-testid for stability
+    const hintElements = page.locator('[data-testid^="hint-card-"]');
     expect(await hintElements.count()).toBeGreaterThanOrEqual(1);
   });
 });

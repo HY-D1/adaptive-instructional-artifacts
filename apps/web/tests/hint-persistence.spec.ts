@@ -50,9 +50,9 @@ test.describe('@weekly Hint Persistence Across Navigation', () => {
     await expect(page.getByText('Hint 1')).toBeVisible({ timeout: 5000 });
     await expect(page.getByText('Hint 2')).toBeVisible({ timeout: 5000 });
 
-    // Store hint texts for comparison
-    const hint1Text = await page.locator('.bg-blue-50').filter({ hasText: 'Hint 1' }).locator('p.text-blue-900').textContent();
-    const hint2Text = await page.locator('.bg-blue-50').filter({ hasText: 'Hint 2' }).locator('p.text-blue-900').textContent();
+    // Store hint texts for comparison (using data-testid for stability)
+    const hint1Text = await page.locator('[data-testid="hint-card-0"] p').textContent();
+    const hint2Text = await page.locator('[data-testid="hint-card-1"] p').textContent();
 
     // Navigate to My Textbook
     await page.getByRole('link', { name: 'My Textbook' }).first().click();
@@ -63,16 +63,16 @@ test.describe('@weekly Hint Persistence Across Navigation', () => {
     await expect(page).toHaveURL(/\/$/, { timeout: 10000 });
 
     // Verify hints are restored (not showing "Need help? Request a hint...")
-    const needHelpText = page.getByText('Need help? Request a hint to get started.');
+    const needHelpText = page.getByText('Request a hint to get started');
     await expect(needHelpText).not.toBeVisible();
 
     // Verify both hints are still visible
     await expect(page.getByText('Hint 1')).toBeVisible({ timeout: 5000 });
     await expect(page.getByText('Hint 2')).toBeVisible({ timeout: 5000 });
 
-    // Verify hint content is preserved
-    const restoredHint1 = await page.locator('.bg-blue-50').filter({ hasText: 'Hint 1' }).locator('p.text-blue-900').textContent();
-    const restoredHint2 = await page.locator('.bg-blue-50').filter({ hasText: 'Hint 2' }).locator('p.text-blue-900').textContent();
+    // Verify hint content is preserved (using data-testid for stability)
+    const restoredHint1 = await page.locator('[data-testid="hint-card-0"] p').textContent();
+    const restoredHint2 = await page.locator('[data-testid="hint-card-1"] p').textContent();
     
     expect(restoredHint1).toBe(hint1Text);
     expect(restoredHint2).toBe(hint2Text);
@@ -149,7 +149,7 @@ test.describe('@weekly Hint Persistence Across Navigation', () => {
     await page.reload({ timeout: 30000 });
 
     // Current UI only persists hint history within live navigation, not hard reload.
-    await expect(page.getByText('Need help? Request a hint to get started.')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Request a hint to get started')).toBeVisible({ timeout: 5000 });
 
     // Verify hint flow still works after reload.
     await page.locator('.monaco-editor .view-lines').first().click({ position: { x: 8, y: 8 } });
@@ -189,7 +189,7 @@ test.describe('@weekly Hint Persistence Across Navigation', () => {
     await page.getByRole('option', { name: /Filter Users by Age/ }).click();
 
     // Verify hints are reset for new problem
-    await expect(page.getByText('Need help? Request a hint to get started.')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText('Request a hint to get started')).toBeVisible({ timeout: 5000 });
     await expect(page.getByText(/^Hint 1$/)).not.toBeVisible();
 
     // Switch back to first problem

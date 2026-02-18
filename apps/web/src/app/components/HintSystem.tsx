@@ -688,12 +688,12 @@ export function HintSystem({
             const isExpanded = expandedHintIndex === idx;
             
             return (
-              <div key={idx} className="rounded-lg border border-gray-100 bg-gray-50/50 p-3">
+              <div key={idx} className="rounded-lg border border-gray-100 bg-blue-50 p-3" data-testid={`hint-card-${idx}`}>
                 <div className="flex items-start gap-2">
                   <span className="shrink-0 rounded-full bg-white border border-gray-200 px-2 py-0.5 text-xs font-medium text-gray-600">
                     Hint {idx + 1}
                   </span>
-                  <p className="text-sm leading-relaxed text-gray-800 break-words flex-1">{hint}</p>
+                  <p className="text-sm leading-relaxed text-blue-900 break-words flex-1">{hint}</p>
                 </div>
                 
                 {hasPdfSources && (
