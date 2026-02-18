@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
+import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen, PlusCircle } from 'lucide-react';
 import { HelpEventType, InteractionEvent, SQLProblem } from '../types';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { storage } from '../lib/storage';
@@ -12,6 +12,13 @@ import {
 } from '../data/sql-engage';
 import { buildRetrievalBundle, RetrievalPdfPassage } from '../lib/retrieval-bundle';
 import { getProblemById } from '../data/problems';
+import { 
+  SourceViewer, 
+  RungIndicator, 
+  AddToTextbookButton,
+  ConceptTag 
+} from './SourceViewer';
+import { getConceptFromRegistry } from '../data';
 
 interface HintSystemProps {
   sessionId?: string;
@@ -41,6 +48,11 @@ export function HintSystem({
   const [expandedHintIndex, setExpandedHintIndex] = useState<number | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [activeHintSubtype, setActiveHintSubtype] = useState<string | null>(null);
+  // Week 3 D7: Ladder state
+  const [currentRung, setCurrentRung] = useState<1 | 2 | 3>(1);
+  const [conceptIds, setConceptIds] = useState<string[]>([]);
+  const [showSourceViewer, setShowSourceViewer] = useState(false);
+  const [isAddingToTextbook, setIsAddingToTextbook] = useState(false);
   const MAX_DEDUPE_KEYS = 1000; // Prevent unbounded set growth
   
   const helpFlowKeyRef = useRef('');
@@ -67,12 +79,94 @@ export function HintSystem({
     setExpandedHintIndex(null);
     setShowExplanation(false);
     setActiveHintSubtype(null);
+    setCurrentRung(1);
+    setConceptIds([]);
+    setShowSourceViewer(false);
     // Reset refs to ensure clean state for new problem
     helpFlowKeyRef.current = '';
     nextHelpRequestIndexRef.current = 1;
     emittedHelpEventKeysRef.current = new Set();
     helpEventSequenceRef.current = 0;
     isProcessingHintRef.current = false;
+  };
+
+  // Week 3 D7: Handle "Add to My Textbook" (learner-initiated rung 3)
+  const handleAddToTextbook = async () => {
+    if (!sessionId || !profile) return;
+    
+    setIsAddingToTextbook(true);
+    
+    try {
+      // Week 3 D8: Log guidance request for textbook
+      storage.logGuidanceRequest({
+        learnerId,
+        problemId,
+        requestType: 'textbook',
+        currentRung: currentRung,
+        sessionId
+      });
+
+      // Build retrieval bundle for context
+      const problem = getProblemById(problemId);
+      if (problem) {
+        const bundle = buildRetrievalBundle({
+          learnerId,
+          problem,
+          interactions: recentInteractions,
+          lastErrorSubtypeId: activeHintSubtype || errorSubtypeId
+        });
+        
+        // Week 3 D8: Log escalation to rung 3
+        const problemTrace = getProblemTrace();
+        const errorCount = problemTrace.filter((i) => i.eventType === 'error').length;
+        const hintCount = problemTrace.filter((i) => i.eventType === 'hint_view').length;
+        const timeSpent = problemTrace.length > 0
+          ? Date.now() - problemTrace[0].timestamp
+          : 0;
+
+        storage.logGuidanceEscalate({
+          learnerId,
+          problemId,
+          fromRung: currentRung,
+          toRung: 3,
+          trigger: 'learner_request',
+          evidence: {
+            errorCount,
+            retryCount: Math.max(0, errorCount - 1),
+            hintCount,
+            timeSpentMs: timeSpent
+          },
+          sourceInteractionIds: bundle.triggerInteractionIds,
+          sessionId
+        });
+
+        // Trigger escalation with textbook aggregation
+        onEscalate?.(bundle.triggerInteractionIds);
+        
+        // Update state to rung 3
+        setCurrentRung(3);
+
+        // Week 3 D8: Log guidance view for rung 3
+        storage.logGuidanceView({
+          learnerId,
+          problemId,
+          rung: 3,
+          conceptIds: bundle.conceptCandidates.map(c => c.id),
+          sourceRefIds: bundle.pdfPassages.map(p => p.chunkId),
+          grounded: bundle.pdfPassages.length > 0,
+          contentLength: bundle.toPrompt().length,
+          sessionId
+        });
+      }
+    } finally {
+      setIsAddingToTextbook(false);
+    }
+  };
+
+  // Week 3 D7: Get concept labels for display
+  const getConceptLabel = (conceptId: string): string => {
+    const concept = getConceptFromRegistry(conceptId);
+    return concept?.title || conceptId;
   };
 
   useEffect(() => {
@@ -278,6 +372,8 @@ export function HintSystem({
         lastErrorSubtypeId: subtype || latestError?.errorSubtypeId,
         pdfTopK: 3
       });
+      // Week 3 D7: Track concept IDs from bundle
+      setConceptIds(bundle.conceptCandidates.map(c => c.id));
       return bundle.pdfPassages;
     } catch {
       return [];
@@ -296,6 +392,16 @@ export function HintSystem({
       return;
     }
     isProcessingHintRef.current = true;
+
+    // Week 3 D8: Log guidance request event
+    storage.logGuidanceRequest({
+      learnerId,
+      problemId,
+      requestType: 'hint',
+      currentRung: currentRung,
+      sessionId
+    });
+
     const problemTrace = getProblemTrace();
     const nextHelpRequestIndex = allocateNextHelpRequestIndex(problemTrace);
     if (nextHelpRequestIndex >= 4) {
@@ -360,10 +466,39 @@ export function HintSystem({
     };
     storage.saveInteraction(hintEvent);
     onInteractionLogged?.(hintEvent);
+
+    // Week 3 D8: Log guidance view event for replay
+    storage.logGuidanceView({
+      learnerId,
+      problemId,
+      rung: hintSelection.hintLevel as 1 | 2 | 3,
+      conceptIds: conceptIds.length > 0 ? conceptIds : [hintSelection.sqlEngageSubtype],
+      sourceRefIds: pdfPassages.map(p => p.chunkId),
+      grounded: pdfPassages.length > 0,
+      contentLength: hintSelection.hintText.length,
+      sessionId
+    });
+
     isProcessingHintRef.current = false;
 
     // Escalate automatically after Hint 3 (recorded as help request 4).
     if (hintSelection.hintLevel === 3 && !showExplanation) {
+      // Week 3 D8: Log escalation event before transitioning
+      storage.logGuidanceEscalate({
+        learnerId,
+        problemId,
+        fromRung: 1,
+        toRung: 2,
+        trigger: 'auto_escalation_eligible',
+        evidence: {
+          errorCount,
+          retryCount: Math.max(0, errorCount - 1),
+          hintCount,
+          timeSpentMs: timeSpent
+        },
+        sourceInteractionIds: [hintEvent.id],
+        sessionId
+      });
       setShowExplanation(true);
       handleShowExplanation('auto', nextHelpRequestIndex + 1, [...problemTrace, hintEvent]);
     }
@@ -377,6 +512,16 @@ export function HintSystem({
     if (!profile || !sessionId) {
       return;
     }
+
+    // Week 3 D8: Log guidance request for explanation
+    storage.logGuidanceRequest({
+      learnerId,
+      problemId,
+      requestType: 'explanation',
+      currentRung: currentRung,
+      sessionId
+    });
+
     const problemTrace = traceOverride || getProblemTrace();
     const requestedHelpRequestIndex = forcedHelpRequestIndex ?? allocateNextHelpRequestIndex(problemTrace);
     const nextHelpRequestIndex = Math.max(requestedHelpRequestIndex, 4);
@@ -390,6 +535,7 @@ export function HintSystem({
       return;
     }
     setShowExplanation(true);
+    setCurrentRung(2); // Week 3 D7: Explanation is rung 2
     const latestProblemError = [...scopedInteractions]
       .reverse()
       .find((interaction) => interaction.problemId === problemId && interaction.eventType === 'error');
@@ -398,6 +544,30 @@ export function HintSystem({
         ? [latestProblemError.id]
         : [];
     onEscalate?.(sourceInteractionIds);
+
+    // Calculate evidence for escalation logging
+    const errorCount = problemTrace.filter((interaction) => interaction.eventType === 'error').length;
+    const hintCount = problemTrace.filter((interaction) => interaction.eventType === 'hint_view').length;
+    const timeSpent = problemTrace.length > 0 ? Date.now() - problemTrace[0].timestamp : 0;
+
+    // Log escalation event for manual explanation requests
+    if (source === 'manual' && currentRung < 2) {
+      storage.logGuidanceEscalate({
+        learnerId,
+        problemId,
+        fromRung: currentRung,
+        toRung: 2,
+        trigger: 'learner_request',
+        evidence: {
+          errorCount,
+          retryCount: Math.max(0, errorCount - 1),
+          hintCount,
+          timeSpentMs: timeSpent
+        },
+        sourceInteractionIds,
+        sessionId
+      });
+    }
 
     // Log interaction
     const explanationEvent: InteractionEvent = {
@@ -415,9 +585,9 @@ export function HintSystem({
       policyVersion: helpSelection.policyVersion,
       ruleFired: 'escalation',
       inputs: {
-        retry_count: Math.max(0, problemTrace.filter((interaction) => interaction.eventType === 'error').length - 1),
-        hint_count: problemTrace.filter((interaction) => interaction.eventType === 'hint_view').length,
-        time_spent_ms: problemTrace.length > 0 ? Date.now() - problemTrace[0].timestamp : 0
+        retry_count: Math.max(0, errorCount - 1),
+        hint_count: hintCount,
+        time_spent_ms: timeSpent
       },
       outputs: {
         explanation_requested: true,
@@ -428,6 +598,18 @@ export function HintSystem({
     };
     storage.saveInteraction(explanationEvent);
     onInteractionLogged?.(explanationEvent);
+
+    // Week 3 D8: Log guidance view event for explanation
+    storage.logGuidanceView({
+      learnerId,
+      problemId,
+      rung: 2,
+      conceptIds: conceptIds.length > 0 ? conceptIds : [helpSelection.sqlEngageSubtype],
+      sourceRefIds: [],
+      grounded: false, // Explanations are LLM-generated, not directly grounded
+      contentLength: 0, // Explanation content is async-generated
+      sessionId
+    });
   };
 
   const decision = profile
@@ -461,29 +643,42 @@ export function HintSystem({
     : `Request ${helpStep} gives Hint ${helpStep}.`;
 
   return (
-    <Card className="p-4 space-y-4" data-testid="hint-panel">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <Card className="p-4 space-y-4 shadow-sm" data-testid="hint-panel">
+      {/* Clean header with title and rung */}
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Lightbulb className="size-5 text-yellow-600" />
-          <h3 className="font-semibold">HintWise</h3>
+          <div className="p-1.5 bg-amber-50 rounded-lg">
+            <Lightbulb className="size-4 text-amber-500" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-gray-900">Guidance Ladder</h3>
+            <p className="text-xs text-gray-500">Step {helpStep} of 4</p>
+          </div>
         </div>
-        <Badge variant={
-          decision.decision === 'show_hint' ? 'default' :
-          decision.decision === 'show_explanation' ? 'secondary' :
-          'outline'
-        } className="w-fit">
-          {decision.decision.replace('_', ' ')}
-        </Badge>
+        <RungIndicator rung={currentRung} size="sm" />
       </div>
 
-      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-        <p className="font-medium">Help step {helpStep} of 4</p>
-        <p>{stepMessage}</p>
-      </div>
+      {/* Concept tags */}
+      {conceptIds.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {conceptIds.slice(0, 3).map((conceptId) => (
+            <ConceptTag 
+              key={conceptId} 
+              conceptId={conceptId} 
+              label={getConceptLabel(conceptId)}
+            />
+          ))}
+          {conceptIds.length > 3 && (
+            <span className="text-xs text-gray-400 self-center">
+              +{conceptIds.length - 3}
+            </span>
+          )}
+        </div>
+      )}
 
       {hints.length === 0 ? (
-        <div className="text-center py-6 text-gray-500">
-          <p>Need help? Request a hint to get started.</p>
+        <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 p-4 text-center">
+          <p className="text-sm text-gray-500">Request a hint to get started</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -493,19 +688,19 @@ export function HintSystem({
             const isExpanded = expandedHintIndex === idx;
             
             return (
-              <div key={idx} className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-                  <Badge variant="outline" className="w-fit shrink-0">
+              <div key={idx} className="rounded-lg border border-gray-100 bg-gray-50/50 p-3">
+                <div className="flex items-start gap-2">
+                  <span className="shrink-0 rounded-full bg-white border border-gray-200 px-2 py-0.5 text-xs font-medium text-gray-600">
                     Hint {idx + 1}
-                  </Badge>
-                  <p className="text-sm leading-relaxed text-blue-900 break-words">{hint}</p>
+                  </span>
+                  <p className="text-sm leading-relaxed text-gray-800 break-words flex-1">{hint}</p>
                 </div>
                 
                 {hasPdfSources && (
-                  <div className="mt-3 border-t border-blue-200 pt-2">
+                  <div className="mt-2 pt-2 border-t border-gray-200/50">
                     <button
                       onClick={() => setExpandedHintIndex(isExpanded ? null : idx)}
-                      className="flex items-center gap-2 text-xs text-blue-700 hover:text-blue-900 transition-colors"
+                      className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 transition-colors"
                       aria-expanded={isExpanded}
                     >
                       {isExpanded ? (
@@ -515,7 +710,7 @@ export function HintSystem({
                       )}
                       <BookOpen className="size-3.5" />
                       <span>
-                        {isExpanded ? 'Hide source passages' : `View source passages (${pdfPassages.length})`}
+                        {isExpanded ? 'Hide' : `Sources (${pdfPassages.length})`}
                       </span>
                     </button>
                     
@@ -555,41 +750,78 @@ export function HintSystem({
         </div>
       )}
 
-      <div className="flex flex-col gap-2 sm:flex-row">
+      {/* Week 3 D7: Source Viewer for grounded help */}
+      {conceptIds.length > 0 && (
+        <SourceViewer
+          passages={hintPdfPassages[hintPdfPassages.length - 1]?.map(p => ({
+            passageId: p.chunkId,
+            conceptId: conceptIds[0] || 'general',
+            docId: p.docId,
+            chunkId: p.chunkId,
+            page: p.page,
+            text: p.text,
+            whyIncluded: 'Retrieved from PDF index'
+          })) || []}
+          conceptLabels={Object.fromEntries(conceptIds.map(id => [id, getConceptLabel(id)]))}
+          initiallyExpanded={false}
+          // Week 3 D8: Pass logging props
+          problemId={problemId}
+          learnerId={learnerId}
+          sessionId={sessionId}
+        />
+      )}
+
+      <div className="flex flex-col gap-2">
         <Button
           onClick={handleRequestHint}
           variant="outline"
-          size="sm"
-          className="w-full sm:flex-1"
+          className="w-full h-9 text-sm"
           disabled={!profile || !sessionId}
         >
-          <Lightbulb className="size-4 mr-2" />
-          {primaryActionLabel}
+          <Lightbulb className="size-4 mr-2 shrink-0" />
+          <span className="truncate">{primaryActionLabel}</span>
         </Button>
-        <Button
-          onClick={() => handleShowExplanation('manual')}
-          variant="secondary"
-          size="sm"
-          className="w-full sm:flex-1"
-          disabled={!profile || !sessionId || !errorSubtypeId}
-        >
-          Show Explanation
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            onClick={() => handleShowExplanation('manual')}
+            variant="secondary"
+            className="w-full h-9 text-sm px-2"
+            disabled={!profile || !sessionId || !errorSubtypeId}
+          >
+            <span className="truncate">Explain</span>
+          </Button>
+          <button
+            onClick={handleAddToTextbook}
+            disabled={!profile || !sessionId || currentRung >= 3 || isAddingToTextbook}
+            className={`
+              w-full h-9 text-sm px-2 rounded-md font-medium
+              inline-flex items-center justify-center gap-1
+              ${(!profile || !sessionId || currentRung >= 3) 
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                : 'bg-purple-600 text-white hover:bg-purple-700'
+              }
+            `}
+          >
+            {isAddingToTextbook ? (
+              <>
+                <div className="size-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                <span className="truncate">...</span>
+              </>
+            ) : (
+              <>
+                <span>📝</span>
+                <span className="truncate">Save</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {showExplanation && (
-        <p className="text-xs text-emerald-700">
-          Explanation has been generated for this help flow.
-        </p>
-      )}
-
-      {decision.reasoning && (
-        <div className="text-xs text-gray-500 pt-2 border-t">
-          <p className="font-medium mb-1">Adaptive Decision:</p>
-          <p>{decision.reasoning}</p>
-          {activeHintSubtype && (
-            <p className="mt-1">Hint subtype: {activeHintSubtype}</p>
-          )}
+        <div className="rounded-md bg-emerald-50 border border-emerald-100 px-3 py-2">
+          <p className="text-xs text-emerald-700">
+            Explanation has been generated for this help flow.
+          </p>
         </div>
       )}
     </Card>

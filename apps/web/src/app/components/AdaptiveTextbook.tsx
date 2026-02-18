@@ -3,7 +3,7 @@ import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
-import { Book, Trash2 } from 'lucide-react';
+import { Book, Trash2, ChevronRight, ChevronDown, Folder, FileText } from 'lucide-react';
 import { Link } from 'react-router';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
@@ -178,15 +178,47 @@ export function AdaptiveTextbook({
     }
   };
 
+  // Group units by concept, then by problem title (for folding)
   const groupedUnits = orderedUnits.reduce((acc, unit) => {
     const concept = getConceptById(unit.conceptId);
     const conceptName = concept?.name || 'Other';
     if (!acc[conceptName]) {
-      acc[conceptName] = [];
+      acc[conceptName] = {};
     }
-    acc[conceptName].push(unit);
+    // Group by problem title (or unit title if no problem)
+    const problemKey = unit.title || unit.problemId || 'General';
+    if (!acc[conceptName][problemKey]) {
+      acc[conceptName][problemKey] = [];
+    }
+    acc[conceptName][problemKey].push(unit);
     return acc;
-  }, {} as Record<string, InstructionalUnit[]>);
+  }, {} as Record<string, Record<string, InstructionalUnit[]>>);
+
+  // Track expanded sections
+  const [expandedConcepts, setExpandedConcepts] = useState<Record<string, boolean>>({});
+  const [expandedProblems, setExpandedProblems] = useState<Record<string, boolean>>({});
+
+  const toggleConcept = (conceptName: string) => {
+    setExpandedConcepts(prev => ({
+      ...prev,
+      [conceptName]: !prev[conceptName]
+    }));
+  };
+
+  const toggleProblem = (problemKey: string) => {
+    setExpandedProblems(prev => ({
+      ...prev,
+      [problemKey]: !prev[problemKey]
+    }));
+  };
+
+  // Auto-expand first concept on load
+  useEffect(() => {
+    const concepts = Object.keys(groupedUnits);
+    if (concepts.length > 0 && Object.keys(expandedConcepts).length === 0) {
+      setExpandedConcepts({ [concepts[0]]: true });
+    }
+  }, [groupedUnits]);
 
   const getSourceCount = (unit: InstructionalUnit) =>
     getMergedInteractionIds(unit).length;
@@ -236,34 +268,102 @@ export function AdaptiveTextbook({
           </Button>
         </div>
 
-        <div className="space-y-4">
-          {Object.entries(groupedUnits).map(([conceptName, units]) => (
-            <div key={conceptName}>
-              <h4 className="font-medium text-sm text-gray-700 mb-2">
-                {conceptName}
-              </h4>
-              <div className="space-y-1">
-                {units.map((unit) => (
-                  <button
-                    key={unit.id}
-                    onClick={() => handleUnitSelect(unit)}
-                    className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                      selectedUnit?.id === unit.id
-                        ? 'bg-blue-100 text-blue-900'
-                        : 'hover:bg-gray-100'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="text-xs">
-                        {unit.type}
-                      </Badge>
-                      <span className="flex-1 truncate">{unit.title}</span>
-                    </div>
-                  </button>
-                ))}
+        <div className="space-y-2">
+          {Object.entries(groupedUnits).map(([conceptName, problems]) => {
+            const isConceptExpanded = expandedConcepts[conceptName] ?? false;
+            const totalUnits = Object.values(problems).flat().length;
+            
+            return (
+              <div key={conceptName} className="border rounded-lg overflow-hidden">
+                {/* Concept Header - Click to expand/collapse */}
+                <button
+                  onClick={() => toggleConcept(conceptName)}
+                  className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Folder className="size-4 text-blue-500" />
+                    <span className="font-medium text-sm">{conceptName}</span>
+                    <Badge variant="secondary" className="text-xs">
+                      {totalUnits}
+                    </Badge>
+                  </div>
+                  {isConceptExpanded ? (
+                    <ChevronDown className="size-4 text-gray-400" />
+                  ) : (
+                    <ChevronRight className="size-4 text-gray-400" />
+                  )}
+                </button>
+                
+                {/* Problems under this concept */}
+                {isConceptExpanded && (
+                  <div className="p-2 space-y-1">
+                    {Object.entries(problems).map(([problemTitle, units]) => {
+                      const problemKey = `${conceptName}-${problemTitle}`;
+                      const isProblemExpanded = expandedProblems[problemKey] ?? false;
+                      const hasMultipleUnits = units.length > 1;
+                      
+                      return (
+                        <div key={problemKey} className="rounded-md border bg-white overflow-hidden">
+                          {/* Problem Title */}
+                          <button
+                            onClick={() => hasMultipleUnits ? toggleProblem(problemKey) : handleUnitSelect(units[0])}
+                            className={`w-full flex items-center justify-between p-2 text-left hover:bg-gray-50 transition-colors ${
+                              selectedUnit && units.some(u => u.id === selectedUnit.id) 
+                                ? 'bg-blue-50 border-blue-200' 
+                                : ''
+                            }`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              {hasMultipleUnits ? (
+                                isProblemExpanded ? (
+                                  <ChevronDown className="size-3.5 text-gray-400 shrink-0" />
+                                ) : (
+                                  <ChevronRight className="size-3.5 text-gray-400 shrink-0" />
+                                )
+                              ) : (
+                                <FileText className="size-3.5 text-gray-400 shrink-0" />
+                              )}
+                              <span className="text-sm truncate">{problemTitle}</span>
+                            </div>
+                            {hasMultipleUnits && (
+                              <Badge variant="outline" className="text-[10px] h-5 shrink-0">
+                                {units.length} parts
+                              </Badge>
+                            )}
+                          </button>
+                          
+                          {/* Units under this problem */}
+                          {(isProblemExpanded || !hasMultipleUnits) && (
+                            <div className="border-t bg-gray-50/50">
+                              {units.map((unit) => (
+                                <button
+                                  key={unit.id}
+                                  onClick={() => handleUnitSelect(unit)}
+                                  className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
+                                    selectedUnit?.id === unit.id
+                                      ? 'bg-blue-100 text-blue-900'
+                                      : 'hover:bg-gray-100 text-gray-700'
+                                  }`}
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full bg-gray-300 shrink-0" />
+                                  <span className="capitalize text-xs">{unit.type}</span>
+                                  {unit.summary && (
+                                    <span className="text-xs text-gray-400 truncate flex-1">
+                                      {unit.summary.slice(0, 40)}...
+                                    </span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {textbookInsights.misconceptionCards.length > 0 && (
@@ -306,7 +406,10 @@ export function AdaptiveTextbook({
         <div className="text-xs text-gray-500">
           <p className="font-medium mb-1">Coverage</p>
           <p>{orderedUnits.length} instructional units</p>
-          <p>{Object.keys(groupedUnits).length} concepts covered</p>
+          <p>{Object.keys(groupedUnits).length} concepts</p>
+          <p>
+            {Object.values(groupedUnits).reduce((sum, problems) => sum + Object.keys(problems).length, 0)} problems
+          </p>
         </div>
       </Card>
 

@@ -262,10 +262,10 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                         <div className="p-2 bg-purple-600 rounded-lg">
                           <Lightbulb className="size-5 text-white" />
                         </div>
-                        <h3 className="font-semibold text-lg">HintWise Integration</h3>
+                        <h3 className="font-semibold text-lg">Guidance Ladder</h3>
                       </div>
                       <p className="text-sm text-gray-700 mb-3">
-                        Hints are the lowest-level instructional unit, managed by HintWise
+                        Hints are the lowest-level instructional unit, managed by the Guidance Ladder
                         with controlled escalation policies.
                       </p>
                       <ul className="text-sm space-y-2">

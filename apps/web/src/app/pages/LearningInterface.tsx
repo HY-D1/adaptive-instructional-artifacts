@@ -8,6 +8,7 @@ import { Skeleton } from '../components/ui/skeleton';
 import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/SQLEditor';
 import { HintSystem } from '../components/HintSystem';
 import { ConceptCoverage } from '../components/ConceptCoverage';
+import { AskMyTextbookChat } from '../components/AskMyTextbookChat';
 import { Clock, CheckCircle2, AlertCircle, Play, Pause, Sparkles, BookOpen, Check } from 'lucide-react';
 import {
   SQLProblem,
@@ -701,7 +702,7 @@ export function LearningInterface() {
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h1 className="text-2xl font-bold">SQL Learning Lab</h1>
-                <p className="text-gray-600 text-sm">Adaptive instructional system with HintWise</p>
+                <p className="text-gray-600 text-sm">Adaptive instructional system with Guidance Ladder</p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                 {/* Enhanced Session Timer */}
@@ -961,6 +962,15 @@ export function LearningInterface() {
                 knownSubtypeOverride={instructorSubtypeOverride}
                 recentInteractions={problemInteractions}
                 onEscalate={handleEscalate}
+                onInteractionLogged={handleHintSystemInteraction}
+              />
+
+              {/* Week 3 Feature: Ask My Textbook Chat */}
+              <AskMyTextbookChat
+                sessionId={sessionId}
+                learnerId={learnerId}
+                problemId={currentProblem.id}
+                recentInteractions={problemInteractions}
                 onInteractionLogged={handleHintSystemInteraction}
               />
 
