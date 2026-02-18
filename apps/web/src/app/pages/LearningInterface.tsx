@@ -9,13 +9,12 @@ import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/SQLEditor';
 import { HintSystem } from '../components/HintSystem';
 import { ConceptCoverage } from '../components/ConceptCoverage';
 import { AskMyTextbookChat } from '../components/AskMyTextbookChat';
-import { Clock, CheckCircle2, AlertCircle, Play, Pause, Sparkles, BookOpen, Check } from 'lucide-react';
+import { Clock, CheckCircle2, AlertCircle, Play, Pause, Sparkles, BookOpen, Check, GraduationCap, Target, TrendingUp } from 'lucide-react';
 import {
   SQLProblem,
   InteractionEvent,
   InstructionalUnit,
   LearnerProfile,
-  LearningInterfaceMode,
   PdfIndexProvenance,
   RetrievedChunkInfo,
   AutoCreationResult
@@ -39,6 +38,7 @@ import {
   getSqlEngagePolicyVersion,
   getConceptById
 } from '../data/sql-engage';
+import { useUserRole } from '../hooks/useUserRole';
 
 const INSTRUCTOR_SUBTYPE_OPTIONS = getKnownSqlEngageSubtypes();
 
@@ -70,8 +70,8 @@ function formatTime(ms: number): string {
 }
 
 export function LearningInterface() {
+  const { role, isStudent, isInstructor } = useUserRole();
   const [learnerId, setLearnerId] = useState('learner-1');
-  const [mode, setMode] = useState<LearningInterfaceMode>('student');
   const [sessionId, setSessionId] = useState('');
   const [currentProblem, setCurrentProblem] = useState<SQLProblem>(sqlProblems[0]);
   const [sqlDraft, setSqlDraft] = useState(DEFAULT_SQL_EDITOR_CODE);
@@ -82,7 +82,6 @@ export function LearningInterface() {
   const [interactions, setInteractions] = useState<InteractionEvent[]>([]);
   const [lastError, setLastError] = useState<string | undefined>();
   const [lastErrorEventId, setLastErrorEventId] = useState<string | undefined>();
-  const [strategyOverride, setStrategyOverride] = useState<LearnerProfile['currentStrategy']>('adaptive-medium');
   const [subtypeOverride, setSubtypeOverride] = useState('auto');
   const [escalationTriggered, setEscalationTriggered] = useState(false);
   const [notesActionMessage, setNotesActionMessage] = useState<string | undefined>();
@@ -216,7 +215,6 @@ export function LearningInterface() {
     if (!profile) {
       profile = storage.createDefaultProfile(learnerId, 'adaptive-medium');
     }
-    setStrategyOverride(profile.currentStrategy);
     setSubtypeOverride('auto');
 
     const activeSessionId = storage.getActiveSessionId();
@@ -304,18 +302,7 @@ export function LearningInterface() {
     setLearnerId(nextLearnerId);
   };
 
-  const handleStrategyChange = (nextStrategy: LearnerProfile['currentStrategy']) => {
-    setStrategyOverride(nextStrategy);
-    const profile = storage.getProfile(learnerId);
-    if (!profile) return;
-    storage.saveProfile({
-      ...profile,
-      currentStrategy: nextStrategy
-    });
-  };
-
-  const isInstructorMode = mode === 'instructor';
-  const instructorSubtypeOverride = isInstructorMode && subtypeOverride !== 'auto'
+  const instructorSubtypeOverride = isInstructor && subtypeOverride !== 'auto'
     ? canonicalizeSqlEngageSubtype(subtypeOverride)
     : undefined;
 
@@ -743,6 +730,9 @@ export function LearningInterface() {
   // Get count of solved problems
   const solvedCount = sqlProblems.filter(p => isProblemSolved(p.id)).length;
 
+  // Calculate progress percentage
+  const progressPercentage = Math.round((solvedCount / sqlProblems.length) * 100);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -771,10 +761,22 @@ export function LearningInterface() {
         <div className="border-b bg-white">
           <div className="container mx-auto px-4 py-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h1 className="text-2xl font-bold">SQL Learning Lab</h1>
-                <p className="text-gray-600 text-sm">Adaptive instructional system with Guidance Ladder</p>
-              </div>
+              {isStudent ? (
+                // Student-friendly header
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <GraduationCap className="size-6 text-blue-600" />
+                    <h1 className="text-2xl font-bold">Practice SQL</h1>
+                  </div>
+                  <p className="text-gray-600 text-sm">Learn SQL with personalized hints and explanations</p>
+                </div>
+              ) : (
+                // Instructor header
+                <div>
+                  <h1 className="text-2xl font-bold">SQL Learning Lab</h1>
+                  <p className="text-gray-600 text-sm">Adaptive instructional system with Guidance Ladder</p>
+                </div>
+              )}
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
                 {/* Enhanced Session Timer */}
                 <Tooltip>
@@ -805,15 +807,45 @@ export function LearningInterface() {
                   </TooltipContent>
                 </Tooltip>
 
-                <Select value={mode} onValueChange={(value) => setMode(value as LearningInterfaceMode)}>
-                  <SelectTrigger className="w-full sm:w-[150px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="student">Student</SelectItem>
-                    <SelectItem value="instructor">Instructor</SelectItem>
-                  </SelectContent>
-                </Select>
+                {/* Student progress indicator */}
+                {isStudent && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-lg border border-green-200">
+                        <Target className="size-4 text-green-600" />
+                        <span className="text-sm font-medium text-green-700">
+                          {solvedCount}/{sqlProblems.length} solved
+                        </span>
+                        <div className="w-16 h-2 bg-green-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-green-500 rounded-full transition-all"
+                            style={{ width: `${progressPercentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Your progress: {progressPercentage}% complete</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+
+                {/* Role selector - only show for instructors or in dev mode */}
+                {isInstructor && (
+                  <Select value={role} onValueChange={(value) => {
+                    localStorage.setItem('sql-adapt-user-role', value);
+                    window.location.reload();
+                  }}>
+                    <SelectTrigger className="w-full sm:w-[150px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="student">Student</SelectItem>
+                      <SelectItem value="instructor">Instructor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+
                 <Select value={learnerId} onValueChange={handleLearnerChange}>
                   <SelectTrigger className="w-full sm:w-[200px]">
                     <SelectValue />
@@ -960,7 +992,8 @@ export function LearningInterface() {
                   </Tooltip>
                 </div>
 
-                {isInstructorMode && (
+                {/* Instructor Controls - only visible in instructor mode */}
+                {isInstructor && (
                   <Card className="p-4 mb-4 bg-amber-50 border-amber-200">
                     <h3 className="font-semibold text-sm mb-3">Instructor Controls</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -983,8 +1016,16 @@ export function LearningInterface() {
                       <div>
                         <p className="text-xs text-gray-700 mb-1">Strategy</p>
                         <Select
-                          value={strategyOverride}
-                          onValueChange={(value) => handleStrategyChange(value as LearnerProfile['currentStrategy'])}
+                          value={storage.getProfile(learnerId)?.currentStrategy || 'adaptive-medium'}
+                          onValueChange={(value) => {
+                            const profile = storage.getProfile(learnerId);
+                            if (profile) {
+                              storage.saveProfile({
+                                ...profile,
+                                currentStrategy: value as LearnerProfile['currentStrategy']
+                              });
+                            }
+                          }}
                         >
                           <SelectTrigger>
                             <SelectValue />

@@ -14,7 +14,9 @@ import {
   GuidanceRequestType,
   RungLevel,
   GuidanceEscalationTrigger,
-  TextbookUnitAction
+  TextbookUnitAction,
+  UserProfile,
+  UserRole
 } from '../types';
 import {
   canonicalizeSqlEngageSubtype,
@@ -51,9 +53,74 @@ class StorageManager {
   private readonly LLM_CACHE_KEY = 'sql-learning-llm-cache';
   private readonly REPLAY_MODE_KEY = 'sql-learning-policy-replay-mode';
   private readonly PDF_INDEX_KEY = 'sql-learning-pdf-index';
+  private readonly USER_PROFILE_KEY = 'sql-adapt-user-profile'; // Week 4: Aligned with existing app key
 
   // In-memory fallback for PDF index when LocalStorage quota is exceeded
   private pdfIndexMemory: PdfIndexDocument | null = null;
+
+  // Week 4: User profile management
+  saveUserProfile(profile: UserProfile): void {
+    const serializable = {
+      ...profile,
+      createdAt: typeof profile.createdAt === 'number' ? profile.createdAt : Date.now()
+    };
+    localStorage.setItem(this.USER_PROFILE_KEY, JSON.stringify(serializable));
+  }
+
+  getUserProfile(): UserProfile | null {
+    const raw = localStorage.getItem(this.USER_PROFILE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as Partial<UserProfile>;
+      
+      // Validate required fields
+      if (typeof parsed.id !== 'string' || !parsed.id.trim()) {
+        return null;
+      }
+      if (typeof parsed.name !== 'string' || !parsed.name.trim()) {
+        return null;
+      }
+      if (parsed.role !== 'student' && parsed.role !== 'instructor') {
+        return null;
+      }
+      if (typeof parsed.createdAt !== 'number' || !Number.isFinite(parsed.createdAt)) {
+        return null;
+      }
+
+      return {
+        id: parsed.id.trim(),
+        name: parsed.name.trim(),
+        role: parsed.role,
+        createdAt: parsed.createdAt
+      };
+    } catch {
+      // Corrupted profile data
+      localStorage.removeItem(this.USER_PROFILE_KEY);
+      return null;
+    }
+  }
+
+  clearUserProfile(): void {
+    localStorage.removeItem(this.USER_PROFILE_KEY);
+  }
+
+  isStudent(): boolean {
+    const profile = this.getUserProfile();
+    return profile?.role === 'student';
+  }
+
+  isInstructor(): boolean {
+    const profile = this.getUserProfile();
+    return profile?.role === 'instructor';
+  }
+
+  hasRole(role: UserRole): boolean {
+    const profile = this.getUserProfile();
+    return profile?.role === role;
+  }
 
   private readParsedStorage<T>(key: string, fallback: T): T {
     const raw = localStorage.getItem(key);

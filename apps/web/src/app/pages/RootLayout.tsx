@@ -1,14 +1,16 @@
-import { Outlet, Link, useLocation } from 'react-router';
+import { Outlet, Link, useLocation, Navigate } from 'react-router';
 import { Button } from '../components/ui/button';
-import { Book, BarChart3, Code, HelpCircle, Menu, X, Keyboard } from 'lucide-react';
+import { Book, BarChart3, Code, HelpCircle, Menu, X, Keyboard, GraduationCap, LogOut } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { WelcomeModal } from '../components/WelcomeModal';
-import { LearningInterface } from './LearningInterface';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
+import { useUserRole } from '../hooks/useUserRole';
+import { storage } from '../lib/storage';
 
 export function RootLayout() {
   const location = useLocation();
+  const { role, isStudent, isInstructor, isLoading: isRoleLoading } = useUserRole();
   const [showWelcome, setShowWelcome] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -47,15 +49,27 @@ export function RootLayout() {
     setShowWelcome(false);
   };
 
-  const isPracticePage = location.pathname === '/';
+  const isPracticePage = location.pathname === '/practice';
   const isTextbookPage = location.pathname === '/textbook';
   const isResearchPage = location.pathname === '/research';
+  const isInstructorPage = location.pathname === '/instructor-dashboard';
 
-  const navItems = [
-    { to: '/', label: 'Practice', icon: Code, isActive: isPracticePage },
-    { to: '/textbook', label: 'My Textbook', icon: Book, isActive: isTextbookPage },
-    { to: '/research', label: 'Research', icon: BarChart3, isActive: isResearchPage },
-  ];
+  // Redirect instructor accessing student-only pages to instructor dashboard
+  if (!isRoleLoading && isInstructor && (isPracticePage || isTextbookPage)) {
+    return <Navigate to="/instructor-dashboard" replace />;
+  }
+
+  // Build navigation items based on role
+  const navItems = isInstructor
+    ? [
+        { to: '/instructor-dashboard', label: 'Dashboard', icon: BarChart3, isActive: isInstructorPage },
+        { to: '/research', label: 'Research', icon: Book, isActive: isResearchPage },
+      ]
+    : [
+        { to: '/practice', label: 'Practice', icon: Code, isActive: isPracticePage },
+        { to: '/textbook', label: 'My Textbook', icon: Book, isActive: isTextbookPage },
+        { to: '/research', label: 'Research', icon: BarChart3, isActive: isResearchPage },
+      ];
 
   return (
     <TooltipProvider delayDuration={100}>
@@ -66,9 +80,21 @@ export function RootLayout() {
           <div className="container mx-auto px-4">
             <div className="flex items-center justify-between h-16">
               {/* Logo */}
-              <Link to="/" className="flex items-center gap-2 shrink-0">
+              <Link to={isInstructor ? '/instructor-dashboard' : '/practice'} className="flex items-center gap-2 shrink-0">
                 <Code className="size-6 text-blue-600" />
                 <span className="font-bold text-lg hidden sm:block">SQL-Adapt</span>
+                {isStudent && (
+                  <span className="hidden sm:flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                    <GraduationCap className="size-3" />
+                    Student
+                  </span>
+                )}
+                {isInstructor && (
+                  <span className="hidden sm:flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                    <BarChart3 className="size-3" />
+                    Instructor
+                  </span>
+                )}
               </Link>
 
               {/* Desktop Navigation */}
@@ -129,6 +155,28 @@ export function RootLayout() {
                   </TooltipContent>
                 </Tooltip>
 
+                {/* Logout button */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        storage.clearUserProfile();
+                        window.location.href = '/';
+                      }}
+                      className="touch-manipulation hidden md:flex"
+                      aria-label="Logout"
+                    >
+                      <LogOut className="size-4 mr-2 hidden sm:block" />
+                      <span className="hidden sm:inline">Logout</span>
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Logout and return to start page</p>
+                  </TooltipContent>
+                </Tooltip>
+
                 {/* Mobile menu */}
                 <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                   <SheetTrigger asChild className="md:hidden">
@@ -159,6 +207,18 @@ export function RootLayout() {
                         ))}
                       </div>
                       <div className="py-4 border-t space-y-4">
+                        <Button
+                          variant="ghost"
+                          size="lg"
+                          className="w-full justify-start touch-manipulation text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => {
+                            storage.clearUserProfile();
+                            window.location.href = '/';
+                          }}
+                        >
+                          <LogOut className="size-5 mr-3" />
+                          <span>Logout</span>
+                        </Button>
                         <div className="px-2 text-sm text-gray-600">
                           <p className="font-medium mb-2">Keyboard Shortcuts</p>
                           <div className="space-y-1 text-xs">
@@ -185,20 +245,8 @@ export function RootLayout() {
           </div>
         </nav>
 
-        <div className="flex-1 overflow-auto relative">
-          {/* Practice interface - only rendered when on practice page */}
-          {isPracticePage && (
-            <div className="block h-full">
-              <LearningInterface />
-            </div>
-          )}
-          
-          {/* Other pages via Outlet */}
-          {(!isPracticePage) && (
-            <div className="h-full">
-              <Outlet />
-            </div>
-          )}
+        <div className="flex-1 overflow-auto relative h-full">
+          <Outlet />
         </div>
       </div>
     </TooltipProvider>

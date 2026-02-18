@@ -1,6 +1,16 @@
 // Core data models for the adaptive SQL learning system
 
 export type LearningInterfaceMode = 'student' | 'instructor';
+
+// Week 4: Role-based access control
+export type UserRole = 'student' | 'instructor';
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  role: UserRole;
+  createdAt: number;
+}
 export type HelpEventType = 'hint_view' | 'explanation_view';
 
 // Week 3 D8: Guidance Ladder event types for replay reconstruction

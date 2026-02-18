@@ -7,11 +7,12 @@ import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { Skeleton } from '../components/ui/skeleton';
-import { ArrowLeft, Search, Filter, BookOpen, X, Clock, Tag } from 'lucide-react';
+import { ArrowLeft, Search, Filter, BookOpen, X, Clock, Tag, GraduationCap, TrendingUp, Sparkles } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { storage } from '../lib/storage';
 import { InteractionEvent } from '../types';
 import { conceptNodes } from '../data/sql-engage';
+import { useUserRole } from '../hooks/useUserRole';
 
 const learnerOptions = ['learner-1', 'learner-2', 'learner-3'] as const;
 type LearnerId = (typeof learnerOptions)[number];
@@ -31,6 +32,7 @@ const TRACE_ATTEMPT_EVENT_TYPES: InteractionEvent['eventType'][] = [
 
 export function TextbookPage() {
   const navigate = useNavigate();
+  const { isStudent, isInstructor } = useUserRole();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const learnerId: LearnerId = isLearnerId(searchParams.get('learnerId'))
@@ -162,6 +164,14 @@ export function TextbookPage() {
       .sort((a, b) => a!.name.localeCompare(b!.name));
   }, [textbookUnits]);
 
+  // Calculate learning stats for student view
+  const learningStats = useMemo(() => {
+    const totalUnits = textbookUnits.length;
+    const conceptsCovered = new Set(textbookUnits.map(u => u.conceptId)).size;
+    const autoCreatedUnits = textbookUnits.filter(u => u.autoCreated).length;
+    return { totalUnits, conceptsCovered, autoCreatedUnits };
+  }, [textbookUnits]);
+
   // Apply filters
   const filteredAttempts = useMemo(
     () => learnerInteractions.filter((interaction) => {
@@ -220,33 +230,101 @@ export function TextbookPage() {
                   </TooltipContent>
                 </Tooltip>
                 <div>
-                  <h1 className="text-2xl font-bold flex items-center gap-2">
-                    <BookOpen className="size-6 text-blue-600" />
-                    My Textbook
-                  </h1>
-                  <p className="text-gray-600 text-sm">Your personalized SQL learning notes</p>
+                  {isStudent ? (
+                    // Student-friendly "My Learning Journey" header
+                    <>
+                      <h1 className="text-2xl font-bold flex items-center gap-2">
+                        <GraduationCap className="size-6 text-blue-600" />
+                        My Learning Journey
+                      </h1>
+                      <p className="text-gray-600 text-sm">Your personalized SQL notes and progress</p>
+                    </>
+                  ) : (
+                    // Instructor header
+                    <>
+                      <h1 className="text-2xl font-bold flex items-center gap-2">
+                        <BookOpen className="size-6 text-blue-600" />
+                        My Textbook
+                      </h1>
+                      <p className="text-gray-600 text-sm">Your personalized SQL learning notes</p>
+                    </>
+                  )}
                 </div>
               </div>
-              <Select value={learnerId} onValueChange={handleLearnerChange}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="learner-1">Learner 1</SelectItem>
-                  <SelectItem value="learner-2">Learner 2</SelectItem>
-                  <SelectItem value="learner-3">Learner 3</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                {/* Student learning stats */}
+                {isStudent && (
+                  <div className="hidden sm:flex items-center gap-3 mr-2">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 rounded-lg border border-blue-200">
+                          <BookOpen className="size-4 text-blue-600" />
+                          <span className="text-sm font-medium text-blue-700">
+                            {learningStats.totalUnits} notes
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Total notes in your textbook</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 rounded-lg border border-green-200">
+                          <TrendingUp className="size-4 text-green-600" />
+                          <span className="text-sm font-medium text-green-700">
+                            {learningStats.conceptsCovered} concepts
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Concepts you&apos;ve covered</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                )}
+                <Select value={learnerId} onValueChange={handleLearnerChange}>
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="learner-1">Learner 1</SelectItem>
+                    <SelectItem value="learner-2">Learner 2</SelectItem>
+                    <SelectItem value="learner-3">Learner 3</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         </div>
 
         <div className="container mx-auto px-4 py-6 flex-1 min-h-0 flex flex-col gap-4">
-          <Card className="p-3">
-            <p className="text-xs text-gray-700">
-              Units are ordered by concept prerequisites, with misconception and spaced-review insights derived from your trace evidence.
-            </p>
-          </Card>
+          {/* Student welcome card */}
+          {isStudent && (
+            <Card className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+              <div className="flex items-start gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Sparkles className="size-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-blue-900">Your Personal Study Guide</h3>
+                  <p className="text-sm text-blue-700 mt-1">
+                    This page collects helpful explanations and notes created just for you as you practice SQL. 
+                    Review them anytime to reinforce your learning!
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Instructor info card */}
+          {isInstructor && (
+            <Card className="p-3">
+              <p className="text-xs text-gray-700">
+                Units are ordered by concept prerequisites, with misconception and spaced-review insights derived from your trace evidence.
+              </p>
+            </Card>
+          )}
 
           <div className="flex-1 min-h-0">
             <AdaptiveTextbook
@@ -258,180 +336,204 @@ export function TextbookPage() {
             />
           </div>
 
-          <Card id="trace-attempts" className="p-4">
-            <div className="flex flex-col gap-3 mb-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-semibold flex items-center gap-2">
-                    <Clock className="size-4" />
-                    Trace Attempts
-                  </h2>
-                  <p className="text-xs text-gray-600">Filterable attempt log for evidence link targets</p>
+          {/* Trace Attempts section - simplified for students, full for instructors */}
+          {isInstructor ? (
+            // Full Trace Attempts section for instructors
+            <Card id="trace-attempts" className="p-4">
+              <div className="flex flex-col gap-3 mb-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="font-semibold flex items-center gap-2">
+                      <Clock className="size-4" />
+                      Trace Attempts
+                    </h2>
+                    <p className="text-xs text-gray-600">Filterable attempt log for evidence link targets</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {selectedAttemptId && !selectedAttemptExists && (
+                      <Badge variant="outline" className="text-xs text-amber-800 border-amber-300">
+                        Selected evidence reference not found
+                      </Badge>
+                    )}
+                    {selectedAttemptId && (
+                      <Badge variant="secondary" className="text-xs">
+                        Attempt: {selectedAttemptId}
+                      </Badge>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowFilters(!showFilters)}
+                      className={showFilters ? 'bg-gray-100' : ''}
+                    >
+                      <Filter className="size-4 mr-1.5" />
+                      Filters
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {selectedAttemptId && !selectedAttemptExists && (
-                    <Badge variant="outline" className="text-xs text-amber-800 border-amber-300">
-                      Selected evidence reference not found
-                    </Badge>
-                  )}
-                  {selectedAttemptId && (
-                    <Badge variant="secondary" className="text-xs">
-                      Attempt: {selectedAttemptId}
-                    </Badge>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowFilters(!showFilters)}
-                    className={showFilters ? 'bg-gray-100' : ''}
-                  >
-                    <Filter className="size-4 mr-1.5" />
-                    Filters
-                  </Button>
-                </div>
-              </div>
 
-              {/* Search and filters */}
-              {showFilters && (
-                <div className="flex flex-col sm:flex-row gap-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
-                    <Input
-                      placeholder="Search by problem, event type, or subtype..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9"
-                    />
-                    {searchQuery && (
-                      <button
-                        onClick={() => setSearchQuery('')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        <X className="size-4" />
-                      </button>
+                {/* Search and filters */}
+                {showFilters && (
+                  <div className="flex flex-col sm:flex-row gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                      <Input
+                        placeholder="Search by problem, event type, or subtype..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9"
+                      />
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery('')}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="size-4" />
+                        </button>
+                      )}
+                    </div>
+                    
+                    <Select value={selectedSubtype} onValueChange={handleSubtypeChange}>
+                      <SelectTrigger className="w-full sm:w-[200px]">
+                        <Tag className="size-4 mr-2 text-gray-400" />
+                        <SelectValue placeholder="Filter by subtype" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All subtypes</SelectItem>
+                        {subtypeOptions.map((subtype) => (
+                          <SelectItem key={subtype} value={subtype}>
+                            {subtype}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {hasActiveFilters && (
+                      <Button variant="ghost" size="sm" onClick={clearFilters}>
+                        <X className="size-4 mr-1" />
+                        Clear
+                      </Button>
                     )}
                   </div>
-                  
-                  <Select value={selectedSubtype} onValueChange={handleSubtypeChange}>
-                    <SelectTrigger className="w-full sm:w-[200px]">
-                      <Tag className="size-4 mr-2 text-gray-400" />
-                      <SelectValue placeholder="Filter by subtype" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All subtypes</SelectItem>
-                      {subtypeOptions.map((subtype) => (
-                        <SelectItem key={subtype} value={subtype}>
-                          {subtype}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                )}
 
+                {/* Active filters display */}
+                {hasActiveFilters && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs text-gray-500">Active filters:</span>
+                    {searchQuery && (
+                      <Badge variant="secondary" className="text-xs">
+                        Search: &ldquo;{searchQuery}&rdquo;
+                        <button onClick={() => setSearchQuery('')} className="ml-1 hover:text-red-500">
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    )}
+                    {selectedSubtype !== 'all' && (
+                      <Badge variant="secondary" className="text-xs">
+                        Subtype: {selectedSubtype}
+                        <button onClick={() => handleSubtypeChange('all')} className="ml-1 hover:text-red-500">
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    )}
+                    {selectedAttemptId && (
+                      <Badge variant="secondary" className="text-xs">
+                        Attempt: {selectedAttemptId.slice(0, 8)}...
+                        <button onClick={() => updateParams({ attemptId: undefined })} className="ml-1 hover:text-red-500">
+                          <X className="size-3" />
+                        </button>
+                      </Badge>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {filteredAttempts.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Clock className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p className="text-sm">
+                    {hasActiveFilters 
+                      ? 'No attempts match the current filters.' 
+                      : 'No attempts recorded yet.'}
+                  </p>
                   {hasActiveFilters && (
-                    <Button variant="ghost" size="sm" onClick={clearFilters}>
-                      <X className="size-4 mr-1" />
-                      Clear
+                    <Button variant="link" size="sm" onClick={clearFilters} className="mt-2">
+                      Clear all filters
                     </Button>
                   )}
                 </div>
-              )}
-
-              {/* Active filters display */}
-              {hasActiveFilters && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-gray-500">Active filters:</span>
-                  {searchQuery && (
-                    <Badge variant="secondary" className="text-xs">
-                      Search: &ldquo;{searchQuery}&rdquo;
-                      <button onClick={() => setSearchQuery('')} className="ml-1 hover:text-red-500">
-                        <X className="size-3" />
-                      </button>
-                    </Badge>
-                  )}
-                  {selectedSubtype !== 'all' && (
-                    <Badge variant="secondary" className="text-xs">
-                      Subtype: {selectedSubtype}
-                      <button onClick={() => handleSubtypeChange('all')} className="ml-1 hover:text-red-500">
-                        <X className="size-3" />
-                      </button>
-                    </Badge>
-                  )}
-                  {selectedAttemptId && (
-                    <Badge variant="secondary" className="text-xs">
-                      Attempt: {selectedAttemptId.slice(0, 8)}...
-                      <button onClick={() => updateParams({ attemptId: undefined })} className="ml-1 hover:text-red-500">
-                        <X className="size-3" />
-                      </button>
-                    </Badge>
-                  )}
+              ) : (
+                <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                  {filteredAttempts.map((interaction) => {
+                    const subtype = getSubtypeLabel(interaction);
+                    const isSelected = selectedAttemptId === interaction.id;
+                    return (
+                      <div
+                        key={interaction.id}
+                        className={`rounded-lg border p-3 text-sm transition-all ${
+                          isSelected 
+                            ? 'border-blue-300 bg-blue-50 shadow-sm' 
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium font-mono text-xs text-gray-700">
+                              {interaction.id.slice(0, 16)}...
+                            </span>
+                            <Badge variant="outline" className="text-xs">{subtype}</Badge>
+                          </div>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="text-xs text-gray-500 cursor-help">
+                                {new Date(interaction.timestamp).toLocaleString()}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{new Date(interaction.timestamp).toLocaleString()}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-600">
+                          <span className="font-medium">{interaction.problemId}</span>
+                          <span className="text-gray-400">•</span>
+                          <Badge variant="secondary" className="text-[10px]">
+                            {interaction.eventType.replace(new RegExp('_', 'g'), ' ')}
+                          </Badge>
+                          {interaction.successful && (
+                            <Badge variant="outline" className="text-[10px] text-green-600 border-green-200">
+                              Success
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
-            </div>
-
-            {filteredAttempts.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <Clock className="size-12 mx-auto mb-3 text-gray-300" />
-                <p className="text-sm">
-                  {hasActiveFilters 
-                    ? 'No attempts match the current filters.' 
-                    : 'No attempts recorded yet.'}
-                </p>
-                {hasActiveFilters && (
-                  <Button variant="link" size="sm" onClick={clearFilters} className="mt-2">
-                    Clear all filters
-                  </Button>
+            </Card>
+          ) : (
+            // Simplified view for students - just show recent activity summary
+            <Card className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Clock className="size-4" />
+                    Recent Activity
+                  </h3>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {filteredAttempts.length} practice attempts recorded
+                  </p>
+                </div>
+                {filteredAttempts.length > 0 && (
+                  <Badge variant="secondary" className="text-xs">
+                    Last: {new Date(filteredAttempts[0].timestamp).toLocaleDateString()}
+                  </Badge>
                 )}
               </div>
-            ) : (
-              <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-                {filteredAttempts.map((interaction) => {
-                  const subtype = getSubtypeLabel(interaction);
-                  const isSelected = selectedAttemptId === interaction.id;
-                  return (
-                    <div
-                      key={interaction.id}
-                      className={`rounded-lg border p-3 text-sm transition-all ${
-                        isSelected 
-                          ? 'border-blue-300 bg-blue-50 shadow-sm' 
-                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium font-mono text-xs text-gray-700">
-                            {interaction.id.slice(0, 16)}...
-                          </span>
-                          <Badge variant="outline" className="text-xs">{subtype}</Badge>
-                        </div>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="text-xs text-gray-500 cursor-help">
-                              {new Date(interaction.timestamp).toLocaleString()}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>{new Date(interaction.timestamp).toLocaleString()}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                      <div className="flex items-center gap-2 mt-2 text-xs text-gray-600">
-                        <span className="font-medium">{interaction.problemId}</span>
-                        <span className="text-gray-400">•</span>
-                        <Badge variant="secondary" className="text-[10px]">
-                          {interaction.eventType.replace(new RegExp('_', 'g'), ' ')}
-                        </Badge>
-                        {interaction.successful && (
-                          <Badge variant="outline" className="text-[10px] text-green-600 border-green-200">
-                            Success
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
+            </Card>
+          )}
         </div>
       </div>
   );
