@@ -1,0 +1,57 @@
+name: week3-regression-gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify-week3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+      
+      - name: Build application
+        run: npm run build
+      
+      - name: Verify replay checksums
+        run: npm run replay:gate
+      
+      - name: Run Week 2/3 E2E tests (@weekly tagged)
+        run: npm run test:e2e:weekly
+      
+      - name: Generate demo artifacts
+        run: npm run demo:weekly
+      
+      - name: Verify SQL-Engage concept mapping
+        run: npm run check:concept-map
+      
+      - name: Week 2 baseline acceptance gate
+        run: npm run gate:weekly:acceptance
+      
+      - name: Textbook content gate
+        run: npm run gate:textbook:content
+      
+      - name: Week 3 guidance ladder gate
+        run: npm run gate:week3:acceptance
+      
+      - name: Upload demo artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: demo-artifacts
+          path: dist/weekly-demo/
+          retention-days: 7
