@@ -10,6 +10,71 @@
 import type { InstructionalUnit, SaveTextbookUnitResult } from '../types';
 import type { LLMGuidanceOutput } from './llm-contracts';
 
+// Quality score weights (must sum to 1.0)
+export const QUALITY_SCORE_WEIGHTS = {
+  sourceRichness: 0.4, // Based on count of sources / max 5
+  contentSummary: 0.2, // Has summary field
+  contentExamples: 0.2, // Has minimalExample field
+  contentMistakes: 0.2 // Has commonMistakes field
+} as const;
+
+// Maximum source count for richness calculation
+export const MAX_SOURCE_COUNT = 5;
+
+// Quality threshold for "Best" badge
+export const BEST_QUALITY_THRESHOLD = 0.8;
+
+/**
+ * Calculate quality score for an instructional unit (0-1 scale)
+ * 
+ * Formula:
+ * - Source richness: (sourceCount / 5) * 0.4
+ * - Content completeness: 0.2 each for summary, examples, mistakes
+ */
+export function calculateQualityScore(unit: Partial<InstructionalUnit>): number {
+  // Source richness (0-0.4)
+  const sourceCount = (unit.sourceRefIds?.length || 0) + (unit.provenance?.retrievedSourceIds?.length || 0);
+  const uniqueSourceCount = new Set([
+    ...(unit.sourceRefIds || []),
+    ...(unit.provenance?.retrievedSourceIds || [])
+  ]).size;
+  const sourceRichness = Math.min(uniqueSourceCount / MAX_SOURCE_COUNT, 1) * QUALITY_SCORE_WEIGHTS.sourceRichness;
+  
+  // Content completeness (0-0.6)
+  const hasSummary = Boolean(unit.summary?.trim());
+  const hasExamples = Boolean(unit.minimalExample?.trim());
+  const hasMistakes = Array.isArray(unit.commonMistakes) && unit.commonMistakes.length > 0;
+  
+  const contentScore = (
+    (hasSummary ? QUALITY_SCORE_WEIGHTS.contentSummary : 0) +
+    (hasExamples ? QUALITY_SCORE_WEIGHTS.contentExamples : 0) +
+    (hasMistakes ? QUALITY_SCORE_WEIGHTS.contentMistakes : 0)
+  );
+  
+  const totalScore = sourceRichness + contentScore;
+  
+  // Round to 3 decimal places for consistency
+  return Math.round(totalScore * 1000) / 1000;
+}
+
+/**
+ * Check if a unit qualifies as a "Best" explanation
+ */
+export function isBestQualityUnit(unit: InstructionalUnit): boolean {
+  return (unit.qualityScore ?? 0) >= BEST_QUALITY_THRESHOLD;
+}
+
+/**
+ * Get quality tier label for a unit
+ */
+export function getQualityTierLabel(unit: InstructionalUnit): 'best' | 'good' | 'average' | 'basic' {
+  const score = unit.qualityScore ?? 0;
+  if (score >= BEST_QUALITY_THRESHOLD) return 'best';
+  if (score >= 0.6) return 'good';
+  if (score >= 0.4) return 'average';
+  return 'basic';
+}
+
 // Configuration for dedupe/upsert
 export const TEXTBOOK_UNIT_CONFIG = {
   // Dedupe key fields - units with same values are considered the same unit
@@ -149,7 +214,8 @@ export function buildUpdatedUnit(
   const existingHistory = existing.updateHistory || [];
   const newHistoryEntry = createUpdateHistoryEntry(newInput, existing.revisionCount || 0);
   
-  return {
+  // Build the updated unit first (without quality score)
+  const updatedUnit: InstructionalUnit = {
     ...existing,
     
     // Replaceable fields: new content wins
@@ -185,6 +251,11 @@ export function buildUpdatedUnit(
     provenance: existing.provenance,
     lastErrorSubtypeId: newInput.errorSubtypeId ?? existing.lastErrorSubtypeId
   };
+  
+  // Calculate and set quality score based on updated content
+  updatedUnit.qualityScore = calculateQualityScore(updatedUnit);
+  
+  return updatedUnit;
 }
 
 // Build new unit from input
@@ -194,7 +265,8 @@ export function buildNewUnit(
 ): InstructionalUnit {
   const now = Date.now();
   
-  return {
+  // Build the unit first (without quality score)
+  const newUnit: InstructionalUnit = {
     id: unitId,
     sessionId: input.sessionId,
     updatedSessionIds: [input.sessionId],
@@ -214,8 +286,14 @@ export function buildNewUnit(
     minimalExample: input.minimalExample,
     revisionCount: 0,
     updateHistory: [createUpdateHistoryEntry(input, 0)],
-    lastErrorSubtypeId: input.errorSubtypeId
+    lastErrorSubtypeId: input.errorSubtypeId,
+    retrievalCount: 0
   };
+  
+  // Calculate and set quality score
+  newUnit.qualityScore = calculateQualityScore(newUnit);
+  
+  return newUnit;
 }
 
 // Main upsert function - returns action taken and result
@@ -368,12 +446,22 @@ export function getUnitStats(unit: InstructionalUnit): {
   revisionCount: number;
   sourceCount: number;
   isFresh: boolean;
+  qualityScore: number;
+  qualityTier: 'best' | 'good' | 'average' | 'basic';
 } {
   const now = Date.now();
   const age = now - unit.addedTimestamp;
   const revisionCount = unit.revisionCount || 0;
   const sourceCount = (unit.sourceRefIds || []).length;
   const isFresh = age < 7 * 24 * 60 * 60 * 1000; // Less than 7 days
+  const qualityScore = unit.qualityScore ?? 0;
   
-  return { age, revisionCount, sourceCount, isFresh };
+  return { 
+    age, 
+    revisionCount, 
+    sourceCount, 
+    isFresh, 
+    qualityScore,
+    qualityTier: getQualityTierLabel(unit)
+  };
 }

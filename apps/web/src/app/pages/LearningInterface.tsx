@@ -26,6 +26,12 @@ import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content-generator';
 import { createEventId } from '../lib/event-id';
 import {
+  startBackgroundAnalysis,
+  stopBackgroundAnalysis,
+  runAnalysisOnce,
+  AnalysisResult
+} from '../lib/trace-analyzer';
+import {
   canonicalizeSqlEngageSubtype,
   getKnownSqlEngageSubtypes,
   getSqlEngagePolicyVersion,
@@ -82,8 +88,13 @@ export function LearningInterface() {
   const [generationError, setGenerationError] = useState<string | undefined>();
   const [latestGeneratedUnit, setLatestGeneratedUnit] = useState<InstructionalUnit | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [analysisStatus, setAnalysisStatus] = useState<{
+    isRunning: boolean;
+    lastResult?: AnalysisResult;
+  }>({ isRunning: false });
   
   const timerRef = useRef<number | null>(null);
+  const stopAnalysisRef = useRef<(() => void) | null>(null);
   const startTimeRef = useRef(startTime);
   const isTimerPausedRef = useRef(isTimerPaused);
   const elapsedTimeRef = useRef(elapsedTime);
@@ -132,6 +143,17 @@ export function LearningInterface() {
       }
     };
   }, []); // Empty deps - uses refs for mutable values
+
+  // Cleanup background analysis on unmount
+  useEffect(() => {
+    return () => {
+      if (stopAnalysisRef.current) {
+        stopAnalysisRef.current();
+        stopAnalysisRef.current = null;
+      }
+      stopBackgroundAnalysis();
+    };
+  }, []);
 
   // Handle tab visibility change - uses ref to avoid stale closure
   useEffect(() => {
@@ -211,6 +233,26 @@ export function LearningInterface() {
     setLatestGeneratedUnit(null);
     setStartTime(Date.now());
     setElapsedTime(0);
+
+    // Start background trace analysis for this session
+    if (stopAnalysisRef.current) {
+      stopAnalysisRef.current();
+    }
+    
+    const stopAnalysis = startBackgroundAnalysis(learnerId, newSessionId, {
+      intervalMs: 5 * 60 * 1000, // 5 minutes
+      onAnalysisComplete: (result) => {
+        setAnalysisStatus({ isRunning: true, lastResult: result });
+      }
+    });
+    
+    stopAnalysisRef.current = stopAnalysis;
+    setAnalysisStatus({ isRunning: true });
+    
+    // Run initial analysis
+    const initialResult = runAnalysisOnce(learnerId, newSessionId);
+    setAnalysisStatus({ isRunning: true, lastResult: initialResult });
+    
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [learnerId, currentProblem.id]);
 

@@ -6,6 +6,7 @@
  * - "Save to My Notes" button for each response
  * - Quick chips for common queries
  * - Logs chat_interaction events with retrievedSourceIds
+ * - Auto-saves high-quality responses to My Textbook
  */
 
 import { useState, useRef, useCallback } from 'react';
@@ -23,7 +24,8 @@ import {
   Code,
   HelpCircle,
   Hash,
-  X
+  X,
+  CheckCircle
 } from 'lucide-react';
 // Note: Using div with overflow-auto instead of ScrollArea
 import { storage } from '../lib/storage';
@@ -40,8 +42,10 @@ export type ChatMessage = {
   retrievedSourceIds?: string[];
   textbookUnitIds?: string[];
   savedToNotes?: boolean;
+  autoSaved?: boolean;
   quickChip?: string;
   sources?: Array<{id: string; title: string; type: 'unit' | 'pdf'}>;
+  queryHash?: string; // For duplicate detection
 };
 
 interface AskMyTextbookChatProps {
@@ -60,6 +64,18 @@ const QUICK_CHIPS = [
   { id: 'hint_response', label: 'Give me a hint', icon: Lightbulb },
 ] as const;
 
+// Quality threshold for auto-save
+const QUALITY_THRESHOLD = 0.7;
+const MIN_CONTENT_LENGTH = 100;
+const MIN_SOURCE_COUNT = 2;
+
+// Toast notification type
+interface Toast {
+  id: string;
+  message: string;
+  type: 'success' | 'info';
+}
+
 export function AskMyTextbookChat({
   sessionId,
   learnerId,
@@ -70,7 +86,11 @@ export function AskMyTextbookChat({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Track auto-saved queries to prevent duplicates
+  const autoSavedQueriesRef = useRef<Set<string>>(new Set());
 
   // Get textbook units for grounding
   const getTextbookUnits = useCallback((): InstructionalUnit[] => {
@@ -236,12 +256,226 @@ export function AskMyTextbookChat({
            'Check your query syntax carefully. Start with SELECT, then column names, then FROM table_name;';
   }, []);
 
+  // Calculate quality score for auto-save
+  const calculateQuality = useCallback((
+    response: string,
+    sources: Array<{id: string; title: string; type: 'unit' | 'pdf'}>,
+    quickChip?: string
+  ): number => {
+    let score = 0;
+    
+    // Source count factor (0-0.4)
+    const sourceCount = sources?.length || 0;
+    if (sourceCount >= MIN_SOURCE_COUNT) {
+      score += 0.4;
+    } else if (sourceCount === 1) {
+      score += 0.2;
+    }
+    
+    // Content length factor (0-0.4)
+    const contentLength = response?.length || 0;
+    if (contentLength > 200) {
+      score += 0.4;
+    } else if (contentLength > MIN_CONTENT_LENGTH) {
+      score += 0.3;
+    } else if (contentLength > 50) {
+      score += 0.1;
+    }
+    
+    // Quick chip bonus for known high-value types (0-0.2)
+    if (quickChip === 'explain_error' || quickChip === 'minimal_example') {
+      score += 0.2;
+    } else if (quickChip === 'what_concept' || quickChip === 'hint_response') {
+      score += 0.1;
+    }
+    
+    return Math.min(1, score);
+  }, []);
+
+  // Generate a hash for the query to track duplicates
+  const generateQueryHash = useCallback((query: string, quickChip?: string): string => {
+    const normalized = (quickChip || query).toLowerCase().trim();
+    let hash = 0;
+    for (let i = 0; i < normalized.length; i++) {
+      const char = normalized.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return `query-${hash}`;
+  }, []);
+
+  // Check if query already has an auto-saved unit
+  const hasExistingUnitForQuery = useCallback((queryHash: string): boolean => {
+    const existingUnits = storage.getTextbook(learnerId);
+    return existingUnits.some(unit => 
+      unit.sourceInteractionIds?.some(id => id.includes(queryHash)) ||
+      unit.createdFromInteractionIds?.some(id => id.includes(queryHash))
+    );
+  }, [learnerId]);
+
+  // Create instructional unit from chat response
+  const createUnitFromChatResponse = useCallback((
+    response: string,
+    sources: Array<{id: string; title: string; type: 'unit' | 'pdf'}>,
+    problemConceptIds: string[],
+    queryHash: string,
+    quickChip?: string
+  ): InstructionalUnit => {
+    const now = Date.now();
+    const conceptId = problemConceptIds[0] || 'general';
+    const conceptIds = problemConceptIds.length > 0 ? problemConceptIds : [conceptId];
+    
+    // Generate title based on quick chip or content
+    let title: string;
+    if (quickChip === 'explain_error') {
+      title = 'Error Explanation';
+    } else if (quickChip === 'minimal_example') {
+      title = 'SQL Example';
+    } else if (quickChip === 'what_concept') {
+      title = 'Concept Overview';
+    } else if (quickChip === 'hint_response') {
+      title = 'Hint & Guidance';
+    } else {
+      title = `Chat Response - ${new Date(now).toLocaleDateString()}`;
+    }
+    
+    return {
+      id: createEventId('unit-chat'),
+      type: 'summary',
+      conceptId,
+      conceptIds,
+      title,
+      content: response,
+      prerequisites: [],
+      addedTimestamp: now,
+      sourceInteractionIds: [queryHash],
+      createdFromInteractionIds: [queryHash],
+      sourceRefIds: sources.map(s => s.id),
+      revisionCount: 0
+    };
+  }, []);
+
+  // Show toast notification
+  const showToast = useCallback((message: string, type: Toast['type'] = 'info') => {
+    const toast: Toast = {
+      id: createEventId('toast'),
+      message,
+      type
+    };
+    setToasts(prev => [...prev, toast]);
+    
+    // Auto-dismiss after 3 seconds
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== toast.id));
+    }, 3000);
+  }, []);
+
+  // Log textbook_add event for auto-save
+  const logTextbookAddEvent = useCallback((
+    unitId: string,
+    conceptIds: string[],
+    sourceIds: string[],
+    queryHash: string
+  ) => {
+    if (!sessionId) return;
+
+    const event: InteractionEvent = {
+      id: createEventId('textbook-add-auto'),
+      sessionId,
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'textbook_add',
+      problemId,
+      unitId,
+      conceptIds,
+      retrievedSourceIds: sourceIds,
+      triggerInteractionIds: [queryHash],
+      evidenceInteractionIds: [queryHash],
+      sourceInteractionIds: [queryHash],
+      noteTitle: 'Auto-saved from chat',
+      noteContent: `Auto-saved response for query hash ${queryHash}`
+    };
+
+    storage.saveInteraction(event);
+    onInteractionLogged?.(event);
+  }, [sessionId, learnerId, problemId, onInteractionLogged]);
+
+  // Auto-save high-quality response to textbook
+  const autoSaveToTextbook = useCallback((
+    message: ChatMessage,
+    problemConceptIds: string[]
+  ): boolean => {
+    if (!message.sources || message.sources.length === 0) return false;
+    
+    const queryHash = message.queryHash || generateQueryHash(message.content, message.quickChip);
+    
+    // Check if already auto-saved this query
+    if (autoSavedQueriesRef.current.has(queryHash)) {
+      return false;
+    }
+    
+    // Check for existing unit
+    if (hasExistingUnitForQuery(queryHash)) {
+      autoSavedQueriesRef.current.add(queryHash);
+      return false;
+    }
+    
+    // Calculate quality score
+    const quality = calculateQuality(message.content, message.sources, message.quickChip);
+    
+    if (quality >= QUALITY_THRESHOLD) {
+      const unit = createUnitFromChatResponse(
+        message.content,
+        message.sources,
+        problemConceptIds,
+        queryHash,
+        message.quickChip
+      );
+      
+      const result = storage.saveTextbookUnit(learnerId, unit);
+      
+      if (result.success) {
+        // Track this query as auto-saved
+        autoSavedQueriesRef.current.add(queryHash);
+        
+        // Log the auto-save event
+        logTextbookAddEvent(
+          unit.id,
+          unit.conceptIds || [unit.conceptId],
+          message.retrievedSourceIds || [],
+          queryHash
+        );
+        
+        // Update message state to show auto-saved indicator
+        setMessages(prev => prev.map(m => 
+          m.id === message.id ? { ...m, autoSaved: true, queryHash } : m
+        ));
+        
+        // Show toast
+        showToast('Saved to My Textbook', 'success');
+        
+        return true;
+      }
+    }
+    
+    return false;
+  }, [
+    learnerId,
+    calculateQuality,
+    createUnitFromChatResponse,
+    hasExistingUnitForQuery,
+    generateQueryHash,
+    logTextbookAddEvent,
+    showToast
+  ]);
+
   // Generate grounded response using retrieved sources - FOCUSED & ACTIONABLE
   const generateResponse = useCallback((query: string, quickChip?: string): { 
     response: string; 
     sourceIds: string[];
     unitIds: string[];
     sources: Array<{id: string; title: string; type: 'unit' | 'pdf'}>;
+    problemConceptIds: string[];
   } => {
     const { 
       relevantUnits, 
@@ -395,7 +629,8 @@ export function AskMyTextbookChat({
       response,
       sourceIds: allSourceIds,
       unitIds: relevantUnits.map(u => u.id),
-      sources
+      sources,
+      problemConceptIds
     };
   }, [buildGroundingPayload, recentInteractions, problemId, cleanText, extractSqlExample, getActionableFix]);
 
@@ -436,13 +671,17 @@ export function AskMyTextbookChat({
     
     if (!messageText || !sessionId) return;
 
+    // Generate query hash for duplicate detection
+    const queryHash = generateQueryHash(messageText, quickChip);
+
     // Add user message
     const userMessage: ChatMessage = {
       id: createEventId('chat-msg'),
       role: 'user',
       content: messageText,
       timestamp: Date.now(),
-      quickChip
+      quickChip,
+      queryHash
     };
     
     setMessages(prev => [...prev, userMessage]);
@@ -453,7 +692,7 @@ export function AskMyTextbookChat({
     await new Promise(resolve => setTimeout(resolve, 500));
 
     // Generate grounded response
-    const { response, sourceIds, unitIds, sources } = generateResponse(messageText, quickChip);
+    const { response, sourceIds, unitIds, sources, problemConceptIds } = generateResponse(messageText, quickChip);
 
     // Add assistant response
     const assistantMessage: ChatMessage = {
@@ -464,7 +703,8 @@ export function AskMyTextbookChat({
       retrievedSourceIds: sourceIds,
       textbookUnitIds: unitIds,
       sources,
-      quickChip
+      quickChip,
+      queryHash
     };
 
     setMessages(prev => [...prev, assistantMessage]);
@@ -472,7 +712,12 @@ export function AskMyTextbookChat({
 
     // Log interaction
     logChatInteraction(messageText, response, sourceIds, quickChip, false);
-  }, [inputValue, sessionId, generateResponse, logChatInteraction]);
+
+    // Auto-save if quality threshold met
+    setTimeout(() => {
+      autoSaveToTextbook(assistantMessage, problemConceptIds);
+    }, 100);
+  }, [inputValue, sessionId, generateResponse, logChatInteraction, autoSaveToTextbook, generateQueryHash]);
 
   // Handle save to notes
   const handleSaveToNotes = useCallback((messageIndex: number) => {
@@ -500,6 +745,7 @@ export function AskMyTextbookChat({
   // Clear chat
   const handleClear = useCallback(() => {
     setMessages([]);
+    autoSavedQueriesRef.current.clear();
   }, []);
 
   const profile = storage.getProfile(learnerId);
@@ -514,7 +760,24 @@ export function AskMyTextbookChat({
   }
 
   return (
-    <Card className="flex flex-col" data-testid="chat-panel">
+    <Card className="flex flex-col relative" data-testid="chat-panel">
+      {/* Toast Notifications */}
+      <div className="fixed top-4 right-4 z-50 space-y-2 pointer-events-none">
+        {toasts.map(toast => (
+          <div
+            key={toast.id}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm font-medium pointer-events-auto transition-all duration-300 ${
+              toast.type === 'success' 
+                ? 'bg-green-600 text-white' 
+                : 'bg-blue-600 text-white'
+            }`}
+          >
+            {toast.type === 'success' && <CheckCircle className="size-4" />}
+            <span>{toast.message}</span>
+          </div>
+        ))}
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b">
         <div className="flex items-center gap-2">
@@ -611,6 +874,14 @@ export function AskMyTextbookChat({
                         <span className="text-[10px] text-gray-500">
                           Grounded in {msg.retrievedSourceIds.length} source{msg.retrievedSourceIds.length !== 1 ? 's' : ''}
                         </span>
+                      )}
+                      
+                      {/* Auto-saved indicator */}
+                      {msg.autoSaved && (
+                        <Badge variant="outline" className="text-[10px] h-5 bg-green-50 text-green-700 border-green-200">
+                          <CheckCircle className="size-3 mr-1" />
+                          Auto-saved
+                        </Badge>
                       )}
                       
                       {/* Save to My Notes button */}

@@ -11,6 +11,7 @@ import { generateWithOllama, OLLAMA_MODEL } from './llm-client';
 import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
 import { renderPrompt, TemplateId } from '../prompts/templates';
 import { storage } from './storage';
+import { calculateQualityScore } from './textbook-units';
 
 export type GenerateUnitOptions = {
   learnerId: string;
@@ -420,7 +421,7 @@ function buildUnitFromStructuredOutput(
   const genericTitle = `Help with ${options.bundle.problemTitle}`;
   const title = output.title?.trim() || genericTitle;
 
-  return {
+  const unit: InstructionalUnit = {
     id: `unit-${options.templateId}-${inputHash}`,
     sessionId: options.sessionId,
     updatedSessionIds: options.sessionId ? [options.sessionId] : [],
@@ -447,8 +448,14 @@ function buildUnitFromStructuredOutput(
       parserRawLength: parseTelemetry.rawLength,
       parserFailureReason: parseTelemetry.failureReason,
       fallbackReason: 'none'
-    }
+    },
+    retrievalCount: 0
   };
+  
+  // Calculate and set quality score
+  unit.qualityScore = calculateQualityScore(unit);
+  
+  return unit;
 }
 
 function buildFallbackUnit(
@@ -489,7 +496,7 @@ function buildFallbackUnit(
 
   const fallbackContent = content;
 
-  return {
+  const unit: InstructionalUnit = {
     id: `unit-${options.templateId}-${inputHash}`,
     sessionId: options.sessionId,
     updatedSessionIds: options.sessionId ? [options.sessionId] : [],
@@ -516,8 +523,14 @@ function buildFallbackUnit(
       parserRawLength: parseTelemetry.rawLength,
       parserFailureReason: parseTelemetry.failureReason,
       fallbackReason
-    }
+    },
+    retrievalCount: 0
   };
+  
+  // Calculate and set quality score
+  unit.qualityScore = calculateQualityScore(unit);
+  
+  return unit;
 }
 
 export function parseTemplateJson(raw: string): TemplateParseResult {

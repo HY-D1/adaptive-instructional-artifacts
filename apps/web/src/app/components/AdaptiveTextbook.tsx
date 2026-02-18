@@ -3,14 +3,15 @@ import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
-import { Book, Trash2, ChevronRight, ChevronDown, Folder, FileText } from 'lucide-react';
+import { Book, Trash2, ChevronRight, ChevronDown, Folder, FileText, Star, ArrowUpDown } from 'lucide-react';
 import { Link } from 'react-router';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { InstructionalUnit, InteractionEvent } from '../types';
 import { storage } from '../lib/storage';
 import { getConceptById } from '../data/sql-engage';
-import { buildTextbookInsights } from '../lib/textbook-insights';
+import { buildTextbookInsights, SortMode } from '../lib/textbook-insights';
+import { isBestQualityUnit, BEST_QUALITY_THRESHOLD } from '../lib/textbook-units';
 
 interface AdaptiveTextbookProps {
   learnerId: string;
@@ -61,6 +62,7 @@ export function AdaptiveTextbook({
 }: AdaptiveTextbookProps) {
   const [textbookUnits, setTextbookUnits] = useState<InstructionalUnit[]>([]);
   const [selectedUnit, setSelectedUnit] = useState<InstructionalUnit | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>('quality');
   const pendingUnitIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -79,9 +81,10 @@ export function AdaptiveTextbook({
   const textbookInsights = useMemo(
     () => buildTextbookInsights({
       units: textbookUnits,
-      interactions: learnerInteractions
+      interactions: learnerInteractions,
+      sortMode
     }),
-    [textbookUnits, learnerInteractions]
+    [textbookUnits, learnerInteractions, sortMode]
   );
   const orderedUnits = textbookInsights.orderedUnits;
 
@@ -263,13 +266,40 @@ export function AdaptiveTextbook({
             <Book className="size-5" />
             My Textbook
           </h3>
-          <Button
-            onClick={handleClear}
-            variant="ghost"
-            size="sm"
-          >
-            <Trash2 className="size-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              onClick={() => setSortMode(prev => {
+                const modes: SortMode[] = ['quality', 'newest', 'oldest', 'prerequisite'];
+                const currentIndex = modes.indexOf(prev);
+                return modes[(currentIndex + 1) % modes.length];
+              })}
+              variant="ghost"
+              size="sm"
+              title={`Sort: ${sortMode}`}
+            >
+              <ArrowUpDown className="size-4" />
+            </Button>
+            <Button
+              onClick={handleClear}
+              variant="ghost"
+              size="sm"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          </div>
+        </div>
+        
+        {/* Sort indicator */}
+        <div className="flex items-center gap-2 mb-3">
+          <Badge variant="outline" className="text-[10px]">
+            Sort: {sortMode}
+          </Badge>
+          <span className="text-xs text-gray-500">
+            {sortMode === 'quality' && 'Best explanations first'}
+            {sortMode === 'newest' && 'Most recent first'}
+            {sortMode === 'oldest' && 'Oldest first'}
+            {sortMode === 'prerequisite' && 'By learning path'}
+          </span>
         </div>
 
         <div className="space-y-2">
@@ -339,20 +369,40 @@ export function AdaptiveTextbook({
                           {/* Units under this problem */}
                           {(isProblemExpanded || !hasMultipleUnits) && (
                             <div className="border-t bg-gray-50/50">
-                              {units.map((unit) => (
-                                <button
-                                  key={unit.id}
-                                  onClick={() => handleUnitSelect(unit)}
-                                  className={`w-full px-3 py-2 text-left text-sm transition-colors ${
-                                    selectedUnit?.id === unit.id
-                                      ? 'bg-blue-100 text-blue-900'
-                                      : 'hover:bg-gray-100 text-gray-700'
-                                  }`}
-                                >
-                                  <span className="capitalize">{unit.type}</span>{' '}
-                                  <span>{unit.title}</span>
-                                </button>
-                              ))}
+                              {units.map((unit) => {
+                                const isBest = isBestQualityUnit(unit);
+                                return (
+                                  <button
+                                    key={unit.id}
+                                    onClick={() => handleUnitSelect(unit)}
+                                    className={`w-full px-3 py-2 text-left text-sm transition-colors ${
+                                      selectedUnit?.id === unit.id
+                                        ? 'bg-blue-100 text-blue-900'
+                                        : 'hover:bg-gray-100 text-gray-700'
+                                    }`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <span className="capitalize">{unit.type}</span>
+                                      {isBest && (
+                                        <Badge 
+                                          variant="default" 
+                                          className="text-[10px] h-5 bg-amber-500 hover:bg-amber-600"
+                                          title={`Quality score: ${((unit.qualityScore ?? 0) * 100).toFixed(0)}%`}
+                                        >
+                                          <Star className="size-3 mr-0.5" />
+                                          Best
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    <span className="block truncate mt-0.5">{unit.title}</span>
+                                    {unit.qualityScore !== undefined && (
+                                      <span className="text-[10px] text-gray-400">
+                                        Score: {((unit.qualityScore) * 100).toFixed(0)}%
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -418,9 +468,20 @@ export function AdaptiveTextbook({
           <div className="prose prose-sm max-w-none">
             <div className="flex items-center gap-2 mb-4">
               <Badge>{selectedUnit.type}</Badge>
+              {isBestQualityUnit(selectedUnit) && (
+                <Badge className="bg-amber-500 hover:bg-amber-600">
+                  <Star className="size-3 mr-1" />
+                  Best Explanation
+                </Badge>
+              )}
               <span className="text-xs text-gray-500">
                 Added {new Date(selectedUnit.addedTimestamp).toLocaleDateString()}
               </span>
+              {selectedUnit.qualityScore !== undefined && (
+                <Badge variant="outline" className="text-xs">
+                  Quality: {((selectedUnit.qualityScore) * 100).toFixed(0)}%
+                </Badge>
+              )}
             </div>
 
             <div className="not-prose mb-4 rounded-lg border bg-slate-50 p-4">

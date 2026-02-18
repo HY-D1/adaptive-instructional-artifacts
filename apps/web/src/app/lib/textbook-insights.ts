@@ -25,6 +25,45 @@ export type TextbookInsights = {
   spacedReviewPrompts: SpacedReviewPrompt[];
 };
 
+export type SortMode = 'prerequisite' | 'quality' | 'newest' | 'oldest';
+
+/**
+ * Sort units by quality score (highest first), then by timestamp
+ */
+export function orderUnitsByQuality(units: InstructionalUnit[]): InstructionalUnit[] {
+  return [...units].sort((a, b) => {
+    const scoreA = a.qualityScore ?? 0;
+    const scoreB = b.qualityScore ?? 0;
+    if (scoreB !== scoreA) {
+      return scoreB - scoreA; // Higher score first
+    }
+    // Tie-breaker: newer units first
+    return (b.updatedTimestamp ?? b.addedTimestamp) - (a.updatedTimestamp ?? a.addedTimestamp);
+  });
+}
+
+/**
+ * Sort units by timestamp (newest first)
+ */
+export function orderUnitsByNewest(units: InstructionalUnit[]): InstructionalUnit[] {
+  return [...units].sort((a, b) => {
+    const timeA = a.updatedTimestamp ?? a.addedTimestamp;
+    const timeB = b.updatedTimestamp ?? b.addedTimestamp;
+    return timeB - timeA;
+  });
+}
+
+/**
+ * Sort units by timestamp (oldest first)
+ */
+export function orderUnitsByOldest(units: InstructionalUnit[]): InstructionalUnit[] {
+  return [...units].sort((a, b) => {
+    const timeA = a.updatedTimestamp ?? a.addedTimestamp;
+    const timeB = b.updatedTimestamp ?? b.addedTimestamp;
+    return timeA - timeB;
+  });
+}
+
 function sanitizeId(value: string): string {
   return value
     .toLowerCase()
@@ -164,9 +203,28 @@ export function buildTextbookInsights(options: {
   units: InstructionalUnit[];
   interactions: InteractionEvent[];
   nowTimestamp?: number;
+  sortMode?: SortMode;
 }): TextbookInsights {
   const nowTimestamp = options.nowTimestamp ?? Date.now();
-  const orderedUnits = orderUnitsByPrerequisite(options.units);
+  
+  // Sort based on selected mode (default to quality-based sorting)
+  let orderedUnits: InstructionalUnit[];
+  switch (options.sortMode) {
+    case 'prerequisite':
+      orderedUnits = orderUnitsByPrerequisite(options.units);
+      break;
+    case 'newest':
+      orderedUnits = orderUnitsByNewest(options.units);
+      break;
+    case 'oldest':
+      orderedUnits = orderUnitsByOldest(options.units);
+      break;
+    case 'quality':
+    default:
+      orderedUnits = orderUnitsByQuality(options.units);
+      break;
+  }
+  
   const misconceptionCards = buildMisconceptionCards(options.interactions);
   const spacedReviewPrompts = buildSpacedReviewPrompts(misconceptionCards, nowTimestamp);
 

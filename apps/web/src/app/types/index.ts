@@ -73,7 +73,9 @@ export type InteractionEvent = {
     | 'textbook_unit_upsert'
     | 'source_view'
     // Week 3 Feature: Ask My Textbook chat
-    | 'chat_interaction';
+    | 'chat_interaction'
+    // Background concept extraction
+    | 'concept_extraction';
   problemId: string;
   code?: string;
   error?: string;
@@ -235,6 +237,10 @@ export type InstructionalUnit = {
     reason: string;
     addedInteractionIds: string[];
   }>; // History of updates with reasons
+  // Quality score for "best explanation" selection (0-1 scale)
+  qualityScore?: number;
+  // Usage metrics for quality calculation
+  retrievalCount?: number; // How many times this unit was retrieved
 };
 
 export type SaveTextbookUnitResult = {
@@ -378,4 +384,56 @@ export type AlignmentMap = {
   unverifiedMappings: number;
   mappings: AlignmentMapEntry[];
   summary: AlignmentMapSummary;
+};
+
+// Trace Analyzer types for continuous background concept extraction
+
+export type PatternType = 'error_subtype' | 'concept_struggle' | 'success_streak';
+
+export type PatternMatch = {
+  type: PatternType;
+  key: string; // e.g., error subtype name
+  frequency: number;
+  confidence: 'high' | 'medium' | 'low';
+  interactions: string[]; // IDs of matching interactions
+  conceptIds: string[];
+  firstSeen: number;
+  lastSeen: number;
+};
+
+export type ConceptGap = {
+  conceptId: string;
+  relatedSubtypes: string[];
+  interactionCount: number;
+  interactionIds: string[];
+  priority: 'high' | 'medium' | 'low';
+};
+
+export type UnitRecommendation = {
+  id: string;
+  type: 'pattern_based' | 'concept_gap' | 'mastery_reinforcement';
+  conceptIds: string[];
+  priority: 'high' | 'medium' | 'low';
+  reason: string;
+  sourcePattern?: PatternMatch;
+  sourceGap?: ConceptGap;
+  suggestedTemplate: 'explanation.v1' | 'notebook_unit.v1';
+  estimatedImpact: number;
+};
+
+export type AnalysisResult = {
+  timestamp: number;
+  learnerId?: string;
+  patterns: PatternMatch[];
+  conceptGaps: ConceptGap[];
+  recommendations: UnitRecommendation[];
+  summary: {
+    totalInteractionsAnalyzed: number;
+    errorCount: number;
+    uniqueErrorSubtypes: number;
+    patternsDetected: number;
+    conceptGapsFound: number;
+    recommendationsGenerated: number;
+    highPriorityRecommendations: number;
+  };
 };
