@@ -106,16 +106,6 @@ export const router = createBrowserRouter([
         Component: StartPage,
       },
       {
-        // Practice page (index)
-        index: true,
-        element: (
-          <StudentRoute>
-            <LearningInterface />
-          </StudentRoute>
-        ),
-        loader: createProtectedLoader({ requiredRole: 'student' }),
-      },
-      {
         path: 'practice',
         element: (
           <StudentRoute>
