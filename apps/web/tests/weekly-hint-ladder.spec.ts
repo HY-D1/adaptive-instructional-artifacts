@@ -105,6 +105,13 @@ test.beforeEach(async ({ page }) => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    // Set up student profile to bypass StartPage role selection
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'test-user',
+      name: 'Test User',
+      role: 'student',
+      createdAt: Date.now()
+    }));
   });
 });
 
@@ -119,8 +126,16 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   // ===========================================================================
 
   test('@weekly hint level progression: 1→2→3 with sequential helpRequestIndex', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
+    await page.goto('/practice');
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
 
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
@@ -513,11 +528,18 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
-      // Intentionally not creating any learner profile
+      // Set up student profile to bypass StartPage
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+      // Intentionally not creating any learner profile for sql-learning
     });
 
-    await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await page.goto('/practice');
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
 
     // The app should still load, but hint system may be disabled
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -547,6 +569,13 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass StartPage
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       // Create a profile but no session
       const profile = {
         id: 'learner-test',
@@ -564,8 +593,8 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
       // Intentionally not setting sql-learning-active-session
     });
 
-    await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await page.goto('/practice');
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
 
     // The app should create a new session automatically
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -582,8 +611,16 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   });
 
   test('@weekly edge case: different error subtypes get different hints', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     // First error type test
-    await page.goto('/');
+    await page.goto('/practice');
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
     // Test with incomplete query

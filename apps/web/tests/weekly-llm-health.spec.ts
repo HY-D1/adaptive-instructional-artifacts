@@ -8,6 +8,13 @@ test('@weekly research: Test LLM reports Ollama down then up', async ({ page }) 
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    // Set up student profile to bypass StartPage role selection
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'test-user',
+      name: 'Test User',
+      role: 'student',
+      createdAt: Date.now()
+    }));
     // Add minimal learner profile so dashboard has data to render
     window.localStorage.setItem('sql-learning-profiles', JSON.stringify([{
       id: 'test-learner',
@@ -65,7 +72,7 @@ test('@weekly research: Test LLM reports Ollama down then up', async ({ page }) 
 
   // Start from home page and navigate to Research
   await page.goto('/', { timeout: 30000 });
-  await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible({ timeout: 10000 });
+  await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible({ timeout: 10000 });
 
   // Navigate to Research page
   await page.getByRole('link', { name: 'Research' }).click();

@@ -79,6 +79,16 @@ async function runPolicyComparison(page: Page) {
 }
 
 async function setupLearnerWithInteractions(page: Page, strategy: string = 'adaptive-medium') {
+  // Seed profile before navigation to bypass StartPage
+  await page.addInitScript(() => {
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'learner-test',
+      name: 'Test Learner',
+      role: 'student',
+      createdAt: Date.now()
+    }));
+  });
+  
   // First navigate to the app to set up the origin
   await page.goto('/');
   
@@ -459,10 +469,17 @@ test('@weekly policy-comparison: session export generates valid JSON', async ({ 
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    // Set up student profile to bypass StartPage role selection
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'test-user',
+      name: 'Test User',
+      role: 'student',
+      createdAt: Date.now()
+    }));
   });
 
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+  await page.goto('/practice');
+  await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
 
   // Generate some interaction data
   const runQueryButton = page.getByRole('button', { name: 'Run Query' });

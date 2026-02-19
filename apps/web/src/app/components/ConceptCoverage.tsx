@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { conceptNodes } from '../data/sql-engage';
 import { storage } from '../lib/storage';
-import { ConceptCoverageEvidence } from '../types';
+import { ConceptCoverageEvidence, LearnerProfile, CoverageStats } from '../types';
 
 interface ConceptCoverageProps {
   learnerId: string;

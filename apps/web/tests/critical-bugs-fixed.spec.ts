@@ -41,6 +41,13 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
   });
 
@@ -54,7 +61,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     });
 
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
 
     // Verify the app doesn't crash with corrupted PDF index
     const storageCheck = await page.evaluate(() => {
@@ -100,11 +107,11 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     });
 
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
 
     // App should handle invalid chunks gracefully
     const appLoaded = await page.evaluate(() => {
-      return document.querySelector('h1')?.textContent?.includes('SQL Learning Lab');
+      return document.querySelector('h1')?.textContent?.includes('SQL-Adapt Learning System');
     });
     expect(appLoaded).toBe(true);
   });
@@ -113,7 +120,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // BUG FIX 2: SQL Type Coercion
   // ===========================================================================
   test('@critical-bugs SQL Type Coercion: numeric string "1" equals number 1 in results', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     // Execute a query that returns numeric results
     await replaceEditorText(page, 'SELECT 1 as num, "hello" as str');
@@ -148,6 +155,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   });
 
   test('@critical-bugs SQL Type Coercion: floating point comparison uses epsilon tolerance', async ({ page }) => {
+    await page.goto('/practice');
     const floatCheck = await page.evaluate(() => {
       const FLOAT_EPSILON = 0.01;
       
@@ -190,7 +198,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // BUG FIX 3: Escalation Timing
   // ===========================================================================
   test('@critical-bugs Escalation Timing: escalation happens AFTER L3 (help request 4), not ON L3', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
@@ -228,7 +236,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   });
 
   test('@critical-bugs Escalation Timing: help request index sequence is 1,2,3,4+', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
@@ -406,6 +414,13 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // ===========================================================================
   test('@critical-bugs Cache Key Uniqueness: cache keys include learnerId to prevent cross-user pollution', async ({ page }) => {
     await page.addInitScript(() => {
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       const now = Date.now();
       // Create cache entries for different learners with same content hash
       const cache = {
@@ -429,7 +444,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
       window.localStorage.setItem('sql-learning-llm-cache', JSON.stringify(cache));
     });
 
-    await page.goto('/');
+    await page.goto('/practice');
 
     // Verify cache entries are isolated by learnerId
     const cacheCheck = await page.evaluate(() => {
@@ -455,7 +470,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // BUG FIX 6: SQL Execution Error Handling
   // ===========================================================================
   test('@critical-bugs SQL Execution Error Handling: syntax errors are caught and displayed', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     await expect(runQueryButton).toBeVisible();
@@ -474,7 +489,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   });
 
   test('@critical-bugs SQL Execution Error Handling: execution errors include errorSubtypeId', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     await replaceEditorText(page, 'SELECT * FROM nonexistent_table_xyz;');
     await page.getByRole('button', { name: 'Run Query' }).click();
@@ -494,7 +509,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // BUG FIX 7: Double Explanation Prevention
   // ===========================================================================
   test('@critical-bugs Double Explanation Prevention: clicking explanation twice only logs once', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
@@ -647,6 +662,13 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     await page.addInitScript(() => {
       // Seed some data to export
       const now = Date.now();
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       window.localStorage.setItem('sql-learning-interactions', JSON.stringify([{
         id: 'evt-1',
         sessionId: 'session-1',
@@ -657,7 +679,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
       }]));
     });
 
-    await page.goto('/');
+    await page.goto('/practice');
 
     // Track blob URLs created
     const blobUrlsCreated: string[] = [];
@@ -709,7 +731,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // BUG FIX 11: Interaction Save with Quota
   // ===========================================================================
   test('@critical-bugs Interaction Save with Quota: quota exceeded is handled gracefully', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
@@ -735,7 +757,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   });
 
   test('@critical-bugs Interaction Save with Quota: saveInteraction returns quota status', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     // Verify saveInteraction signature supports quota handling
     const saveResult = await page.evaluate(() => {
@@ -804,7 +826,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   });
 
   test('@critical-bugs ConceptIds Array: conceptIds are extracted from SQL-Engage subtypes', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
@@ -831,6 +853,13 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     const originalCreatedAt = now - 3600000; // 1 hour ago
     
     await page.addInitScript(({ originalCreatedAt }) => {
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       const cache = {
         'learner-1:select-basic:hash123': {
           cacheKey: 'learner-1:select-basic:hash123',
@@ -861,7 +890,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
       window.localStorage.setItem('sql-learning-llm-cache', JSON.stringify(cache));
     }, { originalCreatedAt });
 
-    await page.goto('/');
+    await page.goto('/practice');
 
     // Verify cache structure includes provenance
     const cacheCheck = await page.evaluate(() => {
@@ -888,7 +917,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // ===========================================================================
   test('@critical-bugs Error Boundary: errors are caught and displayed gracefully', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
 
     // Verify the app has error boundary by checking the DOM structure
     // The ErrorBoundary component renders a specific error UI when there's an error
@@ -906,7 +935,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     });
 
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
 
     // App should not show error boundary fallback for this recoverable error
     const isErrorBoundaryVisible = await page.locator('text=Something went wrong').isVisible().catch(() => false);
@@ -914,7 +943,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   });
 
   test('@critical-bugs Error Boundary: error boundary renders fallback UI on component errors', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     // Verify error boundary fallback UI structure exists in the app
     // by checking if the error boundary component is properly configured
@@ -946,10 +975,17 @@ test.describe('@critical-bugs Integration Tests for Critical Bug Fixes', () => {
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
 
-    await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await page.goto('/practice');
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
 
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     

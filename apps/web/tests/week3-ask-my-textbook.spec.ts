@@ -49,7 +49,7 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
   });
 
   test('chat panel opens and shows quick chips', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     // Wait for React to render
     await page.waitForTimeout(1000);
@@ -61,7 +61,7 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
   });
 
   test('explain my last error - detects SQL errors', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     await page.waitForTimeout(1000);
 
     await page.locator('.monaco-editor .view-lines').first().click();
@@ -76,7 +76,7 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
   });
 
   test('what concept - shows current problem concepts', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     await page.waitForTimeout(1000);
 
     await page.getByRole('button', { name: 'What concept is this?' }).click();
@@ -86,7 +86,7 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
   });
 
   test('give me a hint - provides contextual hint', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     await page.waitForTimeout(1000);
 
     await page.getByRole('button', { name: 'Give me a hint' }).click();
@@ -96,7 +96,7 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
   });
 
   test('chat interaction events logged', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     await page.waitForTimeout(1000);
 
     await page.getByRole('button', { name: 'What concept is this?' }).click();

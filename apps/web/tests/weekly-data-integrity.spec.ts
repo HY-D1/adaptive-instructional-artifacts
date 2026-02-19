@@ -86,6 +86,13 @@ async function seedValidSessionData(page: Page, learnerId: string = 'learner-tes
   const now = Date.now();
   
   await page.addInitScript((data) => {
+    // Set up student profile to bypass role selection
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'test-user',
+      name: 'Test User',
+      role: 'student',
+      createdAt: Date.now()
+    }));
     const { sessionId, learnerId, now } = data;
     
     const interactions = [
@@ -228,8 +235,8 @@ test.describe('@weekly data-integrity: LocalStorage corruption handling', () => 
       window.localStorage.setItem('sql-learning-interactions', '{broken-json');
     });
 
-    await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await page.goto('/practice');
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
     
     const interactions = await page.evaluate(() => {
       const raw = window.localStorage.getItem('sql-learning-interactions');
@@ -246,7 +253,7 @@ test.describe('@weekly data-integrity: LocalStorage corruption handling', () => 
     });
 
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
     
     const profiles = await page.evaluate(() => {
       const raw = window.localStorage.getItem('sql-learning-profiles');
@@ -263,7 +270,7 @@ test.describe('@weekly data-integrity: LocalStorage corruption handling', () => 
     });
 
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
     
     const textbooks = await page.evaluate(() => {
       const raw = window.localStorage.getItem('sql-learning-textbook');
@@ -287,7 +294,7 @@ test.describe('@weekly data-integrity: LocalStorage corruption handling', () => 
     });
     
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     await expect(runQueryButton).toBeVisible();
@@ -302,7 +309,7 @@ test.describe('@weekly data-integrity: LocalStorage corruption handling', () => 
     });
 
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
     
     // Verify app loads even with corrupted interactions
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -331,7 +338,7 @@ test.describe('@weekly data-integrity: Event schema validation', () => {
     await seedValidSessionData(page, 'learner-schema-test');
     
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
     
     const validation = await page.evaluate(() => {
       const raw = window.localStorage.getItem('sql-learning-interactions');
@@ -380,7 +387,7 @@ test.describe('@weekly data-integrity: Event schema validation', () => {
   test('timestamps are valid numbers', async ({ page }) => {
     await seedValidSessionData(page, 'learner-timestamp-test');
     
-    await page.goto('/');
+    await page.goto('/practice');
     
     const timestampValidation = await page.evaluate(() => {
       const raw = window.localStorage.getItem('sql-learning-interactions');
@@ -493,6 +500,8 @@ test.describe('@weekly data-integrity: Data consistency', () => {
     await seedValidSessionData(page, 'learner-consistency-test');
     
     await page.goto('/textbook');
+    // Textbook page doesn't need role profile - it uses query param
+    await expect(page.getByRole('heading', { name: 'My Textbook', level: 1 })).toBeVisible({ timeout: 30000 });
     await expect(page.getByRole('heading', { name: 'My Textbook', level: 1 })).toBeVisible();
     
     const consistencyCheck = await page.evaluate(() => {
@@ -522,7 +531,7 @@ test.describe('@weekly data-integrity: Data consistency', () => {
   test('profile data matches interaction counts', async ({ page }) => {
     await seedValidSessionData(page, 'learner-profile-match-test');
     
-    await page.goto('/');
+    await page.goto('/practice');
     
     const profileConsistency = await page.evaluate(() => {
       const rawInteractions = window.localStorage.getItem('sql-learning-interactions');
@@ -558,7 +567,7 @@ test.describe('@weekly data-integrity: Data consistency', () => {
   test('export data structure is valid', async ({ page }) => {
     await seedValidSessionData(page, 'learner-export-test');
     
-    await page.goto('/');
+    await page.goto('/practice');
     
     // Verify export data structure through localStorage directly
     const exportIntegrity = await page.evaluate(() => {
@@ -598,6 +607,13 @@ test.describe('@weekly data-integrity: Data consistency', () => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       const now = Date.now();
       const profiles = [
@@ -677,7 +693,7 @@ test.describe('@weekly data-integrity: Export/Import roundtrip', () => {
   test('export data can be saved and restored', async ({ page }) => {
     await seedValidSessionData(page, 'learner-roundtrip-test');
     
-    await page.goto('/');
+    await page.goto('/practice');
     
     // Get data from localStorage (simulating export)
     const exportedData = await page.evaluate(() => {
@@ -725,7 +741,7 @@ test.describe('@weekly data-integrity: Export/Import roundtrip', () => {
   test('cross-session data merge preserves existing data', async ({ page }) => {
     await seedValidSessionData(page, 'learner-merge-test');
     
-    await page.goto('/');
+    await page.goto('/practice');
     
     const originalData = await page.evaluate(() => {
       return {
@@ -768,9 +784,16 @@ test.describe('@weekly data-integrity: Export/Import roundtrip', () => {
       window.localStorage.removeItem('sql-learning-interactions');
       window.localStorage.removeItem('sql-learning-profiles');
       window.localStorage.removeItem('sql-learning-textbook');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
     
-    await page.goto('/');
+    await page.goto('/practice');
     
     const emptyExport = await page.evaluate(() => {
       const rawInteractions = window.localStorage.getItem('sql-learning-interactions');
@@ -810,9 +833,16 @@ test.describe('@weekly data-integrity: Export/Import roundtrip', () => {
         problemId: 'problem-1'
       }]));
       window.localStorage.setItem('sql-learning-active-session', sessionId);
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     }, testSessionId);
     
-    await page.goto('/');
+    await page.goto('/practice');
     
     // Verify session was restored
     const restoredSessionId = await page.evaluate(() => {
@@ -833,6 +863,13 @@ test.describe('@weekly data-integrity: Multi-learner isolation', () => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       const now = Date.now();
       
@@ -891,6 +928,13 @@ test.describe('@weekly data-integrity: Multi-learner isolation', () => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       const now = Date.now();
       
@@ -953,6 +997,13 @@ test.describe('@weekly data-integrity: Multi-learner isolation', () => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       const now = Date.now();
       
@@ -1111,9 +1162,16 @@ test.describe('@weekly data-integrity: Session management', () => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
     
-    await page.goto('/');
+    await page.goto('/practice');
     
     const sessionSwitch = await page.evaluate(() => {
       const session1 = `session-original-${Date.now()}`;
@@ -1147,14 +1205,21 @@ test.describe('@weekly data-integrity: Error handling', () => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
     
     await page.route('**/ollama/**', async (route) => {
       await route.abort('failed');
     });
     
-    await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await page.goto('/practice');
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     await expect(runQueryButton).toBeVisible();
@@ -1169,9 +1234,16 @@ test.describe('@weekly data-integrity: Error handling', () => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
     
-    await page.goto('/');
+    await page.goto('/practice');
     
     // Mock the LLM endpoint to return invalid JSON
     await page.route('**/ollama/api/generate', async (route) => {
@@ -1182,7 +1254,7 @@ test.describe('@weekly data-integrity: Error handling', () => {
       });
     });
     
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     await runUntilErrorCount(page, runQueryButton, 1);
@@ -1198,9 +1270,16 @@ test.describe('@weekly data-integrity: Error handling', () => {
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
       // Enable replay mode to use deterministic content (no LLM timeout)
       window.localStorage.setItem('sql-learning-policy-replay-mode', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
     
-    await page.goto('/');
+    await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     await runUntilErrorCount(page, runQueryButton, 1);
@@ -1224,10 +1303,17 @@ test.describe('@weekly data-integrity: Error handling', () => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
       window.localStorage.setItem('sql-learning-policy-replay-mode', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
     
-    await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await page.goto('/practice');
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     await runUntilErrorCount(page, runQueryButton, 1);
@@ -1481,6 +1567,13 @@ test.describe('@weekly data-integrity: Performance', () => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       const now = Date.now();
       const interactions = [];
@@ -1503,8 +1596,8 @@ test.describe('@weekly data-integrity: Performance', () => {
     });
     
     const loadStart = Date.now();
-    await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await page.goto('/practice');
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
     const loadTime = Date.now() - loadStart;
     
     expect(loadTime).toBeLessThan(5000);
@@ -1517,6 +1610,13 @@ test.describe('@weekly data-integrity: Performance', () => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       const now = Date.now();
       const units = [];
@@ -1560,9 +1660,16 @@ test.describe('@weekly data-integrity: Performance', () => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
     
-    await page.goto('/');
+    await page.goto('/practice');
     
     // Seed data after page load to avoid app-generated events
     await page.evaluate(() => {
@@ -1674,7 +1781,7 @@ test.describe('@weekly data-integrity: State synchronization', () => {
     
     // Reload the page - init script won't run again, so data should persist
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
     
     // Verify data persisted after reload
     const afterReload = await page.evaluate((m) => {

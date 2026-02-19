@@ -63,13 +63,19 @@ async function runScenario(browser: Browser, replayMode: boolean): Promise<Norma
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
     window.localStorage.setItem('sql-learning-policy-replay-mode', JSON.stringify(mode));
+    // Set up student profile to bypass StartPage role selection
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'test-user',
+      name: 'Test User',
+      role: 'student',
+      createdAt: Date.now()
+    }));
   }, replayMode);
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
-
-  const runQueryButton = page.getByRole('button', { name: 'Run Query' });
-  await expect(runQueryButton).toBeVisible();
+  // After profile seeding, should redirect to practice page
+  await expect(page).toHaveURL(/\/(practice)?$/, { timeout: 15000 });
+  await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible({ timeout: 15000 });
 
   await replaceEditorText(page, 'SELECT FROM users;');
   await runUntilErrorCount(page, runQueryButton, 1);

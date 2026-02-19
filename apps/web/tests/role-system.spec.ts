@@ -100,7 +100,7 @@ test.describe('@weekly Role System', () => {
       
       // Assert - Redirected to practice page
       await expect(page).toHaveURL(/\/practice$/);
-      await expect(page.getByText('SQL Learning Lab')).toBeVisible();
+      await expect(page.getByText('SQL-Adapt Learning System')).toBeVisible();
     });
 
     test('submit with Instructor role redirects to /instructor-dashboard', async ({ page }) => {
@@ -383,7 +383,7 @@ test.describe('@weekly Role System', () => {
       
       // Assert - Auto-redirected to practice
       await expect(page).toHaveURL(/\/practice$/);
-      await expect(page.getByText('SQL Learning Lab')).toBeVisible();
+      await expect(page.getByText('SQL-Adapt Learning System')).toBeVisible();
     });
 
     test('returning Instructor is auto-redirected from / to /instructor-dashboard', async ({ page }) => {
@@ -420,7 +420,7 @@ test.describe('@weekly Role System', () => {
       
       // Assert - Still on practice page (profile persisted)
       await expect(page).toHaveURL(/\/practice$/);
-      await expect(page.getByText('SQL Learning Lab')).toBeVisible();
+      await expect(page.getByText('SQL-Adapt Learning System')).toBeVisible();
     });
 
     test('logout clears profile and redirects to /', async ({ page }) => {

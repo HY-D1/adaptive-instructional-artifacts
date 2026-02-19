@@ -30,9 +30,16 @@ test('@weekly smoke: practice editor draft persists across textbook navigation',
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    // Set up student profile to bypass role selection
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'test-user',
+      name: 'Test User',
+      role: 'student',
+      createdAt: Date.now()
+    }));
   });
 
-  await page.goto('/');
+  await page.goto('/practice');
   await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
 
   const marker = 'keep-me-week2-draft-persistence';
@@ -54,11 +61,18 @@ test('@weekly smoke: hint ladder -> escalate -> add/update note -> textbook evid
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    // Set up student profile to bypass role selection
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'test-user',
+      name: 'Test User',
+      role: 'student',
+      createdAt: Date.now()
+    }));
   });
 
-  await page.goto('/');
+  await page.goto('/practice');
 
-  await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Guidance Ladder' })).toBeVisible();
 
   const runQueryButton = page.getByRole('button', { name: 'Run Query' });

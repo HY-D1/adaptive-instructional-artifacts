@@ -211,10 +211,19 @@ test('@parser-batch parser reliability: malformed output degrades safely with fa
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    // Set up student profile to bypass StartPage role selection
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'test-user',
+      name: 'Test User',
+      role: 'student',
+      createdAt: Date.now()
+    }));
   });
 
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+  await page.goto('/practice');
+  // Should be on practice page
+  await expect(page).toHaveURL(/\/practice$/, { timeout: 15000 });
+  await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible({ timeout: 15000 });
 
   await runUntilErrorCount(page, 3);
   const showExplanationButton = page.getByRole('button', { name: 'Show Explanation' });
@@ -236,7 +245,7 @@ test('@parser-batch parser reliability: malformed output degrades safely with fa
   expect(parseSuccessRate).toBeGreaterThan(62.5);
   expect(safeFallbackCount).toBe(parseFailureCount);
   expect(pageErrors).toEqual([]);
-  await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
 
   console.log(
     `[parser-batch] total=${generations.length} parse_success=${parseSuccessCount} parse_failure=${parseFailureCount} parse_success_rate=${parseSuccessRate}%`

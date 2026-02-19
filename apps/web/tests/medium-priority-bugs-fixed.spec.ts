@@ -49,6 +49,13 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
   });
 
@@ -57,7 +64,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   test('@medium-priority-bugs Missing useEffect Dependency: problem changes reload draft', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
 
     // Type some code in the editor
     const editorSurface = page.locator('.monaco-editor .view-lines').first();
@@ -93,7 +100,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     // with the active learner and session
     
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
     
     // Get the current learner and session (app will initialize with defaults)
     const stateBefore = await page.evaluate(() => ({
@@ -145,7 +152,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // BUG FIX 2: Quota in Practice Draft
   // ===========================================================================
   test('@medium-priority-bugs Quota in Practice Draft: save returns quota status', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const quotaTest = await page.evaluate(() => {
       // Simulate the savePracticeDraft behavior
@@ -169,7 +176,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   });
 
   test('@medium-priority-bugs Quota in Practice Draft: clear handles quota exceeded', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const clearTest = await page.evaluate(() => {
       // Simulate clear behavior with quota handling
@@ -194,7 +201,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // BUG FIX 3: Export Sanitization
   // ===========================================================================
   test('@medium-priority-bugs Export Sanitization: validates required interaction fields', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const validationTest = await page.evaluate(() => {
       // Test field validation logic
@@ -225,7 +232,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   });
 
   test('@medium-priority-bugs Export Sanitization: normalizes corrupted event data', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const normalizationTest = await page.evaluate(() => {
       // Simulate normalization logic from storage.ts
@@ -269,7 +276,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     });
 
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
 
     // Verify app doesn't crash with corrupted evidence
     // Use polling for resilience in case app takes time to render
@@ -279,14 +286,14 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
       });
       return headingText;
     }, {
-      message: 'App should load with heading containing SQL Learning Lab',
+      message: 'App should load with heading containing SQL-Adapt Learning System',
       timeout: 10000,
       intervals: [200, 500, 1000]
-    }).toContain('SQL Learning Lab');
+    }).toContain('SQL-Adapt Learning System');
   });
 
   test('@medium-priority-bugs Evidence Map Validation: filters invalid evidence entries', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const evidenceFilterTest = await page.evaluate(() => {
       // Simulate evidence filtering logic
@@ -323,7 +330,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // BUG FIX 5: Multiple Result Sets
   // ===========================================================================
   test('@medium-priority-bugs Multiple Result Sets: returns allResults for multi-statement queries', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const multiResultTest = await page.evaluate(() => {
       // Simulate SQL executor behavior with multiple results
@@ -348,7 +355,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   });
 
   test('@medium-priority-bugs Multiple Result Sets: empty results return empty allResults array', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const emptyResultTest = await page.evaluate(() => {
       // Simulate empty result handling
@@ -368,7 +375,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // BUG FIX 6: Type Safety
   // ===========================================================================
   test('@medium-priority-bugs Type Safety: normalizeValue handles all types', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const typeTest = await page.evaluate(() => {
       function normalizeValue(value: unknown): string {
@@ -397,7 +404,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   });
 
   test('@medium-priority-bugs Type Safety: valuesEqual handles type coercion', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const equalityTest = await page.evaluate(() => {
       const FLOAT_EPSILON = 0.01;
@@ -442,7 +449,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // BUG FIX 7: CSV Edge Cases
   // ===========================================================================
   test('@medium-priority-bugs CSV Edge Cases: handles commas in quoted fields', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const csvTest = await page.evaluate(() => {
       function parseCsvLine(line: string): string[] {
@@ -495,7 +502,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   });
 
   test('@medium-priority-bugs CSV Edge Cases: handles empty quoted fields', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const emptyFieldTest = await page.evaluate(() => {
       function parseCsvLine(line: string): string[] {
@@ -535,7 +542,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // BUG FIX 8: Subtype Aliases
   // ===========================================================================
   test('@medium-priority-bugs Subtype Aliases: maps common error aliases to canonical subtypes', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const aliasTest = await page.evaluate(() => {
       const SUBTYPE_ALIASES: Record<string, string> = {
@@ -579,7 +586,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   });
 
   test('@medium-priority-bugs Subtype Aliases: preserves unrecognized subtypes as-is', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const unrecognizedTest = await page.evaluate(() => {
       const SUBTYPE_ALIASES: Record<string, string> = {};
@@ -605,7 +612,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // BUG FIX 9: ruleFired Metadata
   // ===========================================================================
   test('@medium-priority-bugs ruleFired Metadata: hint events include ruleFired', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
@@ -632,7 +639,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   });
 
   test('@medium-priority-bugs ruleFired Metadata: escalation events include ruleFired', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
@@ -673,7 +680,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // BUG FIX 10: UI Confidence Legend
   // ===========================================================================
   test('@medium-priority-bugs UI Confidence Legend: thresholds match backend values', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const thresholdTest = await page.evaluate(() => {
       // Backend confidence thresholds
@@ -722,7 +729,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // BUG FIX 11: Coverage Event Logging
   // ===========================================================================
   test('@medium-priority-bugs Coverage Event Logging: logs scoreDelta and previousConfidence', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     // Simulate coverage change
     const coverageTest = await page.evaluate(() => {
@@ -752,7 +759,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   });
 
   test('@medium-priority-bugs Coverage Event Logging: includes totalEvidence count', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const evidenceCountTest = await page.evaluate(() => {
       const evidenceCounts = {
@@ -784,7 +791,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // BUG FIX 12: Title Uses LLM Output
   // ===========================================================================
   test('@medium-priority-bugs Title Uses LLM Output: uses LLM title when available', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const titleTest = await page.evaluate(() => {
       // Simulate title selection logic
@@ -814,7 +821,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // BUG FIX 13: PDF Citation Pages
   // ===========================================================================
   test('@medium-priority-bugs PDF Citation Pages: invalid pages default to 1', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const pageTest = await page.evaluate(() => {
       function normalizePage(page: any): number {
@@ -846,7 +853,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // BUG FIX 14: Source Filtering Warning
   // ===========================================================================
   test('@medium-priority-bugs Source Filtering Warning: filters unknown source IDs', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const sourceFilterTest = await page.evaluate(() => {
       const retrievedSourceIds = new Set(['pdf:doc1:p1:c1', 'sql-engage:row1', 'valid-source']);
@@ -878,7 +885,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // BUG FIX 15: PDF Passage Dedup
   // ===========================================================================
   test('@medium-priority-bugs PDF Passage Dedup: removes duplicate chunks', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const dedupTest = await page.evaluate(() => {
       const passages = [
@@ -969,7 +976,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   });
 
   test('@medium-priority-bugs LLM Params Validation: ensures positive timeout', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
 
     const timeoutTest = await page.evaluate(() => {
       const DEFAULT_TIMEOUT = 25000;
@@ -1396,7 +1403,7 @@ test.describe('@medium-priority-bugs Integration Tests', () => {
 
   test('complete flow with all medium-priority bug fixes', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
 
     // Create an interaction
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });

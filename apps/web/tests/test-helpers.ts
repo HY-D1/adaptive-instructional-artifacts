@@ -155,3 +155,38 @@ export async function setupTest(page: Page) {
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
   });
 }
+
+// =============================================================================
+// StartPage Flow Helpers
+// =============================================================================
+
+/**
+ * Complete the StartPage authentication flow for tests
+ * - Waits for StartPage heading
+ * - Enters username
+ * - Selects Student role
+ * - Clicks Get Started
+ * - Waits for navigation to complete
+ * 
+ * Use this helper when tests need to authenticate via StartPage before
+ * accessing protected routes. For tests that bypass auth (seeded storage),
+ * this is not needed.
+ */
+export async function completeStartPageFlow(page: Page, username: string = 'TestStudent') {
+  // Wait for StartPage heading
+  await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible({ timeout: 10000 });
+  
+  // Enter username
+  await page.getByPlaceholder('Enter your username').fill(username);
+  
+  // Select Student role
+  const studentCard = page.locator('.cursor-pointer').filter({ hasText: 'Student' });
+  await studentCard.click();
+  
+  // Click Get Started
+  await page.getByRole('button', { name: 'Get Started' }).click();
+  
+  // Wait for navigation to complete (redirects to /practice for students)
+  await expect(page).toHaveURL(/\/(practice)?$/, { timeout: 15000 });
+  await page.waitForLoadState('domcontentloaded');
+}

@@ -282,9 +282,16 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass StartPage role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
     // Ensure clean state by reloading page context
-    await page.goto('/ ');
+    await page.goto('/practice');
   });
 
   // ============================================================================
@@ -796,9 +803,18 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
   // ============================================================================
   
   test('concept coverage component renders in research dashboard', async ({ page }) => {
+    // Set up student profile to bypass StartPage role selection before navigating
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     // Navigate to app first to initialize it, then set up data
-    await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await page.goto('/practice');
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
     
     // Set up data after app initialization using page.evaluate
     await page.evaluate(() => {

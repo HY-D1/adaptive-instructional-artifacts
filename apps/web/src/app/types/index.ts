@@ -174,6 +174,29 @@ export type LearnerProfile = {
   };
 };
 
+export type CoverageStats = {
+  totalConcepts: number;
+  coveredCount: number;
+  coveragePercentage: number;
+  byConfidence: Record<'low' | 'medium' | 'high', number>;
+  averageScore: number;
+  // Enhanced coverage metrics
+  scoreDistribution: {
+    '0-25': number;
+    '26-50': number;
+    '51-75': number;
+    '76-100': number;
+  };
+  totalEvidenceCount: number;
+  evidenceBreakdown: {
+    successfulExecution: number;
+    notesAdded: number;
+    explanationViewed: number;
+    hintViewed: number;
+    errorEncountered: number;
+  };
+};
+
 export type LLMGenerationParams = {
   temperature: number;
   top_p: number;

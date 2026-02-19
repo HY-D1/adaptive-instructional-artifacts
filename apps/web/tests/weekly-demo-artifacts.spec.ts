@@ -36,6 +36,31 @@ async function getEditorText(page: Page): Promise<string> {
   return page.locator('.monaco-editor .view-lines').first().innerText();
 }
 
+/**
+ * Helper to complete the StartPage flow
+ * - Enter username
+ * - Select Student role
+ * - Click Get Started
+ */
+async function completeStartPageFlow(page: Page, username: string = 'TestStudent') {
+  // Wait for StartPage heading
+  await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible({ timeout: 10000 });
+  
+  // Enter username
+  await page.getByPlaceholder('Enter your username').fill(username);
+  
+  // Select Student role
+  const studentCard = page.locator('.cursor-pointer').filter({ hasText: 'Student' });
+  await studentCard.click();
+  
+  // Click Get Started
+  await page.getByRole('button', { name: 'Get Started' }).click();
+  
+  // Wait for navigation to complete (redirects to /practice which is the default for students)
+  await expect(page).toHaveURL(/\/(practice)?$/, { timeout: 15000 });
+  await page.waitForLoadState('domcontentloaded');
+}
+
 test('week2 demo artifacts: real nav flow + active-session export json and screenshots', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
@@ -45,7 +70,10 @@ test('week2 demo artifacts: real nav flow + active-session export json and scree
   });
 
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+  
+  // Complete the StartPage flow with role selection
+  await completeStartPageFlow(page, 'DemoStudent');
+  
   // Wait for app to fully initialize before interacting
   await page.waitForTimeout(600);
 

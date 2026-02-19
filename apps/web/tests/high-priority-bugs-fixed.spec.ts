@@ -43,6 +43,13 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
   });
 
@@ -71,7 +78,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     }, { learnerId: testLearnerId, sessionId: testSessionId });
     
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
     
     // Trigger an error and request a hint
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -92,7 +99,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   });
 
   test('@high-priority-bugs Stale Session ID: session change clears hint flow state', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     await replaceEditorText(page, 'SELECT');
@@ -118,7 +125,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     
     // Reload to simulate new session context
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
     
     // Hint flow should be reset for new session
     // The app may have updated the session, just verify it's different from first
@@ -243,7 +250,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // BUG FIX 3: Profile Save Race Condition
   // ===========================================================================
   test('@high-priority-bugs Profile Save Race: concurrent updates preserve all data', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     await seedValidProfile(page, 'learner-race-test');
     
     // Simulate concurrent profile updates
@@ -290,7 +297,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   });
 
   test('@high-priority-bugs Profile Save Race: version-based optimistic locking works', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     // Seed profile with version
     await page.evaluate(() => {
@@ -317,7 +324,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // BUG FIX 4: Import Validation
   // ===========================================================================
   test('@high-priority-bugs Import Validation: rejects non-object data', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const validationResults = await page.evaluate(() => {
       const results: string[] = [];
@@ -349,7 +356,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   });
 
   test('@high-priority-bugs Import Validation: validates required interaction fields', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const validationResults = await page.evaluate(() => {
       const testCases = [
@@ -373,7 +380,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   });
 
   test('@high-priority-bugs Import Validation: validates profile structure', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const validationResults = await page.evaluate(() => {
       const profiles = [
@@ -394,7 +401,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   });
 
   test('@high-priority-bugs Import Validation: validates textbooks object structure', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const validationResults = await page.evaluate(() => {
       const testCases = [
@@ -420,7 +427,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // BUG FIX 5: Evidence Deep Clone
   // ===========================================================================
   test('@high-priority-bugs Evidence Deep Clone: mutations do not affect stored evidence', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     // Seed profile with evidence
     await page.evaluate(() => {
@@ -473,7 +480,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   });
 
   test('@high-priority-bugs Evidence Deep Clone: deep cloning preserves evidence isolation', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const cloneTest = await page.evaluate(() => {
       // Create evidence object
@@ -513,7 +520,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // BUG FIX 6: DML Grading
   // ===========================================================================
   test('@high-priority-bugs DML Grading: failed DML returns match: false', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     // Test DML statement that should fail
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -530,7 +537,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   });
 
   test('@high-priority-bugs DML Grading: DELETE with no matching rows handled correctly', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const gradingTest = await page.evaluate(() => {
       // Simulate the valuesEqual function from sql-executor
@@ -570,7 +577,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // BUG FIX 7: Result Order Independent
   // ===========================================================================
   test('@high-priority-bugs Result Order Independent: row order does not matter in comparison', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const comparisonTest = await page.evaluate(() => {
       // Simulate the compareResults logic from sql-executor
@@ -644,7 +651,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   });
 
   test('@high-priority-bugs Result Order Independent: duplicate rows handled correctly', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const duplicateTest = await page.evaluate(() => {
       function normalizeValue(value: any): string {
@@ -710,7 +717,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // BUG FIX 8: Schema Parsing with Semicolons in Strings
   // ===========================================================================
   test('@high-priority-bugs Schema Parsing: semicolons in strings do not break parsing', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const parsingTest = await page.evaluate(() => {
       // Test schema with semicolons inside string literals
@@ -768,7 +775,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   });
 
   test('@high-priority-bugs Schema Parsing: escaped quotes handled correctly', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const quoteTest = await page.evaluate(() => {
       const schema = `
@@ -794,7 +801,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // BUG FIX 9: Missing 17 Subtypes (All 23 subtypes have ladder guidance)
   // ===========================================================================
   test('@high-priority-bugs Missing 17 Subtypes: all 23 canonical subtypes have ladder guidance', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const subtypeTest = await page.evaluate(() => {
       // These are the 23 canonical subtypes from sql-engage.ts
@@ -840,7 +847,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   });
 
   test('@high-priority-bugs Missing 17 Subtypes: guidance has 3 levels for each subtype', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const guidanceTest = await page.evaluate(() => {
       // Test that hint level mapping works for various subtypes
@@ -872,7 +879,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // BUG FIX 10: Subtype Reset (Hint flow doesn't reset incorrectly)
   // ===========================================================================
   test('@high-priority-bugs Subtype Reset: hint flow does not reset on same problem', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
@@ -901,7 +908,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   });
 
   test('@high-priority-bugs Subtype Reset: hint flow resets on problem change', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
@@ -923,7 +930,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // BUG FIX 11: Consistent Index (Help indices are consistent)
   // ===========================================================================
   test('@high-priority-bugs Consistent Index: help indices are sequential without gaps', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
@@ -963,7 +970,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   });
 
   test('@high-priority-bugs Consistent Index: no duplicate help indices', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
@@ -995,7 +1002,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // BUG FIX 12: Coverage Stats (All 6 concepts are counted)
   // ===========================================================================
   test('@high-priority-bugs Coverage Stats: all 6 concepts are included in stats', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/practice');
     
     const coverageTest = await page.evaluate(() => {
       // The 6 core concept node IDs
@@ -1122,7 +1129,7 @@ test.describe('@high-priority-bugs Integration Tests', () => {
 
   test('complete learning flow with all high-priority bug fixes', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL Learning Lab' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
 
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
