@@ -28,6 +28,7 @@ AGENTS.md
 docs/pdf-sources
 docs/week2_progress.md
 docs/
+bugs/
 
 # Agent/LLM conversation files (temporary context)
 *.llm-context.md

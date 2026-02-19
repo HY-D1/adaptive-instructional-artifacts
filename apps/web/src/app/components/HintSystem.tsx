@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 
-import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
+import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen, Loader2, HelpCircle, Sparkles } from 'lucide-react';
 import { HelpEventType, InteractionEvent } from '../types';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { storage } from '../lib/storage';
@@ -20,15 +21,27 @@ import {
 } from './SourceViewer';
 import { getConceptFromRegistry } from '../data';
 
+/**
+ * Props for the HintSystem component
+ */
 interface HintSystemProps {
+  /** Optional session ID for grouping interactions */
   sessionId?: string;
+  /** Unique identifier for the learner */
   learnerId: string;
+  /** ID of the current problem being solved */
   problemId: string;
+  /** Error subtype identifier for targeted hints */
   errorSubtypeId?: string;
+  /** Whether instructor subtype override is active */
   isSubtypeOverrideActive?: boolean;
+  /** Subtype override value from instructor mode */
   knownSubtypeOverride?: string;
+  /** Recent interaction events for context */
   recentInteractions: InteractionEvent[];
+  /** Callback when escalation to explanation occurs */
   onEscalate?: (sourceInteractionIds?: string[]) => void;
+  /** Callback when a new interaction is logged */
   onInteractionLogged?: (event: InteractionEvent) => void;
 }
 
@@ -53,6 +66,7 @@ export function HintSystem({
   const [conceptIds, setConceptIds] = useState<string[]>([]);
   const [showSourceViewer, setShowSourceViewer] = useState(false);
   const [isAddingToTextbook, setIsAddingToTextbook] = useState(false);
+  const [isProcessingHint, setIsProcessingHint] = useState(false);
   const MAX_DEDUPE_KEYS = 1000; // Prevent unbounded set growth
   
   // Guidance Ladder constants
@@ -63,7 +77,6 @@ export function HintSystem({
   const nextHelpRequestIndexRef = useRef(1);
   const emittedHelpEventKeysRef = useRef<Set<string>>(new Set());
   const helpEventSequenceRef = useRef(0);
-  const isProcessingHintRef = useRef(false);
 
   const profile = useMemo(() => storage.getProfile(learnerId), [learnerId]);
   const scopedInteractions = useMemo(
@@ -94,7 +107,7 @@ export function HintSystem({
     nextHelpRequestIndexRef.current = 1;
     emittedHelpEventKeysRef.current = new Set();
     helpEventSequenceRef.current = 0;
-    isProcessingHintRef.current = false;
+    setIsProcessingHint(false);
   };
 
   // Week 3 D7: Handle "Add to My Textbook" (learner-initiated rung 3)
@@ -324,7 +337,9 @@ export function HintSystem({
         setShowExplanation(true);
       }
     }
-  }, [problemId, learnerId, sessionId]); // Remove recentInteractions to prevent infinite loops
+  }, [problemId, learnerId, sessionId]);
+  // Note: recentInteractions is intentionally omitted from deps to prevent infinite loops.
+  // This effect loads historical data once on mount/problem change, not on every interaction update.
 
   /**
    * Get the hint selection for a specific help request index.
@@ -395,10 +410,10 @@ export function HintSystem({
       return;
     }
     // Prevent race conditions from double-clicks
-    if (isProcessingHintRef.current) {
+    if (isProcessingHint) {
       return;
     }
-    isProcessingHintRef.current = true;
+    setIsProcessingHint(true);
 
     // Week 3 D8: Log guidance request event
     storage.logGuidanceRequest({
@@ -413,16 +428,16 @@ export function HintSystem({
     const nextHelpRequestIndex = allocateNextHelpRequestIndex(problemTrace);
     if (nextHelpRequestIndex >= 4) {
       handleShowExplanation('auto', nextHelpRequestIndex, problemTrace);
-      isProcessingHintRef.current = false;
+      setIsProcessingHint(false);
       return;
     }
     const hintSelection = getHelpSelectionForIndex(nextHelpRequestIndex);
     if (!hintSelection) {
-      isProcessingHintRef.current = false;
+      setIsProcessingHint(false);
       return;
     }
     if (!registerHelpEvent('hint_view', nextHelpRequestIndex)) {
-      isProcessingHintRef.current = false;
+      setIsProcessingHint(false);
       return;
     }
 
@@ -486,7 +501,7 @@ export function HintSystem({
       sessionId
     });
 
-    isProcessingHintRef.current = false;
+    setIsProcessingHint(false);
 
     // Escalate automatically after max hint level reached.
     if (hintSelection.hintLevel === MAX_HINT_LEVEL && !showExplanation) {
@@ -538,7 +553,7 @@ export function HintSystem({
       return;
     }
     if (!registerHelpEvent('explanation_view', nextHelpRequestIndex)) {
-      isProcessingHintRef.current = false;
+      setIsProcessingHint(false);
       return;
     }
     setShowExplanation(true);
@@ -684,8 +699,20 @@ export function HintSystem({
       )}
 
       {hints.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 p-4 text-center">
-          <p className="text-sm text-gray-500">Request a hint to get started</p>
+        <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 p-6 text-center">
+          <div className="p-2 bg-amber-50 rounded-full w-fit mx-auto mb-3">
+            <HelpCircle className="size-5 text-amber-500" />
+          </div>
+          <p className="text-sm font-medium text-gray-700 mb-1">Need help?</p>
+          <p className="text-xs text-gray-500">Request a hint to get personalized guidance</p>
+          <div className="mt-3 flex items-center justify-center gap-1 text-[10px] text-gray-400">
+            <span>Progresses through</span>
+            <span className="font-medium text-amber-600">L1</span>
+            <span>→</span>
+            <span className="font-medium text-amber-600">L2</span>
+            <span>→</span>
+            <span className="font-medium text-amber-600">L3</span>
+          </div>
         </div>
       ) : (
         <div className="space-y-3">
@@ -695,10 +722,15 @@ export function HintSystem({
             const isExpanded = expandedHintIndex === idx;
             
             return (
-              <div key={idx} className="rounded-lg border border-gray-100 bg-blue-50 p-3" data-testid={`hint-card-${idx}`}>
+              <div key={idx} className="rounded-lg border border-blue-100 bg-gradient-to-br from-blue-50 to-blue-100/50 p-3 shadow-sm" data-testid={`hint-card-${idx}`}>
                 <div className="flex items-start gap-2">
-                  <span className="shrink-0 rounded-full bg-white border border-gray-200 px-2 py-0.5 text-xs font-medium text-gray-600">
-                    Hint {idx + 1}
+                  <span className={cn(
+                    "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold border",
+                    idx === 0 ? "bg-green-100 text-green-700 border-green-200" :
+                    idx === 1 ? "bg-amber-100 text-amber-700 border-amber-200" :
+                    "bg-red-100 text-red-700 border-red-200"
+                  )}>
+                    L{idx + 1}
                   </span>
                   <p className="text-sm leading-relaxed text-blue-900 break-words flex-1">{hint}</p>
                 </div>
@@ -780,48 +812,83 @@ export function HintSystem({
       )}
 
       <div className="flex flex-col gap-2">
-        <Button
-          onClick={handleRequestHint}
-          variant="outline"
-          className="w-full h-9 text-sm"
-          disabled={!profile || !sessionId}
-        >
-          <Lightbulb className="size-4 mr-2 shrink-0" />
-          <span className="truncate">{primaryActionLabel}</span>
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              onClick={handleRequestHint}
+              variant="outline"
+              className="w-full h-9 text-sm"
+              disabled={!profile || !sessionId || isProcessingHint}
+            >
+              {isProcessingHint ? (
+                <Loader2 className="size-4 mr-2 shrink-0 animate-spin" />
+              ) : (
+                <Lightbulb className="size-4 mr-2 shrink-0" />
+              )}
+              <span className="truncate">{primaryActionLabel}</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p>Get a hint to help solve the problem</p>
+            <p className="text-xs text-gray-400">Progresses through L1 → L2 → L3 hints</p>
+          </TooltipContent>
+        </Tooltip>
         <div className="grid grid-cols-2 gap-2">
-          <Button
-            onClick={() => handleShowExplanation('manual')}
-            variant="secondary"
-            className="w-full h-9 text-sm px-2"
-            disabled={!profile || !sessionId || !errorSubtypeId}
-          >
-            <span className="truncate">Explain</span>
-          </Button>
-          <button
-            type="button"
-            onClick={handleAddToTextbook}
-            disabled={!profile || !sessionId || currentRung >= 3 || isAddingToTextbook}
-            className={cn(
-              'w-full h-9 text-sm px-2 rounded-md font-medium',
-              'inline-flex items-center justify-center gap-1',
-              (!profile || !sessionId || currentRung >= 3) 
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                : 'bg-purple-600 text-white hover:bg-purple-700'
-            )}
-          >
-            {isAddingToTextbook ? (
-              <>
-                <div className="size-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                <span className="truncate">...</span>
-              </>
-            ) : (
-              <>
-                <FileText className="h-4 w-4" />
-                <span className="truncate">Save</span>
-              </>
-            )}
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                onClick={() => handleShowExplanation('manual')}
+                variant="secondary"
+                className="w-full h-9 text-sm px-2"
+                disabled={!profile || !sessionId || !errorSubtypeId}
+              >
+                <Sparkles className="size-3.5 mr-1.5 shrink-0" />
+                <span className="truncate">Explain</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Get a detailed explanation</p>
+              {!errorSubtypeId && (
+                <p className="text-xs text-amber-600">Run a query with an error first</p>
+              )}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleAddToTextbook}
+                disabled={!profile || !sessionId || currentRung >= 3 || isAddingToTextbook}
+                className={cn(
+                  'w-full h-9 text-sm px-2 rounded-md font-medium',
+                  'inline-flex items-center justify-center gap-1 transition-colors',
+                  (!profile || !sessionId || currentRung >= 3) 
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                    : 'bg-purple-600 text-white hover:bg-purple-700'
+                )}
+              >
+                {isAddingToTextbook ? (
+                  <>
+                    <Loader2 className="size-3 animate-spin" />
+                    <span className="truncate">Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <FileText className="h-4 w-4" />
+                    <span className="truncate">Save</span>
+                  </>
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>Save to My Textbook</p>
+              {currentRung >= 3 ? (
+                <p className="text-xs text-gray-400">Already at max level</p>
+              ) : (
+                <p className="text-xs text-gray-400">Creates a personalized study note</p>
+              )}
+            </TooltipContent>
+          </Tooltip>
         </div>
       </div>
 

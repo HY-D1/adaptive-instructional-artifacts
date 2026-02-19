@@ -22,7 +22,7 @@ import { storage } from '../lib/storage';
 import { useUserRole } from '../hooks/useUserRole';
 import type { LearnerProfile, InteractionEvent } from '../types';
 
-// Mock student data for instructor view
+// TODO: This is demo/mock data for MVP. Replace with real student data from backend.
 const MOCK_STUDENTS = [
   { id: 'student-1', name: 'Alice Chen', email: 'alice.chen@school.edu', lastActive: Date.now() - 3600000 },
   { id: 'student-2', name: 'Bob Martinez', email: 'bob.m@school.edu', lastActive: Date.now() - 7200000 },
@@ -41,6 +41,18 @@ interface ClassStats {
   conceptMastery: Array<{ concept: string; masteryRate: number }>;
 }
 
+/**
+ * InstructorDashboard - Overview dashboard for instructors
+ * 
+ * Displays:
+ * - Class statistics (student count, activity, progress)
+ * - Concept mastery rates across the class
+ * - Common error patterns
+ * - Recent student activity
+ * 
+ * Includes mock/demo data for MVP - real backend integration pending.
+ * Redirects students to home page (instructor-only access).
+ */
 export function InstructorDashboard() {
   const navigate = useNavigate();
   const { isStudent, isLoading } = useUserRole();

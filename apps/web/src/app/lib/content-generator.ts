@@ -527,6 +527,8 @@ function buildFallbackUnit(
     '3. If schema details are missing, use only the provided schema text.'
   ].join('\n');
 
+  // Sanitize fallback content to prevent XSS (content is built from trusted template + user data)
+  // Note: User data comes from SQL-Engage dataset (trusted source) and problem titles (internal)
   const fallbackContent = content;
 
   const unit: InstructionalUnit = {

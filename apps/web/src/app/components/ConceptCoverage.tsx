@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
@@ -173,6 +173,62 @@ export function ConceptCoverage({ learnerId }: ConceptCoverageProps) {
   }, [learnerId]);
 
   const evidenceMap = profile?.conceptCoverageEvidence || new Map();
+
+  // Memoize coverage calculations to avoid re-computing on every render
+  const sortedConcepts = useMemo(() => {
+    if (!profile) return [];
+    return [...conceptNodes].sort((a, b) => {
+      const aEvidence = evidenceMap.get(a.id);
+      const bEvidence = evidenceMap.get(b.id);
+      const aScore = aEvidence?.score || 0;
+      const bScore = bEvidence?.score || 0;
+      
+      // Sort by difficulty first, then by score (highest first)
+      const difficultyOrder = { beginner: 0, intermediate: 1, advanced: 2 };
+      const diffDiff = difficultyOrder[a.difficulty] - difficultyOrder[b.difficulty];
+      if (diffDiff !== 0) return diffDiff;
+      return bScore - aScore;
+    });
+  }, [profile, evidenceMap]);
+
+  const conceptsByDifficulty = useMemo(() => {
+    return sortedConcepts.reduce((acc, concept) => {
+      if (!acc[concept.difficulty]) {
+        acc[concept.difficulty] = [];
+      }
+      acc[concept.difficulty].push(concept);
+      return acc;
+    }, {} as Record<string, typeof conceptNodes>);
+  }, [sortedConcepts]);
+
+  const getEvidenceForConcept = (conceptId: string): ConceptCoverageEvidence | undefined => {
+    return evidenceMap.get(conceptId);
+  };
+
+  const getConfidenceForConcept = (conceptId: string): 'low' | 'medium' | 'high' => {
+    return getEvidenceForConcept(conceptId)?.confidence || 'low';
+  };
+
+  const isCovered = (conceptId: string): boolean => {
+    const evidence = getEvidenceForConcept(conceptId);
+    return evidence ? evidence.score >= 50 : profile?.conceptsCovered.has(conceptId) ?? false;
+  };
+
+  // Get recent activity - memoized to avoid re-fetching on every render
+  const recentActivity = useMemo(() => {
+    const recentInteractions = storage.getInteractionsByLearner(learnerId)
+      .filter(i => i.conceptIds && i.conceptIds.length > 0)
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 5);
+
+    const uniqueRecentConcepts = Array.from(new Set(
+      recentInteractions.flatMap(i => i.conceptIds || [])
+    )).slice(0, 3);
+
+    return { recentInteractions, uniqueRecentConcepts };
+  }, [learnerId]);
+
+  const { recentInteractions, uniqueRecentConcepts } = recentActivity;
   
   if (isLoading || !profile) {
     return (
@@ -188,50 +244,7 @@ export function ConceptCoverage({ learnerId }: ConceptCoverageProps) {
     );
   }
 
-  // Sort concepts by difficulty and coverage status
-  const sortedConcepts = [...conceptNodes].sort((a, b) => {
-    const aEvidence = evidenceMap.get(a.id);
-    const bEvidence = evidenceMap.get(b.id);
-    const aScore = aEvidence?.score || 0;
-    const bScore = bEvidence?.score || 0;
-    
-    // Sort by difficulty first, then by score (highest first)
-    const difficultyOrder = { beginner: 0, intermediate: 1, advanced: 2 };
-    const diffDiff = difficultyOrder[a.difficulty] - difficultyOrder[b.difficulty];
-    if (diffDiff !== 0) return diffDiff;
-    return bScore - aScore;
-  });
 
-  const conceptsByDifficulty = sortedConcepts.reduce((acc, concept) => {
-    if (!acc[concept.difficulty]) {
-      acc[concept.difficulty] = [];
-    }
-    acc[concept.difficulty].push(concept);
-    return acc;
-  }, {} as Record<string, typeof conceptNodes>);
-
-  const getEvidenceForConcept = (conceptId: string): ConceptCoverageEvidence | undefined => {
-    return evidenceMap.get(conceptId);
-  };
-
-  const getConfidenceForConcept = (conceptId: string): 'low' | 'medium' | 'high' => {
-    return getEvidenceForConcept(conceptId)?.confidence || 'low';
-  };
-
-  const isCovered = (conceptId: string): boolean => {
-    const evidence = getEvidenceForConcept(conceptId);
-    return evidence ? evidence.score >= 50 : profile.conceptsCovered.has(conceptId);
-  };
-
-  // Get recent activity
-  const recentInteractions = storage.getInteractionsByLearner(learnerId)
-    .filter(i => i.conceptIds && i.conceptIds.length > 0)
-    .sort((a, b) => b.timestamp - a.timestamp)
-    .slice(0, 5);
-
-  const uniqueRecentConcepts = Array.from(new Set(
-    recentInteractions.flatMap(i => i.conceptIds || [])
-  )).slice(0, 3);
 
   return (
     <Card className="p-4">

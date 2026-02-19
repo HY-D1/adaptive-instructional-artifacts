@@ -5,6 +5,7 @@ import { ResearchPage } from './pages/ResearchPage';
 import { InstructorDashboard } from './pages/InstructorDashboard';
 import { StartPage } from './pages/StartPage';
 import { LearningInterface } from './pages/LearningInterface';
+import { SettingsPage } from './pages/SettingsPage';
 import { storage } from './lib/storage';
 import { 
   ROUTES, 
@@ -15,6 +16,19 @@ import {
 
 // Week 4: Lazy-loaded login page (create when needed)
 // const LoginPage = React.lazy(() => import('./pages/LoginPage'));
+
+/**
+ * Start page loader - redirects authenticated users to their default route
+ * This runs BEFORE the component renders, ensuring fast redirect
+ * 
+ * Note: We use client-side redirect in the component instead of loader redirect
+ * to avoid navigation/hydration issues with React Router
+ */
+function startPageLoader(): null {
+  // The redirect is handled in the StartPage component via useEffect
+  // This ensures proper React rendering lifecycle and avoids loader redirect issues
+  return null;
+}
 
 /**
  * Protected route loader factory
@@ -100,10 +114,12 @@ export const router = createBrowserRouter([
     Component: RootLayout,
     loader: createProtectedLoader({ allowAuthenticated: true }),
     children: [
-      // Start page - entry point for all users (unauthenticated)
+      // Start page - entry point for all users
+      // Redirects authenticated users to their dashboard
       {
         index: true,
         Component: StartPage,
+        loader: startPageLoader,
       },
       {
         path: 'practice',
@@ -141,6 +157,16 @@ export const router = createBrowserRouter([
           </InstructorRoute>
         ),
         loader: createProtectedLoader({ requiredRole: 'instructor' }),
+      },
+      // Settings - accessible to both students and instructors
+      {
+        path: 'settings',
+        element: (
+          <AuthenticatedRoute>
+            <SettingsPage />
+          </AuthenticatedRoute>
+        ),
+        loader: createProtectedLoader({ allowAuthenticated: true }),
       },
       // Catch-all redirect
       {

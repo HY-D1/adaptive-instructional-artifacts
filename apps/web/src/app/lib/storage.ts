@@ -56,6 +56,7 @@ import {
 class StorageManager {
   private readonly EXPORT_POLICY_VERSION = 'weekly-export-sanitize-v1';
   private readonly INTERACTIONS_KEY = 'sql-learning-interactions';
+  /** Key for learner profiles (maps learnerId -> LearnerProfile) - tracks learning progress per learner */
   private readonly PROFILES_KEY = 'sql-learning-profiles';
   private readonly TEXTBOOK_KEY = 'sql-learning-textbook';
   private readonly ACTIVE_SESSION_KEY = 'sql-learning-active-session';
@@ -63,6 +64,7 @@ class StorageManager {
   private readonly LLM_CACHE_KEY = 'sql-learning-llm-cache';
   private readonly REPLAY_MODE_KEY = 'sql-learning-policy-replay-mode';
   private readonly PDF_INDEX_KEY = 'sql-learning-pdf-index';
+  /** Key for current user identity (single active user profile) - used for role-based auth (Week 4) */
   private readonly USER_PROFILE_KEY = 'sql-adapt-user-profile'; // Week 4: Aligned with existing app key
 
   // In-memory fallback for PDF index when LocalStorage quota is exceeded
@@ -72,12 +74,22 @@ class StorageManager {
    * Save user profile to localStorage
    * @param profile - User profile to save
    * @returns Object with success flag and optional quota exceeded flag
+   * 
+   * SECURITY: Profile data is validated before storage (see validateProfile).
+   * Name is limited to 1-100 characters. React escapes rendered content by default.
    */
   saveUserProfile(profile: UserProfile): { success: boolean; quotaExceeded?: boolean } {
     try {
+      // Validate before saving to ensure data integrity
+      const validation = this.validateProfile(profile);
+      if (!validation) {
+        console.warn('[Storage] Invalid profile data rejected');
+        return { success: false };
+      }
+      
       const serializable = {
-        ...profile,
-        createdAt: typeof profile.createdAt === 'number' ? profile.createdAt : Date.now()
+        ...validation,
+        createdAt: typeof validation.createdAt === 'number' ? validation.createdAt : Date.now()
       };
       const result = this.safeSetItem(this.USER_PROFILE_KEY, JSON.stringify(serializable));
       if (!result.success) {
@@ -88,6 +100,39 @@ class StorageManager {
       console.error('[Storage] Exception saving user profile:', error);
       return { success: false };
     }
+  }
+
+  /**
+   * Validates a partial user profile object
+   * @param parsed - Partial profile to validate
+   * @returns Validated UserProfile or null if invalid
+   */
+  private validateProfile(parsed: Partial<UserProfile>): UserProfile | null {
+    // Validate required fields
+    if (typeof parsed.id !== 'string' || !parsed.id.trim()) {
+      return null;
+    }
+    // Validate name: must be a non-empty string between 1-100 characters
+    if (typeof parsed.name !== 'string') {
+      return null;
+    }
+    const trimmedName = parsed.name.trim();
+    if (trimmedName.length < 1 || trimmedName.length > 100) {
+      return null;
+    }
+    if (parsed.role !== 'student' && parsed.role !== 'instructor') {
+      return null;
+    }
+    if (typeof parsed.createdAt !== 'number' || !Number.isFinite(parsed.createdAt)) {
+      return null;
+    }
+
+    return {
+      id: parsed.id.trim(),
+      name: trimmedName,
+      role: parsed.role,
+      createdAt: parsed.createdAt
+    };
   }
 
   /**
@@ -102,27 +147,18 @@ class StorageManager {
       }
 
       const parsed = JSON.parse(raw) as Partial<UserProfile>;
+      const validated = this.validateProfile(parsed);
       
-      // Validate required fields
-      if (typeof parsed.id !== 'string' || !parsed.id.trim()) {
-        return null;
+      if (!validated) {
+        // Corrupted profile data - clean up
+        try {
+          localStorage.removeItem(this.USER_PROFILE_KEY);
+        } catch {
+          // Ignore cleanup errors
+        }
       }
-      if (typeof parsed.name !== 'string' || !parsed.name.trim()) {
-        return null;
-      }
-      if (parsed.role !== 'student' && parsed.role !== 'instructor') {
-        return null;
-      }
-      if (typeof parsed.createdAt !== 'number' || !Number.isFinite(parsed.createdAt)) {
-        return null;
-      }
-
-      return {
-        id: parsed.id.trim(),
-        name: parsed.name.trim(),
-        role: parsed.role,
-        createdAt: parsed.createdAt
-      };
+      
+      return validated;
     } catch {
       // Corrupted profile data or localStorage access denied
       try {
@@ -145,6 +181,47 @@ class StorageManager {
     } catch (error) {
       console.error('[Storage] Exception clearing user profile:', error);
       return false;
+    }
+  }
+
+  /**
+   * Safely load user profile with error handling and cleanup
+   * This is a shared utility used by hooks to safely load profiles
+   * @returns Object with profile (or null) and success flag
+   */
+  safeLoadProfile(): { profile: UserProfile | null; success: boolean; error?: Error } {
+    try {
+      const raw = localStorage.getItem(this.USER_PROFILE_KEY);
+      if (!raw) {
+        return { profile: null, success: true };
+      }
+
+      const parsed = JSON.parse(raw) as Partial<UserProfile>;
+      const validated = this.validateProfile(parsed);
+      
+      if (!validated) {
+        // Invalid profile - clean up
+        try {
+          localStorage.removeItem(this.USER_PROFILE_KEY);
+        } catch {
+          // Ignore cleanup errors
+        }
+        return { profile: null, success: false, error: new Error('Invalid profile data') };
+      }
+      
+      return { profile: validated, success: true };
+    } catch (error) {
+      // Corrupted profile data or localStorage access denied
+      try {
+        localStorage.removeItem(this.USER_PROFILE_KEY);
+      } catch {
+        // Ignore cleanup errors
+      }
+      return { 
+        profile: null, 
+        success: false, 
+        error: error instanceof Error ? error : new Error('Unknown error loading profile')
+      };
     }
   }
 

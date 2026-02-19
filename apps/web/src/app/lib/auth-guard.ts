@@ -13,7 +13,7 @@ export const ROUTES = {
   RESEARCH: '/research',
   LOGIN: '/login',
   STUDENT_DASHBOARD: '/',
-  INSTRUCTOR_DASHBOARD: '/research',
+  INSTRUCTOR_DASHBOARD: '/instructor-dashboard',
 } as const;
 
 // Role-based route access configuration

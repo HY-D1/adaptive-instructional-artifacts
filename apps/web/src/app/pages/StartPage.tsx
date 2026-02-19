@@ -9,9 +9,20 @@ import { cn } from '../components/ui/utils';
 import type { UserRole, UserProfile } from '../types';
 import { storage } from '../lib/storage';
 
-// Hardcoded instructor passcode
-const INSTRUCTOR_PASSCODE = 'TeachSQL2024';
+// Instructor passcode from environment variable with fallback
+const INSTRUCTOR_PASSCODE = import.meta.env.VITE_INSTRUCTOR_PASSCODE || 'TeachSQL2024';
 
+/**
+ * StartPage - Entry point for the application
+ * 
+ * Handles user onboarding:
+ * - Username input
+ * - Role selection (Student/Instructor)
+ * - Passcode verification for instructor access
+ * - Profile creation and persistence
+ * 
+ * Redirects returning users based on their saved profile.
+ */
 export function StartPage() {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
@@ -19,35 +30,34 @@ export function StartPage() {
   const [passcode, setPasscode] = useState('');
   const [passcodeError, setPasscodeError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Check for existing profile on mount
+  // Check for existing profile on mount and redirect if found
   useEffect(() => {
-    // Add timeout to prevent infinite loading if storage is blocked
-    const timeoutId = setTimeout(() => {
-      console.warn('[StartPage] Profile check timed out');
-      setIsLoading(false);
-    }, 2000);
-    
-    try {
-      const profile = storage.getUserProfile();
-      clearTimeout(timeoutId);
-      if (profile) {
-        // Auto-redirect based on role
-        if (profile.role === 'instructor') {
-          navigate('/instructor-dashboard', { replace: true });
-        } else {
-          navigate('/practice', { replace: true });
+    // Slight delay to ensure React Router is fully initialized
+    const checkProfile = () => {
+      try {
+        const profile = storage.getUserProfile();
+        if (profile) {
+          // Redirect based on role
+          const targetPath = profile.role === 'instructor' 
+            ? '/instructor-dashboard' 
+            : '/practice';
+          navigate(targetPath, { replace: true });
+          return;
         }
-        return;
+      } catch (error) {
+        console.error('[StartPage] Failed to check user profile:', error);
       }
-    } catch (error) {
-      clearTimeout(timeoutId);
-      console.error('Failed to load user profile:', error);
-      // Continue to show the start page even if storage fails
+      setIsLoading(false);
+    };
+
+    // Use requestAnimationFrame to ensure we're in a browser environment
+    if (typeof window !== 'undefined') {
+      requestAnimationFrame(checkProfile);
+    } else {
+      setIsLoading(false);
     }
-    setIsLoading(false);
-    
-    return () => clearTimeout(timeoutId);
   }, [navigate]);
 
   // Clear passcode error when role changes
@@ -71,6 +81,8 @@ export function StartPage() {
       }
     }
 
+    setIsSubmitting(true);
+
     const profile: UserProfile = {
       id: `user-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
       name: username.trim(),
@@ -79,6 +91,13 @@ export function StartPage() {
     };
 
     storage.saveUserProfile(profile);
+
+    // Also update last activity for session expiry tracking
+    try {
+      localStorage.setItem('sql-adapt-last-active', Date.now().toString());
+    } catch {
+      // Ignore errors
+    }
 
     // Redirect based on role
     if (selectedRole === 'instructor') {
@@ -91,6 +110,7 @@ export function StartPage() {
   const isFormValid = username.trim().length > 0 && selectedRole !== null && 
     (selectedRole !== 'instructor' || passcode.length > 0);
 
+  // Show loading spinner while checking for existing profile
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -249,7 +269,11 @@ export function StartPage() {
                   )}
                 />
                 {passcodeError && (
-                  <p className="text-sm text-red-600 font-medium">
+                  <p 
+                    className="text-sm text-red-600 font-medium" 
+                    role="alert" 
+                    aria-live="polite"
+                  >
                     {passcodeError}
                   </p>
                 )}
@@ -260,11 +284,20 @@ export function StartPage() {
             <Button
               type="submit"
               size="lg"
-              disabled={!isFormValid}
+              disabled={!isFormValid || isSubmitting}
               className="w-full h-12 text-lg font-medium"
             >
-              <GraduationCap className="w-5 h-5 mr-2" />
-              Get Started
+              {isSubmitting ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  Starting...
+                </>
+              ) : (
+                <>
+                  <GraduationCap className="w-5 h-5 mr-2" />
+                  Get Started
+                </>
+              )}
             </Button>
 
             {!isFormValid && (

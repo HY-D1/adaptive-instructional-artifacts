@@ -36,20 +36,25 @@ const AUTO_CREATE_MIN_FREQUENCY = 5; // Minimum pattern frequency to auto-create
 const AUTO_CREATE_QUALITY_THRESHOLD = 0.6; // Minimum quality score for auto-created units
 const AUTO_CREATE_MIN_CONFIDENCE: PatternMatch['confidence'] = 'high'; // Minimum pattern confidence
 
-// Background analysis state
-interface BackgroundAnalysisState {
-  intervalId: number | null;
-  lastAnalysisTime: number;
-  isRunning: boolean;
-  analyzedPatterns: Set<string>; // Track already-analyzed pattern signatures
+// Background analysis state - using closure to prevent shared state across calls
+function createBackgroundAnalysisState() {
+  return {
+    intervalId: null as number | null,
+    lastAnalysisTime: 0,
+    isRunning: false,
+    analyzedPatterns: new Set<string>() // Track already-analyzed pattern signatures
+  };
 }
 
-const state: BackgroundAnalysisState = {
-  intervalId: null,
-  lastAnalysisTime: 0,
-  isRunning: false,
-  analyzedPatterns: new Set()
-};
+// Module-level state instance (singleton per module load)
+let state = createBackgroundAnalysisState();
+
+/**
+ * Reset background analysis state (useful for testing)
+ */
+export function resetBackgroundAnalysisState(): void {
+  state = createBackgroundAnalysisState();
+}
 
 /**
  * Analyze interaction traces to identify patterns and concept gaps.
@@ -536,7 +541,7 @@ function performAnalysis(
         }
         
         // Log to console in development
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.DEV) {
           console.log('[TraceAnalyzer] Analysis with auto-creation complete:', {
             patterns: result.patterns.length,
             gaps: result.conceptGaps.length,
@@ -558,7 +563,7 @@ function performAnalysis(
     }
 
     // Log to console in development
-    if (process.env.NODE_ENV === 'development') {
+    if (import.meta.env.DEV) {
       console.log('[TraceAnalyzer] Analysis complete:', {
         patterns: result.patterns.length,
         gaps: result.conceptGaps.length,
@@ -604,9 +609,20 @@ export function clearAnalyzedPatternsCache(): void {
 const MAX_PATTERN_SIGNATURES = 1000; // Maximum entries before LRU eviction
 const PATTERN_SIGNATURE_EXPIRY_MS = 60 * 60 * 1000; // 1 hour expiration
 
-// Track which patterns have been auto-processed to avoid duplicates
-// Uses Map instead of Set for LRU eviction with timestamp tracking
-const autoCreatedPatternSignatures = new Map<string, number>(); // signature -> timestamp
+// Pattern cache state - using closure to prevent shared state across calls
+function createPatternCache() {
+  return new Map<string, number>(); // signature -> timestamp
+}
+
+// Module-level cache instance (singleton per module load)
+let autoCreatedPatternSignatures = createPatternCache();
+
+/**
+ * Reset auto-created pattern cache (useful for testing)
+ */
+export function resetAutoCreatedPatternCache(): void {
+  autoCreatedPatternSignatures = createPatternCache();
+}
 
 /**
  * Automatically create textbook units from strong analysis patterns.

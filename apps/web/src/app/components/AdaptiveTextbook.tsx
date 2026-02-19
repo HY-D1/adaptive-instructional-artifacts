@@ -7,7 +7,7 @@ import { Book, Trash2, ChevronRight, ChevronDown, Folder, FileText, Star, ArrowU
 import type { TextbookUnitStatus } from '../types';
 import { Link } from 'react-router';
 import DOMPurify from 'dompurify';
-import { marked } from 'marked';
+import { marked, Renderer } from 'marked';
 import { InstructionalUnit, InteractionEvent } from '../types';
 import { storage } from '../lib/storage';
 import { getConceptById } from '../data/sql-engage';
@@ -304,12 +304,26 @@ export function AdaptiveTextbook({
     }
 
     const rawMarkdown = selectedUnit.content || '';
+    
+    // Create a custom renderer that escapes raw HTML to prevent XSS
+    const renderer = new Renderer();
+    const originalHtml = renderer.html.bind(renderer);
+    renderer.html = (html: string) => {
+      // Escape raw HTML by converting < and > to entities
+      return html.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    };
+    
     const renderedMarkdown = marked.parse(rawMarkdown, {
       gfm: true,
-      breaks: true
+      breaks: true,
+      renderer
     }) as string;
 
-    return DOMPurify.sanitize(renderedMarkdown);
+    // Sanitize the rendered HTML as a defense-in-depth measure
+    return DOMPurify.sanitize(renderedMarkdown, {
+      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'a'],
+      ALLOWED_ATTR: ['href', 'title', 'class']
+    });
   }, [selectedUnit]);
 
   if (orderedUnits.length === 0) {

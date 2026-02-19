@@ -24,8 +24,10 @@ export type OllamaGenerateOptions = {
 export type OllamaHealthStatus = {
   /** Whether service is healthy */
   ok: boolean;
-  /** Status message */
+  /** Status message (user-friendly for UI) */
   message: string;
+  /** Technical details for debugging (console only) */
+  details?: string;
   /** List of available models */
   availableModels?: string[];
   /** Response from probe prompt */
@@ -82,10 +84,11 @@ function formatAvailableModels(models: string[]): string {
   return models.length > 4 ? `${preview}, ...` : preview;
 }
 
-function buildServiceDownMessage(details: string): string {
+function buildServiceDownMessage(details: string): { userMessage: string; technicalDetails: string } {
   const normalizedDetails = compactMessage(details);
-  const suffix = normalizedDetails ? ` Details: ${normalizedDetails}.` : '';
-  return `Could not reach local Ollama via ${OLLAMA_PROXY_BASE} -> ${OLLAMA_LOCAL_URL}.${suffix} Start Ollama (macOS: open app or run "ollama serve"; Windows: start Ollama app/service) and verify with "ollama list".`;
+  const technicalDetails = `Could not reach local Ollama via ${OLLAMA_PROXY_BASE} -> ${OLLAMA_LOCAL_URL}.${normalizedDetails ? ` Details: ${normalizedDetails}.` : ''}`;
+  const userMessage = 'Ollama is not running. Start Ollama to enable AI-powered hints.';
+  return { userMessage, technicalDetails };
 }
 
 async function readResponseText(response: Response): Promise<string> {
@@ -182,12 +185,34 @@ function validateLLMParams(params: LLMGenerationParams): LLMGenerationParams {
  * @returns Promise resolving to generated text and metadata
  * @throws OllamaClientError on failure
  */
+/**
+ * Get the selected model from localStorage or use default
+ */
+function getSelectedModel(): string {
+  // Guard for SSR - localStorage is not available on server
+  if (typeof window === 'undefined') {
+    return OLLAMA_MODEL;
+  }
+  try {
+    const saved = localStorage.getItem('sql-adapt-llm-settings');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.model && typeof parsed.model === 'string') {
+        return parsed.model;
+      }
+    }
+  } catch {
+    // Ignore parse errors, fall back to default
+  }
+  return OLLAMA_MODEL;
+}
+
 export async function generateWithOllama(prompt: string, options?: OllamaGenerateOptions): Promise<{
   text: string;
   model: string;
   params: LLMGenerationParams;
 }> {
-  const model = options?.model || OLLAMA_MODEL;
+  const model = options?.model || getSelectedModel();
   const rawParams: LLMGenerationParams = {
     ...DEFAULT_PARAMS,
     ...(options?.params || {})
@@ -261,9 +286,11 @@ export async function checkOllamaHealth(model: string = OLLAMA_MODEL): Promise<O
     if (!response.ok) {
       const body = await readResponseText(response);
       const details = body ? `status ${response.status}: ${body}` : `status ${response.status}`;
+      const { userMessage, technicalDetails } = buildServiceDownMessage(details);
       return {
         ok: false,
-        message: buildServiceDownMessage(details)
+        message: userMessage,
+        details: technicalDetails
       };
     }
 
@@ -303,19 +330,24 @@ export async function checkOllamaHealth(model: string = OLLAMA_MODEL): Promise<O
 
     return {
       ok: false,
-      message: `Connected, but model '${model}' is not available. Run "ollama pull ${model}". Available models: ${formatAvailableModels(availableModels)}.`,
+      message: `Model '${model}' not found. Run 'ollama pull ${model}'.`,
+      details: `Model '${model}' not available. Available models: ${formatAvailableModels(availableModels)}.`,
       availableModels
     };
   } catch (error) {
     if ((error as Error).name === 'AbortError') {
+      const { userMessage, technicalDetails } = buildServiceDownMessage(`timed out after ${HEALTHCHECK_TIMEOUT_MS}ms while calling /api/tags`);
       return {
         ok: false,
-        message: buildServiceDownMessage(`timed out after ${HEALTHCHECK_TIMEOUT_MS}ms while calling /api/tags`)
+        message: userMessage,
+        details: technicalDetails
       };
     }
+    const { userMessage, technicalDetails } = buildServiceDownMessage(getErrorMessage(error));
     return {
       ok: false,
-      message: buildServiceDownMessage(getErrorMessage(error))
+      message: userMessage,
+      details: technicalDetails
     };
   } finally {
     clearTimeout(timeoutId);

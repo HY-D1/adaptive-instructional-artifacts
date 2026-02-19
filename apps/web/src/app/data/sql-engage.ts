@@ -53,6 +53,10 @@ export const conceptNodes: ConceptNode[] = [
   }
 ];
 
+/**
+ * SQL-Engage dataset record type
+ * Represents a single row from the SQL-Engage CSV dataset
+ */
 export type SqlEngageRecord = {
   rowId: string;
   query: string;

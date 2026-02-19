@@ -69,6 +69,11 @@ export type ReplayDecisionPoint = {
 
 /**
  * Selection result for the next hint
+ * 
+ * This type alias exists to provide a domain-specific name for hint selections
+ * within the orchestrator context. While semantically equivalent to NextHintSelection,
+ * using HintSelection makes the orchestrator's intent clearer when the type is
+ * referenced in other modules.
  */
 export type HintSelection = NextHintSelection;
 

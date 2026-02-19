@@ -10,6 +10,9 @@ import {
 } from './src/app/lib/pdf-index-config'
 import { loadOrBuildPdfIndexFromDisk, buildPdfIndexFromBuffer } from './src/server/pdf-index-server'
 
+// WASM file paths
+const wasmFilePath = path.resolve(__dirname, 'public/sql-wasm.wasm')
+
 const ollamaTarget = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434'
 const repoRoot = path.resolve(__dirname, '../..')
 const pdfIndexDir = process.env.PDF_INDEX_DIR || path.resolve(repoRoot, 'dist/pdf-index')
@@ -113,6 +116,7 @@ function pdfIndexApiPlugin() {
               res.end(JSON.stringify({
                 status: 'built',
                 document: result.document,
+                manifest: result.manifest,
                 message: `Successfully built PDF index from '${filePart.filename}' with ${result.manifest.chunkCount} chunks.`
               }))
             } catch (error) {
@@ -177,10 +181,66 @@ function parseMultipart(buffer: Buffer, boundary: string): Array<{ name?: string
   return parts
 }
 
+// WASM serving plugin - ensures correct MIME type for .wasm files
+function wasmServePlugin() {
+  // Shared middleware handler for both dev and preview servers
+  const wasmMiddleware = (req: any, res: any, next: () => void) => {
+    // Only handle requests to /sql-wasm.wasm
+    if (req.url !== '/sql-wasm.wasm' && !req.url?.startsWith('/sql-wasm.wasm?')) {
+      next()
+      return
+    }
+    
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+      next()
+      return
+    }
+    
+    try {
+      if (fs.existsSync(wasmFilePath)) {
+        const wasmContent = fs.readFileSync(wasmFilePath)
+        res.statusCode = 200
+        res.setHeader('Content-Type', 'application/wasm')
+        res.setHeader('Cache-Control', 'public, max-age=3600')
+        res.end(wasmContent)
+      } else {
+        res.statusCode = 404
+        res.setHeader('Content-Type', 'application/json')
+        res.end(JSON.stringify({ error: 'WASM file not found' }))
+      }
+    } catch (error) {
+      res.statusCode = 500
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ error: (error as Error).message }))
+    }
+  }
+
+  return {
+    name: 'wasm-serve',
+    enforce: 'pre', // Run before other middleware (including Vite's SPA fallback)
+    configureServer(server: any) {
+      // Add middleware at the beginning to intercept WASM requests before SPA fallback
+      server.middlewares.stack.unshift({
+        route: '',
+        handle: wasmMiddleware
+      })
+    },
+    configurePreview(server: any) {
+      // Also handle WASM requests in preview mode (vite preview)
+      server.middlewares.stack.unshift({
+        route: '',
+        handle: wasmMiddleware
+      })
+    }
+  }
+}
+
 export default defineConfig({
   // App lives in apps/web; keep dist artifacts in the repository-level dist/.
   root: path.resolve(__dirname),
   plugins: [
+    // WASM plugin must be first to intercept requests before SPA fallback
+    wasmServePlugin(),
     react(),
     pdfIndexApiPlugin(),
     tailwindcss(),
@@ -209,5 +269,5 @@ export default defineConfig({
       }
     }
   },
-  assetsInclude: ['**/*.svg', '**/*.csv', '**/*.wasm'],
+  assetsInclude: ['**/*.svg', '**/*.csv'],
 })

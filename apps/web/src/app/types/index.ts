@@ -248,15 +248,21 @@ export type InstructionalUnit = {
   sessionId?: string;
   updatedSessionIds?: string[];
   type: 'hint' | 'explanation' | 'example' | 'summary';
+  /** Primary concept ID - the main concept this unit addresses */
   conceptId: string;
-  conceptIds?: string[]; // Multi-concept support for notes
+  /** Related concept IDs - additional concepts connected to this unit (e.g., for cross-concept notes) */
+  conceptIds?: string[];
   title: string;
   content: string;
   prerequisites: string[];
   addedTimestamp: number;
   updatedTimestamp?: number; // Set when the unit is updated (preserves original creation time)
   sourceInteractionIds: string[]; // IDs of interactions that triggered this
-  sourceInteractions?: string[]; // Legacy compatibility
+  /**
+   * @deprecated Use sourceInteractionIds instead. Kept for backward compatibility with legacy data.
+   * This field may be removed in a future version.
+   */
+  sourceInteractions?: string[];
   provenance?: UnitProvenance;
   lastErrorSubtypeId?: string;
   // Week 3 D6: Enhanced unit schema fields

@@ -57,8 +57,14 @@ export function TextbookPage() {
   }, []);
   
   useEffect(() => {
+    // Ref to track mounted state for cleanup
+    let isMounted = true;
+    
     const handleStorageChange = () => {
-      setStorageVersion(v => v + 1);
+      // Only update state if component is still mounted
+      if (isMounted) {
+        setStorageVersion(v => v + 1);
+      }
     };
     
     // Listen for localStorage changes from other tabs/windows
@@ -68,6 +74,7 @@ export function TextbookPage() {
     const interval = setInterval(handleStorageChange, 2000);
     
     return () => {
+      isMounted = false;
       window.removeEventListener('storage', handleStorageChange);
       clearInterval(interval);
     };

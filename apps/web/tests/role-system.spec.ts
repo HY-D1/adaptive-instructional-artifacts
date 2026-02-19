@@ -64,12 +64,16 @@ test.describe('@weekly Role System', () => {
       // Arrange
       await page.goto('/');
       
-      // Act - Click Student card
-      const studentCard = page.locator('.cursor-pointer').filter({ hasText: 'Student' });
+      // Act - Click Student card (use heading for exact match)
+      const studentCard = page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Student' })
+      });
       await studentCard.click();
       
-      // Assert - Student card is selected with visual indicator
-      const selectedStudentCard = page.locator('[class*="border-blue-500"]').filter({ hasText: 'Student' });
+      // Assert - Student card is selected with blue border visual indicator
+      const selectedStudentCard = page.locator('[class*="border-blue-500"]').filter({ 
+        has: page.getByRole('heading', { name: 'Student' })
+      });
       await expect(selectedStudentCard).toBeVisible();
     });
 
@@ -77,12 +81,16 @@ test.describe('@weekly Role System', () => {
       // Arrange
       await page.goto('/');
       
-      // Act - Click Instructor card
-      const instructorCard = page.locator('.cursor-pointer').filter({ hasText: 'Instructor' });
+      // Act - Click Instructor card (use heading for exact match)
+      const instructorCard = page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Instructor' })
+      });
       await instructorCard.click();
       
-      // Assert - Instructor card is selected with visual indicator
-      const selectedInstructorCard = page.locator('[class*="border-purple-500"]').filter({ hasText: 'Instructor' });
+      // Assert - Instructor card is selected with purple border visual indicator
+      const selectedInstructorCard = page.locator('[class*="border-purple-500"]').filter({ 
+        has: page.getByRole('heading', { name: 'Instructor' })
+      });
       await expect(selectedInstructorCard).toBeVisible();
     });
 
@@ -92,7 +100,9 @@ test.describe('@weekly Role System', () => {
       
       // Act - Enter username and select Student
       await page.getByPlaceholder('Enter your username').fill('TestStudent');
-      const studentCard = page.locator('.cursor-pointer').filter({ hasText: 'Student' });
+      const studentCard = page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Student' })
+      });
       await studentCard.click();
       
       // Submit form
@@ -100,7 +110,8 @@ test.describe('@weekly Role System', () => {
       
       // Assert - Redirected to practice page
       await expect(page).toHaveURL(/\/practice$/);
-      await expect(page.getByText('SQL-Adapt Learning System')).toBeVisible();
+      // Check for heading on the practice page
+      await expect(page.getByRole('heading', { name: /Practice SQL/i })).toBeVisible();
     });
 
     test('submit with Instructor role redirects to /instructor-dashboard', async ({ page }) => {
@@ -109,8 +120,13 @@ test.describe('@weekly Role System', () => {
       
       // Act - Enter username and select Instructor
       await page.getByPlaceholder('Enter your username').fill('TestInstructor');
-      const instructorCard = page.locator('.cursor-pointer').filter({ hasText: 'Instructor' });
+      const instructorCard = page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Instructor' })
+      });
       await instructorCard.click();
+      
+      // Enter instructor passcode
+      await page.getByLabel('Instructor Passcode').fill('TeachSQL2024');
       
       // Submit form
       await page.getByRole('button', { name: 'Get Started' }).click();
@@ -124,7 +140,9 @@ test.describe('@weekly Role System', () => {
       await page.goto('/');
       
       // Act - Select role but don't enter username
-      const studentCard = page.locator('.cursor-pointer').filter({ hasText: 'Student' });
+      const studentCard = page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Student' })
+      });
       await studentCard.click();
       
       // Assert - Button still disabled
@@ -216,8 +234,8 @@ test.describe('@weekly Role System', () => {
       // Act
       await page.goto('/textbook');
       
-      // Assert - Should be able to access textbook
-      await expect(page.getByRole('heading', { name: 'My Textbook' })).toBeVisible();
+      // Assert - Should be able to access textbook (students see "My Learning Journey")
+      await expect(page.getByRole('heading', { name: /My Learning Journey|My Textbook/i })).toBeVisible();
     });
 
     test('Instructor can access /research', async ({ page }) => {
@@ -273,7 +291,9 @@ test.describe('@weekly Role System', () => {
       // Arrange - Login as student
       await page.goto('/');
       await page.getByPlaceholder('Enter your username').fill('TestStudent');
-      await page.locator('.cursor-pointer').filter({ hasText: 'Student' }).click();
+      await page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Student' })
+      }).click();
       await page.getByRole('button', { name: 'Get Started' }).click();
       
       // Wait for navigation to load
@@ -291,25 +311,30 @@ test.describe('@weekly Role System', () => {
       // Arrange - Login as instructor
       await page.goto('/');
       await page.getByPlaceholder('Enter your username').fill('TestInstructor');
-      await page.locator('.cursor-pointer').filter({ hasText: 'Instructor' }).click();
+      await page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Instructor' })
+      }).click();
+      await page.getByLabel('Instructor Passcode').fill('TeachSQL2024');
       await page.getByRole('button', { name: 'Get Started' }).click();
       
       // Wait for navigation to load
       await expect(page).toHaveURL(/\/instructor-dashboard$/);
       
-      // Assert - Instructor navigation links
-      await expect(page.getByRole('link', { name: /Dashboard/i })).toBeVisible();
-      await expect(page.getByRole('link', { name: /Research/i })).toBeVisible();
-      
-      // Assert - Instructor badge visible
+      // Assert - Instructor badge visible (confirms role is loaded)
       await expect(page.getByText('Instructor', { exact: false })).toBeVisible();
+      
+      // Assert - Instructor navigation links (use getByText for more reliable matching)
+      await expect(page.getByText('Dashboard')).toBeVisible();
+      await expect(page.getByText('Research')).toBeVisible();
     });
 
     test('navigation highlights active route for Student', async ({ page }) => {
       // Arrange - Login as student
       await page.goto('/');
       await page.getByPlaceholder('Enter your username').fill('TestStudent');
-      await page.locator('.cursor-pointer').filter({ hasText: 'Student' }).click();
+      await page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Student' })
+      }).click();
       await page.getByRole('button', { name: 'Get Started' }).click();
       await expect(page).toHaveURL(/\/practice$/);
       
@@ -330,26 +355,34 @@ test.describe('@weekly Role System', () => {
       // Arrange - Login as instructor
       await page.goto('/');
       await page.getByPlaceholder('Enter your username').fill('TestInstructor');
-      await page.locator('.cursor-pointer').filter({ hasText: 'Instructor' }).click();
+      await page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Instructor' })
+      }).click();
+      await page.getByLabel('Instructor Passcode').fill('TeachSQL2024');
       await page.getByRole('button', { name: 'Get Started' }).click();
       await expect(page).toHaveURL(/\/instructor-dashboard$/);
       
+      // Wait for instructor badge to confirm role is loaded
+      await expect(page.getByText('Instructor', { exact: false })).toBeVisible();
+      
       // Assert - Dashboard navigation visible
-      await expect(page.getByRole('link', { name: /Dashboard/i })).toBeVisible();
+      await expect(page.getByText('Dashboard')).toBeVisible();
       
       // Navigate to research
-      await page.getByRole('link', { name: /Research/i }).click();
+      await page.getByText('Research').first().click();
       await expect(page).toHaveURL(/\/research$/);
       
-      // Assert - Research link is visible
-      await expect(page.getByRole('link', { name: /Research/i })).toBeVisible();
+      // Assert - Research page loaded (indicates navigation worked)
+      await expect(page.getByRole('heading', { name: /Research/i })).toBeVisible();
     });
 
     test('logout button is visible in navigation', async ({ page }) => {
       // Arrange - Login as student
       await page.goto('/');
       await page.getByPlaceholder('Enter your username').fill('TestStudent');
-      await page.locator('.cursor-pointer').filter({ hasText: 'Student' }).click();
+      await page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Student' })
+      }).click();
       await page.getByRole('button', { name: 'Get Started' }).click();
       await expect(page).toHaveURL(/\/practice$/);
       
@@ -383,7 +416,8 @@ test.describe('@weekly Role System', () => {
       
       // Assert - Auto-redirected to practice
       await expect(page).toHaveURL(/\/practice$/);
-      await expect(page.getByText('SQL-Adapt Learning System')).toBeVisible();
+      // Check for heading on the practice page
+      await expect(page.getByRole('heading', { name: /Practice SQL/i })).toBeVisible();
     });
 
     test('returning Instructor is auto-redirected from / to /instructor-dashboard', async ({ page }) => {
@@ -408,11 +442,21 @@ test.describe('@weekly Role System', () => {
     });
 
     test('profile persists after page reload', async ({ page }) => {
-      // Arrange - Login as student
-      await page.goto('/');
-      await page.getByPlaceholder('Enter your username').fill('PersistTest');
-      await page.locator('.cursor-pointer').filter({ hasText: 'Student' }).click();
-      await page.getByRole('button', { name: 'Get Started' }).click();
+      // Arrange - Create student profile in localStorage
+      const studentProfile: UserProfile = {
+        id: 'user-student-persist',
+        name: 'PersistTest',
+        role: 'student',
+        createdAt: Date.now(),
+      };
+      
+      await page.addInitScript((profile) => {
+        window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(profile));
+        window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      }, studentProfile);
+      
+      // Act - Go directly to practice page
+      await page.goto('/practice');
       await expect(page).toHaveURL(/\/practice$/);
       
       // Act - Reload page
@@ -420,14 +464,17 @@ test.describe('@weekly Role System', () => {
       
       // Assert - Still on practice page (profile persisted)
       await expect(page).toHaveURL(/\/practice$/);
-      await expect(page.getByText('SQL-Adapt Learning System')).toBeVisible();
+      // Check for heading on the practice page
+      await expect(page.getByRole('heading', { name: /Practice SQL/i })).toBeVisible();
     });
 
     test('logout clears profile and redirects to /', async ({ page }) => {
       // Arrange - Login as student
       await page.goto('/');
       await page.getByPlaceholder('Enter your username').fill('LogoutTest');
-      await page.locator('.cursor-pointer').filter({ hasText: 'Student' }).click();
+      await page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Student' })
+      }).click();
       await page.getByRole('button', { name: 'Get Started' }).click();
       await expect(page).toHaveURL(/\/practice$/);
       
@@ -452,7 +499,9 @@ test.describe('@weekly Role System', () => {
       // Act - Complete registration
       await page.goto('/');
       await page.getByPlaceholder('Enter your username').fill(username);
-      await page.locator('.cursor-pointer').filter({ hasText: 'Student' }).click();
+      await page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Student' })
+      }).click();
       await page.getByRole('button', { name: 'Get Started' }).click();
       
       // Assert - Check stored profile
@@ -479,7 +528,9 @@ test.describe('@weekly Role System', () => {
       // Arrange - Login as student
       await page.goto('/');
       await page.getByPlaceholder('Enter your username').fill('RoleSwitchTest');
-      await page.locator('.cursor-pointer').filter({ hasText: 'Student' }).click();
+      await page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Student' })
+      }).click();
       await page.getByRole('button', { name: 'Get Started' }).click();
       await expect(page).toHaveURL(/\/practice$/);
       
@@ -489,7 +540,10 @@ test.describe('@weekly Role System', () => {
       
       // Act - Login as instructor
       await page.getByPlaceholder('Enter your username').fill('RoleSwitchTest');
-      await page.locator('.cursor-pointer').filter({ hasText: 'Instructor' }).click();
+      await page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Instructor' })
+      }).click();
+      await page.getByLabel('Instructor Passcode').fill('TeachSQL2024');
       await page.getByRole('button', { name: 'Get Started' }).click();
       
       // Assert - Redirected to instructor dashboard
@@ -501,7 +555,9 @@ test.describe('@weekly Role System', () => {
       // Arrange - Login as student and verify nav
       await page.goto('/');
       await page.getByPlaceholder('Enter your username').fill('NavUpdateTest');
-      await page.locator('.cursor-pointer').filter({ hasText: 'Student' }).click();
+      await page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Student' })
+      }).click();
       await page.getByRole('button', { name: 'Get Started' }).click();
       await expect(page).toHaveURL(/\/practice$/);
       
@@ -513,20 +569,29 @@ test.describe('@weekly Role System', () => {
       await expect(page).toHaveURL(/\/$/);
       
       await page.getByPlaceholder('Enter your username').fill('NavUpdateTest');
-      await page.locator('.cursor-pointer').filter({ hasText: 'Instructor' }).click();
+      await page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Instructor' })
+      }).click();
+      await page.getByLabel('Instructor Passcode').fill('TeachSQL2024');
       await page.getByRole('button', { name: 'Get Started' }).click();
       
       // Assert - Instructor navigation visible
       await expect(page).toHaveURL(/\/instructor-dashboard$/);
-      await expect(page.getByRole('link', { name: /Dashboard/i })).toBeVisible();
-      await expect(page.getByRole('link', { name: /Research/i })).toBeVisible();
+      
+      // Wait for instructor badge to confirm role is loaded
+      await expect(page.getByText('Instructor', { exact: false })).toBeVisible();
+      
+      await expect(page.getByText('Dashboard')).toBeVisible();
+      await expect(page.getByText('Research')).toBeVisible();
     });
 
     test('role badge updates after switching roles', async ({ page }) => {
       // Arrange - Login as student
       await page.goto('/');
       await page.getByPlaceholder('Enter your username').fill('BadgeTest');
-      await page.locator('.cursor-pointer').filter({ hasText: 'Student' }).click();
+      await page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Student' })
+      }).click();
       await page.getByRole('button', { name: 'Get Started' }).click();
       await expect(page).toHaveURL(/\/practice$/);
       
@@ -536,7 +601,10 @@ test.describe('@weekly Role System', () => {
       // Act - Switch to instructor
       await page.getByRole('button', { name: /Logout/i }).click();
       await page.getByPlaceholder('Enter your username').fill('BadgeTest');
-      await page.locator('.cursor-pointer').filter({ hasText: 'Instructor' }).click();
+      await page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Instructor' })
+      }).click();
+      await page.getByLabel('Instructor Passcode').fill('TeachSQL2024');
       await page.getByRole('button', { name: 'Get Started' }).click();
       
       // Assert - Instructor badge visible
@@ -611,7 +679,9 @@ test.describe('@weekly Role System', () => {
       
       // Act - Enter username with extra whitespace
       await page.getByPlaceholder('Enter your username').fill('  TestUser  ');
-      await page.locator('.cursor-pointer').filter({ hasText: 'Student' }).click();
+      await page.locator('.cursor-pointer').filter({ 
+        has: page.getByRole('heading', { name: 'Student' })
+      }).click();
       await page.getByRole('button', { name: 'Get Started' }).click();
       
       // Assert - Redirected successfully

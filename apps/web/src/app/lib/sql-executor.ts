@@ -43,6 +43,55 @@ function valuesEqual(actual: unknown, expected: unknown): boolean {
 
 let SQL: any = null;
 let sqlInitializationPromise: Promise<any> | null = null;
+let sqlInitializationError: Error | null = null;
+
+/**
+ * Error thrown when SQL.js initialization fails
+ */
+export class SQLInitializationError extends Error {
+  constructor(
+    message: string,
+    public readonly cause?: Error
+  ) {
+    super(message);
+    this.name = 'SQLInitializationError';
+  }
+}
+
+/**
+ * Check if an error is a WebAssembly compilation error
+ */
+function isWasmCompilationError(error: Error): boolean {
+  const message = error.message || '';
+  return message.includes('magic word') || 
+         message.includes('CompileError') ||
+         message.includes('WebAssembly') ||
+         message.includes('expected');
+}
+
+/**
+ * Reset the SQL initialization state to allow retry
+ * Called when user clicks "Reload Page" or when we want to force re-initialization
+ */
+export function resetSQLInitialization() {
+  SQL = null;
+  sqlInitializationPromise = null;
+  sqlInitializationError = null;
+  console.log('[sql.js] Initialization state reset');
+}
+
+/**
+ * Get the absolute URL for loading WASM files.
+ * Uses the current document location to ensure correct resolution in all environments.
+ */
+function getWasmUrl(file: string): string {
+  // Construct absolute URL using current location as base
+  // This ensures correct resolution regardless of current route or base path
+  const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+  const path = `${baseUrl}/${file}`;
+  console.log(`[sql.js] WASM URL resolved: ${file} -> ${path}`);
+  return path;
+}
 
 export async function initializeSQL() {
   // Return existing instance if available
@@ -55,26 +104,73 @@ export async function initializeSQL() {
     return sqlInitializationPromise;
   }
   
+  // If we previously failed, reset state to allow retry
+  // This enables auto-retry behavior when the user tries again
+  if (sqlInitializationError) {
+    resetSQLInitialization();
+  }
+  
   // Start new initialization and track the promise
-  // Try to load WASM from local public directory first, fallback to CDN
-  sqlInitializationPromise = initSqlJs({
-    locateFile: file => {
-      // Use local WASM file - copied to dist root during build
-      return `/${file}`;
+  sqlInitializationPromise = (async () => {
+    let lastError: Error | undefined;
+    
+    // Try 1: Load from local WASM file (absolute path from root)
+    try {
+      console.log('[sql.js] Attempting local WASM load from /sql-wasm.wasm...');
+      const sql = await initSqlJs({
+        locateFile: file => getWasmUrl(file)
+      });
+      SQL = sql;
+      sqlInitializationError = null;
+      console.log('[sql.js] Successfully loaded from local WASM file');
+      return sql;
+    } catch (err) {
+      lastError = err as Error;
+      console.warn('[sql.js] Local WASM load failed:', err);
+      console.warn('[sql.js] Error details:', {
+        message: lastError.message,
+        name: lastError.name
+      });
     }
-  }).catch((err) => {
-    console.warn('[sql.js] Local WASM failed, falling back to CDN:', err);
-    // Fallback to CDN if local file fails
-    return initSqlJs({
-      locateFile: file => `https://sql.js.org/dist/${file}`
-    });
-  }).then(sql => {
-    SQL = sql;
-    return sql;
-  }).finally(() => {
-    // Clear the promise so future calls can retry if needed
-    sqlInitializationPromise = null;
-  });
+    
+    // Try 2: Fallback to CDN
+    try {
+      console.log('[sql.js] Attempting CDN fallback...');
+      const sql = await initSqlJs({
+        locateFile: file => {
+          const cdnUrl = `https://sql.js.org/dist/${file}`;
+          console.log(`[sql.js] CDN locateFile: ${file} -> ${cdnUrl}`);
+          return cdnUrl;
+        }
+      });
+      SQL = sql;
+      sqlInitializationError = null;
+      console.log('[sql.js] Successfully loaded from CDN fallback');
+      return sql;
+    } catch (err) {
+      lastError = err as Error;
+      console.error('[sql.js] CDN fallback also failed:', err);
+    }
+    
+    // Both attempts failed - provide helpful error message
+    let userMessage = 'Failed to initialize SQL engine. ';
+    
+    if (isWasmCompilationError(lastError!)) {
+      userMessage += 'The database file could not be loaded. This may be due to: ' +
+        '(1) Network connectivity issues, ' +
+        '(2) The WASM file not being found at the expected location, or ' +
+        '(3) Browser security settings blocking WebAssembly. ' +
+        'Please try refreshing the page or check your internet connection.';
+    } else {
+      userMessage += lastError?.message || 'Unknown error occurred.';
+    }
+    
+    // Store the error and reset promise so we can retry on next call
+    sqlInitializationError = lastError || new Error('Unknown initialization error');
+    sqlInitializationPromise = null; // Reset promise to allow retry
+    
+    throw new SQLInitializationError(userMessage, lastError);
+  })();
   
   return sqlInitializationPromise;
 }

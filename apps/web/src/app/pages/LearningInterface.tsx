@@ -9,7 +9,7 @@ import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/SQLEditor';
 import { HintSystem } from '../components/HintSystem';
 import { ConceptCoverage } from '../components/ConceptCoverage';
 import { AskMyTextbookChat } from '../components/AskMyTextbookChat';
-import { Clock, CheckCircle2, AlertCircle, Pause, Sparkles, BookOpen, Check, GraduationCap, Target } from 'lucide-react';
+import { Clock, CheckCircle2, AlertCircle, Pause, Sparkles, BookOpen, Check, GraduationCap, Target, Settings2, Terminal, Keyboard, Copy } from 'lucide-react';
 import {
   SQLProblem,
   InteractionEvent,
@@ -23,6 +23,7 @@ import { storage } from '../lib/storage';
 import { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content-generator';
+import { buildPdfIndexOutputFields } from '../lib/pdf-retrieval';
 import { createEventId } from '../lib/event-id';
 import {
   startBackgroundAnalysis,
@@ -38,6 +39,8 @@ import {
   getConceptById
 } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
+import { cn } from '../components/ui/utils';
+import { useLLMSettings } from '../components/LLMSettingsHelper';
 
 const INSTRUCTOR_SUBTYPE_OPTIONS = getKnownSqlEngageSubtypes();
 
@@ -68,8 +71,20 @@ function formatTime(ms: number): string {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
+/**
+ * LearningInterface - Main student practice page
+ * 
+ * Provides the SQL practice environment with:
+ * - Problem selection and navigation
+ * - SQL editor with execution and correctness checking
+ * - Hint system with progressive guidance ladder (L1-L3)
+ * - Session timer and progress tracking
+ * - Concept coverage visualization
+ * 
+ * Used by both student and instructor roles (instructor has additional controls)
+ */
 export function LearningInterface() {
-  const { role, isStudent, isInstructor } = useUserRole();
+  const { role, isStudent, isInstructor, profile } = useUserRole();
   const [learnerId, setLearnerId] = useState('learner-1');
   const [sessionId, setSessionId] = useState('');
   const [currentProblem, setCurrentProblem] = useState<SQLProblem>(sqlProblems[0]);
@@ -215,6 +230,7 @@ export function LearningInterface() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Effect 1: Session initialization - handles profile, session ID, and state reset
   useEffect(() => {
     // Initialize learner profile if doesn't exist
     let profile = storage.getProfile(learnerId);
@@ -232,6 +248,7 @@ export function LearningInterface() {
       ? activeSessionId
       : storage.startSession(learnerId);
     const restoredDraft = storage.getPracticeDraft(learnerId, newSessionId, currentProblem.id);
+    
     setSessionId(newSessionId);
     setSqlDraft(restoredDraft ?? DEFAULT_SQL_EDITOR_CODE);
     setInteractions(
@@ -247,15 +264,21 @@ export function LearningInterface() {
     setLatestGeneratedUnit(null);
     setStartTime(Date.now());
     setElapsedTime(0);
+  }, [learnerId, currentProblem.id]);
 
-    // Start background trace analysis for this session
+  // Effect 2: Background analysis - handles trace analysis lifecycle
+  useEffect(() => {
+    // Only start analysis when we have a valid session
+    if (!sessionId) return;
+    
+    // Stop any existing analysis before starting new one
     if (stopAnalysisRef.current) {
       stopAnalysisRef.current();
     }
     
-    const stopAnalysis = startBackgroundAnalysis(learnerId, newSessionId, {
-      intervalMs: ANALYSIS_INTERVAL_MS, // Use shared constant
-      enableAutoCreation: true, // Enable proactive unit creation
+    const stopAnalysis = startBackgroundAnalysis(learnerId, sessionId, {
+      intervalMs: ANALYSIS_INTERVAL_MS,
+      enableAutoCreation: true,
       onAnalysisComplete: (result) => {
         setAnalysisStatus({ isRunning: true, lastResult: result });
       },
@@ -285,30 +308,20 @@ export function LearningInterface() {
     setAnalysisStatus({ isRunning: true });
     
     // Run initial analysis
-    const initialResult = runAnalysisOnce(learnerId, newSessionId);
+    const initialResult = runAnalysisOnce(learnerId, sessionId);
     setAnalysisStatus({ isRunning: true, lastResult: initialResult });
     
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [learnerId, currentProblem.id]);
+    // Cleanup function to stop analysis when session changes
+    return () => {
+      if (stopAnalysisRef.current) {
+        stopAnalysisRef.current();
+        stopAnalysisRef.current = null;
+      }
+    };
+  }, [learnerId, sessionId]);
 
-  const handleLearnerChange = (nextLearnerId: string) => {
-    if (nextLearnerId === learnerId) {
-      return;
-    }
-    // Clear prior learner context immediately to avoid one-render stale interaction carryover.
-    setInteractions([]);
-    setSessionId('');
-    setLastError(undefined);
-    setLastErrorEventId(undefined);
-    setEscalationTriggered(false);
-    setNotesActionMessage(undefined);
-    setGenerationError(undefined);
-    setLatestGeneratedUnit(null);
-    setSqlDraft(DEFAULT_SQL_EDITOR_CODE);
-    setStartTime(Date.now());
-    setElapsedTime(0);
-    setLearnerId(nextLearnerId);
-  };
+  // Learner switching is now handled via "Switch User" in the top navigation
+  // The learnerId state remains for data tracking purposes
 
   const instructorSubtypeOverride = isInstructor && subtypeOverride !== 'auto'
     ? canonicalizeSqlEngageSubtype(subtypeOverride)
@@ -770,23 +783,38 @@ export function LearningInterface() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-        <div className="border-b bg-white">
+        <div className={cn(
+          "border-b",
+          isStudent ? "bg-gradient-to-r from-blue-50 to-white border-blue-100" : "bg-amber-50 border-amber-200"
+        )}>
           <div className="container mx-auto px-4 py-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               {isStudent ? (
-                // Student-friendly header
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <GraduationCap className="size-6 text-blue-600" />
-                    <h1 className="text-2xl font-bold">Practice SQL</h1>
+                // Student-friendly header with blue accent
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-blue-100 rounded-xl">
+                    <GraduationCap className="size-7 text-blue-600" />
                   </div>
-                  <p className="text-gray-600 text-sm">Learn SQL with personalized hints and explanations</p>
+                  <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Practice SQL</h1>
+                    <p className="text-gray-600 text-sm">Learn SQL with personalized hints and explanations</p>
+                  </div>
                 </div>
               ) : (
-                // Instructor header
-                <div>
-                  <h1 className="text-2xl font-bold">SQL Learning Lab</h1>
-                  <p className="text-gray-600 text-sm">Adaptive instructional system with Guidance Ladder</p>
+                // Instructor header with amber accent
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-amber-200 rounded-xl">
+                    <Settings2 className="size-7 text-amber-700" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-2xl font-bold text-gray-900">SQL Learning Lab</h1>
+                      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">
+                        Instructor Mode
+                      </Badge>
+                    </div>
+                    <p className="text-gray-600 text-sm">Adaptive instructional system with Guidance Ladder</p>
+                  </div>
                 </div>
               )}
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
@@ -858,16 +886,13 @@ export function LearningInterface() {
                   </Select>
                 )}
 
-                <Select value={learnerId} onValueChange={handleLearnerChange}>
-                  <SelectTrigger className="w-full sm:w-[200px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="learner-1">Learner 1</SelectItem>
-                    <SelectItem value="learner-2">Learner 2</SelectItem>
-                    <SelectItem value="learner-3">Learner 3</SelectItem>
-                  </SelectContent>
-                </Select>
+                {/* User name display - switching handled via "Switch User" in navigation */}
+                {profile?.name && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-lg border border-blue-200">
+                    <GraduationCap className="size-4 text-blue-600" />
+                    <span className="text-sm font-medium text-blue-700">{profile.name}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -926,15 +951,15 @@ export function LearningInterface() {
                     value={currentProblem.id} 
                     onValueChange={handleProblemChange}
                   >
-                    <SelectTrigger className="w-full lg:w-[300px]">
+                    <SelectTrigger className="w-full lg:w-[300px]" data-testid="problem-select-trigger">
                       <div className="flex items-center gap-2 overflow-hidden">
                         <span className="truncate">{currentProblem.title}</span>
-                        <Badge variant="outline" className="text-[10px] px-1 shrink-0">
-                          {solvedCount}/{sqlProblems.length} solved
+                        <Badge variant="outline" className="text-[10px] px-1 shrink-0 hidden sm:inline-flex">
+                          {solvedCount}/{sqlProblems.length}
                         </Badge>
                       </div>
                     </SelectTrigger>
-                    <SelectContent className="max-h-[400px]">
+                    <SelectContent className="max-h-[400px] w-[calc(100vw-2rem)] sm:w-auto max-w-[400px]">
                       {difficultyOrder.map(difficulty => {
                         const problems = problemsByDifficulty[difficulty];
                         if (!problems?.length) return null;
@@ -1159,6 +1184,24 @@ export function LearningInterface() {
                   </div>
                 </div>
               </Card>
+
+              {/* Keyboard Shortcuts Help */}
+              <Card className="p-4 bg-slate-50 border-slate-200">
+                <div className="flex items-center gap-2 mb-3">
+                  <Keyboard className="size-4 text-slate-600" />
+                  <h3 className="font-semibold text-sm text-slate-700">Keyboard Shortcuts</h3>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600">Run query</span>
+                    <kbd className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-slate-700 font-mono">Ctrl+Enter</kbd>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-600">Focus problem</span>
+                    <kbd className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-slate-700 font-mono">Ctrl+/</kbd>
+                  </div>
+                </div>
+              </Card>
             </div>
           </div>
         </div>
@@ -1166,26 +1209,4 @@ export function LearningInterface() {
   );
 }
 
-function buildPdfIndexOutputFields(
-  provenance: PdfIndexProvenance | null
-): Record<string, string | number | boolean | null> {
-  if (!provenance) {
-    return {
-      pdf_index_id: null,
-      pdf_schema_version: null,
-      pdf_embedding_model_id: null,
-      pdf_chunker_version: null,
-      pdf_doc_count: 0,
-      pdf_chunk_count: 0
-    };
-  }
 
-  return {
-    pdf_index_id: provenance.indexId,
-    pdf_schema_version: provenance.schemaVersion,
-    pdf_embedding_model_id: provenance.embeddingModelId,
-    pdf_chunker_version: provenance.chunkerVersion,
-    pdf_doc_count: provenance.docCount,
-    pdf_chunk_count: provenance.chunkCount
-  };
-}

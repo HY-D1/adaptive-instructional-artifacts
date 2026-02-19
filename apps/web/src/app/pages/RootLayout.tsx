@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation, Navigate, useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
-import { Book, BarChart3, Code, HelpCircle, Menu, X, Keyboard, GraduationCap, LogOut, RefreshCw, AlertCircle, Users } from 'lucide-react';
+import { Book, BarChart3, Code, HelpCircle, Menu, X, Keyboard, GraduationCap, LogOut, RefreshCw, AlertCircle, Users, Settings } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { WelcomeModal } from '../components/WelcomeModal';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
@@ -149,6 +149,7 @@ export function RootLayout() {
   const isTextbookPage = location.pathname === '/textbook';
   const isResearchPage = location.pathname === '/research';
   const isInstructorPage = location.pathname === '/instructor-dashboard';
+  const isSettingsPage = location.pathname === '/settings';
 
   // Handle session expired redirect
   const handleSessionExpiredRedirect = () => {
@@ -172,11 +173,12 @@ export function RootLayout() {
     ? [
         { to: '/instructor-dashboard', label: 'Dashboard', icon: BarChart3, isActive: isInstructorPage },
         { to: '/research', label: 'Research', icon: Book, isActive: isResearchPage },
+        { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },
       ]
     : [
         { to: '/practice', label: 'Practice', icon: Code, isActive: isPracticePage },
         { to: '/textbook', label: 'My Textbook', icon: Book, isActive: isTextbookPage },
-        { to: '/research', label: 'Research', icon: BarChart3, isActive: isResearchPage },
+        { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },
       ];
 
   return (

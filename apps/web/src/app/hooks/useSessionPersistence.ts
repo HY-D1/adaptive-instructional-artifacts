@@ -164,11 +164,9 @@ export function useSessionPersistence(): UseSessionPersistenceReturn {
     // Emit event for same-tab listeners
     emitProfileCleared(previousProfile, 'storage');
     
-    // Redirect to start page
-    if (typeof window !== 'undefined') {
-      window.location.href = '/';
-    }
-  }, []);
+    // Redirect to start page using React Router navigate
+    navigate('/', { replace: true });
+  }, [navigate]);
   
   /**
    * Load profile from storage and check expiry
@@ -374,6 +372,9 @@ export function useActivityTracker(): void {
 /**
  * Hook to get a function that saves profile and emits events
  * 
+ * This hook reads the current profile from storage on each call,
+ * avoiding stale state issues that could occur with React state.
+ * 
  * @example
  * ```typescript
  * const saveProfile = useSaveProfile();
@@ -383,8 +384,8 @@ export function useActivityTracker(): void {
 export function useSaveProfile(): (
   updates: Partial<import('../types').UserProfile>
 ) => void {
-  const { profile } = useSessionPersistence();
-  
+  // Note: We don't use profile state here to avoid stale closures.
+  // We always read the latest profile from storage when called.
   return useCallback(
     (updates: Partial<UserProfile>): void => {
       const currentProfile = storage.getUserProfile();
@@ -396,7 +397,7 @@ export function useSaveProfile(): (
       // Emit same-tab event (storage event handles cross-tab)
       emitProfileUpdated(newProfile, currentProfile, 'manual');
     },
-    [profile]
+    [] // No dependencies - always reads fresh from storage
   );
 }
 

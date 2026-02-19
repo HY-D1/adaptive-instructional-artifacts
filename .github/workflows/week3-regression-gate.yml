@@ -46,19 +46,19 @@ jobs:
       - name: Build application
         run: npm run build
       
-      - name: Run core E2E tests (Shard ${{ matrix.shard }}/${{ matrix.totalShards }})
+      - name: Run @weekly E2E tests (Shard ${{ matrix.shard }}/${{ matrix.totalShards }})
         id: test-run
-        run: npx playwright test --shard=${{ matrix.shard }}/${{ matrix.totalShards }}
+        run: npx playwright test -c playwright.config.ts --grep @weekly --shard=${{ matrix.shard }}/${{ matrix.totalShards }}
         env:
           CI: 1
         continue-on-error: false
       
       - name: Create demo directory
-        if: success()
+        if: success() && matrix.shard == 1
         run: mkdir -p dist/weekly-demo
       
       - name: Generate demo artifacts
-        if: success()
+        if: success() && matrix.shard == 1
         run: npm run demo:weekly
         continue-on-error: true
       
@@ -72,9 +72,9 @@ jobs:
       
       - name: Upload demo artifacts
         uses: actions/upload-artifact@v4
-        if: success()
+        if: success() && matrix.shard == 1
         with:
-          name: demo-artifacts-shard-${{ matrix.shard }}
+          name: demo-artifacts
           path: dist/weekly-demo/
           retention-days: 7
           if-no-files-found: warn
@@ -112,12 +112,11 @@ jobs:
           path: all-test-results
           merge-multiple: true
       
-      - name: Download all demo artifacts
+      - name: Download demo artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: demo-artifacts-shard-*
+          name: demo-artifacts
           path: all-demo-artifacts
-          merge-multiple: true
       
       - name: Upload consolidated test results
         uses: actions/upload-artifact@v4

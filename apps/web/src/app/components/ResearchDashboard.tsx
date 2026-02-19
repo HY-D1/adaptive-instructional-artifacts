@@ -304,6 +304,13 @@ export function ResearchDashboard() {
         blobUrlTimeoutRef.current = null;
       }, 5000);
     } catch (error) {
+      // Clean up blob URL on error to prevent memory leak
+      if (url) {
+        URL.revokeObjectURL(url);
+        if (blobUrlRef.current === url) {
+          blobUrlRef.current = null;
+        }
+      }
       if (isMountedRef.current) {
         setImportError(`Export failed: ${(error as Error).message}`);
         setIsExporting(false);

@@ -3,6 +3,37 @@ import { storage } from './storage';
 import { PdfIndexChunk, PdfIndexDocument, PdfIndexProvenance } from '../types';
 
 /**
+ * Build output fields for PDF index provenance
+ * Centralized utility to ensure consistent PDF provenance field building
+ * 
+ * @param provenance - PDF index provenance or null
+ * @returns Record with PDF index output fields
+ */
+export function buildPdfIndexOutputFields(
+  provenance: PdfIndexProvenance | null
+): Record<string, string | number | boolean | null> {
+  if (!provenance) {
+    return {
+      pdf_index_id: null,
+      pdf_schema_version: null,
+      pdf_embedding_model_id: null,
+      pdf_chunker_version: null,
+      pdf_doc_count: 0,
+      pdf_chunk_count: 0
+    };
+  }
+
+  return {
+    pdf_index_id: provenance.indexId,
+    pdf_schema_version: provenance.schemaVersion,
+    pdf_embedding_model_id: provenance.embeddingModelId,
+    pdf_chunker_version: provenance.chunkerVersion,
+    pdf_doc_count: provenance.docCount,
+    pdf_chunk_count: provenance.chunkCount
+  };
+}
+
+/**
  * A PDF chunk retrieved by semantic similarity search
  */
 export type RetrievedPdfChunk = {

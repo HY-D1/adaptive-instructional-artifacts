@@ -391,6 +391,9 @@ export function AskMyTextbookChat({
   }, []);
 
   // Cleanup toast timeouts on unmount
+  // NOTE: This cleanup effect is intentionally separate from toast creation to avoid
+  // re-running cleanup on every toast state change. All timeouts are tracked in
+  // toastTimeoutsRef for centralized cleanup on unmount only.
   useEffect(() => {
     return () => {
       toastTimeoutsRef.current.forEach(id => window.clearTimeout(id));
