@@ -34,8 +34,15 @@ test('@weekly smoke: practice editor draft persists across textbook navigation',
     }));
   });
 
-  await page.goto('/practice');
-  await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
+  // Navigate to root first to let StartPage handle the redirect
+  await page.goto('/');
+  await expect(page).toHaveURL(/\/practice/, { timeout: 30000 });
+  // Wait for SQL engine initialization to complete - poll for button to be enabled
+  await expect.poll(async () => {
+    const button = page.getByRole('button', { name: 'Run Query' });
+    const isEnabled = await button.isEnabled().catch(() => false);
+    return isEnabled;
+  }, { timeout: 60000, intervals: [500, 1000, 2000] }).toBe(true);
 
   const marker = 'keep-me-week2-draft-persistence';
   const sql = `-- ${marker}\nSELECT * FROM users;`;
@@ -65,9 +72,12 @@ test('@weekly smoke: hint ladder -> escalate -> add/update note -> textbook evid
     }));
   });
 
-  await page.goto('/practice');
-
-  await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
+  // Navigate to root first to let StartPage handle the redirect
+  await page.goto('/');
+  await expect(page).toHaveURL(/\/practice/);
+  // Wait for SQL engine initialization to complete
+  await page.waitForSelector('.monaco-editor .view-lines', { state: 'visible', timeout: 30000 });
+  await expect(page.getByRole('button', { name: 'Run Query' })).toBeEnabled({ timeout: 30000 });
   await expect(page.getByRole('heading', { name: 'Guidance Ladder' })).toBeVisible();
 
   const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -232,6 +242,13 @@ test('@weekly textbook provenance readability: merged source IDs and PDF citatio
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    // Set up student profile to bypass role selection
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'learner-1',
+      name: 'Test Learner',
+      role: 'student',
+      createdAt: Date.now()
+    }));
 
     const seededUnit = {
       id: 'unit-seeded-provenance',
@@ -332,7 +349,10 @@ test('@weekly textbook provenance readability: merged source IDs and PDF citatio
     );
   });
 
-  await page.goto('/textbook?learnerId=learner-1', { waitUntil: 'domcontentloaded' });
+  // Navigate to root first, then to textbook (authenticated route)
+  await page.goto('/');
+  await expect(page).toHaveURL(/\/practice/);
+  await page.goto('/textbook?learnerId=learner-1');
   await expect(page).toHaveURL(/\/textbook\?learnerId=learner-1/);
   await expect(page.getByRole('heading', { name: 'My Textbook', level: 1 })).toBeVisible({ timeout: 30000 });
   await expect(page.getByRole('heading', { name: 'Seeded Provenance Unit', level: 2 })).toBeVisible();

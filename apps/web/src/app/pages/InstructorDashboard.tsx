@@ -22,14 +22,31 @@ import { storage } from '../lib/storage';
 import { useUserRole } from '../hooks/useUserRole';
 import type { LearnerProfile, InteractionEvent } from '../types';
 
-// TODO: This is demo/mock data for MVP. Replace with real student data from backend.
-const MOCK_STUDENTS = [
-  { id: 'student-1', name: 'Alice Chen', email: 'alice.chen@school.edu', lastActive: Date.now() - 3600000 },
-  { id: 'student-2', name: 'Bob Martinez', email: 'bob.m@school.edu', lastActive: Date.now() - 7200000 },
-  { id: 'student-3', name: 'Carol Williams', email: 'carol.w@school.edu', lastActive: Date.now() - 1800000 },
-  { id: 'student-4', name: 'David Kim', email: 'david.kim@school.edu', lastActive: Date.now() - 86400000 },
-  { id: 'student-5', name: 'Emma Johnson', email: 'emma.j@school.edu', lastActive: Date.now() - 10800000 },
+// Demo data - only used when no real student data exists
+const DEMO_MODE = import.meta.env.DEV; // Only show demo data in development
+
+const DEMO_STUDENTS = [
+  { id: 'demo-1', name: 'Alice Chen (Demo)', email: 'alice.chen@school.edu', lastActive: Date.now() - 3600000 },
+  { id: 'demo-2', name: 'Bob Martinez (Demo)', email: 'bob.m@school.edu', lastActive: Date.now() - 7200000 },
+  { id: 'demo-3', name: 'Carol Williams (Demo)', email: 'carol.w@school.edu', lastActive: Date.now() - 1800000 },
 ];
+
+const DEMO_STATS = {
+  interactions: 127,
+  errors: [
+    { type: 'syntax-error', count: 12 },
+    { type: 'missing-join-condition', count: 8 },
+    { type: 'aggregate-misuse', count: 6 },
+    { type: 'subquery-error', count: 5 },
+  ],
+  conceptMastery: [
+    { concept: 'SELECT Basics', masteryRate: 78 },
+    { concept: 'WHERE Clause', masteryRate: 65 },
+    { concept: 'JOIN Operations', masteryRate: 42 },
+    { concept: 'Aggregations', masteryRate: 35 },
+    { concept: 'Subqueries', masteryRate: 28 },
+  ]
+};
 
 // Mock class statistics
 interface ClassStats {
@@ -79,20 +96,26 @@ export function InstructorDashboard() {
     loadData();
   }, []);
 
+  // Determine if we should show demo data
+  const hasRealData = profiles.length > 0 || interactions.length > 0;
+  const showDemoData = DEMO_MODE && !hasRealData;
+
   // Calculate class statistics
   const classStats: ClassStats = useMemo(() => {
-    const totalStudents = MOCK_STUDENTS.length;
-    const activeToday = MOCK_STUDENTS.filter(s => Date.now() - s.lastActive < 86400000).length;
+    // Use real profiles if available, otherwise use demo students in dev mode
+    const studentList = hasRealData ? profiles : (showDemoData ? DEMO_STUDENTS : []);
+    const totalStudents = studentList.length;
+    const activeToday = studentList.filter(s => Date.now() - s.lastActive < 86400000).length;
     
     // Calculate average progress based on concept coverage
     const avgProgress = profiles.length > 0
       ? Math.round(profiles.reduce((sum, p) => sum + p.conceptsCovered.size, 0) / profiles.length / 6 * 100)
-      : 45; // Default mock value
+      : (showDemoData ? 45 : 0);
 
-    // Get all interactions including mock data simulation
-    const totalInteractions = interactions.length + 127; // Add mock interactions
+    // Use real interactions or add demo interactions in dev mode
+    const totalInteractions = interactions.length + (showDemoData ? DEMO_STATS.interactions : 0);
 
-    // Analyze common errors from real data + mock patterns
+    // Analyze common errors from real data
     const errorCounts = interactions
       .filter(i => i.eventType === 'error' && i.errorSubtypeId)
       .reduce((acc, i) => {
@@ -100,17 +123,12 @@ export function InstructorDashboard() {
         return acc;
       }, {} as Record<string, number>);
 
-    // Add mock error patterns
-    const mockErrors = [
-      { type: 'syntax-error', count: 12 },
-      { type: 'missing-join-condition', count: 8 },
-      { type: 'aggregate-misuse', count: 6 },
-      { type: 'subquery-error', count: 5 },
-    ];
-
-    mockErrors.forEach(e => {
-      errorCounts[e.type] = (errorCounts[e.type] || 0) + e.count;
-    });
+    // Add demo error patterns only in dev mode when no real data
+    if (showDemoData) {
+      DEMO_STATS.errors.forEach(e => {
+        errorCounts[e.type] = (errorCounts[e.type] || 0) + e.count;
+      });
+    }
 
     const totalErrors = Object.values(errorCounts).reduce((a, b) => a + b, 0) || 1;
     const commonErrors = Object.entries(errorCounts)
@@ -122,28 +140,20 @@ export function InstructorDashboard() {
         percentage: Math.round((count / totalErrors) * 100)
       }));
 
-    // Concept mastery rates
-    const conceptMastery = [
-      { concept: 'SELECT Basics', masteryRate: 78 },
-      { concept: 'WHERE Clause', masteryRate: 65 },
-      { concept: 'JOIN Operations', masteryRate: 42 },
-      { concept: 'Aggregations', masteryRate: 35 },
-      { concept: 'Subqueries', masteryRate: 28 },
-    ];
+    // Concept mastery rates - use demo only in dev mode when no real data
+    const conceptMastery = hasRealData 
+      ? [] // Would calculate from real data
+      : (showDemoData ? DEMO_STATS.conceptMastery : []);
 
     return {
       totalStudents,
       activeToday,
-      avgProgress: Math.min(avgProgress || 45, 100),
+      avgProgress: Math.min(avgProgress || (showDemoData ? 45 : 0), 100),
       totalInteractions,
-      commonErrors: commonErrors.length > 0 ? commonErrors : mockErrors.map(e => ({
-        type: e.type.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        count: e.count,
-        percentage: Math.round((e.count / 31) * 100)
-      })),
+      commonErrors: commonErrors.length > 0 ? commonErrors : [],
       conceptMastery
     };
-  }, [profiles, interactions]);
+  }, [profiles, interactions, hasRealData, showDemoData]);
 
   // Calculate quick stats
   const quickStats = useMemo(() => [
@@ -206,6 +216,11 @@ export function InstructorDashboard() {
               <p className="text-gray-600">Overview of class progress and learning analytics</p>
             </div>
             <div className="flex items-center gap-3">
+              {showDemoData && (
+                <Badge variant="secondary" className="text-sm px-3 py-1 bg-amber-100 text-amber-800 hover:bg-amber-100">
+                  Demo Mode
+                </Badge>
+              )}
               <Badge variant="outline" className="text-sm px-3 py-1">
                 <Users className="size-3 mr-1" />
                 {classStats.totalStudents} Students
@@ -390,7 +405,12 @@ export function InstructorDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {MOCK_STUDENTS.map((student) => {
+                  {(hasRealData ? profiles.map(p => ({ 
+                    id: p.id, 
+                    name: p.name || p.id, 
+                    email: `${p.id}@local`, 
+                    lastActive: p.createdAt 
+                  })) : showDemoData ? DEMO_STUDENTS : []).map((student) => {
                     const profile = profiles.find(p => p.id === student.id);
                     // Deterministic pseudo-random based on student ID to avoid hydration mismatch
                     const conceptsCount = profile?.conceptsCovered.size || (student.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0) % 4) + 1;
@@ -428,7 +448,7 @@ export function InstructorDashboard() {
                           <Button 
                             variant="ghost" 
                             size="sm"
-                            onClick={() => navigate(`/textbook-review?learnerId=${student.id}`)}
+                            onClick={() => navigate(`/textbook?learnerId=${student.id}`)}
                           >
                             <FileText className="size-4 mr-1" />
                             View Textbook
@@ -439,6 +459,13 @@ export function InstructorDashboard() {
                   })}
                 </tbody>
               </table>
+              {!hasRealData && !showDemoData && (
+                <div className="text-center py-12 text-gray-500">
+                  <Users className="size-12 mx-auto mb-4 text-gray-300" />
+                  <p className="font-medium">No students yet</p>
+                  <p className="text-sm mt-1">Student data will appear here once students begin using the system.</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
