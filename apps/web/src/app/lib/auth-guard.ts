@@ -119,6 +119,12 @@ export function protectRoute(options: {
 } = {}): GuardResult {
   const profile = storage.getUserProfile();
   
+  // If allowAuthenticated is set, allow access regardless of auth status
+  // This is used for public routes like the start page
+  if (options.allowAuthenticated) {
+    return { allowed: true };
+  }
+  
   // Not authenticated - redirect to home (start page)
   if (!profile) {
     return { allowed: false, redirect: ROUTES.HOME };
@@ -127,11 +133,6 @@ export function protectRoute(options: {
   // Specific role required
   if (options.requiredRole && profile.role !== options.requiredRole) {
     return { allowed: false, redirect: getDefaultRouteForRole(profile.role) };
-  }
-  
-  // Authenticated access allowed
-  if (options.allowAuthenticated) {
-    return { allowed: true };
   }
   
   return { allowed: true };

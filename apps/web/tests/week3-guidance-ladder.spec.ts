@@ -209,10 +209,6 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
     // Wait for the problem to change and hint panel to reset
     const hintPanel = page.locator('[data-testid="hint-panel"]');
     await expect(hintPanel.getByText('Request a hint to get started')).toBeVisible({ timeout: 5000 });
-
-    // Verify hints reset - hint panel shows empty state
-    const hintPanel = page.locator('[data-testid="hint-panel"]');
-    await expect(hintPanel.getByText('Request a hint to get started')).toBeVisible();
     // Verify previous hints are not shown
     await expect(page.getByText('Hint 1')).toHaveCount(0);
   });

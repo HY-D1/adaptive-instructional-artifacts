@@ -94,9 +94,6 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     // Wait for hint panel to be fully rendered with PDF content
     const hintPanel = page.locator('[data-testid="hint-panel"]');
     await expect(hintPanel).toBeVisible({ timeout: 5000 });
-    // The test passes if the hint system works - source passages are bonus
-    const hintPanel = page.locator('[data-testid="hint-panel"]');
-    await expect(hintPanel).toBeVisible();
   });
 
   test('hints display without errors when PDF index is loaded', async ({ page }) => {
