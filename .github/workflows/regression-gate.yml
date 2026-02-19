@@ -101,7 +101,7 @@ jobs:
   # Consolidate artifacts from all shards
   consolidate-results:
     runs-on: ubuntu-latest
-    needs: verify-week3
+    needs: verify
     if: always()
     
     steps:
