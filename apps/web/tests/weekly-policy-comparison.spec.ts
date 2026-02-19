@@ -1,14 +1,49 @@
 import { expect, Locator, Page, test } from '@playwright/test';
+import { replaceEditorText } from './test-helpers';
 
 const INTERACTIONS_KEY = 'sql-learning-interactions';
 const PROFILES_KEY = 'sql-learning-profiles';
 const TEXTBOOK_KEY = 'sql-learning-textbook';
 const ACTIVE_SESSION_KEY = 'sql-learning-active-session';
 
+// Standard timeout constants for test operations
+const TIMEOUT_SHORT = 5000;
+const TIMEOUT_MEDIUM = 10000;
+const TIMEOUT_LONG = 15000;
+
 type ExportOptions = {
   allHistory?: boolean;
   learnerId?: string;
 };
+
+// Export data structure returned by storage.exportData()
+interface ExportData {
+  interactions: Array<{
+    id: string;
+    eventType: string;
+    sessionId?: string;
+    learnerId: string;
+    timestamp: number;
+    [key: string]: unknown;
+  }>;
+  profiles: Array<{
+    id: string;
+    name: string;
+    currentStrategy: string;
+    interactionCount: number;
+    errors: number;
+    [key: string]: unknown;
+  }>;
+  textbooks: Record<string, unknown[]>;
+  llmCache: unknown[];
+  replayMode: string;
+  pdfIndex: unknown;
+  pdfIndexProvenance: unknown;
+  activeSessionId: string | null;
+  exportScope: string;
+  exportPolicyVersion: string;
+  exportedAt: string;
+}
 
 type DecisionTrace = {
   index: number;
@@ -17,30 +52,43 @@ type DecisionTrace = {
   ruleFired: string;
   strategy: string;
   reasoning: string;
+  policyVersion: string;
+  policySemanticsVersion: string;
 };
+
+// Mock interaction for replay testing
+interface MockInteraction {
+  id: string;
+  timestamp: number;
+  eventType: string;
+  problemId: string;
+  learnerId: string;
+  errorSubtypeId?: string;
+}
+
+// Strategy type for replay
+ type Strategy = 'hint-only' | 'adaptive-low' | 'adaptive-medium' | 'adaptive-high';
 
 async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedErrorCount: number) {
   const marker = page.getByText(new RegExp(`\\b${expectedErrorCount}\\s+error(s)?\\b`));
 
   for (let i = 0; i < 24; i += 1) {
     await runQueryButton.click();
-    if (await marker.first().isVisible().catch(() => false)) {
+    // Use expect.poll for reliable waiting instead of fixed timeout
+    try {
+      await expect.poll(async () => {
+        return await marker.first().isVisible().catch(() => false);
+      }, { timeout: 2000, intervals: [100] }).toBe(true);
       return;
+    } catch {
+      // Continue trying
     }
-    await page.waitForTimeout(500);
   }
 
   throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
 }
 
-async function replaceEditorText(page: Page, text: string) {
-  const editorSurface = page.locator('.monaco-editor .view-lines').first();
-  await editorSurface.click({ position: { x: 8, y: 8 } });
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-  await page.keyboard.type(text);
-}
-
-async function exportSession(page: Page, options: ExportOptions = {}): Promise<any> {
+async function exportSession(page: Page, options: ExportOptions = {}): Promise<ExportData> {
   const exportData = await page.evaluate(async (opts) => {
     const { storage } = await import('/src/app/lib/storage.ts');
     return storage.exportData({ allHistory: opts.allHistory === true });
@@ -75,7 +123,7 @@ async function getDecisionTrace(page: Page): Promise<DecisionTrace[]> {
 
 async function runPolicyComparison(page: Page) {
   await page.getByTestId('trace-replay-button').click();
-  await page.waitForTimeout(200);
+  await expect(page.locator('[data-testid="trace-events-table-body"] tr').first()).toBeVisible({ timeout: 5000 });
 }
 
 async function setupLearnerWithInteractions(page: Page, strategy: string = 'adaptive-medium') {
@@ -203,111 +251,8 @@ async function setupLearnerWithInteractions(page: Page, strategy: string = 'adap
   }, strategy);
 }
 
-// Alternative setup that uses storage.createDefaultProfile
-async function setupLearnerWithStorageAPI(page: Page, strategy: string = 'adaptive-medium') {
-  await page.goto('/');
-  
-  await page.evaluate(async (learnerStrategy) => {
-    const { storage } = await import('/src/app/lib/storage.ts');
-    const now = Date.now();
-    const sessionId = `session-test-${now}`;
-    
-    storage.setActiveSessionId(sessionId);
-    storage.createDefaultProfile('learner-test', learnerStrategy as any);
-    
-    // Create mock interactions for trace replay
-    const interactions = [
-      {
-        id: 'evt-1',
-        sessionId,
-        learnerId: 'learner-test',
-        timestamp: now - 300000,
-        eventType: 'execution',
-        problemId: 'problem-1',
-        successful: false
-      },
-      {
-        id: 'evt-2',
-        sessionId,
-        learnerId: 'learner-test',
-        timestamp: now - 240000,
-        eventType: 'error',
-        problemId: 'problem-1',
-        errorSubtypeId: 'incomplete-query',
-        sqlEngageSubtype: 'incomplete query'
-      },
-      {
-        id: 'evt-3',
-        sessionId,
-        learnerId: 'learner-test',
-        timestamp: now - 180000,
-        eventType: 'hint_view',
-        problemId: 'problem-1',
-        errorSubtypeId: 'incomplete-query',
-        sqlEngageSubtype: 'incomplete query',
-        hintLevel: 1,
-        helpRequestIndex: 1,
-        sqlEngageRowId: 'sql-engage:787',
-        policyVersion: 'sql-engage-index-v3-hintid-contract'
-      },
-      {
-        id: 'evt-4',
-        sessionId,
-        learnerId: 'learner-test',
-        timestamp: now - 120000,
-        eventType: 'error',
-        problemId: 'problem-1',
-        errorSubtypeId: 'incomplete-query',
-        sqlEngageSubtype: 'incomplete query'
-      },
-      {
-        id: 'evt-5',
-        sessionId,
-        learnerId: 'learner-test',
-        timestamp: now - 60000,
-        eventType: 'hint_view',
-        problemId: 'problem-1',
-        errorSubtypeId: 'incomplete-query',
-        sqlEngageSubtype: 'incomplete query',
-        hintLevel: 2,
-        helpRequestIndex: 2,
-        sqlEngageRowId: 'sql-engage:787',
-        policyVersion: 'sql-engage-index-v3-hintid-contract'
-      },
-      {
-        id: 'evt-6',
-        sessionId,
-        learnerId: 'learner-test',
-        timestamp: now - 30000,
-        eventType: 'hint_view',
-        problemId: 'problem-1',
-        errorSubtypeId: 'incomplete-query',
-        sqlEngageSubtype: 'incomplete query',
-        hintLevel: 3,
-        helpRequestIndex: 3,
-        sqlEngageRowId: 'sql-engage:787',
-        policyVersion: 'sql-engage-index-v3-hintid-contract'
-      },
-      {
-        id: 'evt-7',
-        sessionId,
-        learnerId: 'learner-test',
-        timestamp: now,
-        eventType: 'error',
-        problemId: 'problem-1',
-        errorSubtypeId: 'incomplete-query',
-        sqlEngageSubtype: 'incomplete query'
-      }
-    ];
-    
-    for (const interaction of interactions) {
-      storage.saveInteraction(interaction as any);
-    }
-  }, strategy);
-}
-
 // Helper function to run replay and get decisions using orchestrator directly
-async function getReplayDecisions(page: Page, strategy: string): Promise<any[]> {
+async function getReplayDecisions(page: Page, strategy: string): Promise<DecisionTrace[]> {
   return page.evaluate(async (strat) => {
     const { orchestrator } = await import('/src/app/lib/adaptive-orchestrator.ts');
     const { storage } = await import('/src/app/lib/storage.ts');
@@ -317,7 +262,7 @@ async function getReplayDecisions(page: Page, strategy: string): Promise<any[]> 
     if (!profile) return [];
     
     const replayTrace = orchestrator.getPolicyReplayTrace(interactions);
-    return orchestrator.replayDecisionTrace(profile, replayTrace, strat as any);
+    return orchestrator.replayDecisionTrace(profile, replayTrace, strat as Strategy);
   }, strategy);
 }
 
@@ -625,9 +570,9 @@ test('@weekly policy-comparison: export preserves pdf_index_uploaded event type'
   });
 
   const exportData = await exportSession(page, { allHistory: true });
-  const exportedEvent = exportData.interactions.find((event: any) => event.id === eventId);
+  const exportedEvent = exportData.interactions.find((event) => event.id === eventId);
   const activeSessionExport = await exportSession(page, { allHistory: false });
-  const activeSessionEvent = activeSessionExport.interactions.find((event: any) => event.id === eventId);
+  const activeSessionEvent = activeSessionExport.interactions.find((event) => event.id === eventId);
 
   expect(exportedEvent).toBeTruthy();
   expect(exportedEvent.eventType).toBe('pdf_index_uploaded');
@@ -821,11 +766,11 @@ test('@weekly policy-comparison: decision trace structure is correct', async ({ 
     const { orchestrator } = await import('/src/app/lib/adaptive-orchestrator.ts');
     
     // Create mock interactions
-    const mockInteractions = [
+    const mockInteractions: MockInteraction[] = [
       { id: 'evt-1', timestamp: 1000, eventType: 'error', problemId: 'p1', learnerId: 'l1' },
       { id: 'evt-2', timestamp: 2000, eventType: 'hint_view', problemId: 'p1', learnerId: 'l1' },
       { id: 'evt-3', timestamp: 3000, eventType: 'error', problemId: 'p1', learnerId: 'l1' }
-    ] as any;
+    ];
     
     const mockProfile = {
       id: 'l1',
@@ -879,13 +824,13 @@ test('@weekly policy-comparison: decision divergence between strategies is detec
     const { orchestrator } = await import('/src/app/lib/adaptive-orchestrator.ts');
     
     // Create mock interactions with multiple errors (should trigger escalation for adaptive)
-    const mockInteractions = [
+    const mockInteractions: MockInteraction[] = [
       { id: 'evt-1', timestamp: 1000, eventType: 'error', problemId: 'p1', learnerId: 'l1', errorSubtypeId: 'test-error' },
       { id: 'evt-2', timestamp: 2000, eventType: 'hint_view', problemId: 'p1', learnerId: 'l1' },
       { id: 'evt-3', timestamp: 3000, eventType: 'error', problemId: 'p1', learnerId: 'l1', errorSubtypeId: 'test-error' },
       { id: 'evt-4', timestamp: 4000, eventType: 'hint_view', problemId: 'p1', learnerId: 'l1' },
       { id: 'evt-5', timestamp: 5000, eventType: 'error', problemId: 'p1', learnerId: 'l1', errorSubtypeId: 'test-error' }
-    ] as any;
+    ];
     
     const mockProfile = {
       id: 'l1',
@@ -925,7 +870,7 @@ test('@weekly policy-comparison: decision divergence between strategies is detec
 // Test 10: Research Guardrails - "Would Do" Language
 test('@weekly policy-comparison: research guardrails use "would do" language', async ({ page }) => {
   // Ensure clean state
-  await page.goto('/ ');
+  await page.goto('/');
   await page.evaluate(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -1011,7 +956,7 @@ test('@weekly policy-comparison: research guardrails use "would do" language', a
 // Test 11: Export Scope Toggle
 test('@weekly policy-comparison: export scope toggle works correctly', async ({ page }) => {
   // Ensure clean state
-  await page.goto('/ ');
+  await page.goto('/');
   await page.evaluate(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -1077,9 +1022,6 @@ test('@weekly policy-comparison: export scope toggle works correctly', async ({ 
     intervals: [200, 300, 500]
   }).toBe(true);
   
-  // Wait for toggle state to update
-  await page.waitForTimeout(300);
-  
   // Verify label updated with polling
   await expect.poll(async () => {
     const label = page.getByTestId('export-scope-label');
@@ -1109,9 +1051,6 @@ test('@weekly policy-comparison: export scope toggle works correctly', async ({ 
     intervals: [200, 300, 500]
   }).toBe(true);
   
-  // Wait for toggle state to update
-  await page.waitForTimeout(300);
-  
   // Verify label updated back
   await expect.poll(async () => {
     const label = page.getByTestId('export-scope-label');
@@ -1131,7 +1070,7 @@ test('@weekly policy-comparison: export scope toggle works correctly', async ({ 
 // Test 12: Strategy Comparison Tab
 test('@weekly policy-comparison: strategy comparison tab shows experiment conditions', async ({ page }) => {
   // Ensure clean state
-  await page.goto('/ ');
+  await page.goto('/');
   await page.evaluate(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -1157,9 +1096,6 @@ test('@weekly policy-comparison: strategy comparison tab shows experiment condit
     timeout: 10000,
     intervals: [200, 300, 500]
   }).toBe(true);
-  
-  // Wait for tab content to load
-  await page.waitForTimeout(500);
   
   // Verify experiment conditions are displayed with polling for each
   await expect.poll(async () => {

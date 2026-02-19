@@ -1,4 +1,5 @@
 import { expect, Page, test } from '@playwright/test';
+import { replaceEditorText } from './test-helpers';
 
 // ============================================================================
 // Helper Functions
@@ -187,13 +188,6 @@ async function waitForCoverageUpdate(page: Page, learnerId: string, conceptId?: 
 /**
  * Replace editor text using keyboard shortcuts
  */
-async function replaceEditorText(page: Page, text: string) {
-  const editorSurface = page.locator('.monaco-editor .view-lines').first();
-  await editorSurface.click({ position: { x: 8, y: 8 } });
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-  await page.keyboard.type(text);
-}
-
 /**
  * Set editor value directly through Monaco model (with keyboard fallback).
  */
@@ -240,7 +234,8 @@ async function runUntilErrorCount(page: Page, expectedErrorCount: number) {
     if (await marker.first().isVisible().catch(() => false)) {
       return;
     }
-    await page.waitForTimeout(400);
+    // Use polling with shorter interval instead of fixed timeout
+    await page.waitForFunction(() => true, { timeout: 100 });
   }
   throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
 }
@@ -253,7 +248,6 @@ async function runUntilFailedExecution(page: Page): Promise<any> {
 
   for (let i = 0; i < 10; i += 1) {
     await runQueryButton.click();
-    await page.waitForTimeout(400);
 
     const failedExecution = await page.evaluate(() => {
       const raw = window.localStorage.getItem('sql-learning-interactions');
@@ -612,7 +606,13 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
     
     // Trigger another error
     await page.getByRole('button', { name: 'Run Query' }).click();
-    await page.waitForTimeout(400);
+    await expect.poll(async () => (
+      page.evaluate(() => {
+        const raw = window.localStorage.getItem('sql-learning-interactions');
+        const interactions = raw ? JSON.parse(raw) : [];
+        return interactions.filter((i: any) => i.eventType === 'error').length;
+      })
+    ), { timeout: 5000 }).toBeGreaterThan(initialErrorCount);
     
     // Wait for coverage update
     await waitForCoverageUpdate(page, 'learner-1');
@@ -1304,7 +1304,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
     // Trigger more errors - each click may generate multiple error events due to parsing
     for (let i = 0; i < 3; i++) {
       await page.getByRole('button', { name: 'Run Query' }).click();
-      await page.waitForTimeout(400);
+      await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
     }
     
     // Wait for coverage update

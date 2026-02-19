@@ -41,7 +41,7 @@ export function generateDemoData() {
   // Charlie - Adaptive-High (better performance)
   simulateLearnerSession('learner-demo-3', learnerSessions.get('learner-demo-3')!, baseTime + 200000, 'adaptive-high');
 
-  console.log('Demo data generated successfully!');
+  // Demo data generation complete
 }
 
 function simulateLearnerSession(
@@ -149,5 +149,4 @@ function simulateLearnerSession(
 
 export function clearDemoData() {
   storage.clearAll();
-  console.log('Demo data cleared');
 }

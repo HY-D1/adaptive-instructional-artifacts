@@ -12,28 +12,52 @@ import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
 import { renderPrompt, TemplateId } from '../prompts/templates';
 import { storage } from './storage';
 import { calculateQualityScore } from './textbook-units';
+import DOMPurify from 'dompurify';
+import { marked } from 'marked';
 
+/**
+ * Options for generating an instructional unit from LLM
+ */
 export type GenerateUnitOptions = {
+  /** Learner identifier */
   learnerId: string;
+  /** Optional session ID */
   sessionId?: string;
+  /** Template ID for prompt selection */
   templateId: TemplateId;
+  /** Retrieval bundle with context */
   bundle: RetrievalBundle;
+  /** IDs of interactions that triggered this generation */
   triggerInteractionIds: string[];
+  /** LLM model to use */
   model?: string;
+  /** Generation parameters */
   params?: Partial<LLMGenerationParams>;
 };
 
+/**
+ * Result of generating an instructional unit
+ */
 export type GenerateUnitResult = {
+  /** Generated instructional unit */
   unit: InstructionalUnit;
+  /** Hash of input for caching */
   inputHash: string;
+  /** Cache key used */
   cacheKey: string;
+  /** Whether result came from cache */
   fromCache: boolean;
+  /** Whether fallback content was used */
   usedFallback: boolean;
+  /** Reason for using fallback */
   fallbackReason: FallbackReason;
+  /** Model used for generation */
   model: string;
+  /** Parameters used */
   params: LLMGenerationParams;
+  /** Parsing telemetry */
   parseTelemetry: TemplateParseTelemetry;
-  // Additional telemetry for monitoring
+  /** Generation time in milliseconds */
   generationTimeMs?: number;
 };
 
@@ -88,6 +112,11 @@ const DEFAULT_PARAMS: LLMGenerationParams = {
   timeoutMs: 25000
 };
 
+/**
+ * Generate an instructional unit using LLM with caching
+ * @param options - Generation options
+ * @returns Promise resolving to generated unit and metadata
+ */
 export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise<GenerateUnitResult> {
   const startTime = performance.now();
   const model = options.model || OLLAMA_MODEL;
@@ -136,8 +165,7 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
     // Save back the merged provenance to cache
     storage.saveLLMCacheRecord({ ...cached, unit: mergedUnit });
 
-    // Log cache hit for telemetry
-    console.log(`[LLM Cache] Hit for key ${cacheKey.slice(0, 32)}... (${Math.round(performance.now() - startTime)}ms)`);
+    // Cache hit - return cached unit
 
     return {
       unit: mergedUnit,
@@ -171,8 +199,7 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
       hintHistoryCount: options.bundle.hintHistory.length
     };
     
-    // Log generation metrics
-    console.log(`[LLM Generation] Model: ${model}, Parse: ${parsed.telemetry.status}, Time: ${llmTimeMs}ms, PDF chunks: ${retrievalMetrics.pdfChunksRetrieved}`);
+    // Generation metrics available in parseTelemetry
 
     if (!parsed.output) {
       const fallbackReason: FallbackReason = 'parse_failure';
@@ -217,7 +244,7 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
       }
     };
 
-    const unit = buildUnitFromStructuredOutput(
+    const unit = await buildUnitFromStructuredOutput(
       options,
       parsed.output,
       response.model,
@@ -285,6 +312,11 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
   }
 }
 
+/**
+ * Build a retrieval bundle for the current problem context
+ * @param options - Bundle construction options
+ * @returns Retrieval bundle with all context
+ */
 export function buildBundleForCurrentProblem(options: {
   learnerId: string;
   problem: SQLProblem;
@@ -381,14 +413,14 @@ function normalizeRetrievedSourceIds(sourceIds: string[]): string[] {
   });
 }
 
-function buildUnitFromStructuredOutput(
+async function buildUnitFromStructuredOutput(
   options: GenerateUnitOptions,
   output: StructuredTemplateOutput,
   model: string,
   params: LLMGenerationParams,
   inputHash: string,
   parseTelemetry: TemplateParseTelemetry
-): InstructionalUnit {
+): Promise<InstructionalUnit> {
   const retrievedSet = new Set(options.bundle.retrievedSourceIds);
   const sourceIds = output.source_ids
     .filter((sourceId) => {
@@ -415,8 +447,9 @@ function buildUnitFromStructuredOutput(
     `Common pitfall: ${output.common_pitfall || 'Not found in provided sources.'}`
   ].join('\n');
 
-  // DOMPurify is applied at render time in TextbookPage, not here
-  const content = markdown;
+  // Sanitize markdown content before storage to prevent XSS
+  const htmlContent = await marked(markdown);
+  const content = DOMPurify.sanitize(htmlContent);
 
   const genericTitle = `Help with ${options.bundle.problemTitle}`;
   const title = output.title?.trim() || genericTitle;
@@ -533,6 +566,12 @@ function buildFallbackUnit(
   return unit;
 }
 
+/**
+ * Parse LLM response into structured template output
+ * Attempts multiple parsing strategies (strict JSON, code fence, brace extract)
+ * @param raw - Raw LLM response text
+ * @returns Parsed output with telemetry
+ */
 export function parseTemplateJson(raw: string): TemplateParseResult {
   const normalizedRaw = normalizeRawText(raw);
   if (!normalizedRaw) {

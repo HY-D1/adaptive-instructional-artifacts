@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
-import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen, PlusCircle } from 'lucide-react';
-import { HelpEventType, InteractionEvent, SQLProblem } from '../types';
+
+import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
+import { HelpEventType, InteractionEvent } from '../types';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { storage } from '../lib/storage';
 import { createEventId } from '../lib/event-id';
@@ -12,10 +12,10 @@ import {
 } from '../data/sql-engage';
 import { buildRetrievalBundle, RetrievalPdfPassage } from '../lib/retrieval-bundle';
 import { getProblemById } from '../data/problems';
+import { cn } from './ui/utils';
 import { 
   SourceViewer, 
   RungIndicator, 
-  AddToTextbookButton,
   ConceptTag 
 } from './SourceViewer';
 import { getConceptFromRegistry } from '../data';
@@ -55,17 +55,24 @@ export function HintSystem({
   const [isAddingToTextbook, setIsAddingToTextbook] = useState(false);
   const MAX_DEDUPE_KEYS = 1000; // Prevent unbounded set growth
   
+  // Guidance Ladder constants
+  const MAX_HINT_LEVEL = 3; // L1-L3 hints before escalation to explanation
+  const AUTO_ESCALATION_THRESHOLD = 4; // Help request index that triggers auto-escalation
+  
   const helpFlowKeyRef = useRef('');
   const nextHelpRequestIndexRef = useRef(1);
   const emittedHelpEventKeysRef = useRef<Set<string>>(new Set());
   const helpEventSequenceRef = useRef(0);
   const isProcessingHintRef = useRef(false);
 
-  const profile = storage.getProfile(learnerId);
-  const scopedInteractions = recentInteractions.filter(
-    (interaction) =>
-      interaction.learnerId === learnerId &&
-      (!sessionId || interaction.sessionId === sessionId)
+  const profile = useMemo(() => storage.getProfile(learnerId), [learnerId]);
+  const scopedInteractions = useMemo(
+    () => recentInteractions.filter(
+      (interaction) =>
+        interaction.learnerId === learnerId &&
+        (!sessionId || interaction.sessionId === sessionId)
+    ),
+    [recentInteractions, learnerId, sessionId]
   );
   const canonicalOverrideSubtype = knownSubtypeOverride
     ? canonicalizeSqlEngageSubtype(knownSubtypeOverride)
@@ -338,9 +345,9 @@ export function HintSystem({
     const fallbackSubtype = errorSubtypeId || 'incomplete query';
     const effectiveSubtype = activeHintSubtype ||
       canonicalizeSqlEngageSubtype(overrideSubtype || fallbackSubtype);
-    // Clamp level to 1-3 range - this is intentional as we only have 3 hint levels
-    // before escalating to explanations (help request 4+)
-    const levelForSelection = Math.max(1, Math.min(3, helpRequestIndex)) as 1 | 2 | 3;
+    // Clamp level to valid hint range - this is intentional as we only have MAX_HINT_LEVEL
+    // hint levels before escalating to explanations (help request AUTO_ESCALATION_THRESHOLD+)
+    const levelForSelection = Math.max(1, Math.min(MAX_HINT_LEVEL, helpRequestIndex)) as 1 | 2 | 3;
 
     return orchestrator.getNextHint(
       effectiveSubtype,
@@ -433,8 +440,8 @@ export function HintSystem({
 
     // Log interaction with escalation metadata
     // will_escalate indicates that viewing this hint will trigger auto-escalation
-    // This happens at hint level 3 when no explanation has been shown yet
-    const willEscalate = hintSelection.hintLevel === 3 && !showExplanation;
+    // This happens at max hint level when no explanation has been shown yet
+    const willEscalate = hintSelection.hintLevel === MAX_HINT_LEVEL && !showExplanation;
     
     const hintEvent: InteractionEvent = {
       id: buildHelpEventId('hint', nextHelpRequestIndex),
@@ -481,8 +488,8 @@ export function HintSystem({
 
     isProcessingHintRef.current = false;
 
-    // Escalate automatically after Hint 3 (recorded as help request 4).
-    if (hintSelection.hintLevel === 3 && !showExplanation) {
+    // Escalate automatically after max hint level reached.
+    if (hintSelection.hintLevel === MAX_HINT_LEVEL && !showExplanation) {
       // Week 3 D8: Log escalation event before transitioning
       storage.logGuidanceEscalate({
         learnerId,
@@ -702,6 +709,7 @@ export function HintSystem({
                       onClick={() => setExpandedHintIndex(isExpanded ? null : idx)}
                       className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 transition-colors"
                       aria-expanded={isExpanded}
+                      aria-controls={`hint-sources-${idx}`}
                     >
                       {isExpanded ? (
                         <ChevronUp className="size-3.5" />
@@ -715,7 +723,7 @@ export function HintSystem({
                     </button>
                     
                     {isExpanded && (
-                      <div className="mt-2 space-y-2">
+                      <div id={`hint-sources-${idx}`} className="mt-2 space-y-2">
                         <p className="text-[11px] text-blue-600 italic">
                           The following passages from your uploaded PDF were used to generate this hint:
                         </p>
@@ -791,16 +799,16 @@ export function HintSystem({
             <span className="truncate">Explain</span>
           </Button>
           <button
+            type="button"
             onClick={handleAddToTextbook}
             disabled={!profile || !sessionId || currentRung >= 3 || isAddingToTextbook}
-            className={`
-              w-full h-9 text-sm px-2 rounded-md font-medium
-              inline-flex items-center justify-center gap-1
-              ${(!profile || !sessionId || currentRung >= 3) 
+            className={cn(
+              'w-full h-9 text-sm px-2 rounded-md font-medium',
+              'inline-flex items-center justify-center gap-1',
+              (!profile || !sessionId || currentRung >= 3) 
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
                 : 'bg-purple-600 text-white hover:bg-purple-700'
-              }
-            `}
+            )}
           >
             {isAddingToTextbook ? (
               <>
@@ -809,7 +817,7 @@ export function HintSystem({
               </>
             ) : (
               <>
-                <span>📝</span>
+                <FileText className="h-4 w-4" />
                 <span className="truncate">Save</span>
               </>
             )}

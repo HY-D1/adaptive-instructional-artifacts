@@ -14,6 +14,7 @@
  */
 
 import { expect, Locator, Page, test } from '@playwright/test';
+import { replaceEditorText } from './test-helpers';
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -28,31 +29,18 @@ async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedE
 
   for (let i = 0; i < 10; i += 1) {
     await runQueryButton.click();
-    if (await marker.first().isVisible().catch(() => false)) {
+    // Use expect.poll for reliable waiting instead of fixed timeout
+    try {
+      await expect.poll(async () => {
+        return await marker.first().isVisible().catch(() => false);
+      }, { timeout: 2000, intervals: [100] }).toBe(true);
       return;
+    } catch {
+      // Continue trying
     }
-    await page.waitForTimeout(400);
   }
 
   throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
-}
-
-/**
- * Replace the entire content of the Monaco editor with new text.
- * Uses Ctrl+A (or Cmd+A on Mac) to select all, then types the new content.
- */
-async function replaceEditorText(page: Page, text: string) {
-  const editorSurface = page.locator('.monaco-editor .view-lines').first();
-  await editorSurface.click({ position: { x: 8, y: 8 } });
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-  await page.keyboard.type(text);
-}
-
-/**
- * Get the current text content from the Monaco editor.
- */
-async function getEditorText(page: Page): Promise<string> {
-  return page.locator('.monaco-editor .view-lines').first().innerText();
 }
 
 /**
@@ -497,18 +485,20 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     await replaceEditorText(page, 'SELECT');
     await runUntilErrorCount(page, runQueryButton, 1);
 
-    // Rapidly click the hint button multiple times
+    // Click hint button multiple times sequentially with state verification
     const hintButton = page.getByRole('button', { name: 'Request Hint' });
     
-    // Fire multiple clicks rapidly
-    await Promise.all([
-      hintButton.click(),
-      hintButton.click(),
-      hintButton.click()
-    ]);
+    // Sequential clicks with state check between each
+    await hintButton.click();
+    // Wait for button to be disabled (processing state) before next click
+    await expect(hintButton).toBeDisabled();
     
-    // Wait for processing
-    await page.waitForTimeout(1000);
+    // Click again while processing - should be ignored
+    await hintButton.click({ force: true });
+    await hintButton.click({ force: true });
+    
+    // Wait for processing to complete
+    await expect(hintButton).toBeEnabled({ timeout: 5000 });
     
     // Verify deduplication worked
     const hintEvents = await getHintEventsFromStorage(page);

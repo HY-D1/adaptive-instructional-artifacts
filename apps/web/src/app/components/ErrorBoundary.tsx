@@ -2,17 +2,39 @@ import { Component, ReactNode, ErrorInfo } from 'react';
 import { Button } from './ui/button';
 import { AlertTriangle, RefreshCcw } from 'lucide-react';
 
+/**
+ * Props for ErrorBoundary component
+ */
 interface Props {
+  /** Child components to render */
   children: ReactNode;
+  /** Optional custom fallback UI */
   fallback?: ReactNode;
 }
 
+/**
+ * State for ErrorBoundary component
+ */
 interface State {
+  /** Whether an error has been caught */
   hasError: boolean;
+  /** The caught error */
   error: Error | null;
+  /** React error info */
   errorInfo: ErrorInfo | null;
 }
 
+/**
+ * Error Boundary component for catching React errors
+ * Displays a user-friendly error UI when children throw
+ * 
+ * @example
+ * ```tsx
+ * <ErrorBoundary>
+ *   <MyComponent />
+ * </ErrorBoundary>
+ * ```
+ */
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);

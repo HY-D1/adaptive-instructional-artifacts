@@ -6,7 +6,38 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Skeleton } from './ui/skeleton';
-import { Progress } from './ui/progress';
+
+
+// Strategy comparison data type
+interface StrategyComparison {
+  strategy: string;
+  totalErrors: number;
+  totalHints: number;
+  totalSuccess: number;
+  totalEscalations: number;
+  totalUnitsAdded: number;
+  totalUnitUpdates: number;
+  learnerCount: number;
+}
+
+// Timeline data point type
+interface TimelineDataPoint {
+  minute: number;
+  events: number;
+  errors: number;
+  hints: number;
+}
+
+// Comparison row type for table rendering
+interface ComparisonRow {
+  strategy: string;
+  avgErrors: number;
+  avgHints: number;
+  avgSuccess: number;
+  avgEscalations: number;
+  avgUnitsAdded: number;
+  avgDedupRate: string;
+}
 import {
   Table,
   TableBody,
@@ -263,13 +294,14 @@ export function ResearchDashboard() {
       }
       
       // Delay revoke to ensure download starts, but track for unmount cleanup
-      window.setTimeout(() => {
+      blobUrlTimeoutRef.current = window.setTimeout(() => {
         if (url) {
           URL.revokeObjectURL(url);
           if (blobUrlRef.current === url) {
             blobUrlRef.current = null;
           }
         }
+        blobUrlTimeoutRef.current = null;
       }, 5000);
     } catch (error) {
       if (isMountedRef.current) {
@@ -301,6 +333,7 @@ export function ResearchDashboard() {
 
   const fileReaderRef = useRef<FileReader | null>(null);
   const blobUrlRef = useRef<string | null>(null);
+  const blobUrlTimeoutRef = useRef<number | null>(null);
   const isMountedRef = useRef(true);
 
   useEffect(() => {
@@ -315,6 +348,11 @@ export function ResearchDashboard() {
       if (blobUrlRef.current) {
         URL.revokeObjectURL(blobUrlRef.current);
         blobUrlRef.current = null;
+      }
+      // Clean up blob URL timeout
+      if (blobUrlTimeoutRef.current) {
+        clearTimeout(blobUrlTimeoutRef.current);
+        blobUrlTimeoutRef.current = null;
       }
       // Clean up export interval and timeout
       if (exportIntervalRef.current) {
@@ -595,53 +633,57 @@ export function ResearchDashboard() {
   }, [interactionsByType]);
 
   // Strategy comparison
-  const strategyComparison = profiles.reduce((acc, profile) => {
-    const learnerInteractions = interactions.filter(i => i.learnerId === profile.id);
-    const errorCount = learnerInteractions.filter(i => i.eventType === 'error').length;
-    const hintCount = learnerInteractions.filter(i => i.eventType === 'hint_view').length;
-    const successCount = learnerInteractions.filter(i => i.eventType === 'execution' && i.successful).length;
-    const escalationCount = learnerInteractions.filter(i => i.eventType === 'explanation_view').length;
-    const unitsAddedCount = learnerInteractions.filter(i => i.eventType === 'textbook_add').length;
-    const unitUpdateCount = learnerInteractions.filter(i => i.eventType === 'textbook_update').length;
+  const { strategyComparison, comparisonData } = useMemo(() => {
+    const strategyComparison = profiles.reduce((acc, profile) => {
+      const learnerInteractions = interactions.filter(i => i.learnerId === profile.id);
+      const errorCount = learnerInteractions.filter(i => i.eventType === 'error').length;
+      const hintCount = learnerInteractions.filter(i => i.eventType === 'hint_view').length;
+      const successCount = learnerInteractions.filter(i => i.eventType === 'execution' && i.successful).length;
+      const escalationCount = learnerInteractions.filter(i => i.eventType === 'explanation_view').length;
+      const unitsAddedCount = learnerInteractions.filter(i => i.eventType === 'textbook_add').length;
+      const unitUpdateCount = learnerInteractions.filter(i => i.eventType === 'textbook_update').length;
 
-    if (!acc[profile.currentStrategy]) {
-      acc[profile.currentStrategy] = {
-        strategy: profile.currentStrategy,
-        totalErrors: 0,
-        totalHints: 0,
-        totalSuccess: 0,
-        totalEscalations: 0,
-        totalUnitsAdded: 0,
-        totalUnitUpdates: 0,
-        learnerCount: 0
-      };
-    }
+      if (!acc[profile.currentStrategy]) {
+        acc[profile.currentStrategy] = {
+          strategy: profile.currentStrategy,
+          totalErrors: 0,
+          totalHints: 0,
+          totalSuccess: 0,
+          totalEscalations: 0,
+          totalUnitsAdded: 0,
+          totalUnitUpdates: 0,
+          learnerCount: 0
+        };
+      }
 
-    acc[profile.currentStrategy].totalErrors += errorCount;
-    acc[profile.currentStrategy].totalHints += hintCount;
-    acc[profile.currentStrategy].totalSuccess += successCount;
-    acc[profile.currentStrategy].totalEscalations += escalationCount;
-    acc[profile.currentStrategy].totalUnitsAdded += unitsAddedCount;
-    acc[profile.currentStrategy].totalUnitUpdates += unitUpdateCount;
-    acc[profile.currentStrategy].learnerCount += 1;
+      acc[profile.currentStrategy].totalErrors += errorCount;
+      acc[profile.currentStrategy].totalHints += hintCount;
+      acc[profile.currentStrategy].totalSuccess += successCount;
+      acc[profile.currentStrategy].totalEscalations += escalationCount;
+      acc[profile.currentStrategy].totalUnitsAdded += unitsAddedCount;
+      acc[profile.currentStrategy].totalUnitUpdates += unitUpdateCount;
+      acc[profile.currentStrategy].learnerCount += 1;
 
-    return acc;
-  }, {} as Record<string, any>);
+      return acc;
+    }, {} as Record<string, StrategyComparison>);
 
-  const safeAverage = (total: number, count: number, digits = 1) => (
-    count > 0 ? (total / count).toFixed(digits) : (0).toFixed(digits)
-  );
-  const comparisonData = Object.values(strategyComparison).map((s: any) => ({
-    strategy: s.strategy.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-    avgErrors: Number(safeAverage(s.totalErrors, s.learnerCount)),
-    avgHints: Number(safeAverage(s.totalHints, s.learnerCount)),
-    avgSuccess: Number(safeAverage(s.totalSuccess, s.learnerCount)),
-    avgEscalations: Number(safeAverage(s.totalEscalations, s.learnerCount)),
-    avgUnitsAdded: Number(safeAverage(s.totalUnitsAdded, s.learnerCount)),
-    avgDedupRate: s.totalUnitsAdded + s.totalUnitUpdates > 0
-      ? (s.totalUnitUpdates / (s.totalUnitsAdded + s.totalUnitUpdates)).toFixed(2)
-      : '0.00'
-  }));
+    const safeAverage = (total: number, count: number, digits = 1) => (
+      count > 0 ? (total / count).toFixed(digits) : (0).toFixed(digits)
+    );
+    const comparisonData = Object.values(strategyComparison).map((s): ComparisonRow => ({
+      strategy: s.strategy.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      avgErrors: Number(safeAverage(s.totalErrors, s.learnerCount)),
+      avgHints: Number(safeAverage(s.totalHints, s.learnerCount)),
+      avgSuccess: Number(safeAverage(s.totalSuccess, s.learnerCount)),
+      avgEscalations: Number(safeAverage(s.totalEscalations, s.learnerCount)),
+      avgUnitsAdded: Number(safeAverage(s.totalUnitsAdded, s.learnerCount)),
+      avgDedupRate: s.totalUnitsAdded + s.totalUnitUpdates > 0
+        ? (s.totalUnitUpdates / (s.totalUnitsAdded + s.totalUnitUpdates)).toFixed(2)
+        : '0.00'
+    }));
+
+    return { strategyComparison, comparisonData };
+  }, [profiles, interactions]);
 
   const sortedTimelineInteractions = filteredInteractions
     .slice()
@@ -656,7 +698,7 @@ export function ResearchDashboard() {
     if (interaction.eventType === 'error') acc[minute].errors += 1;
     if (interaction.eventType === 'hint_view') acc[minute].hints += 1;
     return acc;
-  }, {} as Record<number, any>);
+  }, {} as Record<number, TimelineDataPoint>);
 
   const timelineChartData = Object.values(timelineData).sort((a, b) => a.minute - b.minute);
   const traceProblemOptions = useMemo(() => {
@@ -1209,7 +1251,7 @@ export function ResearchDashboard() {
                     </BarChart>
                   </ResponsiveContainer>
                   <div className="mt-4 text-sm text-gray-700 space-y-1">
-                    {comparisonData.map((row: any) => (
+                    {comparisonData.map((row: ComparisonRow) => (
                       <p key={row.strategy}>
                         <span className="font-medium">{row.strategy}:</span> dedup rate {row.avgDedupRate}
                       </p>

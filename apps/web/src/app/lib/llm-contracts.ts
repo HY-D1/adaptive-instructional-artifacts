@@ -14,22 +14,39 @@
 import type { GuidanceRung } from './guidance-ladder';
 import type { RetrievalBundle } from './retrieval-bundle';
 
-// LLM Output contract types
+/**
+ * Metadata for validated LLM output
+ */
 export type LLMOutputMetadata = {
+  /** Whether output is grounded in sources */
   grounded: boolean;
+  /** Count of source references */
   sourceRefIdsCount: number;
+  /** Count of concepts referenced */
   conceptIdsCount: number;
+  /** Concepts not in retrieval bundle */
   ungroundedConcepts: string[];
+  /** Contract version used */
   contractVersion: string;
+  /** Validation error messages */
   validationErrors: string[];
 };
 
+/**
+ * Structured output from LLM guidance generation
+ */
 export type LLMGuidanceOutput = {
+  /** Generated content text */
   content: string;
+  /** Referenced concept IDs */
   conceptIds: string[];
+  /** Source reference IDs */
   sourceRefIds: string[];
+  /** Validation metadata */
   metadata: LLMOutputMetadata;
+  /** Whether fallback was used */
   fallbackUsed?: boolean;
+  /** Reason for using fallback */
   fallbackReason?: string;
 };
 
@@ -177,7 +194,11 @@ Ensure all concepts are grounded in the provided sources.`,
   }
 };
 
-// Parse LLM output to extract structured fields
+/**
+ * Parse LLM output to extract structured fields
+ * @param rawOutput - Raw LLM response text
+ * @returns Parsed content, concept IDs, and source refs
+ */
 export function parseLLMOutput(rawOutput: string): {
   content: string;
   conceptIds: string[];
@@ -213,7 +234,13 @@ export function parseLLMOutput(rawOutput: string): {
   return { content: content.trim(), conceptIds, sourceRefIds };
 }
 
-// Validate LLM output against contract
+/**
+ * Validate LLM output against contract rules
+ * @param output - Parsed LLM output
+ * @param rung - Guidance rung level
+ * @param retrievalBundle - Bundle for grounding validation
+ * @returns Validation result with metadata
+ */
 export function validateLLMOutput(
   output: { content: string; conceptIds: string[]; sourceRefIds: string[] },
   rung: GuidanceRung,
@@ -279,7 +306,12 @@ export function validateLLMOutput(
   return { valid: errors.length === 0, metadata };
 }
 
-// Generate fallback content when retrieval is empty
+/**
+ * Generate fallback content when retrieval is empty
+ * @param rung - Guidance rung level
+ * @param errorSubtype - Optional error subtype for context
+ * @returns Fallback guidance output
+ */
 export function generateFallbackContent(
   rung: GuidanceRung,
   errorSubtype?: string
@@ -307,7 +339,14 @@ export function generateFallbackContent(
   };
 }
 
-// Main function to generate guidance with contract enforcement
+/**
+ * Generate guidance with contract enforcement
+ * Main entry point for LLM guidance generation
+ * @param rung - Target guidance rung
+ * @param retrievalBundle - Context retrieval bundle
+ * @param llmCall - Function to call LLM
+ * @returns Promise resolving to guidance output
+ */
 export async function generateGuidance(
   rung: GuidanceRung,
   retrievalBundle: RetrievalBundle,
@@ -380,7 +419,13 @@ function buildPrompt(template: string, bundle: RetrievalBundle): string {
     .replace('{{escalationHistory}}', '[]'); // Would come from ladder state
 }
 
-// Log LLM output for replay/analysis
+/**
+ * Create log entry for LLM generation
+ * @param output - LLM output to log
+ * @param rung - Guidance rung level
+ * @param bundle - Retrieval bundle used
+ * @returns Log entry object
+ */
 export function createLLMLogEntry(
   output: LLMGuidanceOutput,
   rung: GuidanceRung,

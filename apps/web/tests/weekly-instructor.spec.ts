@@ -5,10 +5,15 @@ async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedE
 
   for (let i = 0; i < 12; i += 1) {
     await runQueryButton.click();
-    if (await marker.first().isVisible().catch(() => false)) {
+    // Use expect.poll for reliable waiting instead of fixed timeout
+    try {
+      await expect.poll(async () => {
+        return await marker.first().isVisible().catch(() => false);
+      }, { timeout: 2000, intervals: [100] }).toBe(true);
       return;
+    } catch {
+      // Continue trying
     }
-    await page.waitForTimeout(400);
   }
 
   throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
@@ -56,7 +61,6 @@ test('@weekly instructor: trace table shows events and policy knob changes decis
   await page.getByTestId('trace-replay-button').click();
 
   // Wait for trace replay to complete and events to be populated
-  await page.waitForTimeout(300);
   const tableBodyRows = page.locator('[data-testid="trace-events-table-body"] tr');
   await expect(tableBodyRows.first()).toBeVisible({ timeout: 15000 });
   // Ensure events are fully loaded before assertions
@@ -75,9 +79,7 @@ test('@weekly instructor: trace table shows events and policy knob changes decis
   // Switch to hint-only and replay same trace slice; decision differences should collapse.
   await selectRadixOption(page, 'trace-policy-strategy-select', 'Hint-only baseline');
   await page.getByTestId('trace-replay-button').click();
-  await page.waitForTimeout(300);
-
-  await expect(page.getByTestId('trace-threshold-escalate')).toHaveText('never');
+  await expect(page.getByTestId('trace-threshold-escalate')).toHaveText('never', { timeout: 5000 });
   await expect(page.getByTestId('trace-threshold-aggregate')).toHaveText('never');
   await expect(page.getByTestId('trace-changed-decision-count')).toHaveText('0');
   await expect(page.getByTestId('trace-events-table-body').getByText('escalation-threshold-met')).toHaveCount(0);
@@ -85,8 +87,6 @@ test('@weekly instructor: trace table shows events and policy knob changes decis
   // Switch back to adaptive to confirm immediate policy effect reappears on the same slice.
   await selectRadixOption(page, 'trace-policy-strategy-select', 'Adaptive textbook policy');
   await page.getByTestId('trace-replay-button').click();
-  await page.waitForTimeout(300);
-
   await expectNumericValue(page.getByTestId('trace-threshold-escalate'), 3);
   await expect(page.getByTestId('trace-events-table-body').getByText('escalation-threshold-met').first()).toBeVisible();
   const changedAfterSwitchBack = Number((await page.getByTestId('trace-changed-decision-count').textContent())?.trim() || '0');
@@ -95,7 +95,6 @@ test('@weekly instructor: trace table shows events and policy knob changes decis
   // Auto-escalation mode is explicit and replayable.
   await selectRadixOption(page, 'trace-auto-escalation-mode-select', 'Threshold-gated auto escalation');
   await page.getByTestId('trace-replay-button').click();
-  await page.waitForTimeout(300);
-  await expect(page.getByTestId('trace-policy-semantics-version')).toContainText('threshold-gated');
+  await expect(page.getByTestId('trace-policy-semantics-version')).toContainText('threshold-gated', { timeout: 5000 });
   await expect(tableBodyRows.first()).toBeVisible({ timeout: 15000 });
 });

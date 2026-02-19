@@ -101,7 +101,9 @@ export const TEXTBOOK_UNIT_CONFIG = {
   schemaVersion: 'textbook-unit-v2'
 } as const;
 
-// Input for creating/updating a unit
+/**
+ * Input for creating or updating a textbook unit
+ */
 export type CreateUnitInput = {
   learnerId: string;
   sessionId: string;
@@ -130,13 +132,19 @@ export type CreateUnitInput = {
   }) => void;
 };
 
-// Dedupe key for finding existing units
+/**
+ * Key used for deduplicating textbook units
+ */
 export type UnitDedupeKey = {
   conceptIds: string[];
   type: InstructionalUnit['type'];
 };
 
-// Generate a dedupe key from input or unit
+/**
+ * Generate a dedupe key from input or unit
+ * @param input - Unit or input to generate key from
+ * @returns String dedupe key
+ */
 export function generateDedupeKey(
   input: UnitDedupeKey | InstructionalUnit
 ): string {
@@ -145,12 +153,17 @@ export function generateDedupeKey(
     : [input.conceptId];
   const type = input.type;
   
-  // Sort concept IDs for consistent key generation
-  const sortedConceptIds = [...conceptIds].sort().join(',');
+  // Sort concept IDs for consistent key generation (normalize case)
+  const sortedConceptIds = [...conceptIds].map(c => c.toLowerCase()).sort().join(',');
   return `${sortedConceptIds}::${type}`;
 }
 
-// Find existing unit by dedupe key
+/**
+ * Find existing unit by dedupe key
+ * @param units - Array of units to search
+ * @param dedupeKey - Key to match
+ * @returns Matching unit or undefined
+ */
 export function findExistingUnit(
   units: InstructionalUnit[],
   dedupeKey: string
@@ -158,7 +171,12 @@ export function findExistingUnit(
   return units.find((unit) => generateDedupeKey(unit) === dedupeKey);
 }
 
-// Check if unit should be updated (same concept) or created new
+/**
+ * Check if unit should be updated or created as new
+ * @param existing - Existing unit to check
+ * @param newInput - New input being considered
+ * @returns Decision with shouldUpdate flag and reason
+ */
 export function shouldUpdateUnit(
   existing: InstructionalUnit,
   newInput: CreateUnitInput
@@ -211,7 +229,12 @@ function createUpdateHistoryEntry(
   };
 }
 
-// Build updated unit from existing + new input
+/**
+ * Build updated unit from existing unit and new input
+ * @param existing - Existing unit to update
+ * @param newInput - New input with changes
+ * @returns Updated unit with merged data
+ */
 export function buildUpdatedUnit(
   existing: InstructionalUnit,
   newInput: CreateUnitInput
@@ -269,7 +292,12 @@ export function buildUpdatedUnit(
   return updatedUnit;
 }
 
-// Build new unit from input
+/**
+ * Build new unit from input
+ * @param input - Creation input
+ * @param unitId - ID for the new unit
+ * @returns New instructional unit
+ */
 export function buildNewUnit(
   input: CreateUnitInput,
   unitId: string
@@ -308,7 +336,14 @@ export function buildNewUnit(
   return newUnit;
 }
 
-// Main upsert function - returns action taken and result
+/**
+ * Main upsert function for textbook units
+ * Creates new or updates existing based on dedupe key
+ * @param existingUnits - Current units array
+ * @param input - Input for creation/update
+ * @param generateUnitId - Function to generate new unit IDs
+ * @returns Result with action taken and unit
+ */
 export function upsertTextbookUnit(
   existingUnits: InstructionalUnit[],
   input: CreateUnitInput,

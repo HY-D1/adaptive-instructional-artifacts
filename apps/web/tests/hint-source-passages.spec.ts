@@ -91,10 +91,9 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     // Check that hint appears
     await expect(page.getByText('Hint 1')).toBeVisible({ timeout: 5000 });
 
-    // Wait a bit for PDF retrieval to complete
-    await page.waitForTimeout(1000);
-
-    // Check if "View source passages" button appears (may not if no chunks retrieved)
+    // Wait for hint panel to be fully rendered with PDF content
+    const hintPanel = page.locator('[data-testid="hint-panel"]');
+    await expect(hintPanel).toBeVisible({ timeout: 5000 });
     // The test passes if the hint system works - source passages are bonus
     const hintPanel = page.locator('[data-testid="hint-panel"]');
     await expect(hintPanel).toBeVisible();
@@ -158,7 +157,7 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     // Get 3 hints
     for (let i = 0; i < 3; i++) {
       await requestHintButton.click();
-      await page.waitForTimeout(500);
+      await expect(page.getByText(`Hint ${i + 1}`)).toBeVisible({ timeout: 5000 });
     }
 
     // All hints should be visible
@@ -174,8 +173,8 @@ test.describe('@weekly Hint Source Passages Feature', () => {
       }
     });
 
-    // Give time for any async operations
-    await page.waitForTimeout(1000);
+    // Wait a moment for any async console errors to be captured
+    await page.waitForFunction(() => true, { timeout: 500 });
 
     // Should not have PDF retrieval errors
     const pdfErrors = consoleErrors.filter(e => e.includes('pdf') || e.includes('PDF'));
@@ -344,13 +343,13 @@ test.describe('@weekly Hint Source Passages Feature', () => {
 
     const requestHintButton = page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME });
     await requestHintButton.click();
-    await page.waitForTimeout(300);
+    await expect(page.getByText('Hint 1')).toBeVisible({ timeout: 5000 });
     await requestHintButton.click();
 
     await expect(page.getByText('Hint 2')).toBeVisible({ timeout: 5000 });
 
-    // Give time for PDF retrieval
-    await page.waitForTimeout(1000);
+    // Wait for hint cards to be fully rendered
+    await expect(page.locator('[data-testid^="hint-card-"]')).toHaveCount(2, { timeout: 5000 });
 
     // Test passes if hints work - using data-testid for stability
     const hintElements = page.locator('[data-testid^="hint-card-"]');

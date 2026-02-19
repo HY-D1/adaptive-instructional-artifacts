@@ -7,28 +7,53 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { BookOpen, ChevronDown, ChevronUp, FileText, Hash, Bookmark } from 'lucide-react';
+import { cn } from './ui/utils';
 import type { RetrievalSourcePassage } from '../lib/retrieval-bundle';
 import { storage } from '../lib/storage';
 
+/**
+ * Props for SourceViewer component
+ */
 export type SourceViewerProps = {
+  /** Source passages to display */
   passages: RetrievalSourcePassage[];
-  conceptLabels?: Record<string, string>; // conceptId -> label
+  /** Mapping of concept IDs to display labels */
+  conceptLabels?: Record<string, string>;
+  /** Whether panel starts expanded */
   initiallyExpanded?: boolean;
+  /** Max height of expanded panel in pixels */
   maxHeight?: number;
+  /** Additional CSS classes */
   className?: string;
-  // Week 3 D8: Props for logging source_view events
+  /** Problem ID for logging */
   problemId?: string;
+  /** Learner ID for logging */
   learnerId?: string;
+  /** Session ID for logging */
   sessionId?: string;
 };
 
+/**
+ * SourceViewer Component (Week 3 D7)
+ * 
+ * Displays textbook source passages for grounded help content.
+ * Groups passages by concept and provides expandable cards.
+ * 
+ * Features:
+ * - Collapsible/expandable panel
+ * - Passage grouping by concept
+ * - PDF text cleaning
+ * - Source view logging
+ * 
+ * @param props - Component props
+ * @returns Source viewer JSX
+ */
 export function SourceViewer({
   passages,
   conceptLabels = {},
   initiallyExpanded = false,
   maxHeight = 300,
   className = '',
-  // Week 3 D8: Logging props
   problemId,
   learnerId,
   sessionId
@@ -76,7 +101,7 @@ export function SourceViewer({
 
   if (passages.length === 0) {
     return (
-      <div className={`rounded-lg border border-dashed border-gray-200 bg-gray-50/50 p-4 ${className}`}>
+      <div className={cn('rounded-lg border border-dashed border-gray-200 bg-gray-50/50 p-4', className)}>
         <div className="flex items-center gap-2 text-gray-400">
           <BookOpen className="size-4" />
           <span className="text-sm">No sources available</span>
@@ -86,7 +111,7 @@ export function SourceViewer({
   }
 
   return (
-    <div className={`rounded-lg border border-gray-200 bg-white overflow-hidden ${className}`}>
+    <div className={cn('rounded-lg border border-gray-200 bg-white overflow-hidden', className)}>
       {/* Header */}
       <button
         onClick={handleToggleExpanded}
@@ -116,7 +141,7 @@ export function SourceViewer({
       {isExpanded && (
         <div 
           className="border-t border-gray-100 overflow-y-auto"
-          style={{ maxHeight }}
+          style={{ maxHeight: `${maxHeight}px` }}
         >
           <div className="p-3 space-y-4">
             {uniqueConceptIds.map((conceptId) => {
@@ -208,13 +233,12 @@ function PassageCard({
   return (
     <div
       onClick={onSelect}
-      className={`
-        rounded-md border p-3 cursor-pointer transition-all
-        ${isSelected 
+      className={cn(
+        'rounded-md border p-3 cursor-pointer transition-all',
+        isSelected 
           ? 'border-blue-300 bg-blue-50/50 ring-1 ring-blue-200' 
           : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
-        }
-      `}
+      )}
     >
       {/* Passage header */}
       <div className="flex items-center justify-between mb-2">
@@ -251,7 +275,10 @@ function PassageCard({
   );
 }
 
-// Compact source badge for inline display
+/**
+ * Compact source badge showing count of sources
+ * @param props - Badge props with count and optional click handler
+ */
 export function SourceBadge({
   count,
   onClick
@@ -270,7 +297,10 @@ export function SourceBadge({
   );
 }
 
-// Rung indicator component - Clean, modern design
+/**
+ * Guidance ladder rung indicator badge
+ * @param props - Rung props with level, label visibility, and size
+ */
 export function RungIndicator({
   rung,
   showLabel = true,
@@ -306,19 +336,22 @@ export function RungIndicator({
   };
   
   return (
-    <div className={`
-      inline-flex items-center rounded-full font-medium border
-      ${config.color}
-      ${sizeClasses[size]}
-    `}>
-      <Bookmark className={`size-3 ${config.iconColor}`} />
+    <div className={cn(
+      'inline-flex items-center rounded-full font-medium border',
+      config.color,
+      sizeClasses[size]
+    )}>
+      <Bookmark className={cn('size-3', config.iconColor)} />
       {showLabel && <span>{config.label}</span>}
       <span className="opacity-60">• {rung}/3</span>
     </div>
   );
 }
 
-// Concept tag component
+/**
+ * Concept tag component for displaying concept identifiers
+ * @param props - Tag props with concept ID, optional label, and click handler
+ */
 export function ConceptTag({
   conceptId,
   label,
@@ -331,10 +364,10 @@ export function ConceptTag({
   return (
     <span
       onClick={onClick}
-      className={`
-        inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-700
-        ${onClick ? 'cursor-pointer hover:bg-gray-200' : ''}
-      `}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-700',
+        onClick && 'cursor-pointer hover:bg-gray-200'
+      )}
     >
       <Hash className="size-3 text-gray-400" />
       <span className="truncate max-w-[120px]">{label || conceptId}</span>
@@ -342,7 +375,10 @@ export function ConceptTag({
   );
 }
 
-// Add to My Textbook button
+/**
+ * Button to add content to My Textbook
+ * @param props - Button props with click handler and state flags
+ */
 export function AddToTextbookButton({
   onClick,
   disabled = false,
@@ -356,14 +392,13 @@ export function AddToTextbookButton({
     <button
       onClick={onClick}
       disabled={disabled || loading}
-      className={`
-        w-full sm:flex-1 inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium
-        transition-colors h-9
-        ${disabled 
+      className={cn(
+        'w-full sm:flex-1 inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium',
+        'transition-colors h-9',
+        disabled 
           ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
           : 'bg-purple-600 text-white hover:bg-purple-700 shadow-sm hover:shadow'
-        }
-      `}
+      )}
     >
       {loading ? (
         <>

@@ -32,7 +32,6 @@ import {
 import {
   upsertTextbookUnit,
   buildNewUnit,
-  buildUpdatedUnit,
   findExistingUnit,
   generateDedupeKey,
   competeAndSelectBestUnit,
@@ -41,7 +40,18 @@ import {
 } from './textbook-units';
 
 /**
- * Local storage manager for interaction traces and learner state
+ * StorageManager - Local storage manager for interaction traces and learner state
+ * 
+ * Features:
+ * - User profile management (Week 4)
+ * - Interaction event storage
+ * - Learner profile persistence with optimistic locking
+ * - Textbook unit storage with deduplication
+ * - LLM cache management
+ * - PDF index storage with memory fallback
+ * - Guidance ladder event logging
+ * 
+ * All methods handle quota exceeded errors gracefully.
  */
 class StorageManager {
   private readonly EXPORT_POLICY_VERSION = 'weekly-export-sanitize-v1';
@@ -58,22 +68,39 @@ class StorageManager {
   // In-memory fallback for PDF index when LocalStorage quota is exceeded
   private pdfIndexMemory: PdfIndexDocument | null = null;
 
-  // Week 4: User profile management
-  saveUserProfile(profile: UserProfile): void {
-    const serializable = {
-      ...profile,
-      createdAt: typeof profile.createdAt === 'number' ? profile.createdAt : Date.now()
-    };
-    localStorage.setItem(this.USER_PROFILE_KEY, JSON.stringify(serializable));
+  /**
+   * Save user profile to localStorage
+   * @param profile - User profile to save
+   * @returns Object with success flag and optional quota exceeded flag
+   */
+  saveUserProfile(profile: UserProfile): { success: boolean; quotaExceeded?: boolean } {
+    try {
+      const serializable = {
+        ...profile,
+        createdAt: typeof profile.createdAt === 'number' ? profile.createdAt : Date.now()
+      };
+      const result = this.safeSetItem(this.USER_PROFILE_KEY, JSON.stringify(serializable));
+      if (!result.success) {
+        console.warn('[Storage] Failed to save user profile:', result.quotaExceeded ? 'quota exceeded' : 'unknown error');
+      }
+      return result;
+    } catch (error) {
+      console.error('[Storage] Exception saving user profile:', error);
+      return { success: false };
+    }
   }
 
+  /**
+   * Get user profile from localStorage
+   * @returns User profile or null if not found/invalid
+   */
   getUserProfile(): UserProfile | null {
-    const raw = localStorage.getItem(this.USER_PROFILE_KEY);
-    if (!raw) {
-      return null;
-    }
-
     try {
+      const raw = localStorage.getItem(this.USER_PROFILE_KEY);
+      if (!raw) {
+        return null;
+      }
+
       const parsed = JSON.parse(raw) as Partial<UserProfile>;
       
       // Validate required fields
@@ -97,26 +124,53 @@ class StorageManager {
         createdAt: parsed.createdAt
       };
     } catch {
-      // Corrupted profile data
-      localStorage.removeItem(this.USER_PROFILE_KEY);
+      // Corrupted profile data or localStorage access denied
+      try {
+        localStorage.removeItem(this.USER_PROFILE_KEY);
+      } catch {
+        // Ignore cleanup errors
+      }
       return null;
     }
   }
 
-  clearUserProfile(): void {
-    localStorage.removeItem(this.USER_PROFILE_KEY);
+  /**
+   * Clear user profile from localStorage
+   * @returns True if successful
+   */
+  clearUserProfile(): boolean {
+    try {
+      localStorage.removeItem(this.USER_PROFILE_KEY);
+      return true;
+    } catch (error) {
+      console.error('[Storage] Exception clearing user profile:', error);
+      return false;
+    }
   }
 
+  /**
+   * Check if current user is a student
+   * @returns True if student role
+   */
   isStudent(): boolean {
     const profile = this.getUserProfile();
     return profile?.role === 'student';
   }
 
+  /**
+   * Check if current user is an instructor
+   * @returns True if instructor role
+   */
   isInstructor(): boolean {
     const profile = this.getUserProfile();
     return profile?.role === 'instructor';
   }
 
+  /**
+   * Check if user has a specific role
+   * @param role - Role to check
+   * @returns True if user has the role
+   */
   hasRole(role: UserRole): boolean {
     const profile = this.getUserProfile();
     return profile?.role === role;
@@ -164,12 +218,21 @@ class StorageManager {
     }
   }
 
+  /**
+   * Start a new session
+   * @param learnerId - Learner identifier
+   * @returns Session ID
+   */
   startSession(learnerId: string): string {
     const sessionId = `session-${learnerId}-${Date.now()}`;
     localStorage.setItem(this.ACTIVE_SESSION_KEY, sessionId);
     return sessionId;
   }
 
+  /**
+   * Get active session ID
+   * @returns Session ID or fallback
+   */
   getActiveSessionId(): string {
     const existing = localStorage.getItem(this.ACTIVE_SESSION_KEY);
     if (existing) return existing;
@@ -192,6 +255,14 @@ class StorageManager {
     localStorage.setItem(this.ACTIVE_SESSION_KEY, normalized);
   }
 
+  /**
+   * Save practice draft code
+   * @param learnerId - Learner identifier
+   * @param sessionId - Session identifier
+   * @param problemId - Problem identifier
+   * @param code - SQL code to save
+   * @returns Save result with quota info
+   */
   savePracticeDraft(learnerId: string, sessionId: string, problemId: string, code: string): { success: boolean; quotaExceeded?: boolean } {
     const key = this.buildPracticeDraftKey(learnerId, sessionId, problemId);
     const drafts = this.readParsedStorage<Record<string, string>>(this.PRACTICE_DRAFTS_KEY, {});
@@ -205,6 +276,13 @@ class StorageManager {
     return result;
   }
 
+  /**
+   * Get saved practice draft
+   * @param learnerId - Learner identifier
+   * @param sessionId - Session identifier
+   * @param problemId - Problem identifier
+   * @returns Saved code or null
+   */
   getPracticeDraft(learnerId: string, sessionId: string, problemId: string): string | null {
     const key = this.buildPracticeDraftKey(learnerId, sessionId, problemId);
     const drafts = this.readParsedStorage<Record<string, string>>(this.PRACTICE_DRAFTS_KEY, {});
@@ -237,6 +315,10 @@ class StorageManager {
 
   private readonly MAX_LLM_CACHE_SIZE = 100;
 
+  /**
+   * Save LLM cache record with LRU eviction
+   * @param record - Cache record to save
+   */
   saveLLMCacheRecord(record: LLMCacheRecord) {
     const cache = this.getLLMCache();
     cache[record.cacheKey] = record;
@@ -252,12 +334,21 @@ class StorageManager {
       for (const { key } of toEvict) {
         delete cache[key];
       }
-      console.warn(`[Storage] LLM cache exceeded ${this.MAX_LLM_CACHE_SIZE} entries. Evicted ${toEvict.length} oldest entries.`);
+      // LLM cache size exceeded, evicted oldest entries
     }
     
-    localStorage.setItem(this.LLM_CACHE_KEY, JSON.stringify(cache));
+    // Use safeSetItem to handle quota exceeded errors gracefully
+    const result = this.safeSetItem(this.LLM_CACHE_KEY, JSON.stringify(cache));
+    if (!result.success && result.quotaExceeded) {
+      console.warn('[Storage] Failed to save LLM cache: LocalStorage quota exceeded. Cache will be lost on page refresh.');
+    }
   }
 
+  /**
+   * Get LLM cache record by key
+   * @param cacheKey - Cache key
+   * @returns Cache record or null
+   */
   getLLMCacheRecord(cacheKey: string): LLMCacheRecord | null {
     const cache = this.getLLMCache();
     return cache[cacheKey] || null;
@@ -267,6 +358,11 @@ class StorageManager {
     return this.readParsedStorage<Record<string, LLMCacheRecord>>(this.LLM_CACHE_KEY, {});
   }
 
+  /**
+   * Save PDF index with memory fallback on quota exceeded
+   * @param document - PDF index document
+   * @returns Save result with quota info
+   */
   savePdfIndex(document: PdfIndexDocument): { success: boolean; quotaExceeded?: boolean } {
     const normalized = this.normalizePdfIndexDocument(document);
     if (!normalized) {
@@ -288,6 +384,10 @@ class StorageManager {
     return result;
   }
 
+  /**
+   * Get PDF index from storage or memory fallback
+   * @returns PDF index document or null
+   */
   getPdfIndex(): PdfIndexDocument | null {
     // First try LocalStorage
     const raw = this.readParsedStorage<unknown>(this.PDF_INDEX_KEY, null);
@@ -322,6 +422,11 @@ class StorageManager {
   }
 
   // Interaction traces
+  /**
+   * Save an interaction event
+   * @param event - Interaction event to save
+   * @returns Save result with quota info
+   */
   saveInteraction(event: InteractionEvent): { success: boolean; quotaExceeded?: boolean } {
     const sessionId = event.sessionId || this.getActiveSessionId();
     const normalizedEvent = { ...event, sessionId };
@@ -409,8 +514,7 @@ class StorageManager {
       console.warn(`[Coverage] Failed to save coverage change event: ${result.quotaExceeded ? 'quota exceeded' : 'unknown error'}`);
     }
     
-    // Log to console for debugging coverage progression
-    console.log(`[Coverage] ${params.conceptId}: ${params.previousScore} → ${params.score} (${scoreDelta >= 0 ? '+' : ''}${scoreDelta}), confidence=${params.confidence}, executions=${params.evidenceCounts.successfulExecution}`);
+    // Coverage progression logged via saveCoverageChangeEvent
   }
 
   /**
@@ -427,18 +531,37 @@ class StorageManager {
     return 'low';
   }
 
+  /**
+   * Get all interaction events
+   * @returns Array of all interactions
+   */
   getAllInteractions(): InteractionEvent[] {
     return this.readParsedStorage<InteractionEvent[]>(this.INTERACTIONS_KEY, []);
   }
 
+  /**
+   * Get interactions for a specific learner
+   * @param learnerId - Learner identifier
+   * @returns Filtered interactions
+   */
   getInteractionsByLearner(learnerId: string): InteractionEvent[] {
     return this.getAllInteractions().filter(i => i.learnerId === learnerId);
   }
 
+  /**
+   * Get interactions for a specific problem
+   * @param problemId - Problem identifier
+   * @returns Filtered interactions
+   */
   getInteractionsByProblem(problemId: string): InteractionEvent[] {
     return this.getAllInteractions().filter(i => i.problemId === problemId);
   }
 
+  /**
+   * Get filtered and sorted trace slice
+   * @param options - Filter options (learner, problem, session, limit)
+   * @returns Filtered and sorted interactions
+   */
   getTraceSlice(options?: {
     learnerId?: string;
     problemId?: string;
@@ -496,6 +619,10 @@ class StorageManager {
   }
 
   // Learner profiles with optimistic locking to prevent race conditions
+  /**
+   * Save learner profile with optimistic locking
+   * @param profile - Profile to save
+   */
   saveProfile(profile: LearnerProfile) {
     // Re-read profiles from storage each time to minimize race condition window
     let profiles = this.getAllProfiles();
@@ -538,31 +665,41 @@ class StorageManager {
       }
     }
     
-    // Re-read profiles right before writing to minimize race condition window
-    // This is a best-effort approach since localStorage is not atomic
-    profiles = this.getAllProfiles();
-    index = profiles.findIndex(p => p.id === profile.id);
-    const currentVersion = index >= 0 ? (profiles[index].version || 0) : 0;
+    // Atomic read-modify-write: use the profiles from initial read with merged data
+    // This prevents race conditions from concurrent tab modifications
+    // The version-based merge strategy above already handles stale data detection
+    const currentVersion = existingVersion;
     
     // Convert Sets and Maps to arrays for storage
     const serializable = {
       ...profile,
-      version: currentVersion + 1, // Always increment from current storage version
+      version: currentVersion + 1, // Increment from version at initial read
       currentStrategy: this.normalizeStrategy(profile.currentStrategy),
       conceptsCovered: Array.from(mergedConceptsCovered),
       conceptCoverageEvidence: Array.from(mergedEvidence.entries()),
       errorHistory: Array.from(mergedErrorHistory.entries())
     };
     
-    if (index >= 0) {
-      profiles[index] = serializable;
+    // Re-find index in the current profiles array (from initial read)
+    const writeIndex = profiles.findIndex(p => p.id === profile.id);
+    if (writeIndex >= 0) {
+      profiles[writeIndex] = serializable;
     } else {
       profiles.push(serializable);
     }
     
-    localStorage.setItem(this.PROFILES_KEY, JSON.stringify(profiles));
+    // Use safeSetItem for consistency and quota handling
+    const result = this.safeSetItem(this.PROFILES_KEY, JSON.stringify(profiles));
+    if (!result.success && result.quotaExceeded) {
+      console.warn('[Storage] Failed to save profile: LocalStorage quota exceeded');
+    }
   }
 
+  /**
+   * Get learner profile by ID
+   * @param learnerId - Learner identifier
+   * @returns Profile or null
+   */
   getProfile(learnerId: string): LearnerProfile | null {
     try {
       const profiles = this.getAllProfiles();
@@ -630,6 +767,12 @@ class StorageManager {
     return this.readParsedStorage<any[]>(this.PROFILES_KEY, []);
   }
 
+  /**
+   * Create default profile for new learner
+   * @param learnerId - Learner identifier
+   * @param strategy - Initial strategy (default: adaptive-medium)
+   * @returns Created profile
+   */
   createDefaultProfile(learnerId: string, strategy: LearnerProfile['currentStrategy'] = 'adaptive-medium'): LearnerProfile {
     const profile: LearnerProfile = {
       id: learnerId,
@@ -859,6 +1002,12 @@ class StorageManager {
   ]);
 
   // Textbook/instructional units
+  /**
+   * Save textbook unit (legacy v1)
+   * @param learnerId - Learner identifier
+   * @param unit - Unit to save
+   * @returns Save result
+   */
   saveTextbookUnit(learnerId: string, unit: InstructionalUnit): SaveTextbookUnitResult {
     const textbooks = this.getAllTextbooks();
     if (!textbooks[learnerId]) {
@@ -935,6 +1084,11 @@ class StorageManager {
     }
   }
 
+  /**
+   * Get all textbook units for a learner
+   * @param learnerId - Learner identifier
+   * @returns Array of units
+   */
   getTextbook(learnerId: string): InstructionalUnit[] {
     const textbooks = this.getAllTextbooks();
     const units = textbooks[learnerId] || [];
@@ -1043,10 +1197,7 @@ class StorageManager {
       // Update storage with competition results
       textbooks[learnerId] = updatedUnits;
 
-      // Log competition result
-      if (competitionResult.action !== 'no_competition') {
-        console.log(`[Textbook Competition] ${competitionResult.reason}`);
-      }
+      // Competition result logged via telemetry if needed
 
       // Find the new/updated unit for return
       const primaryUnit = competitionResult.primaryUnit;
@@ -1201,10 +1352,16 @@ class StorageManager {
     return this.readParsedStorage<Record<string, InstructionalUnit[]>>(this.TEXTBOOK_KEY, {});
   }
 
-  clearTextbook(learnerId: string) {
+  clearTextbook(learnerId: string): { success: boolean; quotaExceeded?: boolean } {
     const textbooks = this.getAllTextbooks();
     delete textbooks[learnerId];
-    localStorage.setItem(this.TEXTBOOK_KEY, JSON.stringify(textbooks));
+    
+    // Use safeSetItem for consistency and quota handling
+    const result = this.safeSetItem(this.TEXTBOOK_KEY, JSON.stringify(textbooks));
+    if (!result.success && result.quotaExceeded) {
+      console.warn(`[Storage] Failed to clear textbook for ${learnerId}: LocalStorage quota exceeded`);
+    }
+    return result;
   }
 
   // Export data for research

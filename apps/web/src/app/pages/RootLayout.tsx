@@ -101,9 +101,15 @@ export function RootLayout() {
   } = useSessionPersistence();
 
   useEffect(() => {
-    const hasSeenWelcome = localStorage.getItem('sql-adapt-welcome-seen');
-    const hasDisabledWelcome = localStorage.getItem('sql-adapt-welcome-disabled');
-    if (!hasSeenWelcome && !hasDisabledWelcome) {
+    try {
+      const hasSeenWelcome = localStorage.getItem('sql-adapt-welcome-seen');
+      const hasDisabledWelcome = localStorage.getItem('sql-adapt-welcome-disabled');
+      if (!hasSeenWelcome && !hasDisabledWelcome) {
+        setShowWelcome(true);
+      }
+    } catch (error) {
+      console.error('Failed to check welcome status:', error);
+      // Show welcome modal if we can't check status
       setShowWelcome(true);
     }
   }, []);
@@ -131,7 +137,11 @@ export function RootLayout() {
   }, [handleKeyDown]);
 
   const handleCloseWelcome = () => {
-    localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    try {
+      localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    } catch (error) {
+      console.error('Failed to save welcome status:', error);
+    }
     setShowWelcome(false);
   };
 

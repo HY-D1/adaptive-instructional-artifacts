@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
+
 import { Checkbox } from './ui/checkbox';
 import { Label } from './ui/label';
 import { motion, AnimatePresence } from 'motion/react';
@@ -20,7 +20,11 @@ import {
 import { generateDemoData } from '../data/demo-data';
 import { storage } from '../lib/storage';
 
+/**
+ * Props for WelcomeModal component
+ */
 interface WelcomeModalProps {
+  /** Callback when modal is closed */
   onClose: () => void;
 }
 
@@ -45,6 +49,23 @@ const WELCOME_STEPS = [
   }
 ];
 
+/**
+ * Welcome modal component with onboarding steps
+ * 
+ * Features:
+ * - Multi-step onboarding (intro, features, shortcuts)
+ * - Demo data generation
+ * - Keyboard shortcut reference
+ * - "Don't show again" preference
+ * 
+ * @param props - Component props
+ * @returns Welcome modal JSX
+ * 
+ * @example
+ * ```tsx
+ * <WelcomeModal onClose={() => setShowWelcome(false)} />
+ * ```
+ */
 export function WelcomeModal({ onClose }: WelcomeModalProps) {
   const [showDemo, setShowDemo] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
@@ -72,8 +93,12 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
 
   const handleClose = () => {
     if (dontShowAgain) {
-      localStorage.setItem('sql-adapt-welcome-seen', 'true');
-      localStorage.setItem('sql-adapt-welcome-disabled', 'true');
+      try {
+        localStorage.setItem('sql-adapt-welcome-seen', 'true');
+        localStorage.setItem('sql-adapt-welcome-disabled', 'true');
+      } catch (error) {
+        console.error('Failed to save welcome preferences:', error);
+      }
     }
     onClose();
   };
@@ -158,7 +183,8 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                           ? 'w-2 bg-blue-400' 
                           : 'w-2 bg-gray-300'
                     }`}
-                    aria-label={`Go to step ${idx + 1}`}
+                    aria-label={`Step ${idx + 1}: ${step.title}`}
+                    aria-current={idx === currentStep ? 'step' : undefined}
                   />
                 ))}
               </div>

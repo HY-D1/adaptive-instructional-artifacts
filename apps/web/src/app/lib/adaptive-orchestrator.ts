@@ -22,6 +22,9 @@ const POLICY_REPLAY_EVENT_TYPES: InteractionEvent['eventType'][] = [
 ];
 const POLICY_SEMANTICS_VERSION = 'orchestrator-auto-escalation-variant-v2';
 
+/**
+ * Type for decision rules that can be fired by the orchestrator
+ */
 export type DecisionRuleFired =
   | 'no-errors-show-hint'
   | 'auto-escalation-after-hints'
@@ -29,13 +32,22 @@ export type DecisionRuleFired =
   | 'aggregation-threshold-met'
   | 'progressive-hint';
 
+/**
+ * Thresholds for escalation and aggregation decisions
+ */
 export type StrategyThresholds = {
   escalate: number;
   aggregate: number;
 };
 
+/**
+ * Mode for auto-escalation behavior
+ */
 export type AutoEscalationMode = 'always-after-hint-threshold' | 'threshold-gated';
 
+/**
+ * A single decision point in a policy replay trace
+ */
 export type ReplayDecisionPoint = {
   index: number;
   eventId: string;
@@ -55,6 +67,9 @@ export type ReplayDecisionPoint = {
   reasoning: string;
 };
 
+/**
+ * Selection result for the next hint
+ */
 export type HintSelection = NextHintSelection;
 
 /**
@@ -72,10 +87,19 @@ export class AdaptiveOrchestrator {
     'adaptive-high': { escalate: 2, aggregate: 4 }
   };
 
+  /**
+   * Get escalation/aggregation thresholds for a given strategy
+   * @param strategy - The learner's current strategy
+   * @returns Strategy thresholds object
+   */
   getThresholds(strategy: LearnerProfile['currentStrategy']): StrategyThresholds {
     return { ...this.errorThresholds[strategy] };
   }
 
+  /**
+   * Get the current policy semantics version
+   * @returns Policy version string
+   */
   getPolicySemanticsVersion(): string {
     return POLICY_SEMANTICS_VERSION;
   }
@@ -108,6 +132,14 @@ export class AdaptiveOrchestrator {
     };
   }
 
+  /**
+   * Replay a decision trace with a specific strategy override
+   * @param profile - The learner profile
+   * @param traceSlice - Slice of interaction events to replay
+   * @param strategyOverride - Strategy to use for all decisions
+   * @param options - Optional settings including auto-escalation mode
+   * @returns Array of replay decision points
+   */
   replayDecisionTrace(
     profile: LearnerProfile,
     traceSlice: InteractionEvent[],
@@ -156,6 +188,11 @@ export class AdaptiveOrchestrator {
       });
   }
 
+  /**
+   * Filter and sort events for policy replay
+   * @param traceSlice - Raw interaction trace
+   * @returns Filtered and sorted events
+   */
   getPolicyReplayTrace(traceSlice: InteractionEvent[]): InteractionEvent[] {
     return [...traceSlice]
       .filter((event) => Boolean(event.problemId) && POLICY_REPLAY_EVENT_TYPES.includes(event.eventType))
@@ -252,6 +289,13 @@ export class AdaptiveOrchestrator {
     };
   }
 
+  /**
+   * Determine if auto-escalation should occur based on hint count
+   * @param recentInteractions - Recent learner interactions
+   * @param currentProblemId - Current problem being worked on
+   * @param hintThreshold - Number of hints before escalation (default: 3)
+   * @returns Auto-escalation state with shouldEscalate flag
+   */
   getAutoEscalationState(
     recentInteractions: InteractionEvent[],
     currentProblemId: string,
@@ -372,6 +416,12 @@ ${concept?.examples.map(ex => `\`\`\`sql\n${ex}\n\`\`\``).join('\n\n') || ''}
   /**
    * Aggregate multiple instructional units into a comprehensive textbook entry
    */
+  /**
+   * Aggregate multiple instructional units into a comprehensive textbook entry
+   * @param units - Units to aggregate
+   * @param profile - Learner profile for personalization
+   * @returns Aggregated textbook unit
+   */
   aggregateToTextbook(
     units: InstructionalUnit[],
     profile: LearnerProfile
@@ -418,6 +468,15 @@ ${c?.examples.map((ex, i) => `${i + 1}. Review this pattern: \`${ex}\``).join('\
 
   /**
    * Get next hint level based on interaction history
+   */
+  /**
+   * Get the next hint based on error subtype and current level
+   * @param errorSubtypeId - The error subtype identifier
+   * @param currentLevel - Current hint level (0-3)
+   * @param profile - Learner profile
+   * @param problemId - Current problem ID
+   * @param options - Optional overrides and settings
+   * @returns Hint selection with text and metadata
    */
   getNextHint(
     errorSubtypeId: string,

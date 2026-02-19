@@ -1,4 +1,5 @@
-import { expect, Locator, Page, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { replaceEditorText, runUntilErrorCount } from './test-helpers';
 
 test.beforeEach(async ({ page }) => {
   // Clear all storage before each test for isolation
@@ -13,34 +14,6 @@ test.beforeEach(async ({ page }) => {
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
   });
 });
-
-async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedErrorCount: number, maxAttempts = 30) {
-  const marker = page.getByText(new RegExp(`\\b${expectedErrorCount}\\s+error(s)?\\b`));
-
-  for (let i = 0; i < maxAttempts; i += 1) {
-    await runQueryButton.click();
-    // Wait a bit for the UI to update
-    await page.waitForTimeout(300);
-    
-    try {
-      const isVisible = await marker.first().isVisible({ timeout: 2000 });
-      if (isVisible) {
-        return;
-      }
-    } catch {
-      // Continue trying
-    }
-  }
-
-  throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
-}
-
-async function replaceEditorText(page: Page, text: string) {
-  const editorSurface = page.locator('.monaco-editor .view-lines').first();
-  await editorSurface.click({ position: { x: 8, y: 8 } });
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-  await page.keyboard.type(text);
-}
 
 test.describe('@weekly pdf-rag ui', () => {
   // Clean up after each test to prevent state pollution

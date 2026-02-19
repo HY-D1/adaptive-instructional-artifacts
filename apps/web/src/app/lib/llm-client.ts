@@ -8,20 +8,37 @@ const PROBE_PROMPT = 'Reply with exactly: OLLAMA_OK';
 const PROBE_TIMEOUT_MS = 12000;
 const PROBE_WARMUP_TIMEOUT_MS = 30000;
 
+/**
+ * Options for Ollama generation
+ */
 export type OllamaGenerateOptions = {
+  /** Model to use for generation */
   model?: string;
+  /** Generation parameters */
   params?: Partial<LLMGenerationParams>;
 };
 
+/**
+ * Health status for Ollama service
+ */
 export type OllamaHealthStatus = {
+  /** Whether service is healthy */
   ok: boolean;
+  /** Status message */
   message: string;
+  /** List of available models */
   availableModels?: string[];
+  /** Response from probe prompt */
   probeResponse?: string;
 };
 
+/**
+ * Error type for Ollama client failures
+ */
 export type OllamaClientError = Error & {
+  /** HTTP status code if applicable */
   status?: number;
+  /** Error code category */
   code: 'NETWORK' | 'TIMEOUT' | 'HTTP' | 'INVALID_RESPONSE';
 };
 
@@ -158,6 +175,13 @@ function validateLLMParams(params: LLMGenerationParams): LLMGenerationParams {
   return validated;
 }
 
+/**
+ * Generate text using Ollama LLM service
+ * @param prompt - Prompt text to send
+ * @param options - Generation options
+ * @returns Promise resolving to generated text and metadata
+ * @throws OllamaClientError on failure
+ */
 export async function generateWithOllama(prompt: string, options?: OllamaGenerateOptions): Promise<{
   text: string;
   model: string;
@@ -219,6 +243,11 @@ export async function generateWithOllama(prompt: string, options?: OllamaGenerat
   }
 }
 
+/**
+ * Check Ollama service health and model availability
+ * @param model - Model to check (defaults to OLLAMA_MODEL)
+ * @returns Health status with message and available models
+ */
 export async function checkOllamaHealth(model: string = OLLAMA_MODEL): Promise<OllamaHealthStatus> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), HEALTHCHECK_TIMEOUT_MS);

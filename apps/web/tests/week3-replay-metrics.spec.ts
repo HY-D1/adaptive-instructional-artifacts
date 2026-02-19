@@ -2,16 +2,18 @@
  * Week 3 Replay Metrics Tests
  * 
  * Covers: D9 (Replay Metrics), D8 (Event Logging)
- * - Session export
- * - Metrics computation
- * - Rung distribution
- * - Groundedness rate
+ * - Session export with guidance events
+ * - Metrics computation (rung distribution, groundedness)
+ * - Escalation trigger logging
+ * - Textbook unit upsert tracking
+ * - Source view event logging
+ * - Metrics script export processing
+ * 
+ * @module Week3ReplayMetricsTests
+ * @weekly
  */
 
 import { expect, test } from '@playwright/test';
-import { execSync } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
 
 test.describe('@weekly Week 3 Replay Metrics', () => {
   test.beforeEach(async ({ page }) => {
@@ -29,7 +31,7 @@ test.describe('@weekly Week 3 Replay Metrics', () => {
     });
   });
 
-  test('session export contains guidance events', async ({ page }) => {
+  test('@weekly session export contains guidance events', async ({ page }) => {
     await page.goto('/');
     
     // Setup user with instructor role (required for Research page access)
@@ -79,7 +81,7 @@ test.describe('@weekly Week 3 Replay Metrics', () => {
     expect(guidanceEvents.length).toBeGreaterThanOrEqual(1);
   });
 
-  test('rung distribution computed correctly', async () => {
+  test('@weekly rung distribution computed correctly', async () => {
     // Pure computation test - no browser page needed
     // Create mock export data
     const mockExport = {
@@ -108,7 +110,7 @@ test.describe('@weekly Week 3 Replay Metrics', () => {
     expect(rungCounts[3]).toBe(1);
   });
 
-  test('groundedness rate computed correctly', async () => {
+  test('@weekly groundedness rate computed correctly', async () => {
     // Pure computation test - no browser page needed
     // Create mock export data
     const mockExport = {
@@ -132,7 +134,7 @@ test.describe('@weekly Week 3 Replay Metrics', () => {
     expect(groundednessRate).toBe(1.0);
   });
 
-  test('escalation triggers logged', async ({ page }) => {
+  test('@weekly escalation triggers logged', async ({ page }) => {
     await page.goto('/');
     
     // Setup user with instructor role
@@ -171,7 +173,7 @@ test.describe('@weekly Week 3 Replay Metrics', () => {
     expect(events.length).toBeGreaterThanOrEqual(1);
   });
 
-  test('textbook unit upserts tracked', async ({ page }) => {
+  test('@weekly textbook unit upserts tracked', async ({ page }) => {
     await page.goto('/');
     
     // Setup user with instructor role
@@ -208,7 +210,7 @@ test.describe('@weekly Week 3 Replay Metrics', () => {
     expect(events).toBeDefined();
   });
 
-  test('source view events logged', async ({ page }) => {
+  test('@weekly source view events logged', async ({ page }) => {
     await page.goto('/');
     
     // Setup user with instructor role
@@ -244,7 +246,7 @@ test.describe('@weekly Week 3 Replay Metrics', () => {
     expect(events.length).toBeGreaterThan(0);
   });
 
-  test('metrics script can process export', async () => {
+  test('@weekly metrics script can process export', async () => {
     // Pure computation test - no browser page needed
     // Create test export data
     const testExport = {

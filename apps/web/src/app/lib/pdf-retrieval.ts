@@ -2,6 +2,9 @@ import { PDF_EMBEDDING_DIMENSION } from './pdf-index-config';
 import { storage } from './storage';
 import { PdfIndexChunk, PdfIndexDocument, PdfIndexProvenance } from '../types';
 
+/**
+ * A PDF chunk retrieved by semantic similarity search
+ */
 export type RetrievedPdfChunk = {
   text: string;
   docId: string;
@@ -10,6 +13,11 @@ export type RetrievedPdfChunk = {
   score: number;
 };
 
+/**
+ * Get provenance metadata for the active PDF index
+ * @param indexDocument - Optional document to extract from (defaults to stored index)
+ * @returns Provenance object or null if no index
+ */
 export function getActivePdfIndexProvenance(
   indexDocument: PdfIndexDocument | null = storage.getPdfIndex()
 ): PdfIndexProvenance | null {
@@ -27,6 +35,13 @@ export function getActivePdfIndexProvenance(
   };
 }
 
+/**
+ * Retrieve top-k PDF chunks matching a query
+ * Uses hash-based embeddings for semantic similarity
+ * @param query - Search query text
+ * @param k - Number of results to return
+ * @returns Array of retrieved chunks sorted by relevance
+ */
 export function retrievePdfChunks(query: string, k: number): RetrievedPdfChunk[] {
   const normalizedK = Number.isFinite(k) ? Math.max(0, Math.floor(k)) : 0;
   if (!query.trim() || normalizedK === 0) {

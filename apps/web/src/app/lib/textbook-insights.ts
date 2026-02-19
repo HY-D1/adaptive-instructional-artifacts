@@ -1,30 +1,57 @@
 import { InstructionalUnit, InteractionEvent } from '../types';
 import { conceptNodes, getConceptById, getConceptIdsForSqlEngageSubtype } from '../data/sql-engage';
 
+/**
+ * Card displaying a common misconception pattern
+ */
 export type MisconceptionCard = {
+  /** Card identifier */
   id: string;
+  /** Error subtype */
   subtype: string;
+  /** Number of occurrences */
   count: number;
+  /** Timestamp of last occurrence */
   lastSeenAt: number;
+  /** Associated concept names */
   conceptNames: string[];
+  /** IDs of evidence interactions */
   evidenceIds: string[];
 };
 
+/**
+ * Spaced repetition review prompt
+ */
 export type SpacedReviewPrompt = {
+  /** Prompt identifier */
   id: string;
+  /** Prompt title */
   title: string;
+  /** Display message */
   message: string;
+  /** When review is due */
   dueAt: number;
+  /** Last seen timestamp */
   lastSeenAt: number;
+  /** Evidence interaction IDs */
   evidenceIds: string[];
 };
 
+/**
+ * Complete textbook insights data
+ */
 export type TextbookInsights = {
+  /** Units ordered by selected sort mode */
   orderedUnits: InstructionalUnit[];
+  /** Common misconception cards */
   misconceptionCards: MisconceptionCard[];
+  /** Spaced review prompts */
   spacedReviewPrompts: SpacedReviewPrompt[];
 };
 
+/**
+ * Sorting mode for textbook units
+ */
 export type SortMode = 'prerequisite' | 'quality' | 'newest' | 'oldest';
 
 /**
@@ -199,6 +226,11 @@ function buildSpacedReviewPrompts(cards: MisconceptionCard[], nowTimestamp: numb
   });
 }
 
+/**
+ * Build comprehensive textbook insights from units and interactions
+ * @param options - Units, interactions, and sort configuration
+ * @returns Textbook insights with sorted units, misconceptions, and review prompts
+ */
 export function buildTextbookInsights(options: {
   units: InstructionalUnit[];
   interactions: InteractionEvent[];

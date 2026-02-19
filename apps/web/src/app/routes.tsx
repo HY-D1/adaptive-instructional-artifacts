@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate, redirect, type LoaderFunction } from 're
 import { RootLayout } from './pages/RootLayout';
 import { TextbookPage } from './pages/TextbookPage';
 import { ResearchPage } from './pages/ResearchPage';
+import { InstructorDashboard } from './pages/InstructorDashboard';
 import { StartPage } from './pages/StartPage';
 import { LearningInterface } from './pages/LearningInterface';
 import { storage } from './lib/storage';
@@ -93,17 +94,17 @@ function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
 }
 
 export const router = createBrowserRouter([
-  // Start page - entry point for all users
-  {
-    path: '/',
-    Component: StartPage,
-  },
   // Main app routes - nested under RootLayout with navigation
   {
     path: '/',
     Component: RootLayout,
     loader: createProtectedLoader({ allowAuthenticated: true }),
     children: [
+      // Start page - entry point for all users (unauthenticated)
+      {
+        index: true,
+        Component: StartPage,
+      },
       {
         // Practice page (index)
         index: true,
@@ -146,7 +147,7 @@ export const router = createBrowserRouter([
         path: 'instructor-dashboard',
         element: (
           <InstructorRoute>
-            <ResearchPage />
+            <InstructorDashboard />
           </InstructorRoute>
         ),
         loader: createProtectedLoader({ requiredRole: 'instructor' }),

@@ -1,4 +1,5 @@
 import { expect, Locator, Page, test } from '@playwright/test';
+import { replaceEditorText, getEditorText } from './test-helpers';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -16,24 +17,18 @@ async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedE
 
   for (let i = 0; i < 12; i += 1) {
     await runQueryButton.click();
-    if (await marker.first().isVisible().catch(() => false)) {
+    // Use expect.poll for reliable waiting instead of fixed timeout
+    try {
+      await expect.poll(async () => {
+        return await marker.first().isVisible().catch(() => false);
+      }, { timeout: 2000, intervals: [100] }).toBe(true);
       return;
+    } catch {
+      // Continue trying
     }
-    await page.waitForTimeout(350);
   }
 
   throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
-}
-
-async function replaceEditorText(page: Page, text: string) {
-  const editorSurface = page.locator('.monaco-editor .view-lines').first();
-  await editorSurface.click({ position: { x: 8, y: 8 } });
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-  await page.keyboard.type(text);
-}
-
-async function getEditorText(page: Page): Promise<string> {
-  return page.locator('.monaco-editor .view-lines').first().innerText();
 }
 
 /**
@@ -75,7 +70,7 @@ test('week2 demo artifacts: real nav flow + active-session export json and scree
   await completeStartPageFlow(page, 'DemoStudent');
   
   // Wait for app to fully initialize before interacting
-  await page.waitForTimeout(600);
+  await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible({ timeout: 10000 });
 
   const draftMarker = 'weekly-demo-practice-draft-marker';
   await replaceEditorText(page, `-- ${draftMarker}\nSELECT `);
@@ -96,7 +91,7 @@ test('week2 demo artifacts: real nav flow + active-session export json and scree
   if (await moreHelpButton.isVisible().catch(() => false)) {
     await moreHelpButton.click();
     // Wait for explanation to be generated
-    await page.waitForTimeout(1000);
+    await expect(page.getByText('Explanation has been generated')).toBeVisible({ timeout: 60000 });
   }
   
   await expect.poll(async () => (
@@ -117,8 +112,6 @@ test('week2 demo artifacts: real nav flow + active-session export json and scree
   await expect(page).toHaveURL(/\/textbook/, { timeout: 15000 });
   await page.waitForLoadState('domcontentloaded');
   await page.waitForLoadState('networkidle');
-  // Additional wait for React to render content
-  await page.waitForTimeout(500);
   await expect(page.getByRole('heading', { name: 'My Textbook', level: 1 })).toBeVisible({ timeout: 15000 });
   
   // Check for textbook content with retry (be flexible about exact text)
@@ -133,8 +126,7 @@ test('week2 demo artifacts: real nav flow + active-session export json and scree
   await page.waitForLoadState('domcontentloaded');
   await page.waitForLoadState('networkidle');
   await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible({ timeout: 15000 });
-  // Wait for editor to be fully initialized
-  await page.waitForTimeout(800);
+  // Wait for editor to be fully initialized with draft restored
   await expect.poll(() => getEditorText(page), { timeout: 15000, intervals: [300] }).toContain(draftMarker);
 
   const outputDir = path.join(process.cwd(), 'dist', 'weekly-demo');
@@ -142,7 +134,6 @@ test('week2 demo artifacts: real nav flow + active-session export json and scree
   
   // Ensure hint panel is stable before screenshot
   await expect(page.getByTestId('hint-panel')).toBeVisible({ timeout: 10000 });
-  await page.waitForTimeout(500);
   await page.getByTestId('hint-panel').screenshot({
     path: path.join(outputDir, 'hint-panel.png')
   });
@@ -152,16 +143,13 @@ test('week2 demo artifacts: real nav flow + active-session export json and scree
   await expect(page).toHaveURL(/\/research/, { timeout: 15000 });
   await page.waitForLoadState('domcontentloaded');
   await page.waitForLoadState('networkidle');
-  // Wait for React to hydrate and render
-  await page.waitForTimeout(600);
-  
   // Wait for export scope label with more resilient check
   await expect.poll(async () => {
     const text = await page.getByTestId('export-scope-label').textContent().catch(() => '');
     return text.toLowerCase().includes('active') && text.toLowerCase().includes('session');
   }, { timeout: 15000, intervals: [200, 500] }).toBe(true);
   // Ensure UI is stable before screenshot
-  await page.waitForTimeout(500);
+  await expect(page.getByTestId('export-scope-label')).toBeVisible({ timeout: 5000 });
   await page.getByTestId('export-scope-label').screenshot({
     path: path.join(outputDir, 'research-export-scope.png')
   });

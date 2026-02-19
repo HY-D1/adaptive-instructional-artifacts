@@ -9,7 +9,7 @@
  * - Auto-saves high-quality responses to My Textbook
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -28,6 +28,7 @@ import {
   CheckCircle
 } from 'lucide-react';
 // Note: Using div with overflow-auto instead of ScrollArea
+import { cn } from './ui/utils';
 import { storage } from '../lib/storage';
 import { createEventId } from '../lib/event-id';
 import type { InteractionEvent, InstructionalUnit } from '../types';
@@ -48,11 +49,19 @@ export type ChatMessage = {
   queryHash?: string; // For duplicate detection
 };
 
+/**
+ * Props for AskMyTextbookChat component
+ */
 interface AskMyTextbookChatProps {
+  /** Session identifier */
   sessionId?: string;
+  /** Learner identifier */
   learnerId: string;
+  /** Current problem ID */
   problemId: string;
+  /** Recent interactions for context */
   recentInteractions: InteractionEvent[];
+  /** Callback when interaction is logged */
   onInteractionLogged?: (event: InteractionEvent) => void;
 }
 
@@ -69,6 +78,16 @@ const QUALITY_THRESHOLD = 0.7;
 const MIN_CONTENT_LENGTH = 100;
 const MIN_SOURCE_COUNT = 2;
 
+// Timing constants (ms)
+const TOAST_DURATION_MS = 3000;
+const PROCESSING_DELAY_MS = 500;
+const AUTO_SAVE_DELAY_MS = 100;
+
+// Content limits
+const MAX_SQL_EXAMPLE_LENGTH = 200;
+const MAX_RESPONSE_PREVIEW_LENGTH = 400;
+const MAX_PDF_TEXT_LENGTH = 350;
+
 // Toast notification type
 interface Toast {
   id: string;
@@ -76,6 +95,20 @@ interface Toast {
   type: 'success' | 'info';
 }
 
+/**
+ * Ask My Textbook Chat Component (Week 3 Feature)
+ * 
+ * A chat panel for grounded Q&A with textbook content.
+ * Features:
+ * - Grounded responses using retrieval bundle
+ * - "Save to My Notes" button
+ * - Quick chips for common queries
+ * - Chat interaction logging
+ * - Auto-save for high-quality responses
+ * 
+ * @param props - Component props
+ * @returns Chat panel JSX
+ */
 export function AskMyTextbookChat({
   sessionId,
   learnerId,
@@ -88,6 +121,8 @@ export function AskMyTextbookChat({
   const [isLoading, setIsLoading] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Track toast timeout IDs for cleanup on unmount
+  const toastTimeoutsRef = useRef<Set<number>>(new Set());
 
   // Track auto-saved queries to prevent duplicates
   const autoSavedQueriesRef = useRef<Set<string>>(new Set());
@@ -231,8 +266,8 @@ export function AskMyTextbookChat({
         .replace(/\s+/g, ' ')
         .trim();
       // Limit length
-      if (sql.length > 200) {
-        sql = sql.substring(0, 200) + '...';
+      if (sql.length > MAX_SQL_EXAMPLE_LENGTH) {
+        sql = sql.substring(0, MAX_SQL_EXAMPLE_LENGTH) + '...';
       }
       return sql;
     }
@@ -355,6 +390,14 @@ export function AskMyTextbookChat({
     };
   }, []);
 
+  // Cleanup toast timeouts on unmount
+  useEffect(() => {
+    return () => {
+      toastTimeoutsRef.current.forEach(id => window.clearTimeout(id));
+      toastTimeoutsRef.current.clear();
+    };
+  }, []);
+
   // Show toast notification
   const showToast = useCallback((message: string, type: Toast['type'] = 'info') => {
     const toast: Toast = {
@@ -364,10 +407,12 @@ export function AskMyTextbookChat({
     };
     setToasts(prev => [...prev, toast]);
     
-    // Auto-dismiss after 3 seconds
-    setTimeout(() => {
+    // Auto-dismiss after toast duration
+    const timeoutId = window.setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== toast.id));
-    }, 3000);
+      toastTimeoutsRef.current.delete(timeoutId);
+    }, TOAST_DURATION_MS);
+    toastTimeoutsRef.current.add(timeoutId);
   }, []);
 
   // Log textbook_add event for auto-save
@@ -616,10 +661,10 @@ export function AskMyTextbookChat({
       
       if (unitContent) {
         const content = cleanText(unitContent.summary || unitContent.content || '');
-        response = content.substring(0, 400);
-        if (content.length > 400) response += '...';
+        response = content.substring(0, MAX_RESPONSE_PREVIEW_LENGTH);
+        if (content.length > MAX_RESPONSE_PREVIEW_LENGTH) response += '...';
       } else if (pdfPassages.length > 0) {
-        response = pdfPassages[0].text.substring(0, 350) + '...';
+        response = pdfPassages[0].text.substring(0, MAX_PDF_TEXT_LENGTH) + '...';
       } else {
         response = 'I don\'t have specific notes on that yet. Try the quick chips above for common questions.';
       }
@@ -689,7 +734,7 @@ export function AskMyTextbookChat({
     setIsLoading(true);
 
     // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_MS));
 
     // Generate grounded response
     const { response, sourceIds, unitIds, sources, problemConceptIds } = generateResponse(messageText, quickChip);
@@ -716,7 +761,7 @@ export function AskMyTextbookChat({
     // Auto-save if quality threshold met
     setTimeout(() => {
       autoSaveToTextbook(assistantMessage, problemConceptIds);
-    }, 100);
+    }, AUTO_SAVE_DELAY_MS);
   }, [inputValue, sessionId, generateResponse, logChatInteraction, autoSaveToTextbook, generateQueryHash]);
 
   // Handle save to notes
@@ -766,11 +811,12 @@ export function AskMyTextbookChat({
         {toasts.map(toast => (
           <div
             key={toast.id}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm font-medium pointer-events-auto transition-all duration-300 ${
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 rounded-lg shadow-lg text-sm font-medium pointer-events-auto transition-all duration-300',
               toast.type === 'success' 
                 ? 'bg-green-600 text-white' 
                 : 'bg-blue-600 text-white'
-            }`}
+            )}
           >
             {toast.type === 'success' && <CheckCircle className="size-4" />}
             <span>{toast.message}</span>
@@ -786,6 +832,7 @@ export function AskMyTextbookChat({
         </div>
         {messages.length > 0 && (
           <button 
+            type="button"
             onClick={handleClear}
             className="text-xs text-gray-400 hover:text-gray-600"
           >
@@ -799,6 +846,7 @@ export function AskMyTextbookChat({
         <div className="flex flex-wrap gap-1.5">
           {QUICK_CHIPS.map(chip => (
             <button
+              type="button"
               key={chip.id}
               onClick={() => handleSend(chip.id)}
               disabled={isLoading || !sessionId}

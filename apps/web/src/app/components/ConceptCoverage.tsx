@@ -364,11 +364,19 @@ export function ConceptCoverage({ learnerId }: ConceptCoverageProps) {
                       <Tooltip key={concept.id}>
                         <TooltipTrigger asChild>
                           <div
+                            role="button"
+                            tabIndex={0}
                             className={`group relative flex items-center gap-2 p-2.5 rounded-lg border transition-all duration-200 cursor-pointer hover:shadow-sm ${
                               covered 
                                 ? `${config.bgColor} ${config.borderColor}` 
                                 : 'bg-white border-gray-200 hover:border-gray-300'
                             }`}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                // Tooltip is triggered by focus/hover, no additional action needed
+                              }
+                            }}
                           >
                             <ConfidenceIcon className={`size-4 shrink-0 ${
                               covered ? config.textColor : 'text-gray-400'

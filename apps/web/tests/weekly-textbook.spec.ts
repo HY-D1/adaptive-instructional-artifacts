@@ -34,19 +34,17 @@ async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedE
   const marker = page.getByText(new RegExp(`\\b${expectedErrorCount} errors\\b`));
   for (let i = 0; i < 10; i += 1) {
     await runQueryButton.click();
-    if (await marker.first().isVisible().catch(() => false)) {
+    // Use expect.poll for reliable waiting instead of fixed timeout
+    try {
+      await expect.poll(async () => {
+        return await marker.first().isVisible().catch(() => false);
+      }, { timeout: 2000, intervals: [100] }).toBe(true);
       return;
+    } catch {
+      // Continue trying
     }
-    await page.waitForTimeout(400);
   }
   throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
-}
-
-async function replaceEditorText(page: Page, text: string) {
-  const editorSurface = page.locator('.monaco-editor .view-lines').first();
-  await editorSurface.click({ position: { x: 8, y: 8 } });
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-  await page.keyboard.type(text);
 }
 
 async function progressThroughHintLadder(page: Page, runQueryButton: Locator) {

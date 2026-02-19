@@ -4,6 +4,21 @@ import { storage } from '../lib/storage';
 
 const DEFAULT_ROLE: UserRole = 'student';
 
+/**
+ * Hook for managing user role and profile state
+ * 
+ * Features:
+ * - Load/save profile to localStorage
+ * - Role switching with profile persistence
+ * - Profile updates (name, role)
+ * 
+ * @returns Object with role state, profile, and update functions
+ * 
+ * @example
+ * ```typescript
+ * const { role, setRole, profile, isStudent, isInstructor } = useUserRole();
+ * ```
+ */
 export function useUserRole() {
   const [role, setRoleState] = useState<UserRole>(DEFAULT_ROLE);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -11,11 +26,16 @@ export function useUserRole() {
 
   useEffect(() => {
     // Load from storage module
-    const storedProfile = storage.getUserProfile();
-    if (storedProfile) {
-      setProfile(storedProfile);
-      setRoleState(storedProfile.role);
-    } else {
+    try {
+      const storedProfile = storage.getUserProfile();
+      if (storedProfile) {
+        setProfile(storedProfile);
+        setRoleState(storedProfile.role);
+      } else {
+        setRoleState(DEFAULT_ROLE);
+      }
+    } catch (error) {
+      console.error('Failed to load user profile:', error);
       setRoleState(DEFAULT_ROLE);
     }
     setIsLoading(false);

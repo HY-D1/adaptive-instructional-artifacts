@@ -380,7 +380,8 @@ export function InstructorDashboard() {
                 <tbody>
                   {MOCK_STUDENTS.map((student) => {
                     const profile = profiles.find(p => p.id === student.id);
-                    const conceptsCount = profile?.conceptsCovered.size || Math.floor(Math.random() * 4) + 1;
+                    // Deterministic pseudo-random based on student ID to avoid hydration mismatch
+                    const conceptsCount = profile?.conceptsCovered.size || (student.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0) % 4) + 1;
                     const isActive = Date.now() - student.lastActive < 3600000;
                     
                     return (

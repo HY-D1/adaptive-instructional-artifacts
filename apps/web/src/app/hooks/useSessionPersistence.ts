@@ -174,29 +174,38 @@ export function useSessionPersistence(): UseSessionPersistenceReturn {
    * Load profile from storage and check expiry
    */
   const loadProfile = useCallback((): void => {
-    if (!isMountedRef.current) return;
-    
-    // Check for session expiry first
-    if (checkSessionExpiry()) {
-      handleSessionExpired();
+    if (!isMountedRef.current) {
       setIsLoading(false);
       return;
     }
     
-    const loadedProfile = storage.getUserProfile();
-    
-    if (loadedProfile) {
-      setProfile(loadedProfile);
-      currentProfileRef.current = loadedProfile;
+    try {
+      // Check for session expiry first
+      if (checkSessionExpiry()) {
+        handleSessionExpired();
+        return;
+      }
       
-      // Update activity timestamp on successful load
-      updateActivity();
-    } else {
+      const loadedProfile = storage.getUserProfile();
+      
+      if (loadedProfile) {
+        setProfile(loadedProfile);
+        currentProfileRef.current = loadedProfile;
+        
+        // Update activity timestamp on successful load
+        updateActivity();
+      } else {
+        setProfile(null);
+        currentProfileRef.current = null;
+      }
+    } catch (error) {
+      console.error('[useSessionPersistence] Failed to load profile:', error);
       setProfile(null);
       currentProfileRef.current = null;
+    } finally {
+      // Always clear loading state
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   }, [checkSessionExpiry, handleSessionExpired, updateActivity]);
   
   /**

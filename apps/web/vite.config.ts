@@ -194,6 +194,11 @@ export default defineConfig({
     outDir: path.resolve(__dirname, '../../dist/app'),
     emptyOutDir: false,
   },
+  preview: {
+    port: 4173,
+    host: true,
+    strictPort: true,
+  },
   server: {
     proxy: {
       '/ollama': {
@@ -204,5 +209,5 @@ export default defineConfig({
       }
     }
   },
-  assetsInclude: ['**/*.svg', '**/*.csv'],
+  assetsInclude: ['**/*.svg', '**/*.csv', '**/*.wasm'],
 })

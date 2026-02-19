@@ -8,50 +8,89 @@ import {
   getSqlEngageRowsBySubtype
 } from '../data/sql-engage';
 import {
-  getConceptFromRegistry,
-  getSourceRefsForConcept
+  getConceptFromRegistry
 } from '../data';
 import { getActivePdfIndexProvenance, retrievePdfChunks } from './pdf-retrieval';
 
+/**
+ * History entry for a retrieved hint
+ */
 export type RetrievalHintHistory = {
+  /** Hint level (1-3) */
   hintLevel: 1 | 2 | 3;
+  /** Hint text content */
   hintText: string;
+  /** ID of source interaction */
   interactionId: string;
+  /** Index in help request sequence */
   helpRequestIndex?: number;
+  /** Source identifier */
   sourceId?: string;
 };
 
+/**
+ * SQL-Engage anchor data for retrieval
+ */
 export type RetrievalSqlEngageAnchor = {
+  /** Row identifier */
   rowId: string;
+  /** Error subtype */
   error_subtype: string;
+  /** Target of feedback */
   feedback_target: string;
+  /** Learning outcome description */
   intended_learning_outcome: string;
 };
 
+/**
+ * PDF passage retrieved for context
+ */
 export type RetrievalPdfPassage = {
+  /** Chunk identifier */
   chunkId: string;
+  /** Document identifier */
   docId: string;
+  /** Page number */
   page: number;
+  /** Passage text */
   text: string;
+  /** Relevance score */
   score: number;
 };
 
 // Week 3 D2: Source passages from Concept Registry
+/**
+ * Source passage from concept registry
+ */
 export type RetrievalSourcePassage = {
+  /** Passage identifier */
   passageId: string;
+  /** Associated concept ID */
   conceptId: string;
+  /** Document identifier */
   docId: string;
+  /** Chunk identifier */
   chunkId: string;
+  /** Page number */
   page: number;
+  /** Passage text */
   text: string;
+  /** Reason for inclusion */
   whyIncluded: string;
 };
 
 // Week 3 D2: Why sources were retrieved
+/**
+ * Explanation of why sources were retrieved
+ */
 export type WhyRetrieved = {
+  /** Trigger reason for retrieval */
   trigger: 'error_subtype_match' | 'concept_mapping' | 'learner_request' | 'escalation';
+  /** Error subtype that triggered retrieval */
   errorSubtypeId?: string;
+  /** Concept IDs used for retrieval */
   conceptIds: string[];
+  /** Evidence from interaction trace */
   traceEvidence: {
     errorCount: number;
     retryCount: number;
@@ -61,6 +100,9 @@ export type WhyRetrieved = {
   };
 };
 
+/**
+ * Complete retrieval bundle with all context for LLM generation
+ */
 export type RetrievalBundle = {
   learnerId: string;
   problemId: string;
@@ -89,6 +131,12 @@ export type RetrievalBundle = {
   }>;
 };
 
+/**
+ * Build a retrieval bundle for LLM generation
+ * Gathers context from problem, interactions, PDF index, and SQL-Engage
+ * @param options - Bundle construction options
+ * @returns Complete retrieval bundle
+ */
 export function buildRetrievalBundle(options: {
   learnerId: string;
   problem: SQLProblem;

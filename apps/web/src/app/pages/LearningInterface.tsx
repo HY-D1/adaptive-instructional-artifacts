@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -9,15 +9,14 @@ import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/SQLEditor';
 import { HintSystem } from '../components/HintSystem';
 import { ConceptCoverage } from '../components/ConceptCoverage';
 import { AskMyTextbookChat } from '../components/AskMyTextbookChat';
-import { Clock, CheckCircle2, AlertCircle, Play, Pause, Sparkles, BookOpen, Check, GraduationCap, Target, TrendingUp } from 'lucide-react';
+import { Clock, CheckCircle2, AlertCircle, Pause, Sparkles, BookOpen, Check, GraduationCap, Target } from 'lucide-react';
 import {
   SQLProblem,
   InteractionEvent,
   InstructionalUnit,
   LearnerProfile,
   PdfIndexProvenance,
-  RetrievedChunkInfo,
-  AutoCreationResult
+  RetrievedChunkInfo
 } from '../types';
 import { sqlProblems } from '../data/problems';
 import { storage } from '../lib/storage';
@@ -29,8 +28,8 @@ import {
   startBackgroundAnalysis,
   stopBackgroundAnalysis,
   runAnalysisOnce,
-  publishInteraction,
-  AnalysisResult
+  AnalysisResult,
+  ANALYSIS_INTERVAL_MS
 } from '../lib/trace-analyzer';
 import {
   canonicalizeSqlEngageSubtype,
@@ -107,11 +106,18 @@ export function LearningInterface() {
   const startTimeRef = useRef(startTime);
   const isTimerPausedRef = useRef(isTimerPaused);
   const elapsedTimeRef = useRef(elapsedTime);
+  // Track notification timeout IDs for cleanup on unmount
+  const notificationTimeoutsRef = useRef<Set<number>>(new Set());
 
   // Load initial data
   useEffect(() => {
     const timer = window.setTimeout(() => setIsLoading(false), 500);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      // Clear all notification timeouts on unmount
+      notificationTimeoutsRef.current.forEach(id => window.clearTimeout(id));
+      notificationTimeoutsRef.current.clear();
+    };
   }, []);
 
   // Calculate total time across sessions
@@ -220,7 +226,7 @@ export function LearningInterface() {
     const activeSessionId = storage.getActiveSessionId();
     // Validate session belongs to current learner using exact pattern match
     const expectedPrefix = `session-${learnerId}-`;
-    const belongsToLearner = activeSessionId.startsWith(expectedPrefix) && 
+    const belongsToLearner = activeSessionId?.startsWith(expectedPrefix) === true && 
       activeSessionId.length > expectedPrefix.length;
     const newSessionId = belongsToLearner
       ? activeSessionId
@@ -248,7 +254,7 @@ export function LearningInterface() {
     }
     
     const stopAnalysis = startBackgroundAnalysis(learnerId, newSessionId, {
-      intervalMs: 5 * 60 * 1000, // 5 minutes
+      intervalMs: ANALYSIS_INTERVAL_MS, // Use shared constant
       enableAutoCreation: true, // Enable proactive unit creation
       onAnalysisComplete: (result) => {
         setAnalysisStatus({ isRunning: true, lastResult: result });
@@ -264,11 +270,13 @@ export function LearningInterface() {
           }));
           setAutoCreationNotifications((prev) => [...prev, ...newNotifications]);
           // Auto-dismiss after 10 seconds
-          setTimeout(() => {
+          const timeoutId = window.setTimeout(() => {
             setAutoCreationNotifications((prev) => 
               prev.filter((n) => !newNotifications.find((nn) => nn.id === n.id))
             );
+            notificationTimeoutsRef.current.delete(timeoutId);
           }, 10000);
+          notificationTimeoutsRef.current.add(timeoutId);
         }
       }
     });
@@ -336,7 +344,11 @@ export function LearningInterface() {
   };
 
   const handleProblemChange = (id: string) => {
-    const problem = sqlProblems.find(p => p.id === id)!;
+    const problem = sqlProblems.find(p => p.id === id);
+    if (!problem) {
+      console.error(`Problem not found: ${id}`);
+      return;
+    }
     setCurrentProblem(problem);
     const restoredDraft = sessionId
       ? storage.getPracticeDraft(learnerId, sessionId, problem.id)

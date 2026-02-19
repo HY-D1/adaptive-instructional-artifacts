@@ -6,6 +6,7 @@
  */
 
 import { expect, Locator, Page, test } from '@playwright/test';
+import { replaceEditorText, getEditorText } from './test-helpers';
 
 // =============================================================================
 // Constants
@@ -58,25 +59,19 @@ async function seedCorruptData(page: Page) {
   });
 }
 
-async function replaceEditorText(page: Page, text: string) {
-  const editorSurface = page.locator('.monaco-editor .view-lines').first();
-  await editorSurface.click({ position: { x: 8, y: 8 } });
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-  await page.keyboard.type(text);
-}
-
-async function getEditorText(page: Page): Promise<string> {
-  return page.locator('.monaco-editor .view-lines').first().innerText();
-}
-
 async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedErrorCount: number) {
   const marker = page.getByText(new RegExp(`\\b${expectedErrorCount}\\s+error(s)?\\b`, 'i'));
   for (let i = 0; i < 12; i += 1) {
     await runQueryButton.click();
-    if (await marker.first().isVisible().catch(() => false)) {
+    // Use expect.poll for reliable waiting instead of fixed timeout
+    try {
+      await expect.poll(async () => {
+        return await marker.first().isVisible().catch(() => false);
+      }, { timeout: 2000, intervals: [100] }).toBe(true);
       return;
+    } catch {
+      // Continue trying
     }
-    await page.waitForTimeout(400);
   }
   throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
 }
@@ -1986,13 +1981,17 @@ test.describe('@weekly data-integrity: Edge cases', () => {
     
     // Submit some queries rapidly
     await runQueryButton.click();
-    await page.waitForTimeout(200);
     await runQueryButton.click();
-    await page.waitForTimeout(200);
     await runQueryButton.click();
     
     // Wait for interactions to be saved
-    await page.waitForTimeout(1000);
+    await expect.poll(async () => (
+      page.evaluate(() => {
+        const raw = window.localStorage.getItem('sql-learning-interactions');
+        const interactions = raw ? JSON.parse(raw) : [];
+        return interactions.length;
+      })
+    ), { timeout: 5000 }).toBeGreaterThanOrEqual(3);
     
     const interactionCount = await page.evaluate(() => {
       const raw = window.localStorage.getItem('sql-learning-interactions');

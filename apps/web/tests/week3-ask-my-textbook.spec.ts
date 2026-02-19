@@ -2,6 +2,15 @@
  * Week 3 Ask My Textbook Chat Tests
  * 
  * Covers: D7 (Chat UI), D8 (Chat Events)
+ * - Chat panel with quick action chips
+ * - Error explanation via chat
+ * - Concept queries
+ * - Contextual hints
+ * - Chat interaction event logging
+ * - Save to notes functionality
+ * 
+ * @module Week3AskMyTextbookTests
+ * @weekly
  */
 
 import { expect, test } from '@playwright/test';
@@ -48,21 +57,19 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
     });
   });
 
-  test('chat panel opens and shows quick chips', async ({ page }) => {
+  test('@weekly chat panel opens and shows quick chips', async ({ page }) => {
     await page.goto('/practice');
     
-    // Wait for React to render
-    await page.waitForTimeout(1000);
-
-    await expect(page.getByRole('button', { name: 'Explain my last error' })).toBeVisible();
+    // Wait for chat buttons to be rendered
+    await expect(page.getByRole('button', { name: 'Explain my last error' })).toBeVisible({ timeout: 5000 });
     await expect(page.getByRole('button', { name: 'Show a minimal example' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'What concept is this?' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Give me a hint' })).toBeVisible();
   });
 
-  test('explain my last error - detects SQL errors', async ({ page }) => {
+  test('@weekly explain my last error - detects SQL errors', async ({ page }) => {
     await page.goto('/practice');
-    await page.waitForTimeout(1000);
+    await expect(page.locator('.monaco-editor .view-lines').first()).toBeVisible({ timeout: 5000 });
 
     await page.locator('.monaco-editor .view-lines').first().click();
     await page.keyboard.type('SELECT FROM users;');
@@ -75,9 +82,9 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
     await expect(response).toBeVisible();
   });
 
-  test('what concept - shows current problem concepts', async ({ page }) => {
+  test('@weekly what concept - shows current problem concepts', async ({ page }) => {
     await page.goto('/practice');
-    await page.waitForTimeout(1000);
+    await expect(page.getByRole('button', { name: 'What concept is this?' })).toBeVisible({ timeout: 5000 });
 
     await page.getByRole('button', { name: 'What concept is this?' }).click();
 
@@ -85,9 +92,9 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
     await expect(response).toBeVisible();
   });
 
-  test('give me a hint - provides contextual hint', async ({ page }) => {
+  test('@weekly give me a hint - provides contextual hint', async ({ page }) => {
     await page.goto('/practice');
-    await page.waitForTimeout(1000);
+    await expect(page.getByRole('button', { name: 'Give me a hint' })).toBeVisible({ timeout: 5000 });
 
     await page.getByRole('button', { name: 'Give me a hint' }).click();
 
@@ -95,14 +102,22 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
     await expect(response).toBeVisible();
   });
 
-  test('chat interaction events logged', async ({ page }) => {
+  test('@weekly chat interaction events logged', async ({ page }) => {
     await page.goto('/practice');
-    await page.waitForTimeout(1000);
+    await expect(page.getByRole('button', { name: 'What concept is this?' })).toBeVisible({ timeout: 5000 });
 
     await page.getByRole('button', { name: 'What concept is this?' }).click();
     
     // Wait for the response to be generated and event to be logged
-    await page.waitForTimeout(1000);
+    await expect.poll(async () => {
+      const events = await page.evaluate(() => {
+        const interactions = JSON.parse(
+          window.localStorage.getItem('sql-learning-interactions') || '[]'
+        );
+        return interactions.filter((e: any) => e.eventType === 'chat_interaction').length;
+      });
+      return events;
+    }, { timeout: 5000 }).toBeGreaterThanOrEqual(1);
 
     const events = await page.evaluate(() => {
       const interactions = JSON.parse(
@@ -114,9 +129,9 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
     expect(events.length).toBeGreaterThanOrEqual(1);
   });
 
-  test('save to notes button appears on responses', async ({ page }) => {
+  test('@weekly save to notes button appears on responses', async ({ page }) => {
     await page.goto('/');
-    await page.waitForTimeout(1000);
+    await expect(page.getByRole('button', { name: 'What concept is this?' })).toBeVisible({ timeout: 5000 });
 
     await page.getByRole('button', { name: 'What concept is this?' }).click();
 

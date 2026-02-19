@@ -8,7 +8,8 @@
  */
 
 import type { InteractionEvent } from '../types';
-import { canAutoEscalate, getTextbookConceptIdsForSubtype } from '../data';
+import { canAutoEscalate } from '../data';
+import { FIVE_MINUTES_MS } from './trace-analyzer';
 
 // Rung definitions with strict boundaries
 export type GuidanceRung = 1 | 2 | 3;
@@ -68,7 +69,7 @@ export const TRIGGER_CONDITIONS = {
   },
   time_stuck: {
     description: 'No successful execution for time threshold',
-    threshold: { milliseconds: 5 * 60 * 1000 } // 5 minutes
+    threshold: { milliseconds: FIVE_MINUTES_MS } // 5 minutes
   },
   hint_reopened: {
     description: 'Help requested again after dismissal',
@@ -100,7 +101,12 @@ export type GuidanceLadderState = {
   groundedInSources: boolean;
 };
 
-// Initial state factory
+/**
+ * Create initial guidance ladder state
+ * @param learnerId - Learner identifier
+ * @param problemId - Problem identifier
+ * @returns Initial ladder state at rung 1
+ */
 export function createInitialLadderState(
   learnerId: string,
   problemId: string
@@ -116,7 +122,13 @@ export function createInitialLadderState(
   };
 }
 
-// Check if escalation is allowed (must have trigger)
+/**
+ * Check if escalation is allowed based on trigger and conditions
+ * @param state - Current ladder state
+ * @param trigger - Escalation trigger type
+ * @param interactions - Recent interactions for context
+ * @returns Object with allowed flag and reason
+ */
 export function canEscalate(
   state: GuidanceLadderState,
   trigger: EscalationTrigger,
@@ -268,7 +280,14 @@ export function canEscalate(
   }
 }
 
-// Perform escalation
+/**
+ * Perform escalation to next rung
+ * @param state - Current ladder state
+ * @param trigger - Escalation trigger
+ * @param evidence - Evidence data for logging
+ * @param conceptIds - Associated concept IDs
+ * @returns Updated ladder state
+ */
 export function escalate(
   state: GuidanceLadderState,
   trigger: EscalationTrigger,
@@ -308,7 +327,11 @@ export function escalate(
   };
 }
 
-// Record an attempt at current rung
+/**
+ * Record an attempt at current rung
+ * @param state - Current ladder state
+ * @returns Updated state with incremented attempt count
+ */
 export function recordRungAttempt(state: GuidanceLadderState): GuidanceLadderState {
   return {
     ...state,
@@ -319,7 +342,12 @@ export function recordRungAttempt(state: GuidanceLadderState): GuidanceLadderSta
   };
 }
 
-// Validate content against rung boundaries
+/**
+ * Validate content against rung boundaries
+ * @param content - Content to validate
+ * @param rung - Target rung level
+ * @returns Validation result with violations array
+ */
 export function validateContentForRung(
   content: string,
   rung: GuidanceRung
@@ -364,7 +392,11 @@ export function validateContentForRung(
   return { valid: violations.length === 0, violations };
 }
 
-// Get current rung info
+/**
+ * Get information about current rung
+ * @param state - Current ladder state
+ * @returns Rung info object
+ */
 export function getCurrentRungInfo(state: GuidanceLadderState) {
   return {
     rung: state.currentRung,
@@ -375,7 +407,12 @@ export function getCurrentRungInfo(state: GuidanceLadderState) {
   };
 }
 
-// Determine next action based on state and interactions
+/**
+ * Determine next action based on state and interactions
+ * @param state - Current ladder state
+ * @param interactions - Recent interactions
+ * @returns Action decision with rung and reason
+ */
 export function determineNextAction(
   state: GuidanceLadderState,
   interactions: InteractionEvent[]

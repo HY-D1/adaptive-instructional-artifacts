@@ -23,7 +23,6 @@ import { expect, test } from '@playwright/test';
 import {
   getActiveSessionId,
   getAllInteractionsFromStorage,
-  getExplanationEventsFromStorage,
   getHintEventsFromStorage,
   getProfileFromStorage,
   getTextbookUnits,
@@ -223,8 +222,11 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
       }));
     });
     
-    // Wait for reactive update
-    await page.waitForTimeout(2500);
+    // Wait for reactive update - poll until note appears
+    await expect.poll(async () => {
+      const units = await getTextbookUnits(page, 'learner-1');
+      return units.length;
+    }, { timeout: 5000, intervals: [200, 500] }).toBe(2);
     
     // Verify the new note is now visible
     const units = await getTextbookUnits(page, 'learner-1');

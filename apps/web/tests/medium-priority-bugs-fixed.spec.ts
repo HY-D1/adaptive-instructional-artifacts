@@ -33,7 +33,6 @@
 import { expect, test } from '@playwright/test';
 import {
   getAllInteractionsFromStorage,
-  getCoverageEventsFromStorage,
   getExplanationEventsFromStorage,
   getHintEventsFromStorage
 } from './test-helpers';
@@ -74,12 +73,12 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
 
     // Run the query to create a draft
     await page.getByRole('button', { name: 'Run Query' }).click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
 
     // Change problem using the dropdown
     await page.getByRole('combobox').nth(1).click();
     await page.getByRole('option').nth(1).click();
-    await page.waitForTimeout(500);
+    await expect(page.locator('.monaco-editor .view-lines').first()).toBeVisible({ timeout: 5000 });
 
     // Verify the editor was reset (draft reloaded for new problem)
     const draftCheck = await page.evaluate(() => {
@@ -118,7 +117,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
     await page.keyboard.type('SELECT');
     await runQueryButton.click();
-    await page.waitForTimeout(300);
+    await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
     
     // Verify interaction is properly associated with the active learner
     const interactions = await getAllInteractionsFromStorage(page);
@@ -625,7 +624,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     // Run until we get an error
     for (let i = 0; i < 5; i++) {
       await runQueryButton.click();
-      await page.waitForTimeout(300);
+      await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
     }
 
     // Request hint
@@ -651,22 +650,22 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     
     for (let i = 0; i < 3; i++) {
       await runQueryButton.click();
-      await page.waitForTimeout(300);
+      await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
     }
 
     // Progress through hints
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await page.waitForTimeout(300);
+    await expect(page.getByText('Hint 1', { exact: true })).toBeVisible({ timeout: 5000 });
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await page.waitForTimeout(300);
+    await expect(page.getByText('Hint 2', { exact: true })).toBeVisible({ timeout: 5000 });
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await page.waitForTimeout(500);
+    await expect(page.getByText('Hint 3', { exact: true })).toBeVisible({ timeout: 5000 });
 
     // Click escalation
     const moreHelpButton = page.getByRole('button', { name: 'Get More Help' });
     if (await moreHelpButton.isVisible().catch(() => false)) {
       await moreHelpButton.click();
-      await page.waitForTimeout(500);
+      await expect(page.getByText('Explanation has been generated')).toBeVisible({ timeout: 10000 });
     }
 
     // Check explanation events for ruleFired
@@ -1414,7 +1413,13 @@ test.describe('@medium-priority-bugs Integration Tests', () => {
     
     for (let i = 0; i < 3; i++) {
       await runQueryButton.click();
-      await page.waitForTimeout(300);
+      await expect.poll(async () => (
+        page.evaluate(() => {
+          const raw = window.localStorage.getItem('sql-learning-interactions');
+          const interactions = raw ? JSON.parse(raw) : [];
+          return interactions.length;
+        })
+      ), { timeout: 3000 }).toBeGreaterThanOrEqual(i + 1);
     }
 
     // Verify interactions are created with proper metadata

@@ -17,20 +17,18 @@ async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedE
 
   for (let i = 0; i < 24; i += 1) {
     await runQueryButton.click();
-    if (await marker.first().isVisible().catch(() => false)) {
+    // Use expect.poll for reliable waiting instead of fixed timeout
+    try {
+      await expect.poll(async () => {
+        return await marker.first().isVisible().catch(() => false);
+      }, { timeout: 2000, intervals: [100] }).toBe(true);
       return;
+    } catch {
+      // Continue trying
     }
-    await page.waitForTimeout(500);
   }
 
   throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
-}
-
-async function replaceEditorText(page: Page, text: string) {
-  const editorSurface = page.locator('.monaco-editor .view-lines').first();
-  await editorSurface.click({ position: { x: 8, y: 8 } });
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-  await page.keyboard.type(text);
 }
 
 async function collectDecisionTrace(page: Page): Promise<NormalizedDecisionEvent[]> {
@@ -104,7 +102,7 @@ async function runScenario(browser: Browser, replayMode: boolean): Promise<Norma
   const trace = await collectDecisionTrace(page);
   // Small delay to allow Playwright trace to finish writing before closing context
   // This prevents race conditions in trace file handling
-  await page.waitForTimeout(300);
+  await page.waitForFunction(() => true, { timeout: 300 });
   await context.close();
   return trace;
 }

@@ -43,7 +43,7 @@ test.describe('@weekly Hint Persistence Across Navigation', () => {
     // Request 2 hints
     const requestHintButton = page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME });
     await requestHintButton.click();
-    await page.waitForTimeout(300);
+    await expect(page.getByText('Hint 1')).toBeVisible({ timeout: 5000 });
     await requestHintButton.click();
 
     // Verify both hints are visible
@@ -103,7 +103,7 @@ test.describe('@weekly Hint Persistence Across Navigation', () => {
     const requestHintButton = page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME });
     for (let i = 0; i < 3; i++) {
       await requestHintButton.click();
-      await page.waitForTimeout(300);
+      await expect(page.getByText(`Hint ${i + 1}`)).toBeVisible({ timeout: 5000 });
     }
 
     // Verify explanation was generated

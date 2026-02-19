@@ -21,7 +21,7 @@
  * 14. Error Boundary - errors are caught and displayed
  */
 
-import { expect, Locator, test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import {
   getAllInteractionsFromStorage,
   getExplanationEventsFromStorage,
@@ -495,7 +495,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     await page.getByRole('button', { name: 'Run Query' }).click();
 
     // Wait for error to be logged
-    await page.waitForTimeout(500);
+    await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
 
     const interactions = await getAllInteractionsFromStorage(page);
     const errorEvents = interactions.filter((i: any) => i.eventType === 'error');
@@ -539,14 +539,14 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     const moreHelpButton = page.getByRole('button', { name: 'Get More Help' });
     if (await moreHelpButton.isVisible().catch(() => false)) {
       await moreHelpButton.click();
-      await page.waitForTimeout(500);
+      await expect(page.locator('text=Explanation has been generated')).toBeVisible({ timeout: 10000 });
     }
 
     // Try clicking Show Explanation
     const showExplanationButton = page.getByRole('button', { name: 'Show Explanation' });
     if (await showExplanationButton.isVisible().catch(() => false)) {
       await showExplanationButton.click();
-      await page.waitForTimeout(500);
+      await expect(page.locator('text=Explanation has been generated')).toBeVisible({ timeout: 10000 });
     }
 
     // Count should not have increased (or increased by at most 1 for different help request index)
@@ -631,7 +631,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
 
     // Wait for Monaco editor to be mounted
-    await page.waitForTimeout(1000);
+    await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 10000 });
     
     // Verify Monaco editor is mounted
     const editorMounted = await page.locator('.monaco-editor').count() > 0;
@@ -648,7 +648,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
 
     // Wait for editor to remount
-    await page.waitForTimeout(1000);
+    await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 10000 });
     
     // Editor should be remounted cleanly (no duplicate instances)
     const editorCount = await page.locator('.monaco-editor').count();

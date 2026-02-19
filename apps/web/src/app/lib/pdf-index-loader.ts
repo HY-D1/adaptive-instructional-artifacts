@@ -7,6 +7,9 @@ import {
 } from './pdf-index-config';
 import { PdfIndexDocument } from '../types';
 
+/**
+ * Response type for PDF index load/upload operations
+ */
 export type PdfIndexLoadResponse = {
   status: 'loaded' | 'built';
   document: PdfIndexDocument;
@@ -18,6 +21,11 @@ export type PdfIndexLoadResponse = {
   } | null;
 };
 
+/**
+ * Load existing PDF index or build a new one from cached data
+ * @returns Promise resolving to load response
+ * @throws Error if service is unreachable or returns invalid data
+ */
 export async function loadOrBuildPdfIndex(): Promise<PdfIndexLoadResponse> {
   let response: Response;
   try {
@@ -50,6 +58,12 @@ export async function loadOrBuildPdfIndex(): Promise<PdfIndexLoadResponse> {
   return typedPayload;
 }
 
+/**
+ * Upload a PDF file and build a searchable index
+ * @param file - PDF file to upload
+ * @returns Promise resolving to load response with indexed document
+ * @throws Error if upload fails or service is unreachable
+ */
 export async function uploadPdfAndBuildIndex(file: File): Promise<PdfIndexLoadResponse> {
   const formData = new FormData();
   formData.append('pdf', file);
@@ -86,6 +100,11 @@ export async function uploadPdfAndBuildIndex(file: File): Promise<PdfIndexLoadRe
   return typedPayload;
 }
 
+/**
+ * Validate PDF index document against schema contract
+ * @param document - Document to validate
+ * @throws Error if document fails validation
+ */
 function assertPdfIndexContract(document: PdfIndexDocument) {
   if (!document) {
     throw new Error('PDF index payload is missing.');

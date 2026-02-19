@@ -14,11 +14,9 @@ import { getConceptById } from '../data/sql-engage';
 import { buildTextbookInsights, SortMode } from '../lib/textbook-insights';
 import { 
   isBestQualityUnit, 
-  BEST_QUALITY_THRESHOLD, 
   getUnitDisplayStatus, 
   getAlternativeUnits,
-  filterUnitsByStatus,
-  type CompetitionResult 
+  filterUnitsByStatus
 } from '../lib/textbook-units';
 
 interface AdaptiveTextbookProps {
@@ -381,8 +379,11 @@ export function AdaptiveTextbook({
               <div key={conceptName} className="border rounded-lg overflow-hidden">
                 {/* Concept Header - Click to expand/collapse */}
                 <button
+                  type="button"
                   onClick={() => toggleConcept(conceptName)}
                   className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                  aria-expanded={isConceptExpanded}
+                  aria-controls={`concept-content-${conceptName.replace(/\s+/g, '-').toLowerCase()}`}
                 >
                   <div className="flex items-center gap-2">
                     <Folder className="size-4 text-blue-500" />
@@ -400,7 +401,10 @@ export function AdaptiveTextbook({
                 
                 {/* Problems under this concept */}
                 {isConceptExpanded && (
-                  <div className="p-2 space-y-1">
+                  <div 
+                    id={`concept-content-${conceptName.replace(/\s+/g, '-').toLowerCase()}`}
+                    className="p-2 space-y-1"
+                  >
                     {Object.entries(problems).map(([problemTitle, units]) => {
                       const problemKey = `${conceptName}-${problemTitle}`;
                       const isProblemExpanded = expandedProblems[problemKey] ?? false;
@@ -410,12 +414,15 @@ export function AdaptiveTextbook({
                         <div key={problemKey} className="rounded-md border bg-white overflow-hidden">
                           {/* Problem Title */}
                           <button
+                            type="button"
                             onClick={() => hasMultipleUnits ? toggleProblem(problemKey) : handleUnitSelect(units[0])}
                             className={`w-full flex items-center justify-between p-2 text-left hover:bg-gray-50 transition-colors ${
                               selectedUnit && units.some(u => u.id === selectedUnit.id) 
                                 ? 'bg-blue-50 border-blue-200' 
                                 : ''
                             }`}
+                            aria-expanded={hasMultipleUnits ? isProblemExpanded : undefined}
+                            aria-controls={hasMultipleUnits ? `problem-content-${problemKey.replace(/\s+/g, '-').toLowerCase()}` : undefined}
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               {hasMultipleUnits ? (
@@ -438,11 +445,15 @@ export function AdaptiveTextbook({
                           
                           {/* Units under this problem */}
                           {(isProblemExpanded || !hasMultipleUnits) && (
-                            <div className="border-t bg-gray-50/50">
+                            <div 
+                              id={`problem-content-${problemKey.replace(/\s+/g, '-').toLowerCase()}`}
+                              className="border-t bg-gray-50/50"
+                            >
                               {units.map((unit) => {
                                 const isBest = isBestQualityUnit(unit);
                                 return (
                                   <button
+                                    type="button"
                                     key={unit.id}
                                     onClick={() => handleUnitSelect(unit)}
                                     className={`w-full px-3 py-2 text-left text-sm transition-colors ${

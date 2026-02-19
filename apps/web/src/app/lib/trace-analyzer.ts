@@ -17,9 +17,7 @@ import {
   ConceptGap,
   UnitRecommendation,
   AutoCreationResult,
-  AutoCreatedUnitInfo,
-  AutoCreationSkipInfo,
-  SQLProblem
+  AutoCreatedUnitInfo
 } from '../types';
 import { storage } from './storage';
 import { createEventId } from './event-id';
@@ -28,9 +26,10 @@ import { generateUnitFromLLM, buildBundleForCurrentProblem } from './content-gen
 import { sqlProblems } from '../data/problems';
 
 // Constants for analysis configuration
-const ANALYSIS_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+export const ANALYSIS_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const MIN_PATTERN_FREQUENCY = 3; // Minimum occurrences to be considered a pattern
 const ERROR_SUBTYPE_WINDOW_MS = 30 * 60 * 1000; // 30 minutes window for recent errors
+export const FIVE_MINUTES_MS = 5 * 60 * 1000; // Shared constant for 5-minute intervals
 
 // Constants for proactive unit creation
 const AUTO_CREATE_MIN_FREQUENCY = 5; // Minimum pattern frequency to auto-create unit
@@ -60,6 +59,20 @@ const state: BackgroundAnalysisState = {
  * 2. Find subtypes with >3 occurrences and no textbook unit
  * 3. Recommend unit creation for gaps
  * 4. Return recommendations
+ */
+/**
+ * Analyze interaction traces to identify patterns and concept gaps
+ * 
+ * Algorithm:
+ * 1. Group errors by subtype
+ * 2. Find subtypes with >3 occurrences and no textbook unit
+ * 3. Recommend unit creation for gaps
+ * 4. Return recommendations
+ * 
+ * @param interactions - Learner interaction events
+ * @param textbookUnits - Existing textbook units
+ * @param options - Analysis configuration options
+ * @returns Analysis result with patterns, gaps, and recommendations
  */
 export function analyzeInteractionTraces(
   interactions: InteractionEvent[],
@@ -177,7 +190,7 @@ function calculatePatternConfidence(
     const timestamps = interactions.map(i => i.timestamp).sort((a, b) => a - b);
     const timeSpan = timestamps[timestamps.length - 1] - timestamps[0];
     // If spread over more than 5 minutes, high confidence
-    if (timeSpan > 5 * 60 * 1000) return 'high';
+    if (timeSpan > FIVE_MINUTES_MS) return 'high';
   }
   
   // Medium confidence: meets minimum threshold
@@ -364,6 +377,11 @@ function calculateSummary(
 /**
  * Log analysis results to storage with 'concept_extraction' event type.
  */
+/**
+ * Log analysis results to storage with 'concept_extraction' event type
+ * @param result - Analysis result to log
+ * @param sessionId - Optional session ID
+ */
 export function logAnalysisResults(
   result: AnalysisResult,
   sessionId?: string
@@ -437,6 +455,9 @@ export function startBackgroundAnalysis(
 /**
  * Stop the background analysis interval.
  */
+/**
+ * Stop the background analysis interval
+ */
 export function stopBackgroundAnalysis(): void {
   if (state.intervalId !== null) {
     window.clearInterval(state.intervalId);
@@ -448,12 +469,20 @@ export function stopBackgroundAnalysis(): void {
 /**
  * Check if background analysis is currently running.
  */
+/**
+ * Check if background analysis is currently running
+ * @returns True if analysis interval is active
+ */
 export function isBackgroundAnalysisRunning(): boolean {
   return state.isRunning;
 }
 
 /**
  * Get the last analysis timestamp.
+ */
+/**
+ * Get the last analysis timestamp
+ * @returns Timestamp of last analysis run
  */
 export function getLastAnalysisTime(): number {
   return state.lastAnalysisTime;
@@ -557,11 +586,8 @@ export function runAnalysisOnce(
   });
 
   // Perform auto-creation if enabled
-  if (enableAutoCreation) {
-    // Note: This is synchronous, so we can't await the async auto-creation
-    // For one-off analysis, auto-creation should be handled separately
-    console.log('[TraceAnalyzer] runAnalysisOnce: auto-creation is async. Use autoCreateUnitsFromAnalysis directly for sync context.');
-  }
+  // Note: runAnalysisOnce is synchronous, so we can't await the async auto-creation
+  // For one-off analysis with auto-creation, use autoCreateUnitsFromAnalysis directly
 
   logAnalysisResults(result, sessionId);
   return result;
@@ -574,11 +600,30 @@ export function clearAnalyzedPatternsCache(): void {
   state.analyzedPatterns.clear();
 }
 
+// Constants for pattern signature cache to prevent unbounded memory growth
+const MAX_PATTERN_SIGNATURES = 1000; // Maximum entries before LRU eviction
+const PATTERN_SIGNATURE_EXPIRY_MS = 60 * 60 * 1000; // 1 hour expiration
+
 // Track which patterns have been auto-processed to avoid duplicates
-const autoCreatedPatternSignatures = new Set<string>();
+// Uses Map instead of Set for LRU eviction with timestamp tracking
+const autoCreatedPatternSignatures = new Map<string, number>(); // signature -> timestamp
 
 /**
  * Automatically create textbook units from strong analysis patterns.
+ * 
+ * Criteria for auto-creation:
+ * 1. Error pattern frequency >= 5 (strong signal)
+ * 2. Concept gap exists (no unit for this concept)
+ * 3. Quality threshold >= 0.6
+ * 
+ * @param analysisResult - The analysis result containing patterns and gaps
+ * @param learnerId - The learner ID
+ * @param sessionId - The session ID
+ * @param interactions - All interactions for building retrieval bundle
+ * @returns AutoCreationResult with details of created/updated/skipped units
+ */
+/**
+ * Automatically create textbook units from strong analysis patterns
  * 
  * Criteria for auto-creation:
  * 1. Error pattern frequency >= 5 (strong signal)
@@ -646,6 +691,8 @@ export async function autoCreateUnitsFromAnalysis(
     // Generate pattern signature to avoid duplicate auto-creation
     const patternSignature = `${learnerId}::${pattern.key}::${pattern.conceptIds.join(',')}`;
     if (autoCreatedPatternSignatures.has(patternSignature)) {
+      // Update timestamp for LRU tracking
+      autoCreatedPatternSignatures.set(patternSignature, Date.now());
       continue; // Already auto-created for this pattern
     }
 
@@ -708,8 +755,8 @@ export async function autoCreateUnitsFromAnalysis(
       // Save to textbook
       const saveResult = storage.saveTextbookUnit(learnerId, unitWithAutoFlag);
 
-      // Mark pattern as processed
-      autoCreatedPatternSignatures.add(patternSignature);
+      // Mark pattern as processed with LRU eviction
+      addPatternSignatureWithLRU(patternSignature);
 
       // Track result
       const unitInfo: AutoCreatedUnitInfo = {
@@ -780,7 +827,11 @@ export async function autoCreateUnitsFromAnalysis(
 
     // Check if already created from pattern
     const gapSignature = `${learnerId}::gap::${gap.conceptId}`;
-    if (autoCreatedPatternSignatures.has(gapSignature)) continue;
+    if (autoCreatedPatternSignatures.has(gapSignature)) {
+      // Update timestamp for LRU tracking
+      autoCreatedPatternSignatures.set(gapSignature, Date.now());
+      continue;
+    }
 
     try {
       // Find relevant interaction for this gap
@@ -826,7 +877,7 @@ export async function autoCreateUnitsFromAnalysis(
       };
 
       const saveResult = storage.saveTextbookUnit(learnerId, unitWithAutoFlag);
-      autoCreatedPatternSignatures.add(gapSignature);
+      addPatternSignatureWithLRU(gapSignature);
 
       const unitInfo: AutoCreatedUnitInfo = {
         unitId: saveResult.unit.id,
@@ -860,10 +911,61 @@ export async function autoCreateUnitsFromAnalysis(
 }
 
 /**
+ * Add a pattern signature with LRU eviction when size exceeds limit.
+ * Removes oldest entries (by timestamp) when cache is full.
+ * Also removes entries older than PATTERN_SIGNATURE_EXPIRY_MS.
+ */
+function addPatternSignatureWithLRU(signature: string): void {
+  const now = Date.now();
+  
+  // Remove expired entries (time-based cleanup)
+  const expiryThreshold = now - PATTERN_SIGNATURE_EXPIRY_MS;
+  for (const [sig, timestamp] of autoCreatedPatternSignatures.entries()) {
+    if (timestamp < expiryThreshold) {
+      autoCreatedPatternSignatures.delete(sig);
+    }
+  }
+  
+  // If still at capacity, remove oldest entries by timestamp
+  if (autoCreatedPatternSignatures.size >= MAX_PATTERN_SIGNATURES) {
+    const entries = Array.from(autoCreatedPatternSignatures.entries());
+    // Sort by timestamp ascending (oldest first)
+    entries.sort((a, b) => a[1] - b[1]);
+    
+    // Remove oldest 20% of entries to make room
+    const entriesToRemove = Math.ceil(MAX_PATTERN_SIGNATURES * 0.2);
+    for (let i = 0; i < entriesToRemove && i < entries.length; i++) {
+      autoCreatedPatternSignatures.delete(entries[i][0]);
+    }
+  }
+  
+  // Add new signature with current timestamp
+  autoCreatedPatternSignatures.set(signature, now);
+}
+
+/**
  * Clear auto-created pattern signatures (useful for testing).
  */
 export function clearAutoCreatedPatternCache(): void {
   autoCreatedPatternSignatures.clear();
+}
+
+/**
+ * Get cache statistics for monitoring.
+ */
+export function getPatternSignatureCacheStats(): {
+  size: number;
+  maxSize: number;
+  oldestEntry: number | null;
+  newestEntry: number | null;
+} {
+  const timestamps = Array.from(autoCreatedPatternSignatures.values());
+  return {
+    size: autoCreatedPatternSignatures.size,
+    maxSize: MAX_PATTERN_SIGNATURES,
+    oldestEntry: timestamps.length > 0 ? Math.min(...timestamps) : null,
+    newestEntry: timestamps.length > 0 ? Math.max(...timestamps) : null
+  };
 }
 
 /**
@@ -897,7 +999,7 @@ export function publishInteraction(event: InteractionEvent): void {
     const subtype = event.sqlEngageSubtype || event.errorSubtypeId;
     if (subtype) {
       // Could trigger immediate analysis here for critical patterns
-      console.log(`[TraceAnalyzer] Error published: ${subtype}`);
+      // Error subtype: subtype (logged for debugging if needed)
     }
   }
 }

@@ -163,10 +163,15 @@ async function runUntilErrorCount(page: Page, expectedErrorCount: number) {
 
   for (let i = 0; i < 12; i += 1) {
     await runQueryButton.click();
-    if (await marker.first().isVisible().catch(() => false)) {
+    // Use expect.poll for reliable waiting instead of fixed timeout
+    try {
+      await expect.poll(async () => {
+        return await marker.first().isVisible().catch(() => false);
+      }, { timeout: 2000, intervals: [100] }).toBe(true);
       return;
+    } catch {
+      // Continue trying
     }
-    await page.waitForTimeout(300);
   }
 
   throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);

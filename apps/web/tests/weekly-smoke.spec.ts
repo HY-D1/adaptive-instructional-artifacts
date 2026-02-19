@@ -1,28 +1,23 @@
 import { expect, Locator, Page, test } from '@playwright/test';
+import { replaceEditorText, getEditorText } from './test-helpers';
 
 async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedErrorCount: number) {
   const marker = page.getByText(new RegExp(`\\b${expectedErrorCount} errors\\b`));
 
   for (let i = 0; i < 10; i += 1) {
     await runQueryButton.click();
-    if (await marker.first().isVisible().catch(() => false)) {
+    // Use expect.poll for reliable waiting instead of fixed timeout
+    try {
+      await expect.poll(async () => {
+        return await marker.first().isVisible().catch(() => false);
+      }, { timeout: 2000, intervals: [100] }).toBe(true);
       return;
+    } catch {
+      // Continue trying
     }
-    await page.waitForTimeout(400);
   }
 
   throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
-}
-
-async function replaceEditorText(page: Page, text: string) {
-  const editorSurface = page.locator('.monaco-editor .view-lines').first();
-  await editorSurface.click({ position: { x: 8, y: 8 } });
-  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-  await page.keyboard.type(text);
-}
-
-async function getEditorText(page: Page): Promise<string> {
-  return page.locator('.monaco-editor .view-lines').first().innerText();
 }
 
 test('@weekly smoke: practice editor draft persists across textbook navigation', async ({ page }) => {
@@ -134,8 +129,18 @@ test('@weekly smoke: hint ladder -> escalate -> add/update note -> textbook evid
     })
   ), { timeout: 30000, intervals: [500, 1000, 2000] }).toBeGreaterThanOrEqual(1);
   
-  // Additional wait to ensure all events are persisted and stable
-  await page.waitForTimeout(500);
+  // Wait for all events to be persisted and stable
+  await expect.poll(async () => (
+    page.evaluate(() => {
+      const rawInteractions = window.localStorage.getItem('sql-learning-interactions');
+      const interactions = rawInteractions ? JSON.parse(rawInteractions) : [];
+      const helpInteractions = interactions.filter(
+        (interaction: any) =>
+          interaction.eventType === 'hint_view' || interaction.eventType === 'explanation_view'
+      );
+      return helpInteractions.length;
+    })
+  ), { timeout: 10000, intervals: [200, 500] }).toBeGreaterThanOrEqual(4);
 
   // Escalation is logged on help request 4+ as explanation_view.
   const helpFlowSnapshot = await page.evaluate(() => {

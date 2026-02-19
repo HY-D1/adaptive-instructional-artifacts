@@ -22,17 +22,32 @@ export function StartPage() {
 
   // Check for existing profile on mount
   useEffect(() => {
-    const profile = storage.getUserProfile();
-    if (profile) {
-      // Auto-redirect based on role
-      if (profile.role === 'instructor') {
-        navigate('/instructor-dashboard', { replace: true });
-      } else {
-        navigate('/practice', { replace: true });
+    // Add timeout to prevent infinite loading if storage is blocked
+    const timeoutId = setTimeout(() => {
+      console.warn('[StartPage] Profile check timed out');
+      setIsLoading(false);
+    }, 2000);
+    
+    try {
+      const profile = storage.getUserProfile();
+      clearTimeout(timeoutId);
+      if (profile) {
+        // Auto-redirect based on role
+        if (profile.role === 'instructor') {
+          navigate('/instructor-dashboard', { replace: true });
+        } else {
+          navigate('/practice', { replace: true });
+        }
+        return;
       }
-      return;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      console.error('Failed to load user profile:', error);
+      // Continue to show the start page even if storage fails
     }
     setIsLoading(false);
+    
+    return () => clearTimeout(timeoutId);
   }, [navigate]);
 
   // Clear passcode error when role changes

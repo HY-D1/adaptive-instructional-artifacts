@@ -56,8 +56,18 @@ export async function initializeSQL() {
   }
   
   // Start new initialization and track the promise
+  // Try to load WASM from local public directory first, fallback to CDN
   sqlInitializationPromise = initSqlJs({
-    locateFile: file => `https://sql.js.org/dist/${file}`
+    locateFile: file => {
+      // Use local WASM file - copied to dist root during build
+      return `/${file}`;
+    }
+  }).catch((err) => {
+    console.warn('[sql.js] Local WASM failed, falling back to CDN:', err);
+    // Fallback to CDN if local file fails
+    return initSqlJs({
+      locateFile: file => `https://sql.js.org/dist/${file}`
+    });
   }).then(sql => {
     SQL = sql;
     return sql;
@@ -69,24 +79,45 @@ export async function initializeSQL() {
   return sqlInitializationPromise;
 }
 
-/** Result of executing a single SQL statement */
+/**
+ * Result of executing a single SQL statement
+ */
 export interface SingleQueryResult {
+  /** Column names from the query */
   columns: string[];
+  /** Row values as arrays */
   values: unknown[][];
 }
 
-/** Result of executing a SQL query */
+/**
+ * Result of executing a SQL query
+ */
 export interface QueryResult {
+  /** Whether execution succeeded */
   success: boolean;
+  /** Column names (when successful) */
   columns?: string[];
+  /** Row values (when successful) */
   values?: unknown[][];
-  /** All result sets when multiple statements are executed */
+  /** All result sets for multi-statement queries */
   allResults?: SingleQueryResult[];
+  /** Error message (when failed) */
   error?: string;
+  /** Normalized error subtype ID */
   errorSubtypeId?: string;
+  /** Execution time in milliseconds */
   executionTime?: number;
 }
 
+/**
+ * SQL query executor using sql.js
+ * 
+ * Features:
+ * - Schema initialization
+ * - Query execution with error handling
+ * - Result formatting and comparison
+ * - SQL comment stripping
+ */
 export class SQLExecutor {
   private db: Database | null = null;
 
@@ -159,6 +190,10 @@ export class SQLExecutor {
     return result.trim();
   }
 
+  /**
+   * Initialize the database with a schema
+   * @param schema - SQL DDL statements to create tables
+   */
   async initialize(schema: string) {
     const SQL = await initializeSQL();
     this.db = new SQL.Database();
@@ -181,6 +216,11 @@ export class SQLExecutor {
    * Note on multiple result sets: When executing multiple SELECT statements,
    * only the first result set is returned in `columns`/`values`. All results
    * are available in `allResults` for inspection.
+   */
+  /**
+   * Execute a SQL query against the initialized database
+   * @param query - SQL query to execute
+   * @returns Query result with data or error info
    */
   async executeQuery(query: string): Promise<QueryResult> {
     if (!this.db) {
@@ -240,6 +280,11 @@ export class SQLExecutor {
    * Formats query results into an array of objects.
    * Column order from the query is preserved in each row object.
    */
+  /**
+   * Format query results into an array of objects
+   * @param result - Query result from executeQuery
+   * @returns Array of row objects with column names as keys
+   */
   formatResults(result: QueryResult): Record<string, unknown>[] {
     if (!result.success || !result.columns || !result.values) {
       return [];
@@ -261,6 +306,13 @@ export class SQLExecutor {
    * - Floating point values use epsilon tolerance (0.01)
    * - Null and undefined are treated as equivalent
    * - String values are trimmed before comparison
+   */
+  /**
+   * Compare actual and expected query results
+   * Uses set-based comparison (order-independent)
+   * @param actual - Actual query results
+   * @param expected - Expected query results
+   * @returns Comparison result with match flag and differences
    */
   compareResults(
     actual: Record<string, unknown>[],
@@ -328,6 +380,9 @@ export class SQLExecutor {
     return { match, differences };
   }
 
+  /**
+   * Close the database connection and free resources
+   */
   close() {
     if (this.db) {
       this.db.close();

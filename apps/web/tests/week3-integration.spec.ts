@@ -1,5 +1,13 @@
 /**
  * Week 3 Core Integration Tests
+ * 
+ * Covers: End-to-end integration of Week 3 features
+ * - User journey: errors → hints → unit creation
+ * - Chat and hints working together
+ * - Textbook unit display
+ * 
+ * @module Week3IntegrationTests
+ * @weekly
  */
 
 import { expect, test } from '@playwright/test';
@@ -20,7 +28,7 @@ test.describe('@weekly Week 3 Integration', () => {
     });
   });
 
-  test('e2e: user makes errors → gets hints → unit created', async ({ page }) => {
+  test('@weekly e2e: user makes errors → gets hints → unit created', async ({ page }) => {
     await page.goto('/');
     
     await page.evaluate(() => {
@@ -55,7 +63,7 @@ test.describe('@weekly Week 3 Integration', () => {
     expect(events.length).toBeGreaterThanOrEqual(1);
   });
 
-  test('chat and hints work together', async ({ page }) => {
+  test('@weekly chat and hints work together', async ({ page }) => {
     await page.goto('/');
     
     await page.evaluate(() => {
@@ -85,7 +93,7 @@ test.describe('@weekly Week 3 Integration', () => {
     await expect(page.getByText('Hint 1')).toBeVisible();
   });
 
-  test('textbook displays created units', async ({ page }) => {
+  test('@weekly textbook displays created units', async ({ page }) => {
     await page.goto('/');
     
     await page.evaluate(() => {

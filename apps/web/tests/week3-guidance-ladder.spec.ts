@@ -6,6 +6,11 @@
  * - Escalation triggers
  * - Source grounding
  * - Event logging
+ * - Hint persistence across navigation
+ * - Problem-specific hints
+ * 
+ * @module Week3GuidanceLadderTests
+ * @weekly
  */
 
 import { expect, test } from '@playwright/test';
@@ -28,7 +33,7 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
     });
   });
 
-  test('rung 1: micro-hint displayed on first help request', async ({ page }) => {
+  test('@weekly rung 1: micro-hint displayed on first help request', async ({ page }) => {
     await page.goto('/');
     
     // Setup learner
@@ -62,7 +67,7 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
     expect(hintText?.length).toBeLessThan(200);
   });
 
-  test('rung 2: explanation with source grounding after escalation', async ({ page }) => {
+  test('@weekly rung 2: explanation with source grounding after escalation', async ({ page }) => {
     await page.goto('/');
     
     await page.evaluate(() => {
@@ -98,7 +103,7 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
     await expect(page.getByText(/2\/3/)).toBeVisible();
   });
 
-  test('escalation events logged correctly', async ({ page }) => {
+  test('@weekly escalation events logged correctly', async ({ page }) => {
     await page.goto('/');
     
     await page.evaluate(() => {
@@ -136,7 +141,7 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
     expect(events[0]).toHaveProperty('policyVersion');
   });
 
-  test('source passages displayed with hints', async ({ page }) => {
+  test('@weekly source passages displayed with hints', async ({ page }) => {
     await page.goto('/');
     
     // Setup with PDF index
@@ -173,7 +178,7 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
     await expect(page.getByText('Hint 1')).toBeVisible();
   });
 
-  test('hints are problem-specific', async ({ page }) => {
+  test('@weekly hints are problem-specific', async ({ page }) => {
     await page.goto('/');
     
     await page.evaluate(() => {
@@ -201,8 +206,9 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
     await problemSelector.click();
     await page.getByRole('option').nth(1).click();
     
-    // Wait for the problem to change and UI to update
-    await page.waitForTimeout(500);
+    // Wait for the problem to change and hint panel to reset
+    const hintPanel = page.locator('[data-testid="hint-panel"]');
+    await expect(hintPanel.getByText('Request a hint to get started')).toBeVisible({ timeout: 5000 });
 
     // Verify hints reset - hint panel shows empty state
     const hintPanel = page.locator('[data-testid="hint-panel"]');
@@ -211,7 +217,7 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
     await expect(page.getByText('Hint 1')).toHaveCount(0);
   });
 
-  test('guidance ladder state persists across navigation', async ({ page }) => {
+  test('@weekly guidance ladder state persists across navigation', async ({ page }) => {
     await page.goto('/');
     
     await page.evaluate(() => {
