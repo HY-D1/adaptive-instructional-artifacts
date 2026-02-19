@@ -24,8 +24,6 @@
     "gate:week3:acceptance": "cd dist/weekly-demo && jq -e '[.interactions[] | select(.eventType==\"guidance_view\") | .rung] | max == 3' export.json && jq -e '[.interactions[] | select(.eventType==\"guidance_escalate\")] | length >= 2' export.json && jq -e '[.interactions[] | select(.eventType==\"textbook_unit_upsert\")] | length >= 1' export.json && jq -e '[.interactions[] | select(.eventType==\"source_view\")] | length >= 1' export.json",
     "gate:week3:groundedness": "cd dist/weekly-demo && jq -e '[.interactions[] | select(.eventType==\"guidance_view\" and .rung >= 2) | .grounded] | (map(select(. == true)) | length) / length >= 0.5' export.json",
     "traces:normalize": "node scripts/normalize-real-traces.mjs",
-    "hintwise:convert": "node scripts/convert-hintwise.mjs",
-    "test:hintwise:convert": "node scripts/verify-hintwise-converter.mjs",
     "pdf:index": "node scripts/build-pdf-index.mjs",
     "pdf:search": "node scripts/search-index.mjs",
     "pdf:convert": "node scripts/pdf-to-index.mjs",
