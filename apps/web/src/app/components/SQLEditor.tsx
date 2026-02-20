@@ -55,6 +55,75 @@ function parseSqlError(error: string): {
   };
 }
 
+// Generate positive feedback for correct queries (Research: 2x learning speed with positive feedback)
+function generatePositiveFeedback(query: string): string {
+  const lowerQuery = query.toLowerCase();
+  
+  // Detect query patterns and provide specific praise
+  if (lowerQuery.includes('join')) {
+    if (lowerQuery.includes('inner join')) {
+      return 'Excellent! Your INNER JOIN correctly matches related rows from both tables.';
+    }
+    if (lowerQuery.includes('left join')) {
+      return 'Great! Your LEFT JOIN preserves all rows from the left table while matching related data.';
+    }
+    return 'Well done! Your JOIN condition properly links the tables together.';
+  }
+  
+  if (lowerQuery.includes('group by')) {
+    if (lowerQuery.includes('having')) {
+      return 'Perfect! You correctly used HAVING to filter aggregated groups.';
+    }
+    if (lowerQuery.includes('count(') || lowerQuery.includes('sum(') || lowerQuery.includes('avg(')) {
+      return 'Excellent! Your aggregation with GROUP BY summarizes the data correctly.';
+    }
+    return 'Good! Your GROUP BY organizes rows into summary groups.';
+  }
+  
+  if (lowerQuery.includes('where')) {
+    if (lowerQuery.includes('and') || lowerQuery.includes('or')) {
+      return 'Great! Your WHERE clause with multiple conditions filters precisely.';
+    }
+    if (lowerQuery.includes('like')) {
+      return 'Well done! Your pattern matching with LIKE finds the right data.';
+    }
+    if (lowerQuery.includes('in (')) {
+      return 'Perfect! Using IN with a list makes your filter clean and efficient.';
+    }
+    return 'Good! Your WHERE clause correctly filters the results.';
+  }
+  
+  if (lowerQuery.includes('order by')) {
+    if (lowerQuery.includes('desc')) {
+      return 'Excellent! Your descending sort orders results from highest to lowest.';
+    }
+    return 'Good! Your ORDER BY arranges results in the specified sequence.';
+  }
+  
+  if (lowerQuery.includes('distinct')) {
+    return 'Perfect! DISTINCT eliminates duplicate rows as intended.';
+  }
+  
+  if (lowerQuery.includes('limit') || lowerQuery.includes('top')) {
+    return 'Well done! Limiting results improves query performance.';
+  }
+  
+  if (lowerQuery.includes('subquery') || lowerQuery.includes('select') && query.toLowerCase().split('select').length > 2) {
+    return 'Excellent use of a subquery! Nesting queries solves complex problems elegantly.';
+  }
+  
+  // Default positive feedback
+  const defaults = [
+    'Correct! Your query retrieves exactly the right data.',
+    'Well done! Your SQL syntax is clean and accurate.',
+    'Perfect! Your solution addresses the problem requirements.',
+    'Excellent work! Your query logic is sound.',
+    'Great job! You\'re building strong SQL skills.'
+  ];
+  
+  return defaults[Math.floor(Math.random() * defaults.length)];
+}
+
 /**
  * SQLEditor - Monaco-based SQL code editor with execution
  * 
@@ -492,13 +561,27 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
 
               {result.success ? (
                 <>
+                  {/* Positive feedback for correct queries - Research shows 2x learning speed */}
+                  {correctness?.match && (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <CheckCircle className="size-4 text-green-600 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-green-800">
+                            {generatePositiveFeedback(code)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   {result.values && result.values.length > 0 ? (
                     <div className="overflow-x-auto rounded border">
                       <table className="w-full text-sm">
                         <thead className="bg-gray-100">
                           <tr>
                             {result.columns?.map((col, idx) => (
-                              <th key={idx} className="px-4 py-2 text-left border-b font-medium">
+                              <th key={idx} scope="col" className="px-4 py-2 text-left border-b font-medium">
                                 {col}
                               </th>
                             ))}

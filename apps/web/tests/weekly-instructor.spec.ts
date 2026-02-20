@@ -29,11 +29,12 @@ async function expectNumericValue(locator: Locator, expected: number) {
 }
 
 test('@weekly instructor: trace table shows events and policy knob changes decisions', async ({ page }) => {
+  // Step 1: Generate trace data as student
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
-    // Set up student profile to bypass StartPage role selection
+    // Set up student profile to access Practice page
     window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
       id: 'test-user',
       name: 'Test User',
@@ -53,7 +54,16 @@ test('@weekly instructor: trace table shows events and policy knob changes decis
   // Build a deterministic trace slice with enough failed attempts for adaptive divergence.
   await runUntilErrorCount(page, runQueryButton, 4);
 
-  await page.getByRole('link', { name: 'Research' }).click();
+  // Step 2: Switch to instructor role to access Research page
+  await page.addInitScript(() => {
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'test-user',
+      name: 'Test User',
+      role: 'instructor',
+      createdAt: Date.now()
+    }));
+  });
+  await page.goto('/research');
   await expect(page).toHaveURL(/\/research/);
   await expect(page.getByRole('heading', { name: 'Research Dashboard' }).first()).toBeVisible();
 

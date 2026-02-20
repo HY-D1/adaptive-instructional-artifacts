@@ -67,6 +67,10 @@ export function HintSystem({
   const [showSourceViewer, setShowSourceViewer] = useState(false);
   const [isAddingToTextbook, setIsAddingToTextbook] = useState(false);
   const [isProcessingHint, setIsProcessingHint] = useState(false);
+  const [autoEscalationInfo, setAutoEscalationInfo] = useState<{
+    triggered: boolean;
+    helpRequestCount: number;
+  }>({ triggered: false, helpRequestCount: 0 });
   const MAX_DEDUPE_KEYS = 1000; // Prevent unbounded set growth
   
   // Guidance Ladder constants
@@ -102,6 +106,7 @@ export function HintSystem({
     setCurrentRung(1);
     setConceptIds([]);
     setShowSourceViewer(false);
+    setAutoEscalationInfo({ triggered: false, helpRequestCount: 0 });
     // Reset refs to ensure clean state for new problem
     helpFlowKeyRef.current = '';
     nextHelpRequestIndexRef.current = 1;
@@ -427,6 +432,7 @@ export function HintSystem({
     const problemTrace = getProblemTrace();
     const nextHelpRequestIndex = allocateNextHelpRequestIndex(problemTrace);
     if (nextHelpRequestIndex >= 4) {
+      setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
       handleShowExplanation('auto', nextHelpRequestIndex, problemTrace);
       setIsProcessingHint(false);
       return;
@@ -698,6 +704,18 @@ export function HintSystem({
         </div>
       )}
 
+      {/* Accessibility: Announce new hints to screen readers */}
+      {hints.length > 0 && (
+        <div 
+          role="status" 
+          aria-live="polite" 
+          aria-atomic="true"
+          className="sr-only"
+        >
+          New hint available: {hints[hints.length - 1]}
+        </div>
+      )}
+      
       {hints.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 p-6 text-center">
           <div className="p-2 bg-amber-50 rounded-full w-fit mx-auto mb-3">
@@ -894,9 +912,20 @@ export function HintSystem({
 
       {showExplanation && (
         <div className="rounded-md bg-emerald-50 border border-emerald-100 px-3 py-2">
-          <p className="text-xs text-emerald-700">
-            Explanation has been generated for this help flow.
-          </p>
+          {autoEscalationInfo.triggered ? (
+            <>
+              <p className="text-xs font-medium text-emerald-800">
+                📚 Full Explanation Unlocked
+              </p>
+              <p className="text-xs text-emerald-700 mt-1">
+                After {autoEscalationInfo.helpRequestCount} help requests, we're providing a complete worked example to help you master this concept.
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-emerald-700">
+              Explanation has been generated for this help flow.
+            </p>
+          )}
         </div>
       )}
     </Card>
