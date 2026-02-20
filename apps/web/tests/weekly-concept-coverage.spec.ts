@@ -277,8 +277,9 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
       // Set up student profile to bypass StartPage role selection
+      // Use 'learner-1' as ID to match test expectations
       window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
-        id: 'test-user',
+        id: 'learner-1',
         name: 'Test User',
         role: 'student',
         createdAt: Date.now()

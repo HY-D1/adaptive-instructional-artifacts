@@ -67,6 +67,10 @@ class StorageManager {
   /** Key for current user identity (single active user profile) - used for role-based auth (Week 4) */
   private readonly USER_PROFILE_KEY = 'sql-adapt-user-profile'; // Week 4: Aligned with existing app key
 
+  // Legacy keys for backward compatibility (tests and old data)
+  private readonly LEGACY_PROFILES_KEY = 'sql-adapt-profiles';
+  private readonly LEGACY_TEXTBOOK_KEY = 'sql-adapt-textbook';
+
   // In-memory fallback for PDF index when LocalStorage quota is exceeded
   private pdfIndexMemory: PdfIndexDocument | null = null;
 
@@ -841,7 +845,21 @@ class StorageManager {
   }
 
   getAllProfiles(): any[] {
-    return this.readParsedStorage<any[]>(this.PROFILES_KEY, []);
+    // Read from canonical key first, then merge with legacy key for backward compatibility
+    const canonical = this.readParsedStorage<any[]>(this.PROFILES_KEY, []);
+    const legacy = this.readParsedStorage<any[]>(this.LEGACY_PROFILES_KEY, []);
+    
+    // Merge: canonical takes precedence, legacy fills in gaps for missing IDs
+    const merged = [...canonical];
+    const canonicalIds = new Set(canonical.map(p => p.id));
+    
+    for (const legacyProfile of legacy) {
+      if (legacyProfile.id && !canonicalIds.has(legacyProfile.id)) {
+        merged.push(legacyProfile);
+      }
+    }
+    
+    return merged;
   }
 
   /**
@@ -1052,12 +1070,13 @@ class StorageManager {
   }
 
   // Evidence scoring weights for coverage calculation
+  // FIXED: Errors now properly penalize coverage to reflect actual mastery
   private readonly EVIDENCE_WEIGHTS = {
-    successfulExecution: 25,    // Strong positive evidence
-    notesAdded: 15,             // Good positive evidence (engagement)
-    explanationViewed: 5,       // Weak positive (needed help)
-    hintViewed: 2,              // Minimal positive (just viewed hint)
-    errorEncountered: -5        // Negative evidence
+    successfulExecution: 25,    // Strong positive evidence - only way to significantly increase coverage
+    notesAdded: 10,             // Moderate positive (reflection/learning)
+    explanationViewed: 0,       // Neutral - viewing help doesn't increase coverage
+    hintViewed: 0,              // Neutral - hints don't increase coverage
+    errorEncountered: -10       // Stronger negative - errors should decrease coverage progress
   };
 
   // Thresholds for coverage and confidence
@@ -1465,7 +1484,26 @@ class StorageManager {
   }
 
   getAllTextbooks(): Record<string, InstructionalUnit[]> {
-    return this.readParsedStorage<Record<string, InstructionalUnit[]>>(this.TEXTBOOK_KEY, {});
+    // Read from canonical key first, then merge with legacy key for backward compatibility
+    const canonical = this.readParsedStorage<Record<string, InstructionalUnit[]>>(this.TEXTBOOK_KEY, {});
+    const legacy = this.readParsedStorage<Record<string, InstructionalUnit[]>>(this.LEGACY_TEXTBOOK_KEY, {});
+    
+    // Merge: canonical takes precedence, legacy fills in gaps
+    const merged: Record<string, InstructionalUnit[]> = { ...legacy, ...canonical };
+    
+    // If legacy has entries that canonical doesn't, merge them
+    for (const [learnerId, legacyUnits] of Object.entries(legacy)) {
+      if (!canonical[learnerId]) {
+        merged[learnerId] = legacyUnits;
+      } else {
+        // Merge units, avoiding duplicates by ID
+        const canonicalIds = new Set(canonical[learnerId].map(u => u.id));
+        const uniqueLegacy = legacyUnits.filter(u => !canonicalIds.has(u.id));
+        merged[learnerId] = [...uniqueLegacy, ...canonical[learnerId]];
+      }
+    }
+    
+    return merged;
   }
 
   clearTextbook(learnerId: string): { success: boolean; quotaExceeded?: boolean } {
@@ -1809,8 +1847,11 @@ class StorageManager {
 
   private updateProfileStatsFromEvent(event: InteractionEvent) {
     try {
-      const profile = this.getProfile(event.learnerId);
-      if (!profile) return;
+      let profile = this.getProfile(event.learnerId);
+      // Auto-create profile if it doesn't exist (handles test scenarios and new users)
+      if (!profile) {
+        profile = this.createDefaultProfile(event.learnerId);
+      }
 
       profile.interactionCount += 1;
 

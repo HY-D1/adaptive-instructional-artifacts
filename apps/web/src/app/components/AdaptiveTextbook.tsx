@@ -473,6 +473,7 @@ export function AdaptiveTextbook({
                                     type="button"
                                     key={unit.id}
                                     onClick={() => handleUnitSelect(unit)}
+                                    aria-label={unit.title}
                                     className={`w-full px-3 py-2 text-left text-sm transition-colors ${
                                       selectedUnit?.id === unit.id
                                         ? 'bg-blue-100 text-blue-900'

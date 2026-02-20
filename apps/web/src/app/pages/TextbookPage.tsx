@@ -239,24 +239,14 @@ export function TextbookPage() {
                   </TooltipContent>
                 </Tooltip>
                 <div>
+                  <h1 className="text-2xl font-bold flex items-center gap-2">
+                    <BookOpen className="size-6 text-blue-600" />
+                    My Textbook
+                  </h1>
                   {isStudent ? (
-                    // Student-friendly "My Learning Journey" header
-                    <>
-                      <h1 className="text-2xl font-bold flex items-center gap-2">
-                        <GraduationCap className="size-6 text-blue-600" />
-                        My Learning Journey
-                      </h1>
-                      <p className="text-gray-600 text-sm">Your personalized SQL notes and progress</p>
-                    </>
+                    <p className="text-gray-600 text-sm">My learning journey: your personalized SQL notes and progress</p>
                   ) : (
-                    // Instructor header
-                    <>
-                      <h1 className="text-2xl font-bold flex items-center gap-2">
-                        <BookOpen className="size-6 text-blue-600" />
-                        My Textbook
-                      </h1>
-                      <p className="text-gray-600 text-sm">Your personalized SQL learning notes</p>
-                    </>
+                    <p className="text-gray-600 text-sm">Your personalized SQL learning notes</p>
                   )}
                 </div>
               </div>

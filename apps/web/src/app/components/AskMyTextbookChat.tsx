@@ -132,6 +132,11 @@ export function AskMyTextbookChat({
     return storage.getTextbook(learnerId);
   }, [learnerId]);
 
+  // Get all interactions from storage to persist across page navigation
+  const getStoredInteractions = useCallback((): InteractionEvent[] => {
+    return storage.getInteractionsByLearner(learnerId);
+  }, [learnerId]);
+
   // Build retrieval bundle for grounding - prioritizes current problem context
   const buildGroundingPayload = useCallback((query: string, quickChip?: string) => {
     const problem = getProblemById(problemId);
@@ -140,8 +145,15 @@ export function AskMyTextbookChat({
     // Get current problem's concepts
     const problemConceptIds = problem?.concepts || [];
     
+    // Get interactions from storage (persists across page navigation)
+    // Fall back to recentInteractions prop if storage is empty
+    const storedInteractions = getStoredInteractions();
+    const allInteractions = storedInteractions.length > 0 
+      ? storedInteractions 
+      : recentInteractions;
+    
     // Get the last error subtype for context (includes failed executions)
-    const lastError = [...recentInteractions]
+    const lastError = [...allInteractions]
       .reverse()
       .find(i => i.eventType === 'error' || 
                  (i.eventType === 'execution' && i.successful === false));
@@ -238,7 +250,7 @@ export function AskMyTextbookChat({
       problemConceptIds,
       errorSubtype
     };
-  }, [learnerId, problemId, recentInteractions, getTextbookUnits]);
+  }, [learnerId, problemId, recentInteractions, getTextbookUnits, getStoredInteractions]);
 
   // Clean up text for better readability - more aggressive cleaning
   const cleanText = useCallback((text: string): string => {
@@ -560,8 +572,14 @@ export function AskMyTextbookChat({
     let response = '';
     
     if (quickChip === 'explain_error') {
+      // Get interactions from storage (persists across page navigation)
+      const storedInteractions = getStoredInteractions();
+      const allInteractions = storedInteractions.length > 0 
+        ? storedInteractions 
+        : recentInteractions;
+      
       // Find last error OR failed execution (wrong results)
-      const lastError = [...recentInteractions]
+      const lastError = [...allInteractions]
         .reverse()
         .find(i => i.eventType === 'error' || 
                    (i.eventType === 'execution' && i.successful === false));

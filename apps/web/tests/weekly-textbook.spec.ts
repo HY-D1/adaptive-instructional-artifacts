@@ -1317,6 +1317,12 @@ test('@weekly @textbook edge: misconception cards and spaced review prompts', as
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'learner-1',
+      name: 'Test User',
+      role: 'student',
+      createdAt: Date.now()
+    }));
     
     const now = Date.now();
     const unit = {

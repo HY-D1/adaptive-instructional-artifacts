@@ -18,6 +18,13 @@ test.describe('@weekly Week 3 Integration', () => {
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up user profile for role-based auth (required for route access)
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-learner',
+        name: 'Test Learner',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
   });
 

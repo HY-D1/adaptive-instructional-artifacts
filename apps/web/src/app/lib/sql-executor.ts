@@ -1,7 +1,9 @@
 import initSqlJs, { Database } from 'sql.js';
-// Vite handles this import: copies the .wasm into build output and provides the correct URL
-import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import { normalizeSqlErrorSubtype } from '../data/sql-engage';
+
+// Use the middleware-served WASM path for stability
+// This aligns with the wasm-serve plugin in vite.config.ts
+const WASM_URL = '/sql-wasm.wasm';
 
 const FLOAT_EPSILON = 0.01;
 
@@ -100,16 +102,16 @@ export async function initializeSQL() {
   }
   
   // Start new initialization and track the promise
-  // The WASM file is bundled by Vite via the ?url import above
+  // Uses the middleware-served /sql-wasm.wasm endpoint for stability
   sqlInitializationPromise = (async () => {
     try {
-      console.log('[sql.js] Initializing with bundled WASM...');
+      console.log('[sql.js] Initializing with middleware-served WASM...');
       const sql = await initSqlJs({
         locateFile: (file) => {
-          // Vite provides the correct URL to the bundled WASM file
+          // Use the middleware-served WASM path for reliability
           if (file.endsWith('.wasm')) {
-            console.log(`[sql.js] Using bundled WASM: ${wasmUrl}`);
-            return wasmUrl;
+            console.log(`[sql.js] Using served WASM: ${WASM_URL}`);
+            return WASM_URL;
           }
           return file;
         }
