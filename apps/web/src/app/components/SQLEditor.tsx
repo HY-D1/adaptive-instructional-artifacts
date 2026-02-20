@@ -118,11 +118,15 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
     };
   }, []);
 
+  // Store full error details for debugging
+  const [initErrorDetails, setInitErrorDetails] = useState<string | null>(null);
+
   // SQL executor initialization function
   const initExecutor = useCallback(async (signal?: AbortSignal) => {
     console.log('[SQLEditor] Starting SQL executor initialization...');
     setInitStatus('loading');
     setInitError(null);
+    setInitErrorDetails(null);
     setExecutor(null);
     
     const exec = new SQLExecutor();
@@ -143,6 +147,10 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
     } catch (error) {
       exec.close();
       const errorMsg = error instanceof Error ? error.message : 'Failed to initialize SQL engine';
+      // Capture detailed error info for debugging display
+      const errorDetails = error instanceof Error 
+        ? `${error.name}: ${error.message}\n\nStack:\n${error.stack?.split('\n').slice(0, 5).join('\n') || 'N/A'}`
+        : 'Unknown error';
       console.error('[SQLEditor] Initialization failed:', error);
       console.error('[SQLEditor] Error details:', {
         message: errorMsg,
@@ -152,6 +160,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
         } : 'Unknown error'
       });
       setInitError(errorMsg);
+      setInitErrorDetails(errorDetails);
       setInitStatus('error');
       if (!signal?.aborted) {
         setExecutor(null);
@@ -394,12 +403,25 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
               {/* Initialization Error Message */}
               {initStatus === 'error' && (
                 <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm z-10 flex items-center justify-center">
-                  <div className="bg-white rounded-lg p-4 shadow-lg max-w-md mx-4">
+                  <div className="bg-white rounded-lg p-4 shadow-lg max-w-lg mx-4">
                     <div className="flex items-start gap-3">
                       <AlertCircle className="size-5 text-red-600 shrink-0 mt-0.5" />
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-gray-900">Failed to Initialize SQL Engine</p>
                         <p className="text-xs text-gray-600 mt-1">{initError || 'An unexpected error occurred'}</p>
+                        
+                        {/* Expandable error details for debugging */}
+                        {initErrorDetails && (
+                          <details className="mt-3">
+                            <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">
+                              Show technical details
+                            </summary>
+                            <pre className="mt-2 p-2 bg-gray-100 rounded text-[10px] text-gray-700 overflow-auto max-h-32 whitespace-pre-wrap">
+                              {initErrorDetails}
+                            </pre>
+                          </details>
+                        )}
+                        
                         <div className="flex gap-2 mt-3">
                           <Button 
                             variant="outline" 
