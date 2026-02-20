@@ -268,12 +268,18 @@ async function getReplayDecisions(page: Page, strategy: string): Promise<Decisio
 
 // Test 1: Research Dashboard UI Components
 test('@weekly policy-comparison: research dashboard UI renders correctly', async ({ page }) => {
-  // Ensure completely clean state before test
-  await page.goto('/');
-  await page.evaluate(() => {
+  // Ensure completely clean state before test and seed instructor profile
+  await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    // CRITICAL: Set up instructor profile for role-based auth
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'test-instructor',
+      name: 'Test Instructor',
+      role: 'instructor',
+      createdAt: Date.now()
+    }));
   });
 
   await page.goto('/research');
@@ -664,6 +670,13 @@ test('@weekly policy-comparison: adaptive-medium has correct thresholds', async 
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    // CRITICAL: Set up instructor profile for role-based auth
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'test-instructor',
+      name: 'Test Instructor',
+      role: 'instructor',
+      createdAt: Date.now()
+    }));
   });
 
   await page.goto('/research');
@@ -869,12 +882,18 @@ test('@weekly policy-comparison: decision divergence between strategies is detec
 
 // Test 10: Research Guardrails - "Would Do" Language
 test('@weekly policy-comparison: research guardrails use "would do" language', async ({ page }) => {
-  // Ensure clean state
-  await page.goto('/');
-  await page.evaluate(() => {
+  // Ensure clean state and seed instructor profile
+  await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    // CRITICAL: Set up instructor profile for role-based auth
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'test-instructor',
+      name: 'Test Instructor',
+      role: 'instructor',
+      createdAt: Date.now()
+    }));
   });
 
   await page.goto('/research');
@@ -955,12 +974,18 @@ test('@weekly policy-comparison: research guardrails use "would do" language', a
 
 // Test 11: Export Scope Toggle
 test('@weekly policy-comparison: export scope toggle works correctly', async ({ page }) => {
-  // Ensure clean state
-  await page.goto('/');
-  await page.evaluate(() => {
+  // Ensure clean state and seed instructor profile
+  await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    // CRITICAL: Set up instructor profile for role-based auth
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'test-instructor',
+      name: 'Test Instructor',
+      role: 'instructor',
+      createdAt: Date.now()
+    }));
   });
 
   await setupLearnerWithInteractions(page, 'adaptive-medium');

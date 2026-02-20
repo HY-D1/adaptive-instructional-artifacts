@@ -170,6 +170,14 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   });
 
   test('@weekly hint level progression: cannot exceed level 3', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -214,6 +222,14 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   });
 
   test('@weekly hint level persistence: events are stored in localStorage', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -264,6 +280,14 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   // ===========================================================================
 
   test('@weekly sql-engage integration: error subtypes map to correct hint templates', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -295,6 +319,14 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   });
 
   test('@weekly sql-engage integration: sqlEngageSubtype captured correctly', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -313,6 +345,14 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   });
 
   test('@weekly sql-engage integration: sqlEngageRowId is logged', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -332,6 +372,14 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   });
 
   test('@weekly sql-engage integration: policyVersion is correct', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -358,6 +406,14 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   // ===========================================================================
 
   test('@weekly hint event logging: all required fields present', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -427,6 +483,14 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   });
 
   test('@weekly hint event logging: hint_view omits hintId across levels', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -450,6 +514,14 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   // ===========================================================================
 
   test('@weekly hint deduplication: same helpRequestIndex cannot be logged twice', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -481,6 +553,14 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   });
 
   test('@weekly hint deduplication: rapid clicks do not create duplicates', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -601,6 +681,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
 
   test('@weekly edge case: different error subtypes get different hints', async ({ page }) => {
     await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
       window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: 'test-user',
         name: 'Test User',
@@ -630,6 +711,12 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     await page.reload();
     await page.evaluate(() => {
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
     
     await replaceEditorText(page, 'SELECT * FROM nonexistent_table_xyz;');
@@ -660,6 +747,14 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   // ===========================================================================
 
   test('@weekly hint content quality: hints are progressively more specific', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -695,6 +790,14 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   });
 
   test('@weekly hint content quality: hint text is non-empty and meaningful', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -723,6 +826,14 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   });
 
   test('@weekly hint content quality: hints reference the specific error', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -748,6 +859,14 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   // ===========================================================================
 
   test('@weekly session association: all hints linked to active session', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -774,6 +893,14 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   });
 
   test('@weekly learner association: all hints linked to learner ID', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -799,6 +926,14 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   // ===========================================================================
 
   test('@weekly escalation integration: after level 3, next request triggers explanation', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+    });
     await page.goto('/');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });

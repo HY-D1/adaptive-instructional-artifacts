@@ -8,11 +8,11 @@ test('@weekly @no-external research: Test LLM reports Ollama down then up (mocke
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
-    // Set up student profile to bypass StartPage role selection
+    // Set up instructor profile to bypass StartPage role selection and access Research page
     window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
       id: 'test-user',
       name: 'Test User',
-      role: 'student',
+      role: 'instructor',
       createdAt: Date.now()
     }));
     // Add minimal learner profile so dashboard has data to render

@@ -226,7 +226,15 @@ test.describe('@weekly data-integrity: LocalStorage corruption handling', () => 
   test('corrupt JSON in interactions gracefully handled', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       window.localStorage.setItem('sql-learning-interactions', '{broken-json');
     });
 
@@ -243,7 +251,15 @@ test.describe('@weekly data-integrity: LocalStorage corruption handling', () => 
   test('corrupt JSON in profiles returns defaults', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       window.localStorage.setItem('sql-learning-profiles', '[not-valid-array');
     });
 
@@ -260,7 +276,15 @@ test.describe('@weekly data-integrity: LocalStorage corruption handling', () => 
   test('corrupt JSON in textbook returns empty object', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       window.localStorage.setItem('sql-learning-textbook', 'not-json');
     });
 
@@ -281,7 +305,15 @@ test.describe('@weekly data-integrity: LocalStorage corruption handling', () => 
   test('multiple corrupt keys all handled gracefully', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       window.localStorage.setItem('sql-learning-interactions', '{broken-json-no-end');
       window.localStorage.setItem('sql-learning-profiles', '[invalid array');
       window.localStorage.setItem('sql-learning-textbook', 'not-json-at-all');
@@ -298,7 +330,15 @@ test.describe('@weekly data-integrity: LocalStorage corruption handling', () => 
   test('partial corruption recovery preserves valid data', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       window.localStorage.setItem('sql-learning-interactions', '{broken');
       window.localStorage.setItem('sql-learning-active-session', 'session-valid-test');
     });
@@ -1074,7 +1114,15 @@ test.describe('@weekly data-integrity: Session management', () => {
   test('session creation generates unique IDs', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
     
     await page.goto('/');
@@ -1105,7 +1153,15 @@ test.describe('@weekly data-integrity: Session management', () => {
   test('session persistence across page reloads', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
     
     await page.goto('/');
@@ -1342,7 +1398,15 @@ test.describe('@weekly data-integrity: XSS prevention', () => {
     
     await page.addInitScript((payload) => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       const now = Date.now();
       const textbooks = {
@@ -1402,7 +1466,15 @@ test.describe('@weekly data-integrity: XSS prevention', () => {
     
     await page.addInitScript((payload) => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       const now = Date.now();
       const textbooks = {
@@ -1450,7 +1522,15 @@ test.describe('@weekly data-integrity: XSS prevention', () => {
     
     await page.addInitScript((payload) => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       const now = Date.now();
       const textbooks = {
@@ -1506,7 +1586,15 @@ test.describe('@weekly data-integrity: XSS prevention', () => {
     
     await page.addInitScript((payload) => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       const now = Date.now();
       const textbooks = {
@@ -1747,7 +1835,15 @@ test.describe('@weekly data-integrity: State synchronization', () => {
     // Set up the page with data already in localStorage using addInitScript
     await page.addInitScript((testMarker) => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       // Pre-populate with test data
       const drafts = { 'problem-1': `-- ${testMarker}\nSELECT * FROM users;` };
@@ -1795,7 +1891,15 @@ test.describe('@weekly data-integrity: State synchronization', () => {
   test('navigation preserves draft', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
     
     await page.goto('/');
@@ -1815,7 +1919,15 @@ test.describe('@weekly data-integrity: State synchronization', () => {
   test('localStorage is updated on interaction', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
     
     await page.goto('/');
@@ -1835,7 +1947,15 @@ test.describe('@weekly data-integrity: State synchronization', () => {
   test('session state survives full navigation cycle', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
     
     await page.goto('/');
@@ -1872,7 +1992,15 @@ test.describe('@weekly data-integrity: Edge cases', () => {
   test('handles empty learner ID gracefully', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
     
     await page.goto('/textbook?learnerId=');
@@ -1885,7 +2013,15 @@ test.describe('@weekly data-integrity: Edge cases', () => {
     
     await page.addInitScript((content) => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       const now = Date.now();
       const textbooks = {
@@ -1931,7 +2067,15 @@ test.describe('@weekly data-integrity: Edge cases', () => {
     
     await page.addInitScript((content) => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       const now = Date.now();
       const textbooks = {
@@ -1968,7 +2112,15 @@ test.describe('@weekly data-integrity: Edge cases', () => {
   test('handles rapid sequential interactions', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up student profile to bypass role selection
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
     
     await page.goto('/');

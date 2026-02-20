@@ -61,7 +61,8 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     });
 
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
+    // Authenticated students are redirected to /practice
+    await expect(page.getByRole('heading', { name: 'Practice SQL' })).toBeVisible();
 
     // Verify the app doesn't crash with corrupted PDF index
     const storageCheck = await page.evaluate(() => {
@@ -107,11 +108,12 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     });
 
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
+    // Authenticated students are redirected to /practice
+    await expect(page.getByRole('heading', { name: 'Practice SQL' })).toBeVisible();
 
     // App should handle invalid chunks gracefully
     const appLoaded = await page.evaluate(() => {
-      return document.querySelector('h1')?.textContent?.includes('SQL-Adapt Learning System');
+      return document.querySelector('h1')?.textContent?.includes('Practice SQL');
     });
     expect(appLoaded).toBe(true);
   });
@@ -917,7 +919,8 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // ===========================================================================
   test('@critical-bugs Error Boundary: errors are caught and displayed gracefully', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
+    // Authenticated students are redirected to /practice
+    await expect(page.getByRole('heading', { name: 'Practice SQL' })).toBeVisible();
 
     // Verify the app has error boundary by checking the DOM structure
     // The ErrorBoundary component renders a specific error UI when there's an error
@@ -935,7 +938,8 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     });
 
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
+    // Authenticated students are redirected to /practice
+    await expect(page.getByRole('heading', { name: 'Practice SQL' })).toBeVisible();
 
     // App should not show error boundary fallback for this recoverable error
     const isErrorBoundaryVisible = await page.locator('text=Something went wrong').isVisible().catch(() => false);
@@ -985,7 +989,7 @@ test.describe('@critical-bugs Integration Tests for Critical Bug Fixes', () => {
     });
 
     await page.goto('/practice');
-    await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Practice SQL' })).toBeVisible();
 
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
@@ -1040,6 +1044,17 @@ test.describe('@critical-bugs Integration Tests for Critical Bug Fixes', () => {
   test('multiple learners data isolation with cache keys', async ({ page }) => {
     // Seed data for multiple learners
     await page.addInitScript(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up instructor profile to bypass role selection
+      // Use learner-1 as the ID so it can access learner-1's data
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'learner-1',
+        name: 'Test Instructor',
+        role: 'instructor',
+        createdAt: Date.now()
+      }));
       const now = Date.now();
       
       // Learner 1 data
@@ -1107,7 +1122,6 @@ test.describe('@critical-bugs Integration Tests for Critical Bug Fixes', () => {
       
       window.localStorage.setItem('sql-learning-interactions', JSON.stringify(interactions));
       window.localStorage.setItem('sql-learning-textbook', JSON.stringify(textbooks));
-      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
     });
 
     // Check learner 1 textbook

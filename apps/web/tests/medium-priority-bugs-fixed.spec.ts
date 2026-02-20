@@ -48,7 +48,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
-      // Set up student profile to bypass role selection
+      // CRITICAL: Set up user profile for role-based auth
       window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: 'test-user',
         name: 'Test User',
@@ -263,6 +263,16 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   test('@medium-priority-bugs Evidence Map Validation: handles corrupted evidence data', async ({ page }) => {
     // Seed corrupted profile evidence data BEFORE page load using addInitScript
     await page.addInitScript(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // CRITICAL: Set up user profile for role-based auth
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       window.localStorage.setItem('sql-learning-profiles', JSON.stringify([{
         id: 'learner-corrupted',
         name: 'Test Learner',
@@ -1397,6 +1407,13 @@ test.describe('@medium-priority-bugs Integration Tests', () => {
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // CRITICAL: Set up user profile for role-based auth
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
   });
 

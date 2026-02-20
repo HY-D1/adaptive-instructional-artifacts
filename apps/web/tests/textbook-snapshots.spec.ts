@@ -24,6 +24,13 @@ test.beforeEach(async ({ page }) => {
 test.describe('@weekly @no-external @snapshot Textbook Rendering Snapshots', () => {
   test('markdown with headings and lists renders consistently', async ({ page }) => {
     await page.addInitScript(() => {
+      // CRITICAL: Set up user profile for role-based auth
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'learner-1',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       const now = Date.now();
       const unit = {
         id: 'unit-snapshot-headings',
@@ -80,6 +87,13 @@ test.describe('@weekly @no-external @snapshot Textbook Rendering Snapshots', () 
 
   test('markdown with code blocks renders consistently', async ({ page }) => {
     await page.addInitScript(() => {
+      // CRITICAL: Set up user profile for role-based auth
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'learner-1',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       const now = Date.now();
       const unit = {
         id: 'unit-snapshot-code',
@@ -132,6 +146,13 @@ test.describe('@weekly @no-external @snapshot Textbook Rendering Snapshots', () 
 
   test('markdown with blockquotes renders consistently', async ({ page }) => {
     await page.addInitScript(() => {
+      // CRITICAL: Set up user profile for role-based auth
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'learner-1',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       const now = Date.now();
       const unit = {
         id: 'unit-snapshot-quotes',
@@ -183,6 +204,13 @@ test.describe('@weekly @no-external @snapshot Textbook Rendering Snapshots', () 
 
   test('legacy HTML content renders consistently', async ({ page }) => {
     await page.addInitScript(() => {
+      // CRITICAL: Set up user profile for role-based auth
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'learner-1',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       const now = Date.now();
       const unit = {
         id: 'unit-snapshot-legacy',
@@ -235,6 +263,13 @@ test.describe('@weekly @no-external @snapshot Textbook Rendering Snapshots', () 
 
   test('Key Points and Next Steps sections render consistently', async ({ page }) => {
     await page.addInitScript(() => {
+      // CRITICAL: Set up user profile for role-based auth
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'learner-1',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       const now = Date.now();
       const unit = {
         id: 'unit-snapshot-keypoints',

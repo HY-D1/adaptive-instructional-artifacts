@@ -23,6 +23,13 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // CRITICAL: Set up user profile for role-based auth
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-learner',
+        name: 'Test Learner',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
   });
 
@@ -35,19 +42,6 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
 
   test('@weekly rung 1: micro-hint displayed on first help request', async ({ page }) => {
     await page.goto('/');
-    
-    // Setup learner
-    await page.evaluate(() => {
-      const profile = {
-        id: 'test-learner',
-        name: 'Test Learner',
-        role: 'student',
-        createdAt: Date.now()
-      };
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(profile));
-      window.localStorage.setItem('sql-learning-active-session', 'test-session');
-    });
-    await page.reload();
 
     // Trigger error
     await page.locator('.monaco-editor .view-lines').first().click();
@@ -69,18 +63,6 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
 
   test('@weekly rung 2: explanation with source grounding after escalation', async ({ page }) => {
     await page.goto('/');
-    
-    await page.evaluate(() => {
-      const profile = {
-        id: 'test-learner',
-        name: 'Test Learner',
-        role: 'student',
-        createdAt: Date.now()
-      };
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(profile));
-      window.localStorage.setItem('sql-learning-active-session', 'test-session');
-    });
-    await page.reload();
 
     // Trigger error and exhaust rung 1
     await page.locator('.monaco-editor .view-lines').first().click();
@@ -105,18 +87,6 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
 
   test('@weekly escalation events logged correctly', async ({ page }) => {
     await page.goto('/');
-    
-    await page.evaluate(() => {
-      const profile = {
-        id: 'test-learner',
-        name: 'Test Learner',
-        role: 'student',
-        createdAt: Date.now()
-      };
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(profile));
-      window.localStorage.setItem('sql-learning-active-session', 'test-session');
-    });
-    await page.reload();
 
     // Trigger error and request hints
     await page.locator('.monaco-editor .view-lines').first().click();
@@ -146,15 +116,6 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
     
     // Setup with PDF index
     await page.evaluate(() => {
-      const profile = {
-        id: 'test-learner',
-        name: 'Test Learner',
-        role: 'student',
-        createdAt: Date.now()
-      };
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(profile));
-      window.localStorage.setItem('sql-learning-active-session', 'test-session');
-      
       // Mock PDF index
       window.localStorage.setItem('sql-pdf-index', JSON.stringify({
         indexId: 'test-index',
@@ -180,18 +141,6 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
 
   test('@weekly hints are problem-specific', async ({ page }) => {
     await page.goto('/');
-    
-    await page.evaluate(() => {
-      const profile = {
-        id: 'test-learner',
-        name: 'Test Learner',
-        role: 'student',
-        createdAt: Date.now()
-      };
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(profile));
-      window.localStorage.setItem('sql-learning-active-session', 'test-session');
-    });
-    await page.reload();
 
     // Get hints on problem 1
     await page.locator('.monaco-editor .view-lines').first().click();
@@ -215,18 +164,6 @@ test.describe('@weekly Week 3 Guidance Ladder', () => {
 
   test('@weekly guidance ladder state persists across navigation', async ({ page }) => {
     await page.goto('/');
-    
-    await page.evaluate(() => {
-      const profile = {
-        id: 'test-learner',
-        name: 'Test Learner',
-        role: 'student',
-        createdAt: Date.now()
-      };
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(profile));
-      window.localStorage.setItem('sql-learning-active-session', 'test-session');
-    });
-    await page.reload();
 
     // Get hints
     await page.locator('.monaco-editor .view-lines').first().click();

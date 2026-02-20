@@ -12,6 +12,13 @@ test.beforeEach(async ({ page }) => {
       window.sessionStorage.setItem(beforeEachKey, 'true');
     }
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    // CRITICAL: Set up user profile for role-based auth (instructor role needed for /research)
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'test-user',
+      name: 'Test User',
+      role: 'instructor',
+      createdAt: Date.now()
+    }));
   });
 });
 

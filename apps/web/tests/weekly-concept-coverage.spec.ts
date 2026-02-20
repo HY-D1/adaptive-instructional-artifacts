@@ -806,8 +806,11 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
   test('concept coverage component renders in research dashboard', async ({ page }) => {
     // Set up student profile to bypass StartPage role selection before navigating
     await page.addInitScript(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
       window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
-        id: 'test-user',
+        id: 'learner-1',
         name: 'Test User',
         role: 'student',
         createdAt: Date.now()
@@ -906,7 +909,15 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
 
   test('progress bar displays coverage percentage', async ({ page }) => {
     await page.addInitScript(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'learner-1',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       const profile = {
         id: 'learner-1',
@@ -1067,7 +1078,15 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
   test('coverage survives page refresh', async ({ page }) => {
     // Seed coverage data directly for reliability
     await page.addInitScript(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'learner-1',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       const profile = {
         id: 'learner-1',
@@ -1115,7 +1134,15 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
   test('coverage is included in export JSON', async ({ page }) => {
     // Seed coverage data
     await page.addInitScript(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'learner-1',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       const profile = {
         id: 'learner-1',
@@ -1181,7 +1208,15 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
   test('coverage is per-learner isolated', async ({ page }) => {
     // Seed data for two different learners using init script for reliability
     await page.addInitScript(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'learner-1',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
       
       const profiles = [
         {

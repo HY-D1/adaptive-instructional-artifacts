@@ -74,6 +74,13 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
         preferences: { escalationThreshold: 3, aggregationDelay: 300000 }
       }]));
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up user profile for role-based auth
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     }, { learnerId: testLearnerId, sessionId: testSessionId });
     
     await page.goto('/');
@@ -159,6 +166,13 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
             createdAt: Date.now()
           }
         }]
+      }));
+      // Set up user profile for role-based auth
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
       }));
     });
 
@@ -1126,6 +1140,13 @@ test.describe('@high-priority-bugs Integration Tests', () => {
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // Set up user profile for role-based auth
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
     });
   });
 

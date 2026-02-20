@@ -21,6 +21,13 @@ test.describe('@weekly Week 3 Replay Metrics', () => {
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      // CRITICAL: Set up user profile for role-based auth
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'instructor',  // instructor role for Research page access
+        createdAt: Date.now()
+      }));
     });
   });
 
@@ -34,18 +41,10 @@ test.describe('@weekly Week 3 Replay Metrics', () => {
   test('@weekly session export contains guidance events', async ({ page }) => {
     await page.goto('/');
     
-    // Setup user with instructor role (required for Research page access)
+    // Setup active session
     await page.evaluate(() => {
-      const userProfile = {
-        id: 'test-learner',
-        name: 'Test Learner',
-        role: 'instructor',
-        createdAt: Date.now()
-      };
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(userProfile));
       window.localStorage.setItem('sql-learning-active-session', 'export-test-session');
     });
-    await page.reload();
 
     // Generate some interactions
     await page.locator('.monaco-editor .view-lines').first().click();
@@ -137,18 +136,10 @@ test.describe('@weekly Week 3 Replay Metrics', () => {
   test('@weekly escalation triggers logged', async ({ page }) => {
     await page.goto('/');
     
-    // Setup user with instructor role
+    // Setup active session
     await page.evaluate(() => {
-      const userProfile = {
-        id: 'test-learner',
-        name: 'Test Learner',
-        role: 'instructor',
-        createdAt: Date.now()
-      };
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(userProfile));
       window.localStorage.setItem('sql-learning-active-session', 'escalation-test');
     });
-    await page.reload();
 
     // Generate escalation
     await page.locator('.monaco-editor .view-lines').first().click();
@@ -176,18 +167,10 @@ test.describe('@weekly Week 3 Replay Metrics', () => {
   test('@weekly textbook unit upserts tracked', async ({ page }) => {
     await page.goto('/');
     
-    // Setup user with instructor role
+    // Setup active session
     await page.evaluate(() => {
-      const userProfile = {
-        id: 'test-learner',
-        name: 'Test Learner',
-        role: 'instructor',
-        createdAt: Date.now()
-      };
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(userProfile));
       window.localStorage.setItem('sql-learning-active-session', 'upsert-test');
     });
-    await page.reload();
 
     // Generate error and get explanation to trigger unit creation
     await page.locator('.monaco-editor .view-lines').first().click();
@@ -213,18 +196,10 @@ test.describe('@weekly Week 3 Replay Metrics', () => {
   test('@weekly source view events logged', async ({ page }) => {
     await page.goto('/');
     
-    // Setup user with instructor role
+    // Setup active session
     await page.evaluate(() => {
-      const userProfile = {
-        id: 'test-learner',
-        name: 'Test Learner',
-        role: 'instructor',
-        createdAt: Date.now()
-      };
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(userProfile));
       window.localStorage.setItem('sql-learning-active-session', 'source-view-test');
     });
-    await page.reload();
 
     // Generate hint with sources
     await page.locator('.monaco-editor .view-lines').first().click();

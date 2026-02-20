@@ -13,11 +13,18 @@
 import { expect, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
-  // Clear storage and set welcome seen
+  // Clear storage and set up auth for role-based authentication
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    // CRITICAL: Set up user profile for role-based auth
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'test-user',
+      name: 'Test User',
+      role: 'student',
+      createdAt: Date.now()
+    }));
   });
 });
 

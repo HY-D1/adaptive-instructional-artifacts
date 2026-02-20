@@ -16,26 +16,30 @@ async function closeWelcomeModal(page: Page) {
 // Helper to setup student profile
 async function setupStudentProfile(page: Page) {
   await page.addInitScript(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
     window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
       id: 'test-student',
       name: 'Test Student',
       role: 'student',
       createdAt: Date.now()
     }));
-    window.localStorage.setItem('sql-adapt-welcome-dismissed', 'true');
   });
 }
 
 // Helper to setup instructor profile
 async function setupInstructorProfile(page: Page) {
   await page.addInitScript(() => {
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+    window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
     window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
       id: 'test-instructor',
       name: 'Test Instructor',
       role: 'instructor',
       createdAt: Date.now()
     }));
-    window.localStorage.setItem('sql-adapt-welcome-dismissed', 'true');
   });
 }
 
@@ -300,8 +304,12 @@ test.describe('@edge-case Role/Auth Edge Cases', () => {
   });
 
   test('invalid passcode should show error', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    });
     await page.goto('/');
-    await closeWelcomeModal(page);
     
     // Fill in form with instructor role but wrong passcode
     await page.fill('input[placeholder*="username"], input#username', 'TestUser');
@@ -315,6 +323,11 @@ test.describe('@edge-case Role/Auth Edge Cases', () => {
   });
 
   test('access instructor page without auth should redirect', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+      // No profile set - testing unauthenticated access
+    });
     await page.goto('/instructor-dashboard');
     
     // Should redirect to start page
@@ -347,8 +360,12 @@ test.describe('@edge-case Role/Auth Edge Cases', () => {
   });
 
   test('empty username should not be allowed', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    });
     await page.goto('/');
-    await closeWelcomeModal(page);
     
     // Try to submit with empty username
     await page.click('text=/student/i');
@@ -401,8 +418,12 @@ test.describe('@edge-case XSS Security Tests', () => {
   });
 
   test('XSS in username should be escaped', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    });
     await page.goto('/');
-    await closeWelcomeModal(page);
     
     const xssName = '<script>alert("username-xss")</script>';
     await page.fill('input[placeholder*="username"], input#username', xssName);
@@ -644,8 +665,12 @@ test.describe('@edge-case Race Conditions', () => {
 
 test.describe('@edge-case Input Validation', () => {
   test('very long username should be handled', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    });
     await page.goto('/');
-    await closeWelcomeModal(page);
     
     const longName = 'a'.repeat(1000);
     await page.fill('input[placeholder*="username"], input#username', longName);
@@ -657,8 +682,12 @@ test.describe('@edge-case Input Validation', () => {
   });
 
   test('special characters in username', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    });
     await page.goto('/');
-    await closeWelcomeModal(page);
     
     const specialNames = [
       '<script>alert(1)</script>',

@@ -221,7 +221,11 @@ test.describe('@weekly Hint Source Passages Feature', () => {
 
   test('PDF index with chunks is saved correctly', async ({ page }) => {
     // This test goes to /research (instructor page) so needs instructor role
+    // Must clear first and set up all auth data before navigating
     await page.addInitScript(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
       window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: 'test-instructor',
         name: 'Test Instructor',
