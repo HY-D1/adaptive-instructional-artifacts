@@ -254,6 +254,8 @@ export type InstructionalUnit = {
   conceptIds?: string[];
   title: string;
   content: string;
+  /** Format of content: 'markdown' (canonical) or 'html' (legacy). Defaults to 'markdown' if not set. */
+  contentFormat?: 'markdown' | 'html';
   prerequisites: string[];
   addedTimestamp: number;
   updatedTimestamp?: number; // Set when the unit is updated (preserves original creation time)

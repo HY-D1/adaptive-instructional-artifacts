@@ -435,21 +435,29 @@ async function buildUnitFromStructuredOutput(
   );
   const retrievedPdfCitations = selectPdfCitations(options.bundle, normalizedSourceIds);
 
+  // Helper to sanitize list items: strip code fences and collapse whitespace
+  // This prevents malformed markdown when LLM returns multi-line content in bullets
+  const oneLine = (s: string) =>
+    s
+      .replace(/```[\s\S]*?```/g, '')   // strip fenced code blocks in bullets
+      .replace(/\s+/g, ' ')              // collapse all whitespace to single spaces
+      .trim();
+
   const markdown = [
-    output.content_markdown,
+    output.content_markdown?.trim() || '',
     '',
     '## Key Points',
-    ...output.key_points.map((point) => `- ${point}`),
+    ...output.key_points.map((point) => `- ${oneLine(point)}`),
     '',
     '## Next Steps',
-    ...output.next_steps.map((step, index) => `${index + 1}. ${step}`),
+    ...output.next_steps.map((step, index) => `${index + 1}. ${oneLine(step)}`),
     '',
-    `Common pitfall: ${output.common_pitfall || 'Not found in provided sources.'}`
+    `Common pitfall: ${(output.common_pitfall || 'Not found in provided sources.').trim()}`
   ].join('\n');
 
-  // Sanitize markdown content before storage to prevent XSS
-  const htmlContent = await marked(markdown);
-  const content = DOMPurify.sanitize(htmlContent);
+  // Store markdown (not HTML) - rendering happens at display time
+  // This makes the data format consistent and portable
+  const content = markdown;
 
   const genericTitle = `Help with ${options.bundle.problemTitle}`;
   const title = output.title?.trim() || genericTitle;
@@ -463,6 +471,7 @@ async function buildUnitFromStructuredOutput(
     conceptIds: options.bundle.conceptCandidates.map(c => c.id),
     title,
     content,
+    contentFormat: 'markdown', // Canonical format: markdown stored, HTML rendered at display time
     prerequisites: [],
     addedTimestamp: Date.now(),
     sourceInteractionIds: Array.from(new Set(options.triggerInteractionIds)),
