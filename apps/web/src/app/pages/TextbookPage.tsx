@@ -32,7 +32,7 @@ export function TextbookPage() {
   // Use the actual user's ID as the learner ID (aligned with LearningInterface)
   // For students: always use their own profile ID
   // For instructors: can view other learners via URL param (for research purposes)
-  const userLearnerId = profile?.id || 'default-learner';
+  const userLearnerId = profile?.id || 'learner-1';
   const urlLearnerId = searchParams.get('learnerId');
   
   // Students always see their own data; instructors can view others via URL

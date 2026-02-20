@@ -748,7 +748,8 @@ export function HintSystem({
                     idx === 1 ? "bg-amber-100 text-amber-700 border-amber-200" :
                     "bg-red-100 text-red-700 border-red-200"
                   )}>
-                    L{idx + 1}
+                    <span data-testid={`hint-label-${idx + 1}`}>{`Hint ${idx + 1}`}</span>
+                    <span className="ml-1 text-[10px] opacity-70">{`L${idx + 1}`}</span>
                   </span>
                   <p className="text-sm leading-relaxed text-blue-900 break-words flex-1">{hint}</p>
                 </div>
@@ -837,6 +838,7 @@ export function HintSystem({
               variant="outline"
               className="w-full h-9 text-sm"
               disabled={!profile || !sessionId || isProcessingHint}
+              data-testid="hint-action-button"
             >
               {isProcessingHint ? (
                 <Loader2 className="size-4 mr-2 shrink-0 animate-spin" />
