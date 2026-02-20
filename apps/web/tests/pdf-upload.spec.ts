@@ -7,11 +7,11 @@ test.describe('@weekly PDF Upload Feature', () => {
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
-      // Set up user profile to bypass StartPage role selection
+      // Set up instructor profile for research page access
       window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
-        id: 'test-user',
-        name: 'Test User',
-        role: 'student',
+        id: 'test-instructor',
+        name: 'Test Instructor',
+        role: 'instructor',
         createdAt: Date.now()
       }));
     });

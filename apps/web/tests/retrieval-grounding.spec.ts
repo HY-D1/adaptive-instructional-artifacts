@@ -14,7 +14,7 @@ test('@weekly retrieval grounding: same learner/problem/subtype resolves stable 
     }));
   });
 
-  await page.goto('/');
+  await page.goto('/practice');
 
   const audit = await page.evaluate(async () => {
     const { buildRetrievalBundle } = await import('/src/app/lib/retrieval-bundle.ts');

@@ -2,12 +2,20 @@ import { expect, test } from '@playwright/test';
 
 const PRIMARY_HELP_BUTTON_NAME = /^(Request Hint|Next Hint|Get More Help)$/;
 
+// Helper to set up PDF index in localStorage
+async function setupPdfIndex(page: any, pdfIndex: object) {
+  await page.evaluate((index: object) => {
+    window.localStorage.setItem('sql-learning-pdf-index', JSON.stringify(index));
+  }, pdfIndex);
+}
+
 test.describe('@weekly Hint Source Passages Feature', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      
       // Set up user profile to bypass StartPage role selection
       window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: 'test-user',
@@ -15,6 +23,20 @@ test.describe('@weekly Hint Source Passages Feature', () => {
         role: 'student',
         createdAt: Date.now()
       }));
+      
+      // Set up learner profile for LearningInterface
+      const profiles = [{
+        id: 'test-learner',
+        name: 'Test Learner',
+        currentStrategy: 'adaptive-medium',
+        createdAt: Date.now(),
+        interactionCount: 0,
+        conceptsCovered: [],
+        conceptCoverageEvidence: [],
+        errorHistory: []
+      }];
+      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
+      window.localStorage.setItem('sql-learning-active-session', 'session-test');
     });
   });
 
@@ -26,60 +48,50 @@ test.describe('@weekly Hint Source Passages Feature', () => {
   });
 
   test('source passages UI renders correctly with PDF passages', async ({ page }) => {
-    // Set up profile and session
-    await page.goto('/', { timeout: 30000 });
-    
-    await page.evaluate(() => {
-      const profiles = [{
-        id: 'test-learner',
-        name: 'Test Learner',
-        createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
-      window.localStorage.setItem('sql-learning-active-session', 'session-test-123');
-      
-      // Create PDF index with content that matches "incomplete query" error type
-      const testPdfIndex = {
-        indexId: 'pdf-index-test-v1',
-        sourceName: 'test-reference.pdf',
-        createdAt: new Date().toISOString(),
-        schemaVersion: 'pdf-index-schema-v1',
-        chunkerVersion: 'word-window-180-overlap-30-v1',
-        embeddingModelId: 'hash-embedding-v1',
-        sourceDocs: [{
-          docId: 'test-reference.pdf',
-          filename: 'test-reference.pdf',
-          sha256: 'test-sha-123',
-          pageCount: 10
-        }],
-        docCount: 1,
-        chunkCount: 3,
-        chunks: [
-          {
-            chunkId: 'test-reference.pdf:p5:c1',
-            docId: 'test-reference.pdf',
-            page: 5,
-            text: 'Incomplete query missing SELECT columns FROM table incomplete query'
-          },
-          {
-            chunkId: 'test-reference.pdf:p6:c1',
-            docId: 'test-reference.pdf',
-            page: 6,
-            text: 'Syntax error incomplete query requires column specification'
-          },
-          {
-            chunkId: 'test-reference.pdf:p7:c1',
-            docId: 'test-reference.pdf',
-            page: 7,
-            text: 'Query structure SELECT column FROM table WHERE condition'
-          }
-        ]
-      };
-      window.localStorage.setItem('sql-learning-pdf-index', JSON.stringify(testPdfIndex));
-    });
+    await page.goto('/practice', { timeout: 30000 });
 
+    // Wait for SQL engine to initialize
+    await expect(page.getByRole('button', { name: 'Run Query' })).toBeEnabled({ timeout: 10000 });
+    
+    // Create PDF index with content that matches "incomplete query" error type
+    const testPdfIndex = {
+      indexId: 'pdf-index-test-v1',
+      sourceName: 'test-reference.pdf',
+      createdAt: new Date().toISOString(),
+      schemaVersion: 'pdf-index-schema-v1',
+      chunkerVersion: 'word-window-180-overlap-30-v1',
+      embeddingModelId: 'hash-embedding-v1',
+      sourceDocs: [{
+        docId: 'test-reference.pdf',
+        filename: 'test-reference.pdf',
+        sha256: 'test-sha-123',
+        pageCount: 10
+      }],
+      docCount: 1,
+      chunkCount: 3,
+      chunks: [
+        {
+          chunkId: 'test-reference.pdf:p5:c1',
+          docId: 'test-reference.pdf',
+          page: 5,
+          text: 'Incomplete query missing SELECT columns FROM table incomplete query'
+        },
+        {
+          chunkId: 'test-reference.pdf:p6:c1',
+          docId: 'test-reference.pdf',
+          page: 6,
+          text: 'Syntax error incomplete query requires column specification'
+        },
+        {
+          chunkId: 'test-reference.pdf:p7:c1',
+          docId: 'test-reference.pdf',
+          page: 7,
+          text: 'Query structure SELECT column FROM table WHERE condition'
+        }
+      ]
+    };
+    await setupPdfIndex(page, testPdfIndex);
     await page.reload({ timeout: 30000 });
-    await expect(page).toHaveURL(/\/$/, { timeout: 10000 });
 
     // Trigger an incomplete query error
     await page.locator('.monaco-editor .view-lines').first().click({ position: { x: 8, y: 8 } });
@@ -104,51 +116,48 @@ test.describe('@weekly Hint Source Passages Feature', () => {
   });
 
   test('hints display without errors when PDF index is loaded', async ({ page }) => {
-    await page.goto('/', { timeout: 30000 });
-    
-    await page.evaluate(() => {
-      const profiles = [{
-        id: 'test-learner-2',
-        name: 'Test Learner',
-        createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
-      window.localStorage.setItem('sql-learning-active-session', 'session-test-456');
-      
-      const testPdfIndex = {
-        indexId: 'pdf-index-test-v2',
-        sourceName: 'sql-guide.pdf',
-        createdAt: new Date().toISOString(),
-        schemaVersion: 'pdf-index-schema-v1',
-        chunkerVersion: 'word-window-180-overlap-30-v1',
-        embeddingModelId: 'hash-embedding-v1',
-        sourceDocs: [{
-          docId: 'sql-guide.pdf',
-          filename: 'sql-guide.pdf',
-          sha256: 'test-sha-456',
-          pageCount: 20
-        }],
-        docCount: 1,
-        chunkCount: 2,
-        chunks: [
-          {
-            chunkId: 'sql-guide.pdf:p10:c1',
-            docId: 'sql-guide.pdf',
-            page: 10,
-            text: 'SELECT FROM incomplete query column table'
-          },
-          {
-            chunkId: 'sql-guide.pdf:p11:c1',
-            docId: 'sql-guide.pdf',
-            page: 11,
-            text: 'WHERE clause syntax condition filter'
-          }
-        ]
-      };
-      window.localStorage.setItem('sql-learning-pdf-index', JSON.stringify(testPdfIndex));
-    });
+    await page.goto('/practice', { timeout: 30000 });
 
+    // Wait for SQL engine and Monaco editor to initialize
+    await expect(page.getByRole('button', { name: 'Run Query' })).toBeEnabled({ timeout: 10000 });
+    await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.monaco-editor .view-lines')).toBeVisible({ timeout: 10000 });
+    
+    const testPdfIndex = {
+      indexId: 'pdf-index-test-v2',
+      sourceName: 'sql-guide.pdf',
+      createdAt: new Date().toISOString(),
+      schemaVersion: 'pdf-index-schema-v1',
+      chunkerVersion: 'word-window-180-overlap-30-v1',
+      embeddingModelId: 'hash-embedding-v1',
+      sourceDocs: [{
+        docId: 'sql-guide.pdf',
+        filename: 'sql-guide.pdf',
+        sha256: 'test-sha-456',
+        pageCount: 20
+      }],
+      docCount: 1,
+      chunkCount: 2,
+      chunks: [
+        {
+          chunkId: 'sql-guide.pdf:p10:c1',
+          docId: 'sql-guide.pdf',
+          page: 10,
+          text: 'SELECT FROM incomplete query column table'
+        },
+        {
+          chunkId: 'sql-guide.pdf:p11:c1',
+          docId: 'sql-guide.pdf',
+          page: 11,
+          text: 'WHERE clause syntax condition filter'
+        }
+      ]
+    };
+    await setupPdfIndex(page, testPdfIndex);
     await page.reload({ timeout: 30000 });
+
+    // Wait for Monaco editor to be ready after reload
+    await expect(page.locator('.monaco-editor .view-lines')).toBeVisible({ timeout: 10000 });
 
     // Get multiple hints
     await page.locator('.monaco-editor .view-lines').first().click({ position: { x: 8, y: 8 } });
@@ -171,7 +180,7 @@ test.describe('@weekly Hint Source Passages Feature', () => {
 
     // No console errors from PDF retrieval
     const consoleErrors: string[] = [];
-    page.on('console', msg => {
+    page.on('console', (msg: { type: () => string; text: () => string }) => {
       if (msg.type() === 'error') {
         consoleErrors.push(msg.text());
       }
@@ -186,20 +195,14 @@ test.describe('@weekly Hint Source Passages Feature', () => {
   });
 
   test('hint system works without PDF index', async ({ page }) => {
-    await page.goto('/', { timeout: 30000 });
-    
-    await page.evaluate(() => {
-      const profiles = [{
-        id: 'test-learner-3',
-        name: 'Test Learner',
-        createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
-      window.localStorage.setItem('sql-learning-active-session', 'session-no-pdf');
-      // No PDF index loaded
-    });
+    await page.goto('/practice', { timeout: 30000 });
+    // No PDF index loaded - profile already set up in beforeEach
 
-    await page.reload({ timeout: 30000 });
+    // Wait for SQL engine to initialize
+    await expect(page.getByRole('button', { name: 'Run Query' })).toBeEnabled({ timeout: 10000 });
+
+    // Wait for Monaco editor to be ready
+    await expect(page.locator('.monaco-editor .view-lines')).toBeVisible({ timeout: 10000 });
 
     // Get a hint
     await page.locator('.monaco-editor .view-lines').first().click({ position: { x: 8, y: 8 } });
@@ -217,6 +220,16 @@ test.describe('@weekly Hint Source Passages Feature', () => {
   });
 
   test('PDF index with chunks is saved correctly', async ({ page }) => {
+    // This test goes to /research (instructor page) so needs instructor role
+    await page.addInitScript(() => {
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-instructor',
+        name: 'Test Instructor',
+        role: 'instructor',
+        createdAt: Date.now()
+      }));
+    });
+    
     await page.goto('/research', { timeout: 30000 });
     
     const testPdfIndex = {
@@ -271,19 +284,10 @@ test.describe('@weekly Hint Source Passages Feature', () => {
   });
 
   test('hint text is non-empty and meaningful', async ({ page }) => {
-    await page.goto('/', { timeout: 30000 });
-    
-    await page.evaluate(() => {
-      const profiles = [{
-        id: 'test-learner-4',
-        name: 'Test Learner',
-        createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
-      window.localStorage.setItem('sql-learning-active-session', 'session-hint-text');
-    });
+    await page.goto('/practice', { timeout: 30000 });
 
-    await page.reload({ timeout: 30000 });
+    // Wait for SQL engine to initialize
+    await expect(page.getByRole('button', { name: 'Run Query' })).toBeEnabled({ timeout: 10000 });
 
     // Get a hint
     await page.locator('.monaco-editor .view-lines').first().click({ position: { x: 8, y: 8 } });
@@ -302,41 +306,33 @@ test.describe('@weekly Hint Source Passages Feature', () => {
   });
 
   test('source passages toggle state is independent per hint', async ({ page }) => {
-    await page.goto('/', { timeout: 30000 });
-    
-    await page.evaluate(() => {
-      const profiles = [{
-        id: 'test-learner-5',
-        name: 'Test Learner',
-        createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
-      window.localStorage.setItem('sql-learning-active-session', 'session-toggle-test');
-      
-      const testPdfIndex = {
-        indexId: 'pdf-index-toggle-test',
-        sourceName: 'toggle-test.pdf',
-        createdAt: new Date().toISOString(),
-        schemaVersion: 'pdf-index-schema-v1',
-        chunkerVersion: 'word-window-180-overlap-30-v1',
-        embeddingModelId: 'hash-embedding-v1',
-        sourceDocs: [{
-          docId: 'toggle-test.pdf',
-          filename: 'toggle-test.pdf',
-          sha256: 'test-sha-toggle',
-          pageCount: 5
-        }],
-        docCount: 1,
-        chunkCount: 3,
-        chunks: [
-          { chunkId: 'toggle-test.pdf:p1:c1', docId: 'toggle-test.pdf', page: 1, text: 'Toggle test content one incomplete query' },
-          { chunkId: 'toggle-test.pdf:p2:c1', docId: 'toggle-test.pdf', page: 2, text: 'Toggle test content two SELECT FROM' },
-          { chunkId: 'toggle-test.pdf:p3:c1', docId: 'toggle-test.pdf', page: 3, text: 'Toggle test content three column table' }
-        ]
-      };
-      window.localStorage.setItem('sql-learning-pdf-index', JSON.stringify(testPdfIndex));
-    });
+    await page.goto('/practice', { timeout: 30000 });
 
+    // Wait for SQL engine to initialize
+    await expect(page.getByRole('button', { name: 'Run Query' })).toBeEnabled({ timeout: 10000 });
+    
+    const testPdfIndex = {
+      indexId: 'pdf-index-toggle-test',
+      sourceName: 'toggle-test.pdf',
+      createdAt: new Date().toISOString(),
+      schemaVersion: 'pdf-index-schema-v1',
+      chunkerVersion: 'word-window-180-overlap-30-v1',
+      embeddingModelId: 'hash-embedding-v1',
+      sourceDocs: [{
+        docId: 'toggle-test.pdf',
+        filename: 'toggle-test.pdf',
+        sha256: 'test-sha-toggle',
+        pageCount: 5
+      }],
+      docCount: 1,
+      chunkCount: 3,
+      chunks: [
+        { chunkId: 'toggle-test.pdf:p1:c1', docId: 'toggle-test.pdf', page: 1, text: 'Toggle test content one incomplete query' },
+        { chunkId: 'toggle-test.pdf:p2:c1', docId: 'toggle-test.pdf', page: 2, text: 'Toggle test content two SELECT FROM' },
+        { chunkId: 'toggle-test.pdf:p3:c1', docId: 'toggle-test.pdf', page: 3, text: 'Toggle test content three column table' }
+      ]
+    };
+    await setupPdfIndex(page, testPdfIndex);
     await page.reload({ timeout: 30000 });
 
     // Get multiple hints
@@ -347,6 +343,7 @@ test.describe('@weekly Hint Source Passages Feature', () => {
 
     const requestHintButton = page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME });
     await requestHintButton.click();
+
     await expect(page.getByText('Hint 1')).toBeVisible({ timeout: 5000 });
     await requestHintButton.click();
 
