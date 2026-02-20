@@ -39,3 +39,4 @@ chat-history/
 .cursor/
 .aider*
 prompt-history/
+EDGE_CASE_TEST_REPORT.md

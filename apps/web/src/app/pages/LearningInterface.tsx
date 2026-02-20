@@ -41,6 +41,7 @@ import {
 import { useUserRole } from '../hooks/useUserRole';
 import { cn } from '../components/ui/utils';
 import { useLLMSettings } from '../components/LLMSettingsHelper';
+import { useScreenReaderAnnouncer, HintAnnouncer, NotificationAnnouncer } from '../components/ScreenReaderAnnouncer';
 
 const INSTRUCTOR_SUBTYPE_OPTIONS = getKnownSqlEngageSubtypes();
 
@@ -85,7 +86,8 @@ function formatTime(ms: number): string {
  */
 export function LearningInterface() {
   const { role, isStudent, isInstructor, profile } = useUserRole();
-  const [learnerId, setLearnerId] = useState('learner-1');
+  // Use actual user profile ID for data isolation (aligned with TextbookPage)
+  const learnerId = profile?.id || 'learner-1';
   const [sessionId, setSessionId] = useState('');
   const [currentProblem, setCurrentProblem] = useState<SQLProblem>(sqlProblems[0]);
   const [sqlDraft, setSqlDraft] = useState(DEFAULT_SQL_EDITOR_CODE);
@@ -123,6 +125,10 @@ export function LearningInterface() {
   const elapsedTimeRef = useRef(elapsedTime);
   // Track notification timeout IDs for cleanup on unmount
   const notificationTimeoutsRef = useRef<Set<number>>(new Set());
+  
+  // Screen reader announcements for accessibility
+  const { announcement: hintAnnouncement, announce: announceHint } = useScreenReaderAnnouncer();
+  const [notificationAnnouncement, setNotificationAnnouncement] = useState('');
 
   // Load initial data
   useEffect(() => {
