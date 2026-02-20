@@ -110,6 +110,7 @@ export function AdaptiveTextbook({
   const [sortMode, setSortMode] = useState<SortMode>('quality');
   const [showArchived, setShowArchived] = useState(false);
   const [expandedAlternatives, setExpandedAlternatives] = useState<Record<string, boolean>>({});
+  const [legacyUnitsInfo, setLegacyUnitsInfo] = useState<{ hasLegacyUnits: boolean; count: number }>({ hasLegacyUnits: false, count: 0 });
   const pendingUnitIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -119,6 +120,9 @@ export function AdaptiveTextbook({
   const loadTextbook = () => {
     const units = storage.getTextbook(learnerId);
     setTextbookUnits(units);
+    // Check for legacy HTML units
+    const legacyInfo = storage.getLegacyHtmlUnitsInfo(learnerId);
+    setLegacyUnitsInfo(legacyInfo);
   };
 
   const learnerInteractions = useMemo(
@@ -365,6 +369,23 @@ export function AdaptiveTextbook({
             {sortMode === 'prerequisite' && 'By learning path'}
           </span>
         </div>
+
+        {/* Legacy HTML units warning */}
+        {legacyUnitsInfo.hasLegacyUnits && (
+          <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+            <p className="font-medium">⚠️ Legacy Content Detected</p>
+            <p>{legacyUnitsInfo.count} unit(s) may display formatting issues.</p>
+            <p className="mt-1">
+              <button
+                onClick={handleClear}
+                className="underline hover:text-amber-900"
+              >
+                Clear all units
+              </button>{' '}
+              and generate new content for best results.
+            </p>
+          </div>
+        )}
 
         <div className="space-y-2">
           {Object.entries(groupedUnits).map(([conceptName, problems]) => {

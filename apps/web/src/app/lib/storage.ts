@@ -1169,10 +1169,49 @@ class StorageManager {
   getTextbook(learnerId: string): InstructionalUnit[] {
     const textbooks = this.getAllTextbooks();
     const units = textbooks[learnerId] || [];
-    return units.map(unit => ({
+    return units.map(unit => this.migrateUnit(this.mergeUnitIds(unit)));
+  }
+
+  /**
+   * Merge legacy sourceInteractions into sourceInteractionIds
+   */
+  private mergeUnitIds(unit: InstructionalUnit): InstructionalUnit {
+    return {
       ...unit,
       sourceInteractionIds: this.mergeIds(unit.sourceInteractionIds, unit.sourceInteractions)
-    }));
+    };
+  }
+
+  /**
+   * Migrate old HTML-stored units to be properly marked
+   * 
+   * Legacy units (created before contentFormat field) may have HTML content
+   * without the format marker. This detects them and adds the marker for
+   * proper rendering in AdaptiveTextbook.
+   */
+  private migrateUnit(unit: InstructionalUnit): InstructionalUnit {
+    // If contentFormat is already set, no migration needed
+    if (unit.contentFormat) {
+      return unit;
+    }
+
+    // Detect if content looks like HTML (starts with < and contains closing tags)
+    const content = unit.content || '';
+    const looksLikeHtml = /^</.test(content) && /<\/[a-z][\s\S]*>/i.test(content);
+
+    if (looksLikeHtml) {
+      // Mark as HTML format for proper rendering
+      return {
+        ...unit,
+        contentFormat: 'html'
+      };
+    }
+
+    // Content appears to be markdown (or empty), mark as markdown
+    return {
+      ...unit,
+      contentFormat: 'markdown'
+    };
   }
 
   // Week 3 D6: Enhanced upsert with dedupe and revision tracking
@@ -1439,6 +1478,35 @@ class StorageManager {
       console.warn(`[Storage] Failed to clear textbook for ${learnerId}: LocalStorage quota exceeded`);
     }
     return result;
+  }
+
+  /**
+   * Get information about legacy HTML-stored units
+   * @param learnerId - Learner identifier
+   * @returns Object with legacy unit count and details
+   */
+  getLegacyHtmlUnitsInfo(learnerId: string): {
+    hasLegacyUnits: boolean;
+    count: number;
+    unitIds: string[];
+  } {
+    const textbooks = this.getAllTextbooks();
+    const units = textbooks[learnerId] || [];
+    
+    const legacyUnits = units.filter(unit => {
+      // Unit is legacy if:
+      // 1. contentFormat is not set, AND
+      // 2. content looks like HTML
+      if (unit.contentFormat) return false;
+      const content = unit.content || '';
+      return /^</.test(content) && /<\/[a-z][\s\S]*>/i.test(content);
+    });
+
+    return {
+      hasLegacyUnits: legacyUnits.length > 0,
+      count: legacyUnits.length,
+      unitIds: legacyUnits.map(u => u.id)
+    };
   }
 
   // Export data for research
