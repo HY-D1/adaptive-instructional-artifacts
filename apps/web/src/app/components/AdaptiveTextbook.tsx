@@ -6,8 +6,7 @@ import { Separator } from './ui/separator';
 import { Book, Trash2, ChevronRight, ChevronDown, Folder, FileText, Star, ArrowUpDown, Layers, Archive } from 'lucide-react';
 import type { TextbookUnitStatus } from '../types';
 import { Link } from 'react-router';
-import DOMPurify from 'dompurify';
-import { marked, Renderer, type Token } from 'marked';
+import { renderTextbookContent } from '../lib/textbook-renderer';
 import { InstructionalUnit, InteractionEvent } from '../types';
 import { storage } from '../lib/storage';
 import { getConceptById } from '../data/sql-engage';
@@ -303,38 +302,9 @@ export function AdaptiveTextbook({
       return '';
     }
 
-    const rawContent = selectedUnit.content || '';
-    const format = selectedUnit.contentFormat;
-    
-    // If content is explicitly marked as HTML (legacy), sanitize and display directly
-    // Otherwise, treat as markdown (canonical format) and parse to HTML
-    if (format === 'html') {
-      return DOMPurify.sanitize(rawContent, {
-        ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'a'],
-        ALLOWED_ATTR: ['href', 'title', 'class']
-      });
-    }
-    
-    // Canonical path: markdown -> HTML (format is 'markdown' or undefined for backward compat)
-    // Create a custom renderer that escapes raw HTML to prevent XSS
-    const renderer = new Renderer();
-    renderer.html = (token: Token) => {
-      // Marked v14+ passes a token object with text/raw property
-      // Escape raw HTML by converting < and > to entities
-      const raw = (token as { text?: string; raw?: string }).text ?? (token as { raw?: string }).raw ?? '';
-      return raw.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    };
-    
-    const renderedMarkdown = marked.parse(rawContent, {
-      gfm: true,
-      breaks: true,
-      renderer
-    }) as string;
-
-    // Sanitize the rendered HTML as a defense-in-depth measure
-    return DOMPurify.sanitize(renderedMarkdown, {
-      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'blockquote', 'a'],
-      ALLOWED_ATTR: ['href', 'title', 'class']
+    return renderTextbookContent({
+      content: selectedUnit.content,
+      contentFormat: selectedUnit.contentFormat
     });
   }, [selectedUnit]);
 
