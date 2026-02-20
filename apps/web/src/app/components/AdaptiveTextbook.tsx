@@ -7,7 +7,7 @@ import { Book, Trash2, ChevronRight, ChevronDown, Folder, FileText, Star, ArrowU
 import type { TextbookUnitStatus } from '../types';
 import { Link } from 'react-router';
 import DOMPurify from 'dompurify';
-import { marked, Renderer } from 'marked';
+import { marked, Renderer, type Token } from 'marked';
 import { InstructionalUnit, InteractionEvent } from '../types';
 import { storage } from '../lib/storage';
 import { getConceptById } from '../data/sql-engage';
@@ -307,10 +307,11 @@ export function AdaptiveTextbook({
     
     // Create a custom renderer that escapes raw HTML to prevent XSS
     const renderer = new Renderer();
-    const originalHtml = renderer.html.bind(renderer);
-    renderer.html = (html: string) => {
+    renderer.html = (token: Token) => {
+      // Marked v14+ passes a token object with text/raw property
       // Escape raw HTML by converting < and > to entities
-      return html.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const raw = (token as { text?: string; raw?: string }).text ?? (token as { raw?: string }).raw ?? '';
+      return raw.replace(/</g, '&lt;').replace(/>/g, '&gt;');
     };
     
     const renderedMarkdown = marked.parse(rawMarkdown, {

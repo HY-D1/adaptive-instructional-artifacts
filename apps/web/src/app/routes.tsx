@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate, redirect, type LoaderFunction } from 'react-router';
+import { RouteError } from './components/RouteError';
 import { RootLayout } from './pages/RootLayout';
 import { TextbookPage } from './pages/TextbookPage';
 import { ResearchPage } from './pages/ResearchPage';
@@ -112,6 +113,7 @@ export const router = createBrowserRouter([
   {
     path: '/',
     Component: RootLayout,
+    errorElement: <RouteError />,
     loader: createProtectedLoader({ allowAuthenticated: true }),
     children: [
       // Start page - entry point for all users

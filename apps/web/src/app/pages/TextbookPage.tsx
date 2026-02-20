@@ -14,12 +14,6 @@ import { InteractionEvent } from '../types';
 import { conceptNodes } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
 
-const learnerOptions = ['learner-1', 'learner-2', 'learner-3'] as const;
-type LearnerId = (typeof learnerOptions)[number];
-
-const isLearnerId = (value: string | null): value is LearnerId =>
-  value !== null && learnerOptions.includes(value as LearnerId);
-
 const getSubtypeLabel = (interaction: InteractionEvent) =>
   interaction.sqlEngageSubtype || interaction.errorSubtypeId || 'unknown-subtype';
 
@@ -32,12 +26,19 @@ const TRACE_ATTEMPT_EVENT_TYPES: InteractionEvent['eventType'][] = [
 
 export function TextbookPage() {
   const navigate = useNavigate();
-  const { isStudent, isInstructor } = useUserRole();
+  const { isStudent, isInstructor, profile } = useUserRole();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const learnerId: LearnerId = isLearnerId(searchParams.get('learnerId'))
-    ? (searchParams.get('learnerId') as LearnerId)
-    : 'learner-1';
+  // Use the actual user's ID as the learner ID (aligned with LearningInterface)
+  // For students: always use their own profile ID
+  // For instructors: can view other learners via URL param (for research purposes)
+  const userLearnerId = profile?.id || 'default-learner';
+  const urlLearnerId = searchParams.get('learnerId');
+  
+  // Students always see their own data; instructors can view others via URL
+  const learnerId = isStudent 
+    ? userLearnerId 
+    : (urlLearnerId || userLearnerId);
   const selectedUnitId = searchParams.get('unitId') || undefined;
   const selectedAttemptId = searchParams.get('attemptId') || undefined;
   const selectedSubtypeParam = searchParams.get('subtype');
@@ -96,7 +97,8 @@ export function TextbookPage() {
   }, [searchParams, setSearchParams]);
 
   const handleLearnerChange = (value: string) => {
-    if (!isLearnerId(value)) return;
+    // Only instructors can switch learners
+    if (isStudent) return;
     updateParams({
       learnerId: value,
       unitId: undefined,
@@ -290,16 +292,20 @@ export function TextbookPage() {
                     </Tooltip>
                   </div>
                 )}
-                <Select value={learnerId} onValueChange={handleLearnerChange}>
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="learner-1">Learner 1</SelectItem>
-                    <SelectItem value="learner-2">Learner 2</SelectItem>
-                    <SelectItem value="learner-3">Learner 3</SelectItem>
-                  </SelectContent>
-                </Select>
+                {/* Learner selector - only for instructors */}
+                {isInstructor && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg border">
+                        <GraduationCap className="size-4 text-gray-600" />
+                        <span className="text-sm text-gray-700">Viewing: {learnerId.slice(0, 20)}...</span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Instructor view: viewing learner {learnerId}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
               </div>
             </div>
           </div>
