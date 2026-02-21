@@ -855,21 +855,21 @@ export function AskMyTextbookChat({
       
       const contextText = contextParts.join('\n');
       
-      // Build prompt based on query type
+      // Build prompt based on query type - ALL prompts must be Socratic, never give solutions
       let userPrompt = '';
       if (quickChip === 'explain_error') {
-        userPrompt = `The student has this error: ${errorSubtype || 'Unknown error'}.\n\nUsing this context:\n${contextText}\n\nExplain the error in 2-3 sentences, suggest a fix, and cite which source you used.`;
+        userPrompt = `The student has this error: ${errorSubtype || 'Unknown error'}.\n\nUsing this context:\n${contextText}\n\nExplain what the error means in 2-3 sentences. Help them understand WHY it happened. DO NOT write the corrected SQL code. DO NOT give them the solution. Just explain the concept they need to understand.`;
       } else if (quickChip === 'minimal_example') {
-        userPrompt = `The student wants a minimal SQL example for this problem: ${problem?.title}.\n\nUsing this context:\n${contextText}\n\nProvide a short SQL example (under 5 lines) and explain how to adapt it.`;
+        userPrompt = `The student wants an example for this problem: ${problem?.title}.\n\nUsing this context:\n${contextText}\n\nDescribe the PATTERN or STRUCTURE they need (like "SELECT [columns] FROM [table]" with blanks), but DO NOT fill in the actual table names or column names. Let them figure that out. NO working SQL code.`;
       } else if (quickChip === 'what_concept') {
-        userPrompt = `The student is asking about concepts for this problem: ${problem?.title}. Concepts: ${problemConceptIds.join(', ')}.\n\nUsing this context:\n${contextText}\n\nBriefly explain the key concept(s) in 2-3 sentences.`;
+        userPrompt = `The student is asking about concepts for this problem: ${problem?.title}. Concepts: ${problemConceptIds.join(', ')}.\n\nUsing this context:\n${contextText}\n\nExplain the concept in 2-3 sentences. Focus on the IDEA, not the syntax. DO NOT show SQL code examples.`;
       } else if (quickChip === 'hint_response') {
-        userPrompt = `The student wants a hint for this problem: ${problem?.title}. Error: ${errorSubtype || 'None'}.\n\nUsing this context:\n${contextText}\n\nGive a brief, helpful hint (1-2 sentences) that nudges them without giving the answer.`;
+        userPrompt = `The student wants a hint for this problem: ${problem?.title}. Error: ${errorSubtype || 'None'}.\n\nUsing this context:\n${contextText}\n\nGive a brief hint (1-2 sentences) that nudges them toward understanding. Ask a leading question. DO NOT give the answer or write SQL code.`;
       } else {
-        userPrompt = `Student question: "${query}"\n\nProblem: ${problem?.title}\nError: ${errorSubtype || 'None'}\n\nUsing this context:\n${contextText}\n\nProvide a helpful response (2-4 sentences). If the context doesn't have enough info, say so.`;
+        userPrompt = `Student question: "${query}"\n\nProblem: ${problem?.title}\nError: ${errorSubtype || 'None'}\n\nUsing this context:\n${contextText}\n\nProvide a helpful response (2-4 sentences). Guide their thinking with questions. DO NOT give them the SQL solution.`;
       }
       
-      const systemPrompt = `You are a helpful SQL tutor. Use ONLY the provided context to answer. Be concise (under 300 chars). Cite sources naturally like "(from your notes)" or "(see textbook p.X)".`;
+      const systemPrompt = `You are a Socratic SQL tutor. NEVER give working SQL code. NEVER give the solution. NEVER write "Example: SELECT..." with real code. Help students discover answers through guidance and questions. Be concise (under 300 chars). Cite sources like "(from your notes)".`;
       
       // Call LLM
       const llmCall = async (prompt: string): Promise<string> => {
@@ -969,21 +969,33 @@ export function AskMyTextbookChat({
                            lastError.sqlEngageSubtype || 
                            (lastError.successful === false ? 'incorrect_results' : 'unknown');
           
-          const errorMessage = lastError.error || 
-                              (lastError.successful === false ? 'Query returned wrong results' : 'Unknown error');
+          // Conceptual explanation instead of actionable fix
+          response = `**Understanding the error:**\n\n`;
           
-          // ACTIONABLE fix first
-          if (errorType !== 'unknown' && errorType !== 'incorrect_results') {
-            response = `**Fix:** ${getActionableFix(errorType)}\n\n`;
-          } else if (lastError.successful === false) {
-            // Wrong results - give specific guidance
-            response = `**Issue:** Your query ran but returned incorrect results.\n\n`;
-            response += `**Check:**\n`;
+          if (errorType.includes('incomplete') || errorType.includes('missing')) {
+            response += `Your query is missing a required component. Think about what SQL needs to know: what data to retrieve and where it comes from.\n\n`;
+            response += `**Questions to ask yourself:**\n`;
+            response += `• Does your query have all required keywords (SELECT, FROM)?\n`;
+            response += `• Is the table name specified correctly?\n`;
+            response += `• Are all the columns you need listed?\n\n`;
+          } else if (errorType.includes('syntax') || errorType.includes('parse')) {
+            response += `There's a syntax issue in your query. SQL has specific rules about keyword order and punctuation.\n\n`;
+            response += `**Check carefully:**\n`;
+            response += `• Are commas in the right places between columns?\n`;
+            response += `• Is there a semicolon at the end?\n`;
+            response += `• Are all keywords spelled correctly?\n\n`;
+          } else if (errorType === 'incorrect_results' || lastError.successful === false) {
+            response += `Your query ran but returned incorrect results. This means the logic needs adjustment.\n\n`;
+            response += `**Things to verify:**\n`;
             response += `• Did you select all required columns?\n`;
-            response += `• Is your WHERE clause too restrictive?\n`;
-            response += `• Are you filtering out rows that should be included?\n\n`;
+            response += `• Is your WHERE clause filtering the right rows?\n`;
+            response += `• Are you including rows that should be filtered out?\n\n`;
           } else {
-            response = `**Error:** ${errorMessage}\n\n`;
+            response += `There's an issue with your query. Let's think through this systematically.\n\n`;
+            response += `**Debugging approach:**\n`;
+            response += `• Read the error message carefully - it often tells you where to look\n`;
+            response += `• Check your query structure step by step\n`;
+            response += `• Compare with patterns from your textbook\n\n`;
           }
           
           // Add context from PDF if relevant and short
@@ -1002,27 +1014,19 @@ export function AskMyTextbookChat({
           response = 'No recent errors found. Try running a query first!';
         }
       } else if (quickChip === 'minimal_example') {
-        // Try to find a clean SQL example
-        let example: string | null = null;
+        // Provide conceptual pattern guidance instead of working SQL
+        response = `**Pattern to follow:**\n\n`;
+        response += `Start with SELECT, then specify what to retrieve, then specify where it comes from.\n\n`;
+        response += `**Structure:** SELECT [columns] FROM [table]\n\n`;
+        response += `The [brackets] are placeholders - you fill them in with your actual column and table names.\n\n`;
+        response += `**Steps to build your query:**\n`;
+        response += `1. Identify which table has the data you need\n`;
+        response += `2. Determine which columns to retrieve\n`;
+        response += `3. Add any filtering conditions if needed\n\n`;
         
-        // Check PDF passages for SELECT examples
-        for (const passage of pdfPassages) {
-          example = extractSqlExample(passage.text);
-          if (example) break;
-        }
-        
-        // Check units for minimalExample
-        if (!example) {
-          const unitWithExample = relevantUnits.find(u => u.minimalExample);
-          if (unitWithExample?.minimalExample) {
-            example = cleanText(unitWithExample.minimalExample);
-          }
-        }
-        
-        if (example) {
-          response = `**Try this pattern:**\n\n\`\`\`sql\n${example}\n\`\`\`\n\nAdapt the column and table names to your problem.`;
-        } else {
-          response = `**Basic pattern:**\n\n\`\`\`sql\nSELECT column_name\nFROM table_name\nWHERE condition;\n\`\`\`\n\nReplace with your actual columns, table, and filter.`;
+        // Add unit reference if available
+        if (relevantUnits.length > 0) {
+          response += `📚 Review "${relevantUnits[0].title}" in your textbook for more guidance.`;
         }
       } else if (quickChip === 'what_concept') {
         const problem = getProblemById(problemId);
@@ -1042,18 +1046,22 @@ export function AskMyTextbookChat({
           response = 'This problem tests SQL SELECT basics. Identify the table, then pick the right columns.';
         }
       } else if (quickChip === 'hint_response') {
-        // Get the most practical hint
+        // Get the most practical hint - Socratic guidance instead of solutions
         const unit = relevantUnits[0];
         
         if (unit?.commonMistakes?.length) {
-          response = `**Common mistake:** ${unit.commonMistakes[0]}\n\n**Try:** ${getActionableFix(errorSubtype || 'syntax_error')}`;
+          response = `**Think about this:** ${unit.commonMistakes[0]}\n\n`;
+          response += `What part of your query addresses this? Check your notes or textbook for guidance on how to handle this issue.`;
         } else if (unit?.summary) {
           const summary = cleanText(unit.summary);
-          response = `**Hint:** ${summary.substring(0, 200)}${summary.length > 200 ? '...' : ''}`;
-        } else if (errorSubtype) {
-          response = `**Hint:** ${getActionableFix(errorSubtype)}`;
+          response = `**Guidance:** ${summary.substring(0, 200)}${summary.length > 200 ? '...' : ''}\n\n`;
+          response += `How does this apply to your current problem?`;
         } else {
-          response = '**Hint:** Break it down: 1) Which table? 2) Which columns? 3) Any filters needed?';
+          response = `**Questions to guide you:**\n\n`;
+          response += `1. Which table contains the data you need?\n`;
+          response += `2. What columns should you retrieve?\n`;
+          response += `3. Do you need any conditions to filter the results?\n\n`;
+          response += `Work through these step by step.`;
         }
       } else {
         // Custom query - concise answer

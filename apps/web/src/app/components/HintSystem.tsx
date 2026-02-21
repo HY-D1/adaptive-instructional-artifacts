@@ -85,8 +85,9 @@ export function HintSystem({
   
   // Persist enhanced hint info to localStorage
   const HINT_INFO_KEY = useMemo(() => `hint-info-${learnerId}-${problemId}`, [learnerId, problemId]);
+  const HINTS_KEY = useMemo(() => `hints-${learnerId}-${problemId}`, [learnerId, problemId]);
 
-  // Load enhanced hint info from localStorage on mount
+  // Load enhanced hint info from localStorage on mount (backup only)
   useEffect(() => {
     const saved = localStorage.getItem(HINT_INFO_KEY);
     if (saved) {
@@ -98,6 +99,13 @@ export function HintSystem({
       }
     }
   }, [HINT_INFO_KEY]);
+
+  // Save hints to localStorage when they change (for backup only, not for loading)
+  useEffect(() => {
+    if (hints.length > 0) {
+      localStorage.setItem(HINTS_KEY, JSON.stringify(hints));
+    }
+  }, [hints, HINTS_KEY]);
 
   // Save enhanced hint info to localStorage on change
   useEffect(() => {
@@ -158,6 +166,7 @@ export function HintSystem({
     setAutoEscalationInfo({ triggered: false, helpRequestCount: 0 });
     setEnhancedHintInfo([]);
     localStorage.removeItem(HINT_INFO_KEY);
+    localStorage.removeItem(HINTS_KEY);
     // Reset refs to ensure clean state for new problem
     helpFlowKeyRef.current = '';
     nextHelpRequestIndexRef.current = 1;
@@ -360,7 +369,22 @@ export function HintSystem({
     prevProblemLearnerSessionRef.current = currentKey;
     hasReconstructedRef.current = true;
     
-    const problemTrace = getProblemTrace();
+    // Clear existing state first to prevent duplication
+    setHints([]);
+    setHintPdfPassages([]);
+    setEnhancedHintInfo([]);
+    
+    // Try to get problem trace from recentInteractions first
+    let problemTrace = getProblemTrace();
+    
+    // If empty, load from storage
+    if (problemTrace.length === 0) {
+      const allInteractions = storage.getInteractionsByLearner(learnerId);
+      problemTrace = allInteractions.filter(
+        (i) => i.problemId === problemId && i.learnerId === learnerId
+      );
+    }
+    
     const hintEvents = problemTrace.filter(
       (interaction) => interaction.eventType === 'hint_view'
     );
@@ -408,6 +432,15 @@ export function HintSystem({
   }, [problemId, learnerId, sessionId]);
   // Note: recentInteractions is intentionally omitted from deps to prevent infinite loops.
   // This effect loads historical data once on mount/problem change, not on every interaction update.
+  
+  // Cleanup old localStorage when problem changes
+  useEffect(() => {
+    return () => {
+      // Clear localStorage for this problem when unmounting/changing problems
+      // This prevents stale hints from appearing when returning to the problem
+      localStorage.removeItem(HINTS_KEY);
+    };
+  }, [problemId, HINTS_KEY]);
 
   /**
    * Get the hint selection for a specific help request index.
@@ -850,7 +883,11 @@ export function HintSystem({
     : hints.length === 0
       ? 'Request Hint'
       : 'Next Hint';
-  const hintProgress = Math.min(hints.length + (showExplanation ? 1 : 0), 4);
+  // Count hints that have been actually viewed
+  const viewedHintsCount = hints.length;
+  const hintProgress = showExplanation 
+    ? Math.min(viewedHintsCount + 1, 4)  // Hints + explanation
+    : Math.min(viewedHintsCount, 3);      // Just hints
   const stepMessage = nextHelpRequestIndex >= 4
     ? 'You are in explanation mode. Additional help requests provide deeper explanation support.'
     : `Request ${hintProgress} gives Hint ${hintProgress}.`;
@@ -865,7 +902,12 @@ export function HintSystem({
           </div>
           <div>
             <h3 className="font-semibold text-gray-900">Guidance Ladder</h3>
-            <p className="text-xs text-gray-500">Step {hintProgress} of 4</p>
+            <p className="text-xs text-gray-500">
+              {showExplanation 
+                ? `Explain • ${Math.min(hints.length, 3)}/3`
+                : `Hint ${hintProgress} of 3`
+              }
+            </p>
           </div>
         </div>
         <RungIndicator rung={currentRung} size="sm" />

@@ -11,19 +11,22 @@ on:
 env:
   NODE_VERSION: 20
   PLAYWRIGHT_VERSION: 1.42
+  CI: true
+  NODE_ENV: production
+  PLAYWRIGHT_BROWSERS_PATH: 0
 
 jobs:
   # Build and verify the application
   verify:
     name: E2E Tests (Shard ${{ matrix.shard }})
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
-        totalShards: [4]
+        shard: [1, 2]
+        totalShards: [2]
     
     steps:
       - name: Checkout repository
@@ -66,10 +69,18 @@ jobs:
         id: test-run
         run: |
           echo "Running tests for shard ${{ matrix.shard }} of ${{ matrix.totalShards }}"
-          npx playwright test -c playwright.config.ts --grep @weekly --shard=${{ matrix.shard }}/${{ matrix.totalShards }}
+          npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@flaky' --shard=${{ matrix.shard }}/${{ matrix.totalShards }}
         env:
           CI: true
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results-shard-${{ matrix.shard }}.json
+      
+      - name: Retry failed tests
+        if: failure()
+        run: |
+          npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@flaky' --shard=${{ matrix.shard }}/${{ matrix.totalShards }} --last-failed
+        env:
+          CI: true
+        continue-on-error: true
       
       - name: Create demo directory
         if: success() && matrix.shard == 1

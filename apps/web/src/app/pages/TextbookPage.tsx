@@ -7,7 +7,7 @@ import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { Skeleton } from '../components/ui/skeleton';
-import { ArrowLeft, Search, Filter, BookOpen, X, Clock, Tag, GraduationCap, TrendingUp, Sparkles } from 'lucide-react';
+import { ArrowLeft, Search, Filter, BookOpen, X, Clock, Tag, GraduationCap, TrendingUp, Sparkles, MessageCircle } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { storage } from '../lib/storage';
 import { InteractionEvent } from '../types';
@@ -22,6 +22,11 @@ const TRACE_ATTEMPT_EVENT_TYPES: InteractionEvent['eventType'][] = [
   'error',
   'hint_view',
   'explanation_view'
+];
+
+// Add chat_interaction to the event types we fetch
+const CHAT_EVENT_TYPES: InteractionEvent['eventType'][] = [
+  'chat_interaction'
 ];
 
 export function TextbookPage() {
@@ -149,6 +154,14 @@ export function TextbookPage() {
     () => learnerInteractionsAll.filter((interaction) => TRACE_ATTEMPT_EVENT_TYPES.includes(interaction.eventType)),
     [learnerInteractionsAll]
   );
+
+// Then create a memo for chat interactions (after learnerInteractionsAll):
+const chatInteractions = useMemo(
+  () => learnerInteractionsAll.filter(
+    (interaction) => interaction.eventType === 'chat_interaction'
+  ),
+  [learnerInteractionsAll]
+);
   const selectedAttemptExists = !selectedAttemptId
     || learnerInteractionsAll.some((interaction) => interaction.id === selectedAttemptId);
 
@@ -196,6 +209,21 @@ export function TextbookPage() {
     
     return grouped;
   }, [textbookUnits]);
+
+  // Group chat interactions by problem
+  const chatsByProblem = useMemo(() => {
+    const grouped = new Map<string, typeof chatInteractions>();
+    
+    for (const chat of chatInteractions) {
+      const pid = chat.problemId || 'unknown';
+      if (!grouped.has(pid)) {
+        grouped.set(pid, []);
+      }
+      grouped.get(pid)!.push(chat);
+    }
+    
+    return grouped;
+  }, [chatInteractions]);
 
   // Get problem names for display
   const problemNames = useMemo(() => {
@@ -434,6 +462,49 @@ export function TextbookPage() {
                       </div>
                     </div>
                   ))
+                )}
+
+                {/* Chat History Section */}
+                {chatsByProblem.size > 0 && (
+                  <div className="mt-8 space-y-4">
+                    <h2 className="text-lg font-semibold text-gray-800">Chat History by Problem</h2>
+                    {Array.from(chatsByProblem.entries()).map(([pid, chats]) => (
+                      <div key={`chat-${pid}`} className="border rounded-lg bg-white overflow-hidden">
+                        <div className="bg-blue-50 px-4 py-3 border-b flex items-center justify-between">
+                          <h3 className="font-medium text-gray-900 flex items-center gap-2">
+                            <MessageCircle className="size-4 text-blue-500" />
+                            {problemNames.get(pid) || pid}
+                          </h3>
+                          <span className="text-xs text-gray-500 bg-blue-100 px-2 py-0.5 rounded-full">
+                            {chats.length} chats
+                          </span>
+                        </div>
+                        <div className="p-4 space-y-3 max-h-64 overflow-y-auto">
+                          {chats.slice(0, 5).map(chat => (
+                            <div key={chat.id} className="text-sm border-b border-gray-100 pb-2 last:border-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs text-gray-500">
+                                  {new Date(chat.timestamp).toLocaleString()}
+                                </span>
+                                {chat.chatQuickChip && (
+                                  <Badge variant="outline" className="text-[10px]">
+                                    {chat.chatQuickChip}
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="font-medium text-gray-800 mb-1">Q: {chat.chatMessage}</p>
+                              <p className="text-gray-600 line-clamp-2">A: {chat.chatResponse}</p>
+                            </div>
+                          ))}
+                          {chats.length > 5 && (
+                            <p className="text-sm text-blue-600 text-center">
+                              + {chats.length - 5} more chats
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             )}

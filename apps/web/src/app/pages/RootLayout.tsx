@@ -278,24 +278,26 @@ export function RootLayout() {
                   </TooltipContent>
                 </Tooltip>
 
-                {/* Switch User button */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleSwitchUser}
-                      className="touch-manipulation hidden md:flex"
-                      aria-label="Switch User"
-                    >
-                      <Users className="size-4 mr-2 hidden sm:block" />
-                      <span className="hidden sm:inline">Switch User</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Switch to a different user account</p>
-                  </TooltipContent>
-                </Tooltip>
+                {/* Switch User button - only for instructors */}
+                {isInstructor && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleSwitchUser}
+                        className="touch-manipulation hidden md:flex"
+                        aria-label="Switch User"
+                      >
+                        <Users className="size-4 mr-2 hidden sm:block" />
+                        <span className="hidden sm:inline">Switch User</span>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Switch to a different user account</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
 
                 {/* Logout button */}
                 <Tooltip>
@@ -349,18 +351,20 @@ export function RootLayout() {
                         ))}
                       </div>
                       <div className="py-4 border-t space-y-2">
-                        <Button
-                          variant="ghost"
-                          size="lg"
-                          className="w-full justify-start touch-manipulation"
-                          onClick={() => {
-                            setMobileMenuOpen(false);
-                            handleSwitchUser();
-                          }}
-                        >
-                          <Users className="size-5 mr-3" />
-                          <span>Switch User</span>
-                        </Button>
+                        {isInstructor && (
+                          <Button
+                            variant="ghost"
+                            size="lg"
+                            className="w-full justify-start touch-manipulation"
+                            onClick={() => {
+                              setMobileMenuOpen(false);
+                              handleSwitchUser();
+                            }}
+                          >
+                            <Users className="size-5 mr-3" />
+                            <span>Switch User</span>
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="lg"
