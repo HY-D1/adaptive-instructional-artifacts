@@ -15,7 +15,9 @@
 import type { 
   InteractionEvent, 
   InstructionalUnit,
-  SqlEngageRecord 
+  SqlEngageRecord,
+  SQLProblem,
+  RetrievedChunkInfo
 } from '../types';
 import { 
   GuidanceRung, 
@@ -28,6 +30,7 @@ import {
   canonicalizeSqlEngageSubtype
 } from '../data/sql-engage';
 import { storage } from './storage';
+import { createEventId } from './event-id';
 import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
 import { getProblemById } from '../data/problems';
 
@@ -90,6 +93,36 @@ export type HintGenerationOptions = {
   recentInteractions: InteractionEvent[];
   /** Whether to force LLM generation even if available */
   forceLLM?: boolean;
+};
+
+/**
+ * Context for adaptive hint generation
+ * Passed to generateAdaptiveHint for creating pedagogically progressive hints
+ */
+export type AdaptiveHintContext = {
+  /** Current rung level (1, 2, or 3) */
+  rung: 1 | 2 | 3;
+  /** Error subtype identifier */
+  errorSubtype: string;
+  /** Current problem information */
+  problem: SQLProblem;
+  /** Array of hints already given to the learner */
+  previousHints: string[];
+  /** Relevant textbook content */
+  textbookUnits: InstructionalUnit[];
+  /** Relevant PDF passages */
+  pdfPassages: RetrievedChunkInfo[];
+  /** SQL-Engage records for this error subtype */
+  sqlEngageRecords: SqlEngageRecord[];
+};
+
+/**
+ * Parsed LLM output for adaptive hints
+ */
+type AdaptiveHintOutput = {
+  content: string;
+  conceptIds: string[];
+  sourceRefIds: string[];
 };
 
 /**
@@ -293,7 +326,17 @@ export async function generateEnhancedHint(
   const retrievalBundle = buildEnhancedRetrievalBundle(options, resources);
   
   // Decision: Can we use LLM?
-  const canUseLLM = resources.llm && (forceLLM || rung >= 2);
+  // For now, allow LLM for all rungs if forceLLM is true or for rung 2+
+  // In the future, we could enable LLM for L1 too for consistency
+  const canUseLLM = resources.llm && (forceLLM || rung >= 1);
+  
+  console.log('[EnhancedHint] Decision check:', { 
+    rung, 
+    forceLLM, 
+    llmAvailable: resources.llm, 
+    canUseLLM,
+    hasTextbookContent: retrievalBundle.textbookUnits?.length > 0 
+  });
   
   // Decision: Do we have textbook content?
   const hasTextbookContent = retrievalBundle.textbookUnits && 
@@ -301,16 +344,19 @@ export async function generateEnhancedHint(
   
   // CASE 1: LLM available → Generate AI-powered hint
   if (canUseLLM) {
+    console.log('[EnhancedHint] Taking CASE 1: LLM-enhanced hint');
     return generateLLMEnhancedHint(options, retrievalBundle, resources);
   }
   
   // CASE 2: No LLM but Textbook available → Enhanced SQL-Engage with textbook refs
   if (hasTextbookContent && errorSubtypeId) {
+    console.log('[EnhancedHint] Taking CASE 2: Textbook-enhanced hint');
     return generateTextbookEnhancedHint(options, retrievalBundle, resources);
   }
   
   // CASE 3: Neither LLM nor Textbook → SQL-Engage CSV fallback
   if (errorSubtypeId) {
+    console.log('[EnhancedHint] Taking CASE 3: SQL-Engage fallback');
     return generateSqlEngageFallbackHint(errorSubtypeId, rung);
   }
   
@@ -331,7 +377,316 @@ export async function generateEnhancedHint(
 }
 
 /**
- * Generate LLM-enhanced hint with full context
+ * Save generated hint to My Textbook for future reference
+ * Organized by problem for easy lookup
+ */
+export async function saveHintToTextbook(
+  learnerId: string,
+  problemId: string,
+  rung: 1 | 2 | 3,
+  hintContent: string,
+  errorSubtype: string,
+  conceptIds: string[],
+  sourceRefIds: string[]
+): Promise<void> {
+  // Import storage dynamically to avoid circular deps
+  const { storage } = await import('./storage');
+  const { createEventId } = await import('./event-id');
+  
+  // Build a descriptive title based on rung and error
+  const rungLabels = { 1: 'Quick Hint', 2: 'Guidance', 3: 'Detailed Help' };
+  const title = `${rungLabels[rung]}: ${errorSubtype}`;
+  
+  // Create the instructional unit
+  const unit: InstructionalUnit = {
+    id: createEventId('hint'),
+    type: 'hint',
+    conceptId: conceptIds[0] || 'general',
+    conceptIds: conceptIds.length > 0 ? conceptIds : ['general'],
+    title,
+    content: hintContent,
+    contentFormat: 'markdown',
+    prerequisites: [],
+    addedTimestamp: Date.now(),
+    sourceInteractionIds: [],
+    sourceRefIds: sourceRefIds,
+    lastErrorSubtypeId: errorSubtype,
+    problemId, // Store which problem this hint belongs to
+    provenance: {
+      templateId: `adaptive-hint-rung-${rung}`,
+      modelId: 'llm-local',
+      generationParams: { rung, errorSubtype }
+    }
+  };
+  
+  // Save to textbook - use saveTextbookUnitV2 for deduplication
+  const result = storage.saveTextbookUnitV2(
+    learnerId,
+    {
+      type: 'hint',
+      conceptId: unit.conceptId,
+      conceptIds: unit.conceptIds,
+      title: unit.title,
+      content: unit.content,
+      contentFormat: 'markdown',
+      sourceInteractionIds: unit.sourceInteractionIds,
+      sourceRefIds: unit.sourceRefIds,
+      lastErrorSubtypeId: errorSubtype,
+      problemId,
+      provenance: unit.provenance
+    },
+    problemId // Pass problemId for organization
+  );
+  
+  if (result.success) {
+    console.log(`[HintSave] Saved ${rungLabels[rung]} to textbook for problem ${problemId}`);
+  }
+}
+
+/**
+ * Generate adaptive hint with pedagogical progression
+ * 
+ * This function creates progressively more helpful hints following a strict
+ * pedagogical ladder that never gives away the answer.
+ * 
+ * Pedagogical Progression:
+ * - Rung 1 (Subtle Nudge): Max 100 chars, vague direction, NO code
+ * - Rung 2 (Guiding Question): Max 250 chars, leading questions, cites sources
+ * - Rung 3 (Explicit Direction): Max 500 chars, clear explanation, partial patterns only
+ * 
+ * @param context - Context for hint generation including rung, error, problem, previous hints
+ * @param llmCall - Function to call LLM with a prompt
+ * @returns Promise resolving to parsed hint output
+ */
+export async function generateAdaptiveHint(
+  context: AdaptiveHintContext,
+  llmCall: (prompt: string) => Promise<string>
+): Promise<AdaptiveHintOutput> {
+  const { rung, errorSubtype, problem, previousHints, textbookUnits, pdfPassages } = context;
+  
+  // Build rung-specific prompt
+  const prompt = buildAdaptivePrompt(context);
+  
+  try {
+    console.log(`[AdaptiveHint] Generating rung ${rung} hint for ${errorSubtype}...`);
+    
+    // Call LLM with the adaptive prompt
+    const rawOutput = await llmCall(prompt);
+    
+    // Parse and validate the output
+    const parsed = parseAdaptiveOutput(rawOutput, rung);
+    
+    console.log(`[AdaptiveHint] Generated hint (${parsed.content.length} chars):`, parsed.content.slice(0, 50) + '...');
+    
+    return parsed;
+  } catch (error) {
+    console.error('[AdaptiveHint] Generation failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Build adaptive prompt based on rung level
+ * Each rung has strict pedagogical constraints
+ */
+function buildAdaptivePrompt(context: AdaptiveHintContext): string {
+  const { rung, errorSubtype, problem, previousHints, textbookUnits, pdfPassages, sqlEngageRecords } = context;
+  
+  // Common context building
+  const problemContext = `
+PROBLEM: ${problem.title}
+DESCRIPTION: ${problem.description}
+SCHEMA: ${problem.schema.slice(0, 200)}...`;
+
+  const previousHintsContext = previousHints.length > 0
+    ? `\nPREVIOUS HINTS GIVEN:\n${previousHints.map((h, i) => `${i + 1}. ${h}`).join('\n')}`
+    : '\nNo previous hints given.';
+
+  const textbookContext = textbookUnits.length > 0
+    ? `\nRELEVANT TEXTBOOK UNITS:\n${textbookUnits.map(u => `- "${u.title}": ${u.content.slice(0, 100)}...`).join('\n')}`
+    : '\nNo textbook units available.';
+
+  const pdfContext = pdfPassages.length > 0
+    ? `\nRELEVANT PDF PASSAGES:\n${pdfPassages.map((p, i) => `[${p.docId} p.${p.page}]: ${p.snippet?.slice(0, 80) || '...'}...`).join('\n')}`
+    : '\nNo PDF passages available.';
+
+  const sqlEngageContext = sqlEngageRecords.length > 0
+    ? `\nSQL-ENGAGE REFERENCE:\nError Type: ${sqlEngageRecords[0].error_subtype}\nGuidance: ${sqlEngageRecords[0].feedback_target}`
+    : '';
+
+  // Rung-specific prompts with strict pedagogical constraints
+  if (rung === 1) {
+    return `You are a SQL tutor providing SUBTLE NUDGES. Your goal is to point learners in the right direction WITHOUT giving away the answer.
+
+## STRICT CONSTRAINTS FOR RUNG 1 (SUBTLE NUDGE):
+- MAXIMUM 100 characters (be extremely brief)
+- NO code examples, NO specific syntax, NO SQL keywords as solutions
+- NO direct answers or "you should write..."
+- Point to relevant concept WITHOUT naming it explicitly
+- Use vague directional language like "Think about...", "Consider..."
+- Focus on WHAT to think about, not HOW to do it
+
+## EXAMPLES OF GOOD RUNG 1 HINTS:
+- "Think about what comes after SELECT in a basic query pattern."
+- "Consider which clause specifies where data comes from."
+- "What determines which rows appear in your results?"
+- "There's a missing piece connecting your tables."
+
+## FORMAT REQUIREMENTS:
+Respond with ONLY the hint text (max 100 chars), then on new lines:
+conceptIds: ["concept-id-1"]
+
+${problemContext}
+ERROR TYPE: ${errorSubtype}
+${previousHintsContext}
+${textbookContext}${pdfContext}${sqlEngageContext}
+
+Generate a SUBTLE NUDGE (max 100 chars, NO code, NO specific syntax):`;
+  }
+
+  if (rung === 2) {
+    return `You are a SQL tutor providing GUIDING QUESTIONS. Help learners discover the answer through questioning.
+
+## STRICT CONSTRAINTS FOR RUNG 2 (GUIDING QUESTION):
+- MAXIMUM 250 characters
+- Ask LEADING QUESTIONS, not statements
+- Reference textbook/PDF with citations like "(see your notes on SELECT)" or "(p.12)"
+- Hint at structure WITHOUT giving code
+- NO copy-paste solutions
+- Guide the learner to think through the logic
+
+## EXAMPLES OF GOOD RUNG 2 HINTS:
+- "Which table contains the user data? Check your textbook notes on table selection (p.12)."
+- "What condition would filter for active users? See your notes on WHERE clauses."
+- "How do you connect the orders table to users? Think about the relationship between them."
+- "Every JOIN needs an ON clause. What's the matching column between these tables?"
+
+## FORMAT REQUIREMENTS:
+Respond with the guiding question/statement (max 250 chars), then on new lines:
+conceptIds: ["concept-id-1", "concept-id-2"]
+sourceRefIds: ["doc:chunk:page"]
+
+${problemContext}
+ERROR TYPE: ${errorSubtype}
+${previousHintsContext}
+${textbookContext}${pdfContext}${sqlEngageContext}
+
+Generate a GUIDING QUESTION (max 250 chars, cite sources, NO code solutions):`;
+  }
+
+  // Rung 3
+  return `You are a SQL tutor providing EXPLICIT DIRECTION. Give clear guidance but NEVER the complete answer.
+
+## STRICT CONSTRAINTS FOR RUNG 3 (EXPLICIT DIRECTION):
+- MAXIMUM 500 characters
+- Clear explanation of WHAT to do
+- Can show partial patterns like "SELECT ___ FROM ___ WHERE ___" (blanks required)
+- Cite multiple sources from textbook/PDF
+- NO copy-paste solution - learner must fill in the blanks
+- Explain the CONCEPT, not just syntax
+
+## EXAMPLES OF GOOD RUNG 3 HINTS:
+- "You need to specify both the columns (after SELECT) and the table (after FROM). Structure: SELECT ___ FROM ___. From your textbook: 'Every SELECT needs a FROM clause' (p.12)."
+- "To filter results, use WHERE with a condition. Pattern: SELECT columns FROM table WHERE condition. See your notes on filtering data (p.45)."
+- "Joining tables requires: SELECT ___ FROM table1 JOIN table2 ON ___. The ON clause specifies how tables connect. Check your notes on JOIN conditions."
+
+## FORMAT REQUIREMENTS:
+Respond with the explicit direction (max 500 chars), then on new lines:
+conceptIds: ["concept-id-1", "concept-id-2"]
+sourceRefIds: ["doc:chunk:page", "doc:chunk:page2"]
+
+${problemContext}
+ERROR TYPE: ${errorSubtype}
+${previousHintsContext}
+${textbookContext}${pdfContext}${sqlEngageContext}
+
+Generate EXPLICIT DIRECTION (max 500 chars, use ___ for blanks, cite sources, NO complete solutions):`;
+}
+
+/**
+ * Parse LLM output for adaptive hints
+ * Validates against rung-specific constraints
+ */
+function parseAdaptiveOutput(rawOutput: string, rung: 1 | 2 | 3): AdaptiveHintOutput {
+  let content = rawOutput;
+  const conceptIds: string[] = [];
+  const sourceRefIds: string[] = [];
+
+  // Debug logging for L1 hint issues
+  if (rung === 1 && process.env.NODE_ENV !== 'production') {
+    console.log('[AdaptiveHint] Raw LLM output:', rawOutput.slice(0, 500));
+  }
+
+  // Extract conceptIds
+  const conceptIdsMatch = rawOutput.match(/conceptIds:\s*\[([^\]]*)\]/i);
+  if (conceptIdsMatch) {
+    content = content.replace(conceptIdsMatch[0], '').trim();
+    const ids = conceptIdsMatch[1]
+      .split(',')
+      .map(id => id.trim().replace(/["']/g, ''))
+      .filter(Boolean);
+    conceptIds.push(...ids);
+  }
+
+  // Extract sourceRefIds
+  const sourceRefIdsMatch = rawOutput.match(/sourceRefIds:\s*\[([^\]]*)\]/i);
+  if (sourceRefIdsMatch) {
+    content = content.replace(sourceRefIdsMatch[0], '').trim();
+    const ids = sourceRefIdsMatch[1]
+      .split(',')
+      .map(id => id.trim().replace(/["']/g, ''))
+      .filter(Boolean);
+    sourceRefIds.push(...ids);
+  }
+
+  // Clean up any echoed prompt content
+  // Use multiline (^) matching to only remove lines that START with these keywords
+  const promptEchoPatterns = [
+    /^PROBLEM:.*$/gim,
+    /^DESCRIPTION:.*$/gim,
+    /^SCHEMA:.*$/gim,
+    /^ERROR TYPE:.*$/gim,
+    /^PREVIOUS HINTS GIVEN:.*$/gim,
+    /^RELEVANT TEXTBOOK UNITS:.*$/gim,
+    /^RELEVANT PDF PASSAGES:.*$/gim,
+    /^SQL-ENGAGE REFERENCE:.*$/gim,
+    /^Generate (?:a )?(?:SUBTLE NUDGE|GUIDING QUESTION|EXPLICIT DIRECTION).*$/gim,
+    // Additional artifacts from LLM output
+    /^##?\s*GENERATED HINT:?.*$/gim,
+    /^##?\s*HINT:?.*$/gim,
+    /^##?\s*RUNG \d HINT:?.*$/gim,
+    /^##?\s*RESPONSE:?.*$/gim,
+    /^Here is (?:a |the )?(?:hint|response|answer):?.*$/gim,
+    /^\*\*Hint:\*\s*/gi,
+    /^\*\*Response:\*\s*/gi,
+  ];
+
+  for (const pattern of promptEchoPatterns) {
+    content = content.replace(pattern, '');
+  }
+
+  // Clean up multiple newlines
+  content = content.replace(/\n{3,}/g, '\n\n').trim();
+
+  // Debug logging after cleanup (for L1 rung)
+  if (rung === 1 && process.env.NODE_ENV !== 'production') {
+    console.log('[AdaptiveHint] Content after cleanup:', content.slice(0, 200) || '(empty)');
+  }
+
+  // Enforce length constraints based on rung
+  const maxLengths = { 1: 100, 2: 250, 3: 500 };
+  const maxLength = maxLengths[rung];
+  
+  if (content.length > maxLength) {
+    console.warn(`[AdaptiveHint] Hint exceeded max length (${content.length} > ${maxLength}), truncating...`);
+    content = content.slice(0, maxLength - 3) + '...';
+  }
+
+  return { content: content.trim(), conceptIds, sourceRefIds };
+}
+
+/**
+ * Generate LLM-enhanced hint with adaptive pedagogical progression
  */
 async function generateLLMEnhancedHint(
   options: HintGenerationOptions,
@@ -340,47 +695,98 @@ async function generateLLMEnhancedHint(
 ): Promise<EnhancedHint> {
   const { rung, errorSubtypeId } = options;
   
-  // Import LLM contracts dynamically to avoid circular dependencies
-  const { generateGuidanceFromLLM, validateLLMOutput } = await import('./llm-contracts');
+  if (!errorSubtypeId) {
+    throw new Error('Cannot generate LLM hint without errorSubtypeId');
+  }
+
+  // Import LLM client dynamically to avoid circular dependencies
+  const { generateWithOllama } = await import('./llm-client');
   
   try {
-    // Generate using LLM with full retrieval bundle
-    const llmOutput = await generateGuidanceFromLLM(rung, retrievalBundle);
+    console.log('[EnhancedHint] Generating adaptive LLM hint for rung', rung, '...');
     
-    // Validate output
-    const validation = validateLLMOutput(llmOutput.content, rung, retrievalBundle);
+    // Build adaptive hint context
+    const problem = getProblemById(options.problemId);
+    if (!problem) {
+      throw new Error(`Problem not found: ${options.problemId}`);
+    }
+
+    // Get previous hints from recent interactions
+    const previousHints = options.recentInteractions
+      .filter(i => i.eventType === 'hint_view' && i.hintText)
+      .map(i => i.hintText!)
+      .slice(-3); // Last 3 hints
+
+    // Get SQL-Engage records for context
+    const canonicalSubtype = canonicalizeSqlEngageSubtype(errorSubtypeId);
+    const sqlEngageRecords = getSqlEngageRowsBySubtype(canonicalSubtype);
+
+    // Build the adaptive context
+    const adaptiveContext: AdaptiveHintContext = {
+      rung,
+      errorSubtype: errorSubtypeId,
+      problem,
+      previousHints,
+      textbookUnits: retrievalBundle.textbookUnits || [],
+      pdfPassages: retrievalBundle.pdfPassages.map(p => ({
+        docId: p.docId,
+        chunkId: p.chunkId,
+        page: p.page,
+        score: 0,
+        snippet: p.text
+      })),
+      sqlEngageRecords
+    };
+
+    // Create LLM call function
+    const llmCall = async (prompt: string): Promise<string> => {
+      const result = await generateWithOllama(prompt);
+      return result.text;
+    };
+
+    // Generate using adaptive hint algorithm
+    const hintOutput = await generateAdaptiveHint(adaptiveContext, llmCall);
     
-    if (validation.valid) {
-      return {
-        content: llmOutput.content,
+    console.log('[EnhancedHint] Adaptive hint generated:', hintOutput.content.slice(0, 50) + '...');
+    
+    // Save hint to textbook for future reference
+    try {
+      await saveHintToTextbook(
+        options.learnerId,
+        options.problemId,
         rung,
-        sources: {
-          sqlEngage: resources.sqlEngage,
-          textbook: Boolean(retrievalBundle.textbookUnits?.length),
-          llm: true,
-          pdfPassages: resources.pdfIndex
-        },
-        conceptIds: llmOutput.conceptIds || [],
-        sourceRefIds: llmOutput.sourceRefIds,
-        textbookUnits: retrievalBundle.textbookUnits,
-        llmGenerated: true,
-        confidence: 0.9 // High confidence for LLM-generated
-      };
+        hintOutput.content,
+        errorSubtypeId,
+        hintOutput.conceptIds,
+        hintOutput.sourceRefIds
+      );
+    } catch (saveError) {
+      console.warn('[EnhancedHint] Failed to save hint to textbook:', saveError);
     }
     
-    // Validation failed → Fall back to SQL-Engage
-    console.warn('[EnhancedHint] LLM validation failed, using fallback:', validation.errors);
+    // Return LLM-generated hint
+    return {
+      content: hintOutput.content,
+      rung,
+      sources: {
+        sqlEngage: resources.sqlEngage,
+        textbook: Boolean(retrievalBundle.textbookUnits?.length),
+        llm: true,
+        pdfPassages: resources.pdfIndex
+      },
+      conceptIds: hintOutput.conceptIds,
+      sourceRefIds: hintOutput.sourceRefIds,
+      textbookUnits: retrievalBundle.textbookUnits,
+      llmGenerated: true,
+      confidence: 0.9 // High confidence for LLM-generated
+    };
     
   } catch (error) {
-    console.warn('[EnhancedHint] LLM generation failed:', error);
-  }
-  
-  // Fallback to SQL-Engage if LLM fails
-  if (errorSubtypeId) {
+    console.warn('[EnhancedHint] Adaptive LLM generation failed:', error);
+    
+    // Fallback to SQL-Engage if adaptive hint generation fails
     return generateSqlEngageFallbackHint(errorSubtypeId, rung);
   }
-  
-  throw new Error('Failed to generate hint with all available methods');
 }
 
 /**
@@ -460,4 +866,4 @@ export async function preloadHintContext(
 }
 
 // Export version for tracking
-export const ENHANCED_HINT_SERVICE_VERSION = 'enhanced-hint-v1.0.0';
+export const ENHANCED_HINT_SERVICE_VERSION = 'enhanced-hint-v2.0.0-adaptive';

@@ -48,6 +48,7 @@ export function TextbookPage() {
   const [selectedConcept, setSelectedConcept] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'concepts' | 'problems'>('concepts');
 
   // Storage change listener for reactive updates
   const [storageVersion, setStorageVersion] = useState(0);
@@ -181,6 +182,37 @@ export function TextbookPage() {
     return { totalUnits, conceptsCovered, autoCreatedUnits };
   }, [textbookUnits]);
 
+  // Group units by problem for folder view
+  const unitsByProblem = useMemo(() => {
+    const grouped = new Map<string, typeof textbookUnits>();
+    
+    for (const unit of textbookUnits) {
+      const pid = unit.problemId || 'unknown';
+      if (!grouped.has(pid)) {
+        grouped.set(pid, []);
+      }
+      grouped.get(pid)!.push(unit);
+    }
+    
+    return grouped;
+  }, [textbookUnits]);
+
+  // Get problem names for display
+  const problemNames = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const unit of textbookUnits) {
+      if (unit.problemId && !names.has(unit.problemId)) {
+        // Try to extract a readable name from problemId
+        const name = unit.problemId
+          .replace(/-/g, ' ')
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, l => l.toUpperCase());
+        names.set(unit.problemId, name);
+      }
+    }
+    return names;
+  }, [textbookUnits]);
+
   // Apply filters
   const filteredAttempts = useMemo(
     () => learnerInteractions.filter((interaction) => {
@@ -251,6 +283,24 @@ export function TextbookPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {/* View Mode Toggle */}
+                <div className="flex items-center gap-2 mr-2">
+                  <span className="text-sm text-gray-500">View by:</span>
+                  <div className="flex rounded-lg border bg-white overflow-hidden">
+                    <button
+                      onClick={() => setViewMode('concepts')}
+                      className={`px-3 py-1.5 text-sm ${viewMode === 'concepts' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      Concepts
+                    </button>
+                    <button
+                      onClick={() => setViewMode('problems')}
+                      className={`px-3 py-1.5 text-sm ${viewMode === 'problems' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      Problems
+                    </button>
+                  </div>
+                </div>
                 {/* Student learning stats */}
                 {isStudent && (
                   <div className="hidden sm:flex items-center gap-3 mr-2">
@@ -330,13 +380,63 @@ export function TextbookPage() {
           )}
 
           <div className="flex-1 min-h-0">
-            <AdaptiveTextbook
-              learnerId={learnerId}
-              selectedUnitId={selectedUnitId}
-              activeEvidenceId={selectedAttemptId}
-              onSelectedUnitChange={handleSelectedUnitChange}
-              buildEvidenceHref={buildEvidenceHref}
-            />
+            {viewMode === 'concepts' ? (
+              <AdaptiveTextbook
+                learnerId={learnerId}
+                selectedUnitId={selectedUnitId}
+                activeEvidenceId={selectedAttemptId}
+                onSelectedUnitChange={handleSelectedUnitChange}
+                buildEvidenceHref={buildEvidenceHref}
+              />
+            ) : (
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold text-gray-800">Learning by Problem</h2>
+                {unitsByProblem.size === 0 ? (
+                  <Card className="p-8 text-center">
+                    <BookOpen className="size-12 mx-auto mb-3 text-gray-300" />
+                    <p className="text-gray-500">No notes yet. Start practicing to build your textbook!</p>
+                  </Card>
+                ) : (
+                  Array.from(unitsByProblem.entries()).map(([pid, units]) => (
+                    <div key={pid} className="border rounded-lg bg-white overflow-hidden">
+                      <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
+                        <h3 className="font-medium text-gray-900">
+                          {problemNames.get(pid) || pid}
+                        </h3>
+                        <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
+                          {units.length} notes
+                        </span>
+                      </div>
+                      <div className="p-4 space-y-3">
+                        {units.slice(0, 3).map(unit => (
+                          <div key={unit.id} className="text-sm">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                unit.type === 'hint' ? 'bg-amber-100 text-amber-700' :
+                                unit.type === 'explanation' ? 'bg-blue-100 text-blue-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {unit.type}
+                              </span>
+                              <span className="font-medium text-gray-800">{unit.title}</span>
+                            </div>
+                            <p className="text-gray-600 line-clamp-2">{unit.content}</p>
+                          </div>
+                        ))}
+                        {units.length > 3 && (
+                          <button 
+                            onClick={() => setViewMode('concepts')}
+                            className="text-sm text-blue-600 hover:text-blue-700"
+                          >
+                            + {units.length - 3} more
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
 
           {/* Trace Attempts section - simplified for students, full for instructors */}

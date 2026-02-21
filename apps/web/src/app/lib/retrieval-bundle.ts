@@ -1,4 +1,4 @@
-import { SQLProblem, InteractionEvent, PdfIndexProvenance } from '../types';
+import { SQLProblem, InteractionEvent, PdfIndexProvenance, InstructionalUnit } from '../types';
 import {
   canonicalizeSqlEngageSubtype,
   getConceptById,
@@ -129,6 +129,8 @@ export type RetrievalBundle = {
     conceptId: string;
     sourceRefIds: string[];
   }>;
+  // Textbook units for enhanced hint generation
+  textbookUnits?: InstructionalUnit[];
 };
 
 /**

@@ -76,7 +76,35 @@ export function HintSystem({
     triggered: boolean;
     helpRequestCount: number;
   }>({ triggered: false, helpRequestCount: 0 });
+  // Track which hints are enhanced (LLM-generated or use textbook)
+  const [enhancedHintInfo, setEnhancedHintInfo] = useState<Array<{
+    isEnhanced: boolean;
+    sources: { sqlEngage: boolean; textbook: boolean; llm: boolean; pdfPassages: boolean };
+  }>>([]);
   const MAX_DEDUPE_KEYS = 1000; // Prevent unbounded set growth
+  
+  // Persist enhanced hint info to localStorage
+  const HINT_INFO_KEY = useMemo(() => `hint-info-${learnerId}-${problemId}`, [learnerId, problemId]);
+
+  // Load enhanced hint info from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(HINT_INFO_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setEnhancedHintInfo(parsed);
+      } catch {
+        // Ignore parse errors
+      }
+    }
+  }, [HINT_INFO_KEY]);
+
+  // Save enhanced hint info to localStorage on change
+  useEffect(() => {
+    if (enhancedHintInfo.length > 0) {
+      localStorage.setItem(HINT_INFO_KEY, JSON.stringify(enhancedHintInfo));
+    }
+  }, [enhancedHintInfo, HINT_INFO_KEY]);
   
   // Guidance Ladder constants
   const MAX_HINT_LEVEL = 3; // L1-L3 hints before escalation to explanation
@@ -128,6 +156,8 @@ export function HintSystem({
     setConceptIds([]);
     setShowSourceViewer(false);
     setAutoEscalationInfo({ triggered: false, helpRequestCount: 0 });
+    setEnhancedHintInfo([]);
+    localStorage.removeItem(HINT_INFO_KEY);
     // Reset refs to ensure clean state for new problem
     helpFlowKeyRef.current = '';
     nextHelpRequestIndexRef.current = 1;
@@ -355,6 +385,18 @@ export function HintSystem({
       });
       setHintPdfPassages(reconstructedPassages);
       
+      // Reconstruct enhanced hint info from history
+      const reconstructedEnhancedInfo = hintEvents.map(event => ({
+        isEnhanced: event.outputs?.is_enhanced || false,
+        sources: {
+          sqlEngage: true,
+          textbook: event.outputs?.is_enhanced || false,
+          llm: event.ruleFired === 'enhanced-hint',
+          pdfPassages: (event.retrievedSourceIds || []).some(id => id.includes('doc-'))
+        }
+      }));
+      setEnhancedHintInfo(reconstructedEnhancedInfo);
+      
       // Check if explanation was shown
       const hasExplanation = problemTrace.some(
         (interaction) => interaction.eventType === 'explanation_view'
@@ -522,11 +564,22 @@ export function HintSystem({
       sessionId
     });
 
+    // Check if we're already in escalation/explanation mode - don't increment counter
+    if (showExplanation || autoEscalationInfo.triggered) {
+      // Just re-trigger explanation without incrementing
+      const problemTrace = getProblemTrace();
+      await handleShowExplanation('manual', undefined, problemTrace);
+      setIsProcessingHint(false);
+      return;
+    }
+    
     const problemTrace = getProblemTrace();
     const nextHelpRequestIndex = allocateNextHelpRequestIndex(problemTrace);
+    
     if (nextHelpRequestIndex >= 4) {
       setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
-      handleShowExplanation('auto', nextHelpRequestIndex, problemTrace);
+      // Wait for explanation to be generated
+      await handleShowExplanation('auto', nextHelpRequestIndex, problemTrace);
       setIsProcessingHint(false);
       return;
     }
@@ -577,6 +630,12 @@ export function HintSystem({
 
     setHints((currentHints) => [...currentHints, hintSelection!.hintText]);
     setHintPdfPassages((current) => [...current, hintSelection!.pdfPassages]);
+    setEnhancedHintInfo((current) => [...current, {
+      isEnhanced: hintSelection!.isEnhanced,
+      sources: hintSelection!.isEnhanced ? 
+        { sqlEngage: true, textbook: availableResources.textbook, llm: availableResources.llm, pdfPassages: hintSelection!.pdfPassages.length > 0 } :
+        { sqlEngage: true, textbook: false, llm: false, pdfPassages: false }
+    }]);
     setActiveHintSubtype(hintSelection!.sqlEngageSubtype);
     const errorCount = problemTrace.filter((interaction) => interaction.eventType === 'error').length;
     const hintCount = problemTrace.filter((interaction) => interaction.eventType === 'hint_view').length;
@@ -658,7 +717,7 @@ export function HintSystem({
     }
   };
 
-  const handleShowExplanation = (
+  const handleShowExplanation = async (
     source: 'auto' | 'manual' = 'auto',
     forcedHelpRequestIndex?: number,
     traceOverride?: InteractionEvent[]
@@ -791,10 +850,10 @@ export function HintSystem({
     : hints.length === 0
       ? 'Request Hint'
       : 'Next Hint';
-  const helpStep = Math.min(nextHelpRequestIndex, 4);
+  const hintProgress = Math.min(hints.length + (showExplanation ? 1 : 0), 4);
   const stepMessage = nextHelpRequestIndex >= 4
     ? 'You are in explanation mode. Additional help requests provide deeper explanation support.'
-    : `Request ${helpStep} gives Hint ${helpStep}.`;
+    : `Request ${hintProgress} gives Hint ${hintProgress}.`;
 
   return (
     <Card className="p-4 space-y-4 shadow-sm" data-testid="hint-panel">
@@ -806,7 +865,7 @@ export function HintSystem({
           </div>
           <div>
             <h3 className="font-semibold text-gray-900">Guidance Ladder</h3>
-            <p className="text-xs text-gray-500">Step {helpStep} of 4</p>
+            <p className="text-xs text-gray-500">Step {hintProgress} of 4</p>
           </div>
         </div>
         <RungIndicator rung={currentRung} size="sm" />
@@ -845,7 +904,13 @@ export function HintSystem({
           aria-atomic="true"
           className="sr-only"
         >
-          New hint available: {hints[hints.length - 1]}
+          New hint available: {hints[hints.length - 1]
+            .replace(/\*\*/g, '')
+            .replace(/\*/g, '')
+            .replace(/_/g, '')
+            .replace(/` /g, '')
+            .replace(/#{1,6}\s*/g, '')
+            .substring(0, 200)}
         </div>
       )}
       
@@ -871,52 +936,117 @@ export function HintSystem({
             const pdfPassages = hintPdfPassages[idx] || [];
             const hasPdfSources = pdfPassages.length > 0;
             const isExpanded = expandedHintIndex === idx;
+            const enhancedInfo = enhancedHintInfo[idx];
+            const isEnhanced = enhancedInfo?.isEnhanced;
+            const usesLLM = enhancedInfo?.sources.llm;
+            const usesTextbook = enhancedInfo?.sources.textbook;
             
             return (
-              <div key={idx} className="rounded-lg border border-blue-100 bg-gradient-to-br from-blue-50 to-blue-100/50 p-3 shadow-sm" data-testid={`hint-card-${idx}`}>
-                <div className="flex items-start gap-2">
-                  <span className={cn(
-                    "shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold border",
-                    idx === 0 ? "bg-green-100 text-green-700 border-green-200" :
-                    idx === 1 ? "bg-amber-100 text-amber-700 border-amber-200" :
-                    "bg-red-100 text-red-700 border-red-200"
-                  )}>
-                    <span data-testid={`hint-label-${idx + 1}`}>{`Hint ${idx + 1}`}</span>
-                    <span className="ml-1 text-[10px] opacity-70">{`L${idx + 1}`}</span>
-                  </span>
-                  <p className="text-sm leading-relaxed text-blue-900 break-words flex-1">{hint}</p>
-                </div>
-                
-                {hasPdfSources && (
-                  <div className="mt-2 pt-2 border-t border-gray-200/50">
-                    <button
-                      onClick={() => setExpandedHintIndex(isExpanded ? null : idx)}
-                      className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-900 transition-colors"
-                      aria-expanded={isExpanded}
-                      aria-controls={`hint-sources-${idx}`}
-                    >
-                      {isExpanded ? (
-                        <ChevronUp className="size-3.5" />
-                      ) : (
-                        <ChevronDown className="size-3.5" />
-                      )}
-                      <BookOpen className="size-3.5" />
-                      <span>
-                        {isExpanded ? 'Hide' : `Sources (${pdfPassages.length})`}
+              <div key={idx} className={cn(
+                "rounded-lg border-l-4 bg-white shadow-sm overflow-hidden",
+                isEnhanced 
+                  ? "border-l-purple-400 border-purple-100" 
+                  : "border-l-blue-400 border-gray-100"
+              )} data-testid={`hint-card-${idx}`}>
+                {/* Inner card for cleaner separation */}
+                <div className="p-4">
+                  {/* Compact header: level badge and AI badge on same line */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      {/* Level badge - compact */}
+                      <span className={cn(
+                        "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                        idx === 0 ? "bg-green-100 text-green-700" :
+                        idx === 1 ? "bg-amber-100 text-amber-700" :
+                        "bg-red-100 text-red-700"
+                      )}>
+                        <span data-testid={`hint-label-${idx + 1}`}>{`Hint ${idx + 1}`}</span>
+                        <span className="ml-1 opacity-70">{`L${idx + 1}`}</span>
                       </span>
-                    </button>
+                      
+                      {/* AI badge only - most important, compact */}
+                      {isEnhanced && usesLLM && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">
+                          <Sparkles className="size-3" />
+                          AI
+                        </span>
+                      )}
+                    </div>
                     
-                    {isExpanded && (
-                      <div id={`hint-sources-${idx}`} className="mt-2 space-y-2">
-                        <p className="text-[11px] text-blue-600 italic">
-                          The following passages from your uploaded PDF were used to generate this hint:
-                        </p>
+                    {/* Sources toggle button - right side */}
+                    {hasPdfSources && (
+                      <button
+                        onClick={() => setExpandedHintIndex(isExpanded ? null : idx)}
+                        className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-700 transition-colors"
+                        aria-expanded={isExpanded}
+                        aria-controls={`hint-sources-${idx}`}
+                      >
+                        {isExpanded ? (
+                          <ChevronUp className="size-3" />
+                        ) : (
+                          <ChevronDown className="size-3" />
+                        )}
+                        <span>
+                          {isExpanded ? 'Hide' : `Sources (${pdfPassages.length})`}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                  
+                  {/* Hint content - improved readability */}
+                  <div className={cn(
+                    "prose prose-sm max-w-none",
+                    isEnhanced ? "prose-purple" : "prose-blue"
+                  )}>
+                    {hint.startsWith('##') ? (
+                      // Render markdown-like content for structured hints (L3)
+                      <div 
+                        className={cn(
+                          "text-sm leading-7 whitespace-pre-wrap",
+                          isEnhanced ? "text-gray-800" : "text-gray-800"
+                        )}
+                        dangerouslySetInnerHTML={{ 
+                          __html: hint
+                            .replace(/## (.+)/g, '<h3 class="font-semibold text-base mt-3 mb-2 text-gray-900">$1</h3>')
+                            .replace(/\*\*(.+?)\*\*/g, '<strong class="text-gray-900">$1</strong>')
+                            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                            .replace(/_(.+?)_/g, '<em>$1</em>')
+                            .replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs text-gray-800">$1</code>')
+                            .replace(/- (.+)/g, '<li class="ml-4 mb-1">$1</li>')
+                            .replace(/```sql\n([\s\S]*?)```/g, '<pre class="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto my-2"><code>$1</code></pre>')
+                            .replace(/\n\n/g, '<br/>')
+                        }}
+                      />
+                    ) : (
+                      <p 
+                        className={cn(
+                          "text-sm leading-7 whitespace-pre-wrap",
+                          isEnhanced ? "text-gray-800" : "text-gray-800"
+                        )}
+                        dangerouslySetInnerHTML={{
+                          __html: hint
+                            .replace(/\*\*(.+?)\*\*/g, '<strong class="text-gray-900">$1</strong>')
+                            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                            .replace(/_(.+?)_/g, '<em>$1</em>')
+                            .replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs text-gray-800">$1</code>')
+                        }}
+                      />
+                    )}
+                  </div>
+                  
+                  {/* Collapsible sources - only shown when expanded */}
+                  {isExpanded && hasPdfSources && (
+                    <div id={`hint-sources-${idx}`} className="mt-4 pt-3 border-t border-gray-100">
+                      <p className="text-[11px] text-gray-500 italic mb-2">
+                        The following passages from your uploaded PDF were used to generate this hint:
+                      </p>
+                      <div className="space-y-2">
                         {pdfPassages.map((passage, pidx) => (
                           <div 
                             key={passage.chunkId} 
-                            className="p-2 bg-white border border-blue-100 rounded text-xs"
+                            className="p-3 bg-gray-50 border border-gray-100 rounded-md"
                           >
-                            <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mb-1">
+                            <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mb-1.5">
                               <FileText className="size-3" />
                               <span className="font-medium">{passage.docId}</span>
                               <span>·</span>
@@ -927,15 +1057,15 @@ export function HintSystem({
                                 </span>
                               )}
                             </div>
-                            <p className="text-gray-700 leading-relaxed line-clamp-4">
+                            <p className="text-xs text-gray-700 leading-relaxed line-clamp-4">
                               {passage.text}
                             </p>
                           </div>
                         ))}
                       </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -990,10 +1120,10 @@ export function HintSystem({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                onClick={() => handleShowExplanation('manual')}
+                onClick={() => void handleShowExplanation('manual')}
                 variant="secondary"
                 className="w-full h-9 text-sm px-2"
-                disabled={!profile || !sessionId || !errorSubtypeId}
+                disabled={!profile || !sessionId || !errorSubtypeId || isProcessingHint}
               >
                 <Sparkles className="size-3.5 mr-1.5 shrink-0" />
                 <span className="truncate">Explain</span>
