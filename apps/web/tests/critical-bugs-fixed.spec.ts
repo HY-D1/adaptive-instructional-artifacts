@@ -37,17 +37,49 @@ import {
 test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
 
   test.beforeEach(async ({ page }) => {
+    // Stub LLM calls to prevent ECONNREFUSED errors
+    await page.route('**/ollama/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: '{"title": "Test", "content_markdown": "Test content", "key_points": [], "common_pitfall": "", "next_steps": [], "source_ids": []}'
+        })
+      });
+    });
+    await page.route('**/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: '{"title": "Test", "content_markdown": "Test content", "key_points": [], "common_pitfall": "", "next_steps": [], "source_ids": []}'
+        })
+      });
+    });
+
+    // Idempotent init script - only runs once per test
     await page.addInitScript(() => {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
-      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      const FLAG = '__pw_seeded__';
+      if (localStorage.getItem(FLAG) === '1') return;
+      
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.setItem('sql-adapt-welcome-seen', 'true');
       // Set up student profile to bypass role selection
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: 'test-user',
         name: 'Test User',
         role: 'student',
         createdAt: Date.now()
       }));
+      
+      localStorage.setItem(FLAG, '1');
+    });
+  });
+
+  test.afterEach(async ({ page }) => {
+    await page.evaluate(() => {
+      localStorage.removeItem('__pw_seeded__');
     });
   });
 
@@ -210,13 +242,13 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
 
     // Progress through hints 1→2→3 (help requests 1→2→3)
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByTestId('hint-panel').getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
     
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByTestId('hint-panel').getByText('Hint 2', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-2')).toBeVisible();
     
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByTestId('hint-panel').getByText('Hint 3', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-3')).toBeVisible();
 
     // After viewing Hint 3, auto-escalation may have triggered
     // Get current explanation count
@@ -251,7 +283,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     await page.getByRole('button', { name: 'Next Hint' }).click();
     
     // Wait for Hint 3 to be visible
-    await expect(page.getByTestId('hint-panel').getByText('Hint 3', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-3')).toBeVisible();
     
     // Click "Get More Help" for escalation
     await page.getByRole('button', { name: 'Get More Help' }).click();
@@ -520,13 +552,13 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
 
     // Progress through hints to reach escalation
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByTestId('hint-panel').getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
     
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByTestId('hint-panel').getByText('Hint 2', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-2')).toBeVisible();
     
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByTestId('hint-panel').getByText('Hint 3', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-3')).toBeVisible();
 
     // Click "Get More Help" to trigger explanation
     await page.getByRole('button', { name: 'Get More Help' }).click();
@@ -646,7 +678,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     await expect(page).toHaveURL(/\/textbook/);
 
     await page.getByRole('link', { name: 'Practice' }).first().click();
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/practice/);
     await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
 
     // Wait for editor to remount
@@ -836,7 +868,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     await runUntilErrorCount(page, runQueryButton, 1);
 
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByText('Hint 1')).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
 
     // Verify hint event has conceptIds
     const hintEvents = await getHintEventsFromStorage(page);
@@ -999,13 +1031,13 @@ test.describe('@critical-bugs Integration Tests for Critical Bug Fixes', () => {
 
     // Step 2: Request hints through the ladder
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByTestId('hint-panel').getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
     
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByTestId('hint-panel').getByText('Hint 2', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-2')).toBeVisible();
     
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByTestId('hint-panel').getByText('Hint 3', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-3')).toBeVisible();
 
     // Step 3: Escalate to explanation (help request 4)
     await page.getByRole('button', { name: 'Get More Help' }).click();

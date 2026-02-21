@@ -17,11 +17,51 @@ import { expect, test } from '@playwright/test';
 
 test.describe('@weekly Week 3 Ask My Textbook', () => {
   test.beforeEach(async ({ page }) => {
-    // Set up localStorage BEFORE page loads using addInitScript
+    // Stub LLM calls to prevent connection refused in CI (both URL patterns)
+    await page.route('**/ollama/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: '{"title": "Chat Response", "content_markdown": "This is a test chat response for CI.", "key_points": ["Point 1"], "common_pitfall": "None", "next_steps": ["Practice"], "source_ids": ["src-1"]}'
+        })
+      });
+    });
+    
+    await page.route('**/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: '{"title": "Chat Response", "content_markdown": "This is a test chat response for CI.", "key_points": ["Point 1"], "common_pitfall": "None", "next_steps": ["Practice"], "source_ids": ["src-1"]}'
+        })
+      });
+    });
+    
+    await page.route('**/ollama/api/tags', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ models: [{ name: 'qwen2.5:1.5b-instruct' }] })
+      });
+    });
+    
+    await page.route('**/api/tags', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ models: [{ name: 'qwen2.5:1.5b-instruct' }] })
+      });
+    });
+    
+    // Idempotent init script - only runs once per test
     await page.addInitScript(() => {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
-      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      const FLAG = '__pw_seeded__';
+      if (localStorage.getItem(FLAG) === '1') return;
+      
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.setItem('sql-adapt-welcome-seen', 'true');
       
       // Set up NEW format profile for authentication (Required by ProtectedRoute)
       const userProfile = {
@@ -30,7 +70,7 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
         role: 'student',
         createdAt: Date.now()
       };
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(userProfile));
+      localStorage.setItem('sql-adapt-user-profile', JSON.stringify(userProfile));
       
       // Set up OLD format profile for LearningInterface data
       const profiles = [{
@@ -43,17 +83,20 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
         conceptCoverageEvidence: [],
         errorHistory: []
       }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
+      localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
       
       // Session ID must follow format: session-${learnerId}-${timestamp}
-      window.localStorage.setItem('sql-learning-active-session', 'session-learner-1-1234567890');
+      localStorage.setItem('sql-learning-active-session', 'session-learner-1-1234567890');
+      
+      localStorage.setItem(FLAG, '1');
     });
   });
 
   test.afterEach(async ({ page }) => {
     await page.evaluate(() => {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.removeItem('__pw_seeded__');
     });
   });
 

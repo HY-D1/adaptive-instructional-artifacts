@@ -250,10 +250,17 @@ export function LearningInterface() {
     const expectedPrefix = `session-${learnerId}-`;
     const belongsToLearner = activeSessionId?.startsWith(expectedPrefix) === true && 
       activeSessionId.length > expectedPrefix.length;
+    
+    // First, try to find any existing draft for this learner+problem (handles navigation)
+    const existingDraft = storage.findAnyPracticeDraft(learnerId, currentProblem.id);
+    
+    // Use existing session if valid, otherwise create new one
     const newSessionId = belongsToLearner
       ? activeSessionId
       : storage.startSession(learnerId);
-    const restoredDraft = storage.getPracticeDraft(learnerId, newSessionId, currentProblem.id);
+    
+    // Restore draft: prefer existing draft from any session, then try current session
+    const restoredDraft = existingDraft ?? storage.getPracticeDraft(learnerId, newSessionId, currentProblem.id);
     
     setSessionId(newSessionId);
     setSqlDraft(restoredDraft ?? DEFAULT_SQL_EDITOR_CODE);

@@ -2,17 +2,29 @@ import { expect, test } from '@playwright/test';
 
 test.describe('@integration PDF Retrieval and LLM Integration', () => {
   test.beforeEach(async ({ page }) => {
+    // Idempotent init script - only runs once per test
     await page.addInitScript(() => {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
-      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      const FLAG = '__pw_seeded__';
+      if (localStorage.getItem(FLAG) === '1') return;
+      
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.setItem('sql-adapt-welcome-seen', 'true');
       // CRITICAL: Set up user profile for role-based auth
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: 'test-user',
         name: 'Test User',
         role: 'student',
         createdAt: Date.now()
       }));
+      
+      localStorage.setItem(FLAG, '1');
+    });
+  });
+
+  test.afterEach(async ({ page }) => {
+    await page.evaluate(() => {
+      localStorage.removeItem('__pw_seeded__');
     });
   });
 

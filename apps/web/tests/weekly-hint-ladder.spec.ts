@@ -88,18 +88,67 @@ async function getActiveSessionId(page: Page): Promise<string | null> {
 // =============================================================================
 
 test.beforeEach(async ({ page }) => {
-  // Clear all storage and set welcome flag to suppress modal
+  // Stub LLM calls to prevent connection refused in CI
+  // Stub both URL patterns for LLM endpoints
+  await page.route('**/ollama/api/generate', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        response: '{"title": "Test Explanation", "content_markdown": "This is a test explanation for CI.", "key_points": ["Point 1"], "common_pitfall": "None", "next_steps": ["Practice"], "source_ids": ["src-1"]}'
+      })
+    });
+  });
+  
+  await page.route('**/api/generate', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        response: '{"title": "Test Explanation", "content_markdown": "This is a test explanation for CI.", "key_points": ["Point 1"], "common_pitfall": "None", "next_steps": ["Practice"], "source_ids": ["src-1"]}'
+      })
+    });
+  });
+  
+  await page.route('**/ollama/api/tags', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ models: [{ name: 'qwen2.5:1.5b-instruct' }] })
+    });
+  });
+  
+  await page.route('**/api/tags', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ models: [{ name: 'qwen2.5:1.5b-instruct' }] })
+    });
+  });
+  
+  // Idempotent init script - only runs once per test
   await page.addInitScript(() => {
-    window.localStorage.clear();
-    window.sessionStorage.clear();
-    window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    const FLAG = '__pw_seeded__';
+    if (localStorage.getItem(FLAG) === '1') return;
+    
+    localStorage.clear();
+    sessionStorage.clear();
+    localStorage.setItem('sql-adapt-welcome-seen', 'true');
     // Set up student profile to bypass StartPage role selection
-    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+    localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
       id: 'test-user',
       name: 'Test User',
       role: 'student',
       createdAt: Date.now()
     }));
+    
+    localStorage.setItem(FLAG, '1');
+  });
+});
+
+test.afterEach(async ({ page }) => {
+  await page.evaluate(() => {
+    localStorage.removeItem('__pw_seeded__');
   });
 });
 
@@ -133,7 +182,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
 
     // Step 2: Request first hint (Level 1)
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
 
     // Verify Level 1 hint was logged
     let hintEvents = await getHintEventsFromStorage(page);
@@ -143,7 +192,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
 
     // Step 3: Request second hint (Level 2)
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByText('Hint 2', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-2')).toBeVisible();
 
     // Verify Level 2 hint was logged
     hintEvents = await getHintEventsFromStorage(page);
@@ -153,7 +202,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
 
     // Step 4: Request third hint (Level 3)
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByText('Hint 3', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-3')).toBeVisible();
 
     // Verify Level 3 hint was logged
     hintEvents = await getHintEventsFromStorage(page);
@@ -188,13 +237,13 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
 
     // Progress through hints 1→2→3
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
     
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByText('Hint 2', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-2')).toBeVisible();
     
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByText('Hint 3', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-3')).toBeVisible();
 
     // Verify max hint level is 3
     const hintEvents = await getHintEventsFromStorage(page);
@@ -239,10 +288,10 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     await runUntilErrorCount(page, runQueryButton, 1);
 
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
     
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByText('Hint 2', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-2')).toBeVisible();
 
     // Verify hint events are stored in localStorage
     let hintEvents = await getHintEventsFromStorage(page);
@@ -297,7 +346,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     await runUntilErrorCount(page, runQueryButton, 1);
 
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
 
     const hintEvent = await getLastHintEvent(page);
     expect(hintEvent).not.toBeNull();
@@ -531,7 +580,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
 
     // Request first hint
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
     
     // Verify one hint event
     let hintEvents = await getHintEventsFromStorage(page);
@@ -540,7 +589,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     
     // Click next hint button once
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByText('Hint 2', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-2')).toBeVisible();
     
     // Verify we moved to level 2, not duplicated level 1
     hintEvents = await getHintEventsFromStorage(page);
@@ -627,7 +676,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     if (isEnabled) {
       await hintButton.click();
       // Should work with default profile
-      await expect(page.getByText('Hint 1', { exact: true })).toBeVisible();
+      await expect(page.getByTestId('hint-label-1')).toBeVisible();
     }
     // If disabled, that's also acceptable behavior for no-profile state
   });
@@ -943,13 +992,13 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
 
     // Progress through all 3 hint levels
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
     
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByText('Hint 2', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-2')).toBeVisible();
     
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByText('Hint 3', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-3')).toBeVisible();
 
     // After level 3, click "Get More Help" (help request 4) to trigger escalation
     await page.getByRole('button', { name: 'Get More Help' }).click();

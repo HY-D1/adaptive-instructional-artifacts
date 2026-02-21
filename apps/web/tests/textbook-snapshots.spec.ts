@@ -13,11 +13,29 @@
 import { expect, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
-  // Clear storage and set welcome seen
+  // Idempotent init script - only runs once per test
   await page.addInitScript(() => {
-    window.localStorage.clear();
-    window.sessionStorage.clear();
-    window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    const FLAG = '__pw_seeded__';
+    if (localStorage.getItem(FLAG) === '1') return;
+    
+    localStorage.clear();
+    sessionStorage.clear();
+    localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    // CRITICAL: Set up user profile for role-based auth
+    localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'learner-1',
+      name: 'Test User',
+      role: 'student',
+      createdAt: Date.now()
+    }));
+    
+    localStorage.setItem(FLAG, '1');
+  });
+});
+
+test.afterEach(async ({ page }) => {
+  await page.evaluate(() => {
+    localStorage.removeItem('__pw_seeded__');
   });
 });
 
@@ -67,7 +85,7 @@ test.describe('@weekly @no-external @snapshot Textbook Rendering Snapshots', () 
     });
 
     await page.goto('/textbook?learnerId=learner-1');
-    await page.getByRole('button', { name: 'Snapshot: Headings and Lists' }).click();
+    await page.getByLabel('Snapshot: Headings and Lists').click();
 
     // Wait for content to render
     const content = page.locator('.textbook-content, [class*="space-y-4"]').first();
@@ -81,7 +99,7 @@ test.describe('@weekly @no-external @snapshot Textbook Rendering Snapshots', () 
     await expect(content.locator('h1')).toHaveText('Main Heading');
     await expect(content.locator('h2')).toHaveText('Sub Heading');
     await expect(content.locator('h3')).toHaveText('Lists');
-    await expect(content.locator('ul > li')).toHaveCount(3);
+    await expect(content.locator('ul > li')).toHaveCount(4); // 3 main items + 1 nested
     await expect(content.locator('ol > li')).toHaveCount(3);
   });
 
@@ -130,7 +148,7 @@ test.describe('@weekly @no-external @snapshot Textbook Rendering Snapshots', () 
     });
 
     await page.goto('/textbook?learnerId=learner-1');
-    await page.getByRole('button', { name: 'Snapshot: Code Blocks' }).click();
+    await page.getByLabel('Snapshot: Code Blocks').click();
 
     const content = page.locator('.textbook-content, [class*="space-y-4"]').first();
     await expect(content).toBeVisible();
@@ -140,8 +158,8 @@ test.describe('@weekly @no-external @snapshot Textbook Rendering Snapshots', () 
     expect(htmlSnapshot).toMatchSnapshot('code-blocks.html');
 
     // Verify code elements
-    await expect(content.locator('pre code')).toContainText('SELECT id, name, email');
-    await expect(content.locator('code')).toHaveCount(3); // 2 inline + 1 in pre
+    await expect(content.locator('pre code').first()).toContainText('SELECT id, name, email');
+    await expect(content.locator('code')).toHaveCount(4); // 2 inline + 2 in pre blocks
   });
 
   test('markdown with blockquotes renders consistently', async ({ page }) => {
@@ -189,7 +207,7 @@ test.describe('@weekly @no-external @snapshot Textbook Rendering Snapshots', () 
     });
 
     await page.goto('/textbook?learnerId=learner-1');
-    await page.getByRole('button', { name: 'Snapshot: Blockquotes' }).click();
+    await page.getByLabel('Snapshot: Blockquotes').click();
 
     const content = page.locator('.textbook-content, [class*="space-y-4"]').first();
     await expect(content).toBeVisible();
@@ -247,7 +265,7 @@ test.describe('@weekly @no-external @snapshot Textbook Rendering Snapshots', () 
     });
 
     await page.goto('/textbook?learnerId=learner-1');
-    await page.getByRole('button', { name: 'Snapshot: Legacy HTML' }).click();
+    await page.getByLabel('Snapshot: Legacy HTML').click();
 
     const content = page.locator('.textbook-content, [class*="space-y-4"]').first();
     await expect(content).toBeVisible();
@@ -306,7 +324,7 @@ test.describe('@weekly @no-external @snapshot Textbook Rendering Snapshots', () 
     });
 
     await page.goto('/textbook?learnerId=learner-1');
-    await page.getByRole('button', { name: 'Snapshot: Key Points Section' }).click();
+    await page.getByLabel('Snapshot: Key Points Section').click();
 
     const content = page.locator('.textbook-content, [class*="space-y-4"]').first();
     await expect(content).toBeVisible();

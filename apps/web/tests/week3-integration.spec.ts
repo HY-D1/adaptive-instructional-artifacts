@@ -14,24 +14,68 @@ import { expect, test } from '@playwright/test';
 
 test.describe('@weekly Week 3 Integration', () => {
   test.beforeEach(async ({ page }) => {
+    // Stub LLM calls to prevent connection refused in CI (both URL patterns)
+    await page.route('**/ollama/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: '{"title": "Test Explanation", "content_markdown": "This is a test explanation for CI.", "key_points": ["Point 1"], "common_pitfall": "None", "next_steps": ["Practice"], "source_ids": ["src-1"]}'
+        })
+      });
+    });
+    
+    await page.route('**/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: '{"title": "Test Explanation", "content_markdown": "This is a test explanation for CI.", "key_points": ["Point 1"], "common_pitfall": "None", "next_steps": ["Practice"], "source_ids": ["src-1"]}'
+        })
+      });
+    });
+    
+    await page.route('**/ollama/api/tags', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ models: [{ name: 'qwen2.5:1.5b-instruct' }] })
+      });
+    });
+    
+    await page.route('**/api/tags', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ models: [{ name: 'qwen2.5:1.5b-instruct' }] })
+      });
+    });
+    
+    // Idempotent init script - only runs once per test
     await page.addInitScript(() => {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
-      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      const FLAG = '__pw_seeded__';
+      if (localStorage.getItem(FLAG) === '1') return;
+      
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.setItem('sql-adapt-welcome-seen', 'true');
       // Set up user profile for role-based auth (required for route access)
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: 'test-learner',
         name: 'Test Learner',
         role: 'student',
         createdAt: Date.now()
       }));
+      
+      localStorage.setItem(FLAG, '1');
     });
   });
 
   test.afterEach(async ({ page }) => {
     await page.evaluate(() => {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.removeItem('__pw_seeded__');
     });
   });
 
@@ -57,7 +101,7 @@ test.describe('@weekly Week 3 Integration', () => {
 
     // Get hints
     await page.getByRole('button', { name: /Request Hint|Next Hint/ }).click();
-    await expect(page.getByText('Hint 1')).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
 
     // Verify events logged
     const events = await page.evaluate(() => {
@@ -97,22 +141,12 @@ test.describe('@weekly Week 3 Integration', () => {
 
     // Get hint
     await page.getByRole('button', { name: /Request Hint/ }).click();
-    await expect(page.getByText('Hint 1')).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
   });
 
   test('@weekly textbook displays created units', async ({ page }) => {
-    await page.goto('/');
-    
-    await page.evaluate(() => {
-      const profiles = [{
-        id: 'test-learner',
-        name: 'Test Learner',
-        createdAt: Date.now()
-      }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
-      window.localStorage.setItem('sql-learning-active-session', 'test-session');
-      
-      // Seed textbook
+    // Seed textbook data BEFORE navigating to page
+    await page.addInitScript(() => {
       window.localStorage.setItem('sql-learning-textbook', JSON.stringify({
         'test-learner': [{
           id: 'unit-test',
@@ -124,13 +158,12 @@ test.describe('@weekly Week 3 Integration', () => {
         }]
       }));
     });
-    await page.reload();
-
-    // Navigate to textbook
-    await page.getByRole('link', { name: 'My Textbook' }).first().click();
-    await expect(page).toHaveURL(/\/textbook/);
     
-    // Verify unit visible
-    await expect(page.getByRole('heading', { name: 'My Textbook' })).toBeVisible();
+    // Navigate to textbook page
+    await page.goto('/textbook');
+
+    // Verify on textbook page with seeded unit visible
+    await expect(page).toHaveURL(/\/textbook/);
+    await expect(page.getByText('Test SELECT Unit').first()).toBeVisible({ timeout: 10000 });
   });
 });

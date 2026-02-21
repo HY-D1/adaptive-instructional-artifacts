@@ -24,12 +24,23 @@ interface UserProfile {
 // Test suite for role system
 test.describe('@weekly Role System', () => {
   
-  // Clear storage before each test to ensure clean state
+  // Idempotent init script - only runs once per test
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
-      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      const FLAG = '__pw_seeded__';
+      if (localStorage.getItem(FLAG) === '1') return;
+      
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      
+      localStorage.setItem(FLAG, '1');
+    });
+  });
+
+  test.afterEach(async ({ page }) => {
+    await page.evaluate(() => {
+      localStorage.removeItem('__pw_seeded__');
     });
   });
 

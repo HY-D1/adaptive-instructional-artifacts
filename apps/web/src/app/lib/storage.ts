@@ -64,6 +64,8 @@ class StorageManager {
   private readonly LLM_CACHE_KEY = 'sql-learning-llm-cache';
   private readonly REPLAY_MODE_KEY = 'sql-learning-policy-replay-mode';
   private readonly PDF_INDEX_KEY = 'sql-learning-pdf-index';
+  /** Key for tracking uploaded PDF files list */
+  private readonly PDF_UPLOADS_KEY = 'sql-learning-pdf-uploads';
   /** Key for current user identity (single active user profile) - used for role-based auth (Week 4) */
   private readonly USER_PROFILE_KEY = 'sql-adapt-user-profile'; // Week 4: Aligned with existing app key
 
@@ -370,6 +372,23 @@ class StorageManager {
     return drafts[key] ?? null;
   }
 
+  /**
+   * Find any practice draft for a learner and problem, regardless of session
+   * Used when navigating back to a page after session changes
+   */
+  findAnyPracticeDraft(learnerId: string, problemId: string): string | null {
+    const drafts = this.readParsedStorage<Record<string, string>>(this.PRACTICE_DRAFTS_KEY, {});
+    const prefix = `${learnerId}::session-${learnerId}-`;
+    const suffix = `::${problemId}`;
+    
+    for (const [key, value] of Object.entries(drafts)) {
+      if (key.startsWith(prefix) && key.endsWith(suffix)) {
+        return value;
+      }
+    }
+    return null;
+  }
+
   clearPracticeDraft(learnerId: string, sessionId: string, problemId: string): { success: boolean; quotaExceeded?: boolean } {
     const key = this.buildPracticeDraftKey(learnerId, sessionId, problemId);
     const drafts = this.readParsedStorage<Record<string, string>>(this.PRACTICE_DRAFTS_KEY, {});
@@ -500,6 +519,65 @@ class StorageManager {
       docCount: index.docCount,
       chunkCount: index.chunkCount
     };
+  }
+
+  /**
+   * Add a PDF file to the uploaded files list
+   * @param file - Uploaded PDF file metadata
+   * @returns Save result
+   */
+  addUploadedPdfFile(file: { docId: string; filename: string; pageCount: number; chunkCount: number }): { success: boolean; quotaExceeded?: boolean } {
+    const list = this.getUploadedPdfFiles();
+    
+    // Check if file already exists (by docId)
+    const existingIndex = list.files.findIndex(f => f.docId === file.docId);
+    if (existingIndex >= 0) {
+      // Update existing entry
+      list.files[existingIndex] = {
+        ...file,
+        uploadedAt: Date.now()
+      };
+    } else {
+      // Add new entry
+      list.files.push({
+        ...file,
+        uploadedAt: Date.now()
+      });
+    }
+    
+    list.lastUpdated = Date.now();
+    return this.safeSetItem(this.PDF_UPLOADS_KEY, JSON.stringify(list));
+  }
+
+  /**
+   * Get list of uploaded PDF files
+   * @returns Uploaded PDF list
+   */
+  getUploadedPdfFiles(): { files: Array<{ docId: string; filename: string; pageCount: number; chunkCount: number; uploadedAt: number }>; lastUpdated: number } {
+    const raw = this.readParsedStorage<{ files: Array<{ docId: string; filename: string; pageCount: number; chunkCount: number; uploadedAt: number }>; lastUpdated: number }>(this.PDF_UPLOADS_KEY, null);
+    if (raw && Array.isArray(raw.files)) {
+      return raw;
+    }
+    return { files: [], lastUpdated: 0 };
+  }
+
+  /**
+   * Remove a PDF file from the uploaded files list
+   * @param docId - Document ID to remove
+   * @returns Save result
+   */
+  removeUploadedPdfFile(docId: string): { success: boolean; quotaExceeded?: boolean } {
+    const list = this.getUploadedPdfFiles();
+    list.files = list.files.filter(f => f.docId !== docId);
+    list.lastUpdated = Date.now();
+    return this.safeSetItem(this.PDF_UPLOADS_KEY, JSON.stringify(list));
+  }
+
+  /**
+   * Clear all uploaded PDF files list
+   */
+  clearUploadedPdfFiles(): void {
+    localStorage.removeItem(this.PDF_UPLOADS_KEY);
   }
 
   // Interaction traces

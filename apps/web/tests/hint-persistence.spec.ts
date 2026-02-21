@@ -4,7 +4,30 @@ const PRIMARY_HELP_BUTTON_NAME = /^(Request Hint|Next Hint|Get More Help)$/;
 
 test.describe('@weekly Hint Persistence', () => {
   test.beforeEach(async ({ page }) => {
+    // Stub LLM calls to prevent ECONNREFUSED errors
+    await page.route('**/ollama/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: '{"title": "Test", "content_markdown": "Test content", "key_points": [], "common_pitfall": "", "next_steps": [], "source_ids": []}'
+        })
+      });
+    });
+    await page.route('**/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: '{"title": "Test", "content_markdown": "Test content", "key_points": [], "common_pitfall": "", "next_steps": [], "source_ids": []}'
+        })
+      });
+    });
+
     await page.addInitScript(() => {
+      // Only run once per test - prevents clearing on navigation
+      if (window.localStorage.getItem('__pw_seeded__')) return;
+
       window.localStorage.clear();
       window.sessionStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
@@ -29,11 +52,15 @@ test.describe('@weekly Hint Persistence', () => {
       }];
       window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
       window.localStorage.setItem('sql-learning-active-session', 'session-persistence-test');
+      
+      // Mark as seeded so we don't clear again on navigation
+      window.localStorage.setItem('__pw_seeded__', 'true');
     });
   });
 
   test.afterEach(async ({ page }) => {
     await page.evaluate(() => {
+      window.localStorage.removeItem('__pw_seeded__');
       window.localStorage.clear();
       window.sessionStorage.clear();
     });
@@ -54,18 +81,16 @@ test.describe('@weekly Hint Persistence', () => {
     await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
 
     // Switch to second problem using the problem selector
-    const problemSelector = page.getByRole('combobox');
-    await problemSelector.click();
+    await page.getByTestId('problem-select-trigger').click();
     
-    // Select a different problem
-    const options = page.getByRole('option');
-    await options.nth(1).click();
+    // Select a different problem (second option in the dropdown)
+    await page.locator('[role="option"]').nth(1).click();
 
     // Wait for the problem to switch
     await page.waitForTimeout(500);
 
     // Verify hints are reset for new problem (should see empty state)
-    await expect(page.getByText('Need help?')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('hint-empty-state')).toBeVisible({ timeout: 5000 });
 
     // Verify hint flow works on new problem
     await page.locator('.monaco-editor .view-lines').first().click({ position: { x: 8, y: 8 } });
@@ -84,7 +109,7 @@ test.describe('@weekly Hint Persistence', () => {
     await expect(page.locator('.monaco-editor .view-lines')).toBeVisible({ timeout: 10000 });
 
     // Verify hint system is in empty state initially
-    await expect(page.getByText('Need help?')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('hint-empty-state')).toBeVisible({ timeout: 5000 });
     await expect(page.getByRole('button', { name: 'Request Hint' })).toBeVisible();
 
     // Trigger an error and request a hint

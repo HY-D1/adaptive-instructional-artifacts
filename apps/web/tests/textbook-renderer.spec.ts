@@ -13,18 +13,29 @@
 import { expect, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
-  // Clear storage and set up auth for role-based authentication
+  // Idempotent init script - only runs once per test
   await page.addInitScript(() => {
-    window.localStorage.clear();
-    window.sessionStorage.clear();
-    window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    const FLAG = '__pw_seeded__';
+    if (localStorage.getItem(FLAG) === '1') return;
+    
+    localStorage.clear();
+    sessionStorage.clear();
+    localStorage.setItem('sql-adapt-welcome-seen', 'true');
     // CRITICAL: Set up user profile for role-based auth
-    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
-      id: 'test-user',
+    localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: 'learner-1',
       name: 'Test User',
       role: 'student',
       createdAt: Date.now()
     }));
+    
+    localStorage.setItem(FLAG, '1');
+  });
+});
+
+test.afterEach(async ({ page }) => {
+  await page.evaluate(() => {
+    localStorage.removeItem('__pw_seeded__');
   });
 });
 
@@ -70,11 +81,11 @@ test.describe('@weekly @no-external @textbook Textbook Content Rendering', () =>
     // Navigate to textbook
     await page.goto('/textbook?learnerId=learner-1');
 
+    // Click on the unit to view content
+    await page.getByLabel('Markdown Test Unit').click();
+
     // Verify unit title is visible
     await expect(page.getByRole('heading', { name: 'Markdown Test Unit' })).toBeVisible();
-
-    // Click on the unit to view content
-    await page.getByRole('button', { name: 'Markdown Test Unit' }).click();
 
     // Verify rendered content (should have proper HTML, not raw markdown)
     const content = page.locator('.textbook-content, [class*="space-y-4"]').first();
@@ -139,9 +150,9 @@ test.describe('@weekly @no-external @textbook Textbook Content Rendering', () =>
     });
 
     await page.goto('/textbook?learnerId=learner-1');
-    await expect(page.getByRole('heading', { name: 'HTML Test Unit' })).toBeVisible();
+    await page.getByLabel('HTML Test Unit').click();
 
-    await page.getByRole('button', { name: 'HTML Test Unit' }).click();
+    await expect(page.getByRole('heading', { name: 'HTML Test Unit' })).toBeVisible();
 
     const content = page.locator('.textbook-content, [class*="space-y-4"]').first();
 
@@ -189,12 +200,12 @@ test.describe('@weekly @no-external @textbook Textbook Content Rendering', () =>
     });
 
     await page.goto('/textbook?learnerId=learner-1');
-    await page.getByRole('button', { name: 'XSS Test Unit' }).click();
+    await page.getByLabel('XSS Test Unit').click();
 
-    const content = page.locator('.textbook-content, [class*="space-y-4"]').first;
+    const content = page.locator('.textbook-content, [class*="space-y-4"]').first();
 
     // Script tags should be removed or escaped
-    const htmlContent = await content.innerHTML();
+    const htmlContent = await content.evaluate(el => el.innerHTML);
     expect(htmlContent).not.toContain('<script>');
     expect(htmlContent).not.toContain('javascript:alert');
 
@@ -240,7 +251,7 @@ test.describe('@weekly @no-external @textbook Textbook Content Rendering', () =>
     });
 
     await page.goto('/textbook?learnerId=learner-1');
-    await page.getByRole('button', { name: 'Code Block Test' }).click();
+    await page.getByLabel('Code Block Test').click();
 
     const content = page.locator('.textbook-content, [class*="space-y-4"]').first();
 

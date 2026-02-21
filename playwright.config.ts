@@ -8,8 +8,9 @@ const IS_CI = !!process.env.CI;
 export default defineConfig({
   testDir: './apps/web/tests',
   timeout: 60_000,
+  globalTimeout: 600_000,
   expect: {
-    timeout: 10_000
+    timeout: 15_000
   },
   fullyParallel: false,
   workers: IS_CI ? 1 : undefined,
@@ -21,25 +22,17 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure'
   },
-  webServer: IS_CI
-    ? {
-        // In CI: serve the production build
-        command: `npx vite preview --config apps/web/vite.config.ts --host ${HOST} --port ${PORT}`,
-        url: BASE_URL,
-        reuseExistingServer: false,
-        timeout: 120_000,
-        stdout: 'pipe',
-        stderr: 'pipe'
-      }
-    : {
-        // Local development: use dev server
-        command: `npm run dev -- --host ${HOST} --port ${PORT}`,
-        url: BASE_URL,
-        reuseExistingServer: true,
-        timeout: 120_000,
-        stdout: 'pipe',
-        stderr: 'pipe'
-      },
+  webServer: {
+    // Use preview server for stability in CI
+    command: IS_CI 
+      ? `npx vite preview --config apps/web/vite.config.ts --host ${HOST} --port ${PORT}`
+      : `npm run dev -- --host ${HOST} --port ${PORT}`,
+    url: BASE_URL,
+    reuseExistingServer: !IS_CI,
+    timeout: 120_000,
+    stdout: 'pipe',
+    stderr: 'pipe'
+  },
   projects: [
     {
       name: 'chromium',

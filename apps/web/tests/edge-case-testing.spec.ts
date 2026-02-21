@@ -4,6 +4,28 @@
  */
 import { test, expect, Page } from '@playwright/test';
 
+// Stub LLM calls to prevent ECONNREFUSED errors
+test.beforeEach(async ({ page }) => {
+  await page.route('**/ollama/api/generate', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        response: '{"title": "Test", "content_markdown": "Test content", "key_points": [], "common_pitfall": "", "next_steps": [], "source_ids": []}'
+      })
+    });
+  });
+  await page.route('**/api/generate', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        response: '{"title": "Test", "content_markdown": "Test content", "key_points": [], "common_pitfall": "", "next_steps": [], "source_ids": []}'
+      })
+    });
+  });
+});
+
 // Helper to close welcome modal
 async function closeWelcomeModal(page: Page) {
   const getStartedBtn = page.locator('button:has-text("Get Started")').first();

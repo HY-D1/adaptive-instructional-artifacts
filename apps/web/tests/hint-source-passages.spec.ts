@@ -11,13 +11,37 @@ async function setupPdfIndex(page: any, pdfIndex: object) {
 
 test.describe('@weekly Hint Source Passages Feature', () => {
   test.beforeEach(async ({ page }) => {
+    // Stub LLM calls to prevent ECONNREFUSED errors
+    await page.route('**/ollama/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: '{"title": "Test", "content_markdown": "Test content", "key_points": [], "common_pitfall": "", "next_steps": [], "source_ids": []}'
+        })
+      });
+    });
+    await page.route('**/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: '{"title": "Test", "content_markdown": "Test content", "key_points": [], "common_pitfall": "", "next_steps": [], "source_ids": []}'
+        })
+      });
+    });
+
+    // Idempotent init script - only runs once per test
     await page.addInitScript(() => {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
-      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      const FLAG = '__pw_seeded__';
+      if (localStorage.getItem(FLAG) === '1') return;
+      
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.setItem('sql-adapt-welcome-seen', 'true');
       
       // Set up user profile to bypass StartPage role selection
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: 'test-user',
         name: 'Test User',
         role: 'student',
@@ -35,15 +59,18 @@ test.describe('@weekly Hint Source Passages Feature', () => {
         conceptCoverageEvidence: [],
         errorHistory: []
       }];
-      window.localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
-      window.localStorage.setItem('sql-learning-active-session', 'session-test');
+      localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
+      localStorage.setItem('sql-learning-active-session', 'session-test');
+      
+      localStorage.setItem(FLAG, '1');
     });
   });
 
   test.afterEach(async ({ page }) => {
     await page.evaluate(() => {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.removeItem('__pw_seeded__');
     });
   });
 
@@ -108,7 +135,7 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     await requestHintButton.click();
 
     // Check that hint appears
-    await expect(page.getByText('Hint 1')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
 
     // Wait for hint panel to be fully rendered with PDF content
     const hintPanel = page.locator('[data-testid="hint-panel"]');
@@ -120,8 +147,10 @@ test.describe('@weekly Hint Source Passages Feature', () => {
 
     // Wait for SQL engine and Monaco editor to initialize
     await expect(page.getByRole('button', { name: 'Run Query' })).toBeEnabled({ timeout: 10000 });
+    // Monaco editor loads asynchronously - wait for it to appear
+    await expect(page.locator('.monaco-editor')).toBeAttached({ timeout: 15000 });
     await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('.monaco-editor .view-lines')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.monaco-editor .view-lines')).toBeVisible({ timeout: 10000 })
     
     const testPdfIndex = {
       indexId: 'pdf-index-test-v2',
@@ -170,13 +199,13 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     // Get 3 hints
     for (let i = 0; i < 3; i++) {
       await requestHintButton.click();
-      await expect(page.getByText(`Hint ${i + 1}`)).toBeVisible({ timeout: 5000 });
+      await expect(page.getByTestId(`hint-label-${i + 1}`)).toBeVisible({ timeout: 5000 });
     }
 
     // All hints should be visible
-    await expect(page.getByText(/^Hint 1$/)).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText(/^Hint 2$/)).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText(/^Hint 3$/)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('hint-label-2')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('hint-label-3')).toBeVisible({ timeout: 5000 });
 
     // No console errors from PDF retrieval
     const consoleErrors: string[] = [];
@@ -212,7 +241,7 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     await page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME }).click();
 
     // Hint should still work without PDF
-    await expect(page.getByText('Hint 1')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
 
     // Verify hint panel is functional
     const hintPanel = page.locator('[data-testid="hint-panel"]');
@@ -300,7 +329,7 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
     await page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME }).click();
 
-    await expect(page.getByText('Hint 1')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
 
     // Get hint text content (using data-testid for stability)
     const hintText = await page.locator('[data-testid="hint-card-0"] p').textContent();
@@ -348,10 +377,10 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     const requestHintButton = page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME });
     await requestHintButton.click();
 
-    await expect(page.getByText('Hint 1')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
     await requestHintButton.click();
 
-    await expect(page.getByText('Hint 2')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('hint-label-2')).toBeVisible({ timeout: 5000 });
 
     // Wait for hint cards to be fully rendered
     await expect(page.locator('[data-testid^="hint-card-"]')).toHaveCount(2, { timeout: 5000 });

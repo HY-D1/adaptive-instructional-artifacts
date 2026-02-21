@@ -38,17 +38,49 @@ import {
 test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
 
   test.beforeEach(async ({ page }) => {
+    // Stub LLM calls to prevent ECONNREFUSED errors
+    await page.route('**/ollama/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: '{"title": "Test", "content_markdown": "Test content", "key_points": [], "common_pitfall": "", "next_steps": [], "source_ids": []}'
+        })
+      });
+    });
+    await page.route('**/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: '{"title": "Test", "content_markdown": "Test content", "key_points": [], "common_pitfall": "", "next_steps": [], "source_ids": []}'
+        })
+      });
+    });
+
+    // Idempotent init script - only runs once per test
     await page.addInitScript(() => {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
-      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      const FLAG = '__pw_seeded__';
+      if (localStorage.getItem(FLAG) === '1') return;
+      
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.setItem('sql-adapt-welcome-seen', 'true');
       // Set up student profile to bypass role selection
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: 'test-user',
         name: 'Test User',
         role: 'student',
         createdAt: Date.now()
       }));
+      
+      localStorage.setItem(FLAG, '1');
+    });
+  });
+
+  test.afterEach(async ({ page }) => {
+    await page.evaluate(() => {
+      localStorage.removeItem('__pw_seeded__');
     });
   });
 
@@ -92,7 +124,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     await runUntilErrorCount(page, runQueryButton, 1);
 
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
     
     // Verify hint event uses the test session ID
     const hintEvents = await getHintEventsFromStorage(page);
@@ -117,7 +149,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     
     // Request hint in first session
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
     
     // Start new session
     const secondSession = await page.evaluate(() => {
@@ -905,11 +937,11 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     
     // Request hint 1
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
     
     // Request hint 2
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByText('Hint 2', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-2')).toBeVisible();
     
     // Verify we have 2 hints
     let hintEvents = await getHintEventsFromStorage(page);
@@ -920,7 +952,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     await runQueryButton.click();
     
     // Hint flow should still show we're at level 2
-    await expect(page.getByText('Hint 2', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-2')).toBeVisible();
   });
 
   test('@high-priority-bugs Subtype Reset: hint flow resets on problem change', async ({ page }) => {
@@ -933,7 +965,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     await runUntilErrorCount(page, runQueryButton, 1);
     
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
     
     // Change to different problem (if available)
     // This test verifies the reset logic exists for problem changes
@@ -956,13 +988,13 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     
     // Progress through all hints and escalation
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
     
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByText('Hint 2', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-2')).toBeVisible();
     
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByText('Hint 3', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-3')).toBeVisible();
     
     // Click "Get More Help" for escalation
     await page.getByRole('button', { name: 'Get More Help' }).click();
@@ -996,10 +1028,10 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     
     // Request multiple hints
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
     
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByText('Hint 2', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-2')).toBeVisible();
     
     // Get hint events
     const interactions = await getAllInteractionsFromStorage(page);
@@ -1136,6 +1168,26 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
 test.describe('@high-priority-bugs Integration Tests', () => {
 
   test.beforeEach(async ({ page }) => {
+    // Stub LLM calls to prevent ECONNREFUSED errors
+    await page.route('**/ollama/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: '{"title": "Test", "content_markdown": "Test content", "key_points": [], "common_pitfall": "", "next_steps": [], "source_ids": []}'
+        })
+      });
+    });
+    await page.route('**/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: '{"title": "Test", "content_markdown": "Test content", "key_points": [], "common_pitfall": "", "next_steps": [], "source_ids": []}'
+        })
+      });
+    });
+
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.sessionStorage.clear();
@@ -1162,13 +1214,13 @@ test.describe('@high-priority-bugs Integration Tests', () => {
 
     // Step 2: Progress through hint ladder
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
     
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByText('Hint 2', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-2')).toBeVisible();
     
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByText('Hint 3', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-3')).toBeVisible();
 
     // Step 3: Escalate to explanation
     await page.getByRole('button', { name: 'Get More Help' }).click();

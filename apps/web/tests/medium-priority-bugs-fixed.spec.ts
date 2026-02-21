@@ -44,17 +44,49 @@ import {
 test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
 
   test.beforeEach(async ({ page }) => {
+    // Stub LLM calls to prevent ECONNREFUSED errors
+    await page.route('**/ollama/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: '{"title": "Test", "content_markdown": "Test content", "key_points": [], "common_pitfall": "", "next_steps": [], "source_ids": []}'
+        })
+      });
+    });
+    await page.route('**/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: '{"title": "Test", "content_markdown": "Test content", "key_points": [], "common_pitfall": "", "next_steps": [], "source_ids": []}'
+        })
+      });
+    });
+
+    // Idempotent init script - only runs once per test
     await page.addInitScript(() => {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
-      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      const FLAG = '__pw_seeded__';
+      if (localStorage.getItem(FLAG) === '1') return;
+      
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.setItem('sql-adapt-welcome-seen', 'true');
       // CRITICAL: Set up user profile for role-based auth
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: 'test-user',
         name: 'Test User',
         role: 'student',
         createdAt: Date.now()
       }));
+      
+      localStorage.setItem(FLAG, '1');
+    });
+  });
+
+  test.afterEach(async ({ page }) => {
+    await page.evaluate(() => {
+      localStorage.removeItem('__pw_seeded__');
     });
   });
 
@@ -639,7 +671,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
 
     // Request hint
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByText('Hint 1', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
 
     // Verify hint event has ruleFired
     const hintEvents = await getHintEventsFromStorage(page);
@@ -665,11 +697,11 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
 
     // Progress through hints
     await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByText('Hint 1', { exact: true })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByText('Hint 2', { exact: true })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('hint-label-2')).toBeVisible({ timeout: 5000 });
     await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByText('Hint 3', { exact: true })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('hint-label-3')).toBeVisible({ timeout: 5000 });
 
     // Click escalation
     const moreHelpButton = page.getByRole('button', { name: 'Get More Help' });

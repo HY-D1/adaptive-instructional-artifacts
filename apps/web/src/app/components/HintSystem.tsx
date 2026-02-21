@@ -717,7 +717,7 @@ export function HintSystem({
       )}
       
       {hints.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 p-6 text-center">
+        <div data-testid="hint-empty-state" className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 p-6 text-center">
           <div className="p-2 bg-amber-50 rounded-full w-fit mx-auto mb-3">
             <HelpCircle className="size-5 text-amber-500" />
           </div>

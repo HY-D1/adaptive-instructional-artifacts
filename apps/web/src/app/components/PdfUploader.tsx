@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Button } from './ui/button';
-import { Upload, X, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { Upload, X, CheckCircle, AlertCircle, Loader2, FileText, Trash2 } from 'lucide-react';
 import { cn } from './ui/utils';
 import { storage } from '../lib/storage';
 import type { PdfIndexDocument } from '../types';
@@ -20,7 +20,14 @@ export function PdfUploader({ onUploadComplete, onError }: PdfUploaderProps) {
     pageCount?: number;
     chunkCount?: number;
   }>({ type: null, message: '' });
+  const [uploadedFiles, setUploadedFiles] = useState<Array<{ docId: string; filename: string; pageCount: number; chunkCount: number; uploadedAt: number }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load uploaded files on mount
+  useEffect(() => {
+    const files = storage.getUploadedPdfFiles();
+    setUploadedFiles(files.files);
+  }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -96,6 +103,19 @@ export function PdfUploader({ onUploadComplete, onError }: PdfUploaderProps) {
         if (!saveResult.success) {
           console.warn('[PdfUploader] Failed to save PDF index to storage:', saveResult.quotaExceeded ? 'quota exceeded' : 'unknown error');
         }
+        
+        // Add to uploaded files list
+        const doc = result.document?.sourceDocs?.[0] || result.document;
+        storage.addUploadedPdfFile({
+          docId: doc.docId || result.document.indexId,
+          filename: result.document?.sourceName || doc.filename || file.name,
+          pageCount: doc.pageCount || 0,
+          chunkCount: result.document?.chunkCount || result.manifest?.chunkCount || 0
+        });
+        
+        // Refresh the list
+        const updatedFiles = storage.getUploadedPdfFiles();
+        setUploadedFiles(updatedFiles.files);
       }
       
       setUploadStatus({
@@ -128,6 +148,21 @@ export function PdfUploader({ onUploadComplete, onError }: PdfUploaderProps) {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const handleRemoveFile = (docId: string) => {
+    storage.removeUploadedPdfFile(docId);
+    const updatedFiles = storage.getUploadedPdfFiles();
+    setUploadedFiles(updatedFiles.files);
+  };
+
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
   };
 
   return (
@@ -209,6 +244,45 @@ export function PdfUploader({ onUploadComplete, onError }: PdfUploaderProps) {
               <p className="text-xs text-gray-500">PDF files up to 50MB</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Uploaded Files List */}
+      {uploadedFiles.length > 0 && (
+        <div className="mt-4 pt-4 border-t">
+          <h3 className="text-sm font-medium text-gray-700 mb-2">
+            Uploaded Textbooks ({uploadedFiles.length})
+          </h3>
+          <div className="space-y-2">
+            {uploadedFiles.map((file) => (
+              <div
+                key={file.docId}
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <FileText className="size-5 text-blue-500 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-700 truncate">
+                      {file.filename}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {file.pageCount} pages • {file.chunkCount} chunks • {formatDate(file.uploadedAt)}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleRemoveFile(file.docId)}
+                  className="p-1.5 hover:bg-red-100 rounded-lg transition-colors shrink-0"
+                  title="Remove from list"
+                >
+                  <Trash2 className="size-4 text-red-500" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            These files are stored locally and will be remembered for future sessions.
+          </p>
         </div>
       )}
     </div>

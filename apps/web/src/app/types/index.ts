@@ -329,6 +329,20 @@ export type PdfIndexDocument = {
   chunks: PdfIndexChunk[];
 };
 
+// Uploaded PDF file metadata for persistence
+export type UploadedPdfFile = {
+  docId: string;
+  filename: string;
+  pageCount: number;
+  uploadedAt: number;
+  chunkCount: number;
+};
+
+export type UploadedPdfList = {
+  files: UploadedPdfFile[];
+  lastUpdated: number;
+};
+
 export type AdaptiveDecision = {
   timestamp: number;
   learnerId: string;

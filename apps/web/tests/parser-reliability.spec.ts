@@ -202,7 +202,18 @@ test('@parser-batch parser reliability: malformed output degrades safely with fa
   });
 
   let responseIdx = 0;
+  // Stub both URL patterns for LLM endpoints
   await page.route('**/ollama/api/generate', async (route) => {
+    const text = MOCK_RESPONSES[responseIdx] || MOCK_RESPONSES[MOCK_RESPONSES.length - 1];
+    responseIdx += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ response: text })
+    });
+  });
+
+  await page.route('**/api/generate', async (route) => {
     const text = MOCK_RESPONSES[responseIdx] || MOCK_RESPONSES[MOCK_RESPONSES.length - 1];
     responseIdx += 1;
     await route.fulfill({
