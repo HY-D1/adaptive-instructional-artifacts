@@ -21,6 +21,11 @@ import {
 } from './SourceViewer';
 import { getConceptFromRegistry } from '../data';
 
+// Enhanced Hint System imports
+import { useEnhancedHints } from '../hooks/useEnhancedHints';
+import { HintSourceStatus } from './HintSourceStatus';
+import type { EnhancedHint } from '../lib/enhanced-hint-service';
+
 /**
  * Props for the HintSystem component
  */
@@ -81,6 +86,22 @@ export function HintSystem({
   const nextHelpRequestIndexRef = useRef(1);
   const emittedHelpEventKeysRef = useRef<Set<string>>(new Set());
   const helpEventSequenceRef = useRef(0);
+  
+  // Enhanced hint system hook
+  const {
+    generateHint: generateEnhancedHint,
+    isGenerating: isGeneratingEnhanced,
+    lastHint: lastEnhancedHint,
+    availableResources
+  } = useEnhancedHints({
+    learnerId,
+    problemId,
+    sessionId,
+    recentInteractions
+  });
+  
+  // Track if we're using enhanced hints
+  const isUsingEnhancedHints = availableResources.llm || availableResources.textbook;
 
   const profile = useMemo(() => storage.getProfile(learnerId), [learnerId]);
   const scopedInteractions = useMemo(
@@ -381,6 +402,78 @@ export function HintSystem({
       }
     );
   };
+  
+  /**
+   * Generate enhanced hint using available resources (Textbook + LLM)
+   * Falls back to standard SQL-Engage hints if enhanced resources unavailable
+   */
+  const generateEnhancedHintForRung = async (rung: 1 | 2 | 3): Promise<{
+    hintText: string;
+    hintLevel: number;
+    sqlEngageSubtype: string;
+    sqlEngageRowId: string;
+    policyVersion: string;
+    pdfPassages: RetrievalPdfPassage[];
+    isEnhanced: boolean;
+  } | null> => {
+    if (!profile) return null;
+    
+    const overrideSubtype = isCanonicalOverrideActive ? canonicalOverrideSubtype : undefined;
+    const fallbackSubtype = errorSubtypeId || 'incomplete query';
+    const effectiveSubtype = activeHintSubtype ||
+      canonicalizeSqlEngageSubtype(overrideSubtype || fallbackSubtype);
+    
+    try {
+      // Try to generate enhanced hint
+      const enhancedHint = await generateEnhancedHint(rung, effectiveSubtype);
+      
+      if (enhancedHint) {
+        // Convert concept IDs to PDF passages if available
+        const pdfPassages: RetrievalPdfPassage[] = [];
+        
+        // If we have textbook units, we could convert them to passage format
+        if (enhancedHint.textbookUnits) {
+          for (const unit of enhancedHint.textbookUnits) {
+            pdfPassages.push({
+              chunkId: `textbook:${unit.id}`,
+              docId: 'learner-textbook',
+              text: unit.content.substring(0, 200) + '...',
+              page: undefined,
+              score: 0.9
+            });
+          }
+        }
+        
+        return {
+          hintText: enhancedHint.content,
+          hintLevel: rung,
+          sqlEngageSubtype: effectiveSubtype,
+          sqlEngageRowId: enhancedHint.llmGenerated ? 'llm-generated' : 'sql-engage-enhanced',
+          policyVersion: enhancedHint.llmGenerated ? 'enhanced-llm-v1' : 'sql-engage-v1',
+          pdfPassages,
+          isEnhanced: enhancedHint.llmGenerated || enhancedHint.sources.textbook
+        };
+      }
+    } catch (err) {
+      console.warn('[HintSystem] Enhanced hint generation failed, using fallback:', err);
+    }
+    
+    // Fallback to standard hint
+    const standardHint = getHelpSelectionForIndex(rung);
+    if (!standardHint) return null;
+    
+    const pdfPassages = retrievePdfPassagesForHint(standardHint.sqlEngageSubtype);
+    
+    return {
+      hintText: standardHint.hintText,
+      hintLevel: standardHint.hintLevel,
+      sqlEngageSubtype: standardHint.sqlEngageSubtype,
+      sqlEngageRowId: standardHint.sqlEngageRowId,
+      policyVersion: standardHint.policyVersion,
+      pdfPassages,
+      isEnhanced: false
+    };
+  };
 
   const retrievePdfPassagesForHint = (subtype: string): RetrievalPdfPassage[] => {
     const problem = getProblemById(problemId);
@@ -407,7 +500,7 @@ export function HintSystem({
     }
   };
 
-  const handleRequestHint = () => {
+  const handleRequestHint = async () => {
     if (!profile) {
       return;
     }
@@ -437,22 +530,54 @@ export function HintSystem({
       setIsProcessingHint(false);
       return;
     }
-    const hintSelection = getHelpSelectionForIndex(nextHelpRequestIndex);
-    if (!hintSelection) {
-      setIsProcessingHint(false);
-      return;
+    
+    // Determine rung level for this hint
+    const levelForSelection = Math.max(1, Math.min(MAX_HINT_LEVEL, nextHelpRequestIndex)) as 1 | 2 | 3;
+    
+    // Try to generate enhanced hint (uses LLM/Textbook if available)
+    let hintSelection: {
+      hintText: string;
+      hintLevel: number;
+      sqlEngageSubtype: string;
+      sqlEngageRowId: string;
+      policyVersion: string;
+      pdfPassages: RetrievalPdfPassage[];
+      isEnhanced: boolean;
+    } | null = null;
+    
+    try {
+      hintSelection = await generateEnhancedHintForRung(levelForSelection);
+    } catch (err) {
+      console.warn('[HintSystem] Enhanced hint failed, using fallback:', err);
     }
+    
+    // Fallback to standard hint if enhanced generation failed
+    if (!hintSelection) {
+      const standardHint = getHelpSelectionForIndex(nextHelpRequestIndex);
+      if (!standardHint) {
+        setIsProcessingHint(false);
+        return;
+      }
+      const pdfPassages = retrievePdfPassagesForHint(standardHint.sqlEngageSubtype);
+      hintSelection = {
+        hintText: standardHint.hintText,
+        hintLevel: standardHint.hintLevel,
+        sqlEngageSubtype: standardHint.sqlEngageSubtype,
+        sqlEngageRowId: standardHint.sqlEngageRowId,
+        policyVersion: standardHint.policyVersion,
+        pdfPassages,
+        isEnhanced: false
+      };
+    }
+    
     if (!registerHelpEvent('hint_view', nextHelpRequestIndex)) {
       setIsProcessingHint(false);
       return;
     }
 
-    // Retrieve PDF passages for this hint
-    const pdfPassages = retrievePdfPassagesForHint(hintSelection.sqlEngageSubtype);
-
-    setHints((currentHints) => [...currentHints, hintSelection.hintText]);
-    setHintPdfPassages((current) => [...current, pdfPassages]);
-    setActiveHintSubtype(hintSelection.sqlEngageSubtype);
+    setHints((currentHints) => [...currentHints, hintSelection!.hintText]);
+    setHintPdfPassages((current) => [...current, hintSelection!.pdfPassages]);
+    setActiveHintSubtype(hintSelection!.sqlEngageSubtype);
     const errorCount = problemTrace.filter((interaction) => interaction.eventType === 'error').length;
     const hintCount = problemTrace.filter((interaction) => interaction.eventType === 'hint_view').length;
     const timeSpent = problemTrace.length > 0
@@ -462,7 +587,7 @@ export function HintSystem({
     // Log interaction with escalation metadata
     // will_escalate indicates that viewing this hint will trigger auto-escalation
     // This happens at max hint level when no explanation has been shown yet
-    const willEscalate = hintSelection.hintLevel === MAX_HINT_LEVEL && !showExplanation;
+    const willEscalate = hintSelection!.hintLevel === MAX_HINT_LEVEL && !showExplanation;
     
     const hintEvent: InteractionEvent = {
       id: buildHelpEventId('hint', nextHelpRequestIndex),
@@ -471,25 +596,26 @@ export function HintSystem({
       timestamp: Date.now(),
       eventType: 'hint_view',
       problemId,
-      hintText: hintSelection.hintText,
-      hintLevel: hintSelection.hintLevel,
+      hintText: hintSelection!.hintText,
+      hintLevel: hintSelection!.hintLevel,
       helpRequestIndex: nextHelpRequestIndex,
-      sqlEngageSubtype: hintSelection.sqlEngageSubtype,
-      sqlEngageRowId: hintSelection.sqlEngageRowId,
-      policyVersion: hintSelection.policyVersion,
-      ruleFired: 'progressive-hint',
+      sqlEngageSubtype: hintSelection!.sqlEngageSubtype,
+      sqlEngageRowId: hintSelection!.sqlEngageRowId,
+      policyVersion: hintSelection!.policyVersion,
+      ruleFired: hintSelection!.isEnhanced ? 'enhanced-hint' : 'progressive-hint',
       inputs: {
         retry_count: Math.max(0, errorCount - 1),
         hint_count: hintCount,
         time_spent_ms: timeSpent
       },
       outputs: {
-        hint_level: hintSelection.hintLevel,
+        hint_level: hintSelection!.hintLevel,
         help_request_index: nextHelpRequestIndex,
-        sql_engage_subtype: hintSelection.sqlEngageSubtype,
-        sql_engage_row_id: hintSelection.sqlEngageRowId,
+        sql_engage_subtype: hintSelection!.sqlEngageSubtype,
+        sql_engage_row_id: hintSelection!.sqlEngageRowId,
         will_escalate: willEscalate,
-        rule_fired: willEscalate ? 'progressive-hint-will-escalate' : 'progressive-hint'
+        rule_fired: willEscalate ? 'progressive-hint-will-escalate' : (hintSelection!.isEnhanced ? 'enhanced-hint' : 'progressive-hint'),
+        is_enhanced: hintSelection!.isEnhanced
       }
     };
     storage.saveInteraction(hintEvent);
@@ -499,11 +625,11 @@ export function HintSystem({
     storage.logGuidanceView({
       learnerId,
       problemId,
-      rung: hintSelection.hintLevel as 1 | 2 | 3,
-      conceptIds: conceptIds.length > 0 ? conceptIds : [hintSelection.sqlEngageSubtype],
-      sourceRefIds: pdfPassages.map(p => p.chunkId),
-      grounded: pdfPassages.length > 0,
-      contentLength: hintSelection.hintText.length,
+      rung: hintSelection!.hintLevel as 1 | 2 | 3,
+      conceptIds: conceptIds.length > 0 ? conceptIds : [hintSelection!.sqlEngageSubtype],
+      sourceRefIds: hintSelection!.pdfPassages.map(p => p.chunkId),
+      grounded: hintSelection!.pdfPassages.length > 0,
+      contentLength: hintSelection!.hintText.length,
       sessionId
     });
 
@@ -685,6 +811,13 @@ export function HintSystem({
         </div>
         <RungIndicator rung={currentRung} size="sm" />
       </div>
+
+      {/* Hint Source Status - Shows which resources are being used */}
+      <HintSourceStatus 
+        learnerId={learnerId} 
+        showDetails={false}
+        className="self-start"
+      />
 
       {/* Concept tags */}
       {conceptIds.length > 0 && (
