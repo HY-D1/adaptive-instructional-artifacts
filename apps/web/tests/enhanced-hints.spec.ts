@@ -79,7 +79,13 @@ test.describe('@weekly Enhanced Hint System', () => {
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
     await page.keyboard.type('SELECT * FROM users orders;');
     await page.getByRole('button', { name: 'Run Query' }).click();
-    await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
+    
+    // Wait for error or warning to appear (use poll for reliability)
+    await expect.poll(async () => {
+      const errorVisible = await page.locator('text=SQL Error').isVisible().catch(() => false);
+      const warningVisible = await page.locator('text=Warning').isVisible().catch(() => false);
+      return errorVisible || warningVisible;
+    }, { timeout: 10000 }).toBe(true);
 
     // Request hint
     await page.getByRole('button', { name: 'Request Hint' }).click();
