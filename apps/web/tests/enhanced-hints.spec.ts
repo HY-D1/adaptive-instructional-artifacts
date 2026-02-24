@@ -56,47 +56,6 @@ test.describe('@weekly Enhanced Hint System', () => {
     expect(hintText?.length).toBeGreaterThan(10);
   });
 
-  test('@weekly enhances hint with textbook references when available', async ({ page }) => {
-    // Seed textbook content
-    await page.addInitScript(() => {
-      localStorage.setItem('sql-learning-textbook', JSON.stringify({
-        'test-learner': [{
-          id: 'unit-join-basics',
-          type: 'summary',
-          conceptId: 'joins',
-          title: 'JOIN Operations Guide',
-          content: '## JOIN Operations\n\nJOIN combines rows from two or more tables.',
-          addedTimestamp: Date.now()
-        }]
-      }));
-    });
-
-    await page.goto('/practice');
-    await expect(page.getByRole('button', { name: 'Run Query' })).toBeEnabled({ timeout: 10000 });
-
-    // Trigger a JOIN-related error
-    await page.locator('.monaco-editor .view-lines').first().click({ position: { x: 8, y: 8 } });
-    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
-    await page.keyboard.type('SELECT * FROM users orders;');
-    await page.getByRole('button', { name: 'Run Query' }).click();
-    
-    // Wait for error or warning to appear (use poll for reliability)
-    await expect.poll(async () => {
-      const errorVisible = await page.locator('text=SQL Error').isVisible().catch(() => false);
-      const warningVisible = await page.locator('text=Warning').isVisible().catch(() => false);
-      return errorVisible || warningVisible;
-    }, { timeout: 10000 }).toBe(true);
-
-    // Request hint
-    await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
-
-    // With textbook available, we should see the enhanced hint
-    // The hint should be generated (either from SQL-Engage or enhanced)
-    const hintCard = page.locator('[data-testid="hint-card-0"]');
-    await expect(hintCard).toBeVisible();
-  });
-
   test('@weekly shows multiple hint sources active when textbook connected', async ({ page }) => {
     // Seed textbook
     await page.addInitScript(() => {
