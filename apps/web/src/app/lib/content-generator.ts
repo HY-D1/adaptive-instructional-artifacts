@@ -457,7 +457,11 @@ async function buildUnitFromStructuredOutput(
 
   // Store markdown (not HTML) - rendering happens at display time
   // This makes the data format consistent and portable
-  const content = markdown;
+  // SECURITY: Sanitize to prevent XSS in case markdown contains HTML
+  const content = DOMPurify.sanitize(markdown, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'a', 'div', 'span', 'table', 'thead', 'tbody', 'tr', 'td', 'th'],
+    ALLOWED_ATTR: ['href', 'title', 'class', 'target']
+  });
 
   const genericTitle = `Help with ${options.bundle.problemTitle}`;
   const title = output.title?.trim() || genericTitle;

@@ -31,7 +31,8 @@
     "pdf:search": "node scripts/search-index.mjs",
     "pdf:convert": "node scripts/pdf-to-index.mjs",
     "pdf:query": "node scripts/query-index.mjs",
-    "test:pdf-index": "node scripts/smoke-test-pdf-index.mjs"
+    "test:pdf-index": "node scripts/smoke-test-pdf-index.mjs",
+    "check:source-grounding": "node scripts/check-source-grounding.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

@@ -300,6 +300,6 @@ test('@integration @weekly retrieval grounding: same learner/problem/subtype res
         chunkId: expect.stringMatching(/^doc-synthetic:/),
         page: expect.any(Number)
       })
-    ))
-  ;
+    ])
+  );
 });

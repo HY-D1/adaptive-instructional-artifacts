@@ -8,7 +8,8 @@ import {
   PDF_CHUNK_WORDS,
   PDF_EMBEDDING_DIMENSION,
   PDF_INDEX_CHUNKS_FILENAME,
-  PDF_INDEX_MANIFEST_FILENAME
+  PDF_INDEX_MANIFEST_FILENAME,
+  getDocAlias
 } from '../app/lib/pdf-index-config';
 import type { PdfIndexChunk, PdfIndexDocument, PdfSourceDoc } from '../app/types';
 
@@ -181,7 +182,9 @@ async function buildPdfIndex(config: PdfIndexDiskConfig): Promise<{
     const fileBuffer = await fs.readFile(pdfPath);
     const sha256 = createHash('sha256').update(fileBuffer).digest('hex');
     const relativeName = toPosixPath(path.relative(config.sourcePdfDir, pdfPath));
-    const docId = uniqueDocId(`doc-${sha256.slice(0, 12)}`, usedDocIds);
+    // Use stable doc alias instead of hash-based ID
+    const baseDocId = getDocAlias(path.basename(pdfPath));
+    const docId = uniqueDocId(baseDocId, usedDocIds);
     const pages = await extractPagesFromPdf(pdfPath);
 
     sourceDocs.push({

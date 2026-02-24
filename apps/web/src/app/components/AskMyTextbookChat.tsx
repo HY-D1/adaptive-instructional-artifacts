@@ -369,6 +369,23 @@ export function AskMyTextbookChat({
     return storage.getInteractionsByLearner(learnerId);
   }, [learnerId]);
 
+  // Clean up text for better readability - more aggressive cleaning
+  // MOVED HERE: Fix temporal dead zone - must be defined before use in buildGroundingPayload
+  const cleanText = useCallback((text: string): string => {
+    return text
+      .replace(/_/g, '')
+      .replace(/@\w+/g, '')  // Remove @variables
+      .replace(/\/\/\s*/g, '')  // Remove // comments
+      .replace(/END\/\//gi, '')  // Remove END//
+      .replace(/DEALLOCATE\s+PREPARE[^;]*/gi, '')  // Remove DEALLOCATE statements
+      .replace(/EXECUTE[^;]*/gi, '')  // Remove EXECUTE statements
+      .replace(/\n+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/Figure \d+-\d+[^.]*/gi, '')
+      .replace(/Description\s*•/gi, '')
+      .trim();
+  }, []);
+
   // Build retrieval bundle for grounding - prioritizes current problem context
   const buildGroundingPayload = useCallback((query: string, quickChip?: string) => {
     const problem = getProblemById(problemId);
@@ -484,21 +501,7 @@ export function AskMyTextbookChat({
     };
   }, [learnerId, problemId, recentInteractions, getTextbookUnits, getStoredInteractions]);
 
-  // Clean up text for better readability - more aggressive cleaning
-  const cleanText = useCallback((text: string): string => {
-    return text
-      .replace(/_/g, '')
-      .replace(/@\w+/g, '')  // Remove @variables
-      .replace(/\/\/\s*/g, '')  // Remove // comments
-      .replace(/END\/\//gi, '')  // Remove END//
-      .replace(/DEALLOCATE\s+PREPARE[^;]*/gi, '')  // Remove DEALLOCATE statements
-      .replace(/EXECUTE[^;]*/gi, '')  // Remove EXECUTE statements
-      .replace(/\n+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .replace(/Figure \d+-\d+[^.]*/gi, '')
-      .replace(/Description\s*•/gi, '')
-      .trim();
-  }, []);
+  // cleanText moved above buildGroundingPayload to fix temporal dead zone
   
   // Extract a clean SQL example from text
   const extractSqlExample = useCallback((text: string): string | null => {

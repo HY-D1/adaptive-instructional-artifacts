@@ -4,6 +4,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { Book, Trash2, ChevronRight, ChevronDown, Folder, FileText, Star, ArrowUpDown, Layers, Archive } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import type { TextbookUnitStatus } from '../types';
 import { Link } from 'react-router';
 import { renderTextbookContent } from '../lib/textbook-renderer';
@@ -620,7 +621,10 @@ export function AdaptiveTextbook({
             <div 
               className="space-y-4"
               dangerouslySetInnerHTML={{ 
-                __html: renderedUnitContent 
+                __html: DOMPurify.sanitize(renderedUnitContent, {
+                  ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'a', 'div', 'span', 'table', 'thead', 'tbody', 'tr', 'td', 'th'],
+                  ALLOWED_ATTR: ['href', 'title', 'class', 'target']
+                })
               }}
             />
 

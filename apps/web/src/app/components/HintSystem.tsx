@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import DOMPurify from 'dompurify';
 
 import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen, Loader2, HelpCircle, Sparkles } from 'lucide-react';
 import { HelpEventType, InteractionEvent } from '../types';
@@ -575,6 +576,113 @@ export function HintSystem({
     }
   };
 
+  const handleShowExplanation = async (
+    source: 'auto' | 'manual' = 'auto',
+    forcedHelpRequestIndex?: number,
+    traceOverride?: InteractionEvent[]
+  ) => {
+    if (!profile || !sessionId) {
+      return;
+    }
+
+    // Week 3 D8: Log guidance request for explanation
+    storage.logGuidanceRequest({
+      learnerId,
+      problemId,
+      requestType: 'explanation',
+      currentRung: currentRung,
+      sessionId
+    });
+
+    const problemTrace = traceOverride || getProblemTrace();
+    const requestedHelpRequestIndex = forcedHelpRequestIndex ?? allocateNextHelpRequestIndex(problemTrace);
+    const nextHelpRequestIndex = Math.max(requestedHelpRequestIndex, 4);
+    nextHelpRequestIndexRef.current = Math.max(nextHelpRequestIndexRef.current, nextHelpRequestIndex + 1);
+    const helpSelection = getHelpSelectionForIndex(nextHelpRequestIndex);
+    if (!helpSelection) {
+      return;
+    }
+    if (!registerHelpEvent('explanation_view', nextHelpRequestIndex)) {
+      setIsProcessingHint(false);
+      return;
+    }
+    setShowExplanation(true);
+    setCurrentRung(2); // Week 3 D7: Explanation is rung 2
+    const latestProblemError = [...scopedInteractions]
+      .reverse()
+      .find((interaction) => interaction.problemId === problemId && interaction.eventType === 'error');
+    const sourceInteractionIds =
+      latestProblemError
+        ? [latestProblemError.id]
+        : [];
+    onEscalate?.(sourceInteractionIds);
+
+    // Calculate evidence for escalation logging
+    const errorCount = problemTrace.filter((interaction) => interaction.eventType === 'error').length;
+    const hintCount = problemTrace.filter((interaction) => interaction.eventType === 'hint_view').length;
+    const timeSpent = problemTrace.length > 0 ? Date.now() - problemTrace[0].timestamp : 0;
+
+    // Log escalation event for manual explanation requests
+    if (source === 'manual' && currentRung < 2) {
+      storage.logGuidanceEscalate({
+        learnerId,
+        problemId,
+        fromRung: currentRung,
+        toRung: 2,
+        trigger: 'learner_request',
+        evidence: {
+          errorCount,
+          retryCount: Math.max(0, errorCount - 1),
+          hintCount,
+          timeSpentMs: timeSpent
+        },
+        sourceInteractionIds,
+        sessionId
+      });
+    }
+
+    // Log interaction
+    const explanationEvent: InteractionEvent = {
+      id: buildHelpEventId('explanation', nextHelpRequestIndex, source),
+      sessionId,
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'explanation_view',
+      problemId,
+      explanationId: buildStableExplanationId(helpSelection),
+      errorSubtypeId: helpSelection.sqlEngageSubtype,
+      helpRequestIndex: nextHelpRequestIndex,
+      sqlEngageSubtype: helpSelection.sqlEngageSubtype,
+      sqlEngageRowId: helpSelection.sqlEngageRowId,
+      policyVersion: helpSelection.policyVersion,
+      ruleFired: 'escalation',
+      inputs: {
+        retry_count: Math.max(0, errorCount - 1),
+        hint_count: hintCount,
+        time_spent_ms: timeSpent
+      },
+      outputs: {
+        explanation_requested: true,
+        help_request_index: nextHelpRequestIndex,
+        sql_engage_subtype: helpSelection.sqlEngageSubtype,
+        sql_engage_row_id: helpSelection.sqlEngageRowId
+      }
+    };
+    storage.saveInteraction(explanationEvent);
+    onInteractionLogged?.(explanationEvent);
+
+    // Week 3 D8: Log guidance view event for explanation
+    storage.logGuidanceView({
+      learnerId,
+      problemId,
+      rung: 2,
+      conceptIds: conceptIds.length > 0 ? conceptIds : [helpSelection.sqlEngageSubtype],
+      sourceRefIds: [],
+      grounded: false, // Explanations are LLM-generated, not directly grounded
+      contentLength: 0, // Explanation content is async-generated
+      sessionId
+    });
+  };
   const handleRequestHint = async () => {
     if (!profile) {
       return;
@@ -751,113 +859,6 @@ export function HintSystem({
     }
   };
 
-  const handleShowExplanation = async (
-    source: 'auto' | 'manual' = 'auto',
-    forcedHelpRequestIndex?: number,
-    traceOverride?: InteractionEvent[]
-  ) => {
-    if (!profile || !sessionId) {
-      return;
-    }
-
-    // Week 3 D8: Log guidance request for explanation
-    storage.logGuidanceRequest({
-      learnerId,
-      problemId,
-      requestType: 'explanation',
-      currentRung: currentRung,
-      sessionId
-    });
-
-    const problemTrace = traceOverride || getProblemTrace();
-    const requestedHelpRequestIndex = forcedHelpRequestIndex ?? allocateNextHelpRequestIndex(problemTrace);
-    const nextHelpRequestIndex = Math.max(requestedHelpRequestIndex, 4);
-    nextHelpRequestIndexRef.current = Math.max(nextHelpRequestIndexRef.current, nextHelpRequestIndex + 1);
-    const helpSelection = getHelpSelectionForIndex(nextHelpRequestIndex);
-    if (!helpSelection) {
-      return;
-    }
-    if (!registerHelpEvent('explanation_view', nextHelpRequestIndex)) {
-      setIsProcessingHint(false);
-      return;
-    }
-    setShowExplanation(true);
-    setCurrentRung(2); // Week 3 D7: Explanation is rung 2
-    const latestProblemError = [...scopedInteractions]
-      .reverse()
-      .find((interaction) => interaction.problemId === problemId && interaction.eventType === 'error');
-    const sourceInteractionIds =
-      latestProblemError
-        ? [latestProblemError.id]
-        : [];
-    onEscalate?.(sourceInteractionIds);
-
-    // Calculate evidence for escalation logging
-    const errorCount = problemTrace.filter((interaction) => interaction.eventType === 'error').length;
-    const hintCount = problemTrace.filter((interaction) => interaction.eventType === 'hint_view').length;
-    const timeSpent = problemTrace.length > 0 ? Date.now() - problemTrace[0].timestamp : 0;
-
-    // Log escalation event for manual explanation requests
-    if (source === 'manual' && currentRung < 2) {
-      storage.logGuidanceEscalate({
-        learnerId,
-        problemId,
-        fromRung: currentRung,
-        toRung: 2,
-        trigger: 'learner_request',
-        evidence: {
-          errorCount,
-          retryCount: Math.max(0, errorCount - 1),
-          hintCount,
-          timeSpentMs: timeSpent
-        },
-        sourceInteractionIds,
-        sessionId
-      });
-    }
-
-    // Log interaction
-    const explanationEvent: InteractionEvent = {
-      id: buildHelpEventId('explanation', nextHelpRequestIndex, source),
-      sessionId,
-      learnerId,
-      timestamp: Date.now(),
-      eventType: 'explanation_view',
-      problemId,
-      explanationId: buildStableExplanationId(helpSelection),
-      errorSubtypeId: helpSelection.sqlEngageSubtype,
-      helpRequestIndex: nextHelpRequestIndex,
-      sqlEngageSubtype: helpSelection.sqlEngageSubtype,
-      sqlEngageRowId: helpSelection.sqlEngageRowId,
-      policyVersion: helpSelection.policyVersion,
-      ruleFired: 'escalation',
-      inputs: {
-        retry_count: Math.max(0, errorCount - 1),
-        hint_count: hintCount,
-        time_spent_ms: timeSpent
-      },
-      outputs: {
-        explanation_requested: true,
-        help_request_index: nextHelpRequestIndex,
-        sql_engage_subtype: helpSelection.sqlEngageSubtype,
-        sql_engage_row_id: helpSelection.sqlEngageRowId
-      }
-    };
-    storage.saveInteraction(explanationEvent);
-    onInteractionLogged?.(explanationEvent);
-
-    // Week 3 D8: Log guidance view event for explanation
-    storage.logGuidanceView({
-      learnerId,
-      problemId,
-      rung: 2,
-      conceptIds: conceptIds.length > 0 ? conceptIds : [helpSelection.sqlEngageSubtype],
-      sourceRefIds: [],
-      grounded: false, // Explanations are LLM-generated, not directly grounded
-      contentLength: 0, // Explanation content is async-generated
-      sessionId
-    });
-  };
 
   const decision = profile
     ? orchestrator.makeDecision(profile, scopedInteractions, problemId)
@@ -1049,15 +1050,21 @@ export function HintSystem({
                           isEnhanced ? "text-gray-800" : "text-gray-800"
                         )}
                         dangerouslySetInnerHTML={{ 
-                          __html: hint
-                            .replace(/## (.+)/g, '<h3 class="font-semibold text-base mt-3 mb-2 text-gray-900">$1</h3>')
-                            .replace(/\*\*(.+?)\*\*/g, '<strong class="text-gray-900">$1</strong>')
-                            .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                            .replace(/_(.+?)_/g, '<em>$1</em>')
-                            .replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs text-gray-800">$1</code>')
-                            .replace(/- (.+)/g, '<li class="ml-4 mb-1">$1</li>')
-                            .replace(/```sql\n([\s\S]*?)```/g, '<pre class="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto my-2"><code>$1</code></pre>')
-                            .replace(/\n\n/g, '<br/>')
+                          __html: DOMPurify.sanitize(
+                            hint
+                              .replace(/## (.+)/g, '<h3 class="font-semibold text-base mt-3 mb-2 text-gray-900">$1</h3>')
+                              .replace(/\*\*(.+?)\*\*/g, '<strong class="text-gray-900">$1</strong>')
+                              .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                              .replace(/_(.+?)_/g, '<em>$1</em>')
+                              .replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs text-gray-800">$1</code>')
+                              .replace(/- (.+)/g, '<li class="ml-4 mb-1">$1</li>')
+                              .replace(/```sql\n([\s\S]*?)```/g, '<pre class="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto my-2"><code>$1</code></pre>')
+                              .replace(/\n\n/g, '<br/>'),
+                            {
+                              ALLOWED_TAGS: ['h3', 'strong', 'em', 'code', 'pre', 'li', 'br'],
+                              ALLOWED_ATTR: ['class']
+                            }
+                          )
                         }}
                       />
                     ) : (
@@ -1067,11 +1074,17 @@ export function HintSystem({
                           isEnhanced ? "text-gray-800" : "text-gray-800"
                         )}
                         dangerouslySetInnerHTML={{
-                          __html: hint
-                            .replace(/\*\*(.+?)\*\*/g, '<strong class="text-gray-900">$1</strong>')
-                            .replace(/\*(.+?)\*/g, '<em>$1</em>')
-                            .replace(/_(.+?)_/g, '<em>$1</em>')
-                            .replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs text-gray-800">$1</code>')
+                          __html: DOMPurify.sanitize(
+                            hint
+                              .replace(/\*\*(.+?)\*\*/g, '<strong class="text-gray-900">$1</strong>')
+                              .replace(/\*(.+?)\*/g, '<em>$1</em>')
+                              .replace(/_(.+?)_/g, '<em>$1</em>')
+                              .replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs text-gray-800">$1</code>'),
+                            {
+                              ALLOWED_TAGS: ['strong', 'em', 'code'],
+                              ALLOWED_ATTR: ['class']
+                            }
+                          )
                         }}
                       />
                     )}
