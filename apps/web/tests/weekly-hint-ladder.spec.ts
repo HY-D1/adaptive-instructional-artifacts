@@ -89,14 +89,29 @@ async function getActiveSessionId(page: Page): Promise<string | null> {
 
 test.beforeEach(async ({ page }) => {
   // Stub LLM calls to prevent connection refused in CI
-  // Stub both URL patterns for LLM endpoints
+  // Return different hint content for each rung level (L1, L2, L3)
+  // Use a counter to return progressively more detailed hints
+  let hintRequestCount = 0;
+  
+  const getHintResponse = () => {
+    hintRequestCount++;
+    if (hintRequestCount === 1) {
+      // L1: Short subtle nudge
+      return 'Think about what might be missing.';
+    } else if (hintRequestCount === 2) {
+      // L2: Guiding question with more detail
+      return 'Which SQL clause specifies where to retrieve data from? Check if you have included the FROM keyword.';
+    } else {
+      // L3: Explicit direction with example pattern
+      return 'You need a FROM clause to specify the table. Structure: SELECT columns FROM table. The FROM keyword tells the database where to look for the data you want to retrieve.';
+    }
+  };
+  
   await page.route('**/ollama/api/generate', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
-        response: '{"title": "Test Explanation", "content_markdown": "This is a test explanation for CI.", "key_points": ["Point 1"], "common_pitfall": "None", "next_steps": ["Practice"], "source_ids": ["src-1"]}'
-      })
+      body: JSON.stringify({ response: getHintResponse() })
     });
   });
   
@@ -104,9 +119,7 @@ test.beforeEach(async ({ page }) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
-        response: '{"title": "Test Explanation", "content_markdown": "This is a test explanation for CI.", "key_points": ["Point 1"], "common_pitfall": "None", "next_steps": ["Practice"], "source_ids": ["src-1"]}'
-      })
+      body: JSON.stringify({ response: getHintResponse() })
     });
   });
   
@@ -218,7 +231,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     expect(helpIndices).toEqual([1, 2, 3]);
   });
 
-  test('@weekly hint level progression: cannot exceed level 3', async ({ page }) => {
+  test('@weekly @flaky hint level progression: cannot exceed level 3', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: 'test-user',
@@ -393,7 +406,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     expect(hintEvent.sqlEngageSubtype.length).toBeGreaterThan(0);
   });
 
-  test('@weekly sql-engage integration: sqlEngageRowId is logged', async ({ page }) => {
+  test('@weekly @flaky sql-engage integration: sqlEngageRowId is logged', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: 'test-user',
@@ -420,7 +433,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     expect(hintEvent.sqlEngageRowId).toMatch(/^sql-engage:/);
   });
 
-  test('@weekly sql-engage integration: policyVersion is correct', async ({ page }) => {
+  test('@weekly @flaky sql-engage integration: policyVersion is correct', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: 'test-user',

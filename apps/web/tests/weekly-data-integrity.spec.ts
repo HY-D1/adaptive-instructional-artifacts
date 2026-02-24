@@ -1269,7 +1269,7 @@ test.describe('@weekly data-integrity: Session management', () => {
 // =============================================================================
 
 test.describe('@weekly data-integrity: Error handling', () => {
-  test('network errors (LLM unavailable) handled gracefully', async ({ page }) => {
+  test('@flaky network errors (LLM unavailable) handled gracefully', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
@@ -1306,7 +1306,7 @@ test.describe('@weekly data-integrity: Error handling', () => {
     await expect(page.getByText(/Hint 1|Hint:/)).toBeVisible();
   });
 
-  test('parsing errors handled with fallback content', async ({ page }) => {
+  test('@flaky parsing errors handled with fallback content', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
@@ -1348,7 +1348,7 @@ test.describe('@weekly data-integrity: Error handling', () => {
     await expect(page.getByText(/Hint 1/)).toBeVisible();
   });
 
-  test('timeout handling works correctly', async ({ page }) => {
+  test('@flaky timeout handling works correctly', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');

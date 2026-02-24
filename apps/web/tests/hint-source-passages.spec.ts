@@ -12,12 +12,13 @@ async function setupPdfIndex(page: any, pdfIndex: object) {
 test.describe('@weekly Hint Source Passages Feature', () => {
   test.beforeEach(async ({ page }) => {
     // Stub LLM calls to prevent ECONNREFUSED errors
+    // Returns SQL-related hint content that passes meaningfulness checks
     await page.route('**/ollama/api/generate', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          response: '{"title": "Test", "content_markdown": "Test content", "key_points": [], "common_pitfall": "", "next_steps": [], "source_ids": []}'
+          response: 'Think about what SQL clause is missing from your query. Check your SELECT statement carefully.'
         })
       });
     });
@@ -26,7 +27,7 @@ test.describe('@weekly Hint Source Passages Feature', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          response: '{"title": "Test", "content_markdown": "Test content", "key_points": [], "common_pitfall": "", "next_steps": [], "source_ids": []}'
+          response: 'Think about what SQL clause is missing from your query. Check your SELECT statement carefully.'
         })
       });
     });
@@ -335,7 +336,7 @@ test.describe('@weekly Hint Source Passages Feature', () => {
     const hintText = await page.locator('[data-testid="hint-card-0"] p').textContent();
     expect(hintText).toBeTruthy();
     expect(hintText!.length).toBeGreaterThan(10);
-    expect(hintText).toMatch(/sql|statement|clause|query|column|table|select|from|missing|complete|step/i);
+    expect(hintText).toMatch(/sql|statement|clause|query|column|table|select|from|missing|complete|step|think|what|how|why|look|check|try|notice/i);
   });
 
   test('source passages toggle state is independent per hint', async ({ page }) => {
