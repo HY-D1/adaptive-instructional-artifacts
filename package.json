@@ -4,8 +4,8 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "vite build --config apps/web/vite.config.ts",
-    "dev": "vite --config apps/web/vite.config.ts",
+    "build": "npx vite build --config apps/web/vite.config.ts",
+    "dev": "npx vite --config apps/web/vite.config.ts",
     "test:unit": "npx vitest run",
     "test:e2e": "npx playwright test -c playwright.config.ts",
     "test:e2e:weekly": "CI=1 npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@(integration|flaky)'",
