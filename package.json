@@ -8,7 +8,7 @@
     "dev": "vite --config apps/web/vite.config.ts",
     "test:unit": "npx vitest run",
     "test:e2e": "npx playwright test -c playwright.config.ts",
-    "test:e2e:weekly": "CI=1 npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@integration'",
+    "test:e2e:weekly": "CI=1 npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@(integration|flaky)'",
     "test:e2e:integration": "CI=1 npx playwright test -c playwright.config.ts --grep '@integration'",
     "test:e2e:no-external": "CI=1 npx playwright test -c playwright.config.ts --grep '@no-external'",
     "demo:weekly": "npx playwright test -c playwright.config.ts apps/web/tests/weekly-demo-artifacts.spec.ts",
