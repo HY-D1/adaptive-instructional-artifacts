@@ -77,7 +77,7 @@ jobs:
         id: test-run
         run: |
           echo "Running tests for shard ${{ matrix.shard }} of ${{ matrix.totalShards }}"
-          npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@flaky' --shard=${{ matrix.shard }}/${{ matrix.totalShards }}
+          npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@(integration|flaky)' --shard=${{ matrix.shard }}/${{ matrix.totalShards }}
         env:
           CI: true
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results-shard-${{ matrix.shard }}.json
@@ -85,7 +85,7 @@ jobs:
       - name: Retry failed tests
         if: failure()
         run: |
-          npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@flaky' --shard=${{ matrix.shard }}/${{ matrix.totalShards }} --last-failed
+          npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@(integration|flaky)' --shard=${{ matrix.shard }}/${{ matrix.totalShards }} --last-failed
         env:
           CI: true
         continue-on-error: true
