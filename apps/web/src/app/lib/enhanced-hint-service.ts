@@ -653,8 +653,54 @@ function parseAdaptiveOutput(rawOutput: string, rung: 1 | 2 | 3): AdaptiveHintOu
     console.log('[AdaptiveHint] Raw LLM output:', rawOutput.slice(0, 500));
   }
 
-  // Extract conceptIds
-  const conceptIdsMatch = rawOutput.match(/conceptIds:\s*\[([^\]]*)\]/i);
+  // Try to parse JSON responses (for backward compatibility with test mocks)
+  // Some LLM responses may return JSON with fields like content, content_markdown, etc.
+  try {
+    const trimmed = rawOutput.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('"{') && trimmed.endsWith('}"'))) {
+      // Handle double-encoded JSON
+      const jsonStr = trimmed.startsWith('"') ? JSON.parse(trimmed) : trimmed;
+      const parsed = JSON.parse(jsonStr);
+      
+      // Extract content from various possible fields (priority order)
+      if (parsed.content && typeof parsed.content === 'string') {
+        content = parsed.content;
+      } else if (parsed.content_markdown && typeof parsed.content_markdown === 'string') {
+        content = parsed.content_markdown;
+      } else if (parsed.contentmarkdown && typeof parsed.contentmarkdown === 'string') {
+        content = parsed.contentmarkdown;
+      } else if (parsed.text && typeof parsed.text === 'string') {
+        content = parsed.text;
+      } else if (parsed.response && typeof parsed.response === 'string') {
+        content = parsed.response;
+      }
+      
+      // Extract conceptIds from JSON if present
+      if (parsed.conceptIds && Array.isArray(parsed.conceptIds)) {
+        conceptIds.push(...parsed.conceptIds.filter((id: unknown) => typeof id === 'string'));
+      }
+      if (parsed.concept_ids && Array.isArray(parsed.concept_ids)) {
+        conceptIds.push(...parsed.concept_ids.filter((id: unknown) => typeof id === 'string'));
+      }
+      
+      // Extract sourceRefIds from JSON if present
+      if (parsed.sourceRefIds && Array.isArray(parsed.sourceRefIds)) {
+        sourceRefIds.push(...parsed.sourceRefIds.filter((id: unknown) => typeof id === 'string'));
+      }
+      if (parsed.source_ids && Array.isArray(parsed.source_ids)) {
+        sourceRefIds.push(...parsed.source_ids.filter((id: unknown) => typeof id === 'string'));
+      }
+      
+      console.log('[AdaptiveHint] Parsed JSON response, extracted content:', content.slice(0, 100));
+    }
+  } catch {
+    // Not valid JSON or parsing failed, treat as plain text
+    // Continue with normal parsing
+  }
+
+  // Extract conceptIds (from text format as fallback)
+  const conceptIdsMatch = content.match(/conceptIds:\s*\[([^\]]*)\]/i);
   if (conceptIdsMatch) {
     content = content.replace(conceptIdsMatch[0], '').trim();
     const ids = conceptIdsMatch[1]
@@ -664,8 +710,8 @@ function parseAdaptiveOutput(rawOutput: string, rung: 1 | 2 | 3): AdaptiveHintOu
     conceptIds.push(...ids);
   }
 
-  // Extract sourceRefIds
-  const sourceRefIdsMatch = rawOutput.match(/sourceRefIds:\s*\[([^\]]*)\]/i);
+  // Extract sourceRefIds (from text format as fallback)
+  const sourceRefIdsMatch = content.match(/sourceRefIds:\s*\[([^\]]*)\]/i);
   if (sourceRefIdsMatch) {
     content = content.replace(sourceRefIdsMatch[0], '').trim();
     const ids = sourceRefIdsMatch[1]

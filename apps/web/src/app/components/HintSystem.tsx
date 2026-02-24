@@ -746,6 +746,7 @@ export function HintSystem({
         sessionId
       });
       setShowExplanation(true);
+      setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
       handleShowExplanation('auto', nextHelpRequestIndex + 1, [...problemTrace, hintEvent]);
     }
   };
