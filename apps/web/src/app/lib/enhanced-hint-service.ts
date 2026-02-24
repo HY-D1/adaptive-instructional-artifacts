@@ -73,6 +73,10 @@ export type EnhancedHint = {
   llmGenerated: boolean;
   /** Confidence score (0-1) based on source richness */
   confidence: number;
+  /** Whether LLM was requested but failed (for UI feedback) */
+  llmFailed?: boolean;
+  /** Error message if LLM failed */
+  llmErrorMessage?: string;
 };
 
 /**
@@ -227,7 +231,7 @@ function generateSqlEngageFallbackHint(
   if (records.length > 0) {
     // Use progressive hint from SQL-Engage
     const record = records[0];
-    content = getProgressiveSqlEngageHintText(record, rung);
+    content = getProgressiveSqlEngageHintText(canonicalSubtype, rung, record);
   } else {
     // Ultimate fallback: generic hint based on rung
     content = getGenericFallbackHint(rung, errorSubtypeId);
@@ -473,10 +477,20 @@ export async function generateAdaptiveHint(
     // Call LLM with the adaptive prompt
     const rawOutput = await llmCall(prompt);
     
+    // Debug log raw output for L3 (which seems to have issues)
+    if (rung === 3) {
+      console.log(`[AdaptiveHint] L3 Raw output (${rawOutput.length} chars):`, rawOutput.slice(0, 200));
+    }
+    
     // Parse and validate the output
     const parsed = parseAdaptiveOutput(rawOutput, rung);
     
     console.log(`[AdaptiveHint] Generated hint (${parsed.content.length} chars):`, parsed.content.slice(0, 50) + '...');
+    
+    // Extra debug for empty L3 hints
+    if (rung === 3 && !parsed.content.trim()) {
+      console.warn('[AdaptiveHint] L3 hint content is empty after parsing!');
+    }
     
     return parsed;
   } catch (error) {
@@ -750,9 +764,9 @@ function parseAdaptiveOutput(rawOutput: string, rung: 1 | 2 | 3): AdaptiveHintOu
   // Clean up multiple newlines
   content = content.replace(/\n{3,}/g, '\n\n').trim();
 
-  // Debug logging after cleanup (for L1 rung)
-  if (rung === 1 && process.env.NODE_ENV !== 'production') {
-    console.log('[AdaptiveHint] Content after cleanup:', content.slice(0, 200) || '(empty)');
+  // Debug logging after cleanup (for L1 and L3 rungs which have had issues)
+  if ((rung === 1 || rung === 3) && process.env.NODE_ENV !== 'production') {
+    console.log(`[AdaptiveHint] L${rung} content after cleanup:`, content.slice(0, 200) || '(empty)');
   }
 
   // Enforce length constraints based on rung
@@ -762,6 +776,12 @@ function parseAdaptiveOutput(rawOutput: string, rung: 1 | 2 | 3): AdaptiveHintOu
   if (content.length > maxLength) {
     console.warn(`[AdaptiveHint] Hint exceeded max length (${content.length} > ${maxLength}), truncating...`);
     content = content.slice(0, maxLength - 3) + '...';
+  }
+  
+  // Ensure content is never empty - fallback to generic hint if LLM returns empty
+  if (!content.trim()) {
+    console.warn(`[AdaptiveHint] Empty content for rung ${rung}, using fallback`);
+    content = getGenericFallbackHint(rung, 'incomplete query');
   }
 
   return { content: content.trim(), conceptIds, sourceRefIds };
@@ -864,10 +884,18 @@ async function generateLLMEnhancedHint(
     };
     
   } catch (error) {
-    console.warn('[EnhancedHint] Adaptive LLM generation failed:', error);
+    const errorMessage = error instanceof Error ? error.message : 'LLM service unavailable';
+    console.warn('[EnhancedHint] Adaptive LLM generation failed:', errorMessage);
     
     // Fallback to SQL-Engage if adaptive hint generation fails
-    return generateSqlEngageFallbackHint(errorSubtypeId, rung);
+    const fallbackHint = generateSqlEngageFallbackHint(errorSubtypeId, rung);
+    
+    // Mark that LLM was attempted but failed (for UI feedback)
+    return {
+      ...fallbackHint,
+      llmFailed: true,
+      llmErrorMessage: errorMessage
+    };
   }
 }
 

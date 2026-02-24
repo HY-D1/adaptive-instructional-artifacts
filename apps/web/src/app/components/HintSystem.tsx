@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
 import DOMPurify from 'dompurify';
 
-import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen, Loader2, HelpCircle, Sparkles } from 'lucide-react';
+import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen, Loader2, HelpCircle, Sparkles, AlertCircle } from 'lucide-react';
 import { HelpEventType, InteractionEvent } from '../types';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { storage } from '../lib/storage';
@@ -81,6 +81,8 @@ export function HintSystem({
   const [enhancedHintInfo, setEnhancedHintInfo] = useState<Array<{
     isEnhanced: boolean;
     sources: { sqlEngage: boolean; textbook: boolean; llm: boolean; pdfPassages: boolean };
+    llmFailed?: boolean;
+    llmErrorMessage?: string;
   }>>([]);
   const MAX_DEDUPE_KEYS = 1000; // Prevent unbounded set growth
   
@@ -418,7 +420,9 @@ export function HintSystem({
           textbook: event.outputs?.is_enhanced || false,
           llm: event.ruleFired === 'enhanced-hint',
           pdfPassages: (event.retrievedSourceIds || []).some(id => id.includes('doc-'))
-        }
+        },
+        llmFailed: event.outputs?.llm_failed || false,
+        llmErrorMessage: event.outputs?.llm_error_message
       }));
       setEnhancedHintInfo(reconstructedEnhancedInfo);
       
@@ -491,6 +495,8 @@ export function HintSystem({
     policyVersion: string;
     pdfPassages: RetrievalPdfPassage[];
     isEnhanced: boolean;
+    llmFailed?: boolean;
+    llmErrorMessage?: string;
   } | null> => {
     if (!profile) return null;
     
@@ -527,7 +533,9 @@ export function HintSystem({
           sqlEngageRowId: enhancedHint.llmGenerated ? 'llm-generated' : 'sql-engage-enhanced',
           policyVersion: enhancedHint.llmGenerated ? 'enhanced-llm-v1' : 'sql-engage-v1',
           pdfPassages,
-          isEnhanced: enhancedHint.llmGenerated || enhancedHint.sources.textbook
+          isEnhanced: enhancedHint.llmGenerated || enhancedHint.sources.textbook,
+          llmFailed: enhancedHint.llmFailed,
+          llmErrorMessage: enhancedHint.llmErrorMessage
         };
       }
     } catch (err) {
@@ -547,7 +555,8 @@ export function HintSystem({
       sqlEngageRowId: standardHint.sqlEngageRowId,
       policyVersion: standardHint.policyVersion,
       pdfPassages,
-      isEnhanced: false
+      isEnhanced: false,
+      llmFailed: false
     };
   };
 
@@ -602,10 +611,10 @@ export function HintSystem({
     if (!helpSelection) {
       return;
     }
-    if (!registerHelpEvent('explanation_view', nextHelpRequestIndex)) {
-      setIsProcessingHint(false);
-      return;
-    }
+    const isNewEvent = registerHelpEvent('explanation_view', nextHelpRequestIndex);
+    
+    // Always show explanation and call onEscalate, even if event was already logged
+    // This ensures the explanation UI is shown when user clicks "Get More Help"
     setShowExplanation(true);
     setCurrentRung(2); // Week 3 D7: Explanation is rung 2
     const latestProblemError = [...scopedInteractions]
@@ -641,47 +650,50 @@ export function HintSystem({
       });
     }
 
-    // Log interaction
-    const explanationEvent: InteractionEvent = {
-      id: buildHelpEventId('explanation', nextHelpRequestIndex, source),
-      sessionId,
-      learnerId,
-      timestamp: Date.now(),
-      eventType: 'explanation_view',
-      problemId,
-      explanationId: buildStableExplanationId(helpSelection),
-      errorSubtypeId: helpSelection.sqlEngageSubtype,
-      helpRequestIndex: nextHelpRequestIndex,
-      sqlEngageSubtype: helpSelection.sqlEngageSubtype,
-      sqlEngageRowId: helpSelection.sqlEngageRowId,
-      policyVersion: helpSelection.policyVersion,
-      ruleFired: 'escalation',
-      inputs: {
-        retry_count: Math.max(0, errorCount - 1),
-        hint_count: hintCount,
-        time_spent_ms: timeSpent
-      },
-      outputs: {
-        explanation_requested: true,
-        help_request_index: nextHelpRequestIndex,
-        sql_engage_subtype: helpSelection.sqlEngageSubtype,
-        sql_engage_row_id: helpSelection.sqlEngageRowId
-      }
-    };
-    storage.saveInteraction(explanationEvent);
-    onInteractionLogged?.(explanationEvent);
+    // Only log interaction if this is a new event (not a duplicate)
+    if (isNewEvent) {
+      // Log interaction
+      const explanationEvent: InteractionEvent = {
+        id: buildHelpEventId('explanation', nextHelpRequestIndex, source),
+        sessionId,
+        learnerId,
+        timestamp: Date.now(),
+        eventType: 'explanation_view',
+        problemId,
+        explanationId: buildStableExplanationId(helpSelection),
+        errorSubtypeId: helpSelection.sqlEngageSubtype,
+        helpRequestIndex: nextHelpRequestIndex,
+        sqlEngageSubtype: helpSelection.sqlEngageSubtype,
+        sqlEngageRowId: helpSelection.sqlEngageRowId,
+        policyVersion: helpSelection.policyVersion,
+        ruleFired: 'escalation',
+        inputs: {
+          retry_count: Math.max(0, errorCount - 1),
+          hint_count: hintCount,
+          time_spent_ms: timeSpent
+        },
+        outputs: {
+          explanation_requested: true,
+          help_request_index: nextHelpRequestIndex,
+          sql_engage_subtype: helpSelection.sqlEngageSubtype,
+          sql_engage_row_id: helpSelection.sqlEngageRowId
+        }
+      };
+      storage.saveInteraction(explanationEvent);
+      onInteractionLogged?.(explanationEvent);
 
-    // Week 3 D8: Log guidance view event for explanation
-    storage.logGuidanceView({
-      learnerId,
-      problemId,
-      rung: 2,
-      conceptIds: conceptIds.length > 0 ? conceptIds : [helpSelection.sqlEngageSubtype],
-      sourceRefIds: [],
-      grounded: false, // Explanations are LLM-generated, not directly grounded
-      contentLength: 0, // Explanation content is async-generated
-      sessionId
-    });
+      // Week 3 D8: Log guidance view event for explanation
+      storage.logGuidanceView({
+        learnerId,
+        problemId,
+        rung: 2,
+        conceptIds: conceptIds.length > 0 ? conceptIds : [helpSelection.sqlEngageSubtype],
+        sourceRefIds: [],
+        grounded: false, // Explanations are LLM-generated, not directly grounded
+        contentLength: 0, // Explanation content is async-generated
+        sessionId
+      });
+    }
   };
   const handleRequestHint = async () => {
     if (!profile) {
@@ -775,7 +787,9 @@ export function HintSystem({
       isEnhanced: hintSelection!.isEnhanced,
       sources: hintSelection!.isEnhanced ? 
         { sqlEngage: true, textbook: availableResources.textbook, llm: availableResources.llm, pdfPassages: hintSelection!.pdfPassages.length > 0 } :
-        { sqlEngage: true, textbook: false, llm: false, pdfPassages: false }
+        { sqlEngage: true, textbook: false, llm: false, pdfPassages: false },
+      llmFailed: hintSelection!.llmFailed,
+      llmErrorMessage: hintSelection!.llmErrorMessage
     }]);
     setActiveHintSubtype(hintSelection!.sqlEngageSubtype);
     const errorCount = problemTrace.filter((interaction) => interaction.eventType === 'error').length;
@@ -815,7 +829,9 @@ export function HintSystem({
         sql_engage_row_id: hintSelection!.sqlEngageRowId,
         will_escalate: willEscalate,
         rule_fired: willEscalate ? 'progressive-hint-will-escalate' : (hintSelection!.isEnhanced ? 'enhanced-hint' : 'progressive-hint'),
-        is_enhanced: hintSelection!.isEnhanced
+        is_enhanced: hintSelection!.isEnhanced,
+        llm_failed: hintSelection!.llmFailed || false,
+        llm_error_message: hintSelection!.llmErrorMessage || null
       }
     };
     storage.saveInteraction(hintEvent);
@@ -853,9 +869,13 @@ export function HintSystem({
         sourceInteractionIds: [hintEvent.id],
         sessionId
       });
-      setShowExplanation(true);
-      setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
-      handleShowExplanation('auto', nextHelpRequestIndex + 1, [...problemTrace, hintEvent]);
+      
+      // Delay auto-escalation slightly so user can see the L3 hint first
+      setTimeout(() => {
+        setShowExplanation(true);
+        setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
+        handleShowExplanation('auto', nextHelpRequestIndex + 1, [...problemTrace, hintEvent]);
+      }, 500); // 500ms delay to show L3 hint before switching to explanation
     }
   };
 
@@ -1015,6 +1035,17 @@ export function HintSystem({
                           AI
                         </span>
                       )}
+                      
+                      {/* LLM failed badge - shows when AI was requested but unavailable */}
+                      {enhancedInfo?.llmFailed && (
+                        <span 
+                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700"
+                          title={enhancedInfo.llmErrorMessage || 'AI service unavailable'}
+                        >
+                          <AlertCircle className="size-3" />
+                          AI Offline
+                        </span>
+                      )}
                     </div>
                     
                     {/* Sources toggle button - right side */}
@@ -1172,63 +1203,42 @@ export function HintSystem({
             <p className="text-xs text-gray-400">Progresses through L1 → L2 → L3 hints</p>
           </TooltipContent>
         </Tooltip>
-        <div className="grid grid-cols-2 gap-2">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                onClick={() => void handleShowExplanation('manual')}
-                variant="secondary"
-                className="w-full h-9 text-sm px-2"
-                disabled={!profile || !sessionId || !errorSubtypeId || isProcessingHint}
-              >
-                <Sparkles className="size-3.5 mr-1.5 shrink-0" />
-                <span className="truncate">Explain</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p>Get a detailed explanation</p>
-              {!errorSubtypeId && (
-                <p className="text-xs text-amber-600">Run a query with an error first</p>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={handleAddToTextbook}
+              disabled={!profile || !sessionId || currentRung >= 3 || isAddingToTextbook}
+              className={cn(
+                'w-full h-9 text-sm px-2 rounded-md font-medium',
+                'inline-flex items-center justify-center gap-1 transition-colors',
+                (!profile || !sessionId || currentRung >= 3) 
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                  : 'bg-purple-600 text-white hover:bg-purple-700'
               )}
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={handleAddToTextbook}
-                disabled={!profile || !sessionId || currentRung >= 3 || isAddingToTextbook}
-                className={cn(
-                  'w-full h-9 text-sm px-2 rounded-md font-medium',
-                  'inline-flex items-center justify-center gap-1 transition-colors',
-                  (!profile || !sessionId || currentRung >= 3) 
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                    : 'bg-purple-600 text-white hover:bg-purple-700'
-                )}
-              >
-                {isAddingToTextbook ? (
-                  <>
-                    <Loader2 className="size-3 animate-spin" />
-                    <span className="truncate">Saving...</span>
-                  </>
-                ) : (
-                  <>
-                    <FileText className="h-4 w-4" />
-                    <span className="truncate">Save</span>
-                  </>
-                )}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <p>Save to My Textbook</p>
-              {currentRung >= 3 ? (
-                <p className="text-xs text-gray-400">Already at max level</p>
+            >
+              {isAddingToTextbook ? (
+                <>
+                  <Loader2 className="size-3 animate-spin" />
+                  <span className="truncate">Saving...</span>
+                </>
               ) : (
-                <p className="text-xs text-gray-400">Creates a personalized study note</p>
+                <>
+                  <FileText className="h-4 w-4" />
+                  <span className="truncate">Save to Notes</span>
+                </>
               )}
-            </TooltipContent>
-          </Tooltip>
-        </div>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p>Save to My Textbook</p>
+            {currentRung >= 3 ? (
+              <p className="text-xs text-gray-400">Already at max level</p>
+            ) : (
+              <p className="text-xs text-gray-400">Creates a personalized study note</p>
+            )}
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       {showExplanation && (
