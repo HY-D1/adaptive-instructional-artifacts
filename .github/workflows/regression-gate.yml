@@ -12,7 +12,6 @@ env:
   NODE_VERSION: 20
   PLAYWRIGHT_VERSION: 1.42
   CI: true
-  NODE_ENV: production
   PLAYWRIGHT_BROWSERS_PATH: 0
 
 jobs:
@@ -51,13 +50,13 @@ jobs:
       
       - name: Install dependencies
         run: |
-          npm cache verify
+          npm cache clean --force
           npm ci
           # Verify vite is installed
           if [ ! -f "node_modules/.bin/vite" ]; then
             echo "vite not found in node_modules/.bin"
-            ls -la node_modules/.bin/ | head -20
-            exit 1
+            echo "Installing vite explicitly..."
+            npm install vite --save-dev
           fi
       
       - name: Install Playwright browsers
@@ -72,6 +71,7 @@ jobs:
         run: npx vite build --config apps/web/vite.config.ts
         env:
           CI: true
+          NODE_ENV: production
       
       - name: Run @weekly E2E tests
         id: test-run
@@ -225,13 +225,14 @@ jobs:
       
       - name: Install dependencies
         run: |
-          npm cache verify
+          npm cache clean --force
           npm ci
       
       - name: Build application
         run: npx vite build --config apps/web/vite.config.ts
         env:
           CI: true
+          NODE_ENV: production
       
       - name: Verify build output
         run: |
