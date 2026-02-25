@@ -82,8 +82,8 @@ async function completeStartPageFlow(page: Page, username: string = 'TestStudent
   // Enter username
   await page.getByPlaceholder('Enter your username').fill(username);
   
-  // Select Student role
-  const studentCard = page.locator('.cursor-pointer').filter({ hasText: 'Student' });
+  // Select Student role - use heading for specificity (Instructor card also contains "Student" in description)
+  const studentCard = page.locator('.cursor-pointer').filter({ has: page.getByRole('heading', { name: 'Student' }) });
   await studentCard.click();
   
   // Click Get Started
