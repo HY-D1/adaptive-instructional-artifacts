@@ -10,6 +10,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -34,6 +35,8 @@ import { createEventId } from '../lib/event-id';
 import type { InteractionEvent, InstructionalUnit } from '../types';
 import { buildRetrievalBundle } from '../lib/retrieval-bundle';
 import { getProblemById } from '../data/problems';
+import { checkAvailableResources, type AvailableResources } from '../lib/enhanced-hint-service';
+import { Sparkles } from 'lucide-react';
 
 export type ChatMessage = {
   id: string;
@@ -47,6 +50,7 @@ export type ChatMessage = {
   quickChip?: string;
   sources?: Array<{id: string; title: string; type: 'unit' | 'pdf'}>;
   queryHash?: string; // For duplicate detection
+  llmGenerated?: boolean; // Whether the response was LLM-generated
 };
 
 /**
@@ -96,6 +100,179 @@ interface Toast {
 }
 
 /**
+ * Convert markdown to HTML
+ * Handles bold, italic, inline code, code blocks, and lists
+ */
+function renderMarkdownToHtml(content: string): string {
+  let html = content
+    // Code blocks (must be before inline code)
+    .replace(/```sql\n([\s\S]*?)```/g, '<pre class="bg-gray-900 text-gray-100 p-2 rounded text-xs overflow-x-auto my-2 font-mono"><code>$1</code></pre>')
+    .replace(/```\n?([\s\S]*?)```/g, '<pre class="bg-gray-100 p-2 rounded text-xs overflow-x-auto my-2 font-mono"><code>$1</code></pre>')
+    // Bold
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>')
+    // Italic
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/_(.+?)_/g, '<em>$1</em>')
+    // Inline code
+    .replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-xs font-mono text-pink-600">$1</code>')
+    // List items
+    .replace(/^\*\s+(.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
+    .replace(/^-\s+(.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
+    // Convert remaining newlines to <br/>
+    .replace(/\n/g, '<br/>');
+  
+  return html;
+}
+
+/**
+ * Individual chat message bubble with markdown rendering
+ */
+interface ChatMessageBubbleProps {
+  msg: ChatMessage;
+  idx: number;
+  onSaveToNotes: (index: number) => void;
+}
+
+function ChatMessageBubble({ msg, idx, onSaveToNotes }: ChatMessageBubbleProps) {
+  const [showSources, setShowSources] = useState(false);
+  
+  const hasSources = (msg.sources && msg.sources.length > 0) || msg.llmGenerated;
+  const sourceCount = (msg.sources?.length || 0) + (msg.llmGenerated ? 1 : 0);
+  
+  // Render markdown for assistant messages
+  const renderContent = () => {
+    if (msg.role === 'user') {
+      // User messages - simple text wrapping
+      return (
+        <div className="whitespace-pre-wrap break-words">
+          {msg.content.split('\n').filter(line => line.trim()).map((line, i) => (
+            <p key={i} className="mb-1 last:mb-0 leading-relaxed">
+              {line}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    
+    // Assistant messages - render markdown
+    const html = renderMarkdownToHtml(msg.content);
+    const sanitizedHtml = DOMPurify.sanitize(html, { 
+      ALLOWED_TAGS: ['strong', 'em', 'code', 'pre', 'li', 'br', 'span'],
+      ALLOWED_ATTR: ['class']
+    });
+    
+    return (
+      <div 
+        className="whitespace-pre-wrap break-words prose prose-sm max-w-none text-gray-700"
+        dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
+      />
+    );
+  };
+  
+  return (
+    <div
+      className={`flex flex-col gap-1.5 ${
+        msg.role === 'user' ? 'items-end' : 'items-start'
+      }`}
+    >
+      {/* Message bubble */}
+      <div
+        className={`rounded-lg px-3 py-2.5 text-sm ${
+          msg.role === 'user'
+            ? 'bg-blue-600 text-white max-w-[95%]'
+            : 'bg-gray-50 border border-gray-200 text-gray-800 shadow-sm'
+        }`}
+      >
+        {renderContent()}
+      </div>
+      
+      {/* Source indicators for assistant messages */}
+      {msg.role === 'assistant' && (
+        <div className="flex flex-col gap-1 w-full">
+          {/* Compact source bar */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {/* Source count with expand toggle */}
+              {hasSources && (
+                <button
+                  type="button"
+                  onClick={() => setShowSources(!showSources)}
+                  className="inline-flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  <span className="bg-gray-100 px-1.5 py-0.5 rounded">
+                    {sourceCount} source{sourceCount !== 1 ? 's' : ''}
+                  </span>
+                  <span className="text-gray-400">
+                    {showSources ? '▲' : '▼'}
+                  </span>
+                </button>
+              )}
+              
+              {/* Auto-saved indicator */}
+              {msg.autoSaved && (
+                <span className="inline-flex items-center gap-0.5 text-[10px] text-green-600">
+                  <CheckCircle className="size-3" />
+                  Saved
+                </span>
+              )}
+            </div>
+            
+            {/* Save to My Notes button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 px-2 text-[10px] text-gray-500 hover:text-gray-700"
+              onClick={() => onSaveToNotes(idx)}
+              disabled={msg.savedToNotes}
+            >
+              <Save className="size-3 mr-1" />
+              {msg.savedToNotes ? 'Saved' : 'Save'}
+            </Button>
+          </div>
+          
+          {/* Expanded source badges */}
+          {showSources && hasSources && (
+            <div className="flex flex-wrap gap-1 mt-1 pt-1 border-t border-gray-100">
+              {/* AI badge for LLM-generated responses */}
+              {msg.llmGenerated && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 border border-purple-200">
+                  <Sparkles className="size-3" />
+                  AI
+                </span>
+              )}
+              {/* Textbook/Unit sources */}
+              {msg.sources?.filter(s => s.type === 'unit').map((source, sIdx) => (
+                <Badge 
+                  key={`unit-${sIdx}`}
+                  variant="secondary" 
+                  className="text-[10px] h-5 px-1.5 max-w-[120px] truncate font-normal"
+                  title={source.title}
+                >
+                  <BookOpen className="size-3 mr-0.5 shrink-0" />
+                  <span className="truncate">{source.title}</span>
+                </Badge>
+              ))}
+              {/* PDF sources */}
+              {msg.sources?.filter(s => s.type === 'pdf').map((source, sIdx) => (
+                <Badge 
+                  key={`pdf-${sIdx}`}
+                  variant="outline" 
+                  className="text-[10px] h-5 px-1.5 max-w-[120px] truncate font-normal"
+                  title={source.title}
+                >
+                  <Hash className="size-3 mr-0.5 shrink-0" />
+                  <span className="truncate">{source.title}</span>
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * Ask My Textbook Chat Component (Week 3 Feature)
  * 
  * A chat panel for grounded Q&A with textbook content.
@@ -124,8 +301,63 @@ export function AskMyTextbookChat({
   // Track toast timeout IDs for cleanup on unmount
   const toastTimeoutsRef = useRef<Set<number>>(new Set());
 
+  // Load persisted messages for this problem
+  const CHAT_HISTORY_KEY = `chat-history-${learnerId}-${problemId}`;
+
+  useEffect(() => {
+    const saved = localStorage.getItem(CHAT_HISTORY_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Validate structure
+        if (Array.isArray(parsed) && parsed.every(m => m.id && m.role && m.content)) {
+          // Add restoration message
+          if (parsed.length > 0) {
+            const restoredMessage: ChatMessage = {
+              id: createEventId('chat-restore'),
+              role: 'assistant',
+              content: `Previous chat restored (${parsed.length} messages)`,
+              timestamp: Date.now(),
+              autoSaved: true
+            };
+            setMessages([...parsed, restoredMessage]);
+          } else {
+            setMessages(parsed);
+          }
+        }
+      } catch (e) {
+        console.warn('[Chat] Failed to load history:', e);
+      }
+    }
+  }, [learnerId, problemId, CHAT_HISTORY_KEY]);
+
+  // Persist messages on change
+  useEffect(() => {
+    if (messages.length > 0) {
+      // Filter out restoration messages before saving
+      const messagesToSave = messages.filter(m => !m.id.includes('chat-restore'));
+      if (messagesToSave.length > 0) {
+        localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messagesToSave));
+      }
+    }
+  }, [messages, CHAT_HISTORY_KEY]);
+
   // Track auto-saved queries to prevent duplicates
   const autoSavedQueriesRef = useRef<Set<string>>(new Set());
+  
+  // Check available resources (LLM, PDF, etc.)
+  const [availableResources, setAvailableResources] = useState<AvailableResources>({
+    sqlEngage: true,
+    textbook: false,
+    llm: false,
+    pdfIndex: false
+  });
+  
+  // Check resources on mount
+  useEffect(() => {
+    const resources = checkAvailableResources(learnerId);
+    setAvailableResources(resources);
+  }, [learnerId]);
 
   // Get textbook units for grounding
   const getTextbookUnits = useCallback((): InstructionalUnit[] => {
@@ -136,6 +368,23 @@ export function AskMyTextbookChat({
   const getStoredInteractions = useCallback((): InteractionEvent[] => {
     return storage.getInteractionsByLearner(learnerId);
   }, [learnerId]);
+
+  // Clean up text for better readability - more aggressive cleaning
+  // MOVED HERE: Fix temporal dead zone - must be defined before use in buildGroundingPayload
+  const cleanText = useCallback((text: string): string => {
+    return text
+      .replace(/_/g, '')
+      .replace(/@\w+/g, '')  // Remove @variables
+      .replace(/\/\/\s*/g, '')  // Remove // comments
+      .replace(/END\/\//gi, '')  // Remove END//
+      .replace(/DEALLOCATE\s+PREPARE[^;]*/gi, '')  // Remove DEALLOCATE statements
+      .replace(/EXECUTE[^;]*/gi, '')  // Remove EXECUTE statements
+      .replace(/\n+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/Figure \d+-\d+[^.]*/gi, '')
+      .replace(/Description\s*•/gi, '')
+      .trim();
+  }, []);
 
   // Build retrieval bundle for grounding - prioritizes current problem context
   const buildGroundingPayload = useCallback((query: string, quickChip?: string) => {
@@ -252,21 +501,7 @@ export function AskMyTextbookChat({
     };
   }, [learnerId, problemId, recentInteractions, getTextbookUnits, getStoredInteractions]);
 
-  // Clean up text for better readability - more aggressive cleaning
-  const cleanText = useCallback((text: string): string => {
-    return text
-      .replace(/_/g, '')
-      .replace(/@\w+/g, '')  // Remove @variables
-      .replace(/\/\/\s*/g, '')  // Remove // comments
-      .replace(/END\/\//gi, '')  // Remove END//
-      .replace(/DEALLOCATE\s+PREPARE[^;]*/gi, '')  // Remove DEALLOCATE statements
-      .replace(/EXECUTE[^;]*/gi, '')  // Remove EXECUTE statements
-      .replace(/\n+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .replace(/Figure \d+-\d+[^.]*/gi, '')
-      .replace(/Description\s*•/gi, '')
-      .trim();
-  }, []);
+  // cleanText moved above buildGroundingPayload to fix temporal dead zone
   
   // Extract a clean SQL example from text
   const extractSqlExample = useCallback((text: string): string | null => {
@@ -529,14 +764,142 @@ export function AskMyTextbookChat({
     showToast
   ]);
 
+  /**
+   * Save chat response to My Textbook organized by problem
+   */
+  const saveChatResponseToTextbook = useCallback(async (
+    response: string,
+    query: string,
+    quickChip: string | undefined,
+    sources: Array<{id: string; title: string; type: 'unit' | 'pdf'}>,
+    conceptIds: string[]
+  ): Promise<void> => {
+    try {
+      // Generate title based on query type
+      let title: string;
+      if (quickChip === 'explain_error') {
+        title = 'Error Explanation';
+      } else if (quickChip === 'minimal_example') {
+        title = 'SQL Example';
+      } else if (quickChip === 'what_concept') {
+        title = 'Concept Overview';
+      } else if (quickChip === 'hint_response') {
+        title = 'Hint & Guidance';
+      } else {
+        title = `Q: ${query.slice(0, 40)}${query.length > 40 ? '...' : ''}`;
+      }
+      
+      // Create unit input
+      const unitInput = {
+        type: 'summary' as const,
+        conceptId: conceptIds[0] || 'general',
+        conceptIds: conceptIds.length > 0 ? conceptIds : ['general'],
+        title,
+        content: response,
+        contentFormat: 'markdown' as const,
+        sourceInteractionIds: [],
+        sourceRefIds: sources.map(s => s.id),
+        problemId // Associate with current problem
+      };
+      
+      // Save using V2 API for deduplication
+      const result = storage.saveTextbookUnitV2(learnerId, unitInput, problemId);
+      
+      if (result.success) {
+        console.log('[ChatSave] Saved response to textbook for problem', problemId);
+        showToast(result.action === 'created' ? 'Saved to My Textbook' : 'Updated in My Textbook', 'success');
+      }
+    } catch (error) {
+      console.warn('[ChatSave] Failed to save to textbook:', error);
+    }
+  }, [learnerId, problemId, showToast]);
+
+  // Generate LLM-powered response when available
+  const generateLLMResponse = useCallback(async (
+    query: string, 
+    quickChip: string | undefined,
+    groundingPayload: ReturnType<typeof buildGroundingPayload>
+  ): Promise<string | null> => {
+    if (!availableResources.llm) return null;
+    
+    const { relevantUnits, pdfPassages, errorSubtype, problemConceptIds } = groundingPayload;
+    const problem = getProblemById(problemId);
+    
+    try {
+      // Import LLM modules dynamically
+      const { generateGuidance } = await import('../lib/llm-contracts');
+      const { generateWithOllama } = await import('../lib/llm-client');
+      
+      // Build context from sources
+      const contextParts: string[] = [];
+      
+      // Add textbook unit content
+      if (relevantUnits.length > 0) {
+        contextParts.push('=== Your Textbook Notes ===');
+        relevantUnits.slice(0, 2).forEach(unit => {
+          contextParts.push(`**${unit.title}:**`);
+          contextParts.push(unit.summary || unit.content.substring(0, 300));
+        });
+      }
+      
+      // Add PDF passages
+      if (pdfPassages.length > 0) {
+        contextParts.push('\n=== Course Materials ===');
+        pdfPassages.slice(0, 2).forEach(p => {
+          contextParts.push(`[${p.docId} p.${p.page}]: ${p.text.substring(0, 200)}...`);
+        });
+      }
+      
+      // Add error context
+      if (errorSubtype) {
+        contextParts.push(`\n=== Current Error ===`);
+        contextParts.push(`Type: ${errorSubtype}`);
+      }
+      
+      const contextText = contextParts.join('\n');
+      
+      // Build prompt based on query type - ALL prompts must be Socratic, never give solutions
+      let userPrompt = '';
+      if (quickChip === 'explain_error') {
+        userPrompt = `The student has this error: ${errorSubtype || 'Unknown error'}.\n\nUsing this context:\n${contextText}\n\nExplain what the error means in 2-3 sentences. Help them understand WHY it happened. DO NOT write the corrected SQL code. DO NOT give them the solution. Just explain the concept they need to understand.`;
+      } else if (quickChip === 'minimal_example') {
+        userPrompt = `The student wants an example for this problem: ${problem?.title}.\n\nUsing this context:\n${contextText}\n\nDescribe the PATTERN or STRUCTURE they need (like "SELECT [columns] FROM [table]" with blanks), but DO NOT fill in the actual table names or column names. Let them figure that out. NO working SQL code.`;
+      } else if (quickChip === 'what_concept') {
+        userPrompt = `The student is asking about concepts for this problem: ${problem?.title}. Concepts: ${problemConceptIds.join(', ')}.\n\nUsing this context:\n${contextText}\n\nExplain the concept in 2-3 sentences. Focus on the IDEA, not the syntax. DO NOT show SQL code examples.`;
+      } else if (quickChip === 'hint_response') {
+        userPrompt = `The student wants a hint for this problem: ${problem?.title}. Error: ${errorSubtype || 'None'}.\n\nUsing this context:\n${contextText}\n\nGive a brief hint (1-2 sentences) that nudges them toward understanding. Ask a leading question. DO NOT give the answer or write SQL code.`;
+      } else {
+        userPrompt = `Student question: "${query}"\n\nProblem: ${problem?.title}\nError: ${errorSubtype || 'None'}\n\nUsing this context:\n${contextText}\n\nProvide a helpful response (2-4 sentences). Guide their thinking with questions. DO NOT give them the SQL solution.`;
+      }
+      
+      const systemPrompt = `You are a Socratic SQL tutor. NEVER give working SQL code. NEVER give the solution. NEVER write "Example: SELECT..." with real code. Help students discover answers through guidance and questions. Be concise (under 300 chars). Cite sources like "(from your notes)".`;
+      
+      // Call LLM
+      const llmCall = async (prompt: string): Promise<string> => {
+        const result = await generateWithOllama(prompt, { 
+          params: { temperature: 0.3, max_tokens: 200 }
+        });
+        return result.text;
+      };
+      
+      const response = await llmCall(systemPrompt + '\n\n' + userPrompt);
+      
+      return response.trim();
+    } catch (error) {
+      console.warn('[AskMyTextbook] LLM generation failed:', error);
+      return null;
+    }
+  }, [availableResources.llm, problemId]);
+
   // Generate grounded response using retrieved sources - FOCUSED & ACTIONABLE
-  const generateResponse = useCallback((query: string, quickChip?: string): { 
+  const generateResponse = useCallback(async (query: string, quickChip?: string): Promise<{ 
     response: string; 
     sourceIds: string[];
     unitIds: string[];
     sources: Array<{id: string; title: string; type: 'unit' | 'pdf'}>;
     problemConceptIds: string[];
-  } => {
+    llmGenerated?: boolean;
+  }> => {
     const { 
       relevantUnits, 
       bundleSources, 
@@ -568,126 +931,154 @@ export function AskMyTextbookChat({
       return true;
     }).slice(0, 4); // MAX 4 sources displayed
     
-    // Generate response based on quick chip or query
+    // Try LLM first if available
     let response = '';
+    let llmGenerated = false;
     
-    if (quickChip === 'explain_error') {
-      // Get interactions from storage (persists across page navigation)
-      const storedInteractions = getStoredInteractions();
-      const allInteractions = storedInteractions.length > 0 
-        ? storedInteractions 
-        : recentInteractions;
-      
-      // Find last error OR failed execution (wrong results)
-      const lastError = [...allInteractions]
-        .reverse()
-        .find(i => i.eventType === 'error' || 
-                   (i.eventType === 'execution' && i.successful === false));
-      
-      if (lastError) {
-        // Determine error type and message
-        const errorType = lastError.errorSubtypeId || 
-                         lastError.sqlEngageSubtype || 
-                         (lastError.successful === false ? 'incorrect_results' : 'unknown');
+    if (availableResources.llm) {
+      const groundingPayload = {
+        relevantUnits,
+        bundleSources,
+        pdfPassages,
+        allSourceIds,
+        problemConceptIds,
+        errorSubtype
+      };
+      const llmResponse = await generateLLMResponse(query, quickChip, groundingPayload);
+      if (llmResponse) {
+        response = llmResponse;
+        llmGenerated = true;
+      }
+    }
+    
+    // Fall back to template-based if LLM not available or failed
+    if (!response) {
+      if (quickChip === 'explain_error') {
+        // Get interactions from storage (persists across page navigation)
+        const storedInteractions = getStoredInteractions();
+        const allInteractions = storedInteractions.length > 0 
+          ? storedInteractions 
+          : recentInteractions;
         
-        const errorMessage = lastError.error || 
-                            (lastError.successful === false ? 'Query returned wrong results' : 'Unknown error');
+        // Find last error OR failed execution (wrong results)
+        const lastError = [...allInteractions]
+          .reverse()
+          .find(i => i.eventType === 'error' || 
+                     (i.eventType === 'execution' && i.successful === false));
         
-        // ACTIONABLE fix first
-        if (errorType !== 'unknown' && errorType !== 'incorrect_results') {
-          response = `**Fix:** ${getActionableFix(errorType)}\n\n`;
-        } else if (lastError.successful === false) {
-          // Wrong results - give specific guidance
-          response = `**Issue:** Your query ran but returned incorrect results.\n\n`;
-          response += `**Check:**\n`;
-          response += `• Did you select all required columns?\n`;
-          response += `• Is your WHERE clause too restrictive?\n`;
-          response += `• Are you filtering out rows that should be included?\n\n`;
-        } else {
-          response = `**Error:** ${errorMessage}\n\n`;
-        }
-        
-        // Add context from PDF if relevant and short
-        if (pdfPassages.length > 0) {
-          const relevantText = pdfPassages[0].text.substring(0, 250);
-          if (relevantText.length > 50) {
-            response += `**From your textbook:** ${relevantText}...\n\n`;
+        if (lastError) {
+          // Determine error type and message
+          const errorType = lastError.errorSubtypeId || 
+                           lastError.sqlEngageSubtype || 
+                           (lastError.successful === false ? 'incorrect_results' : 'unknown');
+          
+          // Conceptual explanation instead of actionable fix
+          response = `**Understanding the error:**\n\n`;
+          
+          if (errorType.includes('incomplete') || errorType.includes('missing')) {
+            response += `Your query is missing a required component. Think about what SQL needs to know: what data to retrieve and where it comes from.\n\n`;
+            response += `**Questions to ask yourself:**\n`;
+            response += `• Does your query have all required keywords (SELECT, FROM)?\n`;
+            response += `• Is the table name specified correctly?\n`;
+            response += `• Are all the columns you need listed?\n\n`;
+          } else if (errorType.includes('syntax') || errorType.includes('parse')) {
+            response += `There's a syntax issue in your query. SQL has specific rules about keyword order and punctuation.\n\n`;
+            response += `**Check carefully:**\n`;
+            response += `• Are commas in the right places between columns?\n`;
+            response += `• Is there a semicolon at the end?\n`;
+            response += `• Are all keywords spelled correctly?\n\n`;
+          } else if (errorType === 'incorrect_results' || lastError.successful === false) {
+            response += `Your query ran but returned incorrect results. This means the logic needs adjustment.\n\n`;
+            response += `**Things to verify:**\n`;
+            response += `• Did you select all required columns?\n`;
+            response += `• Is your WHERE clause filtering the right rows?\n`;
+            response += `• Are you including rows that should be filtered out?\n\n`;
+          } else {
+            response += `There's an issue with your query. Let's think through this systematically.\n\n`;
+            response += `**Debugging approach:**\n`;
+            response += `• Read the error message carefully - it often tells you where to look\n`;
+            response += `• Check your query structure step by step\n`;
+            response += `• Compare with patterns from your textbook\n\n`;
           }
+          
+          // Add context from PDF if relevant and short
+          if (pdfPassages.length > 0) {
+            const relevantText = pdfPassages[0].text.substring(0, 250);
+            if (relevantText.length > 50) {
+              response += `**From your textbook:** ${relevantText}...\n\n`;
+            }
+          }
+          
+          // Add unit reference if available
+          if (relevantUnits.length > 0) {
+            response += `📚 See "${relevantUnits[0].title}" in your textbook.`;
+          }
+        } else {
+          response = 'No recent errors found. Try running a query first!';
         }
+      } else if (quickChip === 'minimal_example') {
+        // Provide conceptual pattern guidance instead of working SQL
+        response = `**Pattern to follow:**\n\n`;
+        response += `Start with SELECT, then specify what to retrieve, then specify where it comes from.\n\n`;
+        response += `**Structure:** SELECT [columns] FROM [table]\n\n`;
+        response += `The [brackets] are placeholders - you fill them in with your actual column and table names.\n\n`;
+        response += `**Steps to build your query:**\n`;
+        response += `1. Identify which table has the data you need\n`;
+        response += `2. Determine which columns to retrieve\n`;
+        response += `3. Add any filtering conditions if needed\n\n`;
         
         // Add unit reference if available
         if (relevantUnits.length > 0) {
-          response += `📚 See "${relevantUnits[0].title}" in your textbook.`;
+          response += `📚 Review "${relevantUnits[0].title}" in your textbook for more guidance.`;
         }
-      } else {
-        response = 'No recent errors found. Try running a query first!';
-      }
-    } else if (quickChip === 'minimal_example') {
-      // Try to find a clean SQL example
-      let example: string | null = null;
-      
-      // Check PDF passages for SELECT examples
-      for (const passage of pdfPassages) {
-        example = extractSqlExample(passage.text);
-        if (example) break;
-      }
-      
-      // Check units for minimalExample
-      if (!example) {
-        const unitWithExample = relevantUnits.find(u => u.minimalExample);
-        if (unitWithExample?.minimalExample) {
-          example = cleanText(unitWithExample.minimalExample);
-        }
-      }
-      
-      if (example) {
-        response = `**Try this pattern:**\n\n\`\`\`sql\n${example}\n\`\`\`\n\nAdapt the column and table names to your problem.`;
-      } else {
-        response = `**Basic pattern:**\n\n\`\`\`sql\nSELECT column_name\nFROM table_name\nWHERE condition;\n\`\`\`\n\nReplace with your actual columns, table, and filter.`;
-      }
-    } else if (quickChip === 'what_concept') {
-      const problem = getProblemById(problemId);
-      if (problem?.concepts.length || problemConceptIds.length) {
-        const concepts = problem?.concepts || problemConceptIds;
-        response = `**Key concept${concepts.length > 1 ? 's' : ''}:** ${concepts.join(', ')}\n\n`;
-        
-        if (relevantUnits.length) {
-          response += `**Review:** "${relevantUnits[0].title}"\n\n`;
-          if (relevantUnits[0].summary) {
-            response += cleanText(relevantUnits[0].summary).substring(0, 200);
+      } else if (quickChip === 'what_concept') {
+        const problem = getProblemById(problemId);
+        if (problem?.concepts.length || problemConceptIds.length) {
+          const concepts = problem?.concepts || problemConceptIds;
+          response = `**Key concept${concepts.length > 1 ? 's' : ''}:** ${concepts.join(', ')}\n\n`;
+          
+          if (relevantUnits.length) {
+            response += `**Review:** "${relevantUnits[0].title}"\n\n`;
+            if (relevantUnits[0].summary) {
+              response += cleanText(relevantUnits[0].summary).substring(0, 200);
+            }
+          } else {
+            response += 'Focus on which table has the data you need and what columns to select.';
           }
         } else {
-          response += 'Focus on which table has the data you need and what columns to select.';
+          response = 'This problem tests SQL SELECT basics. Identify the table, then pick the right columns.';
+        }
+      } else if (quickChip === 'hint_response') {
+        // Get the most practical hint - Socratic guidance instead of solutions
+        const unit = relevantUnits[0];
+        
+        if (unit?.commonMistakes?.length) {
+          response = `**Think about this:** ${unit.commonMistakes[0]}\n\n`;
+          response += `What part of your query addresses this? Check your notes or textbook for guidance on how to handle this issue.`;
+        } else if (unit?.summary) {
+          const summary = cleanText(unit.summary);
+          response = `**Guidance:** ${summary.substring(0, 200)}${summary.length > 200 ? '...' : ''}\n\n`;
+          response += `How does this apply to your current problem?`;
+        } else {
+          response = `**Questions to guide you:**\n\n`;
+          response += `1. Which table contains the data you need?\n`;
+          response += `2. What columns should you retrieve?\n`;
+          response += `3. Do you need any conditions to filter the results?\n\n`;
+          response += `Work through these step by step.`;
         }
       } else {
-        response = 'This problem tests SQL SELECT basics. Identify the table, then pick the right columns.';
-      }
-    } else if (quickChip === 'hint_response') {
-      // Get the most practical hint
-      const unit = relevantUnits[0];
-      
-      if (unit?.commonMistakes?.length) {
-        response = `**Common mistake:** ${unit.commonMistakes[0]}\n\n**Try:** ${getActionableFix(errorSubtype || 'syntax_error')}`;
-      } else if (unit?.summary) {
-        const summary = cleanText(unit.summary);
-        response = `**Hint:** ${summary.substring(0, 200)}${summary.length > 200 ? '...' : ''}`;
-      } else if (errorSubtype) {
-        response = `**Hint:** ${getActionableFix(errorSubtype)}`;
-      } else {
-        response = '**Hint:** Break it down: 1) Which table? 2) Which columns? 3) Any filters needed?';
-      }
-    } else {
-      // Custom query - concise answer
-      const unitContent = relevantUnits[0];
-      
-      if (unitContent) {
-        const content = cleanText(unitContent.summary || unitContent.content || '');
-        response = content.substring(0, MAX_RESPONSE_PREVIEW_LENGTH);
-        if (content.length > MAX_RESPONSE_PREVIEW_LENGTH) response += '...';
-      } else if (pdfPassages.length > 0) {
-        response = pdfPassages[0].text.substring(0, MAX_PDF_TEXT_LENGTH) + '...';
-      } else {
-        response = 'I don\'t have specific notes on that yet. Try the quick chips above for common questions.';
+        // Custom query - concise answer
+        const unitContent = relevantUnits[0];
+        
+        if (unitContent) {
+          const content = cleanText(unitContent.summary || unitContent.content || '');
+          response = content.substring(0, MAX_RESPONSE_PREVIEW_LENGTH);
+          if (content.length > MAX_RESPONSE_PREVIEW_LENGTH) response += '...';
+        } else if (pdfPassages.length > 0) {
+          response = pdfPassages[0].text.substring(0, MAX_PDF_TEXT_LENGTH) + '...';
+        } else {
+          response = 'I don\'t have specific notes on that yet. Try the quick chips above for common questions.';
+        }
       }
     }
 
@@ -696,9 +1087,10 @@ export function AskMyTextbookChat({
       sourceIds: allSourceIds,
       unitIds: relevantUnits.map(u => u.id),
       sources,
-      problemConceptIds
+      problemConceptIds,
+      llmGenerated
     };
-  }, [buildGroundingPayload, recentInteractions, problemId, cleanText, extractSqlExample, getActionableFix]);
+  }, [buildGroundingPayload, recentInteractions, problemId, cleanText, extractSqlExample, getActionableFix, availableResources.llm, generateLLMResponse]);
 
   // Log chat interaction
   const logChatInteraction = useCallback((
@@ -754,11 +1146,8 @@ export function AskMyTextbookChat({
     setInputValue('');
     setIsLoading(true);
 
-    // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, PROCESSING_DELAY_MS));
-
-    // Generate grounded response
-    const { response, sourceIds, unitIds, sources, problemConceptIds } = generateResponse(messageText, quickChip);
+    // Generate grounded response (with LLM if available)
+    const { response, sourceIds, unitIds, sources, problemConceptIds, llmGenerated } = await generateResponse(messageText, quickChip);
 
     // Add assistant response
     const assistantMessage: ChatMessage = {
@@ -770,20 +1159,33 @@ export function AskMyTextbookChat({
       textbookUnitIds: unitIds,
       sources,
       quickChip,
-      queryHash
+      queryHash,
+      llmGenerated
     };
 
     setMessages(prev => [...prev, assistantMessage]);
     setIsLoading(false);
 
+    // Save to textbook automatically
+    await saveChatResponseToTextbook(
+      response,
+      messageText,
+      quickChip,
+      sources,
+      problemConceptIds
+    );
+
     // Log interaction
     logChatInteraction(messageText, response, sourceIds, quickChip, false);
 
-    // Auto-save if quality threshold met
+    // Auto-save if quality threshold met (boost quality for LLM-generated)
     setTimeout(() => {
-      autoSaveToTextbook(assistantMessage, problemConceptIds);
+      const messageForAutoSave = llmGenerated 
+        ? { ...assistantMessage, sources: [...(sources || []), { id: 'llm-generated', title: 'AI Assistant', type: 'unit' as const }] }
+        : assistantMessage;
+      autoSaveToTextbook(messageForAutoSave, problemConceptIds);
     }, AUTO_SAVE_DELAY_MS);
-  }, [inputValue, sessionId, generateResponse, logChatInteraction, autoSaveToTextbook, generateQueryHash]);
+  }, [inputValue, sessionId, generateResponse, logChatInteraction, autoSaveToTextbook, generateQueryHash, saveChatResponseToTextbook]);
 
   // Handle save to notes
   const handleSaveToNotes = useCallback((messageIndex: number) => {
@@ -812,7 +1214,8 @@ export function AskMyTextbookChat({
   const handleClear = useCallback(() => {
     setMessages([]);
     autoSavedQueriesRef.current.clear();
-  }, []);
+    localStorage.removeItem(CHAT_HISTORY_KEY);
+  }, [CHAT_HISTORY_KEY]);
 
   const profile = storage.getProfile(learnerId);
 
@@ -850,12 +1253,23 @@ export function AskMyTextbookChat({
         <div className="flex items-center gap-2">
           <MessageCircle className="size-4 text-blue-600" />
           <h3 className="font-semibold text-sm">Ask My Textbook</h3>
+          {availableResources.llm && (
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 border border-purple-200" title="AI Assistant enabled">
+              <Sparkles className="size-3" />
+              AI
+            </span>
+          )}
         </div>
         {messages.length > 0 && (
           <button 
             type="button"
-            onClick={handleClear}
+            onClick={() => {
+              if (confirm('Clear chat history for this problem?')) {
+                handleClear();
+              }
+            }}
             className="text-xs text-gray-400 hover:text-gray-600"
+            title="Clear chat history"
           >
             <X className="size-3" />
           </button>
@@ -891,83 +1305,12 @@ export function AskMyTextbookChat({
             </div>
           ) : (
             messages.map((msg, idx) => (
-              <div
+              <ChatMessageBubble
                 key={msg.id}
-                className={`flex flex-col gap-1.5 ${
-                  msg.role === 'user' ? 'items-end' : 'items-start'
-                }`}
-              >
-                <div
-                  className={`w-full rounded-lg px-3 py-2.5 text-sm ${
-                    msg.role === 'user'
-                      ? 'bg-blue-600 text-white max-w-[95%]'
-                      : 'bg-white border border-gray-200 text-gray-800'
-                  }`}
-                >
-                  <div className="whitespace-pre-wrap break-words prose prose-sm max-w-none">
-                    {msg.content.split('\n').map((line, i) => (
-                      <p key={i} className="mb-1.5 last:mb-0 leading-relaxed">
-                        {line}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-                
-                {/* Source indicators for assistant messages */}
-                {msg.role === 'assistant' && (
-                  <div className="flex flex-col gap-1.5 w-full">
-                    {/* Source badges */}
-                    {msg.sources && msg.sources.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {msg.sources.map((source, sIdx) => (
-                          <Badge 
-                            key={sIdx}
-                            variant={source.type === 'unit' ? 'secondary' : 'outline'} 
-                            className="text-[10px] h-5 max-w-[150px] truncate"
-                            title={source.title}
-                          >
-                            {source.type === 'unit' ? (
-                              <BookOpen className="size-3 mr-1 shrink-0" />
-                            ) : (
-                              <Hash className="size-3 mr-1 shrink-0" />
-                            )}
-                            <span className="truncate">{source.title}</span>
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                    
-                    {/* Grounding indicator */}
-                    <div className="flex items-center gap-2">
-                      {msg.retrievedSourceIds && msg.retrievedSourceIds.length > 0 && (
-                        <span className="text-[10px] text-gray-500">
-                          Grounded in {msg.retrievedSourceIds.length} source{msg.retrievedSourceIds.length !== 1 ? 's' : ''}
-                        </span>
-                      )}
-                      
-                      {/* Auto-saved indicator */}
-                      {msg.autoSaved && (
-                        <Badge variant="outline" className="text-[10px] h-5 bg-green-50 text-green-700 border-green-200">
-                          <CheckCircle className="size-3 mr-1" />
-                          Auto-saved
-                        </Badge>
-                      )}
-                      
-                      {/* Save to My Notes button */}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-5 px-2 text-[10px] ml-auto"
-                        onClick={() => handleSaveToNotes(idx)}
-                        disabled={msg.savedToNotes}
-                      >
-                        <Save className="size-3 mr-1" />
-                        {msg.savedToNotes ? 'Saved' : 'Save to My Notes'}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
+                msg={msg}
+                idx={idx}
+                onSaveToNotes={handleSaveToNotes}
+              />
             ))
           )}
           <div ref={messagesEndRef} />

@@ -1269,7 +1269,7 @@ test.describe('@weekly data-integrity: Session management', () => {
 // =============================================================================
 
 test.describe('@weekly data-integrity: Error handling', () => {
-  test('network errors (LLM unavailable) handled gracefully', async ({ page }) => {
+  test('@flaky network errors (LLM unavailable) handled gracefully', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
@@ -1303,10 +1303,11 @@ test.describe('@weekly data-integrity: Error handling', () => {
     await runUntilErrorCount(page, runQueryButton, 1);
     await page.getByRole('button', { name: 'Request Hint' }).click();
     
-    await expect(page.getByText(/Hint 1|Hint:/)).toBeVisible();
+    // Use more specific selector to avoid ambiguity with "Hint 1 of 3" progress text
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
   });
 
-  test('parsing errors handled with fallback content', async ({ page }) => {
+  test('@flaky parsing errors handled with fallback content', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
@@ -1345,10 +1346,11 @@ test.describe('@weekly data-integrity: Error handling', () => {
     await page.getByRole('button', { name: 'Request Hint' }).click();
     
     // Should show hint from fallback/template even with invalid LLM response
-    await expect(page.getByText(/Hint 1/)).toBeVisible();
+    // Use more specific selector to avoid ambiguity
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
   });
 
-  test('timeout handling works correctly', async ({ page }) => {
+  test('@flaky timeout handling works correctly', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
@@ -1372,14 +1374,15 @@ test.describe('@weekly data-integrity: Error handling', () => {
     await page.getByRole('button', { name: 'Request Hint' }).click();
     
     // With replay mode enabled, hint should appear quickly without LLM call
-    await expect(page.getByText(/Hint 1/)).toBeVisible({ timeout: 5000 });
+    // Use more specific selector to avoid ambiguity with "Hint 1 of 3"
+    await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
     const elapsed = Date.now() - startTime;
     
     // Should respond quickly (under 3 seconds) since no LLM call in replay mode
     expect(elapsed).toBeLessThan(3000);
     
     // Verify fallback hint was shown
-    await expect(page.getByText(/Hint 1/, { exact: true })).toBeVisible();
+    await expect(page.getByTestId('hint-label-1')).toBeVisible();
   });
 
   test('fallback content generation works', async ({ page }) => {

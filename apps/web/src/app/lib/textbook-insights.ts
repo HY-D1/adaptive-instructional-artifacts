@@ -57,7 +57,7 @@ export type SortMode = 'prerequisite' | 'quality' | 'newest' | 'oldest';
 /**
  * Sort units by quality score (highest first), then by timestamp
  */
-export function orderUnitsByQuality(units: InstructionalUnit[]): InstructionalUnit[] {
+function orderUnitsByQuality(units: InstructionalUnit[]): InstructionalUnit[] {
   return [...units].sort((a, b) => {
     const scoreA = a.qualityScore ?? 0;
     const scoreB = b.qualityScore ?? 0;
@@ -72,7 +72,7 @@ export function orderUnitsByQuality(units: InstructionalUnit[]): InstructionalUn
 /**
  * Sort units by timestamp (newest first)
  */
-export function orderUnitsByNewest(units: InstructionalUnit[]): InstructionalUnit[] {
+function orderUnitsByNewest(units: InstructionalUnit[]): InstructionalUnit[] {
   return [...units].sort((a, b) => {
     const timeA = a.updatedTimestamp ?? a.addedTimestamp;
     const timeB = b.updatedTimestamp ?? b.addedTimestamp;
@@ -83,7 +83,7 @@ export function orderUnitsByNewest(units: InstructionalUnit[]): InstructionalUni
 /**
  * Sort units by timestamp (oldest first)
  */
-export function orderUnitsByOldest(units: InstructionalUnit[]): InstructionalUnit[] {
+function orderUnitsByOldest(units: InstructionalUnit[]): InstructionalUnit[] {
   return [...units].sort((a, b) => {
     const timeA = a.updatedTimestamp ?? a.addedTimestamp;
     const timeB = b.updatedTimestamp ?? b.addedTimestamp;
@@ -134,7 +134,7 @@ function getConceptDepthMap(): Map<string, number> {
   return memo;
 }
 
-export function orderUnitsByPrerequisite(units: InstructionalUnit[]): InstructionalUnit[] {
+function orderUnitsByPrerequisite(units: InstructionalUnit[]): InstructionalUnit[] {
   const depthMap = getConceptDepthMap();
 
   return [...units].sort((a, b) => {

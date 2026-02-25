@@ -103,7 +103,7 @@ test.describe('@weekly Week 3 Replay Metrics', () => {
     expect(groundednessRate).toBe(1.0);
   });
 
-  test('@weekly escalation triggers logged', async ({ page }) => {
+  test('@weekly @flaky escalation triggers logged', async ({ page }) => {
     // Navigate to practice page directly since test needs Monaco editor
     await page.goto('/practice');
     

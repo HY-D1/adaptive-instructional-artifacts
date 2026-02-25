@@ -52,7 +52,7 @@ let state = createBackgroundAnalysisState();
 /**
  * Reset background analysis state (useful for testing)
  */
-export function resetBackgroundAnalysisState(): void {
+function resetBackgroundAnalysisState(): void {
   state = createBackgroundAnalysisState();
 }
 
@@ -387,7 +387,7 @@ function calculateSummary(
  * @param result - Analysis result to log
  * @param sessionId - Optional session ID
  */
-export function logAnalysisResults(
+function logAnalysisResults(
   result: AnalysisResult,
   sessionId?: string
 ): void {
@@ -478,7 +478,7 @@ export function stopBackgroundAnalysis(): void {
  * Check if background analysis is currently running
  * @returns True if analysis interval is active
  */
-export function isBackgroundAnalysisRunning(): boolean {
+function isBackgroundAnalysisRunning(): boolean {
   return state.isRunning;
 }
 
@@ -489,7 +489,7 @@ export function isBackgroundAnalysisRunning(): boolean {
  * Get the last analysis timestamp
  * @returns Timestamp of last analysis run
  */
-export function getLastAnalysisTime(): number {
+function getLastAnalysisTime(): number {
   return state.lastAnalysisTime;
 }
 
@@ -601,7 +601,7 @@ export function runAnalysisOnce(
 /**
  * Clear analyzed patterns cache (useful for testing).
  */
-export function clearAnalyzedPatternsCache(): void {
+function clearAnalyzedPatternsCache(): void {
   state.analyzedPatterns.clear();
 }
 
@@ -620,7 +620,7 @@ let autoCreatedPatternSignatures = createPatternCache();
 /**
  * Reset auto-created pattern cache (useful for testing)
  */
-export function resetAutoCreatedPatternCache(): void {
+function resetAutoCreatedPatternCache(): void {
   autoCreatedPatternSignatures = createPatternCache();
 }
 
@@ -960,16 +960,9 @@ function addPatternSignatureWithLRU(signature: string): void {
 }
 
 /**
- * Clear auto-created pattern signatures (useful for testing).
- */
-export function clearAutoCreatedPatternCache(): void {
-  autoCreatedPatternSignatures.clear();
-}
-
-/**
  * Get cache statistics for monitoring.
  */
-export function getPatternSignatureCacheStats(): {
+function getPatternSignatureCacheStats(): {
   size: number;
   maxSize: number;
   oldestEntry: number | null;
@@ -987,7 +980,7 @@ export function getPatternSignatureCacheStats(): {
 /**
  * Get auto-creation configuration constants.
  */
-export function getAutoCreationConfig(): {
+function getAutoCreationConfig(): {
   minFrequency: number;
   qualityThreshold: number;
   minConfidence: PatternMatch['confidence'];

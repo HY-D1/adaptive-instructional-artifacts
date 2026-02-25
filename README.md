@@ -5,7 +5,7 @@ An adaptive SQL learning environment where students practice SQL problems with p
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)
 ![React](https://img.shields.io/badge/React-18.3-61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-6.4-646CFF)
-![Tests](https://img.shields.io/badge/Tests-221%2B%20passing-success)
+![Tests](https://img.shields.io/badge/Tests-138%20passing-success)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## Features
@@ -152,7 +152,7 @@ npm run gate:week3:acceptance
 │   │   │   ├── lib/          # Business logic (storage, orchestrator)
 │   │   │   ├── data/         # Static data (problems, SQL-Engage)
 │   │   │   └── hooks/        # Custom React hooks (useUserRole, etc.)
-│   │   └── tests/            # Playwright E2E tests (221+ tests)
+│   │   └── tests/            # Playwright E2E tests (138 @weekly tests)
 │   └── vite.config.ts
 ├── scripts/               # Utility scripts (replay, metrics)
 ├── docs/                  # Documentation
@@ -174,12 +174,12 @@ npm run gate:week3:acceptance
 
 ## Testing
 
-The project has **221+ E2E tests** covering:
+The project has **138 E2E tests** covering:
 
 - **Bug Regression**: 87 tests (critical, high, medium priority)
 - **Week 4 Features**: 31 tests (role-based auth)
-- **Week 3 Features**: 99 tests (guidance ladder, source grounding, textbook)
-- **Data Integrity**: 46 tests (event logging, validation)
+- **Week 3 Features**: 20 tests (guidance ladder, source grounding, textbook)
+- **Data Integrity**: 46+ tests (event logging, validation)
 
 Run tests with:
 ```bash

@@ -516,7 +516,9 @@ ${c?.examples.map((ex, i) => `${i + 1}. Review this pattern: \`${ex}\``).join('\
       sqlEngageRowId: rowId,
       hintLevel: nextLevel,
       policyVersion,
-      shouldEscalate: nextLevel > 3
+      // FIX: Use requestedLevel (unclamped) instead of nextLevel (clamped to 3)
+      // to properly detect when escalation should occur
+      shouldEscalate: requestedLevel > 3
     };
   }
 }

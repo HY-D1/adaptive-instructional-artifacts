@@ -7,7 +7,7 @@ import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { Skeleton } from '../components/ui/skeleton';
-import { ArrowLeft, Search, Filter, BookOpen, X, Clock, Tag, GraduationCap, TrendingUp, Sparkles } from 'lucide-react';
+import { ArrowLeft, Search, Filter, BookOpen, X, Clock, Tag, GraduationCap, TrendingUp, Sparkles, MessageCircle } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { storage } from '../lib/storage';
 import { InteractionEvent } from '../types';
@@ -22,6 +22,11 @@ const TRACE_ATTEMPT_EVENT_TYPES: InteractionEvent['eventType'][] = [
   'error',
   'hint_view',
   'explanation_view'
+];
+
+// Add chat_interaction to the event types we fetch
+const CHAT_EVENT_TYPES: InteractionEvent['eventType'][] = [
+  'chat_interaction'
 ];
 
 export function TextbookPage() {
@@ -48,6 +53,7 @@ export function TextbookPage() {
   const [selectedConcept, setSelectedConcept] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'concepts' | 'problems'>('concepts');
 
   // Storage change listener for reactive updates
   const [storageVersion, setStorageVersion] = useState(0);
@@ -148,6 +154,14 @@ export function TextbookPage() {
     () => learnerInteractionsAll.filter((interaction) => TRACE_ATTEMPT_EVENT_TYPES.includes(interaction.eventType)),
     [learnerInteractionsAll]
   );
+
+// Then create a memo for chat interactions (after learnerInteractionsAll):
+const chatInteractions = useMemo(
+  () => learnerInteractionsAll.filter(
+    (interaction) => interaction.eventType === 'chat_interaction'
+  ),
+  [learnerInteractionsAll]
+);
   const selectedAttemptExists = !selectedAttemptId
     || learnerInteractionsAll.some((interaction) => interaction.id === selectedAttemptId);
 
@@ -179,6 +193,52 @@ export function TextbookPage() {
     const conceptsCovered = new Set(textbookUnits.map(u => u.conceptId)).size;
     const autoCreatedUnits = textbookUnits.filter(u => u.autoCreated).length;
     return { totalUnits, conceptsCovered, autoCreatedUnits };
+  }, [textbookUnits]);
+
+  // Group units by problem for folder view
+  const unitsByProblem = useMemo(() => {
+    const grouped = new Map<string, typeof textbookUnits>();
+    
+    for (const unit of textbookUnits) {
+      const pid = unit.problemId || 'unknown';
+      if (!grouped.has(pid)) {
+        grouped.set(pid, []);
+      }
+      grouped.get(pid)!.push(unit);
+    }
+    
+    return grouped;
+  }, [textbookUnits]);
+
+  // Group chat interactions by problem
+  const chatsByProblem = useMemo(() => {
+    const grouped = new Map<string, typeof chatInteractions>();
+    
+    for (const chat of chatInteractions) {
+      const pid = chat.problemId || 'unknown';
+      if (!grouped.has(pid)) {
+        grouped.set(pid, []);
+      }
+      grouped.get(pid)!.push(chat);
+    }
+    
+    return grouped;
+  }, [chatInteractions]);
+
+  // Get problem names for display
+  const problemNames = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const unit of textbookUnits) {
+      if (unit.problemId && !names.has(unit.problemId)) {
+        // Try to extract a readable name from problemId
+        const name = unit.problemId
+          .replace(/-/g, ' ')
+          .replace(/_/g, ' ')
+          .replace(/\b\w/g, l => l.toUpperCase());
+        names.set(unit.problemId, name);
+      }
+    }
+    return names;
   }, [textbookUnits]);
 
   // Apply filters
@@ -251,6 +311,24 @@ export function TextbookPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {/* View Mode Toggle */}
+                <div className="flex items-center gap-2 mr-2">
+                  <span className="text-sm text-gray-500">View by:</span>
+                  <div className="flex rounded-lg border bg-white overflow-hidden">
+                    <button
+                      onClick={() => setViewMode('concepts')}
+                      className={`px-3 py-1.5 text-sm ${viewMode === 'concepts' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      Concepts
+                    </button>
+                    <button
+                      onClick={() => setViewMode('problems')}
+                      className={`px-3 py-1.5 text-sm ${viewMode === 'problems' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                    >
+                      Problems
+                    </button>
+                  </div>
+                </div>
                 {/* Student learning stats */}
                 {isStudent && (
                   <div className="hidden sm:flex items-center gap-3 mr-2">
@@ -330,13 +408,106 @@ export function TextbookPage() {
           )}
 
           <div className="flex-1 min-h-0">
-            <AdaptiveTextbook
-              learnerId={learnerId}
-              selectedUnitId={selectedUnitId}
-              activeEvidenceId={selectedAttemptId}
-              onSelectedUnitChange={handleSelectedUnitChange}
-              buildEvidenceHref={buildEvidenceHref}
-            />
+            {viewMode === 'concepts' ? (
+              <AdaptiveTextbook
+                learnerId={learnerId}
+                selectedUnitId={selectedUnitId}
+                activeEvidenceId={selectedAttemptId}
+                onSelectedUnitChange={handleSelectedUnitChange}
+                buildEvidenceHref={buildEvidenceHref}
+              />
+            ) : (
+              <div className="space-y-4">
+                <h2 className="text-lg font-semibold text-gray-800">Learning by Problem</h2>
+                {unitsByProblem.size === 0 ? (
+                  <Card className="p-8 text-center">
+                    <BookOpen className="size-12 mx-auto mb-3 text-gray-300" />
+                    <p className="text-gray-500">No notes yet. Start practicing to build your textbook!</p>
+                  </Card>
+                ) : (
+                  Array.from(unitsByProblem.entries()).map(([pid, units]) => (
+                    <div key={pid} className="border rounded-lg bg-white overflow-hidden">
+                      <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
+                        <h3 className="font-medium text-gray-900">
+                          {problemNames.get(pid) || pid}
+                        </h3>
+                        <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
+                          {units.length} notes
+                        </span>
+                      </div>
+                      <div className="p-4 space-y-3">
+                        {units.slice(0, 3).map(unit => (
+                          <div key={unit.id} className="text-sm">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                unit.type === 'hint' ? 'bg-amber-100 text-amber-700' :
+                                unit.type === 'explanation' ? 'bg-blue-100 text-blue-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {unit.type}
+                              </span>
+                              <span className="font-medium text-gray-800">{unit.title}</span>
+                            </div>
+                            <p className="text-gray-600 line-clamp-2">{unit.content}</p>
+                          </div>
+                        ))}
+                        {units.length > 3 && (
+                          <button 
+                            onClick={() => setViewMode('concepts')}
+                            className="text-sm text-blue-600 hover:text-blue-700"
+                          >
+                            + {units.length - 3} more
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+
+                {/* Chat History Section */}
+                {chatsByProblem.size > 0 && (
+                  <div className="mt-8 space-y-4">
+                    <h2 className="text-lg font-semibold text-gray-800">Chat History by Problem</h2>
+                    {Array.from(chatsByProblem.entries()).map(([pid, chats]) => (
+                      <div key={`chat-${pid}`} className="border rounded-lg bg-white overflow-hidden">
+                        <div className="bg-blue-50 px-4 py-3 border-b flex items-center justify-between">
+                          <h3 className="font-medium text-gray-900 flex items-center gap-2">
+                            <MessageCircle className="size-4 text-blue-500" />
+                            {problemNames.get(pid) || pid}
+                          </h3>
+                          <span className="text-xs text-gray-500 bg-blue-100 px-2 py-0.5 rounded-full">
+                            {chats.length} chats
+                          </span>
+                        </div>
+                        <div className="p-4 space-y-3 max-h-64 overflow-y-auto">
+                          {chats.slice(0, 5).map(chat => (
+                            <div key={chat.id} className="text-sm border-b border-gray-100 pb-2 last:border-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs text-gray-500">
+                                  {new Date(chat.timestamp).toLocaleString()}
+                                </span>
+                                {chat.chatQuickChip && (
+                                  <Badge variant="outline" className="text-[10px]">
+                                    {chat.chatQuickChip}
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="font-medium text-gray-800 mb-1">Q: {chat.chatMessage}</p>
+                              <p className="text-gray-600 line-clamp-2">A: {chat.chatResponse}</p>
+                            </div>
+                          ))}
+                          {chats.length > 5 && (
+                            <p className="text-sm text-blue-600 text-center">
+                              + {chats.length - 5} more chats
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Trace Attempts section - simplified for students, full for instructors */}

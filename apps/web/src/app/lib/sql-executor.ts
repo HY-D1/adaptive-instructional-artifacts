@@ -210,8 +210,16 @@ export class SQLExecutor {
         i++;
         // Copy everything until closing quote (handling escaped quotes)
         while (i < sql.length) {
+          // Handle backslash escapes (e.g., \', \", \\)
+          if (sql[i] === '\\' && i + 1 < sql.length) {
+            result += sql[i];
+            i++;
+            result += sql[i];
+            i++;
+            continue;
+          }
           if (sql[i] === quote) {
-            // Check for escaped quote (e.g., '')
+            // Check for escaped quote (e.g., '' in SQL standard)
             if (i + 1 < sql.length && sql[i + 1] === quote) {
               result += sql[i];
               i++;

@@ -177,7 +177,7 @@ export function findExistingUnit(
  * @param newInput - New input being considered
  * @returns Decision with shouldUpdate flag and reason
  */
-export function shouldUpdateUnit(
+function shouldUpdateUnit(
   existing: InstructionalUnit,
   newInput: CreateUnitInput
 ): { shouldUpdate: boolean; reason: string } {
@@ -235,7 +235,7 @@ function createUpdateHistoryEntry(
  * @param newInput - New input with changes
  * @returns Updated unit with merged data
  */
-export function buildUpdatedUnit(
+function buildUpdatedUnit(
   existing: InstructionalUnit,
   newInput: CreateUnitInput
 ): InstructionalUnit {

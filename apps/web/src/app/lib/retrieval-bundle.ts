@@ -1,4 +1,4 @@
-import { SQLProblem, InteractionEvent, PdfIndexProvenance } from '../types';
+import { SQLProblem, InteractionEvent, PdfIndexProvenance, InstructionalUnit } from '../types';
 import {
   canonicalizeSqlEngageSubtype,
   getConceptById,
@@ -11,6 +11,7 @@ import {
   getConceptFromRegistry
 } from '../data';
 import { getActivePdfIndexProvenance, retrievePdfChunks } from './pdf-retrieval';
+import { retrieveSourcePassages, RetrievedSourcePassage } from './source-ref-lookup';
 
 /**
  * History entry for a retrieved hint
@@ -129,6 +130,8 @@ export type RetrievalBundle = {
     conceptId: string;
     sourceRefIds: string[];
   }>;
+  // Textbook units for enhanced hint generation
+  textbookUnits?: InstructionalUnit[];
 };
 
 /**
@@ -273,22 +276,53 @@ export function buildRetrievalBundle(options: {
     };
   });
 
-  // Week 3 D2: Build sourcePassages from concept registry (placeholder for actual text retrieval)
-  // In a full implementation, this would fetch actual passage text from the PDF/textbook
-  const sourcePassages: RetrievalSourcePassage[] = [];
+  // Week 3 D2: Build sourcePassages from concept registry with actual PDF text retrieval
+  // Uses source-ref-lookup to bridge semantic chunkIds with physical PDF chunks
+  let sourcePassages: RetrievalSourcePassage[] = [];
   for (const conceptId of conceptIds) {
     const registryConcept = getConceptFromRegistry(conceptId);
     if (registryConcept?.sourceRefs) {
-      for (const ref of registryConcept.sourceRefs.slice(0, 2)) { // Top 2 refs per concept
+      // Retrieve actual text from PDF index using page-based lookup
+      const refsForConcept = registryConcept.sourceRefs.slice(0, 2).map(ref => ({
+        docId: ref.docId,
+        chunkId: ref.chunkId,
+        page: ref.page,
+        passageId: ref.passageId
+      }));
+      
+      const retrievedPassages = retrieveSourcePassages(refsForConcept, conceptId);
+      
+      // Map to RetrievalSourcePassage format
+      for (const passage of retrievedPassages) {
         sourcePassages.push({
-          passageId: ref.passageId || `${ref.chunkId}-p${ref.page}`,
-          conceptId,
-          docId: ref.docId,
-          chunkId: ref.chunkId,
-          page: ref.page,
-          text: `[Source: ${ref.docId}, Page ${ref.page}]`, // Placeholder - actual text would come from PDF/chunk store
-          whyIncluded: `Concept registry source for ${conceptId}`
+          passageId: passage.passageId,
+          conceptId: passage.conceptId,
+          docId: passage.docId,
+          chunkId: passage.chunkId,
+          page: passage.page,
+          text: passage.text,
+          whyIncluded: passage.whyIncluded
         });
+      }
+    }
+  }
+  
+  // If no PDF chunks found, fallback to semantic placeholders for backward compatibility
+  if (sourcePassages.length === 0) {
+    for (const conceptId of conceptIds) {
+      const registryConcept = getConceptFromRegistry(conceptId);
+      if (registryConcept?.sourceRefs) {
+        for (const ref of registryConcept.sourceRefs.slice(0, 2)) {
+          sourcePassages.push({
+            passageId: ref.passageId || `${ref.chunkId}-p${ref.page}`,
+            conceptId,
+            docId: ref.docId,
+            chunkId: ref.chunkId,
+            page: ref.page,
+            text: `[Source: ${ref.docId}, Page ${ref.page}]`,
+            whyIncluded: `Concept registry source for ${conceptId} (PDF not indexed)`
+          });
+        }
       }
     }
   }

@@ -13,6 +13,7 @@
 
 import type { GuidanceRung } from './guidance-ladder';
 import type { RetrievalBundle } from './retrieval-bundle';
+import type { InstructionalUnit } from '../types';
 
 /**
  * Metadata for validated LLM output
@@ -68,25 +69,25 @@ export const PROMPT_TEMPLATES: Record<
     system: `You are a SQL learning assistant providing brief micro-hints.
 
 CONTRACT REQUIREMENTS (MUST FOLLOW):
-1. Output MUST be under 150 characters
-2. Include conceptIds[] array at the end
+1. Output ONLY the hint text (max 150 chars) + conceptIds array
+2. Do NOT include "Retrieval Bundle" or any prompt text in your output
 3. Do NOT provide full explanations - only brief nudges
-4. Stay grounded in the provided retrieval bundle
-5. If retrieval bundle is empty, use fallback behavior
+4. Stay grounded in the provided context
+5. Start immediately with your hint text
 
-VALID OUTPUT FORMAT:
-[Brief hint text here]
+VALID OUTPUT FORMAT (COPY THIS EXACTLY, REPLACE [text]):
+[Your brief hint here, max 150 characters]
 
 conceptIds: ["concept-id-1"]`,
-    user: `Retrieval Bundle:
-- Error subtype: {{errorSubtype}}
+    user: `CONTEXT (use this information, do NOT repeat it):
+- Error: {{errorSubtype}}
 - Problem: {{problemTitle}}
 - Schema: {{schemaText}}
-- Concept candidates: {{conceptCandidates}}
-- PDF passages: {{pdfPassages}}
-- Previous hints: {{hintHistory}}
+- Available concepts: {{conceptCandidates}}
+- Reference materials: {{pdfPassages}}
+- Previous hints given: {{hintHistory}}
 
-Provide a brief micro-hint (max 150 chars) that nudges toward the solution without giving it away.`,
+INSTRUCTION: Write ONLY a brief micro-hint (max 150 chars) that nudges the learner toward the solution. Start immediately with your hint. Do NOT include the context above in your response.`,
     requiredFields: ['conceptIds'],
     maxOutputLength: 200 // Allow some buffer for the conceptIds line
   },
@@ -96,37 +97,35 @@ Provide a brief micro-hint (max 150 chars) that nudges toward the solution witho
     system: `You are a SQL learning assistant providing structured explanations.
 
 CONTRACT REQUIREMENTS (MUST FOLLOW):
-1. Output MUST be under 800 characters
-2. MUST cite at least one source from the retrieval bundle
-3. Include conceptIds[] array at the end
-4. Include sourceRefIds[] array at the end
-5. Do NOT provide copy-paste solutions
-6. Explain the CONCEPT, not just the fix
+1. Output ONLY your explanation (max 800 chars) + conceptIds + sourceRefIds
+2. Do NOT include "Retrieval Bundle" or any prompt text in your output
+3. MUST cite at least one source like "(see textbook p.XX)"
+4. Do NOT provide copy-paste solutions
+5. Explain the CONCEPT, not just the fix
+6. Start immediately with your explanation
 
-VALID OUTPUT FORMAT:
-[Your explanation here, citing sources like "(see textbook p.XX)"]
+VALID OUTPUT FORMAT (COPY THIS EXACTLY, REPLACE [text]):
+[Your explanation here, max 800 characters, cite sources like "(see textbook p.XX)"]
 
 conceptIds: ["concept-id-1", "concept-id-2"]
 sourceRefIds: ["doc:chunk:page"]
 
 GROUNDING RULES:
 - Every concept mentioned must have a corresponding sourceRefId
-- If you mention a textbook page, include it in sourceRefIds
-- Ungrounded explanations will be rejected`,
-    user: `Retrieval Bundle:
-- Error subtype: {{errorSubtype}}
+- Cite sources naturally in your text, e.g., "According to the textbook (p.12)..."
+- Start immediately with your explanation, no preamble`,
+    user: `CONTEXT (use this information, do NOT repeat it):
+- Error: {{errorSubtype}}
 - Problem: {{problemTitle}}
 - Schema: {{schemaText}}
-- Concept candidates: {{conceptCandidates}}
+- Available concepts: {{conceptCandidates}}
 - Source passages: {{sourcePassages}}
-- PDF passages: {{pdfPassages}}
-- Why retrieved: {{whyRetrieved}}
+- Reference materials: {{pdfPassages}}
+- Textbook units: {{textbookUnits}}
+- Retrieval reasoning: {{whyRetrieved}}
 - Previous hints: {{hintHistory}}
 
-Provide a structured explanation (max 800 chars) that:
-1. Explains the underlying concept
-2. Cites specific sources from the retrieval bundle
-3. Guides toward understanding without giving the full answer`,
+INSTRUCTION: Write ONLY a structured explanation (max 800 chars) that explains the concept and cites sources. Start immediately with your explanation. Do NOT include the context above in your response.`,
     requiredFields: ['conceptIds', 'sourceRefIds'],
     maxOutputLength: 900
   },
@@ -136,59 +135,49 @@ Provide a structured explanation (max 800 chars) that:
     system: `You are a SQL learning assistant creating reflective notes for "My Textbook".
 
 CONTRACT REQUIREMENTS (MUST FOLLOW):
-1. Output MUST include ALL required sections
-2. MUST cite all relevant sources from retrieval bundle
-3. Include conceptIds[] array
-4. Include sourceRefIds[] array with ALL cited sources
-5. Structure as a learning unit, not just a hint
+1. Output ONLY the required sections + conceptIds + sourceRefIds
+2. Do NOT include "Retrieval Bundle" or any prompt text in your output
+3. MUST cite all relevant sources
+4. Structure as a learning unit with ALL 4 sections
+5. Start immediately with ## Summary
 
-REQUIRED SECTIONS:
-1. Summary: Brief overview of the concept (1-2 sentences)
-2. Common Mistakes: List 2-3 typical errors with explanations
-3. Minimal Example: A simple, clear SQL example
-4. Key Takeaway: One memorable rule to remember
-
-VALID OUTPUT FORMAT:
+VALID OUTPUT FORMAT (COPY THIS EXACTLY, REPLACE [text]):
 ## Summary
-[Summary text]
+[1-2 sentence overview of the concept]
 
 ## Common Mistakes
-- Mistake 1: [description]
-- Mistake 2: [description]
+- Mistake 1: [description with explanation]
+- Mistake 2: [description with explanation]
+- Mistake 3: [optional description]
 
 ## Minimal Example
 \`\`\`sql
-[SQL code]
+[A simple, clear SQL example]
 \`\`\`
 
 ## Key Takeaway
-[Key rule]
+[One memorable rule to remember]
 
 conceptIds: ["concept-id-1", "concept-id-2"]
 sourceRefIds: ["doc:chunk:page", "doc:chunk:page2"]
 
 GROUNDING RULES:
-- Every concept must have ≥1 source
-- Every source in sourceRefIds must be from the retrieval bundle
-- Examples should be minimal but complete`,
-    user: `Retrieval Bundle:
-- Error subtype: {{errorSubtype}}
+- Every concept must have ≥1 source cited
+- Start immediately with ## Summary, no preamble
+- Make examples minimal but complete and runnable`,
+    user: `CONTEXT (use this information, do NOT repeat it):
+- Error: {{errorSubtype}}
 - Problem: {{problemTitle}}
 - Schema: {{schemaText}}
-- Concept candidates: {{conceptCandidates}}
+- Available concepts: {{conceptCandidates}}
 - Source passages: {{sourcePassages}}
-- Concept source refs: {{conceptSourceRefs}}
-- PDF passages: {{pdfPassages}}
-- Why retrieved: {{whyRetrieved}}
+- Concept references: {{conceptSourceRefs}}
+- Reference materials: {{pdfPassages}}
+- Textbook units: {{textbookUnits}}
+- Retrieval reasoning: {{whyRetrieved}}
 - Escalation history: {{escalationHistory}}
 
-Create a reflective note (My Textbook unit) with:
-1. Summary of the concept
-2. Common mistakes learners make
-3. A minimal, clear SQL example
-4. Key takeaway rule
-
-Ensure all concepts are grounded in the provided sources.`,
+INSTRUCTION: Create a reflective note with ALL 4 sections: Summary, Common Mistakes, Minimal Example, Key Takeaway. Start immediately with ## Summary. Do NOT include the context above in your response.`,
     requiredFields: ['conceptIds', 'sourceRefIds', 'summary', 'commonMistakes', 'minimalExample'],
     maxOutputLength: 2500
   }
@@ -204,7 +193,6 @@ export function parseLLMOutput(rawOutput: string): {
   conceptIds: string[];
   sourceRefIds: string[];
 } {
-  const lines = rawOutput.split('\n');
   let content = rawOutput;
   const conceptIds: string[] = [];
   const sourceRefIds: string[] = [];
@@ -230,6 +218,37 @@ export function parseLLMOutput(rawOutput: string): {
       .filter(Boolean);
     sourceRefIds.push(...ids);
   }
+
+  // Clean up any echoed prompt content
+  const promptEchoPatterns = [
+    /Retrieval Bundle:.*?(?=\n\n|$)/gis,
+    /CONTEXT \(use this information.*?(?=\n\n|$)/gis,
+    /INSTRUCTION:.*?(?=\n\n|$)/gis,
+    /Provide a brief micro-hint.*?(?=\n\n|$)/gis,
+    /Write ONLY a brief.*?(?=\n\n|$)/gis,
+    /Write ONLY a structured.*?(?=\n\n|$)/gis,
+    /Create a reflective note.*?(?=\n\n|$)/gis,
+    /Error subtype:.*?\n/gi,
+    /Problem:.*?\n/gi,
+    /Schema:.*?\n/gi,
+    /- PDF passages:.*?\n/gi,
+    /- Previous hints:.*?\n/gi,
+    /VALID OUTPUT FORMAT.*?(?=\n\n|$)/gis,
+    /\[Brief hint text here\]/gi,
+    /\[Your brief hint here.*?\]/gi,
+    /\[Your explanation here.*?\]/gi,
+    /\[Summary text\]/gi,
+  ];
+  
+  for (const pattern of promptEchoPatterns) {
+    content = content.replace(pattern, '');
+  }
+  
+  // Clean up multiple newlines
+  content = content.replace(/\n{3,}/g, '\n\n').trim();
+  
+  // Remove any remaining bracketed placeholders
+  content = content.replace(/\[.*?\]/g, '').trim();
 
   return { content: content.trim(), conceptIds, sourceRefIds };
 }
@@ -353,9 +372,12 @@ export async function generateGuidance(
   llmCall: (prompt: string) => Promise<string>
 ): Promise<LLMGuidanceOutput> {
   // Check if we have sufficient retrieval for grounding
+  // Include textbookUnits as valid sources for rung 2+
+  const textbookUnits = (retrievalBundle as RetrievalBundle & { textbookUnits?: InstructionalUnit[] }).textbookUnits;
   const hasSources = retrievalBundle.sourcePassages.length > 0 || 
                      retrievalBundle.pdfPassages.length > 0 ||
-                     retrievalBundle.retrievedSourceIds.length > 0;
+                     retrievalBundle.retrievedSourceIds.length > 0 ||
+                     (textbookUnits && textbookUnits.length > 0);
 
   // For rung 2+, require sources
   if (rung >= 2 && !hasSources) {
@@ -406,6 +428,12 @@ export async function generateGuidance(
 
 // Build prompt by substituting template variables
 function buildPrompt(template: string, bundle: RetrievalBundle): string {
+  // Get textbook units if available
+  const textbookUnits = (bundle as RetrievalBundle & { textbookUnits?: InstructionalUnit[] }).textbookUnits;
+  const textbookUnitsText = textbookUnits && textbookUnits.length > 0
+    ? textbookUnits.map(u => `[${u.title}]: ${u.content.slice(0, 200)}...`).join('\n')
+    : 'No textbook units available';
+
   return template
     .replace('{{errorSubtype}}', bundle.lastErrorSubtypeId)
     .replace('{{problemTitle}}', bundle.problemTitle)
@@ -413,6 +441,7 @@ function buildPrompt(template: string, bundle: RetrievalBundle): string {
     .replace('{{conceptCandidates}}', bundle.conceptCandidates.map(c => `${c.id} (${c.name})`).join(', '))
     .replace('{{sourcePassages}}', bundle.sourcePassages.map(s => `[${s.docId} p.${s.page}]: ${s.text.slice(0, 100)}...`).join('\n'))
     .replace('{{pdfPassages}}', bundle.pdfPassages.map(p => `[${p.docId} p.${p.page}]: ${p.text.slice(0, 100)}...`).join('\n'))
+    .replace('{{textbookUnits}}', textbookUnitsText)
     .replace('{{whyRetrieved}}', JSON.stringify(bundle.whyRetrieved, null, 2))
     .replace('{{hintHistory}}', bundle.hintHistory.map(h => `Rung ${h.hintLevel}: ${h.hintText.slice(0, 50)}...`).join('\n'))
     .replace('{{conceptSourceRefs}}', JSON.stringify(bundle.conceptSourceRefs, null, 2))

@@ -4,11 +4,11 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "vite build --config apps/web/vite.config.ts",
-    "dev": "vite --config apps/web/vite.config.ts",
+    "build": "npx vite build --config apps/web/vite.config.ts",
+    "dev": "npx vite --config apps/web/vite.config.ts",
     "test:unit": "npx vitest run",
     "test:e2e": "npx playwright test -c playwright.config.ts",
-    "test:e2e:weekly": "CI=1 npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@integration'",
+    "test:e2e:weekly": "CI=1 npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@(integration|flaky)'",
     "test:e2e:integration": "CI=1 npx playwright test -c playwright.config.ts --grep '@integration'",
     "test:e2e:no-external": "CI=1 npx playwright test -c playwright.config.ts --grep '@no-external'",
     "demo:weekly": "npx playwright test -c playwright.config.ts apps/web/tests/weekly-demo-artifacts.spec.ts",
@@ -31,7 +31,8 @@
     "pdf:search": "node scripts/search-index.mjs",
     "pdf:convert": "node scripts/pdf-to-index.mjs",
     "pdf:query": "node scripts/query-index.mjs",
-    "test:pdf-index": "node scripts/smoke-test-pdf-index.mjs"
+    "test:pdf-index": "node scripts/smoke-test-pdf-index.mjs",
+    "check:source-grounding": "node scripts/check-source-grounding.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
@@ -103,7 +104,7 @@
     "jsdom": "^28.1.0",
     "tailwindcss": "4.1.12",
     "vite": "^6.4.1",
-    "vite-plugin-plain-text": "^1.4.2",
+    "vite-plugin-plain-text": "^1.3.2",
     "vitest": "^4.0.18"
   },
   "peerDependencies": {

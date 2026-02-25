@@ -23,9 +23,10 @@ export default defineConfig({
     screenshot: 'only-on-failure'
   },
   webServer: {
-    // Use preview server for stability in CI
+    // In CI: use preview server with existing build (build done in workflow)
+    // Local: use dev server
     command: IS_CI 
-      ? `npx vite preview --config apps/web/vite.config.ts --host ${HOST} --port ${PORT}`
+      ? `npx vite preview --config apps/web/vite.config.ts --host ${HOST} --port ${PORT} --outDir ../../dist/app`
       : `npm run dev -- --host ${HOST} --port ${PORT}`,
     url: BASE_URL,
     reuseExistingServer: !IS_CI,

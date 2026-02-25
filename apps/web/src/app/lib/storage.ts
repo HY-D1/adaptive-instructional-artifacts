@@ -18,6 +18,7 @@ import {
   UserProfile,
   UserRole
 } from '../types';
+import { createEventId } from './event-id';
 import {
   canonicalizeSqlEngageSubtype,
   getConceptIdsForSqlEngageSubtype,
@@ -1142,9 +1143,8 @@ class StorageManager {
    * Generate a unique event ID for Guidance Ladder events.
    */
   private generateEventId(prefix: string): string {
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 8);
-    return `evt-${prefix}-${timestamp}-${random}`;
+    // Use createEventId for better entropy and collision resistance
+    return createEventId(prefix);
   }
 
   // Evidence scoring weights for coverage calculation

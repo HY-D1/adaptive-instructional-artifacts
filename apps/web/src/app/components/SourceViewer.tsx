@@ -225,6 +225,9 @@ function PassageCard({
 }) {
   const cleanedText = cleanPdfText(passage.text);
   
+  // Check if this is actual grounded content or a placeholder
+  const isGrounded = !passage.text.startsWith('[Source:') && passage.text.length > 100;
+  
   // Skip if cleaned text is too short (likely just index entries)
   if (cleanedText.length < 50) {
     return null;
@@ -247,6 +250,15 @@ function PassageCard({
           <span className="font-medium">{passage.docId}</span>
           <span className="text-gray-300">|</span>
           <span>Page {passage.page}</span>
+          {isGrounded ? (
+            <span className="ml-1 inline-flex items-center rounded-full bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700" title="Actual PDF content retrieved">
+              ✓ Grounded
+            </span>
+          ) : (
+            <span className="ml-1 inline-flex items-center rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700" title="PDF index not available">
+              ⚠ Placeholder
+            </span>
+          )}
         </div>
         {isSelected && (
           <span className="text-xs text-blue-600 font-medium">Selected</span>

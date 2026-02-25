@@ -126,12 +126,15 @@ test.describe('@weekly Hint Persistence', () => {
     await page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME }).click();
     await expect(page.getByTestId('hint-label-2')).toBeVisible({ timeout: 5000 });
 
-    // Request third hint (triggers escalation)
+    // Request third hint (L3 - max level)
     await page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME }).click();
     await expect(page.getByTestId('hint-label-3')).toBeVisible({ timeout: 5000 });
 
-    // Verify explanation was generated
-    await expect(page.getByText('Explanation has been generated')).toBeVisible({ timeout: 5000 });
+    // Request fourth help (triggers escalation to explanation after L3)
+    await page.getByRole('button', { name: 'Get More Help' }).click();
+
+    // Verify explanation was generated (auto-escalation after L3 hint)
+    await expect(page.getByText('Full Explanation Unlocked')).toBeVisible({ timeout: 5000 });
   });
 
   test('hints remain visible within same problem session', async ({ page }) => {
