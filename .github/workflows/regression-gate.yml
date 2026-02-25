@@ -12,7 +12,6 @@ env:
   NODE_VERSION: 20
   PLAYWRIGHT_VERSION: 1.42
   CI: true
-  PLAYWRIGHT_BROWSERS_PATH: 0
 
 jobs:
   # Build and verify the application
@@ -60,12 +59,10 @@ jobs:
           fi
       
       - name: Install Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
       
-      - name: Verify Playwright browsers
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: npx playwright install-deps chromium
+      - name: Verify browsers installed
+        run: npx playwright chromium --version
       
       - name: Build application
         run: npx vite build --config apps/web/vite.config.ts
@@ -77,7 +74,7 @@ jobs:
         id: test-run
         run: |
           echo "Running tests for shard ${{ matrix.shard }} of ${{ matrix.totalShards }}"
-          npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@(integration|flaky)' --shard=${{ matrix.shard }}/${{ matrix.totalShards }}
+          npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@(integration|flaky)' --shard=${{ matrix.shard }}/${{ matrix.totalShards }} --reporter=list
         env:
           CI: true
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results-shard-${{ matrix.shard }}.json
