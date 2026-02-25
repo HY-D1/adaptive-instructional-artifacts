@@ -42,3 +42,6 @@ chat-history/
 .aider*
 prompt-history/
 EDGE_CASE_TEST_REPORT.md
+
+# Architecture diagrams (local only)
+diagrams/
