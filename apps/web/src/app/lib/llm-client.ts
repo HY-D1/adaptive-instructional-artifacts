@@ -1,4 +1,5 @@
 import { LLMGenerationParams } from '../types';
+import { isDemoMode, shouldAttemptLLM } from './demo-mode';
 
 export const OLLAMA_MODEL = 'qwen2.5:1.5b-instruct';
 const OLLAMA_PROXY_BASE = '/ollama';
@@ -212,6 +213,11 @@ export async function generateWithOllama(prompt: string, options?: OllamaGenerat
   model: string;
   params: LLMGenerationParams;
 }> {
+  // In demo mode, immediately throw a network error so fallback kicks in
+  if (!shouldAttemptLLM()) {
+    throw buildClientError('NETWORK', 'Demo mode: LLM not available, using fallback hints.');
+  }
+  
   const model = options?.model || getSelectedModel();
   const rawParams: LLMGenerationParams = {
     ...DEFAULT_PARAMS,
@@ -274,6 +280,16 @@ export async function generateWithOllama(prompt: string, options?: OllamaGenerat
  * @returns Health status with message and available models
  */
 export async function checkOllamaHealth(model: string = OLLAMA_MODEL): Promise<OllamaHealthStatus> {
+  // In demo mode, return a friendly message immediately
+  if (isDemoMode()) {
+    return {
+      ok: true,
+      message: '🎓 Demo Mode: AI features use pre-built content. No local setup needed!',
+      availableModels: [OLLAMA_MODEL],
+      probeResponse: 'DEMO_MODE_ACTIVE'
+    };
+  }
+  
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), HEALTHCHECK_TIMEOUT_MS);
 
