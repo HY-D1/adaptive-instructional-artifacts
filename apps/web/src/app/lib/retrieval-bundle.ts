@@ -12,6 +12,7 @@ import {
 } from '../data';
 import { getActivePdfIndexProvenance, retrievePdfChunks } from './pdf-retrieval';
 import { retrieveSourcePassages, RetrievedSourcePassage } from './source-ref-lookup';
+import { getConceptChunks } from './concept-loader';
 
 /**
  * History entry for a retrieved hint
@@ -147,6 +148,7 @@ export function buildRetrievalBundle(options: {
   triggerInteractionIds?: string[];
   lastErrorSubtypeId?: string;
   pdfTopK?: number;
+  conceptId?: string;
 }): RetrievalBundle {
   const {
     learnerId,
@@ -154,7 +156,8 @@ export function buildRetrievalBundle(options: {
     interactions,
     triggerInteractionIds = [],
     lastErrorSubtypeId,
-    pdfTopK = 3
+    pdfTopK = 3,
+    conceptId
   } = options;
 
   const problemInteractions = interactions
@@ -231,7 +234,8 @@ export function buildRetrievalBundle(options: {
       subtype: normalizedSubtype,
       problemTitle: problem.title,
       problemDescription: problem.description,
-      conceptNames: conceptCandidates.map((concept) => concept.name)
+      conceptNames: conceptCandidates.map((concept) => concept.name),
+      conceptId
     },
     pdfTopK
   );
@@ -398,9 +402,25 @@ function findTopPdfPassages(
     problemTitle: string;
     problemDescription?: string;
     conceptNames: string[];
+    conceptId?: string;
   },
   topK: number
 ): RetrievalPdfPassage[] {
+  // If we have a specific concept ID, prioritize those chunks first
+  if (input.conceptId) {
+    const conceptChunks = getConceptChunks(input.conceptId);
+    if (conceptChunks && conceptChunks.length > 0) {
+      // Return concept chunks with high relevance score
+      return conceptChunks.slice(0, topK).map(chunk => ({
+        chunkId: chunk.chunkId,
+        docId: chunk.docId,
+        page: chunk.page,
+        text: chunk.text,
+        score: 0.95 // High score for concept-specific content
+      }));
+    }
+  }
+  
   // Build a more comprehensive query that includes:
   // 1. Error subtype (e.g., "incomplete query")
   // 2. Problem title (e.g., "Select All Users")

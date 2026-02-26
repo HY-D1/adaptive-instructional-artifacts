@@ -1,0 +1,3238 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-02-26T04:42:10.237197+00:00",
+  "sourceDocIds": [
+    "dbms-ramakrishnan-3rd-edition",
+    "murachs-mysql-3rd-edition"
+  ],
+  "concepts": {
+    "murachs-mysql-3rd-edition/relational-databases": {
+      "title": "Introduction to Relational Databases",
+      "definition": "Understanding client/server systems, relational database model, tables, relationships, and SQL basics",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p23:c1",
+          "murachs-mysql-3rd-edition:p23:c2",
+          "murachs-mysql-3rd-edition:p24:c1",
+          "murachs-mysql-3rd-edition:p24:c2",
+          "murachs-mysql-3rd-edition:p24:c3",
+          "murachs-mysql-3rd-edition:p25:c1",
+          "murachs-mysql-3rd-edition:p25:c2"
+        ],
+        "explanation": [
+          "murachs-mysql-3rd-edition:p26:c1",
+          "murachs-mysql-3rd-edition:p26:c2",
+          "murachs-mysql-3rd-edition:p27:c1",
+          "murachs-mysql-3rd-edition:p27:c2",
+          "murachs-mysql-3rd-edition:p28:c1",
+          "murachs-mysql-3rd-edition:p28:c2",
+          "murachs-mysql-3rd-edition:p28:c3",
+          "murachs-mysql-3rd-edition:p29:c1",
+          "murachs-mysql-3rd-edition:p29:c2",
+          "murachs-mysql-3rd-edition:p30:c1",
+          "murachs-mysql-3rd-edition:p30:c2",
+          "murachs-mysql-3rd-edition:p30:c3",
+          "murachs-mysql-3rd-edition:p30:c4"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p31:c1",
+          "murachs-mysql-3rd-edition:p31:c2",
+          "murachs-mysql-3rd-edition:p31:c3",
+          "murachs-mysql-3rd-edition:p32:c1",
+          "murachs-mysql-3rd-edition:p32:c2",
+          "murachs-mysql-3rd-edition:p33:c1",
+          "murachs-mysql-3rd-edition:p33:c2",
+          "murachs-mysql-3rd-edition:p33:c3",
+          "murachs-mysql-3rd-edition:p34:c1",
+          "murachs-mysql-3rd-edition:p34:c2",
+          "murachs-mysql-3rd-edition:p35:c1",
+          "murachs-mysql-3rd-edition:p35:c2"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p36:c1",
+          "murachs-mysql-3rd-edition:p36:c2",
+          "murachs-mysql-3rd-edition:p36:c3",
+          "murachs-mysql-3rd-edition:p37:c1",
+          "murachs-mysql-3rd-edition:p37:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/sql-intro",
+        "murachs-mysql-3rd-edition/mysql-workbench"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/sql-intro": {
+      "title": "Introduction to SQL",
+      "definition": "Overview of SQL statements: DML (SELECT, INSERT, UPDATE, DELETE) and DDL (CREATE, ALTER, DROP)",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p38:c1",
+          "murachs-mysql-3rd-edition:p38:c2",
+          "murachs-mysql-3rd-edition:p38:c3",
+          "murachs-mysql-3rd-edition:p39:c1",
+          "murachs-mysql-3rd-edition:p39:c2",
+          "murachs-mysql-3rd-edition:p39:c3",
+          "murachs-mysql-3rd-edition:p40:c1",
+          "murachs-mysql-3rd-edition:p40:c2",
+          "murachs-mysql-3rd-edition:p40:c3",
+          "murachs-mysql-3rd-edition:p41:c1",
+          "murachs-mysql-3rd-edition:p42:c1",
+          "murachs-mysql-3rd-edition:p42:c2"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p43:c1",
+          "murachs-mysql-3rd-edition:p43:c2",
+          "murachs-mysql-3rd-edition:p44:c1",
+          "murachs-mysql-3rd-edition:p44:c2",
+          "murachs-mysql-3rd-edition:p45:c1"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p46:c1",
+          "murachs-mysql-3rd-edition:p46:c2",
+          "murachs-mysql-3rd-edition:p47:c1",
+          "murachs-mysql-3rd-edition:p47:c2",
+          "murachs-mysql-3rd-edition:p48:c1",
+          "murachs-mysql-3rd-edition:p48:c2",
+          "murachs-mysql-3rd-edition:p48:c3",
+          "murachs-mysql-3rd-edition:p49:c1",
+          "murachs-mysql-3rd-edition:p49:c2",
+          "murachs-mysql-3rd-edition:p50:c1",
+          "murachs-mysql-3rd-edition:p50:c2",
+          "murachs-mysql-3rd-edition:p51:c1",
+          "murachs-mysql-3rd-edition:p51:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/relational-databases",
+        "murachs-mysql-3rd-edition/select-basics"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/mysql-workbench": {
+      "title": "Using MySQL Workbench",
+      "definition": "How to use MySQL Workbench for database development and administration",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p62:c1",
+          "murachs-mysql-3rd-edition:p62:c2",
+          "murachs-mysql-3rd-edition:p62:c3",
+          "murachs-mysql-3rd-edition:p63:c1",
+          "murachs-mysql-3rd-edition:p63:c2",
+          "murachs-mysql-3rd-edition:p63:c3",
+          "murachs-mysql-3rd-edition:p64:c1",
+          "murachs-mysql-3rd-edition:p64:c2",
+          "murachs-mysql-3rd-edition:p64:c3"
+        ],
+        "explanation": [
+          "murachs-mysql-3rd-edition:p65:c1",
+          "murachs-mysql-3rd-edition:p65:c2",
+          "murachs-mysql-3rd-edition:p66:c1",
+          "murachs-mysql-3rd-edition:p66:c2",
+          "murachs-mysql-3rd-edition:p66:c3",
+          "murachs-mysql-3rd-edition:p67:c1",
+          "murachs-mysql-3rd-edition:p67:c2",
+          "murachs-mysql-3rd-edition:p67:c3",
+          "murachs-mysql-3rd-edition:p67:c4",
+          "murachs-mysql-3rd-edition:p68:c1",
+          "murachs-mysql-3rd-edition:p68:c2",
+          "murachs-mysql-3rd-edition:p69:c1",
+          "murachs-mysql-3rd-edition:p69:c2",
+          "murachs-mysql-3rd-edition:p70:c1"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p71:c1",
+          "murachs-mysql-3rd-edition:p71:c2",
+          "murachs-mysql-3rd-edition:p71:c3",
+          "murachs-mysql-3rd-edition:p72:c1",
+          "murachs-mysql-3rd-edition:p72:c2",
+          "murachs-mysql-3rd-edition:p73:c1",
+          "murachs-mysql-3rd-edition:p73:c2",
+          "murachs-mysql-3rd-edition:p73:c3",
+          "murachs-mysql-3rd-edition:p74:c1",
+          "murachs-mysql-3rd-edition:p74:c2",
+          "murachs-mysql-3rd-edition:p74:c3",
+          "murachs-mysql-3rd-edition:p75:c1",
+          "murachs-mysql-3rd-edition:p75:c2",
+          "murachs-mysql-3rd-edition:p75:c3"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p76:c1",
+          "murachs-mysql-3rd-edition:p76:c2",
+          "murachs-mysql-3rd-edition:p77:c1",
+          "murachs-mysql-3rd-edition:p77:c2",
+          "murachs-mysql-3rd-edition:p77:c3",
+          "murachs-mysql-3rd-edition:p78:c1",
+          "murachs-mysql-3rd-edition:p78:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/relational-databases"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/select-basics": {
+      "title": "SELECT Statement Basics",
+      "definition": "How to retrieve data from a single table using SELECT, column specifications, and aliases",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        94,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102,
+        103,
+        104,
+        105
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p94:c1",
+          "murachs-mysql-3rd-edition:p94:c2",
+          "murachs-mysql-3rd-edition:p94:c3",
+          "murachs-mysql-3rd-edition:p95:c1",
+          "murachs-mysql-3rd-edition:p95:c2",
+          "murachs-mysql-3rd-edition:p95:c3",
+          "murachs-mysql-3rd-edition:p96:c1",
+          "murachs-mysql-3rd-edition:p96:c2",
+          "murachs-mysql-3rd-edition:p96:c3",
+          "murachs-mysql-3rd-edition:p97:c1",
+          "murachs-mysql-3rd-edition:p97:c2"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p98:c1",
+          "murachs-mysql-3rd-edition:p98:c2",
+          "murachs-mysql-3rd-edition:p98:c3",
+          "murachs-mysql-3rd-edition:p99:c1",
+          "murachs-mysql-3rd-edition:p99:c2",
+          "murachs-mysql-3rd-edition:p100:c1",
+          "murachs-mysql-3rd-edition:p100:c2",
+          "murachs-mysql-3rd-edition:p101:c1",
+          "murachs-mysql-3rd-edition:p101:c2"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p102:c1",
+          "murachs-mysql-3rd-edition:p102:c2",
+          "murachs-mysql-3rd-edition:p102:c3",
+          "murachs-mysql-3rd-edition:p102:c4",
+          "murachs-mysql-3rd-edition:p103:c1",
+          "murachs-mysql-3rd-edition:p103:c2",
+          "murachs-mysql-3rd-edition:p104:c1",
+          "murachs-mysql-3rd-edition:p104:c2",
+          "murachs-mysql-3rd-edition:p104:c3",
+          "murachs-mysql-3rd-edition:p105:c1",
+          "murachs-mysql-3rd-edition:p105:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/where-clause",
+        "murachs-mysql-3rd-edition/order-by"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/where-clause": {
+      "title": "The WHERE Clause",
+      "definition": "How to filter rows using comparison operators, AND/OR, IN, BETWEEN, LIKE, and IS NULL",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        106,
+        107,
+        108,
+        109,
+        110,
+        111,
+        112,
+        113,
+        114,
+        115,
+        116,
+        117,
+        118
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p106:c1",
+          "murachs-mysql-3rd-edition:p106:c2",
+          "murachs-mysql-3rd-edition:p106:c3",
+          "murachs-mysql-3rd-edition:p107:c1",
+          "murachs-mysql-3rd-edition:p107:c2",
+          "murachs-mysql-3rd-edition:p108:c1",
+          "murachs-mysql-3rd-edition:p108:c2",
+          "murachs-mysql-3rd-edition:p109:c1"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p110:c1",
+          "murachs-mysql-3rd-edition:p111:c1",
+          "murachs-mysql-3rd-edition:p111:c2",
+          "murachs-mysql-3rd-edition:p112:c1",
+          "murachs-mysql-3rd-edition:p112:c2",
+          "murachs-mysql-3rd-edition:p112:c3",
+          "murachs-mysql-3rd-edition:p112:c4",
+          "murachs-mysql-3rd-edition:p113:c1",
+          "murachs-mysql-3rd-edition:p113:c2"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p114:c1",
+          "murachs-mysql-3rd-edition:p114:c2",
+          "murachs-mysql-3rd-edition:p114:c3",
+          "murachs-mysql-3rd-edition:p115:c1",
+          "murachs-mysql-3rd-edition:p115:c2",
+          "murachs-mysql-3rd-edition:p115:c3",
+          "murachs-mysql-3rd-edition:p116:c1",
+          "murachs-mysql-3rd-edition:p116:c2"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p117:c1",
+          "murachs-mysql-3rd-edition:p117:c2",
+          "murachs-mysql-3rd-edition:p118:c1",
+          "murachs-mysql-3rd-edition:p118:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/select-basics",
+        "murachs-mysql-3rd-edition/logical-operators"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/logical-operators": {
+      "title": "Logical Operators",
+      "definition": "Using AND, OR, NOT, IN, BETWEEN to combine filter conditions",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        119,
+        120,
+        121,
+        122,
+        123
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p119:c1",
+          "murachs-mysql-3rd-edition:p119:c2",
+          "murachs-mysql-3rd-edition:p120:c1",
+          "murachs-mysql-3rd-edition:p120:c2",
+          "murachs-mysql-3rd-edition:p120:c3",
+          "murachs-mysql-3rd-edition:p120:c4"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p121:c1",
+          "murachs-mysql-3rd-edition:p121:c2",
+          "murachs-mysql-3rd-edition:p121:c3",
+          "murachs-mysql-3rd-edition:p122:c1",
+          "murachs-mysql-3rd-edition:p122:c2",
+          "murachs-mysql-3rd-edition:p122:c3",
+          "murachs-mysql-3rd-edition:p123:c1",
+          "murachs-mysql-3rd-edition:p123:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/where-clause"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/order-by": {
+      "title": "The ORDER BY Clause",
+      "definition": "Sorting result sets by one or more columns in ascending or descending order",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        124,
+        125,
+        126,
+        127,
+        128,
+        129
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p124:c1",
+          "murachs-mysql-3rd-edition:p124:c2",
+          "murachs-mysql-3rd-edition:p125:c1",
+          "murachs-mysql-3rd-edition:p125:c2",
+          "murachs-mysql-3rd-edition:p125:c3"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p126:c1",
+          "murachs-mysql-3rd-edition:p126:c2",
+          "murachs-mysql-3rd-edition:p127:c1",
+          "murachs-mysql-3rd-edition:p127:c2"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p128:c1",
+          "murachs-mysql-3rd-edition:p128:c2",
+          "murachs-mysql-3rd-edition:p129:c1",
+          "murachs-mysql-3rd-edition:p129:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/select-basics"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/joins-intro": {
+      "title": "Introduction to Joins",
+      "definition": "Combining data from multiple tables using INNER JOIN, OUTER JOIN, and cross joins",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        130,
+        131,
+        132,
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        139,
+        140,
+        141
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p130:c1",
+          "murachs-mysql-3rd-edition:p130:c2",
+          "murachs-mysql-3rd-edition:p131:c1",
+          "murachs-mysql-3rd-edition:p131:c2",
+          "murachs-mysql-3rd-edition:p131:c3",
+          "murachs-mysql-3rd-edition:p132:c1",
+          "murachs-mysql-3rd-edition:p132:c2"
+        ],
+        "explanation": [
+          "murachs-mysql-3rd-edition:p133:c1",
+          "murachs-mysql-3rd-edition:p133:c2",
+          "murachs-mysql-3rd-edition:p134:c1",
+          "murachs-mysql-3rd-edition:p134:c2",
+          "murachs-mysql-3rd-edition:p134:c3",
+          "murachs-mysql-3rd-edition:p135:c1",
+          "murachs-mysql-3rd-edition:p135:c2"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p136:c1",
+          "murachs-mysql-3rd-edition:p136:c2",
+          "murachs-mysql-3rd-edition:p137:c1",
+          "murachs-mysql-3rd-edition:p137:c2",
+          "murachs-mysql-3rd-edition:p138:c1",
+          "murachs-mysql-3rd-edition:p138:c2",
+          "murachs-mysql-3rd-edition:p139:c1",
+          "murachs-mysql-3rd-edition:p139:c2"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p140:c1",
+          "murachs-mysql-3rd-edition:p141:c1",
+          "murachs-mysql-3rd-edition:p141:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/inner-join",
+        "murachs-mysql-3rd-edition/outer-join"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/inner-join": {
+      "title": "Inner Joins",
+      "definition": "Retrieving matching rows from two or more tables",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        142,
+        143,
+        144,
+        145,
+        146,
+        147
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p142:c1",
+          "murachs-mysql-3rd-edition:p142:c2",
+          "murachs-mysql-3rd-edition:p143:c1"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p144:c1",
+          "murachs-mysql-3rd-edition:p145:c1"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p146:c1",
+          "murachs-mysql-3rd-edition:p146:c2",
+          "murachs-mysql-3rd-edition:p147:c1",
+          "murachs-mysql-3rd-edition:p147:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/joins-intro",
+        "murachs-mysql-3rd-edition/outer-join"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/outer-join": {
+      "title": "Outer Joins",
+      "definition": "Retrieving all rows from one table and matching rows from another (LEFT, RIGHT, FULL)",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+        154,
+        155
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p148:c1",
+          "murachs-mysql-3rd-edition:p148:c2",
+          "murachs-mysql-3rd-edition:p149:c1",
+          "murachs-mysql-3rd-edition:p149:c2"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p150:c1",
+          "murachs-mysql-3rd-edition:p150:c2",
+          "murachs-mysql-3rd-edition:p150:c3",
+          "murachs-mysql-3rd-edition:p150:c4",
+          "murachs-mysql-3rd-edition:p151:c1"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p152:c1",
+          "murachs-mysql-3rd-edition:p153:c1",
+          "murachs-mysql-3rd-edition:p153:c2"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p154:c1",
+          "murachs-mysql-3rd-edition:p154:c2",
+          "murachs-mysql-3rd-edition:p154:c3",
+          "murachs-mysql-3rd-edition:p155:c1",
+          "murachs-mysql-3rd-edition:p155:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/joins-intro",
+        "murachs-mysql-3rd-edition/inner-join"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/insert-statement": {
+      "title": "The INSERT Statement",
+      "definition": "Adding new rows to a table using INSERT INTO with VALUES or SELECT",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        156,
+        157,
+        158,
+        159,
+        160,
+        161,
+        162,
+        163
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p156:c1",
+          "murachs-mysql-3rd-edition:p156:c2",
+          "murachs-mysql-3rd-edition:p157:c1",
+          "murachs-mysql-3rd-edition:p157:c2"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p158:c1",
+          "murachs-mysql-3rd-edition:p158:c2",
+          "murachs-mysql-3rd-edition:p159:c1",
+          "murachs-mysql-3rd-edition:p159:c2"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p160:c1",
+          "murachs-mysql-3rd-edition:p160:c2",
+          "murachs-mysql-3rd-edition:p160:c3",
+          "murachs-mysql-3rd-edition:p161:c1",
+          "murachs-mysql-3rd-edition:p161:c2",
+          "murachs-mysql-3rd-edition:p162:c1",
+          "murachs-mysql-3rd-edition:p162:c2"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p163:c1",
+          "murachs-mysql-3rd-edition:p163:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/update-statement",
+        "murachs-mysql-3rd-edition/delete-statement"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/update-statement": {
+      "title": "The UPDATE Statement",
+      "definition": "Modifying existing rows in a table with UPDATE and SET clauses",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        164,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p164:c1",
+          "murachs-mysql-3rd-edition:p164:c2",
+          "murachs-mysql-3rd-edition:p165:c1",
+          "murachs-mysql-3rd-edition:p165:c2"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p166:c1",
+          "murachs-mysql-3rd-edition:p166:c2",
+          "murachs-mysql-3rd-edition:p167:c1",
+          "murachs-mysql-3rd-edition:p167:c2",
+          "murachs-mysql-3rd-edition:p167:c3"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p169:c1",
+          "murachs-mysql-3rd-edition:p169:c2"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p170:c1",
+          "murachs-mysql-3rd-edition:p170:c2",
+          "murachs-mysql-3rd-edition:p170:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/insert-statement",
+        "murachs-mysql-3rd-edition/delete-statement"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/delete-statement": {
+      "title": "The DELETE Statement",
+      "definition": "Removing rows from a table using DELETE with WHERE clause",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        171,
+        172,
+        173,
+        174,
+        175,
+        176
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p171:c1",
+          "murachs-mysql-3rd-edition:p171:c2",
+          "murachs-mysql-3rd-edition:p172:c1",
+          "murachs-mysql-3rd-edition:p172:c2",
+          "murachs-mysql-3rd-edition:p172:c3",
+          "murachs-mysql-3rd-edition:p172:c4"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p173:c1",
+          "murachs-mysql-3rd-edition:p173:c2",
+          "murachs-mysql-3rd-edition:p173:c3"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p174:c1",
+          "murachs-mysql-3rd-edition:p174:c2",
+          "murachs-mysql-3rd-edition:p174:c3",
+          "murachs-mysql-3rd-edition:p175:c1",
+          "murachs-mysql-3rd-edition:p175:c2"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p176:c1",
+          "murachs-mysql-3rd-edition:p176:c2",
+          "murachs-mysql-3rd-edition:p176:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/insert-statement",
+        "murachs-mysql-3rd-edition/update-statement"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/aggregate-functions": {
+      "title": "Aggregate Functions",
+      "definition": "Using COUNT, SUM, AVG, MAX, MIN to calculate summary values",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        180,
+        181,
+        182,
+        183,
+        184,
+        185,
+        186,
+        187,
+        188
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p180:c1",
+          "murachs-mysql-3rd-edition:p180:c2",
+          "murachs-mysql-3rd-edition:p181:c1",
+          "murachs-mysql-3rd-edition:p182:c1",
+          "murachs-mysql-3rd-edition:p182:c2",
+          "murachs-mysql-3rd-edition:p182:c3"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p183:c1",
+          "murachs-mysql-3rd-edition:p183:c2",
+          "murachs-mysql-3rd-edition:p184:c1",
+          "murachs-mysql-3rd-edition:p184:c2"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p185:c1",
+          "murachs-mysql-3rd-edition:p185:c2",
+          "murachs-mysql-3rd-edition:p187:c1"
+        ],
+        "commonMistakes": []
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/group-by",
+        "murachs-mysql-3rd-edition/having-clause"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/group-by": {
+      "title": "The GROUP BY Clause",
+      "definition": "Grouping rows for aggregate calculations",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        189,
+        190,
+        191,
+        192,
+        193,
+        194,
+        195,
+        196
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p189:c1",
+          "murachs-mysql-3rd-edition:p189:c2",
+          "murachs-mysql-3rd-edition:p190:c1",
+          "murachs-mysql-3rd-edition:p190:c2",
+          "murachs-mysql-3rd-edition:p190:c3"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p191:c1",
+          "murachs-mysql-3rd-edition:p191:c2",
+          "murachs-mysql-3rd-edition:p192:c1",
+          "murachs-mysql-3rd-edition:p192:c2",
+          "murachs-mysql-3rd-edition:p192:c3"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p193:c1",
+          "murachs-mysql-3rd-edition:p193:c2",
+          "murachs-mysql-3rd-edition:p194:c1",
+          "murachs-mysql-3rd-edition:p194:c2",
+          "murachs-mysql-3rd-edition:p194:c3",
+          "murachs-mysql-3rd-edition:p194:c4",
+          "murachs-mysql-3rd-edition:p195:c1",
+          "murachs-mysql-3rd-edition:p195:c2",
+          "murachs-mysql-3rd-edition:p195:c3"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p196:c1",
+          "murachs-mysql-3rd-edition:p196:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/aggregate-functions",
+        "murachs-mysql-3rd-edition/having-clause"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/having-clause": {
+      "title": "The HAVING Clause",
+      "definition": "Filtering grouped results based on aggregate conditions",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        197,
+        198,
+        199,
+        200,
+        201
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p197:c1",
+          "murachs-mysql-3rd-edition:p197:c2",
+          "murachs-mysql-3rd-edition:p198:c1",
+          "murachs-mysql-3rd-edition:p198:c2",
+          "murachs-mysql-3rd-edition:p198:c3"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p199:c1",
+          "murachs-mysql-3rd-edition:p199:c2"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p200:c1",
+          "murachs-mysql-3rd-edition:p200:c2",
+          "murachs-mysql-3rd-edition:p201:c1",
+          "murachs-mysql-3rd-edition:p201:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/aggregate-functions",
+        "murachs-mysql-3rd-edition/group-by"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/subqueries": {
+      "title": "Subqueries",
+      "definition": "Using queries nested inside other queries for complex data retrieval",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        220,
+        221,
+        222,
+        223,
+        224,
+        225,
+        226,
+        227,
+        228,
+        229,
+        230,
+        231
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p220:c1",
+          "murachs-mysql-3rd-edition:p220:c2",
+          "murachs-mysql-3rd-edition:p221:c1",
+          "murachs-mysql-3rd-edition:p221:c2",
+          "murachs-mysql-3rd-edition:p222:c1",
+          "murachs-mysql-3rd-edition:p222:c2",
+          "murachs-mysql-3rd-edition:p222:c3"
+        ],
+        "explanation": [
+          "murachs-mysql-3rd-edition:p223:c1",
+          "murachs-mysql-3rd-edition:p223:c2",
+          "murachs-mysql-3rd-edition:p224:c1",
+          "murachs-mysql-3rd-edition:p224:c2",
+          "murachs-mysql-3rd-edition:p225:c1",
+          "murachs-mysql-3rd-edition:p225:c2"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p226:c1",
+          "murachs-mysql-3rd-edition:p227:c1",
+          "murachs-mysql-3rd-edition:p227:c2",
+          "murachs-mysql-3rd-edition:p228:c1",
+          "murachs-mysql-3rd-edition:p228:c2",
+          "murachs-mysql-3rd-edition:p228:c3",
+          "murachs-mysql-3rd-edition:p229:c1",
+          "murachs-mysql-3rd-edition:p229:c2"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p230:c1",
+          "murachs-mysql-3rd-edition:p230:c2",
+          "murachs-mysql-3rd-edition:p231:c1",
+          "murachs-mysql-3rd-edition:p231:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/correlated-subquery"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/correlated-subquery": {
+      "title": "Correlated Subqueries",
+      "definition": "Subqueries that reference columns from the outer query",
+      "difficulty": "advanced",
+      "pageNumbers": [
+        232,
+        233,
+        234,
+        235,
+        236,
+        237,
+        238
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p232:c1",
+          "murachs-mysql-3rd-edition:p232:c2",
+          "murachs-mysql-3rd-edition:p232:c3",
+          "murachs-mysql-3rd-edition:p233:c1",
+          "murachs-mysql-3rd-edition:p233:c2"
+        ],
+        "explanation": [
+          "murachs-mysql-3rd-edition:p234:c1",
+          "murachs-mysql-3rd-edition:p234:c2",
+          "murachs-mysql-3rd-edition:p235:c1"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p236:c1",
+          "murachs-mysql-3rd-edition:p236:c2",
+          "murachs-mysql-3rd-edition:p237:c1",
+          "murachs-mysql-3rd-edition:p237:c2",
+          "murachs-mysql-3rd-edition:p238:c1",
+          "murachs-mysql-3rd-edition:p238:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/subqueries"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/data-types": {
+      "title": "MySQL Data Types",
+      "definition": "Understanding numeric, string, date/time, and large object data types",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        260,
+        261,
+        262,
+        263,
+        264,
+        265,
+        266,
+        267,
+        268,
+        269,
+        270
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p260:c1",
+          "murachs-mysql-3rd-edition:p260:c2",
+          "murachs-mysql-3rd-edition:p260:c3",
+          "murachs-mysql-3rd-edition:p261:c1",
+          "murachs-mysql-3rd-edition:p261:c2",
+          "murachs-mysql-3rd-edition:p262:c1",
+          "murachs-mysql-3rd-edition:p262:c2",
+          "murachs-mysql-3rd-edition:p262:c3"
+        ],
+        "explanation": [
+          "murachs-mysql-3rd-edition:p263:c1",
+          "murachs-mysql-3rd-edition:p263:c2",
+          "murachs-mysql-3rd-edition:p264:c1",
+          "murachs-mysql-3rd-edition:p264:c2",
+          "murachs-mysql-3rd-edition:p264:c3",
+          "murachs-mysql-3rd-edition:p264:c4",
+          "murachs-mysql-3rd-edition:p265:c1",
+          "murachs-mysql-3rd-edition:p265:c2",
+          "murachs-mysql-3rd-edition:p265:c3",
+          "murachs-mysql-3rd-edition:p266:c1",
+          "murachs-mysql-3rd-edition:p266:c2"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p267:c1",
+          "murachs-mysql-3rd-edition:p268:c1",
+          "murachs-mysql-3rd-edition:p268:c2",
+          "murachs-mysql-3rd-edition:p268:c3"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p269:c1",
+          "murachs-mysql-3rd-edition:p269:c2",
+          "murachs-mysql-3rd-edition:p270:c1",
+          "murachs-mysql-3rd-edition:p270:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/create-table"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/mysql-functions": {
+      "title": "MySQL Functions",
+      "definition": "String, numeric, date/time, and conversion functions",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        290,
+        291,
+        292,
+        293,
+        294,
+        295,
+        296,
+        297,
+        298
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p290:c1",
+          "murachs-mysql-3rd-edition:p290:c2",
+          "murachs-mysql-3rd-edition:p290:c3",
+          "murachs-mysql-3rd-edition:p291:c1",
+          "murachs-mysql-3rd-edition:p292:c1"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p293:c1",
+          "murachs-mysql-3rd-edition:p293:c2",
+          "murachs-mysql-3rd-edition:p294:c1",
+          "murachs-mysql-3rd-edition:p294:c2"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p295:c1",
+          "murachs-mysql-3rd-edition:p296:c1",
+          "murachs-mysql-3rd-edition:p296:c2",
+          "murachs-mysql-3rd-edition:p297:c1",
+          "murachs-mysql-3rd-edition:p297:c2",
+          "murachs-mysql-3rd-edition:p298:c1",
+          "murachs-mysql-3rd-edition:p298:c2",
+          "murachs-mysql-3rd-edition:p298:c3",
+          "murachs-mysql-3rd-edition:p298:c4"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/data-types"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/database-design": {
+      "title": "Database Design",
+      "definition": "How to design databases using ERDs and normalization",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        320,
+        321,
+        322,
+        323,
+        324,
+        325,
+        326,
+        327,
+        328,
+        329,
+        330,
+        331
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p320:c1",
+          "murachs-mysql-3rd-edition:p320:c2",
+          "murachs-mysql-3rd-edition:p321:c1",
+          "murachs-mysql-3rd-edition:p321:c2",
+          "murachs-mysql-3rd-edition:p321:c3"
+        ],
+        "explanation": [
+          "murachs-mysql-3rd-edition:p323:c1",
+          "murachs-mysql-3rd-edition:p323:c2",
+          "murachs-mysql-3rd-edition:p325:c1",
+          "murachs-mysql-3rd-edition:p325:c2",
+          "murachs-mysql-3rd-edition:p326:c1",
+          "murachs-mysql-3rd-edition:p326:c2",
+          "murachs-mysql-3rd-edition:p326:c3",
+          "murachs-mysql-3rd-edition:p326:c4"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p327:c1",
+          "murachs-mysql-3rd-edition:p327:c2",
+          "murachs-mysql-3rd-edition:p328:c1",
+          "murachs-mysql-3rd-edition:p328:c2",
+          "murachs-mysql-3rd-edition:p328:c3",
+          "murachs-mysql-3rd-edition:p329:c1",
+          "murachs-mysql-3rd-edition:p329:c2"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p330:c1",
+          "murachs-mysql-3rd-edition:p330:c2",
+          "murachs-mysql-3rd-edition:p330:c3",
+          "murachs-mysql-3rd-edition:p331:c1"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/normalization",
+        "murachs-mysql-3rd-edition/create-table"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/normalization": {
+      "title": "Normalization",
+      "definition": "Organizing data to reduce redundancy and improve integrity",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        332,
+        333,
+        334,
+        335,
+        336,
+        337,
+        338,
+        339
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p332:c1",
+          "murachs-mysql-3rd-edition:p332:c2",
+          "murachs-mysql-3rd-edition:p332:c3",
+          "murachs-mysql-3rd-edition:p332:c4",
+          "murachs-mysql-3rd-edition:p333:c1",
+          "murachs-mysql-3rd-edition:p333:c2",
+          "murachs-mysql-3rd-edition:p334:c1",
+          "murachs-mysql-3rd-edition:p334:c2",
+          "murachs-mysql-3rd-edition:p334:c3",
+          "murachs-mysql-3rd-edition:p334:c4"
+        ],
+        "explanation": [
+          "murachs-mysql-3rd-edition:p335:c1",
+          "murachs-mysql-3rd-edition:p335:c2",
+          "murachs-mysql-3rd-edition:p335:c3",
+          "murachs-mysql-3rd-edition:p336:c1",
+          "murachs-mysql-3rd-edition:p336:c2",
+          "murachs-mysql-3rd-edition:p336:c3",
+          "murachs-mysql-3rd-edition:p337:c1",
+          "murachs-mysql-3rd-edition:p337:c2"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p338:c1",
+          "murachs-mysql-3rd-edition:p338:c2",
+          "murachs-mysql-3rd-edition:p338:c3",
+          "murachs-mysql-3rd-edition:p339:c1",
+          "murachs-mysql-3rd-edition:p339:c2",
+          "murachs-mysql-3rd-edition:p339:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/database-design"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/create-table": {
+      "title": "Creating Tables and Indexes",
+      "definition": "Using CREATE TABLE, ALTER TABLE, CREATE INDEX, and DROP statements",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        360,
+        361,
+        362,
+        363,
+        364,
+        365,
+        366,
+        367,
+        368,
+        369,
+        370,
+        371
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p361:c1",
+          "murachs-mysql-3rd-edition:p361:c2",
+          "murachs-mysql-3rd-edition:p362:c1",
+          "murachs-mysql-3rd-edition:p362:c2",
+          "murachs-mysql-3rd-edition:p362:c3"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p363:c1",
+          "murachs-mysql-3rd-edition:p364:c1",
+          "murachs-mysql-3rd-edition:p364:c2",
+          "murachs-mysql-3rd-edition:p364:c3",
+          "murachs-mysql-3rd-edition:p364:c4",
+          "murachs-mysql-3rd-edition:p365:c1",
+          "murachs-mysql-3rd-edition:p365:c2"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p366:c1",
+          "murachs-mysql-3rd-edition:p366:c2",
+          "murachs-mysql-3rd-edition:p366:c3",
+          "murachs-mysql-3rd-edition:p366:c4",
+          "murachs-mysql-3rd-edition:p367:c1",
+          "murachs-mysql-3rd-edition:p367:c2",
+          "murachs-mysql-3rd-edition:p368:c1",
+          "murachs-mysql-3rd-edition:p368:c2",
+          "murachs-mysql-3rd-edition:p368:c3",
+          "murachs-mysql-3rd-edition:p368:c4",
+          "murachs-mysql-3rd-edition:p369:c1",
+          "murachs-mysql-3rd-edition:p369:c2"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p370:c1",
+          "murachs-mysql-3rd-edition:p370:c2",
+          "murachs-mysql-3rd-edition:p370:c3",
+          "murachs-mysql-3rd-edition:p370:c4",
+          "murachs-mysql-3rd-edition:p371:c1",
+          "murachs-mysql-3rd-edition:p371:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/data-types",
+        "murachs-mysql-3rd-edition/database-design"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/views": {
+      "title": "Views",
+      "definition": "Creating and using virtual tables based on SELECT queries",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        380,
+        381,
+        382,
+        383,
+        384,
+        385,
+        386,
+        387,
+        388,
+        389
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p380:c1",
+          "murachs-mysql-3rd-edition:p380:c2",
+          "murachs-mysql-3rd-edition:p380:c3",
+          "murachs-mysql-3rd-edition:p380:c4",
+          "murachs-mysql-3rd-edition:p381:c1",
+          "murachs-mysql-3rd-edition:p381:c2",
+          "murachs-mysql-3rd-edition:p382:c1",
+          "murachs-mysql-3rd-edition:p382:c2",
+          "murachs-mysql-3rd-edition:p382:c3",
+          "murachs-mysql-3rd-edition:p383:c1",
+          "murachs-mysql-3rd-edition:p383:c2",
+          "murachs-mysql-3rd-edition:p383:c3"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p384:c1",
+          "murachs-mysql-3rd-edition:p385:c1",
+          "murachs-mysql-3rd-edition:p385:c2",
+          "murachs-mysql-3rd-edition:p385:c3"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p386:c1",
+          "murachs-mysql-3rd-edition:p387:c1",
+          "murachs-mysql-3rd-edition:p387:c2",
+          "murachs-mysql-3rd-edition:p387:c3",
+          "murachs-mysql-3rd-edition:p388:c1",
+          "murachs-mysql-3rd-edition:p388:c2",
+          "murachs-mysql-3rd-edition:p388:c3",
+          "murachs-mysql-3rd-edition:p388:c4"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p389:c1",
+          "murachs-mysql-3rd-edition:p389:c2",
+          "murachs-mysql-3rd-edition:p389:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/select-basics"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/transactions": {
+      "title": "Transactions and Locking",
+      "definition": "Ensuring data integrity with ACID transactions and concurrency control",
+      "difficulty": "advanced",
+      "pageNumbers": [
+        420,
+        421,
+        422,
+        423,
+        424,
+        425,
+        426,
+        427,
+        428,
+        429,
+        430,
+        431,
+        432
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p421:c1",
+          "murachs-mysql-3rd-edition:p421:c2",
+          "murachs-mysql-3rd-edition:p422:c1",
+          "murachs-mysql-3rd-edition:p422:c2",
+          "murachs-mysql-3rd-edition:p422:c3",
+          "murachs-mysql-3rd-edition:p423:c1",
+          "murachs-mysql-3rd-edition:p423:c2"
+        ],
+        "explanation": [
+          "murachs-mysql-3rd-edition:p424:c1",
+          "murachs-mysql-3rd-edition:p424:c2",
+          "murachs-mysql-3rd-edition:p424:c3",
+          "murachs-mysql-3rd-edition:p425:c1",
+          "murachs-mysql-3rd-edition:p426:c1",
+          "murachs-mysql-3rd-edition:p426:c2",
+          "murachs-mysql-3rd-edition:p427:c1"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p428:c1",
+          "murachs-mysql-3rd-edition:p428:c2",
+          "murachs-mysql-3rd-edition:p428:c3",
+          "murachs-mysql-3rd-edition:p428:c4",
+          "murachs-mysql-3rd-edition:p429:c1",
+          "murachs-mysql-3rd-edition:p429:c2",
+          "murachs-mysql-3rd-edition:p430:c1",
+          "murachs-mysql-3rd-edition:p430:c2",
+          "murachs-mysql-3rd-edition:p430:c3"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p431:c1",
+          "murachs-mysql-3rd-edition:p431:c2",
+          "murachs-mysql-3rd-edition:p432:c1",
+          "murachs-mysql-3rd-edition:p432:c2",
+          "murachs-mysql-3rd-edition:p432:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/stored-procedures"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/stored-procedures": {
+      "title": "Stored Procedures and Functions",
+      "definition": "Creating reusable SQL code blocks stored in the database",
+      "difficulty": "advanced",
+      "pageNumbers": [
+        460,
+        461,
+        462,
+        463,
+        464,
+        465,
+        466,
+        467,
+        468,
+        469,
+        470,
+        471,
+        472,
+        473
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p460:c1",
+          "murachs-mysql-3rd-edition:p460:c2",
+          "murachs-mysql-3rd-edition:p460:c3",
+          "murachs-mysql-3rd-edition:p460:c4",
+          "murachs-mysql-3rd-edition:p461:c1",
+          "murachs-mysql-3rd-edition:p461:c2",
+          "murachs-mysql-3rd-edition:p461:c3",
+          "murachs-mysql-3rd-edition:p462:c1",
+          "murachs-mysql-3rd-edition:p462:c2",
+          "murachs-mysql-3rd-edition:p462:c3",
+          "murachs-mysql-3rd-edition:p462:c4",
+          "murachs-mysql-3rd-edition:p463:c1",
+          "murachs-mysql-3rd-edition:p463:c2"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p464:c1",
+          "murachs-mysql-3rd-edition:p464:c2",
+          "murachs-mysql-3rd-edition:p465:c1",
+          "murachs-mysql-3rd-edition:p465:c2",
+          "murachs-mysql-3rd-edition:p466:c1",
+          "murachs-mysql-3rd-edition:p466:c2",
+          "murachs-mysql-3rd-edition:p466:c3",
+          "murachs-mysql-3rd-edition:p466:c4",
+          "murachs-mysql-3rd-edition:p467:c1",
+          "murachs-mysql-3rd-edition:p467:c2"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p468:c1",
+          "murachs-mysql-3rd-edition:p468:c2",
+          "murachs-mysql-3rd-edition:p468:c3",
+          "murachs-mysql-3rd-edition:p468:c4",
+          "murachs-mysql-3rd-edition:p469:c1",
+          "murachs-mysql-3rd-edition:p469:c2",
+          "murachs-mysql-3rd-edition:p470:c1",
+          "murachs-mysql-3rd-edition:p470:c2",
+          "murachs-mysql-3rd-edition:p471:c1",
+          "murachs-mysql-3rd-edition:p471:c2"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p472:c1",
+          "murachs-mysql-3rd-edition:p472:c2",
+          "murachs-mysql-3rd-edition:p472:c3",
+          "murachs-mysql-3rd-edition:p473:c1",
+          "murachs-mysql-3rd-edition:p473:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/transactions",
+        "murachs-mysql-3rd-edition/functions"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/triggers": {
+      "title": "Triggers and Events",
+      "definition": "Automating SQL execution on data changes and scheduled events",
+      "difficulty": "advanced",
+      "pageNumbers": [
+        500,
+        501,
+        502,
+        503,
+        504,
+        505,
+        506,
+        507,
+        508
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p500:c1",
+          "murachs-mysql-3rd-edition:p500:c2",
+          "murachs-mysql-3rd-edition:p500:c3",
+          "murachs-mysql-3rd-edition:p501:c1",
+          "murachs-mysql-3rd-edition:p502:c1",
+          "murachs-mysql-3rd-edition:p502:c2",
+          "murachs-mysql-3rd-edition:p502:c3"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p503:c1",
+          "murachs-mysql-3rd-edition:p503:c2",
+          "murachs-mysql-3rd-edition:p504:c1",
+          "murachs-mysql-3rd-edition:p504:c2",
+          "murachs-mysql-3rd-edition:p504:c3"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p505:c1",
+          "murachs-mysql-3rd-edition:p505:c2",
+          "murachs-mysql-3rd-edition:p506:c1",
+          "murachs-mysql-3rd-edition:p506:c2",
+          "murachs-mysql-3rd-edition:p506:c3",
+          "murachs-mysql-3rd-edition:p506:c4",
+          "murachs-mysql-3rd-edition:p507:c1",
+          "murachs-mysql-3rd-edition:p507:c2"
+        ],
+        "commonMistakes": [
+          "murachs-mysql-3rd-edition:p508:c1",
+          "murachs-mysql-3rd-edition:p508:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/stored-procedures"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/database-security": {
+      "title": "Database Security",
+      "definition": "Managing users, privileges, roles, and securing database access",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        540,
+        541,
+        542,
+        543,
+        544,
+        545,
+        546,
+        547,
+        548
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p540:c1",
+          "murachs-mysql-3rd-edition:p540:c2",
+          "murachs-mysql-3rd-edition:p540:c3",
+          "murachs-mysql-3rd-edition:p541:c1",
+          "murachs-mysql-3rd-edition:p541:c2",
+          "murachs-mysql-3rd-edition:p541:c3"
+        ],
+        "explanation": [
+          "murachs-mysql-3rd-edition:p543:c1",
+          "murachs-mysql-3rd-edition:p543:c2",
+          "murachs-mysql-3rd-edition:p544:c1",
+          "murachs-mysql-3rd-edition:p544:c2",
+          "murachs-mysql-3rd-edition:p545:c1"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p546:c1",
+          "murachs-mysql-3rd-edition:p546:c2",
+          "murachs-mysql-3rd-edition:p547:c1",
+          "murachs-mysql-3rd-edition:p547:c2",
+          "murachs-mysql-3rd-edition:p548:c1",
+          "murachs-mysql-3rd-edition:p548:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/mysql-workbench"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "murachs-mysql-3rd-edition/backup-restore": {
+      "title": "Backup and Restore",
+      "definition": "Strategies and commands for backing up and restoring MySQL databases",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        560,
+        561,
+        562,
+        563,
+        564,
+        565,
+        566
+      ],
+      "chunkIds": {
+        "definition": [
+          "murachs-mysql-3rd-edition:p560:c1",
+          "murachs-mysql-3rd-edition:p560:c2",
+          "murachs-mysql-3rd-edition:p561:c1",
+          "murachs-mysql-3rd-edition:p562:c1",
+          "murachs-mysql-3rd-edition:p562:c2",
+          "murachs-mysql-3rd-edition:p562:c3",
+          "murachs-mysql-3rd-edition:p562:c4"
+        ],
+        "syntax": [
+          "murachs-mysql-3rd-edition:p563:c1",
+          "murachs-mysql-3rd-edition:p563:c2",
+          "murachs-mysql-3rd-edition:p563:c3",
+          "murachs-mysql-3rd-edition:p564:c1",
+          "murachs-mysql-3rd-edition:p564:c2",
+          "murachs-mysql-3rd-edition:p564:c3",
+          "murachs-mysql-3rd-edition:p564:c4"
+        ],
+        "examples": [
+          "murachs-mysql-3rd-edition:p565:c1",
+          "murachs-mysql-3rd-edition:p566:c1",
+          "murachs-mysql-3rd-edition:p566:c2",
+          "murachs-mysql-3rd-edition:p566:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "murachs-mysql-3rd-edition/database-security"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "murachs-mysql-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/relational-databases": {
+      "title": "Introduction to Relational Databases",
+      "definition": "Understanding client/server systems, relational database model, tables, relationships, and SQL basics",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p23:c1",
+          "dbms-ramakrishnan-3rd-edition:p23:c2",
+          "dbms-ramakrishnan-3rd-edition:p24:c1",
+          "dbms-ramakrishnan-3rd-edition:p24:c2",
+          "dbms-ramakrishnan-3rd-edition:p25:c1",
+          "dbms-ramakrishnan-3rd-edition:p25:c2"
+        ],
+        "explanation": [
+          "dbms-ramakrishnan-3rd-edition:p26:c1",
+          "dbms-ramakrishnan-3rd-edition:p27:c1",
+          "dbms-ramakrishnan-3rd-edition:p27:c2",
+          "dbms-ramakrishnan-3rd-edition:p28:c1",
+          "dbms-ramakrishnan-3rd-edition:p28:c2",
+          "dbms-ramakrishnan-3rd-edition:p28:c3",
+          "dbms-ramakrishnan-3rd-edition:p29:c1",
+          "dbms-ramakrishnan-3rd-edition:p29:c2",
+          "dbms-ramakrishnan-3rd-edition:p29:c3",
+          "dbms-ramakrishnan-3rd-edition:p30:c1",
+          "dbms-ramakrishnan-3rd-edition:p30:c2"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p31:c1",
+          "dbms-ramakrishnan-3rd-edition:p31:c2",
+          "dbms-ramakrishnan-3rd-edition:p31:c3",
+          "dbms-ramakrishnan-3rd-edition:p32:c1",
+          "dbms-ramakrishnan-3rd-edition:p32:c2",
+          "dbms-ramakrishnan-3rd-edition:p32:c3",
+          "dbms-ramakrishnan-3rd-edition:p33:c1",
+          "dbms-ramakrishnan-3rd-edition:p33:c2",
+          "dbms-ramakrishnan-3rd-edition:p33:c3",
+          "dbms-ramakrishnan-3rd-edition:p33:c4",
+          "dbms-ramakrishnan-3rd-edition:p34:c1",
+          "dbms-ramakrishnan-3rd-edition:p34:c2",
+          "dbms-ramakrishnan-3rd-edition:p34:c3",
+          "dbms-ramakrishnan-3rd-edition:p35:c1",
+          "dbms-ramakrishnan-3rd-edition:p35:c2",
+          "dbms-ramakrishnan-3rd-edition:p35:c3"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p36:c1"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/sql-intro",
+        "dbms-ramakrishnan-3rd-edition/mysql-workbench"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/sql-intro": {
+      "title": "Introduction to SQL",
+      "definition": "Overview of SQL statements: DML (SELECT, INSERT, UPDATE, DELETE) and DDL (CREATE, ALTER, DROP)",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p38:c1",
+          "dbms-ramakrishnan-3rd-edition:p38:c2",
+          "dbms-ramakrishnan-3rd-edition:p39:c1",
+          "dbms-ramakrishnan-3rd-edition:p39:c2",
+          "dbms-ramakrishnan-3rd-edition:p39:c3",
+          "dbms-ramakrishnan-3rd-edition:p40:c1",
+          "dbms-ramakrishnan-3rd-edition:p40:c2",
+          "dbms-ramakrishnan-3rd-edition:p40:c3",
+          "dbms-ramakrishnan-3rd-edition:p41:c1",
+          "dbms-ramakrishnan-3rd-edition:p41:c2",
+          "dbms-ramakrishnan-3rd-edition:p41:c3",
+          "dbms-ramakrishnan-3rd-edition:p42:c1",
+          "dbms-ramakrishnan-3rd-edition:p42:c2",
+          "dbms-ramakrishnan-3rd-edition:p42:c3"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p43:c1",
+          "dbms-ramakrishnan-3rd-edition:p43:c2",
+          "dbms-ramakrishnan-3rd-edition:p43:c3",
+          "dbms-ramakrishnan-3rd-edition:p44:c1",
+          "dbms-ramakrishnan-3rd-edition:p44:c2",
+          "dbms-ramakrishnan-3rd-edition:p44:c3",
+          "dbms-ramakrishnan-3rd-edition:p45:c1",
+          "dbms-ramakrishnan-3rd-edition:p45:c2",
+          "dbms-ramakrishnan-3rd-edition:p45:c3"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p46:c1",
+          "dbms-ramakrishnan-3rd-edition:p46:c2",
+          "dbms-ramakrishnan-3rd-edition:p47:c1",
+          "dbms-ramakrishnan-3rd-edition:p47:c2",
+          "dbms-ramakrishnan-3rd-edition:p47:c3",
+          "dbms-ramakrishnan-3rd-edition:p48:c1",
+          "dbms-ramakrishnan-3rd-edition:p48:c2",
+          "dbms-ramakrishnan-3rd-edition:p49:c1",
+          "dbms-ramakrishnan-3rd-edition:p49:c2",
+          "dbms-ramakrishnan-3rd-edition:p49:c3",
+          "dbms-ramakrishnan-3rd-edition:p50:c1",
+          "dbms-ramakrishnan-3rd-edition:p50:c2",
+          "dbms-ramakrishnan-3rd-edition:p50:c3",
+          "dbms-ramakrishnan-3rd-edition:p51:c1",
+          "dbms-ramakrishnan-3rd-edition:p51:c2",
+          "dbms-ramakrishnan-3rd-edition:p51:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/relational-databases",
+        "dbms-ramakrishnan-3rd-edition/select-basics"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/mysql-workbench": {
+      "title": "Using MySQL Workbench",
+      "definition": "How to use MySQL Workbench for database development and administration",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p62:c1",
+          "dbms-ramakrishnan-3rd-edition:p62:c2",
+          "dbms-ramakrishnan-3rd-edition:p62:c3",
+          "dbms-ramakrishnan-3rd-edition:p63:c1",
+          "dbms-ramakrishnan-3rd-edition:p63:c2",
+          "dbms-ramakrishnan-3rd-edition:p63:c3",
+          "dbms-ramakrishnan-3rd-edition:p64:c1",
+          "dbms-ramakrishnan-3rd-edition:p64:c2",
+          "dbms-ramakrishnan-3rd-edition:p64:c3",
+          "dbms-ramakrishnan-3rd-edition:p64:c4"
+        ],
+        "explanation": [
+          "dbms-ramakrishnan-3rd-edition:p65:c1",
+          "dbms-ramakrishnan-3rd-edition:p65:c2",
+          "dbms-ramakrishnan-3rd-edition:p66:c1",
+          "dbms-ramakrishnan-3rd-edition:p66:c2",
+          "dbms-ramakrishnan-3rd-edition:p67:c1",
+          "dbms-ramakrishnan-3rd-edition:p67:c2",
+          "dbms-ramakrishnan-3rd-edition:p68:c1",
+          "dbms-ramakrishnan-3rd-edition:p68:c2",
+          "dbms-ramakrishnan-3rd-edition:p69:c1",
+          "dbms-ramakrishnan-3rd-edition:p69:c2",
+          "dbms-ramakrishnan-3rd-edition:p70:c1",
+          "dbms-ramakrishnan-3rd-edition:p70:c2"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p71:c1",
+          "dbms-ramakrishnan-3rd-edition:p71:c2",
+          "dbms-ramakrishnan-3rd-edition:p72:c1",
+          "dbms-ramakrishnan-3rd-edition:p72:c2",
+          "dbms-ramakrishnan-3rd-edition:p72:c3",
+          "dbms-ramakrishnan-3rd-edition:p73:c1",
+          "dbms-ramakrishnan-3rd-edition:p73:c2",
+          "dbms-ramakrishnan-3rd-edition:p74:c1",
+          "dbms-ramakrishnan-3rd-edition:p74:c2",
+          "dbms-ramakrishnan-3rd-edition:p74:c3",
+          "dbms-ramakrishnan-3rd-edition:p75:c1",
+          "dbms-ramakrishnan-3rd-edition:p75:c2"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p76:c1",
+          "dbms-ramakrishnan-3rd-edition:p76:c2",
+          "dbms-ramakrishnan-3rd-edition:p77:c1",
+          "dbms-ramakrishnan-3rd-edition:p77:c2",
+          "dbms-ramakrishnan-3rd-edition:p78:c1",
+          "dbms-ramakrishnan-3rd-edition:p78:c2",
+          "dbms-ramakrishnan-3rd-edition:p78:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/relational-databases"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/select-basics": {
+      "title": "SELECT Statement Basics",
+      "definition": "How to retrieve data from a single table using SELECT, column specifications, and aliases",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        94,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102,
+        103,
+        104,
+        105
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p94:c1",
+          "dbms-ramakrishnan-3rd-edition:p94:c2",
+          "dbms-ramakrishnan-3rd-edition:p94:c3",
+          "dbms-ramakrishnan-3rd-edition:p95:c1",
+          "dbms-ramakrishnan-3rd-edition:p95:c2",
+          "dbms-ramakrishnan-3rd-edition:p96:c1",
+          "dbms-ramakrishnan-3rd-edition:p96:c2",
+          "dbms-ramakrishnan-3rd-edition:p96:c3",
+          "dbms-ramakrishnan-3rd-edition:p97:c1",
+          "dbms-ramakrishnan-3rd-edition:p97:c2"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p98:c1",
+          "dbms-ramakrishnan-3rd-edition:p98:c2",
+          "dbms-ramakrishnan-3rd-edition:p99:c1",
+          "dbms-ramakrishnan-3rd-edition:p99:c2",
+          "dbms-ramakrishnan-3rd-edition:p99:c3",
+          "dbms-ramakrishnan-3rd-edition:p100:c1",
+          "dbms-ramakrishnan-3rd-edition:p100:c2",
+          "dbms-ramakrishnan-3rd-edition:p100:c3",
+          "dbms-ramakrishnan-3rd-edition:p100:c4",
+          "dbms-ramakrishnan-3rd-edition:p101:c1",
+          "dbms-ramakrishnan-3rd-edition:p101:c2",
+          "dbms-ramakrishnan-3rd-edition:p101:c3"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p102:c1",
+          "dbms-ramakrishnan-3rd-edition:p102:c2",
+          "dbms-ramakrishnan-3rd-edition:p102:c3",
+          "dbms-ramakrishnan-3rd-edition:p103:c1",
+          "dbms-ramakrishnan-3rd-edition:p103:c2",
+          "dbms-ramakrishnan-3rd-edition:p104:c1",
+          "dbms-ramakrishnan-3rd-edition:p104:c2",
+          "dbms-ramakrishnan-3rd-edition:p104:c3",
+          "dbms-ramakrishnan-3rd-edition:p105:c1",
+          "dbms-ramakrishnan-3rd-edition:p105:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/where-clause",
+        "dbms-ramakrishnan-3rd-edition/order-by"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/where-clause": {
+      "title": "The WHERE Clause",
+      "definition": "How to filter rows using comparison operators, AND/OR, IN, BETWEEN, LIKE, and IS NULL",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        106,
+        107,
+        108,
+        109,
+        110,
+        111,
+        112,
+        113,
+        114,
+        115,
+        116,
+        117,
+        118
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p106:c1",
+          "dbms-ramakrishnan-3rd-edition:p106:c2",
+          "dbms-ramakrishnan-3rd-edition:p106:c3",
+          "dbms-ramakrishnan-3rd-edition:p107:c1",
+          "dbms-ramakrishnan-3rd-edition:p107:c2",
+          "dbms-ramakrishnan-3rd-edition:p108:c1",
+          "dbms-ramakrishnan-3rd-edition:p108:c2",
+          "dbms-ramakrishnan-3rd-edition:p108:c3",
+          "dbms-ramakrishnan-3rd-edition:p109:c1",
+          "dbms-ramakrishnan-3rd-edition:p109:c2"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p110:c1",
+          "dbms-ramakrishnan-3rd-edition:p110:c2",
+          "dbms-ramakrishnan-3rd-edition:p111:c1",
+          "dbms-ramakrishnan-3rd-edition:p111:c2",
+          "dbms-ramakrishnan-3rd-edition:p112:c1",
+          "dbms-ramakrishnan-3rd-edition:p112:c2",
+          "dbms-ramakrishnan-3rd-edition:p113:c1",
+          "dbms-ramakrishnan-3rd-edition:p113:c2"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p114:c1",
+          "dbms-ramakrishnan-3rd-edition:p114:c2",
+          "dbms-ramakrishnan-3rd-edition:p115:c1",
+          "dbms-ramakrishnan-3rd-edition:p115:c2",
+          "dbms-ramakrishnan-3rd-edition:p116:c1",
+          "dbms-ramakrishnan-3rd-edition:p116:c2",
+          "dbms-ramakrishnan-3rd-edition:p116:c3"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p117:c1",
+          "dbms-ramakrishnan-3rd-edition:p117:c2",
+          "dbms-ramakrishnan-3rd-edition:p118:c1",
+          "dbms-ramakrishnan-3rd-edition:p118:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/select-basics",
+        "dbms-ramakrishnan-3rd-edition/logical-operators"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/logical-operators": {
+      "title": "Logical Operators",
+      "definition": "Using AND, OR, NOT, IN, BETWEEN to combine filter conditions",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        119,
+        120,
+        121,
+        122,
+        123
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p119:c1",
+          "dbms-ramakrishnan-3rd-edition:p119:c2",
+          "dbms-ramakrishnan-3rd-edition:p120:c1",
+          "dbms-ramakrishnan-3rd-edition:p120:c2"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p121:c1",
+          "dbms-ramakrishnan-3rd-edition:p121:c2",
+          "dbms-ramakrishnan-3rd-edition:p122:c1",
+          "dbms-ramakrishnan-3rd-edition:p122:c2",
+          "dbms-ramakrishnan-3rd-edition:p122:c3",
+          "dbms-ramakrishnan-3rd-edition:p123:c1",
+          "dbms-ramakrishnan-3rd-edition:p123:c2",
+          "dbms-ramakrishnan-3rd-edition:p123:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/where-clause"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/order-by": {
+      "title": "The ORDER BY Clause",
+      "definition": "Sorting result sets by one or more columns in ascending or descending order",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        124,
+        125,
+        126,
+        127,
+        128,
+        129
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p124:c1",
+          "dbms-ramakrishnan-3rd-edition:p124:c2",
+          "dbms-ramakrishnan-3rd-edition:p124:c3",
+          "dbms-ramakrishnan-3rd-edition:p125:c1",
+          "dbms-ramakrishnan-3rd-edition:p125:c2"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p126:c1",
+          "dbms-ramakrishnan-3rd-edition:p126:c2",
+          "dbms-ramakrishnan-3rd-edition:p126:c3",
+          "dbms-ramakrishnan-3rd-edition:p127:c1",
+          "dbms-ramakrishnan-3rd-edition:p127:c2"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p128:c1",
+          "dbms-ramakrishnan-3rd-edition:p128:c2",
+          "dbms-ramakrishnan-3rd-edition:p128:c3",
+          "dbms-ramakrishnan-3rd-edition:p129:c1",
+          "dbms-ramakrishnan-3rd-edition:p129:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/select-basics"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/joins-intro": {
+      "title": "Introduction to Joins",
+      "definition": "Combining data from multiple tables using INNER JOIN, OUTER JOIN, and cross joins",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        130,
+        131,
+        132,
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        139,
+        140,
+        141
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p130:c1",
+          "dbms-ramakrishnan-3rd-edition:p130:c2",
+          "dbms-ramakrishnan-3rd-edition:p130:c3",
+          "dbms-ramakrishnan-3rd-edition:p131:c1",
+          "dbms-ramakrishnan-3rd-edition:p131:c2",
+          "dbms-ramakrishnan-3rd-edition:p131:c3",
+          "dbms-ramakrishnan-3rd-edition:p131:c4",
+          "dbms-ramakrishnan-3rd-edition:p132:c1",
+          "dbms-ramakrishnan-3rd-edition:p132:c2",
+          "dbms-ramakrishnan-3rd-edition:p132:c3"
+        ],
+        "explanation": [
+          "dbms-ramakrishnan-3rd-edition:p133:c1",
+          "dbms-ramakrishnan-3rd-edition:p133:c2",
+          "dbms-ramakrishnan-3rd-edition:p133:c3",
+          "dbms-ramakrishnan-3rd-edition:p134:c1",
+          "dbms-ramakrishnan-3rd-edition:p134:c2",
+          "dbms-ramakrishnan-3rd-edition:p135:c1",
+          "dbms-ramakrishnan-3rd-edition:p135:c2"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p136:c1",
+          "dbms-ramakrishnan-3rd-edition:p136:c2",
+          "dbms-ramakrishnan-3rd-edition:p136:c3",
+          "dbms-ramakrishnan-3rd-edition:p137:c1",
+          "dbms-ramakrishnan-3rd-edition:p137:c2",
+          "dbms-ramakrishnan-3rd-edition:p138:c1",
+          "dbms-ramakrishnan-3rd-edition:p138:c2",
+          "dbms-ramakrishnan-3rd-edition:p139:c1",
+          "dbms-ramakrishnan-3rd-edition:p139:c2",
+          "dbms-ramakrishnan-3rd-edition:p139:c3"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p140:c1",
+          "dbms-ramakrishnan-3rd-edition:p140:c2",
+          "dbms-ramakrishnan-3rd-edition:p140:c3",
+          "dbms-ramakrishnan-3rd-edition:p141:c1",
+          "dbms-ramakrishnan-3rd-edition:p141:c2",
+          "dbms-ramakrishnan-3rd-edition:p141:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/inner-join",
+        "dbms-ramakrishnan-3rd-edition/outer-join"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/inner-join": {
+      "title": "Inner Joins",
+      "definition": "Retrieving matching rows from two or more tables",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        142,
+        143,
+        144,
+        145,
+        146,
+        147
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p142:c1",
+          "dbms-ramakrishnan-3rd-edition:p142:c2",
+          "dbms-ramakrishnan-3rd-edition:p142:c3",
+          "dbms-ramakrishnan-3rd-edition:p143:c1",
+          "dbms-ramakrishnan-3rd-edition:p143:c2",
+          "dbms-ramakrishnan-3rd-edition:p143:c3"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p144:c1",
+          "dbms-ramakrishnan-3rd-edition:p144:c2",
+          "dbms-ramakrishnan-3rd-edition:p144:c3",
+          "dbms-ramakrishnan-3rd-edition:p145:c1",
+          "dbms-ramakrishnan-3rd-edition:p145:c2"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p146:c1",
+          "dbms-ramakrishnan-3rd-edition:p146:c2",
+          "dbms-ramakrishnan-3rd-edition:p147:c1",
+          "dbms-ramakrishnan-3rd-edition:p147:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/joins-intro",
+        "dbms-ramakrishnan-3rd-edition/outer-join"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/outer-join": {
+      "title": "Outer Joins",
+      "definition": "Retrieving all rows from one table and matching rows from another (LEFT, RIGHT, FULL)",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+        154,
+        155
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p148:c1",
+          "dbms-ramakrishnan-3rd-edition:p148:c2",
+          "dbms-ramakrishnan-3rd-edition:p148:c3",
+          "dbms-ramakrishnan-3rd-edition:p149:c1",
+          "dbms-ramakrishnan-3rd-edition:p149:c2",
+          "dbms-ramakrishnan-3rd-edition:p149:c3"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p150:c1",
+          "dbms-ramakrishnan-3rd-edition:p150:c2",
+          "dbms-ramakrishnan-3rd-edition:p150:c3",
+          "dbms-ramakrishnan-3rd-edition:p151:c1",
+          "dbms-ramakrishnan-3rd-edition:p151:c2",
+          "dbms-ramakrishnan-3rd-edition:p151:c3"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p152:c1",
+          "dbms-ramakrishnan-3rd-edition:p152:c2",
+          "dbms-ramakrishnan-3rd-edition:p152:c3",
+          "dbms-ramakrishnan-3rd-edition:p153:c1",
+          "dbms-ramakrishnan-3rd-edition:p153:c2",
+          "dbms-ramakrishnan-3rd-edition:p153:c3"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p154:c1",
+          "dbms-ramakrishnan-3rd-edition:p154:c2",
+          "dbms-ramakrishnan-3rd-edition:p154:c3",
+          "dbms-ramakrishnan-3rd-edition:p155:c1",
+          "dbms-ramakrishnan-3rd-edition:p155:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/joins-intro",
+        "dbms-ramakrishnan-3rd-edition/inner-join"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/insert-statement": {
+      "title": "The INSERT Statement",
+      "definition": "Adding new rows to a table using INSERT INTO with VALUES or SELECT",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        156,
+        157,
+        158,
+        159,
+        160,
+        161,
+        162,
+        163
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p156:c1",
+          "dbms-ramakrishnan-3rd-edition:p156:c2",
+          "dbms-ramakrishnan-3rd-edition:p156:c3",
+          "dbms-ramakrishnan-3rd-edition:p157:c1",
+          "dbms-ramakrishnan-3rd-edition:p157:c2",
+          "dbms-ramakrishnan-3rd-edition:p157:c3"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p158:c1",
+          "dbms-ramakrishnan-3rd-edition:p158:c2",
+          "dbms-ramakrishnan-3rd-edition:p158:c3",
+          "dbms-ramakrishnan-3rd-edition:p159:c1",
+          "dbms-ramakrishnan-3rd-edition:p159:c2",
+          "dbms-ramakrishnan-3rd-edition:p159:c3"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p160:c1",
+          "dbms-ramakrishnan-3rd-edition:p160:c2",
+          "dbms-ramakrishnan-3rd-edition:p160:c3",
+          "dbms-ramakrishnan-3rd-edition:p161:c1",
+          "dbms-ramakrishnan-3rd-edition:p161:c2",
+          "dbms-ramakrishnan-3rd-edition:p161:c3",
+          "dbms-ramakrishnan-3rd-edition:p162:c1",
+          "dbms-ramakrishnan-3rd-edition:p162:c2",
+          "dbms-ramakrishnan-3rd-edition:p162:c3"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p163:c1",
+          "dbms-ramakrishnan-3rd-edition:p163:c2",
+          "dbms-ramakrishnan-3rd-edition:p163:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/update-statement",
+        "dbms-ramakrishnan-3rd-edition/delete-statement"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/update-statement": {
+      "title": "The UPDATE Statement",
+      "definition": "Modifying existing rows in a table with UPDATE and SET clauses",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        164,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p164:c1",
+          "dbms-ramakrishnan-3rd-edition:p164:c2",
+          "dbms-ramakrishnan-3rd-edition:p165:c1",
+          "dbms-ramakrishnan-3rd-edition:p165:c2"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p166:c1",
+          "dbms-ramakrishnan-3rd-edition:p166:c2",
+          "dbms-ramakrishnan-3rd-edition:p166:c3",
+          "dbms-ramakrishnan-3rd-edition:p167:c1",
+          "dbms-ramakrishnan-3rd-edition:p167:c2",
+          "dbms-ramakrishnan-3rd-edition:p167:c3"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p168:c1",
+          "dbms-ramakrishnan-3rd-edition:p168:c2",
+          "dbms-ramakrishnan-3rd-edition:p169:c1",
+          "dbms-ramakrishnan-3rd-edition:p169:c2"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p170:c1",
+          "dbms-ramakrishnan-3rd-edition:p170:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/insert-statement",
+        "dbms-ramakrishnan-3rd-edition/delete-statement"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/delete-statement": {
+      "title": "The DELETE Statement",
+      "definition": "Removing rows from a table using DELETE with WHERE clause",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        171,
+        172,
+        173,
+        174,
+        175,
+        176
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p171:c1",
+          "dbms-ramakrishnan-3rd-edition:p171:c2",
+          "dbms-ramakrishnan-3rd-edition:p171:c3",
+          "dbms-ramakrishnan-3rd-edition:p172:c1",
+          "dbms-ramakrishnan-3rd-edition:p172:c2",
+          "dbms-ramakrishnan-3rd-edition:p172:c3"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p173:c1",
+          "dbms-ramakrishnan-3rd-edition:p173:c2"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p174:c1",
+          "dbms-ramakrishnan-3rd-edition:p174:c2",
+          "dbms-ramakrishnan-3rd-edition:p174:c3",
+          "dbms-ramakrishnan-3rd-edition:p175:c1",
+          "dbms-ramakrishnan-3rd-edition:p175:c2",
+          "dbms-ramakrishnan-3rd-edition:p175:c3"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p176:c1",
+          "dbms-ramakrishnan-3rd-edition:p176:c2",
+          "dbms-ramakrishnan-3rd-edition:p176:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/insert-statement",
+        "dbms-ramakrishnan-3rd-edition/update-statement"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/aggregate-functions": {
+      "title": "Aggregate Functions",
+      "definition": "Using COUNT, SUM, AVG, MAX, MIN to calculate summary values",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        180,
+        181,
+        182,
+        183,
+        184,
+        185,
+        186,
+        187,
+        188
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p180:c1",
+          "dbms-ramakrishnan-3rd-edition:p180:c2",
+          "dbms-ramakrishnan-3rd-edition:p180:c3",
+          "dbms-ramakrishnan-3rd-edition:p181:c1",
+          "dbms-ramakrishnan-3rd-edition:p181:c2",
+          "dbms-ramakrishnan-3rd-edition:p182:c1",
+          "dbms-ramakrishnan-3rd-edition:p182:c2",
+          "dbms-ramakrishnan-3rd-edition:p182:c3"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p183:c1",
+          "dbms-ramakrishnan-3rd-edition:p183:c2",
+          "dbms-ramakrishnan-3rd-edition:p183:c3",
+          "dbms-ramakrishnan-3rd-edition:p184:c1",
+          "dbms-ramakrishnan-3rd-edition:p184:c2"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p185:c1",
+          "dbms-ramakrishnan-3rd-edition:p185:c2",
+          "dbms-ramakrishnan-3rd-edition:p186:c1",
+          "dbms-ramakrishnan-3rd-edition:p186:c2",
+          "dbms-ramakrishnan-3rd-edition:p187:c1",
+          "dbms-ramakrishnan-3rd-edition:p187:c2"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p188:c1",
+          "dbms-ramakrishnan-3rd-edition:p188:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/group-by",
+        "dbms-ramakrishnan-3rd-edition/having-clause"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/group-by": {
+      "title": "The GROUP BY Clause",
+      "definition": "Grouping rows for aggregate calculations",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        189,
+        190,
+        191,
+        192,
+        193,
+        194,
+        195,
+        196
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p189:c1",
+          "dbms-ramakrishnan-3rd-edition:p189:c2",
+          "dbms-ramakrishnan-3rd-edition:p190:c1",
+          "dbms-ramakrishnan-3rd-edition:p190:c2",
+          "dbms-ramakrishnan-3rd-edition:p190:c3"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p191:c1",
+          "dbms-ramakrishnan-3rd-edition:p191:c2",
+          "dbms-ramakrishnan-3rd-edition:p191:c3",
+          "dbms-ramakrishnan-3rd-edition:p192:c1",
+          "dbms-ramakrishnan-3rd-edition:p192:c2"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p193:c1",
+          "dbms-ramakrishnan-3rd-edition:p193:c2",
+          "dbms-ramakrishnan-3rd-edition:p194:c1",
+          "dbms-ramakrishnan-3rd-edition:p194:c2",
+          "dbms-ramakrishnan-3rd-edition:p195:c1",
+          "dbms-ramakrishnan-3rd-edition:p195:c2",
+          "dbms-ramakrishnan-3rd-edition:p195:c3"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p196:c1",
+          "dbms-ramakrishnan-3rd-edition:p196:c2",
+          "dbms-ramakrishnan-3rd-edition:p196:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/aggregate-functions",
+        "dbms-ramakrishnan-3rd-edition/having-clause"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/having-clause": {
+      "title": "The HAVING Clause",
+      "definition": "Filtering grouped results based on aggregate conditions",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        197,
+        198,
+        199,
+        200,
+        201
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p197:c1",
+          "dbms-ramakrishnan-3rd-edition:p197:c2",
+          "dbms-ramakrishnan-3rd-edition:p198:c1",
+          "dbms-ramakrishnan-3rd-edition:p198:c2",
+          "dbms-ramakrishnan-3rd-edition:p198:c3"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p199:c1",
+          "dbms-ramakrishnan-3rd-edition:p199:c2",
+          "dbms-ramakrishnan-3rd-edition:p199:c3"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p200:c1",
+          "dbms-ramakrishnan-3rd-edition:p200:c2",
+          "dbms-ramakrishnan-3rd-edition:p201:c1",
+          "dbms-ramakrishnan-3rd-edition:p201:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/aggregate-functions",
+        "dbms-ramakrishnan-3rd-edition/group-by"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/subqueries": {
+      "title": "Subqueries",
+      "definition": "Using queries nested inside other queries for complex data retrieval",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        220,
+        221,
+        222,
+        223,
+        224,
+        225,
+        226,
+        227,
+        228,
+        229,
+        230,
+        231
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p220:c1",
+          "dbms-ramakrishnan-3rd-edition:p220:c2",
+          "dbms-ramakrishnan-3rd-edition:p221:c1",
+          "dbms-ramakrishnan-3rd-edition:p221:c2",
+          "dbms-ramakrishnan-3rd-edition:p221:c3",
+          "dbms-ramakrishnan-3rd-edition:p222:c1",
+          "dbms-ramakrishnan-3rd-edition:p222:c2",
+          "dbms-ramakrishnan-3rd-edition:p222:c3"
+        ],
+        "explanation": [
+          "dbms-ramakrishnan-3rd-edition:p223:c1",
+          "dbms-ramakrishnan-3rd-edition:p223:c2",
+          "dbms-ramakrishnan-3rd-edition:p223:c3",
+          "dbms-ramakrishnan-3rd-edition:p224:c1",
+          "dbms-ramakrishnan-3rd-edition:p224:c2",
+          "dbms-ramakrishnan-3rd-edition:p224:c3",
+          "dbms-ramakrishnan-3rd-edition:p225:c1",
+          "dbms-ramakrishnan-3rd-edition:p225:c2"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p226:c1",
+          "dbms-ramakrishnan-3rd-edition:p226:c2",
+          "dbms-ramakrishnan-3rd-edition:p226:c3",
+          "dbms-ramakrishnan-3rd-edition:p227:c1",
+          "dbms-ramakrishnan-3rd-edition:p227:c2",
+          "dbms-ramakrishnan-3rd-edition:p227:c3",
+          "dbms-ramakrishnan-3rd-edition:p228:c1",
+          "dbms-ramakrishnan-3rd-edition:p228:c2",
+          "dbms-ramakrishnan-3rd-edition:p228:c3",
+          "dbms-ramakrishnan-3rd-edition:p229:c1",
+          "dbms-ramakrishnan-3rd-edition:p229:c2",
+          "dbms-ramakrishnan-3rd-edition:p229:c3"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p230:c1",
+          "dbms-ramakrishnan-3rd-edition:p230:c2",
+          "dbms-ramakrishnan-3rd-edition:p230:c3",
+          "dbms-ramakrishnan-3rd-edition:p231:c1",
+          "dbms-ramakrishnan-3rd-edition:p231:c2",
+          "dbms-ramakrishnan-3rd-edition:p231:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/correlated-subquery"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/correlated-subquery": {
+      "title": "Correlated Subqueries",
+      "definition": "Subqueries that reference columns from the outer query",
+      "difficulty": "advanced",
+      "pageNumbers": [
+        232,
+        233,
+        234,
+        235,
+        236,
+        237,
+        238
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p232:c1",
+          "dbms-ramakrishnan-3rd-edition:p232:c2",
+          "dbms-ramakrishnan-3rd-edition:p232:c3",
+          "dbms-ramakrishnan-3rd-edition:p233:c1",
+          "dbms-ramakrishnan-3rd-edition:p233:c2",
+          "dbms-ramakrishnan-3rd-edition:p233:c3"
+        ],
+        "explanation": [
+          "dbms-ramakrishnan-3rd-edition:p234:c1",
+          "dbms-ramakrishnan-3rd-edition:p234:c2",
+          "dbms-ramakrishnan-3rd-edition:p235:c1",
+          "dbms-ramakrishnan-3rd-edition:p235:c2",
+          "dbms-ramakrishnan-3rd-edition:p235:c3"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p236:c1",
+          "dbms-ramakrishnan-3rd-edition:p236:c2",
+          "dbms-ramakrishnan-3rd-edition:p237:c1",
+          "dbms-ramakrishnan-3rd-edition:p237:c2",
+          "dbms-ramakrishnan-3rd-edition:p237:c3",
+          "dbms-ramakrishnan-3rd-edition:p238:c1",
+          "dbms-ramakrishnan-3rd-edition:p238:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/subqueries"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/data-types": {
+      "title": "MySQL Data Types",
+      "definition": "Understanding numeric, string, date/time, and large object data types",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        260,
+        261,
+        262,
+        263,
+        264,
+        265,
+        266,
+        267,
+        268,
+        269,
+        270
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p260:c1",
+          "dbms-ramakrishnan-3rd-edition:p260:c2",
+          "dbms-ramakrishnan-3rd-edition:p260:c3",
+          "dbms-ramakrishnan-3rd-edition:p261:c1",
+          "dbms-ramakrishnan-3rd-edition:p261:c2",
+          "dbms-ramakrishnan-3rd-edition:p261:c3",
+          "dbms-ramakrishnan-3rd-edition:p262:c1"
+        ],
+        "explanation": [
+          "dbms-ramakrishnan-3rd-edition:p263:c1",
+          "dbms-ramakrishnan-3rd-edition:p263:c2",
+          "dbms-ramakrishnan-3rd-edition:p263:c3",
+          "dbms-ramakrishnan-3rd-edition:p264:c1",
+          "dbms-ramakrishnan-3rd-edition:p264:c2",
+          "dbms-ramakrishnan-3rd-edition:p264:c3",
+          "dbms-ramakrishnan-3rd-edition:p265:c1",
+          "dbms-ramakrishnan-3rd-edition:p265:c2",
+          "dbms-ramakrishnan-3rd-edition:p266:c1",
+          "dbms-ramakrishnan-3rd-edition:p266:c2"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p267:c1",
+          "dbms-ramakrishnan-3rd-edition:p267:c2",
+          "dbms-ramakrishnan-3rd-edition:p267:c3",
+          "dbms-ramakrishnan-3rd-edition:p268:c1",
+          "dbms-ramakrishnan-3rd-edition:p268:c2",
+          "dbms-ramakrishnan-3rd-edition:p268:c3"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p269:c1",
+          "dbms-ramakrishnan-3rd-edition:p269:c2",
+          "dbms-ramakrishnan-3rd-edition:p270:c1",
+          "dbms-ramakrishnan-3rd-edition:p270:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/create-table"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/mysql-functions": {
+      "title": "MySQL Functions",
+      "definition": "String, numeric, date/time, and conversion functions",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        290,
+        291,
+        292,
+        293,
+        294,
+        295,
+        296,
+        297,
+        298
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p290:c1",
+          "dbms-ramakrishnan-3rd-edition:p290:c2",
+          "dbms-ramakrishnan-3rd-edition:p291:c1",
+          "dbms-ramakrishnan-3rd-edition:p291:c2",
+          "dbms-ramakrishnan-3rd-edition:p291:c3",
+          "dbms-ramakrishnan-3rd-edition:p292:c1"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p293:c1",
+          "dbms-ramakrishnan-3rd-edition:p293:c2",
+          "dbms-ramakrishnan-3rd-edition:p294:c1",
+          "dbms-ramakrishnan-3rd-edition:p294:c2",
+          "dbms-ramakrishnan-3rd-edition:p294:c3"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p295:c1",
+          "dbms-ramakrishnan-3rd-edition:p295:c2",
+          "dbms-ramakrishnan-3rd-edition:p295:c3",
+          "dbms-ramakrishnan-3rd-edition:p296:c1",
+          "dbms-ramakrishnan-3rd-edition:p296:c2",
+          "dbms-ramakrishnan-3rd-edition:p296:c3",
+          "dbms-ramakrishnan-3rd-edition:p297:c1",
+          "dbms-ramakrishnan-3rd-edition:p297:c2",
+          "dbms-ramakrishnan-3rd-edition:p297:c3",
+          "dbms-ramakrishnan-3rd-edition:p297:c4",
+          "dbms-ramakrishnan-3rd-edition:p298:c1",
+          "dbms-ramakrishnan-3rd-edition:p298:c2",
+          "dbms-ramakrishnan-3rd-edition:p298:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/data-types"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/database-design": {
+      "title": "Database Design",
+      "definition": "How to design databases using ERDs and normalization",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        320,
+        321,
+        322,
+        323,
+        324,
+        325,
+        326,
+        327,
+        328,
+        329,
+        330,
+        331
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p320:c1",
+          "dbms-ramakrishnan-3rd-edition:p320:c2",
+          "dbms-ramakrishnan-3rd-edition:p320:c3",
+          "dbms-ramakrishnan-3rd-edition:p321:c1",
+          "dbms-ramakrishnan-3rd-edition:p321:c2",
+          "dbms-ramakrishnan-3rd-edition:p321:c3",
+          "dbms-ramakrishnan-3rd-edition:p321:c4",
+          "dbms-ramakrishnan-3rd-edition:p322:c1",
+          "dbms-ramakrishnan-3rd-edition:p322:c2",
+          "dbms-ramakrishnan-3rd-edition:p322:c3"
+        ],
+        "explanation": [
+          "dbms-ramakrishnan-3rd-edition:p323:c1",
+          "dbms-ramakrishnan-3rd-edition:p323:c2",
+          "dbms-ramakrishnan-3rd-edition:p323:c3",
+          "dbms-ramakrishnan-3rd-edition:p323:c4",
+          "dbms-ramakrishnan-3rd-edition:p324:c1",
+          "dbms-ramakrishnan-3rd-edition:p324:c2",
+          "dbms-ramakrishnan-3rd-edition:p324:c3",
+          "dbms-ramakrishnan-3rd-edition:p325:c1",
+          "dbms-ramakrishnan-3rd-edition:p325:c2",
+          "dbms-ramakrishnan-3rd-edition:p325:c3",
+          "dbms-ramakrishnan-3rd-edition:p326:c1",
+          "dbms-ramakrishnan-3rd-edition:p326:c2"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p327:c1",
+          "dbms-ramakrishnan-3rd-edition:p327:c2",
+          "dbms-ramakrishnan-3rd-edition:p327:c3",
+          "dbms-ramakrishnan-3rd-edition:p328:c1",
+          "dbms-ramakrishnan-3rd-edition:p328:c2",
+          "dbms-ramakrishnan-3rd-edition:p328:c3",
+          "dbms-ramakrishnan-3rd-edition:p329:c1",
+          "dbms-ramakrishnan-3rd-edition:p329:c2",
+          "dbms-ramakrishnan-3rd-edition:p329:c3"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p330:c1",
+          "dbms-ramakrishnan-3rd-edition:p330:c2",
+          "dbms-ramakrishnan-3rd-edition:p330:c3",
+          "dbms-ramakrishnan-3rd-edition:p331:c1",
+          "dbms-ramakrishnan-3rd-edition:p331:c2",
+          "dbms-ramakrishnan-3rd-edition:p331:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/normalization",
+        "dbms-ramakrishnan-3rd-edition/create-table"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/normalization": {
+      "title": "Normalization",
+      "definition": "Organizing data to reduce redundancy and improve integrity",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        332,
+        333,
+        334,
+        335,
+        336,
+        337,
+        338,
+        339
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p332:c1",
+          "dbms-ramakrishnan-3rd-edition:p332:c2",
+          "dbms-ramakrishnan-3rd-edition:p332:c3",
+          "dbms-ramakrishnan-3rd-edition:p333:c1",
+          "dbms-ramakrishnan-3rd-edition:p333:c2",
+          "dbms-ramakrishnan-3rd-edition:p333:c3",
+          "dbms-ramakrishnan-3rd-edition:p334:c1",
+          "dbms-ramakrishnan-3rd-edition:p334:c2",
+          "dbms-ramakrishnan-3rd-edition:p334:c3"
+        ],
+        "explanation": [
+          "dbms-ramakrishnan-3rd-edition:p335:c1",
+          "dbms-ramakrishnan-3rd-edition:p335:c2",
+          "dbms-ramakrishnan-3rd-edition:p335:c3",
+          "dbms-ramakrishnan-3rd-edition:p336:c1",
+          "dbms-ramakrishnan-3rd-edition:p336:c2",
+          "dbms-ramakrishnan-3rd-edition:p336:c3",
+          "dbms-ramakrishnan-3rd-edition:p337:c1",
+          "dbms-ramakrishnan-3rd-edition:p337:c2"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p338:c1",
+          "dbms-ramakrishnan-3rd-edition:p338:c2",
+          "dbms-ramakrishnan-3rd-edition:p338:c3",
+          "dbms-ramakrishnan-3rd-edition:p339:c1",
+          "dbms-ramakrishnan-3rd-edition:p339:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/database-design"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/create-table": {
+      "title": "Creating Tables and Indexes",
+      "definition": "Using CREATE TABLE, ALTER TABLE, CREATE INDEX, and DROP statements",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        360,
+        361,
+        362,
+        363,
+        364,
+        365,
+        366,
+        367,
+        368,
+        369,
+        370,
+        371
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p360:c1",
+          "dbms-ramakrishnan-3rd-edition:p360:c2",
+          "dbms-ramakrishnan-3rd-edition:p360:c3",
+          "dbms-ramakrishnan-3rd-edition:p361:c1",
+          "dbms-ramakrishnan-3rd-edition:p361:c2",
+          "dbms-ramakrishnan-3rd-edition:p362:c1",
+          "dbms-ramakrishnan-3rd-edition:p362:c2",
+          "dbms-ramakrishnan-3rd-edition:p362:c3"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p363:c1",
+          "dbms-ramakrishnan-3rd-edition:p363:c2",
+          "dbms-ramakrishnan-3rd-edition:p363:c3",
+          "dbms-ramakrishnan-3rd-edition:p364:c1",
+          "dbms-ramakrishnan-3rd-edition:p364:c2",
+          "dbms-ramakrishnan-3rd-edition:p364:c3",
+          "dbms-ramakrishnan-3rd-edition:p365:c1",
+          "dbms-ramakrishnan-3rd-edition:p365:c2",
+          "dbms-ramakrishnan-3rd-edition:p365:c3"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p366:c1",
+          "dbms-ramakrishnan-3rd-edition:p366:c2",
+          "dbms-ramakrishnan-3rd-edition:p366:c3",
+          "dbms-ramakrishnan-3rd-edition:p367:c1",
+          "dbms-ramakrishnan-3rd-edition:p367:c2",
+          "dbms-ramakrishnan-3rd-edition:p368:c1",
+          "dbms-ramakrishnan-3rd-edition:p368:c2",
+          "dbms-ramakrishnan-3rd-edition:p368:c3",
+          "dbms-ramakrishnan-3rd-edition:p369:c1",
+          "dbms-ramakrishnan-3rd-edition:p369:c2",
+          "dbms-ramakrishnan-3rd-edition:p369:c3"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p370:c1",
+          "dbms-ramakrishnan-3rd-edition:p370:c2",
+          "dbms-ramakrishnan-3rd-edition:p370:c3",
+          "dbms-ramakrishnan-3rd-edition:p370:c4",
+          "dbms-ramakrishnan-3rd-edition:p371:c1",
+          "dbms-ramakrishnan-3rd-edition:p371:c2",
+          "dbms-ramakrishnan-3rd-edition:p371:c3",
+          "dbms-ramakrishnan-3rd-edition:p371:c4"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/data-types",
+        "dbms-ramakrishnan-3rd-edition/database-design"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/views": {
+      "title": "Views",
+      "definition": "Creating and using virtual tables based on SELECT queries",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        380,
+        381,
+        382,
+        383,
+        384,
+        385,
+        386,
+        387,
+        388,
+        389
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p380:c1",
+          "dbms-ramakrishnan-3rd-edition:p380:c2",
+          "dbms-ramakrishnan-3rd-edition:p380:c3",
+          "dbms-ramakrishnan-3rd-edition:p381:c1",
+          "dbms-ramakrishnan-3rd-edition:p381:c2",
+          "dbms-ramakrishnan-3rd-edition:p381:c3",
+          "dbms-ramakrishnan-3rd-edition:p381:c4",
+          "dbms-ramakrishnan-3rd-edition:p382:c1",
+          "dbms-ramakrishnan-3rd-edition:p382:c2",
+          "dbms-ramakrishnan-3rd-edition:p382:c3",
+          "dbms-ramakrishnan-3rd-edition:p383:c1",
+          "dbms-ramakrishnan-3rd-edition:p383:c2",
+          "dbms-ramakrishnan-3rd-edition:p383:c3"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p384:c1",
+          "dbms-ramakrishnan-3rd-edition:p384:c2",
+          "dbms-ramakrishnan-3rd-edition:p385:c1",
+          "dbms-ramakrishnan-3rd-edition:p385:c2",
+          "dbms-ramakrishnan-3rd-edition:p385:c3"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p386:c1",
+          "dbms-ramakrishnan-3rd-edition:p386:c2",
+          "dbms-ramakrishnan-3rd-edition:p387:c1",
+          "dbms-ramakrishnan-3rd-edition:p387:c2",
+          "dbms-ramakrishnan-3rd-edition:p387:c3",
+          "dbms-ramakrishnan-3rd-edition:p387:c4",
+          "dbms-ramakrishnan-3rd-edition:p388:c1",
+          "dbms-ramakrishnan-3rd-edition:p388:c2",
+          "dbms-ramakrishnan-3rd-edition:p388:c3"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p389:c1",
+          "dbms-ramakrishnan-3rd-edition:p389:c2",
+          "dbms-ramakrishnan-3rd-edition:p389:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/select-basics"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/transactions": {
+      "title": "Transactions and Locking",
+      "definition": "Ensuring data integrity with ACID transactions and concurrency control",
+      "difficulty": "advanced",
+      "pageNumbers": [
+        420,
+        421,
+        422,
+        423,
+        424,
+        425,
+        426,
+        427,
+        428,
+        429,
+        430,
+        431,
+        432
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p420:c1",
+          "dbms-ramakrishnan-3rd-edition:p420:c2",
+          "dbms-ramakrishnan-3rd-edition:p420:c3",
+          "dbms-ramakrishnan-3rd-edition:p421:c1",
+          "dbms-ramakrishnan-3rd-edition:p421:c2",
+          "dbms-ramakrishnan-3rd-edition:p421:c3",
+          "dbms-ramakrishnan-3rd-edition:p422:c1",
+          "dbms-ramakrishnan-3rd-edition:p423:c1",
+          "dbms-ramakrishnan-3rd-edition:p423:c2",
+          "dbms-ramakrishnan-3rd-edition:p423:c3"
+        ],
+        "explanation": [
+          "dbms-ramakrishnan-3rd-edition:p424:c1",
+          "dbms-ramakrishnan-3rd-edition:p424:c2",
+          "dbms-ramakrishnan-3rd-edition:p425:c1",
+          "dbms-ramakrishnan-3rd-edition:p425:c2",
+          "dbms-ramakrishnan-3rd-edition:p425:c3",
+          "dbms-ramakrishnan-3rd-edition:p426:c1"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p428:c1",
+          "dbms-ramakrishnan-3rd-edition:p428:c2",
+          "dbms-ramakrishnan-3rd-edition:p429:c1",
+          "dbms-ramakrishnan-3rd-edition:p429:c2",
+          "dbms-ramakrishnan-3rd-edition:p429:c3",
+          "dbms-ramakrishnan-3rd-edition:p430:c1",
+          "dbms-ramakrishnan-3rd-edition:p430:c2"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p431:c1",
+          "dbms-ramakrishnan-3rd-edition:p431:c2",
+          "dbms-ramakrishnan-3rd-edition:p431:c3",
+          "dbms-ramakrishnan-3rd-edition:p432:c1",
+          "dbms-ramakrishnan-3rd-edition:p432:c2"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/stored-procedures"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/stored-procedures": {
+      "title": "Stored Procedures and Functions",
+      "definition": "Creating reusable SQL code blocks stored in the database",
+      "difficulty": "advanced",
+      "pageNumbers": [
+        460,
+        461,
+        462,
+        463,
+        464,
+        465,
+        466,
+        467,
+        468,
+        469,
+        470,
+        471,
+        472,
+        473
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p460:c1",
+          "dbms-ramakrishnan-3rd-edition:p461:c1",
+          "dbms-ramakrishnan-3rd-edition:p461:c2",
+          "dbms-ramakrishnan-3rd-edition:p462:c1",
+          "dbms-ramakrishnan-3rd-edition:p462:c2",
+          "dbms-ramakrishnan-3rd-edition:p462:c3",
+          "dbms-ramakrishnan-3rd-edition:p463:c1",
+          "dbms-ramakrishnan-3rd-edition:p463:c2",
+          "dbms-ramakrishnan-3rd-edition:p463:c3"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p464:c1",
+          "dbms-ramakrishnan-3rd-edition:p464:c2",
+          "dbms-ramakrishnan-3rd-edition:p464:c3",
+          "dbms-ramakrishnan-3rd-edition:p465:c1",
+          "dbms-ramakrishnan-3rd-edition:p465:c2",
+          "dbms-ramakrishnan-3rd-edition:p465:c3",
+          "dbms-ramakrishnan-3rd-edition:p466:c1",
+          "dbms-ramakrishnan-3rd-edition:p466:c2",
+          "dbms-ramakrishnan-3rd-edition:p466:c3",
+          "dbms-ramakrishnan-3rd-edition:p467:c1",
+          "dbms-ramakrishnan-3rd-edition:p467:c2",
+          "dbms-ramakrishnan-3rd-edition:p467:c3"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p468:c1",
+          "dbms-ramakrishnan-3rd-edition:p468:c2",
+          "dbms-ramakrishnan-3rd-edition:p469:c1",
+          "dbms-ramakrishnan-3rd-edition:p469:c2",
+          "dbms-ramakrishnan-3rd-edition:p470:c1",
+          "dbms-ramakrishnan-3rd-edition:p470:c2",
+          "dbms-ramakrishnan-3rd-edition:p471:c1",
+          "dbms-ramakrishnan-3rd-edition:p471:c2",
+          "dbms-ramakrishnan-3rd-edition:p471:c3"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p472:c1",
+          "dbms-ramakrishnan-3rd-edition:p472:c2",
+          "dbms-ramakrishnan-3rd-edition:p472:c3",
+          "dbms-ramakrishnan-3rd-edition:p473:c1",
+          "dbms-ramakrishnan-3rd-edition:p473:c2",
+          "dbms-ramakrishnan-3rd-edition:p473:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/transactions",
+        "dbms-ramakrishnan-3rd-edition/functions"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/triggers": {
+      "title": "Triggers and Events",
+      "definition": "Automating SQL execution on data changes and scheduled events",
+      "difficulty": "advanced",
+      "pageNumbers": [
+        500,
+        501,
+        502,
+        503,
+        504,
+        505,
+        506,
+        507,
+        508
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p500:c1",
+          "dbms-ramakrishnan-3rd-edition:p500:c2",
+          "dbms-ramakrishnan-3rd-edition:p500:c3",
+          "dbms-ramakrishnan-3rd-edition:p500:c4",
+          "dbms-ramakrishnan-3rd-edition:p501:c1",
+          "dbms-ramakrishnan-3rd-edition:p501:c2",
+          "dbms-ramakrishnan-3rd-edition:p501:c3",
+          "dbms-ramakrishnan-3rd-edition:p501:c4",
+          "dbms-ramakrishnan-3rd-edition:p502:c1",
+          "dbms-ramakrishnan-3rd-edition:p502:c2"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p503:c1",
+          "dbms-ramakrishnan-3rd-edition:p503:c2",
+          "dbms-ramakrishnan-3rd-edition:p503:c3",
+          "dbms-ramakrishnan-3rd-edition:p504:c1",
+          "dbms-ramakrishnan-3rd-edition:p504:c2"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p505:c1",
+          "dbms-ramakrishnan-3rd-edition:p505:c2",
+          "dbms-ramakrishnan-3rd-edition:p505:c3",
+          "dbms-ramakrishnan-3rd-edition:p506:c1",
+          "dbms-ramakrishnan-3rd-edition:p506:c2",
+          "dbms-ramakrishnan-3rd-edition:p506:c3",
+          "dbms-ramakrishnan-3rd-edition:p507:c1",
+          "dbms-ramakrishnan-3rd-edition:p507:c2",
+          "dbms-ramakrishnan-3rd-edition:p507:c3"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p508:c1",
+          "dbms-ramakrishnan-3rd-edition:p508:c2",
+          "dbms-ramakrishnan-3rd-edition:p508:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/stored-procedures"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/database-security": {
+      "title": "Database Security",
+      "definition": "Managing users, privileges, roles, and securing database access",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        540,
+        541,
+        542,
+        543,
+        544,
+        545,
+        546,
+        547,
+        548
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p540:c1",
+          "dbms-ramakrishnan-3rd-edition:p540:c2",
+          "dbms-ramakrishnan-3rd-edition:p540:c3",
+          "dbms-ramakrishnan-3rd-edition:p541:c1",
+          "dbms-ramakrishnan-3rd-edition:p541:c2",
+          "dbms-ramakrishnan-3rd-edition:p541:c3",
+          "dbms-ramakrishnan-3rd-edition:p542:c1",
+          "dbms-ramakrishnan-3rd-edition:p542:c2",
+          "dbms-ramakrishnan-3rd-edition:p542:c3"
+        ],
+        "explanation": [
+          "dbms-ramakrishnan-3rd-edition:p543:c1",
+          "dbms-ramakrishnan-3rd-edition:p543:c2",
+          "dbms-ramakrishnan-3rd-edition:p543:c3",
+          "dbms-ramakrishnan-3rd-edition:p544:c1",
+          "dbms-ramakrishnan-3rd-edition:p544:c2",
+          "dbms-ramakrishnan-3rd-edition:p544:c3",
+          "dbms-ramakrishnan-3rd-edition:p545:c1",
+          "dbms-ramakrishnan-3rd-edition:p545:c2",
+          "dbms-ramakrishnan-3rd-edition:p545:c3"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p546:c1",
+          "dbms-ramakrishnan-3rd-edition:p546:c2",
+          "dbms-ramakrishnan-3rd-edition:p546:c3",
+          "dbms-ramakrishnan-3rd-edition:p546:c4",
+          "dbms-ramakrishnan-3rd-edition:p547:c1",
+          "dbms-ramakrishnan-3rd-edition:p547:c2",
+          "dbms-ramakrishnan-3rd-edition:p547:c3",
+          "dbms-ramakrishnan-3rd-edition:p548:c1",
+          "dbms-ramakrishnan-3rd-edition:p548:c2",
+          "dbms-ramakrishnan-3rd-edition:p548:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/mysql-workbench"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/backup-restore": {
+      "title": "Backup and Restore",
+      "definition": "Strategies and commands for backing up and restoring MySQL databases",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        560,
+        561,
+        562,
+        563,
+        564,
+        565,
+        566
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p560:c1",
+          "dbms-ramakrishnan-3rd-edition:p560:c2",
+          "dbms-ramakrishnan-3rd-edition:p561:c1",
+          "dbms-ramakrishnan-3rd-edition:p561:c2",
+          "dbms-ramakrishnan-3rd-edition:p562:c1",
+          "dbms-ramakrishnan-3rd-edition:p562:c2"
+        ],
+        "syntax": [
+          "dbms-ramakrishnan-3rd-edition:p563:c1",
+          "dbms-ramakrishnan-3rd-edition:p563:c2",
+          "dbms-ramakrishnan-3rd-edition:p563:c3",
+          "dbms-ramakrishnan-3rd-edition:p564:c1",
+          "dbms-ramakrishnan-3rd-edition:p564:c2"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p565:c1",
+          "dbms-ramakrishnan-3rd-edition:p565:c2",
+          "dbms-ramakrishnan-3rd-edition:p565:c3",
+          "dbms-ramakrishnan-3rd-edition:p566:c1",
+          "dbms-ramakrishnan-3rd-edition:p566:c2",
+          "dbms-ramakrishnan-3rd-edition:p566:c3"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/database-security"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    }
+  }
+}

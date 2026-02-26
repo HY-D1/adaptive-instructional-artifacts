@@ -147,6 +147,7 @@ export function RootLayout() {
 
   const isPracticePage = location.pathname === '/practice';
   const isTextbookPage = location.pathname === '/textbook';
+  const isConceptsPage = location.pathname === '/concepts' || location.pathname.startsWith('/concepts/');
   const isResearchPage = location.pathname === '/research';
   const isInstructorPage = location.pathname === '/instructor-dashboard';
   const isSettingsPage = location.pathname === '/settings';
@@ -176,6 +177,7 @@ export function RootLayout() {
         { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },
       ]
     : [
+        { to: '/concepts', label: 'Learn', icon: Book, isActive: isConceptsPage },
         { to: '/practice', label: 'Practice', icon: Code, isActive: isPracticePage },
         { to: '/textbook', label: 'My Textbook', icon: Book, isActive: isTextbookPage },
         { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },

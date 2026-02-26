@@ -26,6 +26,7 @@ import { getConceptFromRegistry } from '../data';
 import { useEnhancedHints } from '../hooks/useEnhancedHints';
 import { HintSourceStatus } from './HintSourceStatus';
 import type { EnhancedHint } from '../lib/enhanced-hint-service';
+import { useUserRole } from '../hooks/useUserRole';
 
 /**
  * Props for the HintSystem component
@@ -89,6 +90,9 @@ export function HintSystem({
   // Persist enhanced hint info to localStorage
   const HINT_INFO_KEY = useMemo(() => `hint-info-${learnerId}-${problemId}`, [learnerId, problemId]);
   const HINTS_KEY = useMemo(() => `hints-${learnerId}-${problemId}`, [learnerId, problemId]);
+  
+  // Get user role for hint source display
+  const { isInstructor } = useUserRole();
 
   // Load enhanced hint info from localStorage on mount (backup only)
   useEffect(() => {
@@ -940,6 +944,7 @@ export function HintSystem({
         learnerId={learnerId} 
         showDetails={false}
         className="self-start"
+        studentMode={!isInstructor}
       />
 
       {/* Concept tags */}
@@ -1052,18 +1057,23 @@ export function HintSystem({
                     {hasPdfSources && (
                       <button
                         onClick={() => setExpandedHintIndex(isExpanded ? null : idx)}
-                        className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-700 transition-colors"
+                        className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 transition-colors"
                         aria-expanded={isExpanded}
                         aria-controls={`hint-sources-${idx}`}
                       >
+                        <BookOpen className="size-3" />
                         {isExpanded ? (
-                          <ChevronUp className="size-3" />
+                          <>
+                            <ChevronUp className="size-3" />
+                            <span>Hide Textbook Source</span>
+                          </>
                         ) : (
-                          <ChevronDown className="size-3" />
+                          <>
+                            <ChevronDown className="size-3" />
+                            <span>Textbook Page {pdfPassages[0]?.page}</span>
+                            {pdfPassages.length > 1 && ` +${pdfPassages.length - 1}`}
+                          </>
                         )}
-                        <span>
-                          {isExpanded ? 'Hide' : `Sources (${pdfPassages.length})`}
-                        </span>
                       </button>
                     )}
                   </div>
@@ -1124,8 +1134,9 @@ export function HintSystem({
                   {/* Collapsible sources - only shown when expanded */}
                   {isExpanded && hasPdfSources && (
                     <div id={`hint-sources-${idx}`} className="mt-4 pt-3 border-t border-gray-100">
-                      <p className="text-[11px] text-gray-500 italic mb-2">
-                        The following passages from your uploaded PDF were used to generate this hint:
+                      <p className="text-[11px] text-gray-500 italic mb-2 flex items-center gap-1">
+                        <BookOpen className="size-3" />
+                        Content from SQL Course Textbook used to generate this hint:
                       </p>
                       <div className="space-y-2">
                         {pdfPassages.map((passage, pidx) => (

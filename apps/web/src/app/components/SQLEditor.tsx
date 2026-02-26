@@ -8,7 +8,7 @@ import { Play, RotateCcw, CheckCircle, XCircle, AlertCircle, Terminal, Loader2, 
 import { SQLExecutor, QueryResult, resetSQLInitialization } from '../lib/sql-executor';
 import { SQLProblem } from '../types';
 
-export const DEFAULT_SQL_EDITOR_CODE = '-- Write your SQL query here\nSELECT ';
+export const DEFAULT_SQL_EDITOR_CODE = '-- Write your SQL query here';
 
 interface SQLEditorProps {
   problem: SQLProblem;

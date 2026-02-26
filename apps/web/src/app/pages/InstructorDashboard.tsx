@@ -22,6 +22,23 @@ import { storage } from '../lib/storage';
 import { useUserRole } from '../hooks/useUserRole';
 import type { LearnerProfile, InteractionEvent } from '../types';
 
+// Helper function to safely format dates
+function formatLastActive(timestamp: number | undefined): string {
+  if (!timestamp || typeof timestamp !== 'number' || isNaN(timestamp)) {
+    return 'Never';
+  }
+  const date = new Date(timestamp);
+  if (isNaN(date.getTime())) {
+    return 'Never';
+  }
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
 // Demo data - only used when no real student data exists
 const DEMO_MODE = import.meta.env.DEV; // Only show demo data in development
 
@@ -409,12 +426,12 @@ export function InstructorDashboard() {
                     id: p.id, 
                     name: p.name || p.id, 
                     email: `${p.id}@local`, 
-                    lastActive: p.createdAt 
+                    lastActive: p.createdAt || Date.now() 
                   })) : showDemoData ? DEMO_STUDENTS : []).map((student) => {
                     const profile = profiles.find(p => p.id === student.id);
                     // Deterministic pseudo-random based on student ID to avoid hydration mismatch
                     const conceptsCount = profile?.conceptsCovered.size || (student.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0) % 4) + 1;
-                    const isActive = Date.now() - student.lastActive < 3600000;
+                    const isActive = student.lastActive && Date.now() - student.lastActive < 3600000;
                     
                     return (
                       <tr key={student.id} className="border-b last:border-0 hover:bg-gray-50">
@@ -437,12 +454,7 @@ export function InstructorDashboard() {
                           </div>
                         </td>
                         <td className="py-3 px-4 text-sm text-gray-600">
-                          {new Date(student.lastActive).toLocaleString(undefined, {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
+                          {formatLastActive(student.lastActive)}
                         </td>
                         <td className="py-3 px-4">
                           <Button 
