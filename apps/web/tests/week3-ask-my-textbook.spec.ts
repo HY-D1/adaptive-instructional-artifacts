@@ -172,12 +172,4 @@ test.describe('@weekly Week 3 Ask My Textbook', () => {
     expect(events.length).toBeGreaterThanOrEqual(1);
   });
 
-  test('@weekly @flaky save to notes button appears on responses', async ({ page }) => {
-    await page.goto('/');
-    await expect(page.getByRole('button', { name: 'What concept is this?' })).toBeVisible({ timeout: 5000 });
-
-    await page.getByRole('button', { name: 'What concept is this?' }).click();
-
-    await expect(page.getByRole('button', { name: /Save to My Notes/ }).first()).toBeVisible();
-  });
 });

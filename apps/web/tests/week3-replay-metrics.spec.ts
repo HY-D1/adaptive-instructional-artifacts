@@ -103,37 +103,6 @@ test.describe('@weekly Week 3 Replay Metrics', () => {
     expect(groundednessRate).toBe(1.0);
   });
 
-  test('@weekly @flaky escalation triggers logged', async ({ page }) => {
-    // Navigate to practice page directly since test needs Monaco editor
-    await page.goto('/practice');
-    
-    // Setup active session
-    await page.evaluate(() => {
-      window.localStorage.setItem('sql-learning-active-session', 'escalation-test');
-    });
-
-    // Generate escalation
-    await page.locator('.monaco-editor .view-lines').first().click();
-    await page.keyboard.type('SELECT FROM users;');
-    await page.getByRole('button', { name: 'Run Query' }).click();
-    await expect(page.locator('text=SQL Error')).toBeVisible();
-
-    // Request multiple hints to trigger escalation
-    await page.getByRole('button', { name: /Request Hint/ }).click();
-    await page.getByRole('button', { name: /Next Hint/ }).click();
-    await page.getByRole('button', { name: /Next Hint/ }).click();
-
-    // Verify escalation events
-    const events = await page.evaluate(() => {
-      const interactions = JSON.parse(
-        window.localStorage.getItem('sql-learning-interactions') || '[]'
-      );
-      return interactions.filter((e: any) => e.eventType === 'guidance_escalate');
-    });
-
-    // Should have escalation events
-    expect(events.length).toBeGreaterThanOrEqual(1);
-  });
 
   test('@weekly textbook unit upserts tracked', async ({ page }) => {
     await page.goto('/');

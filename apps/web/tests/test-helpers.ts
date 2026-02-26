@@ -12,9 +12,23 @@ import { expect, Locator, Page } from '@playwright/test';
 // =============================================================================
 
 /**
+ * Wait for Monaco editor to be ready
+ */
+export async function waitForEditorReady(page: Page, timeout = 30000) {
+  await page.waitForSelector('.monaco-editor', { state: 'visible', timeout });
+  // Wait for editor to be fully initialized
+  await page.waitForFunction(() => {
+    const editor = document.querySelector('.monaco-editor');
+    return editor && editor.querySelector('.view-lines') !== null;
+  }, { timeout });
+}
+
+/**
  * Replace text in the Monaco editor with new content
  */
 export async function replaceEditorText(page: Page, text: string) {
+  // Wait for editor to be ready first
+  await waitForEditorReady(page);
   const editorSurface = page.locator('.monaco-editor .view-lines').first();
   await editorSurface.click({ position: { x: 8, y: 8 } });
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
