@@ -1,59 +1,82 @@
-# Normalization
+# Database Normalization
 
 ## Definition
-Organizing data to reduce redundancy and improve integrity
+
+Database normalization is a process of organizing data to eliminate redundancy and improve data integrity. It involves decomposing tables into smaller, more manageable parts by removing duplicate columns and ensuring that each column contains atomic values.
 
 ## Explanation
-StoTage and Inde.Ting index because the size of entries is larger. For a composite B+ tree index, this also means a potential increase in the number of levels, although key COlnpres- sion can be used to alleviate this problem (see Section 10.8.1). Design Examples of Composite Keys Consider the following query, which returns all employees with 20 < age < 30 and 3000 < sal < 5000: SELECT FROM WHERE E.eid Employees E E.age BETWEEN 20 AND 30 AND E.sal BETWEEN 3000 AND 5000 A composite index on (age, sal) could help if the conditions in the WHERE clause are fairly selective. Obviously, a hash index will not help; a B+ tree (or ISAM) index is required. It is also clear that a clustered index is likely to be superior to an unclustered index. For this query, in which the conditions on age and sal are equally selective, a composite, clustered B+ tree index on (age, sal) is as effective as a composite, clustered B+ tree index on (sal, age). However, the order of search key attributes can sometimes make
 
-clustered B+ tree index on (age, sal) is as effective as a composite, clustered B+ tree index on (sal, age). However, the order of search key attributes can sometimes make a big difference, as the next query illustrates: SELECT FROM WHERE E.eid Employees E E.age = 25 AND E.sal BETWEEN 3000 AND 5000 In this query a composite, clustered B+ tree index on (age, sal) will give good performance because records are sorted by age first and then (if two records have the same age value) by sal. Thus, all records with age = 25 are clustered together. On the other hand, a composite, clustered B+ tree index on (sal, age) will not perform as well. In this case, records are sorted by sal first, and there- fore two records with the same age value (in particular, with age = 25) may be quite far apart. In effect, this index allows us to use the range selection on sal, but not the equality selection on age, to retrieve tuples. (Good performance on both variants of the query can be achieved
-
-allo
+Normalization solves the problem of data redundancy and inconsistency. When data is normalized, it becomes easier to manage and update. Here’s how it works step-by-step:
+1. **First Normal Form (1NF)**: Ensure each table has a primary key and all columns contain atomic values.
+2. **Second Normal Form (2NF)**: Eliminate partial dependencies by ensuring that non-key columns are fully dependent on the primary key.
+3. **Third Normal Form (3NF)**: Remove transitive dependencies to ensure that only relevant data is stored in each table.
+Normalization is crucial because it helps prevent common issues like data anomalies and ensures that data remains consistent across different parts of a database.
 
 ## Examples
-### Example 1: SELECT Example
+
+### Basic Usage
+
 ```sql
-SELECT FROM WHERE E.eid Employees E E.age BETWEEN 20 AND 30 AND E.sal BETWEEN 3000 AND 5000 A composite index on (age, sal) could help if the conditions in the WHERE clause are fairly selective. Obviously, a hash index will not help;
+-- CREATE a TABLE with redundant data CREATE TABLE Employee ( ID INT, Name VARCHAR(50), Department VARCHAR(50), ManagerID INT, DepartmentManagerID INT ); -- Normalize the TABLE by removing redundancy CREATE TABLE Employee ( ID INT PRIMARY KEY, Name VARCHAR(50) ); CREATE TABLE Department ( ID INT PRIMARY KEY, Name VARCHAR(50), ManagerID INT ); CREATE TABLE Manager ( ID INT PRIMARY KEY, Name VARCHAR(50) );
 ```
-Example SELECT statement from textbook.
 
-### Example 2: SELECT Example
+This example shows how a table with redundant data is normalized into three separate tables, each with its own primary key and relevant columns.
+
+### Practical Example
+
 ```sql
-SELECT FROM WHERE E.eid Employees E E.age = 25 AND E.sal BETWEEN 3000 AND 5000 In this query a composite, clustered B+ tree index on (age, sal) will give good performance because records are sorted by age first and then (if two records have the same age value) by sal. Thus, all records with age = 25 are clustered together. On the other hand, a composite, clustered B+ tree index on (sal, age) will not perform as well. In this case, records are sorted by sal first, and there- fore two records with the same age value (in particular, with age = 25) may be quite far apart. In effect, this index allows us to use the range selection on sal, but not the equality selection on age, to retrieve tuples. (Good performance on both variants of the query can be achieved
-
-allows us to use the range selection on sal, but not the equality selection on age, to retrieve tuples. (Good performance on both variants of the query can be achieved using a single spatial index. \:Ye discuss spatial indexes in Chapter 28.) Composite indexes are also useful in dealing with many aggregate queries. Con- sider: SELECT AVG (E.sal)
-
-298 FROM WHERE Employees E E.age = 25 AND Ksal BETWEEN 3000 AND 5000 CHAPTERt 8 A composite B+ tree index on (age, sal) allows us to answer the query with an index-only scan. A composite B+ tree index on (sal, age) also allows us to answer the query with an index-only scan, although more index entries are retrieved in this case than with an index on (age, sal). Here is a variation of an earlier example: SELECT FROM WHERE GROUP BY Kdno, COUNT(*) Employees E E.sal=lO,OOO Kdno An index on dna alone does not allow us to evaluate this query with an index- only scan, because we need to look at the sal field of each tuple to verify that sal = 10, 000. However, we can use an index-only plan if we have a composite B+ tree index on (sal, dna) or (dna, sal). In an index with key (sal, dno) , all data entries with sal = 10,000 are arranged contiguously (whether or not the index is clustered). Further, these entries are sorted by dna, making it
-
-key (sal, dno) , all data entries with sal = 10,000 are arranged contiguously (whether or not the index is clustered). Further, these entries are sorted by dna, making it easy to obtain a count for each dna group. Note that we need to retrieve only data entries with sal = 10, 000. It is worth observing that this strategy does not work if the WHERE clause is modified to use sal> 10, 000. Although it suffices to retrieve only index data entries-that is, an index-only strategy still applies-these entries must now be sorted by dna to identify the groups (because, for example, two entries with the same dna but different sal values may not be contiguous). An index with key (dna, sal) is better for this query: Data entries with a given dna value are stored together, and each such group of entries is itself sorted by sal. For each dna group, we can eliminate the entries with sal not greater than 10,000 and count the rest. (Using this index is less efficient than an index-only scan with key
-
-each dna group, we can eliminate the entries with sal not greater than 10,000 and count the rest. (Using this index is less efficient than an index-only scan with key (sal, dna) for the query with sal = 10, 000, because we must read all data entries. Thus, the choice between these indexes is influenced by which query is more common.) As another eXEunple, suppose we want to find the minimum sal for each dna: SELECT Kdno, MIN(E.sal) FROM Employees E GROUP BY E.dno
-
-Stomge and Indexing 2~9 An index on dna alone does not allow us to evaluate this query with an index- only scan. However, we can use an index-only plan if we have a composite B+ tree index on (dna, sal). Note that all data entries in the index with a given dna value are stored together (whether or not the index is clustered). :B\lrther, this group of entries is itself sorted by 8al. An index on (sal, dna) enables us to avoid retrieving data records, but the index data entries must be sorted on dno. 8.5.4 Index Specification in SQL:1999 A natural question to ask at this point is how we can create indexes using SQL. The SQL:1999 standard does not include any statement for creating or dropping index structures. In fact, th.e standard does not even require SQL implementations to support indexes! In practice, of course, every commercial relational DBMS supports one or more kinds of indexes. The following com- mand to create a B+ tree index-we discuss B+ tree indexes in Chapter 10----·-is illustrative: CREATE INDEX IndAgeRating ON
-
-DBMS supports one or more kinds of indexes. The following com- mand to create a B+ tree index-we discuss B+ tree indexes in Chapter 10----·-is illustrative: CREATE INDEX IndAgeRating ON Students WITH STRUCTURE = BTREE, KEY = (age, gpa) This specifies that a B+ tree index is to be created on the Students table using the concatenation of the age and gpa columns as the key. Thus, key values are pairs of the form (age, gpa) , and there is a distinct entry for each such pair. Once created, the index is automatically maintained by the DBMS adding or removing data entries in response to inserts or deletes of records on the Students relation. 8.6 REVIEW QUESTIONS Answers to the review questions can be found in the listed sections. III 'Where does a DBMS store persistent data? How does it bring data into main memory for processing? What DBMS component reads and writes data from main memory, and what is the unit of I/O? (Section 8.1) • 'What is a file organization? vVhat is an index? What is the relationship
-
-reads and writes data from main memory, and what is the unit of I/O? (Section 8.1) • 'What is a file organization? vVhat is an index? What is the relationship between files and indexes? Can we have several indexes on a single file of records? Can an index itself store data records (i.e., act as a file)? (Section 8.2) III What is the 8earch key for an index? What is a data entry in an index? (Section 8.2)
-
-300 CHAPTER S • vVhat is a clustered index? vVhat is a prinwry index? How many clustered indexes can you build on a file? How many unclustered indexes can you build? (Section 8.2.1) • Hmv is data organized in a hash-ba'lcd index? \Vhen would you use a hash-based index? (Section 8.3.1) • How is data organized in a tree-based index? vVhen would you use a tree- based index? (Section 8.3.2) • Consider the following operations: scans, equality and 'range selections, inserts, and deletes, and the following file organizations: heap files, sorted files, clustered files, heap files with an unclustered tree index on the search key, and heap files with an unclusteTed hash index. Which file organization is best suited for each operation? (Section 8.4) • What are the main contributors to the cost of database operations? Discuss a simple cost model that reflects this. (Section 8.4.1) • How does the expected workload influence physical database design deci- siems such as what indexes to build? vVhy is the choice of indexes a central aspect of physical database design? (Section 8.5) •
-
-expected workload influence physical database design deci- siems such as what indexes to build? vVhy is the choice of indexes a central aspect of physical database design? (Section 8.5) • What issues are considered in using clustered indexes? What is an indcl;
+-- INSERT data into the normalized tables INSERT INTO Employee (ID, Name) VALUES (1, 'John Doe'); INSERT INTO Department (ID, Name, ManagerID) VALUES (1, 'Engineering', 2); INSERT INTO Manager (ID, Name) VALUES (2, 'Jane Smith');
 ```
-Example SELECT statement from textbook.
 
-### Example 3: UPDATE Example
-```sql
-update that is definitely speeded 1lJi because of the available indexes. (English description is sufficient.)
-
-Storage and Inde.7:ing 303 ~ 3. Give an example of an update that is definitely slowed down because of the indexes. (English description is sufficient.) 4. Can you give an example of an update that is neither speeded up nor slowed down by the indexes? Exercise 8.11 Consider the following relations: Emp( eid: integer, ename: varchar, sal: integer, age: integer, did: integer) Dept(did: integer, budget: integer, floor: integer, mgr_eid: integer) Salaries range from $10,000 to $100,000, ages vary from 20 to 80, each department has about five employees on average, there are 10 floors, and budgets vary from $10,000 to $1 million. You can assume uniform distributions of values. For each of the following queries, which of the listed index choices would you choose to speed up the query? If your database system does not consider index-only plans (i.e., data records are always retrieved even if enough information is available in the index entry), how would your answer change? Explain briefly. 1. Query: Print ename, age, and sal for all employees. (a) Clustered hash index on (ename, age, sal) fields
-
-in the index entry), how would your answer change? Explain briefly. 1. Query: Print ename, age, and sal for all employees. (a) Clustered hash index on (ename, age, sal) fields of Emp. (b) Unclustered hash index on (ename, age, sal) fields of Emp. (c) Clustered B+ tree index on (ename, age, sal) fields of Emp. (d) Unclustered hash index on (eid, did) fields of Emp. (e) No index. 2. Query: Find the dids of departments that are on the 10th floor and have a budget of less than $15,000. (a) Clustered hash index on the floor field of Dept. (b) Unclustered hash index on the floor' field of Dept. (c) Clustered B+ tree index on (floor, budget) fields of Dept. (d) Clustered B+ tree index on the budget: field of Dept. (e) No index. PROJECT-BASED EXERCISES Exercise 8.12 Answer the following questions: 1. What indexing techniques are supported in Minibase? 2. \;
-```
-Example UPDATE statement from textbook.
+This practical example demonstrates inserting data into the normalized tables and how it helps in maintaining data integrity and reducing redundancy.
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Not identifying all dependencies correctly
+
+**Incorrect:**
+
+```sql
+-- Incorrectly assuming no transitive dependency CREATE TABLE Employee ( ID INT, Name VARCHAR(50), DepartmentID INT, ManagerID INT, DepartmentManagerID INT );
+```
+
+**Correct:**
+
+```sql
+-- Correctly identifying AND removing transitive dependencies CREATE TABLE Employee ( ID INT PRIMARY KEY, Name VARCHAR(50) ); CREATE TABLE Department ( ID INT PRIMARY KEY, Name VARCHAR(50), ManagerID INT ); CREATE TABLE Manager ( ID INT PRIMARY KEY, Name VARCHAR(50) );
+```
+
+**Why this happens:** This mistake occurs when not all dependencies are identified, leading to data anomalies. Correcting it involves ensuring that only relevant data is stored in each table.
 
 ---
-*Source: dbms-ramakrishnan-3rd-edition, Pages 332, 333, 334, 335, 336, 337, 338, 339*
+
+## Practice
+
+**Question:** Normalize the following table into 3NF:
+CREATE TABLE Employee (
+    ID INT,
+    Name VARCHAR(50),
+    DepartmentID INT,
+    ManagerID INT,
+    DepartmentManagerID INT
+);
+
+**Solution:** -- Normalize the table by removing redundancy
+CREATE TABLE Employee (
+    ID INT PRIMARY KEY,
+    Name VARCHAR(50)
+);
+CREATE TABLE Department (
+    ID INT PRIMARY KEY,
+    Name VARCHAR(50),
+    ManagerID INT
+);
+CREATE TABLE Manager (
+    ID INT PRIMARY KEY,
+    Name VARCHAR(50)
+);
+
+
+---
+
+*Source: Database Management Systems, 3rd Edition by Ramakrishnan & Gehrke*

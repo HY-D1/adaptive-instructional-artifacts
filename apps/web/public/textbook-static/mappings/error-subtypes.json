@@ -1,0 +1,146 @@
+{
+  "schemaVersion": "error-subtypes-v1",
+  "description": "SQL-Engage error subtype definitions",
+  "createdAt": "2026-02-26T00:00:00Z",
+  "totalSubtypes": 23,
+  "subtypes": {
+    "incomplete_query": {
+      "id": 1,
+      "name": "Incomplete Query",
+      "severity": "error",
+      "category": "completeness"
+    },
+    "incorrect_select_usage": {
+      "id": 2,
+      "name": "Incorrect SELECT Usage",
+      "severity": "error",
+      "category": "syntax"
+    },
+    "incorrect_wildcard_usage": {
+      "id": 3,
+      "name": "Incorrect Wildcard Usage",
+      "severity": "warning",
+      "category": "syntax"
+    },
+    "missing_comma_in_select": {
+      "id": 4,
+      "name": "Missing Comma in SELECT",
+      "severity": "error",
+      "category": "syntax"
+    },
+    "extra_comma_in_select": {
+      "id": 5,
+      "name": "Extra Comma in SELECT",
+      "severity": "error",
+      "category": "syntax"
+    },
+    "missing_where_clause": {
+      "id": 6,
+      "name": "Missing WHERE Clause",
+      "severity": "warning",
+      "category": "logic"
+    },
+    "incorrect_operator_usage": {
+      "id": 7,
+      "name": "Incorrect Operator Usage",
+      "severity": "error",
+      "category": "logic"
+    },
+    "incorrect_function_usage": {
+      "id": 8,
+      "name": "Incorrect Function Usage",
+      "severity": "error",
+      "category": "logic"
+    },
+    "incorrect_parentheses": {
+      "id": 9,
+      "name": "Incorrect Parentheses",
+      "severity": "error",
+      "category": "syntax"
+    },
+    "incorrect_null_comparison": {
+      "id": 10,
+      "name": "Incorrect NULL Comparison",
+      "severity": "error",
+      "category": "logic"
+    },
+    "incorrect_join_type": {
+      "id": 11,
+      "name": "Incorrect JOIN Type",
+      "severity": "error",
+      "category": "logic"
+    },
+    "missing_join_condition": {
+      "id": 12,
+      "name": "Missing JOIN Condition",
+      "severity": "error",
+      "category": "syntax"
+    },
+    "incorrect_join_table_order": {
+      "id": 13,
+      "name": "Incorrect JOIN Table Order",
+      "severity": "warning",
+      "category": "logic"
+    },
+    "missing_group_by": {
+      "id": 14,
+      "name": "Missing GROUP BY",
+      "severity": "error",
+      "category": "logic"
+    },
+    "incorrect_group_by_columns": {
+      "id": 15,
+      "name": "Incorrect GROUP BY Columns",
+      "severity": "error",
+      "category": "logic"
+    },
+    "having_without_group_by": {
+      "id": 16,
+      "name": "HAVING Without GROUP BY",
+      "severity": "warning",
+      "category": "logic"
+    },
+    "incorrect_aggregate_function": {
+      "id": 17,
+      "name": "Incorrect Aggregate Function",
+      "severity": "error",
+      "category": "logic"
+    },
+    "incorrect_union_usage": {
+      "id": 18,
+      "name": "Incorrect UNION Usage",
+      "severity": "error",
+      "category": "syntax"
+    },
+    "incompatible_columns_in_union": {
+      "id": 19,
+      "name": "Incompatible Columns in UNION",
+      "severity": "error",
+      "category": "logic"
+    },
+    "incorrect_subquery_usage": {
+      "id": 20,
+      "name": "Incorrect Subquery Usage",
+      "severity": "error",
+      "category": "logic"
+    },
+    "correlated_subquery_error": {
+      "id": 21,
+      "name": "Correlated Subquery Error",
+      "severity": "error",
+      "category": "logic"
+    },
+    "ambiguous_column_reference": {
+      "id": 22,
+      "name": "Ambiguous Column Reference",
+      "severity": "error",
+      "category": "syntax"
+    },
+    "undefined_alias": {
+      "id": 23,
+      "name": "Undefined Alias",
+      "severity": "error",
+      "category": "syntax"
+    }
+  }
+}

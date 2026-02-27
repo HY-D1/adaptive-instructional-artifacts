@@ -1,25 +1,68 @@
 # Introduction to SQL
 
 ## Definition
-Overview of SQL statements: DML (SELECT, INSERT, UPDATE, DELETE) and DDL (CREATE, ALTER, DROP)
+
+SQL (Structured Query Language) is a programming language used for managing and manipulating relational databases. It allows users to create, retrieve, update, and delete data from databases efficiently.
 
 ## Explanation
-1 OVERVIEW OF DATABASE SYSTEMS -- What is a DBMS, in particular, a relational DBMS? .. Why should we consider a DBMS to manage data? .. How is application data represented in a DBMS? -- How is data in a DBMS retrieved and manipulated? .. How does a DBMS support concurrent access and protect data during system failures? .. What are the main components of a DBMS? .. Who is involved with databases in real life? .. Key concepts: database management, data independence, database design, data model; relational databases and queries; schemas, levels of abstraction; transactions, concurrency and locking, recovery and logging; DBMS architecture; database administrator, application pro- grammer, end user Has everyone noticed that all the letters of the word database are typed with the left hand? Now the layout of the QWEHTY typewriter keyboard was designed, among other things, to facilitate the even use of both hands. It follows, therefore, that writing about databases is not only unnatural, but a lot harder than it appears. ---Anonymous The alIlount of information available to us is literally exploding, and the
 
-follows, therefore, that writing about databases is not only unnatural, but a lot harder than it appears. ---Anonymous The alIlount of information available to us is literally exploding, and the value of data as an organizational asset is widely recognized. To get the most out of their large and complex datasets, users require tools that simplify the tasks of 3
+SQL is essential for database management because it provides a standardized way to interact with databases. Here’s how it works and when to use it:
 
-4 CHAPTER If The area of database management systenls is a microcosm of computer sci- ence in general. The issues addressed and the techniques used span a wide spectrum, including languages, object-orientation and other progTamming paradigms, compilation, operating systems, concurrent programming, data structures, algorithms, theory, parallel and distributed systems, user inter- faces, expert systems and artificial intelligence, statistical techniques, and dynamic programming. \Ve cannot go into all these &<;j
+1. **What problem does SQL solve?** SQL addresses the need for efficient data management by allowing users to perform complex operations on large datasets without needing to manually handle each record.
+
+2. **How does it work?** SQL uses a set of commands (like SELECT, INSERT, UPDATE, DELETE) to interact with databases. Each command is designed to perform a specific task, such as retrieving data that meets certain criteria or modifying existing data.
+
+3. **When to use it?** Use SQL whenever you need to manage a relational database. This includes creating new databases, adding or removing data, updating records, and querying data based on specific conditions.
+
+4. **Key things to remember:** Always ensure your SQL queries are well-structured and properly formatted. Common mistakes include forgetting to close parentheses or using incorrect syntax.
 
 ## Examples
-### Example 1
+
+### Basic Usage
+
 ```sql
--- No specific example available in textbook
+-- SELECT all employees FROM the Employees TABLE SELECT * FROM Employees;
 ```
-No example available for this concept.
+
+This example demonstrates how to retrieve all records from a table.
+
+### Practical Example
+
+```sql
+-- Find all employees who work in the 'Sales' department SELECT name, ssn FROM Employees WHERE dept_id = (SELECT did FROM Departments WHERE dname = 'Sales');
+```
+
+This practical example shows how to use a subquery to filter data based on related tables.
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Forgetting to close parentheses
+
+**Incorrect:**
+
+```sql
+-- Incorrect query SELECT name, ssn FROM Employees WHERE dept_id = (SELECT did FROM Departments WHERE dname = 'Sales';
+```
+
+**Correct:**
+
+```sql
+-- Corrected query
+SELECT name, ssn FROM Employees WHERE dept_id = (SELECT did FROM Departments WHERE dname = 'Sales')
+```
+
+**Why this happens:** This mistake can lead to syntax errors. Always ensure all parentheses are properly closed.
 
 ---
-*Source: dbms-ramakrishnan-3rd-edition, Pages 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51*
+
+## Practice
+
+**Question:** Write a SQL query that selects the names and social security numbers of all employees who work in departments with a budget greater than $50,000.
+
+**Solution:** -- Solution
+SELECT e.name, e.ssn FROM Employees e JOIN DepLMgr d ON e.ssn = d.ssn WHERE d.budget > 50000;
+
+
+---
+
+*Source: Database Management Systems, 3rd Edition by Ramakrishnan & Gehrke*

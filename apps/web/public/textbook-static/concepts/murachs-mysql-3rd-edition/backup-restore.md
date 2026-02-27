@@ -1,65 +1,58 @@
 # Backup and Restore
 
 ## Definition
-Strategies and commands for backing up and restoring MySQL databases
+
+Backup and restore are processes used to save copies of databases and recover them when needed. This ensures data safety and availability.
 
 ## Explanation
-540 Section 5 Database administration How to revoke privileges After you've created users and granted privileges to them, you may need to revoke privileges. For example, you may need to revoke some or all of a user's privileges if the t1ser abuses those privileges. To do that, you can use the REVOKE statement as shown in figure 18-8. Since this statement works similarly to the GRANT statement, you shouldn't have much trouble using it. Here, the first statement shows how to revoke all privileges from a user named jim. To do that, you can code a REVOKE statement that uses the ALL keyword to revoke all privileges. In addition, you must specify GRANT OPTION to revoke the GRANT OPTION privilege. This revokes all privileges from the user on all databases. To be able to use this syntax, you must be logged in as a user that has the CREATE USER privilege. Otherwise, you won't have the privileges you need to execute the REVOKE statement. The second statement works like the first statement. However, it revokes all privileges from two users.
 
-privilege. Otherwise, you won't have the privileges you need to execute the REVOKE statement. The second statement works like the first statement. However, it revokes all privileges from two users. To do that, this statement separates the usernames in the FROM clause with a comma. The third statement revokes specific privileges from a user. To do that, you separate the privileges with a comma. For example, this statement revokes the INSERT and UPDATE privileges on the Invoices table in the AP database from the user named joel@localhost. To be able to use this syntax, you must be logged in as a user that has the GRANT OPTION privilege and the privilege that you're revoking. Although the REVOKE statement removes privileges, it doesn't remove the user from the database that MySQL uses to keep track of users. To remove a user account entirely, use the DROP USER statement described in figure 18-4.
-
-Chapter 18 How to secure a database 541 The sy
+Database backups are crucial for protecting against data loss due to hardware failures, software errors, or malicious attacks. A backup creates a copy of the database at a specific point in time. When a restore is performed, this backup is used to recreate the database state. This process helps maintain business continuity and data integrity.
 
 ## Examples
-### Example 1: SELECT Example
+
+### Basic Backup
+
 ```sql
-SELECT statement like the one in this figure. This statement retrieves inforination from the User table of the mysql database for all users who don't have an authentication string, which is typically the password in encrypted
-
-this figure. This statement retrieves inforination from the User table of the mysql database for all users who don't have an authentication string, which is typically the password in encrypted format. (With MySQL 5.6 and earlier, you need to check the Password column for an empty string instead of the authentication_string column.) In this case, the SELECT statement returned an empty result set, which indicates that all users have been assigned passwords. However, if this statement rettrrns a result set, you can set a password for each user in the result set. Or, if those users aren't needed, you can drop them.
-
-Chapter 18 How to secure a database 543 How to use the ALTER USER statement The syntax ALTER USER [IF EXISTS] {username lUSER()} [IDENTIFIED BY 'password'] [PASSWORD EXPIRE [DEFAULT INEVER IINTERVAL days DAY] I PA.SSWORD HISTORY {DEFAULT I nwnber_passwords} I PASSWORD REUSE INTERVAL {DEFAULT ldays DAY}] A statement that changes a user's password ALTER USER john IDENTIFIED BY •password' A statement that changes the current user's password ALTER USER USER () IDENTIFIED BY 'secret • A statement that forces a user to change their password every 90 days ALTER USER IF EXISTS john PASSWORD EXPIRE INTERVAL 90 DAY How to use the SET PASSWORD statement The syntax SET PASSWORD [FOR username] = 'password' A statement that changes a user's password SET PASSWORD FOR john= 'paSSword' A statement that changes the current user's password SET PASSWORD= 'secret' A SELECT statement that selects all users that don't have passwords SELECT Host, User FROM mysql.user WHERE authentication_ string = •• Host User -;
+-- SQL command to CREATE a backup of the 'mydatabase' database mysqldump -u username -p mydatabase > mydatabase_backup.sql;
 ```
-Example SELECT statement from textbook.
 
-### Example 2: SELECT Example
+This example demonstrates how to use the mysqldump utility to create a backup of a database. The backup file is saved in the current directory.
+
+### Practical Example
+
 ```sql
-select data from the User
-
-ALTER USER statement work just like they do for the CREATE USER statement. • To be sure you've assigned passwords to all users, you can select data from the User table of the mysql database for all users without authentication strings (MySQL 5.7 and later) or passwords (MySQL 5.6 and earlier). Figure 18-9 How to change passwords
-
-544 Section 5 Database administration A script that creates users Figure 18-10 presents a script that creates users and grants privileges for the AP database. This script starts with DROP USER statements that delete the users named john, jane, jirn, and joel if they exist. Because you can't use the IF EXISTS clause with MYSQL 5.6 and earlier, you should omit this clause if you're using one of these versions. If you do that, though, and a user doesn't exist, the statement that deletes that user will cause an error and execution of the script will stop. As a result, you should omit the DROP statements if you know that the users don't already exist. The CREATE USER statements create the users named john, jane, jirn, and joel. To make it easy to remember the passwords for these users, this script assigns a password of ''sesame'' to all four users. Of course, if you really wanted to secure the database, you would need to assign a different, more cryptic password to each user. After the CREATE USER statements execute, the
-
-Of course, if you really wanted to secure the database, you would need to assign a different, more cryptic password to each user. After the CREATE USER statements execute, the users exist but they don't have any privileges. Then, the GRANT statements grant specific privileges to each user. Here, because the user named joel is a developer, he is given access to all databases and tables on the server. In addition, be is given the GRANT OPTION privilege. As a result, he can work with the data or structl1re of any table of any database on the server, and he can grant his privileges to other users. However, he can on1 y connect from the local host. This helps prevent hackers from connecting as this user. In general, it's considered a best practice to limit connectivity in this way whenever possible, especially for administrative users. Un1ike the user named joel, the user named jim can only work with data in the AP database. In other words, jim can't modify the structure of the AP database by adding, altering, or dropping
-
-the user named jim can only work with data in the AP database. In other words, jim can't modify the structure of the AP database by adding, altering, or dropping objects. That makes sense becat1se jim is a manager, not an administrator. However, jim can grant all of his p1ivileges to other users. For example, he might need to grant privileges to users that he manages. In addition, jim can connect from any host computer. Although this is a security risk, at least a hacker who is able to connect as jim on1y has access to the AP database. The users named john and jane have the fewest privileges, since they are end users. These users can work with data in the AP database, but only with the specified tables and privileges. Specifically, they can select, insert, update, and delete data in the Vendors, Invoices, and Invoice_Line_Items tables. However, they can only select data from the General_Ledger_Accounts and Terms tables. Like jim, these users can connect from a computer on any host. Again, this is a security ris.k, but a
-
-can only select data from the General_Ledger_Accounts and Terms tables. Like jim, these users can connect from a computer on any host. Again, this is a security ris.k, but a hacker who can connect as john or jane has even fewer privileges and can do less damage.
-
-Chapter 18 How to secure a database A script that sets up the users and privileges for a database -- drop the users (remove IF EXISTS for MySQL 5.6 and earlier) DROP USER IF EXISTS john;
+-- SQL command to restore 'mydatabase' from a backup
+mysql -u username -p mydatabase < mydatabase_backup.sql;
 ```
-Example SELECT statement from textbook.
 
-### Example 3: INSERT Example
-```sql
-INSERT and UPDATE privileges on the Invoices table in the AP database from the user named joel@localhost. To be able to use this syntax, you must be logged in as a user that has the GRANT OPTION privilege and the privilege that you're revoking. Although the REVOKE statement removes privileges, it doesn't remove the user from the database that MySQL uses to keep track of users. To remove a user account entirely, use the DROP USER statement described in figure 18-4.
-
-Chapter 18 How to secure a database 541 The syntax of the REVOKE statement for all privileges REVOKE ALL[ PRIVILEGES], GRANT OPTION FROM userl[, user2] ••• A statement that revokes all privileges from a user REVOKE ALL, GRANT OPTION FROM jim A statement that revokes all privileges from multiple users REVOKE ALL, GRANT OPTION FROM ap_user, anne@localhost The syntax of the REVOKE statement for specific privileges REVOKE privilege_list ON [db_name.]table FROM userl[, user2] ••• A statement that revokes specific privileges from a user REVOKE INSERT, UPDATE ON ap.vendors FROM joel@localhost Description • You can use the REVOKE statement to revoke privileges from a user. • To revoke all privileges, you must have the global CREATE USER privilege. • To revoke specific privileges, you must have the GRANT OPTION p1·ivilege and you must have the privileges that you are revoking. Note • To completely delete a user account, use the DROP USER statement described in figure 18-4. Figure 18-8 How to revoke privileges
-
-542 Section 5 Database administration How to change passwords To change a password, you can use either the ALTER USER statement or the SET PASSWORD statement. The ALTER USER statement is preferred over the SET PASSWORD statement because it's more widely used across other database platforms. In addition, you can use it to control how often a password needs to be changed and when passwords can be reused. However, the ALTER USER statement didn't become available until MySQL 5.6. So if you're using a release of MySQL before 5.6, you'll need to use the SET PASSWORD statement. The syntax and examples at the top of figure 18-9 show how to use the ALTER USER statement to change passwords. To change the password for a user other than the user who's currently logged on, you code the name of the user, followed by the IDENTIFIED BY clause with the new password. This is illustrated by the first example. For this to wor~ the current user must have the CREATE USER privilege or the UPDATE privilege for the MySQL database. You use
-
-This is illustrated by the first example. For this to wor~ the current user must have the CREATE USER privilege or the UPDATE privilege for the MySQL database. You use a similar technique to change the password for the current user. Instead of coding the name of the user, though, you code the USER function. This is illustrated by the second example. The third example includes the IF EXISTS clause to check that the user exists before changing the password. Then, it uses the PASSWORD EXPIRE clause to set the password to expire in 90 days. This clause, as well as the PASSWORD HISTORY and PASSWORD REUSE INTERVAL clauses, work just like they do for the CREATE USER statement. To use the SET PASSWORD statement to change the password for a user other than the user who's currently logged on, you include the FOR clause to identify the t1ser. For this to work, the current user must have the UPDATE privi- lege for the MySQL database. This is illustrated by the first SET PASSWORD example. To change the password for
-
-this to work, the current user must have the UPDATE privi- lege for the MySQL database. This is illustrated by the first SET PASSWORD example. To change the password for the current user, you can omit the FOR clause as illustrated by the second example. With MySQL 5.6 and earlier, developers often used the PASSWORD function with the SET PASSWORD statement to hash the password. For instance, it was common to code the statement in the frrst example like this: SET PASSWORD FOR john = PASSWORD{ 'paSSword') However, the PASSWORD function was deprecated with MySQL 5.7.6 and removed with MySQL 8.0. Without this function, MySQL uses an authentication plugin to hash the password, which is usually what you want. For security reasons, you should always assign a password to each user. To make sure that every user has a password, you can execute a SELECT statement like the one in this figure. This statement retrieves inforination from the User table of the mysql database for all users who don't have an authentication string, which is typically the password in encrypted
-
-this figure. This statement retrieves inforination from the User table of the mysql database for all users who don't have an authentication string, which is typically the password in encrypted format. (With MySQL 5.6 and earlier, you need to check the Password column for an empty string instead of the authentication_string column.) In this case, the SELECT statement returned an empty result set, which indicates that all users have been assigned passwords. However, if this statement rettrrns a result set, you can set a password for each user in the result set. Or, if those users aren't needed, you can drop them.
-
-Chapter 18 How to secure a database 543 How to use the ALTER USER statement The syntax ALTER USER [IF EXISTS] {username lUSER()} [IDENTIFIED BY 'password'] [PASSWORD EXPIRE [DEFAULT INEVER IINTERVAL days DAY] I PA.SSWORD HISTORY {DEFAULT I nwnber_passwords} I PASSWORD REUSE INTERVAL {DEFAULT ldays DAY}] A statement that changes a user's password ALTER USER john IDENTIFIED BY •password' A statement that changes the current user's password ALTER USER USER () IDENTIFIED BY 'secret • A statement that forces a user to change their password every 90 days ALTER USER IF EXISTS john PASSWORD EXPIRE INTERVAL 90 DAY How to use the SET PASSWORD statement The syntax SET PASSWORD [FOR username] = 'password' A statement that changes a user's password SET PASSWORD FOR john= 'paSSword' A statement that changes the current user's password SET PASSWORD= 'secret' A SELECT statement that selects all users that don't have passwords SELECT Host, User FROM mysql.user WHERE authentication_ string = •• Host User -;
-```
-Example INSERT statement from textbook.
+This example shows how to restore a database using the mysqldump utility. The database is restored from the previously created backup file.
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Forgetting to include the database name in the backup command
+
+**Incorrect:**
+
+```sql
+-- Incorrect backup command mysqldump -u username -p > mydatabase_backup.sql;
+```
+
+**Correct:**
+
+```sql
+-- Correct backup command mysqldump -u username -p mydatabase > mydatabase_backup.sql;
+```
+
+**Why this happens:** This mistake can lead to an incomplete backup. Always specify the database name in the mysqldump command.
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 560, 561, 562, 563, 564, 565, 566*
+
+## Practice
+
+**Question:** How would you create a backup of a database named 'sales' using mysqldump?
+
+**Solution:** The correct SQL command is: mysqldump -u username -p sales > sales_backup.sql. This command will prompt for the password and then create a backup of the 'sales' database, saving it as 'sales_backup.sql'.
+
+---
+
+*Source: Murach's MySQL 3rd Edition*

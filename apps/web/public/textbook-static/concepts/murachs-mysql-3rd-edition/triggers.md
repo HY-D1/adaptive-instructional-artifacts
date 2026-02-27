@@ -1,61 +1,63 @@
-# Triggers and Events
+# Triggers
 
 ## Definition
-Automating SQL execution on data changes and scheduled events
+
+A trigger is a special type of stored procedure that automatically executes when a specific event occurs on a table, such as INSERT, UPDATE, or DELETE. It helps maintain data integrity and enforce business rules directly within the database.
 
 ## Explanation
-480 Section 4 Stored prvgram development Since the body of this trigger executes a single statement, it could also be coded without specifying a block of code like this: CREATE TRIGGER vendors_before_update BEFORE UPDATE ON vendors FOR EACH ROW SET NEW.vendor_ state = UPPER(NEW.vendor_ state); The advantage of not specifying a block of code is that you don't have to change the delimiter or identify the start and end of the block of code. The disadvantage is that it's more difficult to add statements to the trigger if you later decide that you want the trigger to do more work. Although it's not mentioned in chapter 15, stored procedures and functions that execute a single statement can also be coded without specifying a block of code. If you look back at figure 15-8, for example, you'll see a stored procedure whose body consists of a single UPDATE statement. Because of that, the body of this procedure could be rewritten without specifying a block of code. In 1nost cases, though, you'll want to code the body of a stored procedure or
 
-that, the body of this procedure could be rewritten without specifying a block of code. In 1nost cases, though, you'll want to code the body of a stored procedure or function within a block. How to use a trigger to enforce data consistency Triggers are commonly used to enforce data consistency. For example, the sum of line item amounts for an invoice in the Invoice Line Items table - - should always be equal to the corresponding invoice total amount in the Invoices table. Unfortunately, you can't enforce this rule using a constraint on either the Invoices table or the Invoice_Line_Items table. However, you can use a trigger like the one in figure 16-2 to enforce this rule when an invoice amount is updated. The trigger shown here fires before an UPDATE statement attempts to update the invoice_total column in the Invoices table. When this trigger fires, it checks if the sum of the line items is equal to the invoice total. If it isn't, the t
+Triggers are incredibly useful for maintaining the consistency and accuracy of your data without having to write complex application logic. They allow you to perform actions automatically whenever certain events happen on a table. For example, if you want to ensure that every time a new record is inserted into an 'orders' table, the total amount is calculated and stored in another column, you can create a trigger for this purpose.
 
 ## Examples
-### Example 1: SELECT Example
+
+### Basic Trigger Example
+
 ```sql
-SELECT SUM(line_ item_amount) INTO sum_ line_ item_amount FROM invoice_line_ items WHERE invoice_id = NEW.invoice_ id;
+-- CREATE a trigger that updates the 'last_modified' column whenever any row in the 'employees' TABLE is updated. CREATE TRIGGER update_last_modified BEFORE UPDATE ON employees FOR EACH ROW BEGIN SET NEW.last_modified = NOW(); END;
 ```
-Example SELECT statement from textbook.
 
-### Example 2: SELECT Example
+This example shows how to create a trigger that automatically updates the 'last_modified' column with the current timestamp every time an employee record is updated.
+
+### Practical Example
+
 ```sql
-SELECT statement that retrieves the rows in the audit table SELECT* FROM invoices audit vendorjd invoice_number invoice_ total action_
-
-to fire DELETE FROM invoices WHERE invoice_ id = 115 A SELECT statement that retrieves the rows in the audit table SELECT* FROM invoices audit vendorjd invoice_number invoice_ total action_ type action_date ► 34 ZXA-080 14092.59 INSERTED 2018-12-28 11:30:33 I 34 ZXA-080 14092.59 D8£TED 2018- 12-28 11:30:33 Description • You can use an AFfER trigger to insert rows into an audit table. Figure 16-3 How to create an AFTER trigger
-
-484 Section 4 Stored prvgram development How to view or drop triggers When you 're working with triggers, you often need to view all of the triggers that have been created for a database. Then, you can review information about those triggers, and you can drop them if they are no longer needed. Figure 16-4 starts by showing how to use the SHOW TRIGGERS statement to view all the triggers in the current database. Usually, that's what you want. In some cases, though, you may want to use the IN clause to specify the database as shown in the second example. The result set for the second example shows that the AP database contains four triggers, and it provides detailed information about each trigger. First, the Trigger column shows the name of each trigger. Second, the Event column shows the type of statem.ent that causes the trigger to fire. Third, the Table column shows the table for the trigger. Here, three of these triggers are associated with the Invoices table and one with the Vendors table. Fourth, the Statement column
-
-the Table column shows the table for the trigger. Here, three of these triggers are associated with the Invoices table and one with the Vendors table. Fourth, the Statement column shows the code for the body of the trigger. Fifth, the Timing column indicates whether the trigger is a BEFORE trigger or an AFTER trigger. After that, there are four other columns of information. If a database contains a large number of triggers, you may want to use the LIKE clause to display just the triggers with names that match a specified pattern. In this figure, for instance, the third SHOW TRIGGERS statement only shows triggers that start with ''ven''. As a result, this statement shows just the UPDATE trigger that has been defined for the Vendors table. For more informa- tion about using the LIKE clause, please see chapter 3. Because MySQL doesn't provide a way to alter a trigger, you have to drop it and then create a new trigger to change the way it works. To drop a trigger, you code the DROP TRIGGER keywords followed by
-
-trigger, you have to drop it and then create a new trigger to change the way it works. To drop a trigger, you code the DROP TRIGGER keywords followed by the name of the trigger. If you want, you can add the optional IF EXISTS keywords. Since this drops the trigger only if it exists, it prevents an error from occurring if the trigger doesn't exist. In some cases, you may want to temporarily disable triggers. For example, you may want to disable the triggers for one or more tables before inserting a large number of rows. This can help the INSERT statements run faster, and it lets you insert data that isn't allowed by the triggers. Unfortunately, MySQL doesn't provide a way to disable a trigger. Instead, you have to drop the trigger and then create it again later.
-
-Chapter 16 How to create triggers and events 485 A statement that lists all triggers in the current database SHOW TRIGGERS A statement that lists all triggers in the specified database SHOW TRIGGERS IN ap J Tr19ger Event Table Statement Ttming Created ► j involces_after _insert INSERT invoices BEGIN INSERT INTO invoices_audit VALUES ... BEGIN DEa.ARE sum_line_jtem_amou,t DEO ... BEGIN INSERT INTO invoices_audlt VALUES •.• BEGIN SET NEW. vendor _state = UPPER{NEW •... AFTER 2018-12-28 ll: invoices _befure_upda te UPDATE Invoices BEFORE 2018-12-28 11: involces_after _delete DaETE Invoices AFTER 2018-12-28 11: vendors _before _update UPDATE vendors BEFORE 2018-12-28 11: < > A statement that lists all triggers in a database that begin with ''ven'' SHOW TRIGGERS IN ap LIKE 'ven%' Trigger Event Table Statement Tuning Created ► vendors_before_update UPDATE vendors BEGIN SET NE¥J.vendor_state = UPPER{NEW .... BEFORE 2018-12-28 11: A statement that drops a trigger DROP TRIGGER vendors_before_update A statement that drops a trigger only if it exists DROP TRIGGER IF EXISTS vendors_before_update Description • To view triggers, use the SHOW TRIGGERS statement. To filter the result set that's returned,
-
-that drops a trigger only if it exists DROP TRIGGER IF EXISTS vendors_before_update Description • To view triggers, use the SHOW TRIGGERS statement. To filter the result set that's returned, include an IN clause or a LIKE clat1se. • To drop a trigger, use the DROP TRIGGER statement. To be sure a trigger exists before it's dropped, include the IF EXISTS keywords. Figure 16-4 How to view or drop triggers >
-
-486 Section 4 Stored prvgram development How to work with events An event, or scheduled event, is a named database object that executes, or fires, according to the event scheduler. With MySQL 8.0 and later, the event scheduler is on by default. As a result, if you don't need to use events, you should turn the event scheduler off to save system resources. Conversely, the event scheduler is off by default with MySQL 5.7 and earlier. If you want to use the event scheduler with one of those releases, then, you need to turn it on. How to turn the event scheduler on or off Figure 16-5 begins by showing how to check if the event scheduler is on. To do that, you can use the SHOW VARIABLES statement to view the variable named event_scheduler. Then, if the event scheduler isn't on, you'll need to tum it on before you can work with events. To do that, you can use the SET statement to set the value of the event scheduler variable to ON. - Here, the ON keyword is
-
-can work with events. To do that, you can use the SET statement to set the value of the event scheduler variable to ON. - Here, the ON keyword is a synonym for the INT value of 1. Conversely, the OFF keyword is a synonym for the INT value of 0. Since the ON and OFF keywords are easier to read than I and 0, this chapter uses these keywords. However, if you 're using an older version of MySQL, you may need to use the INT values. When you use a SET statement to change the event_scheduler variable as shown in this figure, the change only applies until the server is restarted. However, if you want to make this change permanent, you can change this variable in MySQL's configuration ftle as described in the next chapter. How to create an event Figure 16-5 also shows how to use the CREATE EVENT statement to create an event. You can use this statement to create a one-time event that occurs only once or a recitrring event that repeats at a regular
-
-CREATE EVENT statement to create an event. You can use this statement to create a one-time event that occurs only once or a recitrring event that repeats at a regular interval. The first CREATE EVENT statement in this figure creates a one-time event named one_time_delete_audit_rows. To do that, this trigger uses the AT keyword to specify that the event should be executed one month from the current date and time. Then, it uses the DO keyword to identify the statements that the event should execute. Here, the statements include the BEGIN and END keywords that identify a block of code. Within that block, a single DELETE statement deletes all rows from the Invoices_Audit table that are more than one month old. Like the code for a trigger, the code for an event doesn't have to be coded within a block if it consists of a single statement. In this case, then, the event could have been coded like this: CREATE EVENT one_time_delete_audit_rows ON SCHEDULE AT NOW () + INTERVAL 1 MONTH DO DELETE FROM invoices_audit WHERE action_date < NOW{) -
-
-then, the event could have been coded like this: CREATE EVENT one_time_delete_audit_rows ON SCHEDULE AT NOW () + INTERVAL 1 MONTH DO DELETE FROM invoices_audit WHERE action_date < NOW{) - INTERVAL 1 MONTH;
+-- CREATE a trigger that inserts a new row into an 'audit_log' TABLE whenever a new product is added to the 'products' TABLE. CREATE TRIGGER log_product_addition AFTER INSERT ON products FOR EACH ROW BEGIN INSERT INTO audit_log (action, product_id, action_date) VALUES ('Added', NEW.product_id, NOW()); END;
 ```
-Example SELECT statement from textbook.
 
-### Example 3: INSERT Example
-```sql
-INSERT statement is executed on the Invoices table. This trigger inserts the new values for the vendor_id, invoice_number, and invoice_total columns into the Invoices_Audit table. In addition, it inse11s a string value of
-
-executed on the Invoices table. This trigger inserts the new values for the vendor_id, invoice_number, and invoice_total columns into the Invoices_Audit table. In addition, it inse11s a string value of ''Inserted'' to indicate that the row has been inserted, and it uses the NOW function to inse1t the date and time of the action. The second CREATE TRIGGER statement works similarly, but it executes after a DELETE statement. It inserts a string value of ''Deleted'' to indicate that the row has been deleted. Note that the first trigger inserts the new values for the row that's being inserted since there aren't any old values for this row. However, the second trigger inserts the old values for the row that's being deleted since there aren't any new values for this row. Although the example that's presented in this figure has been simplified, it presents all of the skills that you need for creating more complex audit tables. For example, if you're having a problem updating rows in a database, you can create an audit table and a trigger to store whatever
-
-for creating more complex audit tables. For example, if you're having a problem updating rows in a database, you can create an audit table and a trigger to store whatever data you want about each update. Then, the next time the update problem occurs, you can review the data in the audit table to identify the cause of the problem.
-
-Chapter 16 How to create triggers and events 483 A statement that creates an audit table for actions on the invoices table CREATE TABLE invoices_audit ( ) vendor_ id invoice_ nwnber invoice_total action_type action_date INT VARCHAR ( 5 0) DECIMAL(9,2) VAR CHAR ( 5 0) DATETIME NOT NULL, NOT NULL, NOT NULL, NOT NULL, NOT NULL Two AFTER triggers that insert rows into the audit table DELIMITER// CREATE TRIGGER invoices_after insert AFTER INSERT ON invoices FOR EACH ROW BEGIN INSERT INTO invoices_ audit VALUES (NEW.vendor_ id, NEW.invoice_ number, NEW.invoice_total, 'INSERTED', NOW(});
-```
-Example INSERT statement from textbook.
+This practical example demonstrates how a trigger can be used to maintain an audit log of all changes made to the 'products' table.
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Forgetting to specify the correct timing (BEFORE, AFTER) for the trigger.
+
+**Incorrect:**
+
+```sql
+-- Incorrect trigger creation CREATE TRIGGER incorrect_trigger ON employees FOR EACH ROW BEGIN SET NEW.last_modified = NOW(); END;
+```
+
+**Correct:**
+
+```sql
+-- Correct trigger creation CREATE TRIGGER update_last_modified AFTER UPDATE ON employees FOR EACH ROW BEGIN SET NEW.last_modified = NOW(); END;
+```
+
+**Why this happens:** Triggers must specify when they should be executed (BEFORE or AFTER the event). Forgetting this can lead to unexpected behavior.
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 500, 501, 502, 503, 504, 505, 506, 507, 508*
+
+## Practice
+
+**Question:** Create a trigger that automatically updates the 'total_amount' column in the 'orders' table whenever any row is updated.
+
+**Solution:** -- Solution
+CREATE TRIGGER update_total_amount
+BEFORE UPDATE ON orders
+FOR EACH ROW
+BEGIN
+SET NEW.total_amount = NEW.quantity * NEW.price;
+END;
+
+---
+
+*Source: Murach's MySQL 3rd Edition*

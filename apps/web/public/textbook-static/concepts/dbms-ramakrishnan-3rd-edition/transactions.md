@@ -1,37 +1,78 @@
-# Transactions and Locking
+# Database Transactions
 
 ## Definition
-Ensuring data integrity with ACID transactions and concurrency control
+
+A database transaction is a sequence of operations that are treated as a single unit of work. It ensures data consistency and integrity by either fully completing all operations or rolling back any changes if an error occurs.
 
 ## Explanation
-Hash~Based Indexing 385 ! the same a.'3 element N + 2, and so on, we can avoid the actual copying for the rest of the directory. The second split occurs at bucket 1; now directory element N + 1 becomes significant and is added. At the end of the round, all the original N buckets are split, and the directory is doubled in size (because all elements point to distinct buckets). \Ve observe that the choice of hashing functions is actually very similar to what goes on in Extendible Hashing---in effect, moving from hi to hi+1 in Linear Hashing corresponds to doubling the directory in Extendible Hashing. Both operations double the effective range into which key values are hashed; but whereas the directory is doubled in a single step of Extendible Hashing, moving from hi to hi+l, along with a corresponding doubling in the number of buckets, occurs gradually over the course of a round in Linear Ha.'3hing. The new idea behind Linear Ha.'3hing is that a directory can be avoided by a clever choice of the bucket to split.
 
-the course of a round in Linear Ha.'3hing. The new idea behind Linear Ha.'3hing is that a directory can be avoided by a clever choice of the bucket to split. On the other hand, by always splitting the appropriate bucket, Extendible Hashing may lead to a reduced number of splits and higher bucket occupancy. The directory analogy is useful for understanding the ideas behind Extendible and Linear Hashing. However, the directory structure can be avoided for Linear Hashing (but not for Extendible Hashing) by allocating primary bucket pages consecutively, which would allow us to locate the page for bucket i by a simple offset calculation. For uniform distributions, this implementation of Linear Hashing has a lower average cost for equality selections (because the directory level is eliminated). For skewed distributions, this implementation could result in any empty or nearly empty buckets, each of which is allocated at least one page, leading to poor performance rel
+Database transactions solve the problem of ensuring data consistency when multiple operations need to be performed together. Here’s how they work:
+1. **Start**: A transaction begins with a BEGIN statement.
+2. **Execute**: Multiple SQL statements are executed within this block.
+3. **Commit**: If all operations succeed, the COMMIT statement is issued to save changes permanently.
+4. **Rollback**: If any operation fails, the ROLLBACK statement is used to undo all changes made during the transaction.
+
+Transactions are crucial in preventing data corruption and ensuring that the database remains consistent even in the face of errors or system failures.
 
 ## Examples
-### Example 1: INSERT Example
+
+### Basic Usage
+
 ```sql
-insert and delete operations are handled in a static hash index. Discuss how overflow pages are used, and their impact on performance. How many disk l/Os does an equality search require, in the absence of overflow chains? What kinds of workload does a static hash index handle well, and when it is especially poor? (Section 11.1) • How does Extendible Hashing use a directory of buckets? How does Ex- tendible Hashing handle an equality query? How does it handle insert and delete operations? Discuss the global depth of the index and local depth of a bucket in your answer. Under what conditions can the directory can get large? (Section 11.2) • What are collisions? Why do we need overflow pages to handle them? (Section 11.2) • How does Linear Hashing avoid a directory? Discuss the round-robin split- ting of buckets.
-
-• What are collisions? Why do we need overflow pages to handle them? (Section 11.2) • How does Linear Hashing avoid a directory? Discuss the round-robin split- ting of buckets. Explain how the split bucket is chosen, and what triggers a split. Explain the role of the family of hash functions, and the role of the Level and Next counters. When does a round of splitting end? (Sec- tion 11.3) • Discuss the relationship between Extendible and Linear Hashing. What are their relative merits? Consider space utilization for skewed distributions, the use of overflow pages to handle collisions in Extendible Hashing, and the use of a directory in Linear Hashing. (Section 11.4) EXERCISES Exercise 11.1 Consider the Extendible Hashing index shown in Figure 1l.14. Answer the following questions about this index: 1. What can you say about the last entry that was inserted into the index? 2. What can you say about the last entry that was inserted into the index if you know that there have been no deletions from this index so far? 3. Suppose you are told
-
-say about the last entry that was inserted into the index if you know that there have been no deletions from this index so far? 3. Suppose you are told that there have been no deletions from this index so far. What can you say about the last entry whose insertion into the index caused a split? 4. Show the index after inserting an entry with hash value 68. 5. Show the original index after inserting entries with ha.sh values 17 and 69. 6. Show the original index after deleting the entry with hash value 21. (Assume that the full deletion algorithm is used.) 7. Show the original index after deleting the entry with ha,,;
+-- Start a transaction BEGIN; -- INSERT data into the TABLE INSERT INTO employees (name, position) VALUES ('John Doe', 'Manager'); -- Commit the transaction to save changes COMMIT;
 ```
-Example INSERT statement from textbook.
 
-### Example 2: DELETE Example
+This example demonstrates starting a transaction, inserting data, and committing the changes. If any error occurs during these operations, the ROLLBACK statement can be used instead of COMMIT.
+
+### Practical Example
+
 ```sql
-delete operations are handled in a static hash index. Discuss how overflow pages are used, and their impact on performance. How many disk l/Os does an equality search require, in the absence of overflow chains? What kinds of workload does a static hash index handle well, and when it is especially poor? (Section 11.1) • How does Extendible Hashing use a directory of buckets? How does Ex- tendible Hashing handle an equality query? How does it handle insert and delete operations? Discuss the global depth of the index and local depth of a bucket in your answer. Under what conditions can the directory can get large? (Section 11.2) • What are collisions? Why do we need overflow pages to handle them? (Section 11.2) • How does Linear Hashing avoid a directory? Discuss the round-robin split- ting of buckets.
-
-• What are collisions? Why do we need overflow pages to handle them? (Section 11.2) • How does Linear Hashing avoid a directory? Discuss the round-robin split- ting of buckets. Explain how the split bucket is chosen, and what triggers a split. Explain the role of the family of hash functions, and the role of the Level and Next counters. When does a round of splitting end? (Sec- tion 11.3) • Discuss the relationship between Extendible and Linear Hashing. What are their relative merits? Consider space utilization for skewed distributions, the use of overflow pages to handle collisions in Extendible Hashing, and the use of a directory in Linear Hashing. (Section 11.4) EXERCISES Exercise 11.1 Consider the Extendible Hashing index shown in Figure 1l.14. Answer the following questions about this index: 1. What can you say about the last entry that was inserted into the index? 2. What can you say about the last entry that was inserted into the index if you know that there have been no deletions from this index so far? 3. Suppose you are told
-
-say about the last entry that was inserted into the index if you know that there have been no deletions from this index so far? 3. Suppose you are told that there have been no deletions from this index so far. What can you say about the last entry whose insertion into the index caused a split? 4. Show the index after inserting an entry with hash value 68. 5. Show the original index after inserting entries with ha.sh values 17 and 69. 6. Show the original index after deleting the entry with hash value 21. (Assume that the full deletion algorithm is used.) 7. Show the original index after deleting the entry with ha,,;
+-- Transfer money from one account to another
+BEGIN;
+-- Debit the sender's account
+UPDATE accounts SET balance = balance - 100 WHERE id = 1;
+-- Credit the receiver's account
+UPDATE accounts SET balance = balance + 100 WHERE id = 2;
+-- Commit the transaction if both operations succeed
+COMMIT;
 ```
-Example DELETE statement from textbook.
+
+This practical example shows how transactions are used in real-world scenarios, such as transferring money between bank accounts. It ensures that both debit and credit operations are completed successfully before any changes are saved.
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Forgetting to commit or rollback
+
+**Incorrect:**
+
+```sql
+-- UPDATE data without committing UPDATE employees SET position = 'Senior Manager' WHERE id = 1;
+```
+
+**Correct:**
+
+```sql
+-- Correct way with transaction management BEGIN; UPDATE employees SET position = 'Senior Manager' WHERE id = 1; COMMIT;
+```
+
+**Why this happens:** Forgetting to commit or rollback can lead to partial changes being saved, which is undesirable. Always ensure that all operations are either committed or rolled back.
 
 ---
-*Source: dbms-ramakrishnan-3rd-edition, Pages 420, 421, 422, 423, 424, 425, 426, 427, 428, 429, 430, 431, 432*
+
+## Practice
+
+**Question:** Write a SQL transaction to update the salary of an employee and then insert a record into a log table. Ensure that if any error occurs during these operations, both changes should be rolled back.
+
+**Solution:** -- Start a transaction
+BEGIN;
+-- Update employee's salary
+UPDATE employees SET salary = salary + 5000 WHERE id = 101;
+-- Insert record into log table
+INSERT INTO salary_log (employee_id, new_salary) VALUES (101, (SELECT salary FROM employees WHERE id = 101));
+-- Commit the transaction if both operations succeed
+COMMIT;
+
+
+---
+
+*Source: Database Management Systems, 3rd Edition by Ramakrishnan & Gehrke*

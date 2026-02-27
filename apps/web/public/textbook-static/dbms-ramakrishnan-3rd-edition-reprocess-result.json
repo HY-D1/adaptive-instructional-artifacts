@@ -1,0 +1,106 @@
+{
+  "success": true,
+  "pdf_path": "raw_pdf/dbms-ramakrishnan-3rd-edition.pdf",
+  "timestamp": "2026-02-27T04:55:18.877652+00:00",
+  "outputs": {
+    "concept_manifest": "/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/public/textbook-static/concept-manifest.json",
+    "concepts_readme": "/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/public/textbook-static/concepts/dbms-ramakrishnan-3rd-edition/README.md",
+    "extraction": "/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/public/textbook-static/dbms-ramakrishnan-3rd-edition-extraction.json",
+    "educational_notes": "/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/public/textbook-static/dbms-ramakrishnan-3rd-edition-educational-notes.json",
+    "sqladapt": "/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/public/textbook-static/dbms-ramakrishnan-3rd-edition-sqladapt.json",
+    "study_guide": "/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/public/textbook-static/dbms-ramakrishnan-3rd-edition-study-guide.md"
+  },
+  "errors": [],
+  "stats": {
+    "pages_extracted": 1089,
+    "concepts_generated": 9,
+    "extraction_method": "pymupdf-direct",
+    "llm_enhanced": true,
+    "content_validation": {
+      "total": 9,
+      "relevant": 1,
+      "irrelevant": 8
+    }
+  },
+  "content_validation": {
+    "concepts": {
+      "content": {
+        "score": 0.3,
+        "sql_score": 1.0,
+        "concept_score": 1.0,
+        "non_sql_penalty": 0.5,
+        "is_relevant": true,
+        "analysis": "SQL content"
+      },
+      "part-1": {
+        "score": 0,
+        "sql_score": 0.0,
+        "concept_score": 0.0,
+        "non_sql_penalty": 0.2,
+        "is_relevant": false,
+        "analysis": "Non-SQL content"
+      },
+      "part-2": {
+        "score": 0,
+        "sql_score": 0.1,
+        "concept_score": 0.1,
+        "non_sql_penalty": 0.1,
+        "is_relevant": false,
+        "analysis": "Non-SQL content"
+      },
+      "part-3": {
+        "score": 0,
+        "sql_score": 0.3,
+        "concept_score": 0.3,
+        "non_sql_penalty": 0.3,
+        "is_relevant": false,
+        "analysis": "Non-SQL content"
+      },
+      "active-transactions": {
+        "score": 0.25,
+        "sql_score": 0.5,
+        "concept_score": 0.2,
+        "non_sql_penalty": 0.0,
+        "is_relevant": false,
+        "analysis": "SQL content"
+      },
+      "ofcpus": {
+        "score": 0.08,
+        "sql_score": 0.1,
+        "concept_score": 0.1,
+        "non_sql_penalty": 0.0,
+        "is_relevant": false,
+        "analysis": "Non-SQL content"
+      },
+      "of-cpus-database-size": {
+        "score": 0.08,
+        "sql_score": 0.1,
+        "concept_score": 0.1,
+        "non_sql_penalty": 0.0,
+        "is_relevant": false,
+        "analysis": "Non-SQL content"
+      },
+      "of-cpus-transactions-per-second": {
+        "score": 0.06,
+        "sql_score": 0.2,
+        "concept_score": 0.0,
+        "non_sql_penalty": 0.0,
+        "is_relevant": false,
+        "analysis": "Non-SQL content"
+      },
+      "the-enhanced-functionality-of-oildbivlss-raises-several-irnp1ernentation-chal": {
+        "score": 0.18,
+        "sql_score": 0.6,
+        "concept_score": 0.0,
+        "non_sql_penalty": 0.0,
+        "is_relevant": false,
+        "analysis": "SQL content"
+      }
+    },
+    "summary": {
+      "total": 9,
+      "relevant": 1,
+      "irrelevant": 8
+    }
+  }
+}

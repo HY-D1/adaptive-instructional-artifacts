@@ -1,23 +1,80 @@
 # MySQL Functions
 
 ## Definition
-String, numeric, date/time, and conversion functions
+
+MySQL functions are pre-defined routines that perform specific operations on data. They help simplify complex queries and make your database more efficient.
 
 ## Explanation
-270 Section 2 More SQL skills cts you need them How to work with date/time data In the topics that follow, you'll learn how to use some of the functions that MySQL provides for working with dates and times. As you'll see, these include functions for extracting different parts of a date/time value and for performing operations on dates and times. In addition, you '11 learn how to perfor1n different types of searches on date/time values. How to get the current date and time Figure 9-7 presents some of th.e date/time functions and shows how they work. The NOW, CURDATE, and CURTIME functions return the local dates and/or times based on your system's clock. However, if a session time zone has been set, the value returned by the CURDATE and CURTIME functions is adjusted to accommodate that time zone. The UTC_DATE and UTC_TIME functions work siinilarly, but they return the Universal Time Coordinate (UTC) date, also known as Greenwich Mean Time (GMT). Although you probably won't use the UTC functions often, they're useful if your system operates in different time
 
-Universal Time Coordinate (UTC) date, also known as Greenwich Mean Time (GMT). Although you probably won't use the UTC functions often, they're useful if your system operates in different time zones. That way, the date/time values always reflect Greenwich Mean Time, regardless of the time zone in which they're entered. For example, a date/time value entered at 11 :00 a.m. Los Angeles time is given the same value as a date/time value entered at 2:00 p.m. New York time. That makes it easy to compare and operate on these values. When you use functions to get the current date and time, you should be aware that the CURRENT_TIMESTAMP, CURRENT_DATE, and CURRENT_TIME functions are synonymous with the NOW, CURDATE, and CURTIME functions. In practice, the NOW, CURDATE, and CURTIME functions are typically used by MySQL programmers because they've been around the longest and because they're shorter, which makes them easier to
+MySQL functions are essential for performing calculations, manipulating text, and handling dates and times directly within SQL queries without needing to write additional programming code. These functions can be grouped into several categories: arithmetic, string, date and time, and aggregate functions. Understanding how to use these functions correctly is crucial for writing efficient and powerful SQL queries.
 
 ## Examples
-### Example 1
+
+### Basic Usage of an Aggregate Function
+
 ```sql
--- No specific example available in textbook
+-- Calculate the total amount invoiced for each account
+SELECT account_number, SUM(line_item_amount) AS total_amount FROM Invoice_Line_Items GROUP BY account_number;
 ```
-No example available for this concept.
+
+This example demonstrates how to use the SUM function to calculate the total line item amount for each account number. The results are grouped by account number.
+
+### Practical Example: Using a String Function
+
+```sql
+-- Concatenate vendor name and account description
+SELECT CONCAT(vendor_name, ' - ', account_description) AS vendor_info FROM Vendors JOIN Invoice_Line_Items ON Vendors.account_number = Invoice_Line_Items.account_number;
+```
+
+This practical example shows how to use the CONCAT function to combine vendor name and account description into a single column. It joins two tables based on account number.
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Incorrectly using aggregate functions without grouping
+
+**Incorrect:**
+
+```sql
+-- This will cause an error
+SELECT SUM(line_item_amount) FROM Invoice_Line_Items;
+```
+
+**Correct:**
+
+```sql
+-- Correct usage with GROUP BY
+SELECT account_number, SUM(line_item_amount) AS total_amount FROM Invoice_Line_Items GROUP BY account_number;
+```
+
+**Why this happens:** Aggregates like SUM and AVG require a GROUP BY clause to operate on each group of rows. Failing to include it will result in an error.
+
+### Forgetting to use parentheses with functions
+
+**Incorrect:**
+
+```sql
+-- This will cause an error
+SELECT SUBSTRING(vendor_name, 1, 3) vendor_name FROM Vendors;
+```
+
+**Correct:**
+
+```sql
+-- Correct usage with parentheses
+SELECT SUBSTRING(vendor_name, 1, 3) AS vendor_name FROM Vendors;
+```
+
+**Why this happens:** Parentheses are necessary to define the arguments for functions. Forgetting them can lead to syntax errors.
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 290, 291, 292, 293, 294, 295, 296, 297, 298*
+
+## Practice
+
+**Question:** Write a query that calculates the average invoice total for each quarter of 2018.
+
+**Solution:** -- Calculate average invoice total per quarter
+SELECT QUARTER(invoice_date) AS quarter, AVG(invoice_total) AS avg_total FROM Invoices WHERE YEAR(invoice_date) = 2018 GROUP BY quarter;
+
+---
+
+*Source: Murach's MySQL 3rd Edition*

@@ -1,0 +1,633 @@
+{
+  "schemaVersion": "1.0.0",
+  "description": "SQL Learning Concept Registry - Maps concept IDs to content, problems, and error mappings",
+  "createdAt": "2024-01-15",
+  "totalConcepts": 30,
+  "concepts": {
+    "select-basic": {
+      "id": "select-basic",
+      "title": "SELECT Statement Basics",
+      "description": "Retrieving data from one or more tables using the SELECT statement",
+      "difficulty": "beginner",
+      "estimatedReadTime": 10,
+      "category": "SELECT Basics",
+      "relatedConcepts": ["distinct", "alias", "where-clause"],
+      "errorSubtypes": ["incomplete query", "incorrect select usage", "incorrect wildcard usage", "missing from clause", "syntax error near select"],
+      "practiceProblems": ["problem-1", "problem-2", "problem-6", "problem-7", "problem-8", "problem-9", "problem-18", "problem-20", "problem-29"],
+      "prerequisites": [],
+      "nextConcepts": ["where-clause", "joins"],
+      "contentLocation": "concepts/select-basic.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Understand SELECT statement syntax",
+        "Select specific columns vs all columns (*)",
+        "Use column aliases for readability"
+      ]
+    },
+    "distinct": {
+      "id": "distinct",
+      "title": "DISTINCT Keyword",
+      "description": "Removing duplicate rows from query results",
+      "difficulty": "beginner",
+      "estimatedReadTime": 5,
+      "category": "SELECT Basics",
+      "relatedConcepts": ["select-basic", "group-by"],
+      "errorSubtypes": ["incorrect select usage"],
+      "practiceProblems": ["problem-7", "problem-14"],
+      "prerequisites": ["select-basic"],
+      "nextConcepts": ["aggregation"],
+      "contentLocation": "concepts/select-basic.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Use DISTINCT to eliminate duplicates",
+        "Understand DISTINCT with multiple columns"
+      ]
+    },
+    "alias": {
+      "id": "alias",
+      "title": "Column and Table Aliases",
+      "description": "Using AS keyword for column and table naming",
+      "difficulty": "beginner",
+      "estimatedReadTime": 5,
+      "category": "SELECT Basics",
+      "relatedConcepts": ["select-basic", "joins"],
+      "errorSubtypes": ["missing alias"],
+      "practiceProblems": ["problem-9"],
+      "prerequisites": ["select-basic"],
+      "nextConcepts": ["joins"],
+      "contentLocation": "concepts/select-basic.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Create column aliases with AS",
+        "Use table aliases in multi-table queries",
+        "Understand when aliases are required"
+      ]
+    },
+    "where-clause": {
+      "id": "where-clause",
+      "title": "WHERE Clause Filtering",
+      "description": "Filtering rows using conditions with WHERE clause",
+      "difficulty": "beginner",
+      "estimatedReadTime": 12,
+      "category": "SELECT Basics",
+      "relatedConcepts": ["select-basic", "logical-operators", "null-handling"],
+      "errorSubtypes": ["incorrect where clause", "null handling error"],
+      "practiceProblems": ["problem-2", "problem-10", "problem-11", "problem-19"],
+      "prerequisites": ["select-basic"],
+      "nextConcepts": ["joins", "aggregation"],
+      "contentLocation": "concepts/where-clause.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Filter rows with WHERE conditions",
+        "Combine conditions with AND/OR",
+        "Handle NULL values in conditions"
+      ]
+    },
+    "joins": {
+      "id": "joins",
+      "title": "SQL Joins",
+      "description": "Combining data from multiple tables using INNER, LEFT, RIGHT joins",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 20,
+      "category": "JOINs",
+      "relatedConcepts": ["join-condition-missing", "ambiguous-column", "alias"],
+      "errorSubtypes": ["incorrect join usage"],
+      "practiceProblems": ["problem-3", "problem-4", "problem-16", "problem-30"],
+      "prerequisites": ["select-basic", "where-clause"],
+      "nextConcepts": ["aggregation", "subqueries"],
+      "contentLocation": "concepts/joins.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Understand different join types (INNER, LEFT, RIGHT)",
+        "Write proper join conditions with ON",
+        "Avoid common join pitfalls"
+      ]
+    },
+    "join-condition-missing": {
+      "id": "join-condition-missing",
+      "title": "Missing Join Conditions",
+      "description": "Common error of joining tables without proper ON clause",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 8,
+      "category": "JOINs",
+      "relatedConcepts": ["joins", "ambiguous-column"],
+      "errorSubtypes": ["incorrect join usage"],
+      "practiceProblems": ["problem-3"],
+      "prerequisites": ["joins"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/joins.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Understand Cartesian products",
+        "Always specify join conditions",
+        "Debug missing join condition errors"
+      ]
+    },
+    "ambiguous-column": {
+      "id": "ambiguous-column",
+      "title": "Ambiguous Column References",
+      "description": "Resolving column name conflicts in multi-table queries",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 6,
+      "category": "JOINs",
+      "relatedConcepts": ["joins", "alias"],
+      "errorSubtypes": ["incorrect join usage", "missing alias"],
+      "practiceProblems": ["problem-16"],
+      "prerequisites": ["joins"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/ambiguous-column.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Qualify column names with table aliases",
+        "Resolve ambiguous column errors",
+        "Best practices for multi-table queries"
+      ]
+    },
+    "aggregation": {
+      "id": "aggregation",
+      "title": "Aggregate Functions",
+      "description": "Using COUNT, SUM, AVG, MAX, MIN for data summarization",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 15,
+      "category": "Aggregation",
+      "relatedConcepts": ["group-by", "group-by-error", "having-clause"],
+      "errorSubtypes": ["incorrect aggregation usage", "group by error"],
+      "practiceProblems": ["problem-4", "problem-5", "problem-12", "problem-13", "problem-17"],
+      "prerequisites": ["select-basic", "where-clause"],
+      "nextConcepts": ["group-by", "subqueries"],
+      "contentLocation": "concepts/aggregation.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Use aggregate functions properly",
+        "Understand NULL handling in aggregates",
+        "Combine aggregates with other columns"
+      ]
+    },
+    "group-by": {
+      "id": "group-by",
+      "title": "GROUP BY Clause",
+      "description": "Grouping rows for aggregate calculations",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 15,
+      "category": "Aggregation",
+      "relatedConcepts": ["aggregation", "group-by-error", "having-clause"],
+      "errorSubtypes": ["group by error"],
+      "practiceProblems": ["problem-5", "problem-12", "problem-13"],
+      "prerequisites": ["aggregation"],
+      "nextConcepts": ["having-clause"],
+      "contentLocation": "concepts/group-by.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Group data by one or more columns",
+        "Apply aggregates to groups",
+        "Understand GROUP BY requirements"
+      ]
+    },
+    "group-by-error": {
+      "id": "group-by-error",
+      "title": "GROUP BY Errors",
+      "description": "Common mistakes with non-aggregated columns in GROUP BY",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 10,
+      "category": "Aggregation",
+      "relatedConcepts": ["group-by", "aggregation"],
+      "errorSubtypes": ["group by error"],
+      "practiceProblems": [],
+      "prerequisites": ["group-by"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/group-by.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Fix non-aggregated column errors",
+        "Understand the 'all non-aggregated columns must be in GROUP BY' rule",
+        "Use ANY_VALUE() or similar workarounds"
+      ]
+    },
+    "having-clause": {
+      "id": "having-clause",
+      "title": "HAVING Clause",
+      "description": "Filtering groups based on aggregate conditions",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 10,
+      "category": "Aggregation",
+      "relatedConcepts": ["group-by", "aggregation", "where-clause"],
+      "errorSubtypes": ["having clause error"],
+      "practiceProblems": [],
+      "prerequisites": ["group-by"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/having-clause.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Distinguish HAVING from WHERE",
+        "Filter groups with aggregate conditions",
+        "Understand HAVING execution order"
+      ]
+    },
+    "subqueries": {
+      "id": "subqueries",
+      "title": "Subqueries",
+      "description": "Nested queries for complex data retrieval",
+      "difficulty": "advanced",
+      "estimatedReadTime": 20,
+      "category": "Subqueries",
+      "relatedConcepts": ["correlated-subquery", "exists-clause", "cte"],
+      "errorSubtypes": ["incorrect subquery usage"],
+      "practiceProblems": ["problem-10", "problem-11", "problem-22", "problem-23"],
+      "prerequisites": ["joins", "aggregation"],
+      "nextConcepts": ["correlated-subquery", "cte"],
+      "contentLocation": "concepts/subqueries.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Write scalar subqueries",
+        "Use subqueries in FROM clause",
+        "Understand subquery performance"
+      ]
+    },
+    "correlated-subquery": {
+      "id": "correlated-subquery",
+      "title": "Correlated Subqueries",
+      "description": "Subqueries that reference outer query columns",
+      "difficulty": "advanced",
+      "estimatedReadTime": 15,
+      "category": "Subqueries",
+      "relatedConcepts": ["subqueries", "exists-clause"],
+      "errorSubtypes": ["incorrect subquery usage"],
+      "practiceProblems": ["problem-23"],
+      "prerequisites": ["subqueries"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/correlated-subquery.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Understand correlated subquery execution",
+        "Use EXISTS with correlated subqueries",
+        "Compare to JOIN alternatives"
+      ]
+    },
+    "exists-clause": {
+      "id": "exists-clause",
+      "title": "EXISTS Operator",
+      "description": "Testing for existence of rows with EXISTS/NOT EXISTS",
+      "difficulty": "advanced",
+      "estimatedReadTime": 10,
+      "category": "Subqueries",
+      "relatedConcepts": ["subqueries", "correlated-subquery"],
+      "errorSubtypes": [],
+      "practiceProblems": [],
+      "prerequisites": ["subqueries"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/subqueries.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Use EXISTS for semi-joins",
+        "Understand EXISTS vs IN",
+        "Optimize EXISTS queries"
+      ]
+    },
+    "cte": {
+      "id": "cte",
+      "title": "Common Table Expressions (CTEs)",
+      "description": "Named temporary result sets using WITH clause",
+      "difficulty": "advanced",
+      "estimatedReadTime": 15,
+      "category": "Subqueries",
+      "relatedConcepts": ["subqueries", "recursive-cte"],
+      "errorSubtypes": ["cte error"],
+      "practiceProblems": [],
+      "prerequisites": ["subqueries"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/cte.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Write non-recursive CTEs",
+        "Understand CTE scope",
+        "Compare to subqueries"
+      ]
+    },
+    "logical-operators": {
+      "id": "logical-operators",
+      "title": "Logical Operators",
+      "description": "Combining conditions with AND, OR, NOT",
+      "difficulty": "beginner",
+      "estimatedReadTime": 10,
+      "category": "Operators",
+      "relatedConcepts": ["where-clause", "in-operator"],
+      "errorSubtypes": ["operator misuse"],
+      "practiceProblems": ["problem-2", "problem-19"],
+      "prerequisites": ["where-clause"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/logical-operators.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Combine conditions with AND/OR",
+        "Understand operator precedence",
+        "Use parentheses for clarity"
+      ]
+    },
+    "in-operator": {
+      "id": "in-operator",
+      "title": "IN Operator",
+      "description": "Checking membership in a list of values",
+      "difficulty": "beginner",
+      "estimatedReadTime": 5,
+      "category": "Operators",
+      "relatedConcepts": ["where-clause", "logical-operators"],
+      "errorSubtypes": ["operator misuse"],
+      "practiceProblems": ["problem-15"],
+      "prerequisites": ["where-clause"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/logical-operators.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Use IN with value lists",
+        "Compare IN to multiple OR conditions",
+        "Use NOT IN"
+      ]
+    },
+    "between-operator": {
+      "id": "between-operator",
+      "title": "BETWEEN Operator",
+      "description": "Range checking with BETWEEN...AND",
+      "difficulty": "beginner",
+      "estimatedReadTime": 5,
+      "category": "Operators",
+      "relatedConcepts": ["where-clause"],
+      "errorSubtypes": ["operator misuse"],
+      "practiceProblems": [],
+      "prerequisites": ["where-clause"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/logical-operators.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Use BETWEEN for inclusive ranges",
+        "Understand BETWEEN with dates",
+        "Compare to comparison operators"
+      ]
+    },
+    "like-pattern": {
+      "id": "like-pattern",
+      "title": "LIKE Pattern Matching",
+      "description": "String pattern matching with wildcards",
+      "difficulty": "beginner",
+      "estimatedReadTime": 8,
+      "category": "Operators",
+      "relatedConcepts": ["where-clause", "string-functions"],
+      "errorSubtypes": ["incorrect wildcard usage"],
+      "practiceProblems": [],
+      "prerequisites": ["where-clause"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/logical-operators.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Use % and _ wildcards",
+        "Escape special characters",
+        "Case sensitivity considerations"
+      ]
+    },
+    "string-functions": {
+      "id": "string-functions",
+      "title": "String Functions",
+      "description": "CONCAT, SUBSTRING, UPPER, LOWER, etc.",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 12,
+      "category": "Functions",
+      "relatedConcepts": ["select-basic", "case-expression"],
+      "errorSubtypes": ["string function error"],
+      "practiceProblems": ["problem-26"],
+      "prerequisites": ["select-basic"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/string-functions.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Concatenate strings",
+        "Extract substrings",
+        "Case conversion and trimming"
+      ]
+    },
+    "date-functions": {
+      "id": "date-functions",
+      "title": "Date and Time Functions",
+      "description": "NOW, DATE_FORMAT, DATEDIFF, etc.",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 12,
+      "category": "Functions",
+      "relatedConcepts": ["select-basic"],
+      "errorSubtypes": ["date function error"],
+      "practiceProblems": ["problem-27"],
+      "prerequisites": ["select-basic"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/date-functions.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Get current date/time",
+        "Format dates",
+        "Calculate date differences"
+      ]
+    },
+    "case-expression": {
+      "id": "case-expression",
+      "title": "CASE Expressions",
+      "description": "Conditional logic in SQL queries",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 10,
+      "category": "Functions",
+      "relatedConcepts": ["select-basic", "string-functions"],
+      "errorSubtypes": ["case expression error"],
+      "practiceProblems": ["problem-21"],
+      "prerequisites": ["select-basic"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/case-expression.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Write simple CASE expressions",
+        "Use searched CASE",
+        "Handle ELSE clause"
+      ]
+    },
+    "window-functions": {
+      "id": "window-functions",
+      "title": "Window Functions",
+      "description": "ROW_NUMBER, RANK, LAG, LEAD for analytical queries",
+      "difficulty": "advanced",
+      "estimatedReadTime": 20,
+      "category": "Functions",
+      "relatedConcepts": ["select-basic", "group-by"],
+      "errorSubtypes": ["window function error"],
+      "practiceProblems": ["problem-24", "problem-25"],
+      "prerequisites": ["group-by"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/window-functions.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Understand OVER() clause",
+        "Use PARTITION BY",
+        "Apply ordering and framing"
+      ]
+    },
+    "null-handling": {
+      "id": "null-handling",
+      "title": "NULL Value Handling",
+      "description": "Working with IS NULL, IS NOT NULL, COALESCE",
+      "difficulty": "beginner",
+      "estimatedReadTime": 8,
+      "category": "Data Handling",
+      "relatedConcepts": ["where-clause"],
+      "errorSubtypes": ["null handling error"],
+      "practiceProblems": ["problem-28"],
+      "prerequisites": ["where-clause"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/null-handling.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Test for NULL correctly",
+        "Use IS NULL / IS NOT NULL",
+        "Handle NULL with COALESCE"
+      ]
+    },
+    "order-by": {
+      "id": "order-by",
+      "title": "ORDER BY Clause",
+      "description": "Sorting query results",
+      "difficulty": "beginner",
+      "estimatedReadTime": 8,
+      "category": "Data Handling",
+      "relatedConcepts": ["select-basic"],
+      "errorSubtypes": ["incorrect order by"],
+      "practiceProblems": [],
+      "prerequisites": ["select-basic"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/select-basic.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Sort by one or more columns",
+        "Use ASC and DESC",
+        "Sort by column position"
+      ]
+    },
+    "limit-offset": {
+      "id": "limit-offset",
+      "title": "LIMIT and OFFSET",
+      "description": "Pagination with LIMIT and OFFSET",
+      "difficulty": "beginner",
+      "estimatedReadTime": 6,
+      "category": "Data Handling",
+      "relatedConcepts": ["select-basic", "order-by"],
+      "errorSubtypes": ["incorrect limit usage"],
+      "practiceProblems": [],
+      "prerequisites": ["select-basic"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/select-basic.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Limit result sets",
+        "Implement pagination",
+        "Understand LIMIT placement"
+      ]
+    },
+    "union": {
+      "id": "union",
+      "title": "UNION and UNION ALL",
+      "description": "Combining results from multiple queries",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 10,
+      "category": "Data Handling",
+      "relatedConcepts": ["select-basic"],
+      "errorSubtypes": ["union error"],
+      "practiceProblems": [],
+      "prerequisites": ["select-basic"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/union.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Combine query results",
+        "Understand UNION vs UNION ALL",
+        "Match column requirements"
+      ]
+    },
+    "syntax-error": {
+      "id": "syntax-error",
+      "title": "SQL Syntax Errors",
+      "description": "Common SQL syntax mistakes and how to avoid them",
+      "difficulty": "beginner",
+      "estimatedReadTime": 15,
+      "category": "Errors",
+      "relatedConcepts": ["select-basic"],
+      "errorSubtypes": ["incomplete query", "syntax error near select", "missing commas"],
+      "practiceProblems": [],
+      "prerequisites": [],
+      "nextConcepts": ["select-basic"],
+      "contentLocation": "concepts/syntax-error.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Identify common syntax errors",
+        "Debug error messages",
+        "Prevention strategies"
+      ]
+    },
+    "missing-from": {
+      "id": "missing-from",
+      "title": "Missing FROM Clause",
+      "description": "Understanding why SELECT requires FROM",
+      "difficulty": "beginner",
+      "estimatedReadTime": 5,
+      "category": "Errors",
+      "relatedConcepts": ["select-basic"],
+      "errorSubtypes": ["missing from clause"],
+      "practiceProblems": [],
+      "prerequisites": ["select-basic"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/select-basic.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Understand FROM clause necessity",
+        "Fix missing FROM errors",
+        "Constant SELECT exceptions"
+      ]
+    }
+  },
+  "statistics": {
+    "byDifficulty": {
+      "beginner": 16,
+      "intermediate": 10,
+      "advanced": 4
+    },
+    "byCategory": {
+      "SELECT Basics": 4,
+      "JOINs": 3,
+      "Aggregation": 4,
+      "Subqueries": 4,
+      "Operators": 4,
+      "Functions": 4,
+      "Data Handling": 5,
+      "Errors": 2
+    },
+    "totalPracticeProblems": 32,
+    "coverageByStatus": {
+      "verified": 30,
+      "draft": 0,
+      "deprecated": 0
+    }
+  },
+  "learningPaths": {
+    "beginner": [
+      "select-basic",
+      "where-clause",
+      "logical-operators",
+      "order-by",
+      "limit-offset"
+    ],
+    "intermediate": [
+      "joins",
+      "aggregation",
+      "group-by",
+      "subqueries",
+      "string-functions",
+      "date-functions"
+    ],
+    "advanced": [
+      "correlated-subquery",
+      "window-functions",
+      "cte",
+      "having-clause"
+    ]
+  }
+}

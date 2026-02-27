@@ -1,29 +1,90 @@
-# Creating Tables and Indexes
+# CREATE TABLE
 
 ## Definition
-Using CREATE TABLE, ALTER TABLE, CREATE INDEX, and DROP statements
+
+A cursor is like a pointer that allows you to iterate through rows returned by a query one at a time, rather than retrieving all rows at once.
 
 ## Explanation
-Storing Data: Disks aTul File,s 32~ Linked List of Pages One possibility is to maintain a heap file as a doubly linked list of pages. The DBMS can remember where the first page is located by maintaining a table containing pairs of (heap_file_name, page_Laddr) in a known location on disk. We call the first page of the file the header page. An important task is to maintain information about empty slots created by deleting a record from the heap file. This task has two distinct parts: how to keep track of free space within a page and how to keep track of pages that have some free space. We consider the first part in Section 9.6. The second part can be addressed by maintaining a doubly linked list of pages with free space and a doubly linked list of full pages; together, these lists contain all pages in the heap file. This organization is illustrated in Figure 9.4; note that each pointer is really a page id. Data page Data page Linked list of full pages Linked list of pages
 
-file. This organization is illustrated in Figure 9.4; note that each pointer is really a page id. Data page Data page Linked list of full pages Linked list of pages with free space page Data Data page Figure 9.4 Heap File Organization with a Linked List If a new page is required, it is obtained by making a request to the disk space manager and then added to the list of pages in the file (probably as a page with free space, because it is unlikely that the new record will take up all the space on the page). If a page is to be deleted from the heap file, it is removed from the list and the disk space Inanager is told to deallocate it. (Note that the scheme can easily be generalized to allocate or deallocate a sequence of several pages and maintain a doubly linked list of these page sequences.) One disadvantage of this scheIue is that virtually all pages in a file will be on the free list if records are of variable length, because it
-
-these page sequences.) One disadvantage of this scheIue is that virtu
+Cursors are essential when dealing with queries that return multiple rows because they allow you to process each row individually. This is particularly useful in applications where you need to perform operations on each row or display them one by one. Here’s how it works step-by-step:
+1. **Declare a Cursor**: You define the cursor and specify the query that will be executed.
+2. **Open the Cursor**: The cursor is opened, which executes the associated query and positions it before the first row of results.
+3. **Fetch Rows**: Using the FETCH command, you can read each row into host language variables one by one.
+4. **Close the Cursor**: Once all rows are processed, you close the cursor to free up resources.
 
 ## Examples
-### Example 1: INSERT Example
+
+### Basic Usage
+
 ```sql
-insert a typical record, we must retrieve and exaInine several pages on the free list before we find one with enough free space. The directory-based heap file organization that we discuss next addresses this problem.
-
-326 Directory of Pages CHAPTER,g An alternative to a linked list of pages is to maintain a directory of pages. The DBMS must remember where the first directory page of each heap file is located. The directory is itself a collection of pages and is shown as a linked list in Figure 9.5. (Other organizations are possible for the directory itself, of course.) Header page Data page 2 Data page N DIRECTORY Figure 9.5 Heap File Organization with a Directory Each directory entry identifies a page (or a sequence of pages) in the heap file. As the heap file grows or shrinks, the number of entries in the directory-and possibly the number of pages in the directory itself--grows or shrinks corre- spondingly. Note that since each directory entry is quite small in comparison to a typical page, the size of the directory is likely to be very small in comparison to the size of the heap file. Free space can be managed by maintaining a bit per entry, indicating whether the corresponding page has any free space, or a count
-
-to the size of the heap file. Free space can be managed by maintaining a bit per entry, indicating whether the corresponding page has any free space, or a count per entry, indicating the amount of free space on the page. If the file contains variable-length records, we can examine the free space count for an entry to determine if the record fits on the page pointed to by the entry. Since several entries fit on a directory page, we can efficiently search for a data page with enough space to hold a record to be inserted. 9.6 PAGE FORMATS The page abstraction is appropriate when dealing with I/O issue-s, but higher levels of the DBMS see data a..<;
+-- Declare a cursor
+DECLARE sinfo CURSOR FOR SELECT S.sname, S.age FROM Sailors S WHERE S.rating > :c_minrating;
+-- Open the cursor
+OPEN sinfo;
+-- Fetch rows into host variables
+FETCH sinfo INTO :csname, :cage;
 ```
-Example INSERT statement from textbook.
+
+This example demonstrates how to declare a cursor for a query that returns multiple rows and fetch each row one by one.
+
+### Practical Example
+
+```sql
+-- Real-world scenario: Fetching customer details FROM a database DECLARE custinfo CURSOR FOR SELECT C.cust_id, C.cust_name FROM Customers C WHERE C.balance > :c_minbalance; OPEN custinfo; FETCH custinfo INTO :cust_id, :cust_name;
+```
+
+This practical example shows how you might use a cursor in an application to fetch customer details based on a balance threshold.
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Forgetting to open the cursor before fetching rows.
+
+**Incorrect:**
+
+```sql
+-- Incorrect FETCH sinfo INTO :csname, :cage;
+```
+
+**Correct:**
+
+```sql
+-- Correct OPEN sinfo; FETCH sinfo INTO :csname, :cage;
+```
+
+**Why this happens:** Always remember to open the cursor with OPEN before attempting to fetch rows. Failing to do so will result in an error.
+
+### Not checking SQLCODE or SQLSTATE after a FETCH.
+
+**Incorrect:**
+
+```sql
+-- Incorrect FETCH sinfo INTO :csname, :cage;
+```
+
+**Correct:**
+
+```sql
+-- Correct FETCH sinfo INTO :csname, :cage; IF SQLCODE = 0 THEN -- Continue processing rows END IF;
+```
+
+**Why this happens:** It's crucial to check if there are more rows after each fetch. Failing to do so can lead to infinite loops or accessing invalid data.
 
 ---
-*Source: dbms-ramakrishnan-3rd-edition, Pages 360, 361, 362, 363, 364, 365, 366, 367, 368, 369, 370, 371*
+
+## Practice
+
+**Question:** Write a SQL script that declares a cursor, opens it, and fetches all rows from the Employees table where the department_id is greater than 50.
+
+**Solution:** -- Solution
+DECLARE deptinfo CURSOR FOR SELECT emp_id, emp_name FROM Employees WHERE department_id > :c_deptid;
+OPEN deptinfo;
+FETCH deptinfo INTO :emp_id, :emp_name;
+WHILE SQLCODE = 0 DO -- Process each row here
+FETCH deptinfo INTO :emp_id, :emp_name;
+END WHILE;
+CLOSE deptinfo;
+
+
+---
+
+*Source: Database Management Systems, 3rd Edition by Ramakrishnan & Gehrke*

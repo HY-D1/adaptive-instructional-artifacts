@@ -1,0 +1,82 @@
+{
+  "success": true,
+  "pdf_path": "raw_pdf/murachs-mysql-3rd-edition.pdf",
+  "timestamp": "2026-02-27T04:58:45.968670+00:00",
+  "outputs": {
+    "concept_manifest": "/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/public/textbook-static/concept-manifest.json",
+    "concepts_readme": "/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/public/textbook-static/concepts/murachs-mysql-3rd-edition/README.md",
+    "extraction": "/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/public/textbook-static/murachs-mysql-3rd-edition-extraction.json",
+    "educational_notes": "/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/public/textbook-static/murachs-mysql-3rd-edition-educational-notes.json",
+    "sqladapt": "/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/public/textbook-static/murachs-mysql-3rd-edition-sqladapt.json",
+    "study_guide": "/Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/apps/web/public/textbook-static/murachs-mysql-3rd-edition-study-guide.md"
+  },
+  "errors": [],
+  "stats": {
+    "pages_extracted": 621,
+    "concepts_generated": 6,
+    "extraction_method": "pymupdf-direct",
+    "llm_enhanced": true,
+    "content_validation": {
+      "total": 6,
+      "relevant": 1,
+      "irrelevant": 5
+    }
+  },
+  "content_validation": {
+    "concepts": {
+      "content": {
+        "score": 0.3,
+        "sql_score": 1.0,
+        "concept_score": 1.0,
+        "non_sql_penalty": 0.5,
+        "is_relevant": true,
+        "analysis": "SQL content"
+      },
+      "stores-the-output-of-the-general-and-slow-query-logs-in-a-table": {
+        "score": 0.08,
+        "sql_score": 0.1,
+        "concept_score": 0.1,
+        "non_sql_penalty": 0.0,
+        "is_relevant": false,
+        "analysis": "Non-SQL content"
+      },
+      "logs-errors-warnings-and-informational-messages": {
+        "score": 0,
+        "sql_score": 0.0,
+        "concept_score": 0.0,
+        "non_sql_penalty": 0.0,
+        "is_relevant": false,
+        "analysis": "Non-SQL content"
+      },
+      "deletes-binary-log-files-that-are-more-than-7-days-old": {
+        "score": 0,
+        "sql_score": 0.0,
+        "concept_score": 0.0,
+        "non_sql_penalty": 0.0,
+        "is_relevant": false,
+        "analysis": "Non-SQL content"
+      },
+      "sets-the-maximum-binary-log-file-size-to-1mb": {
+        "score": 0.16,
+        "sql_score": 0.2,
+        "concept_score": 0.2,
+        "non_sql_penalty": 0.0,
+        "is_relevant": false,
+        "analysis": "Non-SQL content"
+      },
+      "writes-queries-to-the-slow-query-log-if-they-take-longer-than-5-seconds": {
+        "score": 0.08,
+        "sql_score": 0.1,
+        "concept_score": 0.1,
+        "non_sql_penalty": 0.0,
+        "is_relevant": false,
+        "analysis": "Non-SQL content"
+      }
+    },
+    "summary": {
+      "total": 6,
+      "relevant": 1,
+      "irrelevant": 5
+    }
+  }
+}

@@ -1,39 +1,85 @@
-# Views
+# SQL Views
 
 ## Definition
-Creating and using virtual tables based on SELECT queries
+
+A SQL view is a virtual table that is based on the result-set of a SQL query. It allows you to simplify complex queries and provide a layer of abstraction between the application and the database.
 
 ## Explanation
-Tree~StT7lChtTed IndeTing 345 and the leaf nodes contain the data entries. Since the tree structure grows and shrinks dynamically, it is not feasible to allocate the leaf pages sequentially as in ISAM, where the set of primary leaf pages was static. To retrieve all leaf pages efficiently, we have to link them using page pointers. By organizing them into a doubly linked list, we can easily traverse the sequence of leaf pages (sometimes called the sequence set) in either direction. This structure is illustrated in Figure 10.7.2 Index entries (To direct search) Index file Data entries ("Sequence set") Figure 10.7 Structure of a B+ 'n'ee The following are some of the main characteristics of a B+ tree: • Operations (insert, delete) on the tree keep it balanced. • A minimum occupancy of 50 percent is guaranteed for each node except the root if the deletion algorithm discussed in Section 10.6 is implemented. However, deletion is often implemented by simply locating the data entry and removing it, without adjusting the tree &'3 needed to guarantee the 50 percent occupancy, because files
 
-is implemented. However, deletion is often implemented by simply locating the data entry and removing it, without adjusting the tree &'3 needed to guarantee the 50 percent occupancy, because files typically grow rather than shrink. l1li Searching for a record requires just a traversal from the root to the appro- priate leaf. Vie refer to the length of a path from the root to a leaf any leaf, because the tree is balanced as the height of the tree. For example, a tree with only a leaf level and a single index level, such as the tree shown in Figure 10.9, has height 1, and a tree that h&'3 only the root node has height O. Because of high fan-out, the height of a B+ tree is rarely more than 3 or 4. \Ve will study B+ trees in which every node contains Tn entries, where d :::; nJ, :::; 2d. The value d is a parameter of the B+ tree, called the order of the .._- 2If the tree is created by IYll.lk..
+SQL views are incredibly useful for several reasons:
+1. **Simplification**: Complex queries can be encapsulated in a view, making them easier to understand and use throughout your application.
+2. **Security**: Views can restrict access to certain data by only showing specific columns or rows, enhancing security.
+3. **Consistency**: If the underlying data changes, views automatically update without needing any changes to the application code using them.
+4. **Performance**: Some databases optimize queries on views for better performance.
+To create a view, you use the `CREATE VIEW` statement followed by the view name and the `AS` keyword, then the SQL query that defines the view.
 
 ## Examples
-### Example 1: INSERT Example
+
+### Basic Usage
+
 ```sql
-INSERT The algorithm for insertion takes an entry, finds the leaf node where it belongs, and inserts it there. Pseudocode for the B+ tree insertion algorithm is given in Figure HUG. The basic idea behind the algorithm is that we recursively insert the entry by calling the insert algorithm on the appropriate child node. Usually, this procedure results in going down to the leaf node where the entry belongs, placing the entry there, and returning all the way back to the root node. Occasionally a node is full and it must be split. When the node is split, an entry pointing to the node created by the split must be inserted into its parent;
+CREATE VIEW employee_details AS
+SELECT first_name, last_name, email FROM employees;
 ```
-Example INSERT statement from textbook.
 
-### Example 2: INSERT Example
+This example creates a view named `employee_details` that shows only the first name, last name, and email of all employees.
+
+### Practical Example
+
 ```sql
-insert entry 8*, it belongs in
-
-the height of the tree increa..<;
+CREATE VIEW sales_summary AS
+SELECT product_id, SUM(quantity) as total_quantity FROM sales GROUP BY product_id;
 ```
-Example INSERT statement from textbook.
 
-### Example 3: DELETE Example
-```sql
-DELETE The algorithm for deletion takes an entry, finds the leaf node where it belongs, and deletes it. Pseudocode for the B+ tree deletion algorithm is given in Figure 10.15. The basic idea behind the algorithm is that we recursively delete the entry by calling the delete algorithm on the appropriate child node. We usually go down to the leaf node where the entry belongs, remove the entry from there, and return all the way back to the root node. Occasionally a node is at minimum occupancy before the deletion, and the deletion causes it to go below the occupancy threshold. When this happens, we must either redistribute entries from an adjacent sibling or merge the node with a sibling to maintain minimum occupancy. If entries are redistributed between two nodes, their parent
-
-happens, we must either redistribute entries from an adjacent sibling or merge the node with a sibling to maintain minimum occupancy. If entries are redistributed between two nodes, their parent node must be updated to reflect this;
-```
-Example DELETE statement from textbook.
+This practical example creates a view `sales_summary` that shows the total quantity sold for each product.
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Forgetting to use `AS` after `CREATE VIEW`
+
+**Incorrect:**
+
+```sql
+CREATE VIEW employee_details SELECT first_name, last_name, email FROM employees;
+```
+
+**Correct:**
+
+```sql
+CREATE VIEW employee_details AS
+SELECT first_name, last_name, email FROM employees;
+```
+
+**Why this happens:** The `AS` keyword is crucial to define the view's content. Without it, SQL will throw an error.
+
+### Using `SELECT *` in a view
+
+**Incorrect:**
+
+```sql
+CREATE VIEW all_employees AS
+SELECT * FROM employees;
+```
+
+**Correct:**
+
+```sql
+CREATE VIEW employee_details AS
+SELECT first_name, last_name, email FROM employees;
+```
+
+**Why this happens:** While it's tempting to use `SELECT *`, specifying only the necessary columns makes the view more efficient and easier to understand.
 
 ---
-*Source: dbms-ramakrishnan-3rd-edition, Pages 380, 381, 382, 383, 384, 385, 386, 387, 388, 389*
+
+## Practice
+
+**Question:** Create a view named `customer_orders` that shows the customer ID, order date, and total amount for each order.
+
+**Solution:** CREATE VIEW customer_orders AS
+SELECT c.customer_id, o.order_date, SUM(od.quantity * od.price) as total_amount FROM customers c JOIN orders o ON c.customer_id = o.customer_id JOIN order_details od ON o.order_id = od.order_id GROUP BY c.customer_id, o.order_date;
+
+
+---
+
+*Source: Database Management Systems, 3rd Edition by Ramakrishnan & Gehrke*

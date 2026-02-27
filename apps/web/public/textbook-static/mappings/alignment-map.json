@@ -1,0 +1,303 @@
+{
+  "schemaVersion": "alignment-map-v1",
+  "description": "Maps SQL error subtypes to educational concept IDs",
+  "createdAt": "2026-02-26T00:00:00Z",
+  "totalMappings": 23,
+  "mappings": {
+    "incomplete_query": {
+      "error_subtype_id": 1,
+      "concept_ids": [
+        "select-basic",
+        "syntax-error"
+      ],
+      "confidence": "high",
+      "teaching_strategy": "start_fundamentals",
+      "remediation_order": [
+        "select-basic",
+        "syntax-error"
+      ]
+    },
+    "incorrect_select_usage": {
+      "error_subtype_id": 2,
+      "concept_ids": [
+        "select-basic",
+        "distinct"
+      ],
+      "confidence": "high",
+      "teaching_strategy": "select_mastery",
+      "remediation_order": [
+        "select-basic",
+        "distinct"
+      ]
+    },
+    "incorrect_wildcard_usage": {
+      "error_subtype_id": 3,
+      "concept_ids": [
+        "select-basic"
+      ],
+      "confidence": "medium",
+      "teaching_strategy": "explicit_columns",
+      "remediation_order": [
+        "select-basic"
+      ]
+    },
+    "missing_comma_in_select": {
+      "error_subtype_id": 4,
+      "concept_ids": [
+        "select-basic",
+        "syntax-error"
+      ],
+      "confidence": "verified",
+      "teaching_strategy": "syntax_drill",
+      "remediation_order": [
+        "syntax-error",
+        "select-basic"
+      ]
+    },
+    "extra_comma_in_select": {
+      "error_subtype_id": 5,
+      "concept_ids": [
+        "select-basic",
+        "syntax-error"
+      ],
+      "confidence": "verified",
+      "teaching_strategy": "syntax_drill",
+      "remediation_order": [
+        "syntax-error",
+        "select-basic"
+      ]
+    },
+    "missing_where_clause": {
+      "error_subtype_id": 6,
+      "concept_ids": [
+        "where-clause"
+      ],
+      "confidence": "high",
+      "teaching_strategy": "filtering_basics",
+      "remediation_order": [
+        "where-clause"
+      ]
+    },
+    "incorrect_operator_usage": {
+      "error_subtype_id": 7,
+      "concept_ids": [
+        "where-clause",
+        "logical-operators",
+        "comparison-operators"
+      ],
+      "confidence": "medium",
+      "teaching_strategy": "operator_mastery",
+      "remediation_order": [
+        "logical-operators",
+        "where-clause"
+      ]
+    },
+    "incorrect_function_usage": {
+      "error_subtype_id": 8,
+      "concept_ids": [
+        "string-functions",
+        "date-functions",
+        "aggregate-functions"
+      ],
+      "confidence": "medium",
+      "teaching_strategy": "function_basics",
+      "remediation_order": [
+        "string-functions",
+        "date-functions"
+      ]
+    },
+    "incorrect_parentheses": {
+      "error_subtype_id": 9,
+      "concept_ids": [
+        "logical-operators"
+      ],
+      "confidence": "high",
+      "teaching_strategy": "precedence_drill",
+      "remediation_order": [
+        "logical-operators"
+      ]
+    },
+    "incorrect_null_comparison": {
+      "error_subtype_id": 10,
+      "concept_ids": [
+        "null-handling",
+        "is-null-operator"
+      ],
+      "confidence": "verified",
+      "teaching_strategy": "null_mastery",
+      "remediation_order": [
+        "null-handling"
+      ]
+    },
+    "incorrect_join_type": {
+      "error_subtype_id": 11,
+      "concept_ids": [
+        "joins",
+        "inner-join",
+        "outer-join"
+      ],
+      "confidence": "high",
+      "teaching_strategy": "join_types",
+      "remediation_order": [
+        "joins",
+        "inner-join",
+        "outer-join"
+      ]
+    },
+    "missing_join_condition": {
+      "error_subtype_id": 12,
+      "concept_ids": [
+        "joins",
+        "join-condition-missing",
+        "on-clause"
+      ],
+      "confidence": "verified",
+      "teaching_strategy": "join_conditions",
+      "remediation_order": [
+        "joins",
+        "join-condition-missing"
+      ]
+    },
+    "incorrect_join_table_order": {
+      "error_subtype_id": 13,
+      "concept_ids": [
+        "joins"
+      ],
+      "confidence": "medium",
+      "teaching_strategy": "join_basics",
+      "remediation_order": [
+        "joins"
+      ]
+    },
+    "missing_group_by": {
+      "error_subtype_id": 14,
+      "concept_ids": [
+        "group-by",
+        "group-by-error",
+        "aggregation"
+      ],
+      "confidence": "verified",
+      "teaching_strategy": "group_by_mastery",
+      "remediation_order": [
+        "aggregation",
+        "group-by"
+      ]
+    },
+    "incorrect_group_by_columns": {
+      "error_subtype_id": 15,
+      "concept_ids": [
+        "group-by",
+        "group-by-error"
+      ],
+      "confidence": "high",
+      "teaching_strategy": "group_by_drill",
+      "remediation_order": [
+        "group-by"
+      ]
+    },
+    "having_without_group_by": {
+      "error_subtype_id": 16,
+      "concept_ids": [
+        "having-clause",
+        "group-by"
+      ],
+      "confidence": "verified",
+      "teaching_strategy": "having_basics",
+      "remediation_order": [
+        "group-by",
+        "having-clause"
+      ]
+    },
+    "incorrect_aggregate_function": {
+      "error_subtype_id": 17,
+      "concept_ids": [
+        "aggregation",
+        "count-function",
+        "sum-function",
+        "avg-function"
+      ],
+      "confidence": "medium",
+      "teaching_strategy": "aggregate_functions",
+      "remediation_order": [
+        "aggregation"
+      ]
+    },
+    "incorrect_union_usage": {
+      "error_subtype_id": 18,
+      "concept_ids": [
+        "union",
+        "union-all"
+      ],
+      "confidence": "high",
+      "teaching_strategy": "set_operations",
+      "remediation_order": [
+        "union",
+        "union-all"
+      ]
+    },
+    "incompatible_columns_in_union": {
+      "error_subtype_id": 19,
+      "concept_ids": [
+        "union",
+        "data-types"
+      ],
+      "confidence": "medium",
+      "teaching_strategy": "union_compatibility",
+      "remediation_order": [
+        "union"
+      ]
+    },
+    "incorrect_subquery_usage": {
+      "error_subtype_id": 20,
+      "concept_ids": [
+        "subqueries",
+        "in-operator",
+        "exists-operator"
+      ],
+      "confidence": "high",
+      "teaching_strategy": "subquery_basics",
+      "remediation_order": [
+        "subqueries"
+      ]
+    },
+    "correlated_subquery_error": {
+      "error_subtype_id": 21,
+      "concept_ids": [
+        "correlated-subquery",
+        "subqueries"
+      ],
+      "confidence": "medium",
+      "teaching_strategy": "correlated_subqueries",
+      "remediation_order": [
+        "subqueries",
+        "correlated-subquery"
+      ]
+    },
+    "ambiguous_column_reference": {
+      "error_subtype_id": 22,
+      "concept_ids": [
+        "alias",
+        "ambiguous-column",
+        "table-alias"
+      ],
+      "confidence": "verified",
+      "teaching_strategy": "aliasing",
+      "remediation_order": [
+        "alias",
+        "ambiguous-column"
+      ]
+    },
+    "undefined_alias": {
+      "error_subtype_id": 23,
+      "concept_ids": [
+        "alias",
+        "column-alias"
+      ],
+      "confidence": "high",
+      "teaching_strategy": "alias_scope",
+      "remediation_order": [
+        "alias"
+      ]
+    }
+  }
+}
