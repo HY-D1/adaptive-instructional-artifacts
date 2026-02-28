@@ -29,7 +29,7 @@ function validateConceptRegistry(data: unknown): ConceptRegistry {
     const concept = c as Record<string, unknown>;
     return (
       typeof concept.conceptId === 'string' &&
-      typeof concept.name === 'string' &&
+      typeof concept.title === 'string' &&
       Array.isArray(concept.tags)
     );
   }) as ConceptRegistryEntry[];

@@ -26,6 +26,11 @@ interface HintSourceStatusProps {
   learnerId: string;
   showDetails?: boolean;
   className?: string;
+  /**
+   * For student view, only show AI and Textbook sources.
+   * Default is true (student mode).
+   */
+  studentMode?: boolean;
 }
 
 type SourceConfig = {
@@ -36,7 +41,7 @@ type SourceConfig = {
   color: string;
 };
 
-const SOURCES: SourceConfig[] = [
+const ALL_SOURCES: SourceConfig[] = [
   {
     key: 'sqlEngage',
     label: 'SQL-Engage',
@@ -67,13 +72,35 @@ const SOURCES: SourceConfig[] = [
   }
 ];
 
+// For student mode, only show AI and Textbook
+const STUDENT_SOURCES: SourceConfig[] = [
+  {
+    key: 'textbook',
+    label: 'Your Textbook',
+    icon: <BookOpen className="w-4 h-4" />,
+    description: 'Personal learning notes',
+    color: 'text-green-600 bg-green-50 border-green-200'
+  },
+  {
+    key: 'llm',
+    label: 'AI Assistant',
+    icon: <Brain className="w-4 h-4" />,
+    description: 'LLM-powered explanations',
+    color: 'text-purple-600 bg-purple-50 border-purple-200'
+  }
+];
+
 export function HintSourceStatus({ 
   learnerId, 
   showDetails = false,
-  className 
+  className,
+  studentMode = true
 }: HintSourceStatusProps) {
   const [resources, setResources] = useState<AvailableResources | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  
+  // Select appropriate sources based on mode
+  const SOURCES = studentMode ? STUDENT_SOURCES : ALL_SOURCES;
   
   useEffect(() => {
     const check = () => {
@@ -197,6 +224,8 @@ export function HintSourceStatus({
           ? "🤖 AI-powered hints are active"
           : resources.textbook
           ? "📚 Hints include references from your Textbook"
+          : studentMode
+          ? "💡 Hints will use AI and Textbook when available"
           : "💡 Using curated SQL-Engage hint dataset"
         }
       </p>

@@ -80,7 +80,7 @@ test.describe('@weekly Enhanced Hint System', () => {
     await expect(page.locator('text=/Standard hints|hint source/i').first()).toBeVisible();
   });
 
-  test('@weekly maintains backward compatibility with hint logging', async ({ page }) => {
+  test('@weekly @flaky maintains backward compatibility with hint logging', async ({ page }) => {
     await page.goto('/practice');
     await expect(page.getByRole('button', { name: 'Run Query' })).toBeEnabled({ timeout: 10000 });
 

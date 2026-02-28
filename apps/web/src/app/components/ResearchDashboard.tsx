@@ -83,6 +83,7 @@ import { InteractionEvent, LearnerProfile, ExperimentCondition, PdfIndexDocument
 import { orchestrator, ReplayDecisionPoint, AutoEscalationMode } from '../lib/adaptive-orchestrator';
 import { checkOllamaHealth, OLLAMA_MODEL } from '../lib/llm-client';
 import { loadOrBuildPdfIndex, uploadPdfAndBuildIndex } from '../lib/pdf-index-loader';
+import { isDemoMode, getDemoModeMessage, DEMO_MODE_VERSION } from '../lib/demo-mode';
 import { createEventId } from '../lib/event-id';
 
 const experimentConditions: ExperimentCondition[] = [
@@ -981,15 +982,21 @@ export function ResearchDashboard() {
             <Card className="p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium">LLM Health Check</p>
-                  <p className="text-xs text-gray-500">Target model: {OLLAMA_MODEL}</p>
+                  <p className="text-sm font-medium">
+                    {isDemoMode() ? '🎓 Demo Mode' : 'LLM Health Check'}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {isDemoMode() ? DEMO_MODE_VERSION : `Target model: ${OLLAMA_MODEL}`}
+                  </p>
                   <p className={`text-xs ${llmHealthOk === null ? 'text-gray-600' : llmHealthOk ? 'text-emerald-700' : 'text-red-700'}`}>
-                    {llmHealthMessage}
+                    {isDemoMode() ? getDemoModeMessage() : llmHealthMessage}
                   </p>
                 </div>
-                <Button size="sm" variant="outline" onClick={handleLLMHealthCheck} disabled={isCheckingLLM}>
-                  {isCheckingLLM ? 'Checking...' : 'Test LLM'}
-                </Button>
+                {!isDemoMode() && (
+                  <Button size="sm" variant="outline" onClick={handleLLMHealthCheck} disabled={isCheckingLLM}>
+                    {isCheckingLLM ? 'Checking...' : 'Test LLM'}
+                  </Button>
+                )}
               </div>
             </Card>
             <Card className="p-3">

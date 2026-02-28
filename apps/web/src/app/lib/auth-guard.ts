@@ -18,8 +18,8 @@ export const ROUTES = {
 
 // Role-based route access configuration
 const ROLE_ROUTES: Record<UserRole, string[]> = {
-  student: ['/', '/textbook'],
-  instructor: ['/', '/textbook', '/research'],
+  student: ['/', '/textbook', '/concepts', '/practice'],
+  instructor: ['/', '/textbook', '/research', '/instructor-dashboard'],
 };
 
 /**

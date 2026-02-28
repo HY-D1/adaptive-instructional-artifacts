@@ -1,0 +1,337 @@
+{
+  "success": true,
+  "pdf_path": "raw_pdf/murachs-mysql-3rd-edition.pdf",
+  "timestamp": "2026-02-27T18:59:26.411741+00:00",
+  "outputs": {
+    "concept_manifest": "output/both-pdfs/concept-manifest.json",
+    "concepts_readme": "output/both-pdfs/concepts/murachs-mysql-3rd-edition/README.md",
+    "extraction": "output/both-pdfs/murachs-mysql-3rd-edition-extraction.json",
+    "educational_notes": "output/both-pdfs/murachs-mysql-3rd-edition-educational-notes.json",
+    "sqladapt": "output/both-pdfs/murachs-mysql-3rd-edition-sqladapt.json",
+    "mapping_alignment_map": "output/both-pdfs/mappings/alignment-map.json",
+    "mapping_concept_registry": "output/both-pdfs/mappings/concept-registry.json",
+    "mapping_error_subtypes": "output/both-pdfs/mappings/error-subtypes.json",
+    "study_guide": "output/both-pdfs/murachs-mysql-3rd-edition-study-guide.md"
+  },
+  "errors": [],
+  "stats": {
+    "pages_extracted": 621,
+    "concepts_generated": 6,
+    "extraction_method": "pymupdf-direct",
+    "llm_enhanced": true,
+    "content_validation": {
+      "total": 6,
+      "relevant": 1,
+      "irrelevant": 5
+    }
+  },
+  "content_validation": {
+    "concepts": {
+      "content": {
+        "score": 0.57,
+        "is_relevant": true,
+        "rule_based": {
+          "score": 0.3,
+          "sql_score": 1.0,
+          "concept_score": 1.0,
+          "non_sql_penalty": 0.5,
+          "is_relevant": true,
+          "analysis": "SQL content"
+        },
+        "ai_assisted": {
+          "concept_id": "content",
+          "title": "Content",
+          "text_length": 1207500,
+          "factors": {
+            "keyword_match": {
+              "score": 1.0,
+              "matches": 1,
+              "total_keywords": 1,
+              "keywords": [
+                "content"
+              ]
+            },
+            "sql_density": {
+              "score": 1.0,
+              "sql_patterns_found": 5
+            },
+            "educational_quality": {
+              "score": 1.0,
+              "markers_found": 3
+            },
+            "negative_indicators": {
+              "penalty": 0.25,
+              "issues": [
+                "JDBC content"
+              ]
+            }
+          },
+          "relevance_score": 0.75,
+          "is_relevant": true,
+          "recommendation": "\u2705 High quality match. Proceed with LLM enhancement."
+        },
+        "recommendation": "\u2705 High quality match. Proceed with LLM enhancement."
+      },
+      "stores-the-output-of-the-general-and-slow-query-logs-in-a-table": {
+        "score": 0.08,
+        "is_relevant": false,
+        "rule_based": {
+          "score": 0.08,
+          "sql_score": 0.1,
+          "concept_score": 0.1,
+          "non_sql_penalty": 0.0,
+          "is_relevant": false,
+          "analysis": "Non-SQL content"
+        },
+        "ai_assisted": {
+          "concept_id": "stores-the-output-of-the-general-and-slow-query-logs-in-a-table",
+          "title": "stores the output of the general and slow query logs in a table",
+          "text_length": 20,
+          "factors": {
+            "keyword_match": {
+              "score": 0.22,
+              "matches": 2,
+              "total_keywords": 9,
+              "keywords": [
+                "and",
+                "stores",
+                "general",
+                "table",
+                "output",
+                "the",
+                "slow",
+                "logs",
+                "query"
+              ]
+            },
+            "sql_density": {
+              "score": 0.0,
+              "sql_patterns_found": 0
+            },
+            "educational_quality": {
+              "score": 0.0,
+              "markers_found": 0
+            },
+            "negative_indicators": {
+              "penalty": 0.0,
+              "issues": []
+            }
+          },
+          "relevance_score": 0.08,
+          "is_relevant": false,
+          "recommendation": "\u274c Poor match.  detected. Skip or remap pages."
+        },
+        "recommendation": "\u274c Poor match.  detected. Skip or remap pages."
+      },
+      "logs-errors-warnings-and-informational-messages": {
+        "score": 0.0,
+        "is_relevant": false,
+        "rule_based": {
+          "score": 0,
+          "sql_score": 0.0,
+          "concept_score": 0.0,
+          "non_sql_penalty": 0.0,
+          "is_relevant": false,
+          "analysis": "Non-SQL content"
+        },
+        "ai_assisted": {
+          "concept_id": "logs-errors-warnings-and-informational-messages",
+          "title": "logs errors, warnings, and informational messages",
+          "text_length": 25,
+          "factors": {
+            "keyword_match": {
+              "score": 0.0,
+              "matches": 0,
+              "total_keywords": 8,
+              "keywords": [
+                "and",
+                "messages",
+                "warnings",
+                "logs",
+                "errors,",
+                "errors",
+                "warnings,",
+                "informational"
+              ]
+            },
+            "sql_density": {
+              "score": 0.0,
+              "sql_patterns_found": 0
+            },
+            "educational_quality": {
+              "score": 0.0,
+              "markers_found": 0
+            },
+            "negative_indicators": {
+              "penalty": 0.0,
+              "issues": []
+            }
+          },
+          "relevance_score": 0,
+          "is_relevant": false,
+          "recommendation": "\u274c Poor match.  detected. Skip or remap pages."
+        },
+        "recommendation": "\u274c Poor match.  detected. Skip or remap pages."
+      },
+      "deletes-binary-log-files-that-are-more-than-7-days-old": {
+        "score": 0.04,
+        "is_relevant": false,
+        "rule_based": {
+          "score": 0,
+          "sql_score": 0.0,
+          "concept_score": 0.0,
+          "non_sql_penalty": 0.0,
+          "is_relevant": false,
+          "analysis": "Non-SQL content"
+        },
+        "ai_assisted": {
+          "concept_id": "deletes-binary-log-files-that-are-more-than-7-days-old",
+          "title": "deletes binary log files that are more than 7 days old",
+          "text_length": 23,
+          "factors": {
+            "keyword_match": {
+              "score": 0.2,
+              "matches": 2,
+              "total_keywords": 10,
+              "keywords": [
+                "that",
+                "more",
+                "old",
+                "files",
+                "log",
+                "days",
+                "binary",
+                "than",
+                "deletes",
+                "are"
+              ]
+            },
+            "sql_density": {
+              "score": 0.0,
+              "sql_patterns_found": 0
+            },
+            "educational_quality": {
+              "score": 0.0,
+              "markers_found": 0
+            },
+            "negative_indicators": {
+              "penalty": 0.0,
+              "issues": []
+            }
+          },
+          "relevance_score": 0.07,
+          "is_relevant": false,
+          "recommendation": "\u274c Poor match.  detected. Skip or remap pages."
+        },
+        "recommendation": "\u274c Poor match.  detected. Skip or remap pages."
+      },
+      "sets-the-maximum-binary-log-file-size-to-1mb": {
+        "score": 0.12,
+        "is_relevant": false,
+        "rule_based": {
+          "score": 0.16,
+          "sql_score": 0.2,
+          "concept_score": 0.2,
+          "non_sql_penalty": 0.0,
+          "is_relevant": false,
+          "analysis": "Non-SQL content"
+        },
+        "ai_assisted": {
+          "concept_id": "sets-the-maximum-binary-log-file-size-to-1mb",
+          "title": "sets the maximum binary log file size to 1MB",
+          "text_length": 27,
+          "factors": {
+            "keyword_match": {
+              "score": 0.25,
+              "matches": 2,
+              "total_keywords": 8,
+              "keywords": [
+                "file",
+                "log",
+                "the",
+                "sets",
+                "binary",
+                "maximum",
+                "size",
+                "1mb"
+              ]
+            },
+            "sql_density": {
+              "score": 0.0,
+              "sql_patterns_found": 0
+            },
+            "educational_quality": {
+              "score": 0.0,
+              "markers_found": 0
+            },
+            "negative_indicators": {
+              "penalty": 0.0,
+              "issues": []
+            }
+          },
+          "relevance_score": 0.09,
+          "is_relevant": false,
+          "recommendation": "\u274c Poor match.  detected. Skip or remap pages."
+        },
+        "recommendation": "\u274c Poor match.  detected. Skip or remap pages."
+      },
+      "writes-queries-to-the-slow-query-log-if-they-take-longer-than-5-seconds": {
+        "score": 0.09,
+        "is_relevant": false,
+        "rule_based": {
+          "score": 0.08,
+          "sql_score": 0.1,
+          "concept_score": 0.1,
+          "non_sql_penalty": 0.0,
+          "is_relevant": false,
+          "analysis": "Non-SQL content"
+        },
+        "ai_assisted": {
+          "concept_id": "writes-queries-to-the-slow-query-log-if-they-take-longer-than-5-seconds",
+          "title": "writes queries to the slow query log if they take longer than 5 seconds",
+          "text_length": 194,
+          "factors": {
+            "keyword_match": {
+              "score": 0.27,
+              "matches": 3,
+              "total_keywords": 11,
+              "keywords": [
+                "seconds",
+                "queries",
+                "longer",
+                "take",
+                "slow",
+                "the",
+                "log",
+                "they",
+                "than",
+                "writes"
+              ]
+            },
+            "sql_density": {
+              "score": 0.0,
+              "sql_patterns_found": 0
+            },
+            "educational_quality": {
+              "score": 0.0,
+              "markers_found": 0
+            },
+            "negative_indicators": {
+              "penalty": 0.0,
+              "issues": []
+            }
+          },
+          "relevance_score": 0.1,
+          "is_relevant": false,
+          "recommendation": "\u274c Poor match.  detected. Skip or remap pages."
+        },
+        "recommendation": "\u274c Poor match.  detected. Skip or remap pages."
+      }
+    },
+    "summary": {
+      "total": 6,
+      "relevant": 1,
+      "irrelevant": 5
+    }
+  }
+}

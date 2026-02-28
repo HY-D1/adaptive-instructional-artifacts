@@ -13,7 +13,7 @@ export default defineConfig({
     timeout: 15_000
   },
   fullyParallel: false,
-  workers: IS_CI ? 1 : undefined,
+  workers: 1, // Single worker to avoid shared localStorage state issues
   retries: IS_CI ? 1 : 0,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {

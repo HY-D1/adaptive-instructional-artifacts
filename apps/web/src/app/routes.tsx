@@ -7,6 +7,8 @@ import { InstructorDashboard } from './pages/InstructorDashboard';
 import { StartPage } from './pages/StartPage';
 import { LearningInterface } from './pages/LearningInterface';
 import { SettingsPage } from './pages/SettingsPage';
+import { ConceptLibraryPage } from './pages/ConceptLibraryPage';
+import { ConceptDetailPage } from './pages/ConceptDetailPage';
 import { storage } from './lib/storage';
 import { 
   ROUTES, 
@@ -122,6 +124,24 @@ export const router = createBrowserRouter([
         index: true,
         Component: StartPage,
         loader: startPageLoader,
+      },
+      {
+        path: 'concepts',
+        element: (
+          <StudentRoute>
+            <ConceptLibraryPage />
+          </StudentRoute>
+        ),
+        loader: createProtectedLoader({ requiredRole: 'student' }),
+      },
+      {
+        path: 'concepts/*',
+        element: (
+          <StudentRoute>
+            <ConceptDetailPage />
+          </StudentRoute>
+        ),
+        loader: createProtectedLoader({ requiredRole: 'student' }),
       },
       {
         path: 'practice',

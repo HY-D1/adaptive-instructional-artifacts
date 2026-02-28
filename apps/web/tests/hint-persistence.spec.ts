@@ -137,7 +137,7 @@ test.describe('@weekly Hint Persistence', () => {
     await expect(page.getByText('Full Explanation Unlocked')).toBeVisible({ timeout: 5000 });
   });
 
-  test('hints remain visible within same problem session', async ({ page }) => {
+  test('@flaky hints remain visible within same problem session', async ({ page }) => {
     await page.goto('/practice', { timeout: 30000 });
 
     // Wait for SQL engine to initialize

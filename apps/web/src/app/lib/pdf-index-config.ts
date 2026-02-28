@@ -20,6 +20,8 @@ export const PDF_DOC_ALIASES: Record<string, string> = {
   // Exact filename matches
   'SQL_Course_Textbook.pdf': 'sql-textbook',
   'sql-course-textbook.pdf': 'sql-textbook',
+  'murachs-mysql-3rd-edition.pdf': 'murachs-mysql',
+  'reference_book.pdf': 'reference-book',
   // Add more mappings as needed
 };
 

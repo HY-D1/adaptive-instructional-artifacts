@@ -42,3 +42,32 @@ chat-history/
 .aider*
 prompt-history/
 EDGE_CASE_TEST_REPORT.md
+
+# Architecture diagrams (local only)
+diagrams/
+
+# Textbook PDF sources (copyright, large files)
+# Only keep README.md
+textbooks/*.pdf
+textbooks/*.PDF
+
+# Generated PDF index (rebuildable from source)
+dist/pdf-index/
+!dist/pdf-index/.gitkeep
+
+# But KEEP the static textbook content for deployment
+!apps/web/public/textbook-static/
+
+# Temporary screenshot files from UI testing
+*.png
+*.jpg
+*.jpeg
+!apps/web/public/**/*.png
+!apps/web/public/**/*.jpg
+
+# Helper/integration guides (local only)
+PDF_HELPER_INTEGRATION_GUIDE.md
+TEXTBOOK_INTEGRATION_PLAN.md
+
+# Test output logs
+test-output.log

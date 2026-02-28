@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useLocation, Link } from 'react-router';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -40,6 +41,7 @@ import {
 } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
 import { cn } from '../components/ui/utils';
+import { getConcept } from '../lib/concept-loader';
 import { useLLMSettings } from '../components/LLMSettingsHelper';
 import { useScreenReaderAnnouncer, HintAnnouncer, NotificationAnnouncer } from '../components/ScreenReaderAnnouncer';
 
@@ -85,11 +87,14 @@ function formatTime(ms: number): string {
  * Used by both student and instructor roles (instructor has additional controls)
  */
 export function LearningInterface() {
+  const location = useLocation();
   const { role, isStudent, isInstructor, profile } = useUserRole();
   // Use actual user profile ID for data isolation (aligned with TextbookPage)
   const learnerId = profile?.id || 'learner-1';
   const [sessionId, setSessionId] = useState('');
   const [currentProblem, setCurrentProblem] = useState<SQLProblem>(sqlProblems[0]);
+  const [activeConceptId, setActiveConceptId] = useState<string | null>(null);
+  const [activeConceptTitle, setActiveConceptTitle] = useState<string | null>(null);
   const [sqlDraft, setSqlDraft] = useState(DEFAULT_SQL_EDITOR_CODE);
   const [startTime, setStartTime] = useState(Date.now());
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -140,6 +145,38 @@ export function LearningInterface() {
       notificationTimeoutsRef.current.clear();
     };
   }, []);
+
+  // Parse query params on mount to set problem/concept context
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const problemId = params.get('problemId');
+    const conceptId = params.get('conceptId');
+    
+    if (problemId) {
+      // Load specific problem
+      const problem = sqlProblems.find(p => p.id === problemId);
+      if (problem) {
+        setCurrentProblem(problem);
+        // Also check if concept is specified
+        if (conceptId) {
+          setActiveConceptId(conceptId);
+          getConcept(conceptId).then(concept => {
+            if (concept) setActiveConceptTitle(concept.title);
+          });
+        }
+      }
+    } else if (conceptId) {
+      // Find first problem with this concept
+      const problem = sqlProblems.find(p => p.concepts.includes(conceptId));
+      if (problem) {
+        setCurrentProblem(problem);
+        setActiveConceptId(conceptId);
+        getConcept(conceptId).then(concept => {
+          if (concept) setActiveConceptTitle(concept.title);
+        });
+      }
+    }
+  }, [location.search]);
 
   // Calculate total time across sessions
   useEffect(() => {
@@ -912,6 +949,39 @@ export function LearningInterface() {
         </div>
 
         <div className="container mx-auto px-4 py-6">
+          {/* Concept Learning Banner */}
+          {activeConceptId && activeConceptTitle && (
+            <div className="mb-6 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-blue-600 font-medium mb-1">Learning Mode</p>
+                  <p className="text-blue-900 font-semibold text-lg">{activeConceptTitle}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Link 
+                    to={`/concepts/${activeConceptId}`}
+                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                  >
+                    <BookOpen className="w-4 h-4" />
+                    Review Concept
+                  </Link>
+                  <button
+                    onClick={() => {
+                      setActiveConceptId(null);
+                      setActiveConceptTitle(null);
+                      // Clear query params without reload
+                      window.history.replaceState({}, '', '/practice');
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                    title="Clear learning context"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main problem area */}
             <div className="lg:col-span-2 space-y-4 min-w-0">
