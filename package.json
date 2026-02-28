@@ -32,7 +32,10 @@
     "pdf:convert": "node scripts/pdf-to-index.mjs",
     "pdf:query": "node scripts/query-index.mjs",
     "test:pdf-index": "node scripts/smoke-test-pdf-index.mjs",
-    "check:source-grounding": "node scripts/check-source-grounding.mjs"
+    "check:source-grounding": "node scripts/check-source-grounding.mjs",
+    "textbook:process": "echo 'Run: cd ../algl-pdf-helper && ./start.sh'",
+    "textbook:export": "echo 'Run: cd ../algl-pdf-helper && algl-pdf export'",
+    "textbook:verify": "ls -la apps/web/public/textbook-static/ 2>/dev/null || echo 'No textbook-static content. Run: npm run textbook:process'"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",
