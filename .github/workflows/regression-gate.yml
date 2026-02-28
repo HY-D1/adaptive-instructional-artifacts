@@ -140,7 +140,7 @@ jobs:
   consolidate-results:
     name: Consolidate Test Results
     runs-on: ubuntu-latest
-    needs: verify
+    needs: [verify, unit-tests]
     if: always()
     
     steps:
@@ -169,11 +169,18 @@ jobs:
           echo "- Total shard results: $TOTAL_RESULTS" >> $GITHUB_STEP_SUMMARY
           
           # Check for failures
-          if [ "${{ needs.verify.result }}" == "failure" ]; then
+          UNIT_FAILED="${{ needs.unit-tests.result == 'failure' }}"
+          E2E_FAILED="${{ needs.verify.result == 'failure' }}"
+          
+          if [ "$UNIT_FAILED" == "true" ] || [ "$E2E_FAILED" == "true" ]; then
             echo "- Status: ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+            [ "$UNIT_FAILED" == "true" ] && echo "- Unit Tests: ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+            [ "$E2E_FAILED" == "true" ] && echo "- E2E Tests: ❌ FAILED" >> $GITHUB_STEP_SUMMARY
             echo "failed=true" >> $GITHUB_OUTPUT
           else
             echo "- Status: ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "- Unit Tests: ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "- E2E Tests: ✅ PASSED" >> $GITHUB_STEP_SUMMARY
             echo "failed=false" >> $GITHUB_OUTPUT
           fi
           
@@ -204,11 +211,46 @@ jobs:
           echo "Tests failed. Check the artifacts for details."
           exit 1
 
+  # Unit tests - fast feedback, no external dependencies
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      
+      - name: Install dependencies
+        run: |
+          npm cache clean --force
+          npm ci
+      
+      - name: Run unit tests
+        run: npm run test:unit
+      
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-results
+          path: |
+            coverage/
+          retention-days: 7
+          if-no-files-found: ignore
+
   # Quick smoke test for rapid feedback
   smoke-test:
     name: Quick Smoke Test
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    needs: unit-tests
     
     steps:
       - name: Checkout repository
