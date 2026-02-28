@@ -407,59 +407,143 @@ export function getAdaptiveProfileThresholds(
 }
 
 /**
+ * CSI components breakdown
+ */
+export interface CSIComponents {
+  rapidResubmission: number;
+  shortIntervalErrors: number;
+  longPauseBeforeHelp: number;
+  burstErrorClusters: number;
+  escalationDensity: number;
+}
+
+/**
+ * CSI calculation result
+ */
+export interface CSIResult {
+  csi: number;
+  level: 'low' | 'medium' | 'high';
+  components: CSIComponents;
+}
+
+/**
  * Calculate the Cognitive Strain Index (CSI) from recent interactions
  *
  * CSI is a proxy metric derived from interaction patterns that indicate
  * cognitive load (rapid errors, frequent help requests, long pauses).
  *
  * @param recentInteractions - Recent interaction events (last 10-20)
- * @returns CSI score between 0 and 1
+ * @returns CSIResult with score, level, and component breakdown
  */
 export function calculateCSI(
   recentInteractions: InteractionEvent[]
-): number {
+): CSIResult {
+  const defaultResult: CSIResult = {
+    csi: 0,
+    level: 'low',
+    components: {
+      rapidResubmission: 0,
+      shortIntervalErrors: 0,
+      longPauseBeforeHelp: 0,
+      burstErrorClusters: 0,
+      escalationDensity: 0,
+    },
+  };
+
   if (!recentInteractions || recentInteractions.length === 0) {
-    return 0.5; // Neutral default
+    return defaultResult;
   }
 
   const interactions = recentInteractions.slice(-10); // Last 10 interactions
 
-  let strainScore = 0;
-  let strainFactors = 0;
+  // Factor 1: Rapid re-submission rate (panic/guessing)
+  let rapidSubmissions = 0;
+  const submissions = interactions.filter((e) => e.eventType === 'execution');
+  for (let i = 1; i < submissions.length; i++) {
+    const timeDelta = submissions[i].timestamp - submissions[i - 1].timestamp;
+    if (timeDelta < 5000) {
+      rapidSubmissions++;
+    }
+  }
+  const rapidResubmission =
+    submissions.length > 1 ? rapidSubmissions / (submissions.length - 1) : 0;
 
-  // Factor 1: Error rate in recent interactions
-  const errorCount = interactions.filter((e) => e.eventType === 'error').length;
-  const errorRate = errorCount / interactions.length;
-  strainScore += errorRate * 0.4; // 40% weight
-  strainFactors++;
+  // Factor 2: Short interval repeated errors
+  const errors = interactions.filter((e) => e.eventType === 'error');
+  let shortIntervalErrors = 0;
+  for (let i = 1; i < errors.length; i++) {
+    const timeDelta = errors[i].timestamp - errors[i - 1].timestamp;
+    if (timeDelta < 10000) {
+      shortIntervalErrors++;
+    }
+  }
+  const shortIntervalErrorRate =
+    errors.length > 1 ? shortIntervalErrors / (errors.length - 1) : 0;
 
-  // Factor 2: Help request frequency
+  // Factor 3: Long pause before help
   const helpRequests = interactions.filter(
     (e) =>
       e.eventType === 'hint_request' ||
       e.eventType === 'explanation_view' ||
       e.eventType === 'guidance_request'
-  ).length;
-  const helpRate = helpRequests / interactions.length;
-  strainScore += helpRate * 0.3; // 30% weight
-  strainFactors++;
-
-  // Factor 3: Time pressure (rapid successive actions indicate frustration)
-  let rapidActions = 0;
-  for (let i = 1; i < interactions.length; i++) {
-    const timeDelta = interactions[i].timestamp - interactions[i - 1].timestamp;
-    if (timeDelta < 5000) {
-      // Less than 5 seconds between actions
-      rapidActions++;
+  );
+  let longPauses = 0;
+  for (const help of helpRequests) {
+    const previousErrors = interactions.filter(
+      (e) => e.eventType === 'error' && e.timestamp < help.timestamp
+    );
+    if (previousErrors.length > 0) {
+      const lastError = previousErrors[previousErrors.length - 1];
+      const pause = help.timestamp - lastError.timestamp;
+      if (pause > 30000) {
+        longPauses++;
+      }
     }
   }
-  const rapidActionRate =
-    interactions.length > 1 ? rapidActions / (interactions.length - 1) : 0;
-  strainScore += rapidActionRate * 0.3; // 30% weight
-  strainFactors++;
+  const longPauseBeforeHelp =
+    helpRequests.length > 0 ? longPauses / helpRequests.length : 0;
 
-  // Normalize to 0-1 range
-  return Math.min(1, Math.max(0, strainScore));
+  // Factor 4: Burst error clusters (3+ errors in 60 seconds)
+  let burstCount = 0;
+  for (let i = 0; i < errors.length; i++) {
+    const windowEnd = errors[i].timestamp + 60000;
+    const errorsInWindow = errors.filter(
+      (e) => e.timestamp >= errors[i].timestamp && e.timestamp <= windowEnd
+    ).length;
+    if (errorsInWindow >= 3) {
+      burstCount++;
+    }
+  }
+  const burstErrorClusters = Math.min(1, burstCount / 3);
+
+  // Factor 5: Escalation density
+  const escalations = interactions.filter(
+    (e) => e.eventType === 'guidance_escalate'
+  ).length;
+  const problems = new Set(interactions.map((e) => e.problemId)).size;
+  const escalationDensity = problems > 0 ? Math.min(1, escalations / problems) : 0;
+
+  // Calculate weighted CSI
+  const csi =
+    rapidResubmission * 0.25 +
+    shortIntervalErrorRate * 0.25 +
+    longPauseBeforeHelp * 0.15 +
+    burstErrorClusters * 0.2 +
+    escalationDensity * 0.15;
+
+  const normalizedCsi = Math.min(1, Math.max(0, csi));
+
+  return {
+    csi: normalizedCsi,
+    level: normalizedCsi < 0.3 ? 'low' : normalizedCsi < 0.6 ? 'medium' : 'high',
+    components: {
+      rapidResubmission,
+      shortIntervalErrors: shortIntervalErrorRate,
+      longPauseBeforeHelp,
+      burstErrorClusters,
+      escalationDensity,
+    },
+  };
 }
 
 /**
