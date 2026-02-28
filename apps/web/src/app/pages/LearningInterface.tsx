@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useLocation, Link } from 'react-router';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -225,10 +225,42 @@ export function LearningInterface() {
   useEffect(() => {
     if (!learnerId) return;
     
+    // Check for debug profile override first
+    const debugProfileOverride = localStorage.getItem('sql-adapt-debug-profile');
+    
     // Get the current profile for this learner
-    const { armId } = banditManager.selectProfileForLearner(learnerId);
+    const { profile, armId } = banditManager.selectProfileForLearner(learnerId);
     setCurrentProfileId(armId);
-  }, [learnerId]);
+    
+    // Log profile assignment event
+    const assignmentStrategy = (localStorage.getItem('sql-adapt-debug-strategy') as 'static' | 'diagnostic' | 'bandit') || 'bandit';
+    const effectiveProfileId = debugProfileOverride || profile.id;
+    const overrideReason = debugProfileOverride ? 'debug_override' : 'bandit_selection';
+    
+    storage.logProfileAssigned({
+      learnerId,
+      problemId: currentProblem.id,
+      profileId: effectiveProfileId,
+      assignmentStrategy,
+      reason: overrideReason,
+      sessionId
+    });
+    
+    // Log bandit arm selection event
+    storage.logBanditArmSelected({
+      learnerId,
+      problemId: currentProblem.id,
+      armId,
+      selectionMethod: 'thompson_sampling',
+      armStatsAtSelection: banditManager.hasBandit(learnerId) 
+        ? banditManager.getLearnerStats(learnerId).reduce((acc, stat) => {
+            acc[stat.armId] = { mean: stat.meanReward, pulls: stat.pullCount };
+            return acc;
+          }, {} as Record<string, { mean: number; pulls: number }>)
+        : undefined,
+      sessionId
+    });
+  }, [learnerId, currentProblem.id, sessionId]);
 
   // Week 5: Listen for HDI calculated events
   useEffect(() => {
@@ -309,7 +341,9 @@ export function LearningInterface() {
     
     // Only show progress hint every ~15 interactions
     if (interactionCountRef.current % 15 !== 0) return;
-    if (progressHintShownRef.current) return;
+    
+    // Reset the shown flag every 15 interactions so hints can appear again
+    progressHintShownRef.current = false;
     
     // Determine hint based on trend
     let hint: string | null = null;
@@ -612,10 +646,10 @@ export function LearningInterface() {
     }
   };
 
-  const handleProblemChange = (id: string) => {
+  const handleProblemChange = useCallback((id: string) => {
     const problem = sqlProblems.find(p => p.id === id);
     if (!problem) {
-      console.error(`Problem not found: ${id}`);
+      // Problem not found - silently return
       return;
     }
     setCurrentProblem(problem);
@@ -631,7 +665,7 @@ export function LearningInterface() {
     setNotesActionMessage(undefined);
     setGenerationError(undefined);
     setLatestGeneratedUnit(null);
-  };
+  }, [learnerId, sessionId]);
 
   const collectNoteEvidenceIds = (
     extraIds: string[] = [],
@@ -968,51 +1002,97 @@ export function LearningInterface() {
     }
   };
 
-  const learnerSessionInteractions = interactions.filter(
-    (interaction) =>
-      interaction.learnerId === learnerId &&
-      (!sessionId || interaction.sessionId === sessionId)
-  );
-  const problemInteractions = learnerSessionInteractions.filter(i => i.problemId === currentProblem.id);
-  const latestProblemErrorEvent = [...problemInteractions]
-    .reverse()
-    .find((interaction) => interaction.eventType === 'error');
-  const latestProblemErrorSubtype = latestProblemErrorEvent?.sqlEngageSubtype || latestProblemErrorEvent?.errorSubtypeId;
-  const effectiveLastError = lastError || latestProblemErrorSubtype;
-  const showAddToNotes = escalationTriggered && !!effectiveLastError;
-  const errorCount = problemInteractions.filter(i => i.eventType === 'error').length;
-  const totalAttempts = problemInteractions.filter(
-    (interaction) => interaction.eventType === 'execution' || interaction.eventType === 'error'
-  ).length;
-  const hintViewsCount = problemInteractions.filter((interaction) => interaction.eventType === 'hint_view').length;
-  const helpRequestsCount = problemInteractions.filter(
-    (interaction) => interaction.eventType === 'hint_view' || interaction.eventType === 'explanation_view'
-  ).length;
   const timeSpent = Date.now() - startTime;
 
-  // Group problems by difficulty
-  const problemsByDifficulty = sqlProblems.reduce((acc, problem) => {
-    if (!acc[problem.difficulty]) {
-      acc[problem.difficulty] = [];
-    }
-    acc[problem.difficulty].push(problem);
-    return acc;
-  }, {} as Record<string, SQLProblem[]>);
+  // Memoized problem grouping by difficulty
+  const problemsByDifficulty = useMemo(() => 
+    sqlProblems.reduce((acc, problem) => {
+      if (!acc[problem.difficulty]) {
+        acc[problem.difficulty] = [];
+      }
+      acc[problem.difficulty].push(problem);
+      return acc;
+    }, {} as Record<string, SQLProblem[]>),
+    []
+  );
 
   const difficultyOrder = ['beginner', 'intermediate', 'advanced'];
 
-  // Helper to check if a problem has been solved (has successful execution)
-  const isProblemSolved = (problemId: string): boolean => {
-    return learnerSessionInteractions.some(
-      i => i.problemId === problemId && i.eventType === 'execution' && i.successful
-    );
-  };
+  // Memoized learner session interactions
+  const learnerSessionInteractions = useMemo(() => 
+    interactions.filter(
+      (interaction) =>
+        interaction.learnerId === learnerId &&
+        (!sessionId || interaction.sessionId === sessionId)
+    ),
+    [interactions, learnerId, sessionId]
+  );
+
+  // Memoized problem interactions
+  const problemInteractions = useMemo(() => 
+    learnerSessionInteractions.filter(i => i.problemId === currentProblem.id),
+    [learnerSessionInteractions, currentProblem.id]
+  );
+
+  // Memoized helper to check if a problem has been solved
+  const solvedProblemIds = useMemo(() => {
+    const solved = new Set<string>();
+    for (const interaction of learnerSessionInteractions) {
+      if (interaction.eventType === 'execution' && interaction.successful && interaction.problemId) {
+        solved.add(interaction.problemId);
+      }
+    }
+    return solved;
+  }, [learnerSessionInteractions]);
+
+  const isProblemSolved = useCallback((problemId: string): boolean => {
+    return solvedProblemIds.has(problemId);
+  }, [solvedProblemIds]);
 
   // Get count of solved problems
-  const solvedCount = sqlProblems.filter(p => isProblemSolved(p.id)).length;
+  const solvedCount = solvedProblemIds.size;
 
   // Calculate progress percentage
-  const progressPercentage = Math.round((solvedCount / sqlProblems.length) * 100);
+  const progressPercentage = useMemo(() => 
+    Math.round((solvedCount / sqlProblems.length) * 100),
+    [solvedCount]
+  );
+
+  // Memoized error and attempt calculations
+  const latestProblemErrorEvent = useMemo(() => 
+    [...problemInteractions]
+      .reverse()
+      .find((interaction) => interaction.eventType === 'error'),
+    [problemInteractions]
+  );
+
+  const latestProblemErrorSubtype = latestProblemErrorEvent?.sqlEngageSubtype || latestProblemErrorEvent?.errorSubtypeId;
+  const effectiveLastError = lastError || latestProblemErrorSubtype;
+  const showAddToNotes = escalationTriggered && !!effectiveLastError;
+  
+  const errorCount = useMemo(() => 
+    problemInteractions.filter(i => i.eventType === 'error').length,
+    [problemInteractions]
+  );
+  
+  const totalAttempts = useMemo(() => 
+    problemInteractions.filter(
+      (interaction) => interaction.eventType === 'execution' || interaction.eventType === 'error'
+    ).length,
+    [problemInteractions]
+  );
+  
+  const hintViewsCount = useMemo(() => 
+    problemInteractions.filter((interaction) => interaction.eventType === 'hint_view').length,
+    [problemInteractions]
+  );
+  
+  const helpRequestsCount = useMemo(() => 
+    problemInteractions.filter(
+      (interaction) => interaction.eventType === 'hint_view' || interaction.eventType === 'explanation_view'
+    ).length,
+    [problemInteractions]
+  );
 
   if (isLoading) {
     return (

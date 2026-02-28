@@ -1147,6 +1147,292 @@ class StorageManager {
     return createEventId(prefix);
   }
 
+  // ============================================================================
+  // Week 5: Adaptive Personalization Event Logging
+  // ============================================================================
+
+  /**
+   * Log a profile assignment event when a learner is assigned an escalation profile.
+   * Week 5 Component 7: Escalation Profiles
+   */
+  logProfileAssigned(params: {
+    learnerId: string;
+    problemId: string;
+    profileId: string;
+    assignmentStrategy: 'static' | 'diagnostic' | 'bandit';
+    reason?: string;
+    sessionId?: string;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const event: InteractionEvent = {
+      id: createEventId('profile', 'assigned'),
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
+      timestamp: Date.now(),
+      eventType: 'profile_assigned',
+      problemId: params.problemId,
+      profileId: params.profileId,
+      assignmentStrategy: params.assignmentStrategy,
+      payload: {
+        profileId: params.profileId,
+        strategy: params.assignmentStrategy,
+        reason: params.reason || 'bandit_selection'
+      }
+    };
+    return this.saveInteraction(event);
+  }
+
+  /**
+   * Log an escalation triggered event.
+   * Week 5 Component 7: Escalation Profiles
+   */
+  logEscalationTriggered(params: {
+    learnerId: string;
+    problemId: string;
+    trigger: 'threshold_met' | 'time_stuck' | 'repeated_error' | 'rung_exhausted';
+    errorCount: number;
+    profileId: string;
+    sessionId?: string;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const event: InteractionEvent = {
+      id: createEventId('escalation', 'triggered'),
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
+      timestamp: Date.now(),
+      eventType: 'escalation_triggered',
+      problemId: params.problemId,
+      payload: {
+        trigger: params.trigger,
+        errorCount: params.errorCount,
+        profileId: params.profileId
+      }
+    };
+    return this.saveInteraction(event);
+  }
+
+  /**
+   * Log a profile adjustment event when a learner's profile is dynamically adjusted.
+   * Week 5 Component 7: Escalation Profiles
+   */
+  logProfileAdjusted(params: {
+    learnerId: string;
+    problemId: string;
+    oldProfileId: string;
+    newProfileId: string;
+    reason: 'hdi_trend' | 'performance_change' | 'instructor_override';
+    sessionId?: string;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const event: InteractionEvent = {
+      id: createEventId('profile', 'adjusted'),
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
+      timestamp: Date.now(),
+      eventType: 'profile_adjusted',
+      problemId: params.problemId,
+      payload: {
+        oldProfileId: params.oldProfileId,
+        newProfileId: params.newProfileId,
+        reason: params.reason
+      }
+    };
+    return this.saveInteraction(event);
+  }
+
+  /**
+   * Log a bandit arm selection event.
+   * Week 5 Component 8: Multi-Armed Bandit
+   */
+  logBanditArmSelected(params: {
+    learnerId: string;
+    problemId: string;
+    armId: string;
+    selectionMethod: 'thompson_sampling' | 'epsilon_greedy';
+    armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
+    sessionId?: string;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const event: InteractionEvent = {
+      id: createEventId('bandit', 'arm-selected'),
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
+      timestamp: Date.now(),
+      eventType: 'bandit_arm_selected',
+      problemId: params.problemId,
+      selectedArm: params.armId,
+      selectionMethod: params.selectionMethod,
+      payload: {
+        armId: params.armId,
+        method: params.selectionMethod,
+        armStats: params.armStatsAtSelection
+      }
+    };
+    return this.saveInteraction(event);
+  }
+
+  /**
+   * Log a bandit reward observed event.
+   * Week 5 Component 8: Multi-Armed Bandit
+   */
+  logBanditRewardObserved(params: {
+    learnerId: string;
+    problemId: string;
+    armId: string;
+    reward: {
+      total: number;
+      components: {
+        independentSuccess: number;
+        errorReduction: number;
+        delayedRetention: number;
+        dependencyPenalty: number;
+        timeEfficiency: number;
+      };
+    };
+    sessionId?: string;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const event: InteractionEvent = {
+      id: createEventId('bandit', 'reward'),
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
+      timestamp: Date.now(),
+      eventType: 'bandit_reward_observed',
+      problemId: params.problemId,
+      reward: params.reward,
+      payload: {
+        armId: params.armId,
+        reward: params.reward
+      }
+    };
+    return this.saveInteraction(event);
+  }
+
+  /**
+   * Log a bandit update event when arm statistics are updated.
+   * Week 5 Component 8: Multi-Armed Bandit
+   */
+  logBanditUpdated(params: {
+    learnerId: string;
+    problemId: string;
+    armId: string;
+    newAlpha: number;
+    newBeta: number;
+    rewardReceived: number;
+    sessionId?: string;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const event: InteractionEvent = {
+      id: createEventId('bandit', 'updated'),
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
+      timestamp: Date.now(),
+      eventType: 'bandit_updated',
+      problemId: params.problemId,
+      newAlpha: params.newAlpha,
+      newBeta: params.newBeta,
+      payload: {
+        armId: params.armId,
+        newAlpha: params.newAlpha,
+        newBeta: params.newBeta,
+        reward: params.rewardReceived
+      }
+    };
+    return this.saveInteraction(event);
+  }
+
+  /**
+   * Log an HDI calculated event.
+   * Week 5 Component 9: Hint Dependency Index
+   */
+  logHdiCalculated(params: {
+    learnerId: string;
+    problemId: string;
+    hdi: number;
+    hdiLevel: 'low' | 'medium' | 'high';
+    components: {
+      hpa: number;
+      aed: number;
+      er: number;
+      reae: number;
+      iwh: number;
+    };
+    sessionId?: string;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const event: InteractionEvent = {
+      id: createEventId('hdi', 'calculated'),
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
+      timestamp: Date.now(),
+      eventType: 'hdi_calculated',
+      problemId: params.problemId,
+      hdi: params.hdi,
+      hdiLevel: params.hdiLevel,
+      hdiComponents: params.components,
+      payload: {
+        hdi: params.hdi,
+        hdiLevel: params.hdiLevel,
+        components: params.components
+      }
+    };
+    return this.saveInteraction(event);
+  }
+
+  /**
+   * Log an HDI trajectory updated event.
+   * Week 5 Component 9: Hint Dependency Index
+   */
+  logHdiTrajectoryUpdated(params: {
+    learnerId: string;
+    problemId: string;
+    hdi: number;
+    trend: 'increasing' | 'stable' | 'decreasing';
+    slope: number;
+    windowSize: number;
+    sessionId?: string;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const event: InteractionEvent = {
+      id: createEventId('hdi', 'trajectory'),
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
+      timestamp: Date.now(),
+      eventType: 'hdi_trajectory_updated',
+      problemId: params.problemId,
+      hdi: params.hdi,
+      trend: params.trend,
+      slope: params.slope,
+      payload: {
+        hdi: params.hdi,
+        trend: params.trend,
+        slope: params.slope,
+        windowSize: params.windowSize
+      }
+    };
+    return this.saveInteraction(event);
+  }
+
+  /**
+   * Log a dependency intervention triggered event.
+   * Week 5 Component 9: Hint Dependency Index
+   */
+  logDependencyInterventionTriggered(params: {
+    learnerId: string;
+    problemId: string;
+    hdi: number;
+    interventionType: 'forced_independent' | 'profile_switch' | 'reflective_prompt';
+    sessionId?: string;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const event: InteractionEvent = {
+      id: createEventId('intervention', 'dependency'),
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
+      timestamp: Date.now(),
+      eventType: 'dependency_intervention_triggered',
+      problemId: params.problemId,
+      hdi: params.hdi,
+      interventionType: params.interventionType,
+      payload: {
+        hdi: params.hdi,
+        interventionType: params.interventionType
+      }
+    };
+    return this.saveInteraction(event);
+  }
+
   // Evidence scoring weights for coverage calculation
   // FIXED: Errors now properly penalize coverage to reflect actual mastery
   private readonly EVIDENCE_WEIGHTS = {

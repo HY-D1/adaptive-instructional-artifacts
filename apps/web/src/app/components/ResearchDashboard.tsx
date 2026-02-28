@@ -636,30 +636,43 @@ export function ResearchDashboard() {
     return getFilteredByTimeRange(baseFiltered);
   }, [interactions, selectedLearner, getFilteredByTimeRange]);
 
-  const errorsByType = filteredInteractions
-    .filter(i => i.eventType === 'error' && i.errorSubtypeId)
-    .reduce((acc, i) => {
-      const type = i.errorSubtypeId!;
-      acc[type] = (acc[type] || 0) + 1;
+  // Memoized error analysis calculations
+  const errorsByType = useMemo(() => 
+    filteredInteractions
+      .filter(i => i.eventType === 'error' && i.errorSubtypeId)
+      .reduce((acc, i) => {
+        const type = i.errorSubtypeId!;
+        acc[type] = (acc[type] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+    [filteredInteractions]
+  );
+
+  const errorChartData = useMemo(() => 
+    Object.entries(errorsByType).map(([name, count]) => ({
+      name: name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      count,
+      fullName: name
+    })),
+    [errorsByType]
+  );
+
+  const interactionsByType = useMemo(() => 
+    filteredInteractions.reduce((acc, i) => {
+      acc[i.eventType] = (acc[i.eventType] || 0) + 1;
       return acc;
-    }, {} as Record<string, number>);
+    }, {} as Record<string, number>),
+    [filteredInteractions]
+  );
 
-  const errorChartData = Object.entries(errorsByType).map(([name, count]) => ({
-    name: name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-    count,
-    fullName: name
-  }));
-
-  const interactionsByType = filteredInteractions.reduce((acc, i) => {
-    acc[i.eventType] = (acc[i.eventType] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const interactionChartData = Object.entries(interactionsByType).map(([name, count]) => ({
-    name: name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-    count,
-    type: name
-  }));
+  const interactionChartData = useMemo(() => 
+    Object.entries(interactionsByType).map(([name, count]) => ({
+      name: name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      count,
+      type: name
+    })),
+    [interactionsByType]
+  );
 
   // Pie chart data for event distribution
   const eventDistributionData = useMemo(() => {
@@ -737,22 +750,25 @@ export function ResearchDashboard() {
     return { strategyComparison, comparisonData };
   }, [profiles, interactions]);
 
-  const sortedTimelineInteractions = filteredInteractions
-    .slice()
-    .sort((a, b) => a.timestamp - b.timestamp);
-  const timelineStartTimestamp = sortedTimelineInteractions[0]?.timestamp ?? 0;
-  const timelineData = sortedTimelineInteractions.reduce((acc, interaction) => {
-    const minute = Math.floor((interaction.timestamp - timelineStartTimestamp) / 60000);
-    if (!acc[minute]) {
-      acc[minute] = { minute, events: 0, errors: 0, hints: 0 };
-    }
-    acc[minute].events += 1;
-    if (interaction.eventType === 'error') acc[minute].errors += 1;
-    if (interaction.eventType === 'hint_view') acc[minute].hints += 1;
-    return acc;
-  }, {} as Record<number, TimelineDataPoint>);
+  // Memoized timeline data calculation
+  const timelineChartData = useMemo(() => {
+    const sortedTimelineInteractions = filteredInteractions
+      .slice()
+      .sort((a, b) => a.timestamp - b.timestamp);
+    const timelineStartTimestamp = sortedTimelineInteractions[0]?.timestamp ?? 0;
+    const timelineData = sortedTimelineInteractions.reduce((acc, interaction) => {
+      const minute = Math.floor((interaction.timestamp - timelineStartTimestamp) / 60000);
+      if (!acc[minute]) {
+        acc[minute] = { minute, events: 0, errors: 0, hints: 0 };
+      }
+      acc[minute].events += 1;
+      if (interaction.eventType === 'error') acc[minute].errors += 1;
+      if (interaction.eventType === 'hint_view') acc[minute].hints += 1;
+      return acc;
+    }, {} as Record<number, TimelineDataPoint>);
 
-  const timelineChartData = Object.values(timelineData).sort((a, b) => a.minute - b.minute);
+    return Object.values(timelineData).sort((a, b) => a.minute - b.minute);
+  }, [filteredInteractions]);
   const traceProblemOptions = useMemo(() => {
     if (!selectedTraceLearner) return [];
     return Array.from(new Set(
@@ -839,7 +855,7 @@ export function ResearchDashboard() {
     const week5Events = filteredInteractions.filter(i => 
       ['profile_assigned', 'escalation_triggered', 'profile_adjusted',
        'bandit_arm_selected', 'bandit_reward_observed', 'bandit_updated',
-       'hdi_calculated', 'hdi_trajectory_updated'].includes(i.eventType)
+       'hdi_calculated', 'hdi_trajectory_updated', 'dependency_intervention_triggered'].includes(i.eventType)
     );
 
     // 1. Escalation Profile Distribution
@@ -921,7 +937,10 @@ export function ResearchDashboard() {
     ];
     
     hdiDataPoints.forEach(point => {
-      const bin = hdiBins.find(b => point.hdi >= b.min && point.hdi < b.max);
+      // Handle edge case: HDI = 1.0 should go into the 0.8-1.0 bin
+      const bin = hdiBins.find(b => 
+        point.hdi >= b.min && (point.hdi < b.max || (point.hdi === 1.0 && b.max === 1.0))
+      );
       if (bin) bin.count++;
     });
     
@@ -996,6 +1015,10 @@ export function ResearchDashboard() {
       }
     });
 
+    // Sort profile effectiveness by success rate (highest first)
+    const sortedProfileEffectiveness = Object.values(profileEffectiveness)
+      .sort((a, b) => b.avgSuccessRate - a.avgSuccessRate);
+
     return {
       week5Events,
       profileDistributionData,
@@ -1003,7 +1026,7 @@ export function ResearchDashboard() {
       banditRewardData,
       hdiBins,
       highHDIAlerts,
-      profileEffectivenessData: Object.values(profileEffectiveness)
+      profileEffectivenessData: sortedProfileEffectiveness
     };
   }, [filteredInteractions]);
 
@@ -1933,7 +1956,7 @@ export function ResearchDashboard() {
                           <div className="flex items-center gap-2">
                             <AlertCircle className="size-4 text-red-600" />
                             <span className="text-sm font-medium truncate max-w-[150px]">
-                              {alert.learnerId.slice(0, 8)}...
+                              {(alert.learnerId || 'unknown').slice(0, 8)}...
                             </span>
                           </div>
                           <div className="flex items-center gap-2">

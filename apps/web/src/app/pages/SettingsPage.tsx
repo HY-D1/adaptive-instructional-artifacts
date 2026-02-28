@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -39,6 +39,11 @@ import {
 } from '../lib/escalation-profiles';
 import { storage } from '../lib/storage';
 import type { InteractionEvent } from '../types';
+import {
+  calculateHDIData,
+  filterOutHDIEvents,
+  formatHDIDetailed,
+} from '../lib/hdi-debug';
 
 // DEV mode check
 const isDev = import.meta.env.DEV;
@@ -52,6 +57,12 @@ const PROFILE_OPTIONS = [
 ] as const;
 
 type ProfileOverrideId = (typeof PROFILE_OPTIONS)[number]['id'];
+
+// localStorage keys for debug settings
+const DEBUG_KEYS = {
+  PROFILE_OVERRIDE: 'sql-adapt-debug-profile',
+  ASSIGNMENT_STRATEGY: 'sql-adapt-debug-strategy',
+} as const;
 
 export function SettingsPage() {
   const { isInstructor, profile } = useUserRole();
@@ -73,67 +84,67 @@ export function SettingsPage() {
   const [selectedArm, setSelectedArm] = useState<BanditArmId>('adaptive');
   const [refreshKey, setRefreshKey] = useState<number>(0);
 
-  // Load initial values from localStorage
+  // Load initial values from localStorage (DEV mode only)
   useEffect(() => {
     if (!isDev) return;
 
-    const savedProfile = localStorage.getItem('sql-adapt-debug-profile');
-    if (savedProfile) {
+    const savedProfile = localStorage.getItem(DEBUG_KEYS.PROFILE_OVERRIDE);
+    if (savedProfile && PROFILE_OPTIONS.some((p) => p.id === savedProfile)) {
       setProfileOverride(savedProfile as ProfileOverrideId);
     }
 
-    const savedStrategy = localStorage.getItem('sql-adapt-debug-strategy');
-    if (savedStrategy) {
+    const savedStrategy = localStorage.getItem(DEBUG_KEYS.ASSIGNMENT_STRATEGY);
+    if (savedStrategy && ['static', 'diagnostic', 'bandit'].includes(savedStrategy)) {
       setAssignmentStrategy(savedStrategy as AssignmentStrategy);
     }
   }, []);
 
-  // Calculate HDI score and count events
+  // Calculate HDI score and count events - memoized for performance
+  const hdiData = useMemo(() => {
+    if (!isDev || !learnerId) {
+      return { score: null, eventCount: 0, events: [] };
+    }
+
+    const interactions = storage.getAllInteractions();
+    return calculateHDIData(interactions, learnerId);
+  }, [learnerId, refreshKey]);
+
+  // Update state from memoized calculation
+  useEffect(() => {
+    setHdiScore(hdiData.score);
+    setHdiEventCount(hdiData.eventCount);
+  }, [hdiData]);
+
+  // Get bandit arm stats - separate from HDI calculation
   useEffect(() => {
     if (!isDev || !learnerId) return;
 
-    const interactions = storage.getAllInteractions();
-    const hdiEvents = interactions.filter(
-      (i: InteractionEvent) =>
-        i.learnerId === learnerId &&
-        (i.eventType === 'hdi_calculated' ||
-          i.eventType === 'hdi_trajectory_updated' ||
-          i.eventType === 'dependency_intervention_triggered')
-    );
-    setHdiEventCount(hdiEvents.length);
+    // Initialize bandit for learner if not exists (to show all arms)
+    banditManager.getBanditForLearner(learnerId);
 
-    // Get latest HDI score
-    const latestHdiEvent = hdiEvents
-      .filter((i: InteractionEvent) => i.hdi !== undefined)
-      .sort((a: InteractionEvent, b: InteractionEvent) => b.timestamp - a.timestamp)[0];
-    setHdiScore(latestHdiEvent?.hdi ?? null);
-
-    // Get bandit arm stats
-    if (banditManager.hasBandit(learnerId)) {
-      const stats = banditManager.getLearnerStats(learnerId);
-      setArmStats(stats);
-    }
+    const stats = banditManager.getLearnerStats(learnerId);
+    setArmStats(stats);
   }, [learnerId, refreshKey]);
 
   // Profile Override Handlers
   const handleProfileOverrideChange = useCallback((value: ProfileOverrideId) => {
     setProfileOverride(value);
     if (value === 'auto') {
-      localStorage.removeItem('sql-adapt-debug-profile');
+      localStorage.removeItem(DEBUG_KEYS.PROFILE_OVERRIDE);
     } else {
-      localStorage.setItem('sql-adapt-debug-profile', value);
+      localStorage.setItem(DEBUG_KEYS.PROFILE_OVERRIDE, value);
     }
   }, []);
 
   const handleResetProfileOverride = useCallback(() => {
     setProfileOverride('auto');
-    localStorage.removeItem('sql-adapt-debug-profile');
+    localStorage.removeItem(DEBUG_KEYS.PROFILE_OVERRIDE);
   }, []);
 
   // Assignment Strategy Handler
   const handleStrategyChange = useCallback((value: AssignmentStrategy) => {
     setAssignmentStrategy(value);
-    localStorage.setItem('sql-adapt-debug-strategy', value);
+    localStorage.setItem(DEBUG_KEYS.ASSIGNMENT_STRATEGY, value);
   }, []);
 
   // HDI Reset Handler
@@ -141,15 +152,7 @@ export function SettingsPage() {
     if (!learnerId) return;
 
     const interactions = storage.getAllInteractions();
-    const filteredInteractions = interactions.filter(
-      (i: InteractionEvent) =>
-        !(
-          i.learnerId === learnerId &&
-          (i.eventType === 'hdi_calculated' ||
-            i.eventType === 'hdi_trajectory_updated' ||
-            i.eventType === 'dependency_intervention_triggered')
-        )
-    );
+    const filteredInteractions = filterOutHDIEvents(interactions, learnerId);
 
     localStorage.setItem('sql-learning-interactions', JSON.stringify(filteredInteractions));
     setHdiScore(null);
@@ -231,11 +234,11 @@ export function SettingsPage() {
                 </div>
               </div>
               <PdfUploader
-                onUploadComplete={(result) => {
-                  console.log('PDF uploaded:', result);
+                onUploadComplete={() => {
+                  // PDF upload complete - handled by component
                 }}
-                onError={(error) => {
-                  console.error('PDF upload error:', error);
+                onError={() => {
+                  // PDF upload error - handled by component
                 }}
               />
             </Card>
@@ -262,7 +265,7 @@ export function SettingsPage() {
 
         {/* Week 5 Testing Controls - DEV Mode Only */}
         {isDev && (
-          <Card className="mt-6 p-6 max-w-5xl border-amber-300">
+          <Card className="mt-6 p-6 max-w-5xl border-amber-300" data-testid="week5-debug-controls">
             <CardHeader className="px-0 pt-0">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-amber-100 rounded-lg">
@@ -284,7 +287,7 @@ export function SettingsPage() {
 
             <CardContent className="px-0 pb-0 space-y-6">
               {/* Profile Override Section */}
-              <div className="space-y-3">
+              <div className="space-y-3" data-testid="profile-override-section">
                 <div className="flex items-center gap-2">
                   <UserCog className="size-4 text-gray-500" />
                   <h3 className="text-sm font-medium text-gray-900">
@@ -297,6 +300,7 @@ export function SettingsPage() {
                     onValueChange={(value) =>
                       handleProfileOverrideChange(value as ProfileOverrideId)
                     }
+                    data-testid="profile-override-select"
                   >
                     <SelectTrigger className="w-[250px]">
                       <SelectValue placeholder="Select profile" />
@@ -314,6 +318,7 @@ export function SettingsPage() {
                     size="sm"
                     onClick={handleResetProfileOverride}
                     disabled={profileOverride === 'auto'}
+                    data-testid="profile-override-reset"
                   >
                     <RotateCcw className="size-4 mr-1" />
                     Reset
@@ -327,7 +332,7 @@ export function SettingsPage() {
               <Separator />
 
               {/* Assignment Strategy Section */}
-              <div className="space-y-3">
+              <div className="space-y-3" data-testid="assignment-strategy-section">
                 <div className="flex items-center gap-2">
                   <Target className="size-4 text-gray-500" />
                   <h3 className="text-sm font-medium text-gray-900">
@@ -340,6 +345,7 @@ export function SettingsPage() {
                     handleStrategyChange(value as AssignmentStrategy)
                   }
                   className="flex flex-wrap gap-4"
+                  data-testid="assignment-strategy-radio"
                 >
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="static" id="strategy-static" />
@@ -368,7 +374,7 @@ export function SettingsPage() {
               <Separator />
 
               {/* HDI Reset Section */}
-              <div className="space-y-3">
+              <div className="space-y-3" data-testid="hdi-section">
                 <div className="flex items-center gap-2">
                   <BrainCircuit className="size-4 text-gray-500" />
                   <h3 className="text-sm font-medium text-gray-900">
@@ -378,19 +384,22 @@ export function SettingsPage() {
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-md">
                     <span className="text-sm text-gray-600">Current Score:</span>
-                    <span className="text-sm font-mono font-medium">
-                      {hdiScore !== null ? hdiScore.toFixed(3) : 'N/A'}
+                    <span className="text-sm font-mono font-medium" data-testid="hdi-score">
+                      {formatHDIDetailed(hdiScore)}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-md">
                     <span className="text-sm text-gray-600">Events:</span>
-                    <span className="text-sm font-mono font-medium">{hdiEventCount}</span>
+                    <span className="text-sm font-mono font-medium" data-testid="hdi-event-count">
+                      {hdiEventCount}
+                    </span>
                   </div>
                   <Button
                     variant="destructive"
                     size="sm"
                     onClick={handleClearHdiHistory}
                     disabled={hdiEventCount === 0}
+                    data-testid="hdi-clear-button"
                   >
                     <Trash2 className="size-4 mr-1" />
                     Clear HDI History
@@ -405,7 +414,7 @@ export function SettingsPage() {
               <Separator />
 
               {/* Bandit Debug Panel */}
-              <div className="space-y-3">
+              <div className="space-y-3" data-testid="bandit-panel">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <GitBranch className="size-4 text-gray-500" />
@@ -413,14 +422,14 @@ export function SettingsPage() {
                       Bandit Debug Panel
                     </h3>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={handleRefreshStats}>
+                  <Button variant="ghost" size="sm" onClick={handleRefreshStats} data-testid="bandit-refresh">
                     <RotateCcw className="size-4" />
                   </Button>
                 </div>
 
                 {/* Arm Stats Table */}
                 <div className="border rounded-md overflow-hidden">
-                  <table className="w-full text-sm">
+                  <table className="w-full text-sm" data-testid="bandit-arm-stats">
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-3 py-2 text-left font-medium text-gray-700">
@@ -440,7 +449,7 @@ export function SettingsPage() {
                     <tbody className="divide-y">
                       {armStats.length > 0 ? (
                         armStats.map((stat) => (
-                          <tr key={stat.armId} className="hover:bg-gray-50">
+                          <tr key={stat.armId} className="hover:bg-gray-50" data-testid={`arm-stat-${stat.armId}`}>
                             <td className="px-3 py-2 font-mono text-xs">
                               {stat.armId}
                             </td>
@@ -458,6 +467,7 @@ export function SettingsPage() {
                           <td
                             colSpan={4}
                             className="px-3 py-4 text-center text-gray-500 italic"
+                            data-testid="bandit-no-data"
                           >
                             No bandit data available. Interact with problems to generate
                             data.
@@ -474,6 +484,7 @@ export function SettingsPage() {
                   <Select
                     value={selectedArm}
                     onValueChange={(value) => setSelectedArm(value as BanditArmId)}
+                    data-testid="force-arm-select"
                   >
                     <SelectTrigger className="w-[200px]">
                       <SelectValue placeholder="Select arm" />
@@ -486,7 +497,7 @@ export function SettingsPage() {
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button size="sm" onClick={handleForceArmSelection}>
+                  <Button size="sm" onClick={handleForceArmSelection} data-testid="force-arm-apply">
                     Apply
                   </Button>
                 </div>

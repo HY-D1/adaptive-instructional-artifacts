@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -221,8 +221,8 @@ export function InstructorDashboard() {
     };
   }, [profiles, interactions, hasRealData, showDemoData]);
 
-  // Calculate adaptive learning data
-  const adaptiveStats: AdaptiveStats = useMemo(() => {
+  // Memoized helper to calculate student adaptive profiles
+  const studentAdaptiveProfiles = useMemo(() => {
     // Get latest profile assignment per learner
     const latestProfiles = interactions
       .filter(e => e.eventType === 'profile_assigned')
@@ -252,6 +252,7 @@ export function InstructorDashboard() {
     const studentProfiles: StudentAdaptiveProfile[] = [];
     const allLearnerIds = new Set([
       ...Object.keys(latestProfiles),
+      ...Object.keys(latestHDI),  // Also include learners with HDI events (critical for adaptive stats)
       ...profiles.map(p => p.id)
     ]);
 
@@ -267,7 +268,8 @@ export function InstructorDashboard() {
           profile: demo.profile as 'fast' | 'slow' | 'adaptive',
           strategy: demo.strategy as 'static' | 'diagnostic' | 'bandit',
           hdi: demo.hdi,
-          hdiTrend: demo.hdi > 0.6 ? 'up' : 'stable',
+          // HDI > 0.6 = degrading (high dependency) -> trend = 'down'
+          hdiTrend: demo.hdi > 0.6 ? 'down' : 'stable',
           lastUpdated: Date.now()
         });
       });
@@ -279,6 +281,11 @@ export function InstructorDashboard() {
         const history = hdiHistory[learnerId] || [];
 
         // Calculate trend from history
+        // Note: HDI = Hint Dependency Index
+        // - Higher HDI = MORE dependent on hints (WORSE performance)
+        // - Lower HDI = LESS dependent on hints (BETTER performance)
+        // So: HDI increasing = student degrading (trend = 'down')
+        //     HDI decreasing = student improving (trend = 'up')
         let hdiTrend: 'up' | 'down' | 'stable' = 'stable';
         if (history.length >= 2) {
           const sorted = history.sort((a, b) => a.timestamp - b.timestamp);
@@ -287,8 +294,10 @@ export function InstructorDashboard() {
           if (values.length >= 2) {
             const first = values[0];
             const last = values[values.length - 1];
-            if (last > first + 0.05) hdiTrend = 'up';
-            else if (last < first - 0.05) hdiTrend = 'down';
+            // HDI going UP means student is getting WORSE (degrading)
+            if (last > first + 0.05) hdiTrend = 'down';
+            // HDI going DOWN means student is getting BETTER (improving)
+            else if (last < first - 0.05) hdiTrend = 'up';
           }
         }
 
@@ -297,13 +306,20 @@ export function InstructorDashboard() {
           name: profile?.name || learnerId,
           profile: profileEvent?.payload?.profile || 'adaptive',
           strategy: profileEvent?.payload?.strategy || 'static',
-          hdi: hdiEvent?.payload?.hdi || 0.5,
+          hdi: (hdiEvent?.payload?.hdi ?? hdiEvent?.hdi) || 0.5,
           hdiTrend,
           lastUpdated: hdiEvent?.timestamp || Date.now()
         });
       });
     }
 
+    return { studentProfiles, useDemo };
+  }, [interactions, profiles, showDemoData]);
+
+  // Calculate adaptive learning statistics from profiles
+  const adaptiveStats: AdaptiveStats = useMemo(() => {
+    const { studentProfiles, useDemo } = studentAdaptiveProfiles;
+    
     // Calculate statistics
     const totalStudents = studentProfiles.length || 1;
     const averageHDI = studentProfiles.reduce((sum, s) => sum + s.hdi, 0) / totalStudents;
@@ -325,7 +341,9 @@ export function InstructorDashboard() {
         };
 
     // Identify students needing intervention
-    const highDependencyStudents = studentProfiles.filter(s => s.hdi > 0.8);
+    // High dependency: HDI >= 0.8 (heavily dependent on hints)
+    const highDependencyStudents = studentProfiles.filter(s => s.hdi >= 0.8);
+    // Degrading: HDI trend is 'down' (getting worse) AND current HDI > 0.5 (moderately dependent)
     const degradingStudents = studentProfiles.filter(s => s.hdiTrend === 'down' && s.hdi > 0.5);
 
     return {
@@ -335,20 +353,27 @@ export function InstructorDashboard() {
       highDependencyStudents,
       degradingStudents
     };
-  }, [interactions, profiles, showDemoData]);
+  }, [studentAdaptiveProfiles, interactions]);
 
   // Handle intervention trigger
-  const handleTriggerIntervention = (student: StudentAdaptiveProfile) => {
-    // Log intervention event
+  const [interveningStudents, setInterveningStudents] = useState<Set<string>>(new Set());
+  
+  const handleTriggerIntervention = async (student: StudentAdaptiveProfile) => {
+    // Set loading state for this student
+    setInterveningStudents(prev => new Set(prev).add(student.learnerId));
+    
+    // Log intervention event with correct event type
     const interventionEvent: InteractionEvent = {
       id: `intervention-${Date.now()}`,
       learnerId: student.learnerId,
       timestamp: Date.now(),
-      eventType: 'intervention_triggered',
+      eventType: 'dependency_intervention_triggered',
       problemId: 'instructor-dashboard',
       payload: {
         hdi: student.hdi,
+        hdiLevel: student.hdi > 0.8 ? 'high' : 'medium',
         reason: student.hdi > 0.8 ? 'high_dependency' : 'degrading_trend',
+        interventionType: student.hdi > 0.8 ? 'forced_independent' : 'reflective_prompt',
         profile: student.profile
       }
     };
@@ -356,6 +381,16 @@ export function InstructorDashboard() {
     // Save to storage
     const existing = storage.getAllInteractions();
     storage.saveInteractions([...existing, interventionEvent]);
+    
+    // Simulate brief delay for UX
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Remove from loading state
+    setInterveningStudents(prev => {
+      const next = new Set(prev);
+      next.delete(student.learnerId);
+      return next;
+    });
 
     // Show toast
     setToastMessage(`Intervention triggered for ${student.name}`);
@@ -609,8 +644,9 @@ export function InstructorDashboard() {
                       variant="outline" 
                       className="border-red-300 hover:bg-red-100"
                       onClick={() => handleTriggerIntervention(student)}
+                      disabled={interveningStudents.has(student.learnerId)}
                     >
-                      Trigger Intervention
+                      {interveningStudents.has(student.learnerId) ? 'Triggering...' : 'Trigger Intervention'}
                     </Button>
                   </Alert>
                 ))}
@@ -630,8 +666,9 @@ export function InstructorDashboard() {
                       variant="outline" 
                       className="border-yellow-300 hover:bg-yellow-100"
                       onClick={() => handleTriggerIntervention(student)}
+                      disabled={interveningStudents.has(student.learnerId)}
                     >
-                      Trigger Intervention
+                      {interveningStudents.has(student.learnerId) ? 'Triggering...' : 'Trigger Intervention'}
                     </Button>
                   </Alert>
                 ))}
@@ -663,142 +700,64 @@ export function InstructorDashboard() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(() => {
-                    // Get student profiles for the table
-                    const latestProfiles = interactions
-                      .filter(e => e.eventType === 'profile_assigned')
-                      .reduce((acc, e) => {
-                        acc[e.learnerId] = e;
-                        return acc;
-                      }, {} as Record<string, InteractionEvent>);
-
-                    const latestHDI = interactions
-                      .filter(e => e.eventType === 'hdi_calculated')
-                      .reduce((acc, e) => {
-                        acc[e.learnerId] = e;
-                        return acc;
-                      }, {} as Record<string, InteractionEvent>);
-
-                    const hdiHistory = interactions
-                      .filter(e => e.eventType === 'hdi_calculated')
-                      .reduce((acc, e) => {
-                        if (!acc[e.learnerId]) acc[e.learnerId] = [];
-                        acc[e.learnerId].push(e);
-                        return acc;
-                      }, {} as Record<string, InteractionEvent[]>);
-
-                    const allLearnerIds = new Set([
-                      ...Object.keys(latestProfiles),
-                      ...profiles.map(p => p.id)
-                    ]);
-
-                    const useDemo = showDemoData && allLearnerIds.size === 0;
-                    let tableData: StudentAdaptiveProfile[] = [];
-
-                    if (useDemo) {
-                      tableData = DEMO_ADAPTIVE_DATA.profiles.map(demo => {
-                        const demoStudent = DEMO_STUDENTS.find(s => s.id === demo.learnerId);
-                        return {
-                          learnerId: demo.learnerId,
-                          name: demoStudent?.name || demo.learnerId,
-                          profile: demo.profile as 'fast' | 'slow' | 'adaptive',
-                          strategy: demo.strategy as 'static' | 'diagnostic' | 'bandit',
-                          hdi: demo.hdi,
-                          hdiTrend: demo.hdi > 0.6 ? 'up' : 'stable',
-                          lastUpdated: Date.now()
-                        };
-                      });
-                    } else {
-                      tableData = Array.from(allLearnerIds).map(learnerId => {
-                        const profile = profiles.find(p => p.id === learnerId);
-                        const profileEvent = latestProfiles[learnerId];
-                        const hdiEvent = latestHDI[learnerId];
-                        const history = hdiHistory[learnerId] || [];
-
-                        let hdiTrend: 'up' | 'down' | 'stable' = 'stable';
-                        if (history.length >= 2) {
-                          const sorted = history.sort((a, b) => a.timestamp - b.timestamp);
-                          const recent = sorted.slice(-3);
-                          const values = recent.map(e => e.payload?.hdi || 0);
-                          if (values.length >= 2) {
-                            const first = values[0];
-                            const last = values[values.length - 1];
-                            if (last > first + 0.05) hdiTrend = 'up';
-                            else if (last < first - 0.05) hdiTrend = 'down';
-                          }
-                        }
-
-                        return {
-                          learnerId,
-                          name: profile?.name || learnerId,
-                          profile: profileEvent?.payload?.profile || 'adaptive',
-                          strategy: profileEvent?.payload?.strategy || 'static',
-                          hdi: hdiEvent?.payload?.hdi || 0.5,
-                          hdiTrend,
-                          lastUpdated: hdiEvent?.timestamp || Date.now()
-                        };
-                      });
-                    }
-
-                    return tableData.map(student => (
-                      <TableRow key={student.learnerId}>
-                        <TableCell className="font-medium">{student.name}</TableCell>
-                        <TableCell>
-                          <Badge className={getProfileBadgeColor(student.profile)}>
-                            {student.profile.charAt(0).toUpperCase() + student.profile.slice(1)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={getStrategyBadgeVariant(student.strategy)}>
-                            {student.strategy}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Progress value={student.hdi * 100} className="w-20 h-2" />
-                            <span className="text-sm">{(student.hdi * 100).toFixed(0)}%</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {student.hdiTrend === 'up' && <TrendingUp className="size-5 text-green-500" />}
-                          {student.hdiTrend === 'down' && <TrendingDown className="size-5 text-red-500" />}
-                          {student.hdiTrend === 'stable' && <span className="text-gray-400">—</span>}
-                        </TableCell>
-                        <TableCell>
-                          <select 
-                            className="text-sm border rounded px-2 py-1 bg-white"
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                const overrideEvent: InteractionEvent = {
-                                  id: `override-${Date.now()}`,
-                                  learnerId: student.learnerId,
-                                  timestamp: Date.now(),
-                                  eventType: 'profile_assigned',
-                                  problemId: 'instructor-override',
-                                  payload: {
-                                    profile: e.target.value,
-                                    strategy: 'static',
-                                    reason: 'instructor_override'
-                                  }
-                                };
-                                const existing = storage.getAllInteractions();
-                                storage.saveInteractions([...existing, overrideEvent]);
-                                setToastMessage(`Profile updated for ${student.name}`);
-                                // Refresh data
-                                setInteractions([...existing, overrideEvent]);
-                              }
-                            }}
-                            defaultValue=""
-                          >
-                            <option value="">Override...</option>
-                            <option value="fast">Fast</option>
-                            <option value="slow">Slow</option>
-                            <option value="adaptive">Adaptive</option>
-                          </select>
-                        </TableCell>
-                      </TableRow>
-                    ));
-                  })()}
+                  {studentAdaptiveProfiles.studentProfiles.map(student => (
+                    <TableRow key={student.learnerId}>
+                      <TableCell className="font-medium">{student.name}</TableCell>
+                      <TableCell>
+                        <Badge className={getProfileBadgeColor(student.profile)}>
+                          {student.profile.charAt(0).toUpperCase() + student.profile.slice(1)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getStrategyBadgeVariant(student.strategy)}>
+                          {student.strategy}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Progress value={student.hdi * 100} className="w-20 h-2" />
+                          <span className="text-sm">{(student.hdi * 100).toFixed(0)}%</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {student.hdiTrend === 'up' && <TrendingUp className="size-5 text-green-500" />}
+                        {student.hdiTrend === 'down' && <TrendingDown className="size-5 text-red-500" />}
+                        {student.hdiTrend === 'stable' && <span className="text-gray-400">—</span>}
+                      </TableCell>
+                      <TableCell>
+                        <select 
+                          className="text-sm border rounded px-2 py-1 bg-white"
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              const overrideEvent: InteractionEvent = {
+                                id: `override-${Date.now()}`,
+                                learnerId: student.learnerId,
+                                timestamp: Date.now(),
+                                eventType: 'profile_assigned',
+                                problemId: 'instructor-override',
+                                payload: {
+                                  profile: e.target.value,
+                                  strategy: 'static',
+                                  reason: 'instructor_override'
+                                }
+                              };
+                              const existing = storage.getAllInteractions();
+                              storage.saveInteractions([...existing, overrideEvent]);
+                              setToastMessage(`Profile updated for ${student.name}`);
+                              // Refresh data
+                              setInteractions([...existing, overrideEvent]);
+                            }
+                          }}
+                          defaultValue=""
+                        >
+                          <option value="">Override...</option>
+                          <option value="fast">Fast</option>
+                          <option value="slow">Slow</option>
+                          <option value="adaptive">Adaptive</option>
+                        </select>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
               {!showDemoData && profiles.length === 0 && (
