@@ -86,7 +86,19 @@ export type InteractionEvent = {
     // Week 3 Feature: Ask My Textbook chat
     | 'chat_interaction'
     // Background concept extraction
-    | 'concept_extraction';
+    | 'concept_extraction'
+    // Week 5: Escalation Profiles (Component 7)
+    | 'profile_assigned'
+    | 'escalation_triggered'
+    | 'profile_adjusted'
+    // Week 5: Multi-Armed Bandit (Component 8)
+    | 'bandit_arm_selected'
+    | 'bandit_reward_observed'
+    | 'bandit_updated'
+    // Week 5: HDI - Hint Dependency Index (Component 9)
+    | 'hdi_calculated'
+    | 'hdi_trajectory_updated'
+    | 'dependency_intervention_triggered';
   problemId: string;
   code?: string;
   error?: string;
@@ -142,6 +154,40 @@ export type InteractionEvent = {
   chatQuickChip?: string;
   savedToNotes?: boolean;
   textbookUnitsRetrieved?: string[]; // IDs of units used for grounding
+  // Week 5: Escalation Profiles (Component 7)
+  profileId?: string;
+  assignmentStrategy?: 'static' | 'diagnostic' | 'bandit';
+  previousThresholds?: { escalate: number; aggregate: number };
+  newThresholds?: { escalate: number; aggregate: number };
+  // Week 5: Multi-Armed Bandit (Component 8)
+  selectedArm?: string;
+  selectionMethod?: 'thompson_sampling' | 'epsilon_greedy';
+  armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
+  reward?: {
+    total: number;
+    components: {
+      independentSuccess: number;
+      errorReduction: number;
+      delayedRetention: number;
+      dependencyPenalty: number;
+      timeEfficiency: number;
+    };
+  };
+  newAlpha?: number;
+  newBeta?: number;
+  // Week 5: HDI - Hint Dependency Index (Component 9)
+  hdi?: number;
+  hdiLevel?: 'low' | 'medium' | 'high';
+  hdiComponents?: {
+    hpa: number;
+    aed: number;
+    er: number;
+    reae: number;
+    iwh: number;
+  };
+  trend?: 'increasing' | 'stable' | 'decreasing';
+  slope?: number;
+  interventionType?: 'forced_independent' | 'profile_switch' | 'reflective_prompt';
 };
 
 export type ConceptCoverageEvidence = {
@@ -554,3 +600,21 @@ export type AutoCreationSkipInfo = {
   reason: 'existing_unit' | 'quality_threshold_not_met' | 'generation_failed' | 'pattern_not_strong';
   details: string;
 };
+
+// Week 5: Escalation Profile Types (Component 7)
+export type ProfileId = 'fast-escalator' | 'slow-escalator' | 'adaptive-escalator';
+
+// Week 5: HDI Level classification (Component 9)
+export type HDILevel = 'low' | 'medium' | 'high';
+
+// Week 5: HDI Trend direction (Component 9)
+export type HDITrend = 'increasing' | 'stable' | 'decreasing';
+
+// Week 5: HDI Component metrics (Component 9)
+export interface HDIComponents {
+  hpa: number;  // Hints Per Attempt
+  aed: number;  // Average Escalation Depth
+  er: number;   // Explanation Rate
+  reae: number; // Repeated Error After Explanation
+  iwh: number;  // Improvement Without Hint
+}
