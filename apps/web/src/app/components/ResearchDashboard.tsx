@@ -1770,6 +1770,262 @@ export function ResearchDashboard() {
               )}
             </Card>
           </TabsContent>
+
+          <TabsContent value="week5" className="space-y-6">
+            {/* Week 5: Adaptive Personalization Tab */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* 1. Escalation Profile Distribution */}
+              <Card className="p-6">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <Target className="size-5 text-blue-600" />
+                  Escalation Profile Distribution
+                </h3>
+                {week5Analytics.profileDistributionData.length > 0 ? (
+                  <div className="flex flex-col items-center">
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie
+                          data={week5Analytics.profileDistributionData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50}
+                          outerRadius={80}
+                          paddingAngle={3}
+                          dataKey="value"
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {week5Analytics.profileDistributionData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="w-full mt-4 space-y-2">
+                      {week5Analytics.profileDistributionData.map((item) => (
+                        <div key={item.name} className="flex items-center justify-between p-2 rounded bg-gray-50">
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                            <span className="text-sm font-medium">{item.name}</span>
+                          </div>
+                          <Badge variant="outline">{item.value} learners</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-gray-500">
+                    <Target className="size-12 mx-auto mb-3 text-gray-300" />
+                    <p>No profile assignment data available</p>
+                    <p className="text-sm text-gray-400 mt-1">Complete learning sessions to see profile distribution</p>
+                  </div>
+                )}
+              </Card>
+
+              {/* 2. Bandit Performance */}
+              <Card className="p-6">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <BrainCircuit className="size-5 text-purple-600" />
+                  Bandit Performance
+                </h3>
+                {week5Analytics.banditArmData.length > 0 ? (
+                  <div className="space-y-6">
+                    {/* Arm Selection Frequency */}
+                    <div>
+                      <p className="text-sm text-gray-600 mb-2">Arm Selection Frequency</p>
+                      <ResponsiveContainer width="100%" height={150}>
+                        <BarChart data={week5Analytics.banditArmData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="armId" tick={{ fontSize: 11 }} />
+                          <YAxis tick={{ fontSize: 11 }} />
+                          <RechartsTooltip 
+                            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                          />
+                          <Bar dataKey="selectionCount" fill={CHART_COLORS.purple} radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    
+                    {/* Mean Rewards Timeline */}
+                    {week5Analytics.banditRewardData.length > 0 && (
+                      <div>
+                        <p className="text-sm text-gray-600 mb-2">Cumulative Mean Reward</p>
+                        <ResponsiveContainer width="100%" height={120}>
+                          <LineChart data={week5Analytics.banditRewardData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                            <XAxis 
+                              dataKey="timestamp" 
+                              tickFormatter={(ts) => new Date(ts).toLocaleTimeString()}
+                              tick={{ fontSize: 9 }}
+                            />
+                            <YAxis tick={{ fontSize: 11 }} domain={[0, 1]} />
+                            <RechartsTooltip 
+                              contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                              labelFormatter={(ts) => new Date(ts).toLocaleString()}
+                            />
+                            <Line 
+                              type="monotone" 
+                              dataKey="cumulativeMean" 
+                              stroke={CHART_COLORS.success} 
+                              strokeWidth={2} 
+                              dot={false} 
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-gray-500">
+                    <BrainCircuit className="size-12 mx-auto mb-3 text-gray-300" />
+                    <p>No bandit data available</p>
+                    <p className="text-sm text-gray-400 mt-1">Bandit selections will appear as learners interact</p>
+                  </div>
+                )}
+              </Card>
+            </div>
+
+            {/* 3. HDI Analytics */}
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Activity className="size-5 text-orange-600" />
+                HDI (Hint Dependency Index) Analytics
+              </h3>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* HDI Histogram */}
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">HDI Distribution</p>
+                  {week5Analytics.hdiBins.some(b => b.count > 0) ? (
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={week5Analytics.hdiBins}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis dataKey="range" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <RechartsTooltip 
+                          contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                        />
+                        <Bar dataKey="count" fill={CHART_COLORS.orange} radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500 bg-gray-50 rounded">
+                      <p>No HDI data available</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* High HDI Alerts */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-gray-600">High HDI Alerts (&gt; 0.8)</p>
+                    <Badge variant="destructive" className="text-xs">
+                      {week5Analytics.highHDIAlerts.length} learners
+                    </Badge>
+                  </div>
+                  {week5Analytics.highHDIAlerts.length > 0 ? (
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                      {week5Analytics.highHDIAlerts.map((alert, idx) => (
+                        <div 
+                          key={idx} 
+                          className="flex items-center justify-between p-3 bg-red-50 border border-red-100 rounded-lg"
+                        >
+                          <div className="flex items-center gap-2">
+                            <AlertCircle className="size-4 text-red-600" />
+                            <span className="text-sm font-medium truncate max-w-[150px]">
+                              {alert.learnerId.slice(0, 8)}...
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-red-700 border-red-200">
+                              HDI: {alert.hdi.toFixed(2)}
+                            </Badge>
+                            <span className="text-xs text-gray-500">
+                              {new Date(alert.timestamp).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500 bg-gray-50 rounded">
+                      <CheckCircle2 className="size-8 mx-auto mb-2 text-green-500" />
+                      <p className="text-sm">No high dependency learners</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+
+            {/* 4. Profile Effectiveness Table */}
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <TrendingUp className="size-5 text-green-600" />
+                Profile Effectiveness Comparison
+              </h3>
+              {week5Analytics.profileEffectivenessData.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Profile</TableHead>
+                        <TableHead className="text-right">Learners</TableHead>
+                        <TableHead className="text-right">Avg Success Rate</TableHead>
+                        <TableHead className="text-right">Avg Escalations</TableHead>
+                        <TableHead className="text-right">Total Interactions</TableHead>
+                        <TableHead>Performance</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {week5Analytics.profileEffectivenessData.map((row) => (
+                        <TableRow key={row.profile}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Badge 
+                                variant={row.profile === 'FAST' ? 'destructive' : row.profile === 'SLOW' ? 'default' : 'secondary'}
+                              >
+                                {row.profile}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-mono">{row.learnerCount}</TableCell>
+                          <TableCell className="text-right">
+                            <span className={`font-mono ${row.avgSuccessRate >= 70 ? 'text-green-600' : row.avgSuccessRate >= 40 ? 'text-yellow-600' : 'text-red-600'}`}>
+                              {row.avgSuccessRate.toFixed(1)}%
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right font-mono">{row.avgEscalations.toFixed(1)}</TableCell>
+                          <TableCell className="text-right font-mono">{row.totalInteractions.toLocaleString()}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full ${
+                                    row.avgSuccessRate >= 70 ? 'bg-green-500' : 
+                                    row.avgSuccessRate >= 40 ? 'bg-yellow-500' : 'bg-red-500'
+                                  }`}
+                                  style={{ width: `${Math.min(row.avgSuccessRate, 100)}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-500">
+                                {row.avgSuccessRate >= 70 ? 'High' : row.avgSuccessRate >= 40 ? 'Medium' : 'Low'}
+                              </span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <TrendingUp className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>No profile effectiveness data available</p>
+                  <p className="text-sm text-gray-400 mt-1">Assign profiles to learners to see comparison</p>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
         </Tabs>
       </div>
     </TooltipProvider>
