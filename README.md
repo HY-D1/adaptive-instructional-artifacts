@@ -157,9 +157,11 @@ npm run gate:week3:acceptance
 ├── scripts/               # Utility scripts (replay, metrics)
 ├── docs/                  # Documentation
 │   ├── README.md          # Documentation index
-│   ├── progress.md        # Architecture and milestones
-│   ├── weekly-progress.md # Active checkpoint log
-│   └── week3-*.md         # Week 3 deliverables reference
+│   ├── runbooks/          # Active operational docs
+│   │   ├── progress.md    # Architecture and milestones
+│   │   └── weekly-progress.md # Active checkpoint log
+│   ├── research/          # Research and design docs
+│   └── archive/           # Historical docs
 └── dist/                  # Build outputs
 ```
 
@@ -168,9 +170,9 @@ npm run gate:week3:acceptance
 | Document | Purpose |
 |----------|---------|
 | [docs/README.md](docs/README.md) | Documentation index and navigation |
-| [docs/progress.md](docs/progress.md) | Architecture, milestones, research vision |
-| [docs/weekly-progress.md](docs/weekly-progress.md) | Active checkpoint log (every task) |
-| [docs/week3-report.md](docs/week3-report.md) | Week 3 deliverables reference |
+| [docs/runbooks/progress.md](docs/runbooks/progress.md) | Architecture, milestones, research vision |
+| [docs/runbooks/weekly-progress.md](docs/runbooks/weekly-progress.md) | Active checkpoint log (every task) |
+| [docs/archive/archive-week3.md](docs/archive/archive-week3.md) | Week 3 deliverables reference |
 
 ## Testing
 
@@ -192,4 +194,4 @@ MIT License - see [LICENSE](LICENSE)
 
 ## Research
 
-This project explores **dynamic instructional assembly** — content that emerges from learner interaction data. See [docs/progress.md](docs/progress.md) for the research vision and architecture details.
+This project explores **dynamic instructional assembly** — content that emerges from learner interaction data. See [docs/runbooks/progress.md](docs/runbooks/progress.md) for the research vision and architecture details.

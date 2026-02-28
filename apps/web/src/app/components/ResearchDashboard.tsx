@@ -38,6 +38,47 @@ interface ComparisonRow {
   avgUnitsAdded: number;
   avgDedupRate: string;
 }
+
+// Week 5: Adaptive Personalization data types
+interface ProfileDistributionData {
+  name: string;
+  value: number;
+  color: string;
+}
+
+interface BanditArmData {
+  armId: string;
+  selectionCount: number;
+  meanReward: number;
+}
+
+interface BanditRewardData {
+  timestamp: number;
+  armId: string;
+  reward: number;
+  cumulativeMean: number;
+}
+
+interface HDIDataPoint {
+  hdi: number;
+  learnerId: string;
+  timestamp: number;
+}
+
+interface HighHDIAlert {
+  learnerId: string;
+  hdi: number;
+  trend: string;
+  timestamp: number;
+}
+
+interface ProfileEffectivenessData {
+  profile: string;
+  learnerCount: number;
+  avgSuccessRate: number;
+  avgEscalations: number;
+  totalInteractions: number;
+}
 import {
   Table,
   TableBody,
@@ -76,7 +117,10 @@ import {
   BarChart3,
   PieChart as PieChartIcon,
   TrendingUp,
-  Lightbulb
+  Lightbulb,
+  Sparkles,
+  Target,
+  BrainCircuit
 } from 'lucide-react';
 import { storage } from '../lib/storage';
 import { InteractionEvent, LearnerProfile, ExperimentCondition, PdfIndexDocument } from '../types';
@@ -789,6 +833,180 @@ export function ResearchDashboard() {
   const activeThresholds = orchestrator.getThresholds(selectedReplayStrategy);
   const traceStartTime = replayPolicyTrace[0]?.timestamp;
 
+  // Week 5: Adaptive Personalization Analytics
+  const week5Analytics = useMemo(() => {
+    // Filter Week 5 event types
+    const week5Events = filteredInteractions.filter(i => 
+      ['profile_assigned', 'escalation_triggered', 'profile_adjusted',
+       'bandit_arm_selected', 'bandit_reward_observed', 'bandit_updated',
+       'hdi_calculated', 'hdi_trajectory_updated'].includes(i.eventType)
+    );
+
+    // 1. Escalation Profile Distribution
+    const profileAssignments = week5Events.filter(e => e.eventType === 'profile_assigned');
+    const profileCounts: Record<string, number> = {};
+    profileAssignments.forEach(e => {
+      const profileId = e.payload?.profileId || e.profileId || 'unknown';
+      const normalizedProfile = profileId.toUpperCase().includes('FAST') ? 'FAST' :
+                               profileId.toUpperCase().includes('SLOW') ? 'SLOW' :
+                               profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : 'UNKNOWN';
+      profileCounts[normalizedProfile] = (profileCounts[normalizedProfile] || 0) + 1;
+    });
+    
+    const profileDistributionData: ProfileDistributionData[] = [
+      { name: 'FAST', value: profileCounts.FAST || 0, color: CHART_COLORS.error },
+      { name: 'SLOW', value: profileCounts.SLOW || 0, color: CHART_COLORS.success },
+      { name: 'ADAPTIVE', value: profileCounts.ADAPTIVE || 0, color: CHART_COLORS.primary }
+    ].filter(p => p.value > 0);
+
+    // 2. Bandit Performance
+    const armSelections = week5Events.filter(e => e.eventType === 'bandit_arm_selected');
+    const armRewards = week5Events.filter(e => e.eventType === 'bandit_reward_observed');
+    
+    // Calculate arm selection frequency
+    const armSelectionCounts: Record<string, number> = {};
+    armSelections.forEach(e => {
+      const armId = e.payload?.armId || e.selectedArm || 'unknown';
+      armSelectionCounts[armId] = (armSelectionCounts[armId] || 0) + 1;
+    });
+    
+    // Calculate mean rewards per arm
+    const armRewardSums: Record<string, number> = {};
+    const armRewardCounts: Record<string, number> = {};
+    armRewards.forEach(e => {
+      const armId = e.payload?.armId || 'unknown';
+      const reward = e.payload?.reward?.total || e.reward?.total || 0;
+      armRewardSums[armId] = (armRewardSums[armId] || 0) + reward;
+      armRewardCounts[armId] = (armRewardCounts[armId] || 0) + 1;
+    });
+    
+    const banditArmData: BanditArmData[] = Object.keys(armSelectionCounts).map(armId => ({
+      armId,
+      selectionCount: armSelectionCounts[armId] || 0,
+      meanReward: armRewardCounts[armId] ? (armRewardSums[armId] / armRewardCounts[armId]) : 0
+    })).sort((a, b) => b.selectionCount - a.selectionCount);
+
+    // Bandit reward timeline
+    let cumulativeReward = 0;
+    let rewardCount = 0;
+    const banditRewardData: BanditRewardData[] = armRewards
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .map(e => {
+        const reward = e.payload?.reward?.total || e.reward?.total || 0;
+        cumulativeReward += reward;
+        rewardCount++;
+        return {
+          timestamp: e.timestamp,
+          armId: e.payload?.armId || 'unknown',
+          reward,
+          cumulativeMean: rewardCount > 0 ? cumulativeReward / rewardCount : 0
+        };
+      });
+
+    // 3. HDI Analytics
+    const hdiEvents = week5Events.filter(e => e.eventType === 'hdi_calculated');
+    const hdiDataPoints: HDIDataPoint[] = hdiEvents.map(e => ({
+      hdi: e.payload?.hdi ?? e.hdi ?? 0,
+      learnerId: e.learnerId,
+      timestamp: e.timestamp
+    }));
+    
+    // HDI histogram bins
+    const hdiBins = [
+      { range: '0-0.2', min: 0, max: 0.2, count: 0 },
+      { range: '0.2-0.4', min: 0.2, max: 0.4, count: 0 },
+      { range: '0.4-0.6', min: 0.4, max: 0.6, count: 0 },
+      { range: '0.6-0.8', min: 0.6, max: 0.8, count: 0 },
+      { range: '0.8-1.0', min: 0.8, max: 1.0, count: 0 }
+    ];
+    
+    hdiDataPoints.forEach(point => {
+      const bin = hdiBins.find(b => point.hdi >= b.min && point.hdi < b.max);
+      if (bin) bin.count++;
+    });
+    
+    // High HDI alerts (> 0.8)
+    const highHDIAlerts: HighHDIAlert[] = hdiDataPoints
+      .filter(p => p.hdi > 0.8)
+      .sort((a, b) => b.hdi - a.hdi)
+      .slice(0, 10)
+      .map(p => ({
+        learnerId: p.learnerId,
+        hdi: p.hdi,
+        trend: 'stable', // Default, could be enriched with trajectory data
+        timestamp: p.timestamp
+      }));
+
+    // 4. Profile Effectiveness
+    const profileEffectiveness: Record<string, ProfileEffectivenessData> = {};
+    
+    // Initialize profiles
+    Object.keys(profileCounts).forEach(profile => {
+      if (profile !== 'UNKNOWN') {
+        profileEffectiveness[profile] = {
+          profile,
+          learnerCount: profileCounts[profile] || 0,
+          avgSuccessRate: 0,
+          avgEscalations: 0,
+          totalInteractions: 0
+        };
+      }
+    });
+    
+    // Calculate effectiveness metrics per learner
+    const learnersByProfile: Record<string, string[]> = {};
+    profileAssignments.forEach(e => {
+      const profileId = e.payload?.profileId || e.profileId || 'unknown';
+      const normalizedProfile = profileId.toUpperCase().includes('FAST') ? 'FAST' :
+                               profileId.toUpperCase().includes('SLOW') ? 'SLOW' :
+                               profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : null;
+      if (normalizedProfile && normalizedProfile !== 'UNKNOWN') {
+        if (!learnersByProfile[normalizedProfile]) learnersByProfile[normalizedProfile] = [];
+        if (!learnersByProfile[normalizedProfile].includes(e.learnerId)) {
+          learnersByProfile[normalizedProfile].push(e.learnerId);
+        }
+      }
+    });
+    
+    // Calculate metrics for each profile
+    Object.entries(learnersByProfile).forEach(([profile, learnerIds]) => {
+      let totalSuccess = 0;
+      let totalEscalations = 0;
+      let totalInteractions = 0;
+      
+      learnerIds.forEach(learnerId => {
+        const learnerEvents = filteredInteractions.filter(i => i.learnerId === learnerId);
+        const successes = learnerEvents.filter(i => i.eventType === 'execution' && i.successful).length;
+        const executions = learnerEvents.filter(i => i.eventType === 'execution').length;
+        const escalations = learnerEvents.filter(i => i.eventType === 'explanation_view').length;
+        
+        totalSuccess += executions > 0 ? (successes / executions) : 0;
+        totalEscalations += escalations;
+        totalInteractions += learnerEvents.length;
+      });
+      
+      if (profileEffectiveness[profile]) {
+        profileEffectiveness[profile].avgSuccessRate = learnerIds.length > 0 
+          ? (totalSuccess / learnerIds.length) * 100 
+          : 0;
+        profileEffectiveness[profile].avgEscalations = learnerIds.length > 0
+          ? totalEscalations / learnerIds.length
+          : 0;
+        profileEffectiveness[profile].totalInteractions = totalInteractions;
+      }
+    });
+
+    return {
+      week5Events,
+      profileDistributionData,
+      banditArmData,
+      banditRewardData,
+      hdiBins,
+      highHDIAlerts,
+      profileEffectivenessData: Object.values(profileEffectiveness)
+    };
+  }, [filteredInteractions]);
+
   // Helper to format labels consistently (extracted to reduce duplication)
   const formatLabel = (str: string, separator: '_' | '-' = '_') => 
     str.replace(new RegExp(separator, 'g'), ' ');
@@ -1164,6 +1382,10 @@ export function ResearchDashboard() {
             <TabsTrigger value="trace" data-testid="instructor-trace-tab" className="flex items-center gap-1.5">
               <BarChart3 className="size-4" />
               Trace View
+            </TabsTrigger>
+            <TabsTrigger value="week5" className="flex items-center gap-1.5">
+              <Sparkles className="size-4" />
+              Week 5: Adaptive
             </TabsTrigger>
           </TabsList>
 
