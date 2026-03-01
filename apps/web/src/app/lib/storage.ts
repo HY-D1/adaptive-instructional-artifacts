@@ -1152,285 +1152,303 @@ class StorageManager {
   // ============================================================================
 
   /**
-   * Log a profile assignment event when a learner is assigned an escalation profile.
-   * Week 5 Component 7: Escalation Profiles
+   * Log profile assignment event
+   * @param learnerId - Learner identifier
+   * @param profileId - Assigned profile ID
+   * @param strategy - Assignment strategy used
+   * @param problemId - Current problem context
    */
-  logProfileAssigned(params: {
-    learnerId: string;
-    problemId: string;
-    profileId: string;
-    assignmentStrategy: 'static' | 'diagnostic' | 'bandit';
-    reason?: string;
-    sessionId?: string;
-  }): { success: boolean; quotaExceeded?: boolean } {
+  logProfileAssigned(
+    learnerId: string,
+    profileId: string,
+    strategy: 'static' | 'diagnostic' | 'bandit',
+    problemId: string
+  ): void {
     const event: InteractionEvent = {
       id: createEventId('profile', 'assigned'),
-      sessionId: params.sessionId || this.getActiveSessionId(),
-      learnerId: params.learnerId,
+      sessionId: this.getActiveSessionId(),
+      learnerId,
       timestamp: Date.now(),
       eventType: 'profile_assigned',
-      problemId: params.problemId,
-      profileId: params.profileId,
-      assignmentStrategy: params.assignmentStrategy,
+      problemId,
+      profileId,
+      assignmentStrategy: strategy,
+      policyVersion: 'profile-assign-v1',
       payload: {
-        profileId: params.profileId,
-        strategy: params.assignmentStrategy,
-        reason: params.reason || 'bandit_selection'
+        profileId,
+        strategy,
+        reason: 'bandit_selection'
       }
     };
-    return this.saveInteraction(event);
+    this.saveInteraction(event);
   }
 
   /**
-   * Log an escalation triggered event.
-   * Week 5 Component 7: Escalation Profiles
+   * Log escalation triggered event
+   * @param learnerId - Learner identifier
+   * @param profileId - Current profile ID
+   * @param errorCount - Error count at escalation
+   * @param problemId - Current problem
    */
-  logEscalationTriggered(params: {
-    learnerId: string;
-    problemId: string;
-    trigger: 'threshold_met' | 'time_stuck' | 'repeated_error' | 'rung_exhausted';
-    errorCount: number;
-    profileId: string;
-    sessionId?: string;
-  }): { success: boolean; quotaExceeded?: boolean } {
+  logEscalationTriggered(
+    learnerId: string,
+    profileId: string,
+    errorCount: number,
+    problemId: string
+  ): void {
     const event: InteractionEvent = {
       id: createEventId('escalation', 'triggered'),
-      sessionId: params.sessionId || this.getActiveSessionId(),
-      learnerId: params.learnerId,
+      sessionId: this.getActiveSessionId(),
+      learnerId,
       timestamp: Date.now(),
       eventType: 'escalation_triggered',
-      problemId: params.problemId,
+      problemId,
+      profileId,
+      policyVersion: 'escalation-trigger-v1',
       payload: {
-        trigger: params.trigger,
-        errorCount: params.errorCount,
-        profileId: params.profileId
+        trigger: 'threshold_met',
+        errorCount,
+        profileId
       }
     };
-    return this.saveInteraction(event);
+    this.saveInteraction(event);
   }
 
   /**
-   * Log a profile adjustment event when a learner's profile is dynamically adjusted.
-   * Week 5 Component 7: Escalation Profiles
+   * Log profile adjustment event
+   * @param learnerId - Learner identifier
+   * @param previousProfileId - Previous profile
+   * @param newProfileId - New profile
+   * @param reason - Reason for adjustment
    */
-  logProfileAdjusted(params: {
-    learnerId: string;
-    problemId: string;
-    oldProfileId: string;
-    newProfileId: string;
-    reason: 'hdi_trend' | 'performance_change' | 'instructor_override';
-    sessionId?: string;
-  }): { success: boolean; quotaExceeded?: boolean } {
+  logProfileAdjusted(
+    learnerId: string,
+    previousProfileId: string,
+    newProfileId: string,
+    reason: string
+  ): void {
     const event: InteractionEvent = {
       id: createEventId('profile', 'adjusted'),
-      sessionId: params.sessionId || this.getActiveSessionId(),
-      learnerId: params.learnerId,
+      sessionId: this.getActiveSessionId(),
+      learnerId,
       timestamp: Date.now(),
       eventType: 'profile_adjusted',
-      problemId: params.problemId,
+      problemId: 'profile-change',
+      policyVersion: 'profile-adjust-v1',
       payload: {
-        oldProfileId: params.oldProfileId,
-        newProfileId: params.newProfileId,
-        reason: params.reason
+        oldProfileId: previousProfileId,
+        newProfileId,
+        reason
       }
     };
-    return this.saveInteraction(event);
+    this.saveInteraction(event);
   }
 
   /**
-   * Log a bandit arm selection event.
-   * Week 5 Component 8: Multi-Armed Bandit
+   * Log bandit arm selection
+   * @param learnerId - Learner identifier
+   * @param armId - Selected arm ID
+   * @param selectionMethod - How arm was selected
    */
-  logBanditArmSelected(params: {
-    learnerId: string;
-    problemId: string;
-    armId: string;
-    selectionMethod: 'thompson_sampling' | 'epsilon_greedy';
-    armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
-    sessionId?: string;
-  }): { success: boolean; quotaExceeded?: boolean } {
+  logBanditArmSelected(
+    learnerId: string,
+    armId: string,
+    selectionMethod: 'thompson_sampling' | 'epsilon_greedy' | 'forced'
+  ): void {
     const event: InteractionEvent = {
       id: createEventId('bandit', 'arm-selected'),
-      sessionId: params.sessionId || this.getActiveSessionId(),
-      learnerId: params.learnerId,
+      sessionId: this.getActiveSessionId(),
+      learnerId,
       timestamp: Date.now(),
       eventType: 'bandit_arm_selected',
-      problemId: params.problemId,
-      selectedArm: params.armId,
-      selectionMethod: params.selectionMethod,
+      problemId: 'bandit-selection',
+      selectedArm: armId,
+      selectionMethod: selectionMethod === 'forced' ? 'thompson_sampling' : selectionMethod,
+      policyVersion: 'bandit-arm-v1',
       payload: {
-        armId: params.armId,
-        method: params.selectionMethod,
-        armStats: params.armStatsAtSelection
+        armId,
+        method: selectionMethod
       }
     };
-    return this.saveInteraction(event);
+    this.saveInteraction(event);
   }
 
   /**
-   * Log a bandit reward observed event.
-   * Week 5 Component 8: Multi-Armed Bandit
+   * Log bandit reward observed
+   * @param learnerId - Learner identifier
+   * @param armId - Arm that received reward
+   * @param reward - Reward value (0-1)
+   * @param components - Individual reward components
    */
-  logBanditRewardObserved(params: {
-    learnerId: string;
-    problemId: string;
-    armId: string;
-    reward: {
-      total: number;
-      components: {
-        independentSuccess: number;
-        errorReduction: number;
-        delayedRetention: number;
-        dependencyPenalty: number;
-        timeEfficiency: number;
-      };
-    };
-    sessionId?: string;
-  }): { success: boolean; quotaExceeded?: boolean } {
+  logBanditRewardObserved(
+    learnerId: string,
+    armId: string,
+    reward: number,
+    components: {
+      independentSuccess: number;
+      errorReduction: number;
+      delayedRetention: number;
+      dependencyPenalty: number;
+      timeEfficiency: number;
+    }
+  ): void {
     const event: InteractionEvent = {
       id: createEventId('bandit', 'reward'),
-      sessionId: params.sessionId || this.getActiveSessionId(),
-      learnerId: params.learnerId,
+      sessionId: this.getActiveSessionId(),
+      learnerId,
       timestamp: Date.now(),
       eventType: 'bandit_reward_observed',
-      problemId: params.problemId,
-      reward: params.reward,
+      problemId: 'bandit-reward',
+      reward: {
+        total: reward,
+        components
+      },
+      policyVersion: 'bandit-reward-v1',
       payload: {
-        armId: params.armId,
-        reward: params.reward
+        armId,
+        reward: {
+          total: reward,
+          components
+        }
       }
     };
-    return this.saveInteraction(event);
+    this.saveInteraction(event);
   }
 
   /**
-   * Log a bandit update event when arm statistics are updated.
-   * Week 5 Component 8: Multi-Armed Bandit
+   * Log bandit updated (after reward applied)
+   * @param learnerId - Learner identifier
+   * @param armId - Updated arm
+   * @param alpha - New alpha value
+   * @param beta - New beta value
+   * @param pullCount - Total pulls for arm
    */
-  logBanditUpdated(params: {
-    learnerId: string;
-    problemId: string;
-    armId: string;
-    newAlpha: number;
-    newBeta: number;
-    rewardReceived: number;
-    sessionId?: string;
-  }): { success: boolean; quotaExceeded?: boolean } {
+  logBanditUpdated(
+    learnerId: string,
+    armId: string,
+    alpha: number,
+    beta: number,
+    pullCount: number
+  ): void {
     const event: InteractionEvent = {
       id: createEventId('bandit', 'updated'),
-      sessionId: params.sessionId || this.getActiveSessionId(),
-      learnerId: params.learnerId,
+      sessionId: this.getActiveSessionId(),
+      learnerId,
       timestamp: Date.now(),
       eventType: 'bandit_updated',
-      problemId: params.problemId,
-      newAlpha: params.newAlpha,
-      newBeta: params.newBeta,
+      problemId: 'bandit-update',
+      newAlpha: alpha,
+      newBeta: beta,
+      policyVersion: 'bandit-update-v1',
       payload: {
-        armId: params.armId,
-        newAlpha: params.newAlpha,
-        newBeta: params.newBeta,
-        reward: params.rewardReceived
+        armId,
+        newAlpha: alpha,
+        newBeta: beta,
+        pullCount
       }
     };
-    return this.saveInteraction(event);
+    this.saveInteraction(event);
   }
 
   /**
-   * Log an HDI calculated event.
-   * Week 5 Component 9: Hint Dependency Index
+   * Log HDI calculated event
+   * @param learnerId - Learner identifier
+   * @param hdi - HDI score (0-1)
+   * @param components - Individual component scores
+   * @param problemId - Current problem context
    */
-  logHdiCalculated(params: {
-    learnerId: string;
-    problemId: string;
-    hdi: number;
-    hdiLevel: 'low' | 'medium' | 'high';
+  logHDICalculated(
+    learnerId: string,
+    hdi: number,
     components: {
       hpa: number;
       aed: number;
       er: number;
       reae: number;
       iwh: number;
-    };
-    sessionId?: string;
-  }): { success: boolean; quotaExceeded?: boolean } {
+    },
+    problemId: string
+  ): void {
     const event: InteractionEvent = {
       id: createEventId('hdi', 'calculated'),
-      sessionId: params.sessionId || this.getActiveSessionId(),
-      learnerId: params.learnerId,
+      sessionId: this.getActiveSessionId(),
+      learnerId,
       timestamp: Date.now(),
       eventType: 'hdi_calculated',
-      problemId: params.problemId,
-      hdi: params.hdi,
-      hdiLevel: params.hdiLevel,
-      hdiComponents: params.components,
+      problemId,
+      hdi,
+      hdiLevel: hdi < 0.33 ? 'low' : hdi < 0.66 ? 'medium' : 'high',
+      hdiComponents: components,
+      policyVersion: 'hdi-calc-v1',
       payload: {
-        hdi: params.hdi,
-        hdiLevel: params.hdiLevel,
-        components: params.components
+        hdi,
+        hdiLevel: hdi < 0.33 ? 'low' : hdi < 0.66 ? 'medium' : 'high',
+        components
       }
     };
-    return this.saveInteraction(event);
+    this.saveInteraction(event);
   }
 
   /**
-   * Log an HDI trajectory updated event.
-   * Week 5 Component 9: Hint Dependency Index
+   * Log HDI trajectory updated
+   * @param learnerId - Learner identifier
+   * @param hdi - Current HDI
+   * @param trend - Trend direction
+   * @param slope - Rate of change
    */
-  logHdiTrajectoryUpdated(params: {
-    learnerId: string;
-    problemId: string;
-    hdi: number;
-    trend: 'increasing' | 'stable' | 'decreasing';
-    slope: number;
-    windowSize: number;
-    sessionId?: string;
-  }): { success: boolean; quotaExceeded?: boolean } {
+  logHDITrajectoryUpdated(
+    learnerId: string,
+    hdi: number,
+    trend: 'increasing' | 'stable' | 'decreasing',
+    slope: number
+  ): void {
     const event: InteractionEvent = {
       id: createEventId('hdi', 'trajectory'),
-      sessionId: params.sessionId || this.getActiveSessionId(),
-      learnerId: params.learnerId,
+      sessionId: this.getActiveSessionId(),
+      learnerId,
       timestamp: Date.now(),
       eventType: 'hdi_trajectory_updated',
-      problemId: params.problemId,
-      hdi: params.hdi,
-      trend: params.trend,
-      slope: params.slope,
+      problemId: 'hdi-trajectory',
+      hdi,
+      trend,
+      slope,
+      policyVersion: 'hdi-trajectory-v1',
       payload: {
-        hdi: params.hdi,
-        trend: params.trend,
-        slope: params.slope,
-        windowSize: params.windowSize
+        hdi,
+        trend,
+        slope
       }
     };
-    return this.saveInteraction(event);
+    this.saveInteraction(event);
   }
 
   /**
-   * Log a dependency intervention triggered event.
-   * Week 5 Component 9: Hint Dependency Index
+   * Log dependency intervention triggered
+   * @param learnerId - Learner identifier
+   * @param hdi - HDI score that triggered intervention
+   * @param interventionType - Type of intervention
    */
-  logDependencyInterventionTriggered(params: {
-    learnerId: string;
-    problemId: string;
-    hdi: number;
-    interventionType: 'forced_independent' | 'profile_switch' | 'reflective_prompt';
-    sessionId?: string;
-  }): { success: boolean; quotaExceeded?: boolean } {
+  logDependencyInterventionTriggered(
+    learnerId: string,
+    hdi: number,
+    interventionType: 'forced_independent' | 'profile_switch' | 'reflective_prompt'
+  ): void {
     const event: InteractionEvent = {
       id: createEventId('intervention', 'dependency'),
-      sessionId: params.sessionId || this.getActiveSessionId(),
-      learnerId: params.learnerId,
+      sessionId: this.getActiveSessionId(),
+      learnerId,
       timestamp: Date.now(),
       eventType: 'dependency_intervention_triggered',
-      problemId: params.problemId,
-      hdi: params.hdi,
-      interventionType: params.interventionType,
+      problemId: 'hdi-intervention',
+      hdi,
+      interventionType,
+      policyVersion: 'hdi-intervention-v1',
       payload: {
-        hdi: params.hdi,
-        interventionType: params.interventionType
+        hdi,
+        interventionType
       }
     };
-    return this.saveInteraction(event);
+    this.saveInteraction(event);
   }
 
   // Evidence scoring weights for coverage calculation

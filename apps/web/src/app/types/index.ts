@@ -124,8 +124,10 @@ export type InteractionEvent = {
   retrievedChunks?: RetrievedChunkInfo[];
   triggerInteractionIds?: string[];
   evidenceInteractionIds?: string[];
+  sourceInteractionIds?: string[];
+  sourceInteractionIds?: string[];
   inputs?: Record<string, string | number | boolean | null>;
-  outputs?: Record<string, string | number | boolean | null>;
+  outputs?: Record<string, string | number | boolean | null | string[]>;
   conceptIds?: string[];
   // Week 3 D8: Guidance Ladder event metadata fields
   // guidance_request fields
@@ -188,6 +190,9 @@ export type InteractionEvent = {
   trend?: 'increasing' | 'stable' | 'decreasing';
   slope?: number;
   interventionType?: 'forced_independent' | 'profile_switch' | 'reflective_prompt';
+  // Additional metadata for logging/debugging
+  payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 };
 
 export type ConceptCoverageEvidence = {
@@ -248,6 +253,7 @@ export type LLMGenerationParams = {
   top_p: number;
   stream: boolean;
   timeoutMs: number;
+  max_tokens?: number;
 };
 
 export type PdfCitation = {
@@ -292,6 +298,7 @@ export type UnitProvenance = {
 export type InstructionalUnit = {
   id: string;
   sessionId?: string;
+  problemId?: string;
   updatedSessionIds?: string[];
   type: 'hint' | 'explanation' | 'example' | 'summary';
   /** Primary concept ID - the main concept this unit addresses */

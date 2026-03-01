@@ -426,7 +426,7 @@ async function buildUnitFromStructuredOutput(
     .filter((sourceId) => {
       const isValid = retrievedSet.has(sourceId);
       if (!isValid) {
-        console.warn(`[ContentGenerator] Source ID "${sourceId}" from LLM output not found in retrieved sources. Filtered out.`);
+        // Source ID from LLM output not found in retrieved sources - filtered out
       }
       return isValid;
     });

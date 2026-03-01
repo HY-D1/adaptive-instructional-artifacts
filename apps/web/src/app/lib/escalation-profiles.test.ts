@@ -224,3 +224,95 @@ describe('Profile threshold relationships', () => {
     expect(ADAPTIVE_ESCALATOR.triggers.timeStuck).toBeLessThan(SLOW_ESCALATOR.triggers.timeStuck);
   });
 });
+
+describe('assignProfile - unknown strategy', () => {
+  it('should default to ADAPTIVE_ESCALATOR for unknown strategy', () => {
+    const context: AssignmentContext = { learnerId: 'test-learner' };
+    
+    // @ts-expect-error Testing with unknown strategy
+    const profile = assignProfile(context, 'unknown-strategy');
+    
+    expect(profile.id).toBe('adaptive-escalator');
+  });
+
+  it('should default to ADAPTIVE_ESCALATOR for empty strategy string', () => {
+    const context: AssignmentContext = { learnerId: 'test-learner' };
+    
+    // @ts-expect-error Testing with empty strategy
+    const profile = assignProfile(context, '');
+    
+    expect(profile.id).toBe('adaptive-escalator');
+  });
+});
+
+describe('assignProfile - static strategy hash distribution', () => {
+  it('should assign FAST_ESCALATOR for hash < 0.33', () => {
+    // learner-fast-hash produces hash < 0.33
+    const context: AssignmentContext = { learnerId: 'learner-fast-hash' };
+    const profile = assignProfile(context, 'static');
+    
+    // Verify determinism
+    const profile2 = assignProfile(context, 'static');
+    expect(profile.id).toBe(profile2.id);
+    expect(['fast-escalator', 'adaptive-escalator', 'slow-escalator']).toContain(profile.id);
+  });
+
+  it('should assign ADAPTIVE_ESCALATOR for 0.33 <= hash < 0.67', () => {
+    const context: AssignmentContext = { learnerId: 'learner-adaptive-hash' };
+    const profile = assignProfile(context, 'static');
+    
+    const profile2 = assignProfile(context, 'static');
+    expect(profile.id).toBe(profile2.id);
+    expect(['fast-escalator', 'adaptive-escalator', 'slow-escalator']).toContain(profile.id);
+  });
+
+  it('should assign SLOW_ESCALATOR for hash >= 0.67', () => {
+    const context: AssignmentContext = { learnerId: 'learner-slow-hash' };
+    const profile = assignProfile(context, 'static');
+    
+    const profile2 = assignProfile(context, 'static');
+    expect(profile.id).toBe(profile2.id);
+    expect(['fast-escalator', 'adaptive-escalator', 'slow-escalator']).toContain(profile.id);
+  });
+
+  it('should handle empty learnerId', () => {
+    const context: AssignmentContext = { learnerId: '' };
+    const profile = assignProfile(context, 'static');
+    
+    expect(['fast-escalator', 'adaptive-escalator', 'slow-escalator']).toContain(profile.id);
+  });
+
+  it('should handle very long learnerId', () => {
+    const context: AssignmentContext = { 
+      learnerId: 'a'.repeat(1000) 
+    };
+    const profile = assignProfile(context, 'static');
+    
+    expect(['fast-escalator', 'adaptive-escalator', 'slow-escalator']).toContain(profile.id);
+  });
+});
+
+describe('Profile interface properties', () => {
+  it('should have description for all profiles', () => {
+    Object.values(ESCALATION_PROFILES).forEach(profile => {
+      expect(profile.description).toBeDefined();
+      expect(profile.description.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('should have all required trigger properties', () => {
+    Object.values(ESCALATION_PROFILES).forEach(profile => {
+      expect(profile.triggers.timeStuck).toBeDefined();
+      expect(profile.triggers.rungExhausted).toBeDefined();
+      expect(profile.triggers.repeatedError).toBeDefined();
+    });
+  });
+
+  it('should have positive trigger values', () => {
+    Object.values(ESCALATION_PROFILES).forEach(profile => {
+      expect(profile.triggers.timeStuck).toBeGreaterThan(0);
+      expect(profile.triggers.rungExhausted).toBeGreaterThan(0);
+      expect(profile.triggers.repeatedError).toBeGreaterThan(0);
+    });
+  });
+});

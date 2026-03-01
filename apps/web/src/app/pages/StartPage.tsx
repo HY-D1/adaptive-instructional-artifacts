@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
+
+import { BookOpen, BarChart3, Database, GraduationCap, Lock } from 'lucide-react';
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { BookOpen, BarChart3, Database, GraduationCap, Lock } from 'lucide-react';
 import { cn } from '../components/ui/utils';
-import type { UserRole, UserProfile } from '../types';
 import { storage } from '../lib/storage';
+import type { UserRole, UserProfile } from '../types';
 
 // Instructor passcode from environment variable with fallback
 const INSTRUCTOR_PASSCODE = import.meta.env.VITE_INSTRUCTOR_PASSCODE || 'TeachSQL2024';

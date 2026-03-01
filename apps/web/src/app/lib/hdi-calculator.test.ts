@@ -359,7 +359,7 @@ describe('HDI Calculator', () => {
 
   describe('calculateHDI', () => {
     it('returns low level for all zero components', () => {
-      const interactions = [];
+      const interactions: InteractionEvent[] = [];
       const result = calculateHDI(interactions);
       // When empty, IWH defaults to 0 (no success without hints = max dependency)
       // So (1 - 0) * 0.134 = 0.134 contribution from IWH

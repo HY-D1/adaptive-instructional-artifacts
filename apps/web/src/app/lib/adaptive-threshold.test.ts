@@ -12,8 +12,8 @@ import {
   getAdaptiveProfileThresholds,
   calculateCSI,
   type AdjustmentFactors,
-  type InteractionEvent,
 } from './adaptive-threshold';
+import type { InteractionEvent } from '../types';
 
 describe('calculateAdaptiveThreshold', () => {
   it('should return minimum threshold of 2 even with large negative adjustment', () => {

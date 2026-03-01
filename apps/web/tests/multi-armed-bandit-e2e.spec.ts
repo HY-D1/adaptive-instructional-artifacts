@@ -53,27 +53,30 @@ test.describe('@no-external Multi-Armed Bandit E2E', () => {
     await page.goto('/settings');
     await expect(page).toHaveURL(/\/settings/);
 
-    // Check if Week 5 debug controls are present (DEV mode only)
+    // Check if Week 5 debug controls are VISIBLE (DEV mode only)
+    // Use isVisible() with a short timeout to check visibility
     const debugControls = page.locator('[data-testid="week5-debug-controls"]');
-    const count = await debugControls.count();
+    const isVisible = await debugControls.isVisible().catch(() => false);
     
-    if (count === 0) {
-      // Skip test if not in DEV mode - debug controls not rendered
-      console.log('Skipping test: Week 5 debug controls not present - not in DEV mode');
+    if (!isVisible) {
+      // Skip test if not in DEV mode - debug controls not visible
+      console.log('Skipping test: Week 5 debug controls not visible - not in DEV mode');
       return;
     }
 
     // Verify bandit panel is visible
     const banditPanel = page.getByTestId('bandit-panel');
-    await expect(banditPanel).toBeVisible();
+    await expect(banditPanel).toBeVisible({ timeout: 10000 });
 
     // Verify arm stats table exists
     const armStatsTable = page.getByTestId('bandit-arm-stats');
     await expect(armStatsTable).toBeVisible();
 
     // Verify all 4 arms are displayed in the force arm dropdown
-    // Use more specific selector for the select trigger
-    await page.locator('[data-testid="force-arm-select"] >> [role="combobox"]').first().click();
+    // Find the dropdown by the label text (data-testid not rendered by Radix UI)
+    await page.getByText('Force arm selection:').locator('..').getByRole('combobox').click();
+    
+    // Verify all arm options are visible
     for (const arm of EXPECTED_ARMS) {
       await expect(page.getByRole('option', { name: arm.name })).toBeVisible();
     }
@@ -104,14 +107,17 @@ test.describe('@no-external Multi-Armed Bandit E2E', () => {
     await page.goto('/settings');
     await expect(page).toHaveURL(/\/settings/);
 
-    // Check if Week 5 debug controls are present (DEV mode only)
+    // Check if Week 5 debug controls are VISIBLE (DEV mode only)
     const debugControls = page.locator('[data-testid="week5-debug-controls"]');
-    const count = await debugControls.count();
+    const isVisible = await debugControls.isVisible().catch(() => false);
     
-    if (count === 0) {
-      console.log('Skipping test: Week 5 debug controls not present - not in DEV mode');
+    if (!isVisible) {
+      console.log('Skipping test: Week 5 debug controls not visible - not in DEV mode');
       return;
     }
+
+    // Verify bandit panel is visible
+    await expect(page.getByTestId('bandit-panel')).toBeVisible({ timeout: 10000 });
 
     // Verify "no data" message is shown initially
     const noDataMessage = page.getByTestId('bandit-no-data');
@@ -137,9 +143,12 @@ test.describe('@no-external Multi-Armed Bandit E2E', () => {
     // Refresh to pick up the new state
     await page.reload();
 
+    // Wait for bandit panel to be visible after reload
+    await expect(page.getByTestId('bandit-panel')).toBeVisible({ timeout: 10000 });
+
     // After page reload, force arm selection to populate stats
-    await page.locator('[data-testid="force-arm-select"] >> [role="combobox"]').first().click();
-    await page.getByRole('option', { name: 'Adaptive Escalator' }).click();
+    await page.getByText('Force arm selection:').locator('..').getByRole('combobox').click();
+    await page.getByText('Adaptive Escalator', { exact: true }).click();
     await page.getByTestId('force-arm-apply').click();
 
     // Refresh again to see updated stats
@@ -172,18 +181,21 @@ test.describe('@no-external Multi-Armed Bandit E2E', () => {
     await page.goto('/settings');
     await expect(page).toHaveURL(/\/settings/);
 
-    // Check if Week 5 debug controls are present (DEV mode only)
+    // Check if Week 5 debug controls are VISIBLE (DEV mode only)
     const debugControls = page.locator('[data-testid="week5-debug-controls"]');
-    const count = await debugControls.count();
+    const isVisible = await debugControls.isVisible().catch(() => false);
     
-    if (count === 0) {
-      console.log('Skipping test: Week 5 debug controls not present - not in DEV mode');
+    if (!isVisible) {
+      console.log('Skipping test: Week 5 debug controls not visible - not in DEV mode');
       return;
     }
 
+    // Wait for bandit panel to be visible
+    await expect(page.getByTestId('bandit-panel')).toBeVisible({ timeout: 10000 });
+
     // Select "Fast Escalator" from the force arm dropdown
-    await page.locator('[data-testid="force-arm-select"] >> [role="combobox"]').first().click();
-    await page.getByRole('option', { name: 'Fast Escalator' }).click();
+    await page.getByText('Force arm selection:').locator('..').getByRole('combobox').click();
+    await page.getByText('Fast Escalator', { exact: true }).click();
 
     // Click Apply button
     await page.getByTestId('force-arm-apply').click();
@@ -239,14 +251,17 @@ test.describe('@no-external Multi-Armed Bandit E2E', () => {
     await page.goto('/settings');
     await expect(page).toHaveURL(/\/settings/);
 
-    // Check if Week 5 debug controls are present (DEV mode only)
+    // Check if Week 5 debug controls are VISIBLE (DEV mode only)
     const debugControls = page.locator('[data-testid="week5-debug-controls"]');
-    const hasDebugControls = await debugControls.count() > 0;
+    const isVisible = await debugControls.isVisible().catch(() => false);
 
-    if (hasDebugControls) {
+    if (isVisible) {
+      // Wait for bandit panel before interacting
+      await expect(page.getByTestId('bandit-panel')).toBeVisible({ timeout: 10000 });
+      
       // Get initial stats by applying the arm
-      await page.locator('[data-testid="force-arm-select"] >> [role="combobox"]').first().click();
-      await page.getByRole('option', { name: 'Adaptive Escalator' }).click();
+      await page.getByText('Force arm selection:').locator('..').getByRole('combobox').click();
+      await page.getByText('Adaptive Escalator', { exact: true }).click();
       await page.getByTestId('force-arm-apply').click();
       await page.getByTestId('bandit-refresh').click();
 
@@ -273,7 +288,7 @@ test.describe('@no-external Multi-Armed Bandit E2E', () => {
     await page.goto('/settings');
     await expect(page).toHaveURL(/\/settings/);
 
-    if (hasDebugControls) {
+    if (isVisible) {
       // Verify bandit panel still shows data
       await expect(page.getByTestId('bandit-panel')).toBeVisible();
 
@@ -303,18 +318,21 @@ test.describe('@no-external Multi-Armed Bandit E2E', () => {
     await page.goto('/settings');
     await expect(page).toHaveURL(/\/settings/);
 
-    // Check if Week 5 debug controls are present (DEV mode only)
+    // Check if Week 5 debug controls are VISIBLE (DEV mode only)
     const debugControls = page.locator('[data-testid="week5-debug-controls"]');
-    const count = await debugControls.count();
+    const isVisible = await debugControls.isVisible().catch(() => false);
     
-    if (count === 0) {
-      console.log('Skipping test: Week 5 debug controls not present - not in DEV mode');
+    if (!isVisible) {
+      console.log('Skipping test: Week 5 debug controls not visible - not in DEV mode');
       return;
     }
 
+    // Wait for bandit panel to be visible
+    await expect(page.getByTestId('bandit-panel')).toBeVisible({ timeout: 10000 });
+
     // Select "Slow Escalator" and apply
-    await page.locator('[data-testid="force-arm-select"] >> [role="combobox"]').first().click();
-    await page.getByRole('option', { name: 'Slow Escalator' }).click();
+    await page.getByText('Force arm selection:').locator('..').getByRole('combobox').click();
+    await page.getByText('Slow Escalator', { exact: true }).click();
     await page.getByTestId('force-arm-apply').click();
 
     // Verify the selection was applied
@@ -345,9 +363,9 @@ test.describe('@no-external Multi-Armed Bandit E2E', () => {
     await expect(page.getByTestId('arm-stat-conservative')).toBeVisible();
 
     // Verify the force arm dropdown still has all options
-    await page.locator('[data-testid="force-arm-select"] >> [role="combobox"]').first().click();
+    await page.getByText('Force arm selection:').locator('..').getByRole('combobox').click();
     for (const arm of EXPECTED_ARMS) {
-      await expect(page.getByRole('option', { name: arm.name })).toBeVisible();
+      await expect(page.getByText(arm.name, { exact: true })).toBeVisible();
     }
   });
 
@@ -397,18 +415,21 @@ test.describe('@no-external Multi-Armed Bandit E2E', () => {
     await page.goto('/settings');
     await expect(page).toHaveURL(/\/settings/);
 
-    // Check if Week 5 debug controls are present (DEV mode only)
+    // Check if Week 5 debug controls are VISIBLE (DEV mode only)
     const debugControls = page.locator('[data-testid="week5-debug-controls"]');
-    const count = await debugControls.count();
+    const isVisible = await debugControls.isVisible().catch(() => false);
     
-    if (count === 0) {
-      console.log('Skipping test: Week 5 debug controls not present - not in DEV mode');
+    if (!isVisible) {
+      console.log('Skipping test: Week 5 debug controls not visible - not in DEV mode');
       return;
     }
 
+    // Wait for bandit panel before interacting
+    await expect(page.getByTestId('bandit-panel')).toBeVisible({ timeout: 10000 });
+
     // Trigger stats population by applying an arm
-    await page.locator('[data-testid="force-arm-select"] >> [role="combobox"]').first().click();
-    await page.getByRole('option', { name: 'Adaptive Escalator' }).click();
+    await page.getByText('Force arm selection:').locator('..').getByRole('combobox').click();
+    await page.getByText('Adaptive Escalator', { exact: true }).click();
     await page.getByTestId('force-arm-apply').click();
 
     // Refresh to load stats
@@ -474,12 +495,12 @@ test.describe('@no-external Multi-Armed Bandit E2E', () => {
     await page.goto('/settings');
     await expect(page).toHaveURL(/\/settings/);
 
-    // Check if Week 5 debug controls are present (DEV mode only)
+    // Check if Week 5 debug controls are VISIBLE (DEV mode only)
     const debugControls = page.locator('[data-testid="week5-debug-controls"]');
-    const count = await debugControls.count();
+    const isVisible = await debugControls.isVisible().catch(() => false);
     
-    if (count === 0) {
-      console.log('Skipping test: Week 5 debug controls not present - not in DEV mode');
+    if (!isVisible) {
+      console.log('Skipping test: Week 5 debug controls not visible - not in DEV mode');
       return;
     }
 
@@ -487,8 +508,8 @@ test.describe('@no-external Multi-Armed Bandit E2E', () => {
     await expect(page.getByTestId('profile-override-section')).toBeVisible();
 
     // Select "Fast Escalator" from profile override dropdown
-    await page.getByTestId('profile-override-select').click();
-    await page.getByRole('option', { name: 'Fast Escalator' }).click();
+    await page.getByRole('combobox').first().click();
+    await page.getByText('Fast Escalator', { exact: true }).click();
 
     // Verify the selection is saved to localStorage
     const savedProfile = await page.evaluate(() => {
@@ -497,8 +518,8 @@ test.describe('@no-external Multi-Armed Bandit E2E', () => {
     expect(savedProfile).toBe('fast-escalator');
 
     // Select "Adaptive" profile
-    await page.getByTestId('profile-override-select').click();
-    await page.getByRole('option', { name: 'Adaptive' }).click();
+    await page.getByRole('combobox').first().click();
+    await page.getByText('Adaptive', { exact: true }).click();
 
     // Verify the new selection is saved
     const updatedProfile = await page.evaluate(() => {
@@ -536,12 +557,12 @@ test.describe('@no-external Multi-Armed Bandit E2E', () => {
     await page.goto('/settings');
     await expect(page).toHaveURL(/\/settings/);
 
-    // Check if Week 5 debug controls are present (DEV mode only)
+    // Check if Week 5 debug controls are VISIBLE (DEV mode only)
     const debugControls = page.locator('[data-testid="week5-debug-controls"]');
-    const count = await debugControls.count();
+    const isVisible = await debugControls.isVisible().catch(() => false);
     
-    if (count === 0) {
-      console.log('Skipping test: Week 5 debug controls not present - not in DEV mode');
+    if (!isVisible) {
+      console.log('Skipping test: Week 5 debug controls not visible - not in DEV mode');
       return;
     }
 

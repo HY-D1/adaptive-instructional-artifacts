@@ -1,52 +1,51 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useLocation, Link } from 'react-router';
+
+import {
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Pause,
+  Sparkles,
+  BookOpen,
+  Check,
+  GraduationCap,
+  Target,
+  Settings2,
+  Keyboard,
+  Zap,
+  Sprout,
+  TrendingUp
+} from 'lucide-react';
+
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { Skeleton } from '../components/ui/skeleton';
+import { cn } from '../components/ui/utils';
 import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/SQLEditor';
 import { HintSystem } from '../components/HintSystem';
 import { ConceptCoverage } from '../components/ConceptCoverage';
 import { AskMyTextbookChat } from '../components/AskMyTextbookChat';
-import { Clock, CheckCircle2, AlertCircle, Pause, Sparkles, BookOpen, Check, GraduationCap, Target, Settings2, Terminal, Keyboard, Copy, Zap, Sprout, TrendingUp } from 'lucide-react';
-import {
-  SQLProblem,
-  InteractionEvent,
-  InstructionalUnit,
-  LearnerProfile,
-  PdfIndexProvenance,
-  RetrievedChunkInfo,
-  HDITrend
-} from '../types';
+import { useLLMSettings } from '../components/LLMSettingsHelper';
+import { useScreenReaderAnnouncer } from '../components/ScreenReaderAnnouncer';
 import { sqlProblems } from '../data/problems';
+import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
+import { useUserRole } from '../hooks/useUserRole';
 import { storage } from '../lib/storage';
-import { QueryResult } from '../lib/sql-executor';
+import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content-generator';
 import { buildPdfIndexOutputFields } from '../lib/pdf-retrieval';
 import { createEventId } from '../lib/event-id';
-import {
-  startBackgroundAnalysis,
-  stopBackgroundAnalysis,
-  runAnalysisOnce,
-  AnalysisResult,
-  ANALYSIS_INTERVAL_MS
-} from '../lib/trace-analyzer';
-import {
-  canonicalizeSqlEngageSubtype,
-  getKnownSqlEngageSubtypes,
-  getSqlEngagePolicyVersion,
-  getConceptById
-} from '../data/sql-engage';
-import { useUserRole } from '../hooks/useUserRole';
-import { cn } from '../components/ui/utils';
+import { startBackgroundAnalysis, stopBackgroundAnalysis, runAnalysisOnce, ANALYSIS_INTERVAL_MS } from '../lib/trace-analyzer';
+import type { AnalysisResult } from '../lib/trace-analyzer';
 import { getConcept } from '../lib/concept-loader';
-import { useLLMSettings } from '../components/LLMSettingsHelper';
-import { useScreenReaderAnnouncer, HintAnnouncer, NotificationAnnouncer } from '../components/ScreenReaderAnnouncer';
-// Week 5: Import bandit manager for profile indicator
-import { banditManager, BanditArmId } from '../lib/learner-bandit-manager';
+import { banditManager } from '../lib/learner-bandit-manager';
+import type { BanditArmId } from '../lib/learner-bandit-manager';
+import type { SQLProblem, InteractionEvent, InstructionalUnit, LearnerProfile, RetrievedChunkInfo, HDITrend } from '../types';
 
 const INSTRUCTOR_SUBTYPE_OPTIONS = getKnownSqlEngageSubtypes();
 

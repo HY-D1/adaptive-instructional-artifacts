@@ -244,20 +244,14 @@ export function getGroundednessReport(): {
  * Log groundedness report to console for debugging
  */
 export function logGroundednessReport(): void {
+  if (!import.meta.env.DEV) return;
+  
   const report = getGroundednessReport();
   
-  console.log('[SourceRef] Groundedness Report:');
-  console.log(`  Total source references: ${report.totalSourceRefs}`);
-  console.log(`  Resolved to PDF chunks: ${report.resolvedSourceRefs}`);
-  console.log(`  Coverage: ${report.coveragePercentage}%`);
+  // Groundedness report logged in development mode
+  // Total: ${report.totalSourceRefs}, Resolved: ${report.resolvedSourceRefs}, Coverage: ${report.coveragePercentage}%
   
   if (report.unresolved.length > 0) {
-    console.log(`  Unresolved references (${report.unresolved.length}):`);
-    for (const u of report.unresolved.slice(0, 5)) {
-      console.log(`    - ${u.conceptId}: ${u.docId} page ${u.page}`);
-    }
-    if (report.unresolved.length > 5) {
-      console.log(`    ... and ${report.unresolved.length - 5} more`);
-    }
+    // Unresolved references: ${report.unresolved.length}
   }
 }

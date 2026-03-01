@@ -10,6 +10,8 @@ import {
   sampleBeta,
   sampleGamma,
   calculateRegret,
+  calculateCumulativeRegret,
+  createEscalationProfileBandit,
   MULTI_ARMED_BANDIT_VERSION,
 } from './multi-armed-bandit';
 
@@ -263,5 +265,207 @@ describe('Version constant', () => {
   it('should export version string', () => {
     expect(typeof MULTI_ARMED_BANDIT_VERSION).toBe('string');
     expect(MULTI_ARMED_BANDIT_VERSION).toContain('bandit');
+  });
+});
+
+describe('MultiArmedBandit - edge cases', () => {
+  it('should throw error when selecting arm with no arms', () => {
+    const bandit = new MultiArmedBandit([]);
+    expect(() => bandit.selectArm()).toThrow('No arms available in bandit');
+  });
+
+  it('should return null for getBestArm when no arms exist', () => {
+    const bandit = new MultiArmedBandit([]);
+    expect(bandit.getBestArm()).toBeNull();
+  });
+
+  it('should return 0 for getArmCount when no arms exist', () => {
+    const bandit = new MultiArmedBandit([]);
+    expect(bandit.getArmCount()).toBe(0);
+  });
+
+  it('should reset all arms to initial state', () => {
+    const bandit = new MultiArmedBandit(['arm1', 'arm2']);
+    
+    // Update arms
+    bandit.updateArm('arm1', 0.9);
+    bandit.updateArm('arm1', 0.8);
+    bandit.updateArm('arm2', 0.3);
+    
+    // Reset
+    bandit.reset();
+    
+    // Verify arms are back to initial state
+    const arm1 = bandit.getArm('arm1');
+    const arm2 = bandit.getArm('arm2');
+    
+    expect(arm1?.alpha).toBe(1);
+    expect(arm1?.beta).toBe(1);
+    expect(arm1?.pullCount).toBe(0);
+    expect(arm1?.cumulativeReward).toBe(0);
+    
+    expect(arm2?.alpha).toBe(1);
+    expect(arm2?.beta).toBe(1);
+    expect(arm2?.pullCount).toBe(0);
+    expect(arm2?.cumulativeReward).toBe(0);
+  });
+
+  it('should handle getArm for non-existent arm', () => {
+    const bandit = new MultiArmedBandit(['arm1']);
+    expect(bandit.getArm('nonexistent')).toBeUndefined();
+  });
+
+  it('should return correct arm count', () => {
+    const bandit = new MultiArmedBandit(['a', 'b', 'c', 'd']);
+    expect(bandit.getArmCount()).toBe(4);
+  });
+
+  it('should handle reward clamping (reward > 1)', () => {
+    const bandit = new MultiArmedBandit(['arm1']);
+    bandit.updateArm('arm1', 1.5); // Should be clamped to 1
+    
+    const arm = bandit.getArm('arm1');
+    expect(arm?.alpha).toBe(2); // 1 + 1 (clamped)
+    expect(arm?.beta).toBe(1); // 1 + 0
+  });
+
+  it('should handle reward clamping (reward < 0)', () => {
+    const bandit = new MultiArmedBandit(['arm1']);
+    bandit.updateArm('arm1', -0.5); // Should be clamped to 0
+    
+    const arm = bandit.getArm('arm1');
+    expect(arm?.alpha).toBe(1); // 1 + 0 (clamped)
+    expect(arm?.beta).toBe(2); // 1 + 1
+  });
+});
+
+describe('createEscalationProfileBandit', () => {
+  it('should create bandit with escalation profile arms', () => {
+    const bandit = createEscalationProfileBandit();
+    
+    expect(bandit.getArmIds()).toContain('fast-escalator');
+    expect(bandit.getArmIds()).toContain('slow-escalator');
+    expect(bandit.getArmIds()).toContain('adaptive-escalator');
+    expect(bandit.getArmCount()).toBe(3);
+  });
+
+  it('should select an escalation profile arm', () => {
+    const bandit = createEscalationProfileBandit();
+    const selected = bandit.selectArm();
+    
+    expect(['fast-escalator', 'slow-escalator', 'adaptive-escalator']).toContain(selected);
+  });
+});
+
+describe('calculateCumulativeRegret', () => {
+  it('should calculate cumulative regret for reward sequence', () => {
+    const rewards = [0.5, 0.6, 0.7, 0.8];
+    const optimalReward = 1.0;
+    
+    const cumulativeRegret = calculateCumulativeRegret(rewards, optimalReward);
+    
+    // Regret: 0.5 + 0.4 + 0.3 + 0.2 = 1.4
+    expect(cumulativeRegret).toBeCloseTo(1.4, 10);
+  });
+
+  it('should return 0 when all rewards are optimal', () => {
+    const rewards = [1.0, 1.0, 1.0];
+    const optimalReward = 1.0;
+    
+    const cumulativeRegret = calculateCumulativeRegret(rewards, optimalReward);
+    expect(cumulativeRegret).toBe(0);
+  });
+
+  it('should handle empty rewards array', () => {
+    const rewards: number[] = [];
+    const optimalReward = 1.0;
+    
+    const cumulativeRegret = calculateCumulativeRegret(rewards, optimalReward);
+    expect(cumulativeRegret).toBe(0);
+  });
+
+  it('should handle single reward', () => {
+    const rewards = [0.5];
+    const optimalReward = 1.0;
+    
+    const cumulativeRegret = calculateCumulativeRegret(rewards, optimalReward);
+    expect(cumulativeRegret).toBe(0.5);
+  });
+});
+
+describe('sampleGamma edge cases', () => {
+  it('should handle shape < 1 (fallback case)', () => {
+    // Test the fallback branch for shape < 1
+    const samples = Array.from({ length: 10 }, () => sampleGamma(0.5, 1));
+    samples.forEach(sample => {
+      expect(sample).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  it('should handle very small shape values', () => {
+    const samples = Array.from({ length: 10 }, () => sampleGamma(0.1, 1));
+    samples.forEach(sample => {
+      expect(sample).toBeGreaterThanOrEqual(0);
+    });
+  });
+});
+
+describe('sampleBeta edge cases', () => {
+  it('should handle very small alpha values', () => {
+    const samples = Array.from({ length: 10 }, () => sampleBeta(0.0001, 1));
+    samples.forEach(sample => {
+      expect(sample).toBeGreaterThanOrEqual(0);
+      expect(sample).toBeLessThanOrEqual(1);
+    });
+  });
+
+  it('should handle very small beta values', () => {
+    const samples = Array.from({ length: 10 }, () => sampleBeta(1, 0.0001));
+    samples.forEach(sample => {
+      expect(sample).toBeGreaterThanOrEqual(0);
+      expect(sample).toBeLessThanOrEqual(1);
+    });
+  });
+
+  it('should handle both parameters very small', () => {
+    const samples = Array.from({ length: 10 }, () => sampleBeta(0.0001, 0.0001));
+    samples.forEach(sample => {
+      expect(sample).toBeGreaterThanOrEqual(0);
+      expect(sample).toBeLessThanOrEqual(1);
+    });
+  });
+});
+
+describe('MultiArmedBandit serialization edge cases', () => {
+  it('should deserialize with custom priors', () => {
+    const bandit = new MultiArmedBandit(['arm1']);
+    bandit.updateArm('arm1', 0.8);
+    
+    const serialized = bandit.serialize();
+    
+    // Modify serialized state
+    serialized.priorAlpha = 2;
+    serialized.priorBeta = 2;
+    
+    const newBandit = new MultiArmedBandit(['arm1']);
+    newBandit.deserialize(serialized);
+    
+    expect(newBandit.getArm('arm1')?.alpha).toBe(1.8);
+    expect(newBandit.getArm('arm1')?.pullCount).toBe(1);
+  });
+
+  it('should handle getArmStats with high pull count', () => {
+    const bandit = new MultiArmedBandit(['arm1']);
+    
+    // Simulate many pulls
+    for (let i = 0; i < 100; i++) {
+      bandit.updateArm('arm1', 0.7);
+    }
+    
+    const stats = bandit.getArmStats('arm1');
+    expect(stats?.pullCount).toBe(100);
+    expect(stats?.meanReward).toBeCloseTo(0.7, 1);
+    expect(stats?.confidenceInterval[0]).toBeGreaterThanOrEqual(0);
+    expect(stats?.confidenceInterval[1]).toBeLessThanOrEqual(1);
   });
 });

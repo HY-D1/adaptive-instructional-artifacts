@@ -1,4 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
+
+import { 
+  ArrowLeft, 
+  Search, 
+  Filter, 
+  BookOpen, 
+  X, 
+  Clock, 
+  Tag, 
+  GraduationCap, 
+  TrendingUp, 
+  Sparkles, 
+  MessageCircle 
+} from 'lucide-react';
+
 import { AdaptiveTextbook } from '../components/AdaptiveTextbook';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -7,12 +23,10 @@ import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { Skeleton } from '../components/ui/skeleton';
-import { ArrowLeft, Search, Filter, BookOpen, X, Clock, Tag, GraduationCap, TrendingUp, Sparkles, MessageCircle } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router';
-import { storage } from '../lib/storage';
-import { InteractionEvent } from '../types';
 import { conceptNodes } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
+import { storage } from '../lib/storage';
+import type { InteractionEvent } from '../types';
 
 const getSubtypeLabel = (interaction: InteractionEvent) =>
   interaction.sqlEngageSubtype || interaction.errorSubtypeId || 'unknown-subtype';

@@ -201,6 +201,96 @@ describe('LearnerBanditManager', () => {
     expect(stats?.meanReward).toBeLessThan(0.5);
   });
 
+  it('should calculate reward for outcome with zero baseline errors', () => {
+    const bandit = manager.getBanditForLearner('learner-1');
+    
+    // Edge case: zero baseline errors but some errors made
+    manager.recordOutcome('learner-1', 'aggressive', {
+      solved: true,
+      usedExplanation: false,
+      errorCount: 2,
+      baselineErrors: 0, // Edge case
+      timeSpentMs: 5000,
+      medianTimeMs: 10000,
+      hdiScore: 0.3,
+    });
+    
+    const stats = bandit.getArmStats('aggressive');
+    expect(stats?.pullCount).toBe(1);
+  });
+
+  it('should calculate reward for outcome with zero median time', () => {
+    const bandit = manager.getBanditForLearner('learner-1');
+    
+    // Edge case: zero median time
+    manager.recordOutcome('learner-1', 'aggressive', {
+      solved: true,
+      usedExplanation: false,
+      errorCount: 1,
+      baselineErrors: 3,
+      timeSpentMs: 5000,
+      medianTimeMs: 0, // Edge case
+      hdiScore: 0.3,
+    });
+    
+    const stats = bandit.getArmStats('aggressive');
+    expect(stats?.pullCount).toBe(1);
+  });
+
+  it('should calculate reward for very fast solving (possible guessing)', () => {
+    const bandit = manager.getBanditForLearner('learner-1');
+    
+    // Very fast: ratio < 0.5 (possible guessing)
+    manager.recordOutcome('learner-1', 'aggressive', {
+      solved: true,
+      usedExplanation: false,
+      errorCount: 1,
+      baselineErrors: 3,
+      timeSpentMs: 3000, // Very fast
+      medianTimeMs: 10000,
+      hdiScore: 0.3,
+    });
+    
+    const stats = bandit.getArmStats('aggressive');
+    expect(stats?.pullCount).toBe(1);
+  });
+
+  it('should calculate reward for very slow solving', () => {
+    const bandit = manager.getBanditForLearner('learner-1');
+    
+    // Very slow: ratio > 2.0
+    manager.recordOutcome('learner-1', 'aggressive', {
+      solved: true,
+      usedExplanation: false,
+      errorCount: 1,
+      baselineErrors: 3,
+      timeSpentMs: 30000, // Very slow
+      medianTimeMs: 10000,
+      hdiScore: 0.3,
+    });
+    
+    const stats = bandit.getArmStats('aggressive');
+    expect(stats?.pullCount).toBe(1);
+  });
+
+  it('should calculate reward for unsolved problem without explanation', () => {
+    const bandit = manager.getBanditForLearner('learner-1');
+    
+    // Not solved, didn't use explanation (gave up)
+    manager.recordOutcome('learner-1', 'aggressive', {
+      solved: false,
+      usedExplanation: false, // Didn't even use explanation
+      errorCount: 5,
+      baselineErrors: 3,
+      timeSpentMs: 5000,
+      medianTimeMs: 10000,
+      hdiScore: 0.5,
+    });
+    
+    const stats = bandit.getArmStats('aggressive');
+    expect(stats?.pullCount).toBe(1);
+  });
+
   it('should clear all bandits', () => {
     manager.getBanditForLearner('learner-1');
     manager.getBanditForLearner('learner-2');

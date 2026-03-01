@@ -1,4 +1,6 @@
-import { createBrowserRouter, Navigate, redirect, type LoaderFunction } from 'react-router';
+import { createBrowserRouter, Navigate, redirect } from 'react-router';
+import type { LoaderFunction } from 'react-router';
+
 import { RouteError } from './components/RouteError';
 import { RootLayout } from './pages/RootLayout';
 import { TextbookPage } from './pages/TextbookPage';
@@ -13,12 +15,9 @@ import { storage } from './lib/storage';
 import { 
   ROUTES, 
   protectRoute, 
-  getDefaultRouteForRole,
-  type GuardResult 
+  getDefaultRouteForRole
 } from './lib/auth-guard';
-
-// Week 4: Lazy-loaded login page (create when needed)
-// const LoginPage = React.lazy(() => import('./pages/LoginPage'));
+import type { GuardResult } from './lib/auth-guard';
 
 /**
  * Start page loader - redirects authenticated users to their default route

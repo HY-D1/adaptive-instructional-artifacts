@@ -81,7 +81,7 @@ export function resetSQLInitialization() {
   SQL = null;
   sqlInitializationPromise = null;
   sqlInitializationError = null;
-  console.log('[sql.js] Initialization state reset');
+  // SQL initialization state reset
 }
 
 export async function initializeSQL() {
@@ -105,12 +105,12 @@ export async function initializeSQL() {
   // Uses the middleware-served /sql-wasm.wasm endpoint for stability
   sqlInitializationPromise = (async () => {
     try {
-      console.log('[sql.js] Initializing with middleware-served WASM...');
+      // Initializing SQL.js with middleware-served WASM
       const sql = await initSqlJs({
-        locateFile: (file) => {
+        locateFile: (file: string) => {
           // Use the middleware-served WASM path for reliability
           if (file.endsWith('.wasm')) {
-            console.log(`[sql.js] Using served WASM: ${WASM_URL}`);
+            // Using served WASM at configured URL
             return WASM_URL;
           }
           return file;
@@ -118,7 +118,7 @@ export async function initializeSQL() {
       });
       SQL = sql;
       sqlInitializationError = null;
-      console.log('[sql.js] Successfully initialized with bundled WASM');
+      // SQL.js successfully initialized
       return sql;
     } catch (err) {
       const lastError = err as Error;
@@ -327,7 +327,7 @@ export class SQLExecutor {
       }
 
       // Map all results for potential multi-statement queries
-      const allResults: SingleQueryResult[] = results.map(r => ({
+      const allResults: SingleQueryResult[] = results.map((r: { columns: string[]; values: unknown[][] }) => ({
         columns: r.columns,
         values: r.values as unknown[][]
       }));

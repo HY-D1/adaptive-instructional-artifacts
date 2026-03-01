@@ -3,7 +3,13 @@ export * from './sql-engage';
 export * from './problems';
 export * from './demo-data';
 
-import type { ConceptRegistry, AlignmentMap, ConceptRegistryEntry, AlignmentMapEntry } from '../types';
+import type { 
+  ConceptRegistry, 
+  AlignmentMap, 
+  ConceptRegistryEntry, 
+  AlignmentMapEntry,
+  ConceptRegistrySourceRef
+} from '../types';
 
 // Concept Registry (Week 3 D1)
 import conceptRegistryJson from './concept-registry.json';
@@ -90,25 +96,25 @@ function validateAlignmentMap(data: unknown): AlignmentMap {
 export const alignmentMap: AlignmentMap = validateAlignmentMap(alignmentMapJson);
 
 // Helper functions for concept registry
-export function getConceptFromRegistry(conceptId: string): import('../types').ConceptRegistryEntry | undefined {
+export function getConceptFromRegistry(conceptId: string): ConceptRegistryEntry | undefined {
   return conceptRegistry.concepts.find(c => c.conceptId === conceptId);
 }
 
-export function getVerifiedConcepts(): import('../types').ConceptRegistryEntry[] {
+export function getVerifiedConcepts(): ConceptRegistryEntry[] {
   return conceptRegistry.concepts.filter(c => c.status === 'verified');
 }
 
-export function getConceptsByTag(tag: string): import('../types').ConceptRegistryEntry[] {
+export function getConceptsByTag(tag: string): ConceptRegistryEntry[] {
   return conceptRegistry.concepts.filter(c => c.tags.includes(tag));
 }
 
-export function getSourceRefsForConcept(conceptId: string): import('../types').ConceptRegistrySourceRef[] {
+export function getSourceRefsForConcept(conceptId: string): ConceptRegistrySourceRef[] {
   const concept = getConceptFromRegistry(conceptId);
   return concept?.sourceRefs ?? [];
 }
 
 // Helper functions for alignment map (Week 3 D3)
-export function getAlignmentForSubtype(sqlEngageSubtype: string): import('../types').AlignmentMapEntry | undefined {
+export function getAlignmentForSubtype(sqlEngageSubtype: string): AlignmentMapEntry | undefined {
   return alignmentMap.mappings.find(m => m.sqlEngageSubtype === sqlEngageSubtype);
 }
 
@@ -126,10 +132,10 @@ export function canAutoEscalate(sqlEngageSubtype: string): boolean {
   return mapping.status === 'verified' && !mapping.excludedFromAutoEscalation;
 }
 
-export function getVerifiedMappings(): import('../types').AlignmentMapEntry[] {
+export function getVerifiedMappings(): AlignmentMapEntry[] {
   return alignmentMap.mappings.filter(m => m.status === 'verified');
 }
 
-export function getAutoEscalationEligibleMappings(): import('../types').AlignmentMapEntry[] {
+export function getAutoEscalationEligibleMappings(): AlignmentMapEntry[] {
   return alignmentMap.mappings.filter(m => m.status === 'verified' && !m.excludedFromAutoEscalation);
 }

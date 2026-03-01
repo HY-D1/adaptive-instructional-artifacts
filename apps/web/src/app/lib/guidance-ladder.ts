@@ -1,15 +1,21 @@
 /**
- * Guidance Ladder State Machine (Week 3 D4)
+ * Guidance Ladder State Machine (Week 3 D4, Week 5 Profile Integration)
  * 
  * Deterministic ladder controller for progressive instructional support:
  * - Rung 1: Micro-hint (brief, contextual)
  * - Rung 2: Explanation (structured, source-grounded)
  * - Rung 3: Reflective note (My Textbook unit upsert)
+ * 
+ * Policy Version: guidance-ladder-profile-v1
  */
 
 import type { InteractionEvent } from '../types';
 import { canAutoEscalate } from '../data';
 import { FIVE_MINUTES_MS } from './trace-analyzer';
+import type { EscalationProfile } from './escalation-profiles';
+
+// Version constant for profile-aware guidance ladder
+export const GUIDANCE_LADDER_PROFILE_VERSION = 'guidance-ladder-profile-v1';
 
 // Rung definitions with strict boundaries
 export type GuidanceRung = 1 | 2 | 3;
@@ -123,17 +129,36 @@ export function createInitialLadderState(
 }
 
 /**
+ * Get escalation thresholds based on learner's profile
+ * Returns hint count threshold for escalation (rung_exhausted trigger)
+ */
+function getProfileEscalationThreshold(
+  profile: EscalationProfile | null
+): number {
+  if (!profile) return 3; // Default adaptive
+  
+  switch (profile.id) {
+    case 'fast-escalator': return 2;  // Aggressive: 2 hints
+    case 'slow-escalator': return 5;  // Conservative: 5 hints
+    case 'adaptive-escalator': return 3; // Adaptive: 3 hints
+    default: return 3;
+  }
+}
+
+/**
  * Check if escalation is allowed based on trigger and conditions
  * @param state - Current ladder state
  * @param trigger - Escalation trigger type
  * @param interactions - Recent interactions for context
- * @returns Object with allowed flag and reason
+ * @param profile - Optional escalation profile for profile-aware thresholds
+ * @returns Object with allowed flag, reason, and profile awareness indicator
  */
 export function canEscalate(
   state: GuidanceLadderState,
   trigger: EscalationTrigger,
-  interactions: InteractionEvent[]
-): { allowed: boolean; reason: string; evidence?: Record<string, unknown> } {
+  interactions: InteractionEvent[],
+  profile?: EscalationProfile
+): { allowed: boolean; reason: string; evidence?: Record<string, unknown>; profileAware?: boolean } {
   // Already at max rung
   if (state.currentRung >= 3) {
     return { allowed: false, reason: 'Already at maximum rung (3)' };
@@ -151,15 +176,18 @@ export function canEscalate(
 
     case 'rung_exhausted': {
       const currentAttempts = state.rungAttempts[state.currentRung];
-      const threshold = state.currentRung === 1 
+      // Use profile-aware threshold if available
+      const profileThreshold = profile ? getProfileEscalationThreshold(profile) : null;
+      const threshold = profileThreshold ?? (state.currentRung === 1 
         ? TRIGGER_CONDITIONS.rung_exhausted.threshold.rung1 
-        : TRIGGER_CONDITIONS.rung_exhausted.threshold.rung2;
+        : TRIGGER_CONDITIONS.rung_exhausted.threshold.rung2);
       
       if (currentAttempts >= threshold) {
         return {
           allowed: true,
           reason: `Rung ${state.currentRung} exhausted (${currentAttempts} >= ${threshold})`,
-          evidence: { currentAttempts, threshold }
+          evidence: { currentAttempts, threshold, profileAware: !!profile },
+          profileAware: !!profile
         };
       }
       return {
@@ -411,11 +439,13 @@ export function getCurrentRungInfo(state: GuidanceLadderState) {
  * Determine next action based on state and interactions
  * @param state - Current ladder state
  * @param interactions - Recent interactions
+ * @param profile - Optional escalation profile for profile-aware escalation
  * @returns Action decision with rung and reason
  */
 export function determineNextAction(
   state: GuidanceLadderState,
-  interactions: InteractionEvent[]
+  interactions: InteractionEvent[],
+  profile?: EscalationProfile
 ): {
   action: 'stay' | 'escalate' | 'aggregate';
   rung: GuidanceRung;
@@ -426,7 +456,7 @@ export function determineNextAction(
   const lastInteraction = interactions[interactions.length - 1];
   if (lastInteraction?.eventType === 'explanation_view' || 
       lastInteraction?.metadata?.escalationRequested) {
-    const canEsc = canEscalate(state, 'learner_request', interactions);
+    const canEsc = canEscalate(state, 'learner_request', interactions, profile);
     if (canEsc.allowed) {
       return {
         action: 'escalate',
@@ -438,7 +468,7 @@ export function determineNextAction(
   }
 
   // Check rung exhaustion
-  const rungExhausted = canEscalate(state, 'rung_exhausted', interactions);
+  const rungExhausted = canEscalate(state, 'rung_exhausted', interactions, profile);
   if (rungExhausted.allowed) {
     return {
       action: 'escalate',
@@ -449,7 +479,7 @@ export function determineNextAction(
   }
 
   // Check repeated errors
-  const repeatedError = canEscalate(state, 'repeated_error', interactions);
+  const repeatedError = canEscalate(state, 'repeated_error', interactions, profile);
   if (repeatedError.allowed) {
     return {
       action: 'escalate',
@@ -460,7 +490,7 @@ export function determineNextAction(
   }
 
   // Check time stuck
-  const timeStuck = canEscalate(state, 'time_stuck', interactions);
+  const timeStuck = canEscalate(state, 'time_stuck', interactions, profile);
   if (timeStuck.allowed) {
     return {
       action: 'escalate',
@@ -471,7 +501,7 @@ export function determineNextAction(
   }
 
   // Check auto-escalation eligibility
-  const autoEligible = canEscalate(state, 'auto_escalation_eligible', interactions);
+  const autoEligible = canEscalate(state, 'auto_escalation_eligible', interactions, profile);
   if (autoEligible.allowed) {
     return {
       action: 'escalate',

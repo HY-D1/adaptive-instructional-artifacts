@@ -1,4 +1,18 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+
+import {
+  Settings,
+  FileText,
+  Bot,
+  FlaskConical,
+  RotateCcw,
+  Trash2,
+  UserCog,
+  Target,
+  BrainCircuit,
+  GitBranch,
+} from 'lucide-react';
+
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -12,38 +26,16 @@ import {
 } from '../components/ui/select';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { Separator } from '../components/ui/separator';
-import {
-  Settings,
-  FileText,
-  Bot,
-  FlaskConical,
-  RotateCcw,
-  Trash2,
-  UserCog,
-  Target,
-  BrainCircuit,
-  GitBranch,
-} from 'lucide-react';
 import { PdfUploader } from '../components/PdfUploader';
 import { LLMSettingsHelper } from '../components/LLMSettingsHelper';
 import { useUserRole } from '../hooks/useUserRole';
-import {
-  banditManager,
-  BANDIT_ARM_PROFILES,
-  type BanditArmId,
-} from '../lib/learner-bandit-manager';
-import {
-  ESCALATION_PROFILES,
-  assignProfile,
-  type AssignmentStrategy,
-} from '../lib/escalation-profiles';
+import { banditManager, BANDIT_ARM_PROFILES } from '../lib/learner-bandit-manager';
+import type { BanditArmId } from '../lib/learner-bandit-manager';
+import { assignProfile } from '../lib/escalation-profiles';
+import type { AssignmentStrategy } from '../lib/escalation-profiles';
 import { storage } from '../lib/storage';
 import type { InteractionEvent } from '../types';
-import {
-  calculateHDIData,
-  filterOutHDIEvents,
-  formatHDIDetailed,
-} from '../lib/hdi-debug';
+import { calculateHDIData, filterOutHDIEvents, formatHDIDetailed } from '../lib/hdi-debug';
 
 // DEV mode check
 const isDev = import.meta.env.DEV;

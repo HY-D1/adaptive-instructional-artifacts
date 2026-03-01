@@ -12,7 +12,7 @@ import { createEventId } from '../lib/event-id';
 import {
   canonicalizeSqlEngageSubtype
 } from '../data/sql-engage';
-import { buildRetrievalBundle, RetrievalPdfPassage } from '../lib/retrieval-bundle';
+import { buildRetrievalBundle, RetrievalPdfPassage, bundleToPrompt } from '../lib/retrieval-bundle';
 import { getProblemById } from '../data/problems';
 import { cn } from './ui/utils';
 import { 
@@ -246,7 +246,7 @@ export function HintSystem({
           conceptIds: bundle.conceptCandidates.map(c => c.id),
           sourceRefIds: bundle.pdfPassages.map(p => p.chunkId),
           grounded: bundle.pdfPassages.length > 0,
-          contentLength: bundle.toPrompt().length,
+          contentLength: bundleToPrompt(bundle).length,
           sessionId
         });
       }
@@ -542,8 +542,8 @@ export function HintSystem({
           llmErrorMessage: enhancedHint.llmErrorMessage
         };
       }
-    } catch (err) {
-      console.warn('[HintSystem] Enhanced hint generation failed, using fallback:', err);
+    } catch {
+      // Enhanced hint generation failed - using fallback
     }
     
     // Fallback to standard hint
@@ -757,8 +757,8 @@ export function HintSystem({
     
     try {
       hintSelection = await generateEnhancedHintForRung(levelForSelection);
-    } catch (err) {
-      console.warn('[HintSystem] Enhanced hint failed, using fallback:', err);
+    } catch {
+      // Enhanced hint failed - using fallback
     }
     
     // Fallback to standard hint if enhanced generation failed

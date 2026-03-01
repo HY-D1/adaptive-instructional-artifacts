@@ -75,14 +75,16 @@ function UnitStatusBadge({
     amber: 'bg-amber-500 hover:bg-amber-600 text-white',
     blue: 'bg-blue-500 hover:bg-blue-600 text-white',
     gray: 'bg-gray-400 hover:bg-gray-500 text-white',
-    green: 'bg-green-500 hover:bg-green-600 text-white'
+    green: 'bg-green-500 hover:bg-green-600 text-white',
+    purple: 'bg-purple-500 hover:bg-purple-600 text-white'
   };
   
   const icons = {
     amber: Star,
     blue: Layers,
     gray: Archive,
-    green: Star
+    green: Star,
+    purple: Star
   };
   
   const Icon = icons[displayStatus.color];
