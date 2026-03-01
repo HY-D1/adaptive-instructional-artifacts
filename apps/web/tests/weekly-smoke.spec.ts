@@ -252,7 +252,7 @@ test('@weekly @flaky smoke: hint ladder -> escalate -> add/update note -> textbo
   // Note title may vary based on LLM generation, just verify some content is present
   await expect.poll(async () => {
     const bodyText = await page.locator('body').textContent();
-    return bodyText.includes('Help with') || bodyText.includes('Note:') || bodyText.includes('SELECT');
+    return bodyText ? (bodyText.includes('Help with') || bodyText.includes('Note:') || bodyText.includes('SELECT')) : false;
   }, { timeout: 10000 }).toBe(true);
   // Verify provenance section exists
   await page.locator('summary').filter({ hasText: 'Provenance' }).click();

@@ -24,9 +24,9 @@ const LLM_CACHE_KEY = 'sql-learning-llm-cache';
 // =============================================================================
 
 async function corruptLocalStorage(page: Page, key: string, data: string) {
-  await page.evaluate((storageKey, corruptData) => {
+  await page.evaluate(({ storageKey, corruptData }: { storageKey: string; corruptData: string }) => {
     window.localStorage.setItem(storageKey, corruptData);
-  }, key, data);
+  }, { storageKey: key, corruptData: data });
 }
 
 async function getAllLocalStorage(page: Page): Promise<Record<string, any>> {
