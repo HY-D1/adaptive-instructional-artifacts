@@ -9,7 +9,13 @@
  */
 
 import { MultiArmedBandit, BanditArm } from './multi-armed-bandit';
-import { calculateReward, RewardComponents } from './reward-calculator';
+import {
+  calculateReward,
+  RewardComponents,
+  calculateIndependentSuccess,
+  calculateErrorReduction,
+  calculateTimeEfficiency,
+} from './reward-calculator';
 import {
   FAST_ESCALATOR,
   SLOW_ESCALATOR,
@@ -30,52 +36,6 @@ export const BANDIT_ARM_PROFILES = {
 } as const;
 
 export type BanditArmId = keyof typeof BANDIT_ARM_PROFILES;
-
-/**
- * Helper function to calculate independent success reward component
- * @param usedExplanation - Whether learner used explanation
- * @param solved - Whether problem was solved
- * @returns Reward component value (-1 to 1)
- */
-function calculateIndependentSuccess(usedExplanation: boolean, solved: boolean): number {
-  if (!solved) return -1;
-  return usedExplanation ? 0.5 : 1;
-}
-
-/**
- * Helper function to calculate error reduction reward component
- * @param errorCount - Number of errors made
- * @param baselineErrors - Expected baseline error count
- * @returns Reward component value (0 to 1)
- */
-function calculateErrorReduction(errorCount: number, baselineErrors: number): number {
-  if (baselineErrors <= 0) return errorCount === 0 ? 1 : 0;
-  const reduction = Math.max(0, baselineErrors - errorCount) / baselineErrors;
-  return reduction;
-}
-
-/**
- * Helper function to calculate time efficiency reward component
- * @param timeSpentMs - Actual time spent in milliseconds
- * @param medianTimeMs - Median expected time in milliseconds
- * @returns Reward component value (0 to 1)
- */
-function calculateTimeEfficiency(timeSpentMs: number, medianTimeMs: number): number {
-  if (medianTimeMs <= 0) return 0.5;
-  const ratio = timeSpentMs / medianTimeMs;
-  // Optimal ratio is around 1.0 (not too fast, not too slow)
-  // Score decreases as we deviate from optimal
-  if (ratio < 0.5) {
-    // Too fast - may indicate guessing
-    return 0.5 + ratio;
-  } else if (ratio <= 2.0) {
-    // Good range
-    return 1 - Math.abs(ratio - 1) * 0.5;
-  } else {
-    // Too slow
-    return Math.max(0, 1 - (ratio - 2) * 0.3);
-  }
-}
 
 /**
  * Outcome data for recording a learning interaction result

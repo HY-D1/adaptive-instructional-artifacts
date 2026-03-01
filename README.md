@@ -1,18 +1,34 @@
 # SQL-Adapt Learning System
 
-An adaptive SQL learning environment where students practice SQL problems with personalized hints and build their own textbook, while instructors monitor progress and analyze learning patterns.
+An adaptive SQL learning environment exploring **dynamic instructional assembly** — content that emerges from learner interaction data rather than being pre-authored.
 
-![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-blue)
 ![React](https://img.shields.io/badge/React-18.3-61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-6.4-646CFF)
-![Tests](https://img.shields.io/badge/Tests-265%20passing-success)
+![Tests](https://img.shields.io/badge/Tests-403%20passing-success)
 ![License](https://img.shields.io/badge/License-MIT-green)
+
+## Table of Contents
+
+- [Features](#features)
+- [System Architecture](#system-architecture)
+- [Technology Stack](#technology-stack)
+- [Quick Start](#quick-start)
+- [Access Guide](#access-guide)
+- [Development](#development)
+- [Project Structure](#project-structure)
+- [Documentation](#documentation)
+- [Testing](#testing)
+- [CI/CD Pipeline](#cicd-pipeline)
+- [Security](#security)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
 
 ## Features
 
 **For Students:**
 - Practice SQL problems with immediate feedback
-- Progressive hints (3 levels) that adapt to your mistakes
+- Progressive hints (4 levels: L1→L2→L3→LLM) that adapt to your mistakes
 - Build a personal textbook from your learning journey
 - Chat with your accumulated materials (Ask My Textbook)
 
@@ -23,19 +39,49 @@ An adaptive SQL learning environment where students practice SQL problems with p
 - Replay learner interactions with different policies
 
 **Adaptive Personalization (Week 5):**
-- Escalation profiles (Fast/Slow/Adaptive) based on learner behavior
-- Multi-armed bandit with Thompson sampling for optimal strategy selection
-- Hint Dependency Index (HDI) with 5 components to measure learner independence
-- Profile-aware escalation in the guidance ladder
+- **Escalation Profiles**: Fast/Slow/Adaptive/Explanation-first based on learner behavior
+- **Multi-Armed Bandit**: Thompson sampling for optimal strategy selection per learner
+- **Hint Dependency Index (HDI)**: 5-component metric measuring learner independence
+- **Profile-Aware Escalation**: Integrated with the guidance ladder
 
-**Security:**
-- Passcode-protected instructor access (`TeachSQL2024`)
-- Role-based route protection
-- Session persistence across browser tabs
+## System Architecture
 
-## How It Works
+### High-Level Overview
 
-### 🪜 Guidance Ladder (L1 → L2 → L3 → LLM)
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         SQL-ADAPT SYSTEM                            │
+├─────────────────────────────────────────────────────────────────────┤
+│  STUDENT INTERFACE        │        INSTRUCTOR INTERFACE              │
+│  ┌─────────────────────┐  │  ┌─────────────────────────────────┐    │
+│  │ LearningInterface   │  │  │ ResearchDashboard               │    │
+│  │ - SQL Editor        │  │  │ - Progress Analytics            │    │
+│  │ - Hint System       │  │  │ - Concept Coverage              │    │
+│  │ - Textbook View     │  │  │ - Learning Traces               │    │
+│  └──────────┬──────────┘  │  └─────────────────────────────────┘    │
+└─────────────┼─────────────┴─────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      ADAPTIVE CORE                                  │
+│  ┌─────────────┐  ┌──────────────┐  ┌─────────────┐  ┌──────────┐  │
+│  │ Guidance    │  │ Escalation   │  │ Multi-Armed │  │ HDI      │  │
+│  │ Ladder      │  │ Profiles     │  │ Bandit      │  │ Calculator│  │
+│  │ (L1→L2→L3)  │  │ (4 profiles) │  │ (Thompson)  │  │ (5 comp) │  │
+│  └─────────────┘  └──────────────┘  └─────────────┘  └──────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    DATA & RETRIEVAL LAYER                           │
+│  ┌──────────────┐  ┌─────────────┐  ┌───────────────────────────┐  │
+│  │ SQL-Engage   │  │ PDF Index   │  │ Textbook Units (Dynamic)  │  │
+│  │ (Hints)      │  │ (Sources)   │  │ (Personalized Content)    │  │
+│  └──────────────┘  └─────────────┘  └───────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 🪜 Guidance Ladder Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -71,46 +117,52 @@ An adaptive SQL learning environment where students practice SQL problems with p
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 🔄 Adaptive Orchestrator
+### Data Flow
 
 ```
-Error Pattern ──► SQL-Engage Lookup ──► Subtype Identification
-                                              │
-                    ┌─────────────────────────┘
-                    ▼
-┌─────────────────────────────────────────────────────────────┐
-│  Escalation Profiles (Week 5)                                 │
-│  • fast-escalator: 2 errors → explanation (aggressive)        │
-│  • slow-escalator: 5 errors → explanation (conservative)      │
-│  • adaptive: Dynamic threshold based on learner history       │
-│  • explanation-first: Skip hints, go straight to explanation  │
-└─────────────────────────────────────────────────────────────┘
+StartPage → Role Selection → Student/Instructor Profile
+                                  ↓
+                    ┌─────────────┴─────────────┐
+                    ↓                           ↓
+              Student Route               Instructor Route
+                    ↓                           ↓
+          LearningInterface           ResearchDashboard
+                    ↓                           ↓
+          SQL Error → normalizeSqlErrorSubtype()
+                              ↓
+          User Request Hint ← Progressive Hint ←
+                  ↓
+          Rung 1 → Rung 2 → Rung 3 (Linear Progression)
+                  ↓
+          Profile Selection (Bandit/Static/Diagnostic)
+                  ↓
+          Auto-Escalation → Explanation Mode
+                  ↓
+          Retrieval Bundle → SQL-Engage + Template
+                  ↓
+          Explanation View → textbook_add Event → My Notes
 ```
 
-### 📊 Multi-Armed Bandit (Week 5)
+## Technology Stack
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Thompson Sampling Bandit                                     │
-│  • 4 arms: aggressive, conservative, explanation-first        │
-│  • Per-learner bandit instances                               │
-│  • Automatic strategy optimization                            │
-│  • Profile assignment with assignment strategy                │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### 📚 Dynamic Textbook Assembly
-
-Every LLM-generated explanation becomes a **Textbook Unit**:
-- **Content**: Markdown with SQL syntax highlighting
-- **Provenance**: Links to source interactions + PDF citations
-- **Concepts**: Auto-tagged with SQL-Engage concept IDs
-- **Deduplication**: Hash-based merging, timestamp updates
+| Layer | Technology | Version |
+|-------|------------|---------|
+| Framework | React | 18.3.1 |
+| Language | TypeScript | 5.9+ |
+| Build Tool | Vite | 6.4 |
+| Styling | Tailwind CSS | 4.1 |
+| UI Components | Radix UI primitives + MUI | 7.3 |
+| Router | React Router | 7.13 |
+| SQL Engine | sql.js (WASM SQLite) | 1.14 |
+| Testing (E2E) | Playwright | 1.53 |
+| Testing (Unit) | Vitest | 4.0 |
+| Markdown | Marked | 14+ |
+| Sanitization | DOMPurify | 3.3 |
 
 ## Quick Start
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) 18+ (LTS recommended)
+- [Node.js](https://nodejs.org/) 20+ (LTS recommended)
 - [Ollama](https://ollama.com/) (optional, for LLM-powered explanations)
 
 ### Install & Run
@@ -139,9 +191,22 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ### Instructor Access
 1. On the start page, select **"I am an Instructor"**
-2. Enter the passcode when prompted: `TeachSQL2024`
+2. Enter the passcode when prompted (configured via `VITE_INSTRUCTOR_PASSCODE`)
 3. View student analytics, concept coverage, and learning traces
 4. Export data for further analysis
+
+### Route Access Matrix
+
+| Route | Student | Instructor | Anonymous |
+|-------|---------|------------|-----------|
+| `/` (Start) | ✅ | ✅ | ✅ |
+| `/practice` | ✅ | ❌ → /instructor-dashboard | ❌ → / |
+| `/textbook` | ✅ | ✅ | ❌ → / |
+| `/concepts` | ✅ | ❌ → / | ❌ → / |
+| `/concepts/:id` | ✅ | ❌ → / | ❌ → / |
+| `/research` | ❌ → / | ✅ | ❌ → / |
+| `/instructor-dashboard` | ❌ → / | ✅ | ❌ → / |
+| `/settings` | ✅ | ✅ | ❌ → / |
 
 ## Development
 
@@ -150,40 +215,70 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 npm run build
 
 # Run all tests
-npm run test:e2e:weekly
-
-# Run unit tests
-npm run test:unit
+npm run test:e2e:weekly    # 138 E2E tests
+npm run test:unit          # 265 unit tests
 
 # Generate demo artifacts
 npm run demo:weekly
 
-# Run Week 3 acceptance gate
+# Verification gates
+npm run verify:weekly      # Full weekly verification
 npm run gate:week3:acceptance
+npm run gate:week3:groundedness
+npm run check:concept-map
+
+# Replay operations
+npm run replay:gate
+npm run replay:gate:update
+
+# PDF operations
+npm run pdf:index
+npm run pdf:search
+npm run pdf:query
 ```
+
+### Test Tags
+
+| Tag | Purpose |
+|-----|---------|
+| `@weekly` | Weekly regression suite |
+| `@no-external` | No Ollama/PDF needed |
+| `@integration` | Requires external services |
+| `@flaky` | Known intermittent failures |
 
 ## Project Structure
 
 ```
-├── apps/web/              # Main Vite React application
+├── apps/web/                    # Main Vite React application
 │   ├── src/
 │   │   ├── app/
-│   │   │   ├── components/   # React components (HintSystem, etc.)
-│   │   │   ├── pages/        # Route pages (StartPage, LearningInterface, etc.)
-│   │   │   ├── lib/          # Business logic (storage, orchestrator, bandit, HDI)
-│   │   │   ├── data/         # Static data (problems, SQL-Engage)
-│   │   │   └── hooks/        # Custom React hooks (useUserRole, etc.)
-│   │   └── tests/            # Playwright E2E tests (138 @weekly tests)
+│   │   │   ├── components/      # React components (HintSystem, etc.)
+│   │   │   ├── pages/           # Route pages (StartPage, LearningInterface, etc.)
+│   │   │   ├── lib/             # Business logic (storage, orchestrator, bandit, HDI)
+│   │   │   ├── data/            # Static data (problems, SQL-Engage)
+│   │   │   └── hooks/           # Custom React hooks (useUserRole, etc.)
+│   │   └── tests/               # Playwright E2E tests (138 @weekly tests)
 │   └── vite.config.ts
-├── scripts/               # Utility scripts (replay, metrics)
-├── docs/                  # Documentation
-│   ├── README.md          # Documentation index
-│   ├── runbooks/          # Active operational docs
-│   │   ├── progress.md    # Architecture and milestones
-│   │   └── weekly-progress.md # Active checkpoint log
-│   ├── research/          # Research and design docs
-│   └── archive/           # Historical docs
-└── dist/                  # Build outputs
+├── scripts/                     # Utility scripts (replay, metrics)
+├── docs/                        # Documentation
+│   ├── README.md                # Documentation index and navigation
+│   ├── runbooks/                # Active operational docs
+│   │   ├── progress.md          # Architecture and milestones
+│   │   ├── weekly-progress.md   # Active checkpoint log
+│   │   ├── build-test-report-2026-02-28.md
+│   │   ├── concept-comparison.md
+│   │   └── pdf-helper-integration-guide.md
+│   ├── research/                # Research and design docs
+│   │   ├── HDI.md               # Hint Dependency Index
+│   │   ├── MULTI_ARMED_BANDIT.md
+│   │   ├── ESCALATION_POLICIES.md
+│   │   └── RESEARCH_ARCHITECTURE.md
+│   └── archive/                 # Historical/outdated docs
+├── dist/                        # Build outputs (gitignored)
+├── package.json                 # Dependencies and scripts
+├── playwright.config.ts         # E2E test configuration
+├── vitest.config.ts             # Unit test configuration
+└── vercel.json                  # Vercel deployment config
 ```
 
 ## Documentation
@@ -193,10 +288,26 @@ npm run gate:week3:acceptance
 | [docs/README.md](docs/README.md) | Documentation index and navigation |
 | [docs/runbooks/progress.md](docs/runbooks/progress.md) | Architecture, milestones, research vision |
 | [docs/runbooks/weekly-progress.md](docs/runbooks/weekly-progress.md) | Active checkpoint log (every task) |
-| [docs/research/HDI.md](docs/research/HDI.md) | Hint Dependency Index specification |
-| [docs/research/MULTI_ARMED_BANDIT.md](docs/research/MULTI_ARMED_BANDIT.md) | Bandit algorithm design |
-| [docs/research/ESCALATION_POLICIES.md](docs/research/ESCALATION_POLICIES.md) | Escalation profile design |
-| [docs/archive/archive-week3.md](docs/archive/archive-week3.md) | Week 3 deliverables reference |
+| [AGENTS.md](AGENTS.md) | Agent workflow policy and conventions |
+
+### Research Component Documentation
+
+| Component | Document | Status |
+|-----------|----------|--------|
+| Escalation Policies | [ESCALATION_POLICIES.md](docs/research/ESCALATION_POLICIES.md) | ✅ Complete |
+| Multi-Armed Bandit | [MULTI_ARMED_BANDIT.md](docs/research/MULTI_ARMED_BANDIT.md) | ✅ Complete |
+| HDI | [HDI.md](docs/research/HDI.md) | ✅ Complete |
+
+### Policy Versions
+
+| Component | Version | Source File |
+|-----------|---------|-------------|
+| SQL-Engage Policy | `sql-engage-index-v3-hintid-contract` | `apps/web/src/app/data/sql-engage.ts` |
+| Orchestrator Semantics | `orchestrator-auto-escalation-variant-v2` | `apps/web/src/app/lib/adaptive-orchestrator.ts` |
+| Guidance Ladder | `guidance-ladder-profile-v1` | `apps/web/src/app/lib/guidance-ladder.ts` |
+| Escalation Profiles | `escalation-profiles-v1` | `apps/web/src/app/lib/escalation-profiles.ts` |
+| Bandit Algorithm | `bandit-thompson-v1` | `apps/web/src/app/lib/multi-armed-bandit.ts` |
+| HDI Calculator | `hdi-5component-v1` | `apps/web/src/app/lib/hdi-calculator.ts` |
 
 ## Testing
 
@@ -208,13 +319,104 @@ The project has **265 unit tests** and **138 E2E tests** covering:
 - **Week 3 Features**: 20 tests (guidance ladder, source grounding, textbook)
 - **Data Integrity**: 46+ tests (event logging, validation)
 
-Run tests with:
-```bash
-# E2E tests
-npm run test:e2e:weekly
+### Test Inventory
 
-# Unit tests
-npm run test:unit
+| Category | Count | Description |
+|----------|-------|-------------|
+| Unit Tests | 265 | Vitest-based unit and integration tests |
+| E2E Tests | 138 | Playwright browser tests |
+| **Total** | **403** | **All tests passing** |
+
+## CI/CD Pipeline
+
+GitHub Actions workflow (`.github/workflows/regression-gate.yml`) runs on every PR/push:
+
+1. **Build**: `npm run build`
+2. **Test**: 265 unit tests + 138 @weekly E2E tests (2 parallel shards)
+3. **Demo**: Generate demo artifacts
+4. **Validate**: SQL-Engage concept mapping
+5. **Gates**: Week 2 + Week 3 + Week 5 acceptance gates
+6. **Artifacts**: Upload test results and demo artifacts
+
+**Deployment**: Vercel-ready via `vercel.json`
+- Build output: `dist/app`
+- SPA fallback to `index.html`
+
+## Security
+
+### XSS Prevention
+- DOMPurify sanitization before `dangerouslySetInnerHTML`
+- Markdown rendering pipeline: `marked.parse()` → `DOMPurify.sanitize()` → `dangerouslySetInnerHTML`
+- All user input escaped by React by default
+
+### SQL Injection Protection
+- sql.js in-memory SQLite (isolated per session)
+- No persistent DB connection
+- SQL injection attempts contained within sandbox
+
+### LocalStorage Keys
+
+| Key | Purpose |
+|-----|---------|
+| `sql-adapt-user-profile` | User identity |
+| `sql-learning-interactions` | Event log |
+| `sql-learning-textbook` | Accumulated notes |
+| `sql-learning-pdf-index` | PDF search index |
+| `sql-adapt-debug-profile` | Profile override (dev mode) |
+| `sql-adapt-debug-strategy` | Assignment strategy (dev mode) |
+
+## Troubleshooting
+
+### Port 5173 already in use
+```bash
+lsof -ti:5173 | xargs kill -9
+```
+
+### WASM file not loading
+- Ensure `public/sql-wasm.wasm` exists
+- Check Vite config has `wasmServePlugin()`
+
+### Playwright browsers not installed
+```bash
+npx playwright install --with-deps chromium
+```
+
+### Ollama not responding
+- Verify Ollama is running: `curl http://localhost:11434/api/tags`
+- Check Vite proxy configuration in `vite.config.ts`
+
+## Type Definitions
+
+### Core Types
+
+```typescript
+// User identity
+interface UserProfile {
+  id: string;
+  name: string;
+  role: 'student' | 'instructor';
+  createdAt: number;
+}
+
+// Escalation Profile
+interface EscalationProfile {
+  id: 'fast-escalator' | 'slow-escalator' | 'adaptive-escalator' | 'explanation-first';
+  thresholds: { escalate: number; aggregate: number; };
+  triggers: { timeStuck: number; rungExhausted: number; repeatedError: number; };
+}
+
+// HDI Result
+interface HDIResult {
+  hdi: number;
+  level: 'low' | 'medium' | 'high';
+  components: {
+    hpa: number;   // Hints Per Attempt
+    aed: number;   // Average Escalation Depth
+    er: number;    // Explanation Rate
+    reae: number;  // Repeated Error After Explanation
+    iwh: number;   // Improvement Without Hint
+  };
+}
 ```
 
 ## License
@@ -234,3 +436,8 @@ This project explores **dynamic instructional assembly** — content that emerge
 | HDI Calculator | ✅ Complete | 5-component dependency index |
 | Profile-Aware Escalation | ✅ Complete | Integration with guidance ladder |
 | Event Logging | ✅ Complete | All 9 Week 5 event types logged |
+
+---
+
+*Last updated: 2026-02-28*  
+*Project Status: Week 5 Complete — 403 total tests passing*
