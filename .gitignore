@@ -34,6 +34,8 @@ bugs/
 INTEGRATION_TEST_RESULTS.md
 SETTINGS_PAGE_WEEK5_TEST_REPORT.md
 WEEK5_INDICATORS_TEST_REPORT.md
+BUILD_TEST_REPORT.md
+CONCEPT_COMPARISON.md
 
 # Agent/LLM conversation files (temporary context)
 *.llm-context.md
