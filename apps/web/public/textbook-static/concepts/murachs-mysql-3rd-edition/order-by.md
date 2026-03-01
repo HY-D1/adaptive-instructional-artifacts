@@ -1,24 +1,97 @@
 # The ORDER BY Clause
 
-## Definition
-Sorting result sets by one or more columns in ascending or descending order
+🟡 **Difficulty:** Intermediate
+⏱️ **Estimated Time:** 15 minutes
 
-## Explanation
+## Learning Objectives
 
-single column. In the first example, the rows in the Vendors table are sorted in ascending sequence by the vendor_name column. Since ascending is the default sequence, the ASC keyword can be omitted. In the second example, the rows are sorted by the vendor_name column in descending sequence. To sort by more than one column, you simply list the names in the ORDER BY clause separated by commas as shown in the third example. This can be referred to as a nested sort because one sort is nested within another. Here, the rows in the Vendors table are first sorted by the vendor_state column in ascending sequence. Then, within each state, the rows are sorted by the vendor_city column in ascending sequence. Finally, within each city, the rows are sorted by the vendor_name column in ascending sequence.
+- Understand the The ORDER BY Clause concept in SQL
 
-Chapter 3 How to retrieve data from a sin.gle table 105 The expanded syntax of the ORDER BY clause ORDER BY expression [ASCIDESC] [, expression [ASCIDESC]] ••. An ORDER BY clause that sorts by one column in ascending sequenc
+## What is This?
+
+The ORDER BY Clause is an important SQL concept for working with databases.
 
 ## Examples
-### Example 1
+
+### Example 1: Example for order-by
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic usage example
+
 ```sql
--- No specific example available in textbook
+SELECT * FROM users LIMIT 5;
 ```
-No example available for this concept.
+
+**Explanation:** See the practice problems for more examples.
+
+**Expected Output:**
+
+| id | name | email | age | city |
+| --- | --- | --- | --- | --- |
+| 1 | Alice | alice@email.com | 25 | Seattle |
+| 2 | Bob | bob@email.com | 30 | Portland |
+| 3 | Charlie | charlie@email.com | 22 | Seattle |
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Mistake 1: Syntax error
+
+**Incorrect SQL:**
+```sql
+SELECT * FORM users;
+```
+
+**Error Message:** `Error: near 'FORM': syntax error`
+
+**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Double-check SQL keyword spelling
+
+### Mistake 2: Missing semicolon
+
+**Incorrect SQL:**
+```sql
+SELECT * FROM users
+```
+
+**Error Message:** `Some databases require semicolons to end statements`
+
+**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Always end SQL statements with a semicolon
+
+## Practice Challenge
+
+**Practice using order-by with the practice schemas.**
+
+💡 **Hint:** Review the examples above and try writing your own query.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users LIMIT 5;
+```
+
+**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
+</details>
+
+## Related Practice Problems
+
+- [problem-5](/practice/problem-5)
+- [problem-6](/practice/problem-6)
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 124, 125, 126, 127, 128, 129*
+
+*Content generated for SQL-Adapt Learning Platform*

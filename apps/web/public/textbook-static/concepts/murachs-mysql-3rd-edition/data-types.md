@@ -1,33 +1,96 @@
 # MySQL Data Types
 
-## Definition
-Understanding numeric, string, date/time, and large object data types
+🟢 **Difficulty:** Beginner
+⏱️ **Estimated Time:** 15 minutes
 
-## Explanation
+## Learning Objectives
 
-is that it can only store dates up to the year 2038. This is known as the year-2038 problem, the Y2K38 problem, and the Unix Millennium bug. As a result, if you want your database to be able to store dates that go beyond 2038, you should use the DATETIME type instead of the TIMESTAMP type. Otherwise, you can use the TIMESTAMP type since it only requires 4 bytes to store a TIMESTAMP value, compared to 8 bytes for a DATETIME value. If you need to store a year without any other temporal data, you can use the YEAR type. With MySQL 5.7.5 and later, the YEAR type stores 4-digit years from 1901 to 2155. Entries with one and two digits are still acceptable, though, and are converted to 4-digit years as indicated in this figure. Note that, by default, a numeric literal of O or 00 is converted to 0000. To store the value 2000 in a YEAR column, you must code it as a string. Prior to MySQL 5.7.5, the YEAR column could also store a 2-digit year.
+- Understand the MySQL Data Types concept in SQL
 
-0000. To store the value 2000 in a YEAR column, you must code it as a string. Prior to MySQL 5.7.5, the YEAR column could also
+## What is This?
+
+MySQL Data Types is an important SQL concept for working with databases.
 
 ## Examples
-### Example 1: UPDATE Example
+
+### Example 1: Example for data-types
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic usage example
+
 ```sql
-update the value manually as needed. • MySQL 5.7 .5 and later support only 4-digit years, which can be defmed as YEAR and YEAR( 4). I-digit and 2-digit years can still be entered but are converted to 4-digit years. Values from Oto 69 are converted to 2000 to 2069, and values from 70 to 99 are converted to 1970 to 1999. • For a value of O or 00 to be stored as 2000 in a YEAR column, you must enter it as a string. Otherwise, it's stored as 0000. Figure 8-5 The date and time types (part 1 of 2)
-
-the two-digit year cutoff can be modified if necessary. In general, it's considered a good coding practice to use four-digit years. That way, you can be sure that MySQL is interpreting the year correctly. MySQL interprets any punctuation character in a literal as a delimiter between date parts or time parts. If you don't use any delimiters, you can code the value as a numeric literal. In that case, you don't need to use single quotes. When storing a date in a DATE column, the values are loosely checked for valid data. For instance, months must be in the range 0-12 and days must be in the range 0-31. For illegal dates, such as February 31, MySQL returns an error. However, MySQL allows you to store unconventional date values, such as ''2018-12-00'', which represents a month and year without a specific day. The default time format for MySQL is ''hh:mm:ss'', using a 24-hour clock. Many of the same rules for coding date literals also apply to time literals. For instance, you can use any punctuation character as a delimiter. Similarly,
-
-using a 24-hour clock. Many of the same rules for coding date literals also apply to time literals. For instance, you can use any punctuation character as a delimiter. Similarly, for valid values, you can omit the delimiters. In that case, you can use a numeric literal (no quotes) instead of a string literal (quotes). Finally, MySQL checks times for validity. For illegal times, such as ''19:61:11'', MySQL returns an error. The default date/time format for MySQL is a combination of the date and time formats. Most of the rules for coding date/time literals are a combination of the rules for coding date and time literals. In addition, if you don't specify a time when storing a TIMESTAMP or DATETIME value, the time defaults to 00:00:00, which is midnight.
-
-Chapter 8 How to work with data types 243 How MySQL interprets literal date/time values Literal value Value stored in DATE column '2018-08-15' 2018-08-15 '2018-8-15' 2018-08-15 '18-8-15' 2018-08-15 '20180815' 2018-08-15 20180815 2018-08-15 '2018 . 08.15' 2018-08-15 '18/8/15' 2018-08-15 1 8/15/18 1 None '2018-02-31' None Literal value Value stored in TIME column '7:32' '19:32:11' '193211' 193211 1 19:61:11 1 07:32:00 19:32:11 19:32:11 19:32:11 None Literal value Value stored in DATETIME or TIMESTAMP column '2018-08-15 19:32:11' '2018-08-15' Description 2018-08-15 19:32:11 2018-08-15 00:00:00 • You can specify date and time values by coding a literal value. In most cases, you enclose the literal value in single quotes. • For dates, MySQL uses the ''yyyy-mm-dd'' format. For times, MySQL uses the ''hh:mm:ss'' format, using a 24-hour clock. • By default, MySQL does not support common date formats used by other systems such as ''mm/dd/yy'' and ''mon/dd/yyyy''. • By default, MySQL interprets 2-digit years from 00 to 69 as 2000 to 2069 and the years from 70 to 99 as 1970 to 1999. • MySQL interprets any punctuation character as a delimiter between date parts.
-
-00 to 69 as 2000 to 2069 and the years from 70 to 99 as 1970 to 1999. • MySQL interprets any punctuation character as a delimiter between date parts. If you don't use any delimiters, you can code the value as a numeric literal without quotes. • If you don't specify a time when storing a DATETIME or TIMESTAMP value, MySQL stores a time value of 00:00:00 (12:00 midnight). • If you don't specify seconds when storing a TIME value, MySQL stores 00 for the seconds. • When storing date and time values, MySQL loosely checks the values to make sure they are valid. For example, months must be in the range 0-12, days must be in the range 0-31, and so on. If MySQL determines that a date or time isn't valid, it returns an error. • MySQL 5.5 and later are stricter than previous versions of MySQL for storing date and time values. If MySQL can't interpret a value, it returns an error or a warning. Figure 8-5 The date and time types (part 2 of 2)
-
+SELECT * FROM users LIMIT 5;
 ```
-Example UPDATE statement from textbook.
+
+**Explanation:** See the practice problems for more examples.
+
+**Expected Output:**
+
+| id | name | email | age | city |
+| --- | --- | --- | --- | --- |
+| 1 | Alice | alice@email.com | 25 | Seattle |
+| 2 | Bob | bob@email.com | 30 | Portland |
+| 3 | Charlie | charlie@email.com | 22 | Seattle |
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Mistake 1: Syntax error
+
+**Incorrect SQL:**
+```sql
+SELECT * FORM users;
+```
+
+**Error Message:** `Error: near 'FORM': syntax error`
+
+**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Double-check SQL keyword spelling
+
+### Mistake 2: Missing semicolon
+
+**Incorrect SQL:**
+```sql
+SELECT * FROM users
+```
+
+**Error Message:** `Some databases require semicolons to end statements`
+
+**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Always end SQL statements with a semicolon
+
+## Practice Challenge
+
+**Practice using data-types with the practice schemas.**
+
+💡 **Hint:** Review the examples above and try writing your own query.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users LIMIT 5;
+```
+
+**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
+</details>
+
+## Related Practice Problems
+
+- [problem-26](/practice/problem-26)
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 260, 261, 262, 263, 264, 265, 266, 267, 268, 269, 270*
+
+*Content generated for SQL-Adapt Learning Platform*

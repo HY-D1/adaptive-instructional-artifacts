@@ -1,38 +1,92 @@
 # SELECT Statement Basics
 
-## Definition
-How to retrieve data from a single table using SELECT, column specifications, and aliases
+🟡 **Difficulty:** Intermediate
+⏱️ **Estimated Time:** 15 minutes
 
-## Explanation
+## Learning Objectives
 
-this figure with the coding examples in the next figure, you should easily see how the two are related. This syntax summary has been simplified so you can focus on the five main clauses of the SELECT statement: SELECT, FROM, WHERE, ORDER BY, and LIMIT. Most SELECT statements contain the first four of these clauses. However, only the SELECT clause is required. The SELECT clause is always the first clause in a SELECT statement. It identifies the columns in the result set. These columns are retrieved from the base tables named in the FROM clause. Since this chapter focuses on retrieving data from a single table, the examples in this chapter use FROM clauses that name a single base table. In the next chapter, though, you'll learn how to retrieve data from two or more tables. The WHERE, ORDER BY, and LIMIT clauses are optional. The ORDER BY clause determines how the rows in the result set are sorted, and the WHERE clause determines which rows in the b
+- Understand the SELECT Statement Basics concept in SQL
+
+## What is This?
+
+SELECT Statement Basics is an important SQL concept for working with databases.
 
 ## Examples
-### Example 1: SELECT Example
+
+### Example 1: SQL Example 1
+
+**Difficulty:** Intermediate
+
+**Scenario:** Basic data retrieval
+
 ```sql
-SELECT statement To get you started quickly, this chapter begins by presenting the basic syntax of the SELECT statement. Then, it presents several examples that should give you an overview of how this statement works. The basic syntax of the SELECT statement Figure 3-1 presents the basic syntax of the SELECT statement. The syntax summary at the top of this figure uses conventions that are similar to those used in other programming manuals. Capitalized words are keywords that you have to type exactly as shown. In contrast you have to provide replacements for the lowercase words. For example, you can enter a list of columns in place of select_list, and you can enter a table name in place of table_source. Beyond that, you can omit the clauses enclosed in brackets ( [] ). If you compare the syntax in this figure with the coding examples in the next figure, you should easily see how the two are related. This syntax summary has been simplified so you can focus on
-
-this figure with the coding examples in the next figure, you should easily see how the two are related. This syntax summary has been simplified so you can focus on the five main clauses of the SELECT statement: SELECT, FROM, WHERE, ORDER BY, and LIMIT. Most SELECT statements contain the first four of these clauses. However, only the SELECT clause is required. The SELECT clause is always the first clause in a SELECT statement. It identifies the columns in the result set. These columns are retrieved from the base tables named in the FROM clause. Since this chapter focuses on retrieving data from a single table, the examples in this chapter use FROM clauses that name a single base table. In the next chapter, though, you'll learn how to retrieve data from two or more tables. The WHERE, ORDER BY, and LIMIT clauses are optional. The ORDER BY clause determines how the rows in the result set are sorted, and the WHERE clause determines which rows in the base table are included in the result set. The WHERE clause
-
-determines how the rows in the result set are sorted, and the WHERE clause determines which rows in the base table are included in the result set. The WHERE clause specifies a search condition that's used to filter the rows in the base table. When this condition is true, the row is included in the result set. The LIMIT clause limits the number of rows in the result set. In contrast to the WHERE clause, which uses a search condition, the LIMIT clause simply returns a specified number of rows, regardless of the size of the full result set. Of course, if the result set has fewer rows than are specified by the LIMIT clause, all the rows in the result set are returned.
-
-Chapter 3 How to retrieve datafrom a single table 75 The basic syntax of the SELECT statement SELECT select_ list [FROM table_ source] [WHERE search condition] [ORDER BY order_by_ list] [LIMIT row_ limit] The five clauses of the SELECT statement Clause Description SELECT FROM WHERE ORDER BY LIMIT Description Describes the columns in the result set. Names the base table from which the query retrieves the data. Specifies the conditions that must be met for a row to be included in the result set. Specifies how to sort the rows in the result set. Specifies the number of rows to return. • You use the basic SELECT statement shown above to retrieve the columns speci- fied in the SELECT clause from the base table specified in the FROM clause and store them in a result set. • The WHERE clause is used to filter the rows in the base table so that only those rows that match the search condition are included in the result set. If you omit the WHERE clause, all of the rows in the base table
-
-so that only those rows that match the search condition are included in the result set. If you omit the WHERE clause, all of the rows in the base table are included. • The search condition of a WHERE clause consists of one or more Boolean expres- sions that result in a true, false, or null value. If the combination of all the expres- sions is a true value, the row being tested is included in the result set. Otherwise, it's not. • If you include the ORDER BY clause, the rows in the result set are sorted in the specified sequence. Otherwise, the sequence of the rows is not guaranteed by MySQL. • If you include the LIMIT clause, the result set that's retrieved is limited to a speci- fied number of 1ows. If you omit this clause, all rows that match are returned. • You must code the clauses in the order shown or you'll get a syntax error. Note • The syntax shown above does not include all of the clauses of the SELECT state- ment. You
-
-clauses in the order shown or you'll get a syntax error. Note • The syntax shown above does not include all of the clauses of the SELECT state- ment. You '11 learn about the other clauses later in this book. Figure 3-1 The basic syntax of the SELECT statement
-
-statement retrieves selected columns from the Invoices table. These columns are listed in the SELECT clause. Like the first statement, this statement doesn't include a WHERE or a LIMIT clause, so all the rows are retrieved. Then, the ORDER BY clause causes the rows to be sorted by the invoice_total column in descending order, from largest to smallest. The third statement also lists the columns to be retrieved. In this case, though, the last column is calculated from two columns in the base table, credit_total and payment_total, and the resulting column is given the name total_credits. In addition, the WHERE clause specifies that only the invoice whose invoice_id column has a value of 17 should be retrieved. The fourth SELECT statement includes a WHERE clause whose condition specifies a range of values. In this case, only invoices with invoice dates between 06/01/2018 and 06/30/2018 are retrieved. In addition, the rows in the result set are sorted by invoice date. The last statement in this figure shows another example of the WHERE clause. In this case, only those rows with invoice
-
-in the result set are sorted by invoice date. The last statement in this figure shows another example of the WHERE clause. In this case, only those rows with invoice totals greater than 50,000 are retrieved. Since none of the rows in the Invoices table satisfy this condition, the result set is empty.
-
-Chapter 3 How to retrieve datafrom a single table 77 A SELECT statement that retrieves all the data from the Invoices table SELECT* FROM invoices invoice_id vendor_id invoice_number invoice_date invoice_total payment_total credit_total termsjd ~ 1 122 989319-457 2018-04-08 3813.33 3813.33 0.00 3 2 123 263253241 2018-04-10 40.20 40. 20 0.00 3 3 123 963253234 2018-04-13 138.75 1.38. 75 0.00 3 < (114 rows) A SELECT statement that retrieves three columns from each row, sorted in descending sequence by invoice total SELECT invoice_number, invoice_date, invoice_ total FROM invoices ORDER BY invoice_total DESC invoice number invoice date invoice total - - - -;
+SELECT statement that retrieves three columns from each row, sorted in descending sequence by orders total SELECT invoice_number, invoice_date, invoice_ total FROM orders ORDER BY amount DESC orders number orders date orders total - - - -;
 ```
-Example SELECT statement from textbook.
+
+**Explanation:** Example SQL statement
+
+**Expected Output:**
+
+| id | name | email | age | city |
+| --- | --- | --- | --- | --- |
+| 1 | Alice | alice@email.com | 25 | Seattle |
+| 2 | Bob | bob@email.com | 30 | Portland |
+| 3 | Charlie | charlie@email.com | 22 | Seattle |
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Mistake 1: Syntax error
+
+**Incorrect SQL:**
+```sql
+SELECT * FORM users;
+```
+
+**Error Message:** `Error: near 'FORM': syntax error`
+
+**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Double-check SQL keyword spelling
+
+### Mistake 2: Missing semicolon
+
+**Incorrect SQL:**
+```sql
+SELECT * FROM users
+```
+
+**Error Message:** `Some databases require semicolons to end statements`
+
+**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Always end SQL statements with a semicolon
+
+## Practice Challenge
+
+**Practice using select-basics with the practice schemas.**
+
+💡 **Hint:** Review the examples above and try writing your own query.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users LIMIT 5;
+```
+
+**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
+</details>
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105*
+
+*Content generated for SQL-Adapt Learning Platform*

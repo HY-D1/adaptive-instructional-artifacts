@@ -1,24 +1,92 @@
 # Introduction to Joins
 
-## Definition
-Combining data from multiple tables using INNER JOIN, OUTER JOIN, and cross joins
+🟡 **Difficulty:** Intermediate
+⏱️ **Estimated Time:** 15 minutes
 
-## Explanation
+## Learning Objectives
 
-chapter In these exercises, you '11 use MySQL Workbench to run some of the scripts for the examples in this chapter. This assumes that you already know how to use MySQL Workbench, as described in chapter 2. 1. Start MySQL Workbench. 2. Open the script named 3-02.sql that you should fmd in this directory: c:\murach\rnysql\book_scripts\ch03. When it opens, you should see all of the queries for figure 3-2. Note that each of these queries has a semicolon at the end of it. 3. Move the insertion point into the first query and press Ctrl+Enter or click on the Exectite Current Statement button to run the query. This shows you the data that's in the Invoices table that you'll be working with in this chapter. 4. Move the insertion point into the second query and run it.
+- Understand the Introduction to Joins concept in SQL
 
-Chapter 3 How to retrieve data from a sin.gle table 111 5. Open the script named 3-05.sq
+## What is This?
+
+Introduction to Joins is an important SQL concept for working with databases.
 
 ## Examples
-### Example 1
+
+### Example 1: Example for joins-intro
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic usage example
+
 ```sql
--- No specific example available in textbook
+SELECT * FROM users LIMIT 5;
 ```
-No example available for this concept.
+
+**Explanation:** See the practice problems for more examples.
+
+**Expected Output:**
+
+| id | name | email | age | city |
+| --- | --- | --- | --- | --- |
+| 1 | Alice | alice@email.com | 25 | Seattle |
+| 2 | Bob | bob@email.com | 30 | Portland |
+| 3 | Charlie | charlie@email.com | 22 | Seattle |
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Mistake 1: Syntax error
+
+**Incorrect SQL:**
+```sql
+SELECT * FORM users;
+```
+
+**Error Message:** `Error: near 'FORM': syntax error`
+
+**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Double-check SQL keyword spelling
+
+### Mistake 2: Missing semicolon
+
+**Incorrect SQL:**
+```sql
+SELECT * FROM users
+```
+
+**Error Message:** `Some databases require semicolons to end statements`
+
+**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Always end SQL statements with a semicolon
+
+## Practice Challenge
+
+**Practice using joins-intro with the practice schemas.**
+
+💡 **Hint:** Review the examples above and try writing your own query.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users LIMIT 5;
+```
+
+**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
+</details>
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141*
+
+*Content generated for SQL-Adapt Learning Platform*

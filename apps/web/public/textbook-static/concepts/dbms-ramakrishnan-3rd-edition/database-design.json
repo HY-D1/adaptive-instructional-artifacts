@@ -1,0 +1,62 @@
+{
+  "concept_id": "database-design",
+  "title": "Database Design",
+  "learning_objectives": [
+    "Understand the Database Design concept in SQL"
+  ],
+  "prerequisite_concepts": [],
+  "practice_problems": [],
+  "sections": {
+    "definition": {
+      "concept_explanation": "Database Design is an important SQL concept for working with databases.",
+      "visual_diagram": ""
+    },
+    "examples": [
+      {
+        "title": "SQL Example 1",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "insert the record in the employee heap file, at a cost of 2D + C. In addition, the appropriate page in the index must be located, modified to insert a new data entry, and then written back. The additional cost is H + 2D + C. Delete: We need to locate the index must be located, modified to insert a new data entry, and then written back. The additional cost is H + 2D + C. Delete: We need to locate the data record in the employee file and the data entry in the index;",
+        "explanation": "Example SQL statement",
+        "expected_output": ""
+      },
+      {
+        "title": "SQL Example 2",
+        "difficulty": "intermediate",
+        "scenario": "Filtering data based on conditions",
+        "sql": "SELECT FROM WHERE E.dno Employees E E.age > 40 If we have a H+ tree index on age, we can use it to retrieve only tuples that satisfy the selection E. age> 40. \\iVhether such an index is worthwhile depends first of all on the selectivity of the condition. vVhat fraction of the employees are older than 40'1 If virtually everyone is older than 40 1 we gain little by using an index 011 age;",
+        "explanation": "Example SQL statement",
+        "expected_output": "| id | name | email | age | city |\n| --- | --- | --- | --- | --- |\n| 1 | Alice | alice@email.com | 25 | Seattle |\n| 2 | Bob | bob@email.com | 30 | Portland |\n| 3 | Charlie | charlie@email.com | 22 | Seattle |"
+      }
+    ],
+    "common_mistakes": [
+      {
+        "title": "Syntax error",
+        "error_sql": "SELECT * FORM users;",
+        "error_message": "Error: near 'FORM': syntax error",
+        "why_it_happens": "Typo in SQL keyword. The correct keyword is FROM, not FORM.",
+        "fix_sql": "SELECT * FROM users;",
+        "key_takeaway": "Double-check SQL keyword spelling"
+      },
+      {
+        "title": "Missing semicolon",
+        "error_sql": "SELECT * FROM users",
+        "error_message": "Some databases require semicolons to end statements",
+        "why_it_happens": "While some SQL implementations are lenient, it's best practice to end statements with semicolons.",
+        "fix_sql": "SELECT * FROM users;",
+        "key_takeaway": "Always end SQL statements with a semicolon"
+      }
+    ],
+    "practice_challenge": {
+      "description": "Practice using database-design with the practice schemas.",
+      "hint": "Review the examples above and try writing your own query.",
+      "solution": "SELECT * FROM users LIMIT 5;",
+      "explanation": "This is a basic query to get you started. See the linked practice problems for more challenges."
+    }
+  },
+  "metadata": {
+    "difficulty": "intermediate",
+    "estimated_time_minutes": 15,
+    "source_chunks": 37
+  }
+}

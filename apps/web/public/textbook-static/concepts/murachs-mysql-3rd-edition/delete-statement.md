@@ -1,23 +1,92 @@
 # The DELETE Statement
 
-## Definition
-Removing rows from a table using DELETE with WHERE clause
+🟡 **Difficulty:** Intermediate
+⏱️ **Estimated Time:** 15 minutes
 
-## Explanation
-Chapter 5 How to insert, update, and delete data 151 The syntax of the CREATE TABLE AS statement CREATE TABLE table_name AS select_ statement Create a complete copy of the Invoices table CREATE TABLE invoices_copy AS SELECT* FROM invoices Create a partial copy of the Invoices table CREATE TABLE old_ invoices AS SELECT* FROM invoices WHERE invoice_ total - payment_total - credit_total = 0 Create a table with summary rows from the Invoices table CREATE TABLE vendor_balances AS SELECT vendor_ id, SUM(invoice_total) AS sum_of_ invoices FROM invoices WHERE (invoice_total - payment_total - credit_total) <> 0 GROUP BY vendor_ id Delete a table DROP TABLE old invoices Description • You can use the CREATE TABLE AS statement to create a new table based on the result set defined by a SELECT statement. • Each column name in the SELECT clause must be unique. If you use calculated values in the select list, you must name the column. • You can code the other clauses of the SELECT statement just as you would for any other SELECT statement, including grouping, aggregates, joins,
+## Learning Objectives
 
-list, you must name the column. • You can code the other clauses of the SELECT statement just as you would for any other SELECT statement, including grouping, aggregates, joins, and subqueries. • If you code the CREATE TABLE AS statement as shown above, the table you name must not exist. If it does, you must delete the table by using the DROP TABLE statement before you execute the CREATE TABLE AS statement. • When you use the CREATE TABLE AS statement to create a table, only the column definitions and data are copied. Definitions of primary keys, foreign keys, indexes, and so on are not included in the new table. Figure 5-1 How to create a table from a SELECT statement
+- Understand the The DELETE Statement concept in SQL
+
+## What is This?
+
+The DELETE Statement is an important SQL concept for working with databases.
 
 ## Examples
-### Example 1
+
+### Example 1: Example for delete-statement
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic usage example
+
 ```sql
--- No specific example available in textbook
+SELECT * FROM users LIMIT 5;
 ```
-No example available for this concept.
+
+**Explanation:** See the practice problems for more examples.
+
+**Expected Output:**
+
+| id | name | email | age | city |
+| --- | --- | --- | --- | --- |
+| 1 | Alice | alice@email.com | 25 | Seattle |
+| 2 | Bob | bob@email.com | 30 | Portland |
+| 3 | Charlie | charlie@email.com | 22 | Seattle |
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Mistake 1: Syntax error
+
+**Incorrect SQL:**
+```sql
+SELECT * FORM users;
+```
+
+**Error Message:** `Error: near 'FORM': syntax error`
+
+**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Double-check SQL keyword spelling
+
+### Mistake 2: Missing semicolon
+
+**Incorrect SQL:**
+```sql
+SELECT * FROM users
+```
+
+**Error Message:** `Some databases require semicolons to end statements`
+
+**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Always end SQL statements with a semicolon
+
+## Practice Challenge
+
+**Practice using delete-statement with the practice schemas.**
+
+💡 **Hint:** Review the examples above and try writing your own query.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users LIMIT 5;
+```
+
+**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
+</details>
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 171, 172, 173, 174, 175, 176*
+
+*Content generated for SQL-Adapt Learning Platform*

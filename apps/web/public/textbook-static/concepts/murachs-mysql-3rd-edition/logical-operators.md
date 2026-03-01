@@ -1,23 +1,92 @@
 # Logical Operators
 
-## Definition
-Using AND, OR, NOT, IN, BETWEEN to combine filter conditions
+🟡 **Difficulty:** Intermediate
+⏱️ **Estimated Time:** 15 minutes
 
-## Explanation
-Chapter 3 How to retrieve datafrom a sin.gle table 99 The syntax of the WHERE clause with a BETWEEN phrase WHERE test_expression [NOT] BETWEEN begin_ expression AND end_ expression Examples of the BETWEEN phrase A BETWEEN phrase with literal values WHERE invoice_date BETWEEN '2018-06-01' AND '2018-06-30' A BETWEEN phrase preceded by NOT WHERE vendor_ zip_ code NOT BETWEEN 93600 AND 93799 A BETWEEN phrase with a test expression coded as a calculated value WHERE invoice_total - payment_total - credit_total BETWEEN 200 AND 500 A BETWEEN phrase with the upper and lower limits coded as calculated values WHERE payment_ total BETWEEN credit_total AND credit_total + 500 Description • You can use the BETWEEN phrase to test whether an expression falls within a range of values. The lower limit must be coded as the first expression, and the upper limit must be coded as the second expression. Otherwise, MySQL returns an empty result set. • The two expressions used in the BETWEEN phrase for the range of values are inclusive. That is, the result set includes values that are equal to the
+## Learning Objectives
 
-result set. • The two expressions used in the BETWEEN phrase for the range of values are inclusive. That is, the result set includes values that are equal to the upper or lower limit. • You can use the NOT operator to test for an expression that's not within the given range. Figure 3-13 How to use the BETWEEN operator
+- Understand the Logical Operators concept in SQL
+
+## What is This?
+
+Logical Operators is an important SQL concept for working with databases.
 
 ## Examples
-### Example 1
+
+### Example 1: Example for logical-operators
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic usage example
+
 ```sql
--- No specific example available in textbook
+SELECT * FROM users LIMIT 5;
 ```
-No example available for this concept.
+
+**Explanation:** See the practice problems for more examples.
+
+**Expected Output:**
+
+| id | name | email | age | city |
+| --- | --- | --- | --- | --- |
+| 1 | Alice | alice@email.com | 25 | Seattle |
+| 2 | Bob | bob@email.com | 30 | Portland |
+| 3 | Charlie | charlie@email.com | 22 | Seattle |
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Mistake 1: Syntax error
+
+**Incorrect SQL:**
+```sql
+SELECT * FORM users;
+```
+
+**Error Message:** `Error: near 'FORM': syntax error`
+
+**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Double-check SQL keyword spelling
+
+### Mistake 2: Missing semicolon
+
+**Incorrect SQL:**
+```sql
+SELECT * FROM users
+```
+
+**Error Message:** `Some databases require semicolons to end statements`
+
+**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Always end SQL statements with a semicolon
+
+## Practice Challenge
+
+**Practice using logical-operators with the practice schemas.**
+
+💡 **Hint:** Review the examples above and try writing your own query.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users LIMIT 5;
+```
+
+**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
+</details>
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 119, 120, 121, 122, 123*
+
+*Content generated for SQL-Adapt Learning Platform*

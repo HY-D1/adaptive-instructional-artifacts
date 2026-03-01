@@ -1,24 +1,92 @@
 # The INSERT Statement
 
-## Definition
-Adding new rows to a table using INSERT INTO with VALUES or SELECT
+🟡 **Difficulty:** Intermediate
+⏱️ **Estimated Time:** 15 minutes
 
-## Explanation
+## Learning Objectives
 
-to join these tables on both columns and would yield unexpected results. In addition, you may get unexpected results if you use natural joins for complex queries. In that case, you can use the USING or ON clause to explicitly specify the join since these clauses give you more control over the join. If neces- sary, you can mix a natural join with the USING or ON clause within a single SELECT statement. In this figure, for example, the second SELECT statement uses a natural join for the first join and a USING clat1se for the second join. The result is the same as the result for the second statement in figure 4-10. Finally, since natural joins don't explicitly specify the join colu1nn, they may not work correctly if the structure of the database changes later. So although natural joins are easy to code, you'll usually want to avoid using them for production code.
+- Understand the The INSERT Statement concept in SQL
 
-Chapter 4 How to retrieve data f rom two or m.ore tables 137 The syntax for a join that uses the NATURAL keywor
+## What is This?
+
+When you code a natural join, you don't specify the column that's used to join the two tables.
 
 ## Examples
-### Example 1
+
+### Example 1: Example for insert-statement
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic usage example
+
 ```sql
--- No specific example available in textbook
+SELECT * FROM users LIMIT 5;
 ```
-No example available for this concept.
+
+**Explanation:** See the practice problems for more examples.
+
+**Expected Output:**
+
+| id | name | email | age | city |
+| --- | --- | --- | --- | --- |
+| 1 | Alice | alice@email.com | 25 | Seattle |
+| 2 | Bob | bob@email.com | 30 | Portland |
+| 3 | Charlie | charlie@email.com | 22 | Seattle |
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Mistake 1: Syntax error
+
+**Incorrect SQL:**
+```sql
+SELECT * FORM users;
+```
+
+**Error Message:** `Error: near 'FORM': syntax error`
+
+**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Double-check SQL keyword spelling
+
+### Mistake 2: Missing semicolon
+
+**Incorrect SQL:**
+```sql
+SELECT * FROM users
+```
+
+**Error Message:** `Some databases require semicolons to end statements`
+
+**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Always end SQL statements with a semicolon
+
+## Practice Challenge
+
+**Practice using insert-statement with the practice schemas.**
+
+💡 **Hint:** Review the examples above and try writing your own query.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users LIMIT 5;
+```
+
+**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
+</details>
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 156, 157, 158, 159, 160, 161, 162, 163*
+
+*Content generated for SQL-Adapt Learning Platform*

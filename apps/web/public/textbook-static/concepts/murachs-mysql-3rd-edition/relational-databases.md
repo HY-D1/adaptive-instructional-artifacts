@@ -1,23 +1,92 @@
 # Introduction to Relational Databases
 
-## Definition
-Understanding client/server systems, relational database model, tables, relationships, and SQL basics
+🟡 **Difficulty:** Intermediate
+⏱️ **Estimated Time:** 15 minutes
 
-## Explanation
-An introduction to relational databases This chapter presents the concepts and term.~ that you should understand before }rou begin learning how to \Vork \Vith a SQL database such as 1'1ySQL. Although thi chapter doesn't present the coding details. it doe pre. ent an o~enie"'' of the most importa.11t type ot SQL staten1ents that are presented in this book. An introduction to client/server systems ~~4 n1e l1ardware co1nponeru of a cl1entlser,er sy!den1 ...................................... 4 rhe . ot l\vare con1ponents at a client/. er,,er S)' ten1 ........................................ 6 01.he1 cl ie r1t/.ser, er architec1 ut es ..................................................................... & An intr,oductlon to the relational database model ............ 10 Ho\\' a table is 01gan1zed ........................................ - ..................................... 10 Ho'\\' r:ible~ are re lated .................................. -- ................... - .............................................. 12 Ho\.v column!! are uelined .............................................................................. 14 Hov.• Lo read a database diagratn .................................................................... 16 ... An introduction to SQL and SOL-based systems ............. 18 A briet J1i tor) ot SQL ............................................................... .., ................................ .-......................... _ ... 18 A co111par1sot1 oJ Orucle. 082. ~1 icrt)s.oft SQL Sen,er. and My QL ........... 20 The SOL stateme.nts ................................................................
+## Learning Objectives
 
-briet J1i tor) ot SQL ............................................................... .., ................................ .-......................... _ ... 18 A co111par1sot1 oJ Orucle. 082. ~1 icrt)s.oft SQL Sen,er. and My QL ........... 20 The SOL stateme.nts ................................................................ 2
+- Understand the Introduction to Relational Databases concept in SQL
+
+## What is This?
+
+Introduction to Relational Databases is an important SQL concept for working with databases.
 
 ## Examples
-### Example 1
+
+### Example 1: Example for relational-databases
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic usage example
+
 ```sql
--- No specific example available in textbook
+SELECT * FROM users LIMIT 5;
 ```
-No example available for this concept.
+
+**Explanation:** See the practice problems for more examples.
+
+**Expected Output:**
+
+| id | name | email | age | city |
+| --- | --- | --- | --- | --- |
+| 1 | Alice | alice@email.com | 25 | Seattle |
+| 2 | Bob | bob@email.com | 30 | Portland |
+| 3 | Charlie | charlie@email.com | 22 | Seattle |
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Mistake 1: Syntax error
+
+**Incorrect SQL:**
+```sql
+SELECT * FORM users;
+```
+
+**Error Message:** `Error: near 'FORM': syntax error`
+
+**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Double-check SQL keyword spelling
+
+### Mistake 2: Missing semicolon
+
+**Incorrect SQL:**
+```sql
+SELECT * FROM users
+```
+
+**Error Message:** `Some databases require semicolons to end statements`
+
+**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Always end SQL statements with a semicolon
+
+## Practice Challenge
+
+**Practice using relational-databases with the practice schemas.**
+
+💡 **Hint:** Review the examples above and try writing your own query.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users LIMIT 5;
+```
+
+**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
+</details>
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37*
+
+*Content generated for SQL-Adapt Learning Platform*

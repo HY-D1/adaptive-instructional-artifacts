@@ -1,0 +1,70 @@
+{
+  "concept_id": "backup-restore",
+  "title": "Backup and Restore",
+  "learning_objectives": [
+    "Understand the Backup and Restore concept in SQL"
+  ],
+  "prerequisite_concepts": [],
+  "practice_problems": [],
+  "sections": {
+    "definition": {
+      "concept_explanation": "Backup and Restore is an important SQL concept for working with databases.",
+      "visual_diagram": ""
+    },
+    "examples": [
+      {
+        "title": "SQL Example 1",
+        "difficulty": "advanced",
+        "scenario": "Filtering data based on conditions",
+        "sql": "ALTER USER IF EXISTS john PASSWORD EXPIRE INTERVAL 90 hire_date How to use the SET PASSWORD statement The syntax SET PASSWORD [FOR username] = 'password' A statement that changes a user's password SET PASSWORD FOR john= 'paSSword' A statement that changes the current user's password SET PASSWORD= 'secret' A SELECT statement that selects all users that don't have passwords SELECT Host, User FROM mysql.user WHERE authentication_ string = \u2022\u2022 Host User -;",
+        "explanation": "Example SQL statement",
+        "expected_output": ""
+      },
+      {
+        "title": "SQL Example 2",
+        "difficulty": "beginner",
+        "scenario": "Filtering data based on conditions",
+        "sql": "ALTER USER statement or the SET PASSWORD statement to change a password. FROM mysql.user WHERE authentication_ string = \u2022\u2022 Host User -;",
+        "explanation": "Example SQL statement",
+        "expected_output": ""
+      },
+      {
+        "title": "SQL Example 3",
+        "difficulty": "intermediate",
+        "scenario": "Basic data retrieval",
+        "sql": "select data from the General_Ledger_Accounts and Terms tables. Like jim, these users can connect from a computer on any host. Again, this is a security ris.k, but a hacker who can connect as john or jane has even fewer privileges and can do less damage. Chapter 18 How to secure a database A script that sets up the users and privileges for a database -- drop the users (remove IF EXISTS for MySQL 5.6 and earlier) DROP USER IF EXISTS john;",
+        "explanation": "Example SQL statement",
+        "expected_output": "| id | name | email | age | city |\n| --- | --- | --- | --- | --- |\n| 1 | Alice | alice@email.com | 25 | Seattle |\n| 2 | Bob | bob@email.com | 30 | Portland |\n| 3 | Charlie | charlie@email.com | 22 | Seattle |"
+      }
+    ],
+    "common_mistakes": [
+      {
+        "title": "Syntax error",
+        "error_sql": "SELECT * FORM users;",
+        "error_message": "Error: near 'FORM': syntax error",
+        "why_it_happens": "Typo in SQL keyword. The correct keyword is FROM, not FORM.",
+        "fix_sql": "SELECT * FROM users;",
+        "key_takeaway": "Double-check SQL keyword spelling"
+      },
+      {
+        "title": "Missing semicolon",
+        "error_sql": "SELECT * FROM users",
+        "error_message": "Some databases require semicolons to end statements",
+        "why_it_happens": "While some SQL implementations are lenient, it's best practice to end statements with semicolons.",
+        "fix_sql": "SELECT * FROM users;",
+        "key_takeaway": "Always end SQL statements with a semicolon"
+      }
+    ],
+    "practice_challenge": {
+      "description": "Practice using backup-restore with the practice schemas.",
+      "hint": "Review the examples above and try writing your own query.",
+      "solution": "SELECT * FROM users LIMIT 5;",
+      "explanation": "This is a basic query to get you started. See the linked practice problems for more challenges."
+    }
+  },
+  "metadata": {
+    "difficulty": "intermediate",
+    "estimated_time_minutes": 15,
+    "source_chunks": 18
+  }
+}

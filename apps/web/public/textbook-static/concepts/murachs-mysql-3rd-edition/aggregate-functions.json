@@ -1,0 +1,62 @@
+{
+  "concept_id": "aggregate-functions",
+  "title": "Aggregate Functions",
+  "learning_objectives": [
+    "Use COUNT, SUM, AVG, MAX, MIN for calculations",
+    "Understand the difference between COUNT(*) and COUNT(column)",
+    "Combine aggregates with other SQL features"
+  ],
+  "prerequisite_concepts": [
+    "select-basic"
+  ],
+  "practice_problems": [
+    "problem-4",
+    "problem-11",
+    "problem-12"
+  ],
+  "sections": {
+    "definition": {
+      "concept_explanation": "Aggregate functions perform calculations on sets of values and return a single result.",
+      "visual_diagram": ""
+    },
+    "examples": [
+      {
+        "title": "Example for aggregate-functions",
+        "difficulty": "beginner",
+        "scenario": "Basic usage example",
+        "sql": "SELECT * FROM users LIMIT 5;",
+        "explanation": "See the practice problems for more examples.",
+        "expected_output": "| id | name | email | age | city |\n| --- | --- | --- | --- | --- |\n| 1 | Alice | alice@email.com | 25 | Seattle |\n| 2 | Bob | bob@email.com | 30 | Portland |\n| 3 | Charlie | charlie@email.com | 22 | Seattle |"
+      }
+    ],
+    "common_mistakes": [
+      {
+        "title": "Mixing aggregate and non-aggregate columns",
+        "error_sql": "SELECT city, COUNT(*) FROM users;",
+        "error_message": "Error: misuse of aggregate function COUNT()",
+        "why_it_happens": "When using aggregates, non-aggregate columns must be in a GROUP BY clause.",
+        "fix_sql": "SELECT city, COUNT(*) FROM users GROUP BY city;",
+        "key_takeaway": "All non-aggregated columns must be in GROUP BY"
+      },
+      {
+        "title": "Using WHERE with aggregate conditions",
+        "error_sql": "SELECT city, COUNT(*) FROM users WHERE COUNT(*) > 2 GROUP BY city;",
+        "error_message": "Error: misuse of aggregate: COUNT()",
+        "why_it_happens": "WHERE filters rows before aggregation. Use HAVING to filter after aggregation.",
+        "fix_sql": "SELECT city, COUNT(*) FROM users GROUP BY city HAVING COUNT(*) > 2;",
+        "key_takeaway": "Use HAVING, not WHERE, for aggregate conditions"
+      }
+    ],
+    "practice_challenge": {
+      "description": "Find the average age of users in each city.",
+      "hint": "Use AVG with GROUP BY.",
+      "solution": "SELECT city, AVG(age) as avg_age FROM users GROUP BY city;",
+      "explanation": "AVG calculates the average age, and GROUP BY city computes it separately for each city."
+    }
+  },
+  "metadata": {
+    "difficulty": "intermediate",
+    "estimated_time_minutes": 15,
+    "source_chunks": 13
+  }
+}

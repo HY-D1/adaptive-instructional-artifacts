@@ -1,24 +1,93 @@
 # Subqueries
 
-## Definition
-Using queries nested inside other queries for complex data retrieval
+🟡 **Difficulty:** Intermediate
+⏱️ **Estimated Time:** 25 minutes
 
-## Explanation
+## Learning Objectives
 
-each invoice to see if its invoice total is greater than that average. When a subquery returns a single value as it does in this example, you can use it anywhere you would normally use a single value. However, a subquery can also return a list of values (a result set that has one column). In that case, you can use the subque1y in place of a list of values, such as the list for an IN operator. In addition, a subquery can return a table of values (a result set that has multiple columns). In that case, you can use the subquery in the FROM clause in place of a table. In this chapter, you '11 learn about all of these different types of subqueries. Finally, you can code a subquery within another subquery. In that case, the subqueries are said to be nested. Because nested subqueries can be difficult to read, you should use them only when necessary.
+- Write subqueries in SELECT, FROM, and WHERE clauses
+- Understand correlated vs non-correlated subqueries
+- Use EXISTS and IN operators with subqueries
+- Know when to use subqueries vs joins
 
-Chapter 7 How to lode subqueries 201 Four ways to introduce a subquery in a SELECT statement 1. In a WHERE clause as a search conditio
+## Prerequisites
+
+Before learning this concept, you should understand:
+
+- [select-basic](./select-basic.md)
+- [where-clause](./where-clause.md)
+
+## What is This?
+
+200 Section 2 More SQL skills cts you need them An introduction to subqueries As you learned in chapter 5, a subquery is a SELECT statement that's coded within another SQL statement.
 
 ## Examples
-### Example 1
+
+### Example 1: Example for subqueries
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic usage example
+
 ```sql
--- No specific example available in textbook
+SELECT * FROM users LIMIT 5;
 ```
-No example available for this concept.
+
+**Explanation:** See the practice problems for more examples.
+
+**Expected Output:**
+
+| id | name | email | age | city |
+| --- | --- | --- | --- | --- |
+| 1 | Alice | alice@email.com | 25 | Seattle |
+| 2 | Bob | bob@email.com | 30 | Portland |
+| 3 | Charlie | charlie@email.com | 22 | Seattle |
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Mistake 1: Subquery returns multiple rows for single-row operator
+
+**Incorrect SQL:**
+```sql
+SELECT * FROM users WHERE id = (SELECT user_id FROM orders);
+```
+
+**Error Message:** `Error: subquery returns more than one row`
+
+**Why it happens:** The = operator expects a single value, but the subquery returns multiple rows.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users WHERE id IN (SELECT user_id FROM orders);
+```
+
+💡 **Key Takeaway:** Use IN when the subquery may return multiple rows
+
+## Practice Challenge
+
+**Find users who have not placed any orders.**
+
+💡 **Hint:** Use NOT EXISTS or NOT IN with a subquery.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users u
+WHERE NOT EXISTS (
+    SELECT 1 FROM orders o WHERE o.user_id = u.id
+);
+```
+
+**Explanation:** The subquery checks for orders for each user. NOT EXISTS returns users where no matching orders are found.
+</details>
+
+## Related Practice Problems
+
+- [problem-16](/practice/problem-16)
+- [problem-17](/practice/problem-17)
+- [problem-18](/practice/problem-18)
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 220, 221, 222, 223, 224, 225, 226, 227, 228, 229, 230, 231*
+
+*Content generated for SQL-Adapt Learning Platform*

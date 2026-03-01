@@ -1,22 +1,104 @@
 # Correlated Subqueries
 
-## Definition
-Subqueries that reference columns from the outer query
+🔴 **Difficulty:** Advanced
+⏱️ **Estimated Time:** 30 minutes
 
-## Explanation
+## Learning Objectives
 
-average. Each time MySQL processes a row in the main query, it substitutes the value in the vendor_id column for the column reference in the subquery. Then, MySQL executes the subquery based on that value. For example, if the vendor_ id value is 95, MySQL executes this subquery: SELECT AVG (invoice_ total) FROM i nvoic e s WHERE vendor_ id = 95 After MySQL executes this subquery, it uses the returned value to detern1ine whether to include the current invoice in the result set. For example, for vendor 95, the subquery returns a value of 28.501667. Then, MySQL compares that value with the invoice total of the current invoice. If the invoice total is greater than that value, MySQL includes the invoice in the result set. Otherwise, it doesn't. MySQL repeats this process until it has processed each of the invoices in the Invoices table. In this figure, the WHERE clause of the subquery qualifies the vendor_id column from the main query with the ali
+- Understand the Correlated Subqueries concept in SQL
+
+## Prerequisites
+
+Before learning this concept, you should understand:
+
+- [select-basic](./select-basic.md)
+- [subqueries](./subqueries.md)
+
+## What is This?
+
+Correlated Subqueries is an important SQL concept for working with databases.
 
 ## Examples
-### Example 1
+
+### Example 1: Example for correlated-subquery
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic usage example
+
 ```sql
--- No specific example available in textbook
+SELECT * FROM users LIMIT 5;
 ```
-No example available for this concept.
+
+**Explanation:** See the practice problems for more examples.
+
+**Expected Output:**
+
+| id | name | email | age | city |
+| --- | --- | --- | --- | --- |
+| 1 | Alice | alice@email.com | 25 | Seattle |
+| 2 | Bob | bob@email.com | 30 | Portland |
+| 3 | Charlie | charlie@email.com | 22 | Seattle |
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Mistake 1: Syntax error
+
+**Incorrect SQL:**
+```sql
+SELECT * FORM users;
+```
+
+**Error Message:** `Error: near 'FORM': syntax error`
+
+**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Double-check SQL keyword spelling
+
+### Mistake 2: Missing semicolon
+
+**Incorrect SQL:**
+```sql
+SELECT * FROM users
+```
+
+**Error Message:** `Some databases require semicolons to end statements`
+
+**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Always end SQL statements with a semicolon
+
+## Practice Challenge
+
+**Practice using correlated-subquery with the practice schemas.**
+
+💡 **Hint:** Review the examples above and try writing your own query.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users LIMIT 5;
+```
+
+**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
+</details>
+
+## Related Practice Problems
+
+- [problem-18](/practice/problem-18)
+- [problem-19](/practice/problem-19)
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 232, 233, 234, 235, 236, 237, 238*
+
+*Content generated for SQL-Adapt Learning Platform*

@@ -1,63 +1,116 @@
-# Triggers
+# Triggers and Events
 
-## Definition
+🟡 **Difficulty:** Intermediate
+⏱️ **Estimated Time:** 15 minutes
 
-A trigger is a special type of stored procedure that automatically executes when a specific event occurs on a table, such as INSERT, UPDATE, or DELETE. It helps maintain data integrity and enforce business rules directly within the database.
+## Learning Objectives
 
-## Explanation
+- Understand the Triggers and Events concept in SQL
 
-Triggers are incredibly useful for maintaining the consistency and accuracy of your data without having to write complex application logic. They allow you to perform actions automatically whenever certain events happen on a table. For example, if you want to ensure that every time a new record is inserted into an 'orders' table, the total amount is calculated and stored in another column, you can create a trigger for this purpose.
+## What is This?
+
+Triggers and Events is an important SQL concept for working with databases.
 
 ## Examples
 
-### Basic Trigger Example
+### Example 1: SQL Example 1
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic data retrieval
 
 ```sql
--- CREATE a trigger that updates the 'last_modified' column whenever any row in the 'employees' TABLE is updated. CREATE TRIGGER update_last_modified BEFORE UPDATE ON employees FOR EACH ROW BEGIN SET NEW.last_modified = NOW(); END;
+CREATE TRIGGER vendors_before_update BEFORE UPDATE ON users FOR EACH ROW SET NEW.vendor_ state = UPPER (NEW.vendor_ state);
 ```
 
-This example shows how to create a trigger that automatically updates the 'last_modified' column with the current timestamp every time an employee record is updated.
+**Explanation:** Example SQL statement
 
-### Practical Example
+### Example 2: SQL Example 2
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic data retrieval
 
 ```sql
--- CREATE a trigger that inserts a new row into an 'audit_log' TABLE whenever a new product is added to the 'products' TABLE. CREATE TRIGGER log_product_addition AFTER INSERT ON products FOR EACH ROW BEGIN INSERT INTO audit_log (action, product_id, action_date) VALUES ('Added', NEW.product_id, NOW()); END;
+create triggers and events 481 A trigger that validates line products amounts when updating an orders DELIMITER// CREATE TRIGGER invoices_before_update BEFORE UPDATE ON orders FOR EACH ROW BEGIN DECLARE sum_ line_ products amount DECIMAL (9,2);
 ```
 
-This practical example demonstrates how a trigger can be used to maintain an audit log of all changes made to the 'products' table.
+**Explanation:** Example SQL statement
+
+### Example 3: SQL Example 3
+
+**Difficulty:** Beginner
+
+**Scenario:** Filtering data based on conditions
+
+```sql
+SELECT SUM (line_ item_amount) INTO sum_ line_ item_amount FROM invoice_line_ products WHERE invoice_id = NEW.invoice_ id;
+```
+
+**Explanation:** Example SQL statement
+
+**Expected Output:**
+
+| id | name | email | age | city |
+| --- | --- | --- | --- | --- |
+| 1 | Alice | alice@email.com | 25 | Seattle |
+| 2 | Bob | bob@email.com | 30 | Portland |
+| 3 | Charlie | charlie@email.com | 22 | Seattle |
 
 ## Common Mistakes
 
-### Forgetting to specify the correct timing (BEFORE, AFTER) for the trigger.
+### Mistake 1: Syntax error
 
-**Incorrect:**
-
+**Incorrect SQL:**
 ```sql
--- Incorrect trigger creation CREATE TRIGGER incorrect_trigger ON employees FOR EACH ROW BEGIN SET NEW.last_modified = NOW(); END;
+SELECT * FORM users;
 ```
 
-**Correct:**
+**Error Message:** `Error: near 'FORM': syntax error`
 
+**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
+
+**Corrected SQL:**
 ```sql
--- Correct trigger creation CREATE TRIGGER update_last_modified AFTER UPDATE ON employees FOR EACH ROW BEGIN SET NEW.last_modified = NOW(); END;
+SELECT * FROM users;
 ```
 
-**Why this happens:** Triggers must specify when they should be executed (BEFORE or AFTER the event). Forgetting this can lead to unexpected behavior.
+💡 **Key Takeaway:** Double-check SQL keyword spelling
+
+### Mistake 2: Missing semicolon
+
+**Incorrect SQL:**
+```sql
+SELECT * FROM users
+```
+
+**Error Message:** `Some databases require semicolons to end statements`
+
+**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Always end SQL statements with a semicolon
+
+## Practice Challenge
+
+**Practice using triggers with the practice schemas.**
+
+💡 **Hint:** Review the examples above and try writing your own query.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users LIMIT 5;
+```
+
+**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
+</details>
 
 ---
 
-## Practice
-
-**Question:** Create a trigger that automatically updates the 'total_amount' column in the 'orders' table whenever any row is updated.
-
-**Solution:** -- Solution
-CREATE TRIGGER update_total_amount
-BEFORE UPDATE ON orders
-FOR EACH ROW
-BEGIN
-SET NEW.total_amount = NEW.quantity * NEW.price;
-END;
-
----
-
-*Source: Murach's MySQL 3rd Edition*
+*Content generated for SQL-Adapt Learning Platform*

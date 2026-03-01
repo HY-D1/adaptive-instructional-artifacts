@@ -1,0 +1,56 @@
+{
+  "concept_id": "subqueries",
+  "title": "Subqueries",
+  "learning_objectives": [
+    "Write subqueries in SELECT, FROM, and WHERE clauses",
+    "Understand correlated vs non-correlated subqueries",
+    "Use EXISTS and IN operators with subqueries",
+    "Know when to use subqueries vs joins"
+  ],
+  "prerequisite_concepts": [
+    "select-basic",
+    "where-clause"
+  ],
+  "practice_problems": [
+    "problem-16",
+    "problem-17",
+    "problem-18"
+  ],
+  "sections": {
+    "definition": {
+      "concept_explanation": "200 Section 2 More SQL skills cts you need them An introduction to subqueries As you learned in chapter 5, a subquery is a SELECT statement that's coded within another SQL statement.",
+      "visual_diagram": ""
+    },
+    "examples": [
+      {
+        "title": "Example for subqueries",
+        "difficulty": "beginner",
+        "scenario": "Basic usage example",
+        "sql": "SELECT * FROM users LIMIT 5;",
+        "explanation": "See the practice problems for more examples.",
+        "expected_output": "| id | name | email | age | city |\n| --- | --- | --- | --- | --- |\n| 1 | Alice | alice@email.com | 25 | Seattle |\n| 2 | Bob | bob@email.com | 30 | Portland |\n| 3 | Charlie | charlie@email.com | 22 | Seattle |"
+      }
+    ],
+    "common_mistakes": [
+      {
+        "title": "Subquery returns multiple rows for single-row operator",
+        "error_sql": "SELECT * FROM users WHERE id = (SELECT user_id FROM orders);",
+        "error_message": "Error: subquery returns more than one row",
+        "why_it_happens": "The = operator expects a single value, but the subquery returns multiple rows.",
+        "fix_sql": "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders);",
+        "key_takeaway": "Use IN when the subquery may return multiple rows"
+      }
+    ],
+    "practice_challenge": {
+      "description": "Find users who have not placed any orders.",
+      "hint": "Use NOT EXISTS or NOT IN with a subquery.",
+      "solution": "SELECT * FROM users u\nWHERE NOT EXISTS (\n    SELECT 1 FROM orders o WHERE o.user_id = u.id\n);",
+      "explanation": "The subquery checks for orders for each user. NOT EXISTS returns users where no matching orders are found."
+    }
+  },
+  "metadata": {
+    "difficulty": "intermediate",
+    "estimated_time_minutes": 25,
+    "source_chunks": 25
+  }
+}

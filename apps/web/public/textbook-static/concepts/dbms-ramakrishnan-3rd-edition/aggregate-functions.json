@@ -1,0 +1,78 @@
+{
+  "concept_id": "aggregate-functions",
+  "title": "Aggregate Functions",
+  "learning_objectives": [
+    "Use COUNT, SUM, AVG, MAX, MIN for calculations",
+    "Understand the difference between COUNT(*) and COUNT(column)",
+    "Combine aggregates with other SQL features"
+  ],
+  "prerequisite_concepts": [
+    "select-basic"
+  ],
+  "practice_problems": [
+    "problem-4",
+    "problem-11",
+    "problem-12"
+  ],
+  "sections": {
+    "definition": {
+      "concept_explanation": "--------- I Relational Algebra and SQL: Nesting of queries is a feature that is not I available in relational algebra, but nested queries can be translated into i algebra, as we will see in Chapter 15.",
+      "visual_diagram": ""
+    },
+    "examples": [
+      {
+        "title": "SQL Example 1",
+        "difficulty": "intermediate",
+        "scenario": "Finding customer purchase information",
+        "sql": "SELECT FROM WHERE S.sname users S S.id IN (SELECT FROM WHERE R.id orders R R.id = 103) The nested subquery computes the (multi)set of sids for users who have re- served boat 103 (the set contains 22,31, and 74 on instances R2 and 83), and the top-level query retrieves the names of users whose id is in this set. The IN operator allows us to test whether a value is in a given set of elements;",
+        "explanation": "Example SQL statement",
+        "expected_output": "| id | name | email | age | city |\n| --- | --- | --- | --- | --- |\n| 1 | Alice | alice@email.com | 25 | Seattle |\n| 2 | Bob | bob@email.com | 30 | Portland |\n| 3 | Charlie | charlie@email.com | 22 | Seattle |"
+      },
+      {
+        "title": "SQL Example 2",
+        "difficulty": "intermediate",
+        "scenario": "Finding customer purchase information",
+        "sql": "SELECT FROM WHERE S.sname users S S.id IN (SELECT R.id FROM orders R WHERE R.id IN (SELECT B.id FROM products B WHERE B.color = 'red' The innermost subquery finds the set of bids of red products (102 and 104 on instance E1). The subquery one level above finds the set of sids of users who have reserved one of these products. On instances E1, R2, and 83, this set of sids contains 22, 31, and 64. The top-level query finds the names of users whose id is in this set of sids;",
+        "explanation": "Example SQL statement",
+        "expected_output": "| id | name | email | age | city |\n| --- | --- | --- | --- | --- |\n| 1 | Alice | alice@email.com | 25 | Seattle |\n| 2 | Bob | bob@email.com | 30 | Portland |\n| 3 | Charlie | charlie@email.com | 22 | Seattle |"
+      },
+      {
+        "title": "SQL Example 3",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "SELECT clause that is good programming style;",
+        "explanation": "Example SQL statement",
+        "expected_output": "| id | name | email | age | city |\n| --- | --- | --- | --- | --- |\n| 1 | Alice | alice@email.com | 25 | Seattle |\n| 2 | Bob | bob@email.com | 30 | Portland |\n| 3 | Charlie | charlie@email.com | 22 | Seattle |"
+      }
+    ],
+    "common_mistakes": [
+      {
+        "title": "Mixing aggregate and non-aggregate columns",
+        "error_sql": "SELECT city, COUNT(*) FROM users;",
+        "error_message": "Error: misuse of aggregate function COUNT()",
+        "why_it_happens": "When using aggregates, non-aggregate columns must be in a GROUP BY clause.",
+        "fix_sql": "SELECT city, COUNT(*) FROM users GROUP BY city;",
+        "key_takeaway": "All non-aggregated columns must be in GROUP BY"
+      },
+      {
+        "title": "Using WHERE with aggregate conditions",
+        "error_sql": "SELECT city, COUNT(*) FROM users WHERE COUNT(*) > 2 GROUP BY city;",
+        "error_message": "Error: misuse of aggregate: COUNT()",
+        "why_it_happens": "WHERE filters rows before aggregation. Use HAVING to filter after aggregation.",
+        "fix_sql": "SELECT city, COUNT(*) FROM users GROUP BY city HAVING COUNT(*) > 2;",
+        "key_takeaway": "Use HAVING, not WHERE, for aggregate conditions"
+      }
+    ],
+    "practice_challenge": {
+      "description": "Find the average age of users in each city.",
+      "hint": "Use AVG with GROUP BY.",
+      "solution": "SELECT city, AVG(age) as avg_age FROM users GROUP BY city;",
+      "explanation": "AVG calculates the average age, and GROUP BY city computes it separately for each city."
+    }
+  },
+  "metadata": {
+    "difficulty": "intermediate",
+    "estimated_time_minutes": 15,
+    "source_chunks": 21
+  }
+}
