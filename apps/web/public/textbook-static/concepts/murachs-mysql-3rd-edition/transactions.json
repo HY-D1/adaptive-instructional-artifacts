@@ -1,0 +1,70 @@
+{
+  "concept_id": "transactions",
+  "title": "Transactions and Locking",
+  "learning_objectives": [
+    "Understand the Transactions and Locking concept in SQL"
+  ],
+  "prerequisite_concepts": [],
+  "practice_problems": [],
+  "sections": {
+    "definition": {
+      "concept_explanation": "Transactions and Locking is an important SQL concept for working with databases.",
+      "visual_diagram": ""
+    },
+    "examples": [
+      {
+        "title": "SQL Example 1",
+        "difficulty": "intermediate",
+        "scenario": "Basic data retrieval",
+        "sql": "DROP PROCEDURE IF EXISTS command drops the procedure named test if it already exists. This suppresses any error messages that would be displayed if you attempted to drop a procedure that didn't exist. The DELIMITER statement changes the delimiter from the default delimiter of the semicolon (;",
+        "explanation": "Example SQL statement",
+        "expected_output": ""
+      },
+      {
+        "title": "SQL Example 2",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "CREATE PROCEDURE statement, and it allows you to use delimiter from the default delimiter of the semicolon (;",
+        "explanation": "Example SQL statement",
+        "expected_output": ""
+      },
+      {
+        "title": "SQL Example 3",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "CREATE PROCEDURE statement, and it allows you to use two front slashes (//) to identify the end of the CREATE PROCEDURE state- ment. Although we use two front slashes as the delimiter in this book, it's also common to see two dollar signs ($$) or two semicolons (;",
+        "explanation": "Example SQL statement",
+        "expected_output": ""
+      }
+    ],
+    "common_mistakes": [
+      {
+        "title": "Syntax error",
+        "error_sql": "SELECT * FORM users;",
+        "error_message": "Error: near 'FORM': syntax error",
+        "why_it_happens": "Typo in SQL keyword. The correct keyword is FROM, not FORM.",
+        "fix_sql": "SELECT * FROM users;",
+        "key_takeaway": "Double-check SQL keyword spelling"
+      },
+      {
+        "title": "Missing semicolon",
+        "error_sql": "SELECT * FROM users",
+        "error_message": "Some databases require semicolons to end statements",
+        "why_it_happens": "While some SQL implementations are lenient, it's best practice to end statements with semicolons.",
+        "fix_sql": "SELECT * FROM users;",
+        "key_takeaway": "Always end SQL statements with a semicolon"
+      }
+    ],
+    "practice_challenge": {
+      "description": "Practice using transactions with the practice schemas.",
+      "hint": "Review the examples above and try writing your own query.",
+      "solution": "SELECT * FROM users LIMIT 5;",
+      "explanation": "This is a basic query to get you started. See the linked practice problems for more challenges."
+    }
+  },
+  "metadata": {
+    "difficulty": "advanced",
+    "estimated_time_minutes": 15,
+    "source_chunks": 28
+  }
+}

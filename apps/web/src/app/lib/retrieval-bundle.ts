@@ -331,7 +331,7 @@ export function buildRetrievalBundle(options: {
     }
   }
 
-  return {
+  const bundle: RetrievalBundle = {
     learnerId,
     problemId: problem.id,
     problemTitle: problem.title,
@@ -365,6 +365,31 @@ export function buildRetrievalBundle(options: {
     whyRetrieved,
     conceptSourceRefs
   };
+
+  return bundle;
+}
+
+/**
+ * Convert retrieval bundle to a prompt string for logging/debugging
+ * @param bundle - The retrieval bundle
+ * @returns String representation of the bundle
+ */
+export function bundleToPrompt(bundle: RetrievalBundle): string {
+  const lines: string[] = [
+    `Problem: ${bundle.problemTitle}`,
+    `Error Type: ${bundle.lastErrorSubtypeId}`,
+    `Schema:`,
+    bundle.schemaText,
+    `\nHint History (${bundle.hintHistory.length} hints):`,
+    ...bundle.hintHistory.map(h => `  Level ${h.hintLevel}: ${h.hintText.slice(0, 100)}...`),
+    `\nConcepts:`,
+    ...bundle.conceptCandidates.map(c => `  - ${c.name}: ${c.description.slice(0, 100)}...`),
+    `\nPDF Passages (${bundle.pdfPassages.length}):`,
+    ...bundle.pdfPassages.map(p => `  - ${p.chunkId} (p.${p.page}): ${p.text.slice(0, 100)}...`),
+    `\nSource Passages (${bundle.sourcePassages.length}):`,
+    ...bundle.sourcePassages.map(s => `  - ${s.passageId}: ${s.text.slice(0, 100)}...`)
+  ];
+  return lines.join('\n');
 }
 
 // Week 3 D2: Determine why sources were retrieved

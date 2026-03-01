@@ -1,0 +1,54 @@
+{
+  "concept_id": "triggers",
+  "title": "Triggers and Events",
+  "learning_objectives": [
+    "Understand the Triggers and Events concept in SQL"
+  ],
+  "prerequisite_concepts": [],
+  "practice_problems": [],
+  "sections": {
+    "definition": {
+      "concept_explanation": "The number of pages in the (in-memory) hash table built during the probing phase for a partition is thus ~'~'i, where f is a fudge factor used to capture the (small) increase in size between the partition and a hash table for the partition.",
+      "visual_diagram": ""
+    },
+    "examples": [
+      {
+        "title": "SQL Example 1",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "SELECT AVG (S.age) FROM users S Figure 14.14 Simple Aggregation Query CHAPTER 14 The basic algorithm for aggregate operators consists of scanning the entire users relation and maintaining some running information about the scanned tuples;",
+        "explanation": "Example SQL statement",
+        "expected_output": "| id | name | email | age | city |\n| --- | --- | --- | --- | --- |\n| 1 | Alice | alice@email.com | 25 | Seattle |\n| 2 | Bob | bob@email.com | 30 | Portland |\n| 3 | Charlie | charlie@email.com | 22 | Seattle |"
+      }
+    ],
+    "common_mistakes": [
+      {
+        "title": "Syntax error",
+        "error_sql": "SELECT * FORM users;",
+        "error_message": "Error: near 'FORM': syntax error",
+        "why_it_happens": "Typo in SQL keyword. The correct keyword is FROM, not FORM.",
+        "fix_sql": "SELECT * FROM users;",
+        "key_takeaway": "Double-check SQL keyword spelling"
+      },
+      {
+        "title": "Missing semicolon",
+        "error_sql": "SELECT * FROM users",
+        "error_message": "Some databases require semicolons to end statements",
+        "why_it_happens": "While some SQL implementations are lenient, it's best practice to end statements with semicolons.",
+        "fix_sql": "SELECT * FROM users;",
+        "key_takeaway": "Always end SQL statements with a semicolon"
+      }
+    ],
+    "practice_challenge": {
+      "description": "Practice using triggers with the practice schemas.",
+      "hint": "Review the examples above and try writing your own query.",
+      "solution": "SELECT * FROM users LIMIT 5;",
+      "explanation": "This is a basic query to get you started. See the linked practice problems for more challenges."
+    }
+  },
+  "metadata": {
+    "difficulty": "intermediate",
+    "estimated_time_minutes": 15,
+    "source_chunks": 27
+  }
+}

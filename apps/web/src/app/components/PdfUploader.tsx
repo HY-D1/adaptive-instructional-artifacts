@@ -101,7 +101,7 @@ export function PdfUploader({ onUploadComplete, onError }: PdfUploaderProps) {
       if (result.document) {
         const saveResult = storage.savePdfIndex(result.document as PdfIndexDocument);
         if (!saveResult.success) {
-          console.warn('[PdfUploader] Failed to save PDF index to storage:', saveResult.quotaExceeded ? 'quota exceeded' : 'unknown error');
+          // Failed to save PDF index to storage (quota exceeded or other error)
         }
         
         // Add to uploaded files list

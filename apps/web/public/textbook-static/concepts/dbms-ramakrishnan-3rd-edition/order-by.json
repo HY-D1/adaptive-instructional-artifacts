@@ -1,0 +1,73 @@
+{
+  "concept_id": "order-by",
+  "title": "The ORDER BY Clause",
+  "learning_objectives": [
+    "Understand the The ORDER BY Clause concept in SQL"
+  ],
+  "prerequisite_concepts": [],
+  "practice_problems": [
+    "problem-5",
+    "problem-6"
+  ],
+  "sections": {
+    "definition": {
+      "concept_explanation": "The ORDER BY Clause is an important SQL concept for working with databases.",
+      "visual_diagram": ""
+    },
+    "examples": [
+      {
+        "title": "SQL Example 1",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "insert (Reggae203, B, 55000) into Enrolled and also insert (55000, John, null, tuple for id 50000 in Students. To insert (John, 55000, Reggae203), on the other hand, we have to insert (Reggae203, B, 55000) into Enrolled and also insert (55000, John, null, null, null) into Students. Observe how null values are used in fields of the inserted tuple whose value is not available. Fortunately, the view schema contains the primary key fields of both underlying base tables;",
+        "explanation": "Example SQL statement",
+        "expected_output": ""
+      },
+      {
+        "title": "SQL Example 2",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "delete all the rows and remove the table definition information), we can use the DROP TABLE command. we no longer need a base table and want to destroy it (i.e., delete all the rows and remove the table definition information), we can use the DROP TABLE command. For example, DROP TABLE Students RESTRICT de- stroys the Students table unless some view or integrity constraint refers to Students;",
+        "explanation": "Example SQL statement",
+        "expected_output": ""
+      },
+      {
+        "title": "SQL Example 3",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "DROP VIEW command, which is just like DROP TABLE. ALTER TABLE modifies the structure of an existing table. To add a column called maiden-name to Students, for example, we would use the following com- mand: 92 ALTER TABLE Students ADD COLUMN maiden-name CHAR (10) CUAPTER\u00b7.'3 The definition of Students is modified to add this column, and all existing rows are padded with null values in this column. ALTER TABLE can also be used to delete columns and add or drop integrity constraints on a table;",
+        "explanation": "Example SQL statement",
+        "expected_output": ""
+      }
+    ],
+    "common_mistakes": [
+      {
+        "title": "Syntax error",
+        "error_sql": "SELECT * FORM users;",
+        "error_message": "Error: near 'FORM': syntax error",
+        "why_it_happens": "Typo in SQL keyword. The correct keyword is FROM, not FORM.",
+        "fix_sql": "SELECT * FROM users;",
+        "key_takeaway": "Double-check SQL keyword spelling"
+      },
+      {
+        "title": "Missing semicolon",
+        "error_sql": "SELECT * FROM users",
+        "error_message": "Some databases require semicolons to end statements",
+        "why_it_happens": "While some SQL implementations are lenient, it's best practice to end statements with semicolons.",
+        "fix_sql": "SELECT * FROM users;",
+        "key_takeaway": "Always end SQL statements with a semicolon"
+      }
+    ],
+    "practice_challenge": {
+      "description": "Practice using order-by with the practice schemas.",
+      "hint": "Review the examples above and try writing your own query.",
+      "solution": "SELECT * FROM users LIMIT 5;",
+      "explanation": "This is a basic query to get you started. See the linked practice problems for more challenges."
+    }
+  },
+  "metadata": {
+    "difficulty": "intermediate",
+    "estimated_time_minutes": 15,
+    "source_chunks": 15
+  }
+}

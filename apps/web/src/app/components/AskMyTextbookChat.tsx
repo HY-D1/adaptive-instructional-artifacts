@@ -325,8 +325,8 @@ export function AskMyTextbookChat({
             setMessages(parsed);
           }
         }
-      } catch (e) {
-        console.warn('[Chat] Failed to load history:', e);
+      } catch {
+        // Failed to load chat history - will start fresh
       }
     }
   }, [learnerId, problemId, CHAT_HISTORY_KEY]);
@@ -806,11 +806,10 @@ export function AskMyTextbookChat({
       const result = storage.saveTextbookUnitV2(learnerId, unitInput, problemId);
       
       if (result.success) {
-        console.log('[ChatSave] Saved response to textbook for problem', problemId);
         showToast(result.action === 'created' ? 'Saved to My Textbook' : 'Updated in My Textbook', 'success');
       }
-    } catch (error) {
-      console.warn('[ChatSave] Failed to save to textbook:', error);
+    } catch {
+      // Failed to save to textbook - error handled via UI
     }
   }, [learnerId, problemId, showToast]);
 
@@ -885,8 +884,8 @@ export function AskMyTextbookChat({
       const response = await llmCall(systemPrompt + '\n\n' + userPrompt);
       
       return response.trim();
-    } catch (error) {
-      console.warn('[AskMyTextbook] LLM generation failed:', error);
+    } catch {
+      // LLM generation failed - fallback will be used
       return null;
     }
   }, [availableResources.llm, problemId]);

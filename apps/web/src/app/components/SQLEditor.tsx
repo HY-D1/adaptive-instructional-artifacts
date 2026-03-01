@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback, type Editor as MonacoEditorType } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
+import type { editor } from 'monaco-editor';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
@@ -145,13 +146,13 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
   const [initError, setInitError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const activeExecutorRef = useRef<SQLExecutor | null>(null);
-  const editorRef = useRef<MonacoEditorType | null>(null);
+  const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const disposeTimeoutRef = useRef<number | null>(null);
   const initAttemptRef = useRef(0);
 
   const isMountedRef = useRef(true);
 
-  const handleEditorDidMount = (editor: MonacoEditorType) => {
+  const handleEditorDidMount = (editor: editor.IStandaloneCodeEditor) => {
     if (!isMountedRef.current) {
       // Component unmounted, dispose immediately
       const model = editor.getModel();
@@ -192,7 +193,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
 
   // SQL executor initialization function
   const initExecutor = useCallback(async (signal?: AbortSignal) => {
-    console.log('[SQLEditor] Starting SQL executor initialization...');
+    // SQL executor initialization started
     setInitStatus('loading');
     setInitError(null);
     setInitErrorDetails(null);
@@ -205,12 +206,12 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
       if (!signal?.aborted) {
         setExecutor(exec);
         setInitStatus('ready');
-        console.log('[SQLEditor] SQL executor initialized successfully');
+        // SQL executor initialized successfully
         return exec;
       } else {
         exec.close();
         setInitStatus('idle');
-        console.log('[SQLEditor] Initialization aborted');
+        // Initialization aborted
         return null;
       }
     } catch (error) {
@@ -221,13 +222,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
         ? `${error.name}: ${error.message}\n\nStack:\n${error.stack?.split('\n').slice(0, 5).join('\n') || 'N/A'}`
         : 'Unknown error';
       console.error('[SQLEditor] Initialization failed:', error);
-      console.error('[SQLEditor] Error details:', {
-        message: errorMsg,
-        error: error instanceof Error ? {
-          name: error.name,
-          stack: error.stack?.split('\n').slice(0, 5).join('\n')
-        } : 'Unknown error'
-      });
+      // Error details for debugging
       setInitError(errorMsg);
       setInitErrorDetails(errorDetails);
       setInitStatus('error');
@@ -249,7 +244,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
     try {
       await initExecutor();
     } catch (error) {
-      console.error('Retry failed:', error);
+      // Retry failed
     } finally {
       setIsRetrying(false);
     }
@@ -297,7 +292,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
       const correctness = checkCorrectnessForResult(queryResult);
       onExecute(code, queryResult, correctness?.match ?? queryResult.success);
     } catch (error) {
-      console.error('Query execution error:', error);
+      // Query execution error handled
       const errorResult: QueryResult = {
         success: false,
         error: error instanceof Error ? error.message : 'An unexpected error occurred during query execution'
@@ -324,7 +319,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy code:', err);
+      // Failed to copy code
     }
   };
 

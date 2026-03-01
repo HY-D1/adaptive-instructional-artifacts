@@ -2,7 +2,7 @@
   "schemaVersion": "1.0.0",
   "description": "SQL Learning Concept Registry - Maps concept IDs to content, problems, and error mappings",
   "createdAt": "2024-01-15",
-  "totalConcepts": 30,
+  "totalConcepts": 35,
   "concepts": {
     "select-basic": {
       "id": "select-basic",
@@ -495,12 +495,113 @@
       "practiceProblems": [],
       "prerequisites": ["select-basic"],
       "nextConcepts": [],
-      "contentLocation": "concepts/select-basic.md",
+      "contentLocation": "concepts/order-by.md",
       "qualityStatus": "verified",
       "learningObjectives": [
         "Sort by one or more columns",
         "Use ASC and DESC",
         "Sort by column position"
+      ]
+    },
+    "normalization": {
+      "id": "normalization",
+      "title": "Database Normalization",
+      "description": "Organizing data to minimize redundancy and improve integrity",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 20,
+      "category": "Database Design",
+      "relatedConcepts": ["1nf", "2nf", "3nf"],
+      "errorSubtypes": [],
+      "practiceProblems": [],
+      "prerequisites": [],
+      "nextConcepts": ["1nf"],
+      "contentLocation": "concepts/normalization.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Understand the goals of normalization",
+        "Identify redundancy and anomalies",
+        "Apply normalization principles"
+      ]
+    },
+    "1nf": {
+      "id": "1nf",
+      "title": "First Normal Form (1NF)",
+      "description": "Eliminating repeating groups and ensuring atomic values",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 15,
+      "category": "Database Design",
+      "relatedConcepts": ["normalization", "2nf"],
+      "errorSubtypes": [],
+      "practiceProblems": [],
+      "prerequisites": ["normalization"],
+      "nextConcepts": ["2nf"],
+      "contentLocation": "concepts/1nf.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Identify repeating groups",
+        "Ensure atomic values",
+        "Understand 1NF requirements"
+      ]
+    },
+    "2nf": {
+      "id": "2nf",
+      "title": "Second Normal Form (2NF)",
+      "description": "Eliminating partial dependencies",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 15,
+      "category": "Database Design",
+      "relatedConcepts": ["1nf", "3nf"],
+      "errorSubtypes": [],
+      "practiceProblems": [],
+      "prerequisites": ["1nf"],
+      "nextConcepts": ["3nf"],
+      "contentLocation": "concepts/2nf.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Understand partial dependencies",
+        "Identify non-key attributes",
+        "Apply 2NF decomposition"
+      ]
+    },
+    "3nf": {
+      "id": "3nf",
+      "title": "Third Normal Form (3NF)",
+      "description": "Eliminating transitive dependencies",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 15,
+      "category": "Database Design",
+      "relatedConcepts": ["2nf"],
+      "errorSubtypes": [],
+      "practiceProblems": [],
+      "prerequisites": ["2nf"],
+      "nextConcepts": [],
+      "contentLocation": "concepts/3nf.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Understand transitive dependencies",
+        "Identify indirect dependencies",
+        "Apply 3NF decomposition"
+      ]
+    },
+    "acid": {
+      "id": "acid",
+      "title": "ACID Properties",
+      "description": "Atomicity, Consistency, Isolation, Durability in database transactions",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 15,
+      "category": "Database Design",
+      "relatedConcepts": ["transactions"],
+      "errorSubtypes": [],
+      "practiceProblems": [],
+      "prerequisites": [],
+      "nextConcepts": ["transactions"],
+      "contentLocation": "concepts/acid.md",
+      "qualityStatus": "verified",
+      "learningObjectives": [
+        "Understand atomicity",
+        "Understand consistency",
+        "Understand isolation levels",
+        "Understand durability"
       ]
     },
     "limit-offset": {
@@ -587,7 +688,7 @@
   "statistics": {
     "byDifficulty": {
       "beginner": 16,
-      "intermediate": 10,
+      "intermediate": 15,
       "advanced": 4
     },
     "byCategory": {
@@ -598,7 +699,8 @@
       "Operators": 4,
       "Functions": 4,
       "Data Handling": 5,
-      "Errors": 2
+      "Errors": 2,
+      "Database Design": 5
     },
     "totalPracticeProblems": 32,
     "coverageByStatus": {

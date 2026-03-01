@@ -420,9 +420,6 @@ ${concept?.examples.map(ex => `\`\`\`sql\n${ex}\n\`\`\``).join('\n\n') || ''}
 
   /**
    * Aggregate multiple instructional units into a comprehensive textbook entry
-   */
-  /**
-   * Aggregate multiple instructional units into a comprehensive textbook entry
    * @param units - Units to aggregate
    * @param profile - Learner profile for personalization
    * @returns Aggregated textbook unit

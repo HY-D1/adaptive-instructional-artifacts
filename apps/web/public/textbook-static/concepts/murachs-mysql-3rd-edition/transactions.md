@@ -1,37 +1,108 @@
 # Transactions and Locking
 
-## Definition
-Ensuring data integrity with ACID transactions and concurrency control
+🔴 **Difficulty:** Advanced
+⏱️ **Estimated Time:** 15 minutes
 
-## Explanation
-Language skills for writing stored programs This chapter presents the basic language skills that you need to write stored programs. With the skills presented in this chapter, you'll be able to code stored programs that provide functionality similar to procedural programming languages like Python, PHP, Java, C++, C#, and Visual Basic. If you have experience with another procedural language, you shouldn't have any trouble with the skills presented in this chapter. However, you should know that the programming power of MySQL is limited when compared to other languages. That's because MySQL is designed specifically to work with MySQL databases rather than as a general-purpose programming language. For its intended use, however, MySQL is both powerful and flexible. An introduction to stored programs ................................ 402 Four types of stored programs .................................................................... 402 A script that creates and calls a stored procedure ...................................... 402 A summary of statements for coding stored programs .............................. 404 How to write procedural code ........................................... 406 How to display data .................................................................................... 406 How to declare and set variables ................................................................ 408 How to code IF statements .......................................................................... 410
+## Learning Objectives
 
-.............................. 404 How to write procedural code ........................................... 406 How to display data .................................................................................... 406 How to declare and set variables ................................................................ 408 How to code IF statements .......................................................................... 410 How to code CASE statements ........................
+- Understand the Transactions and Locking concept in SQL
+
+## What is This?
+
+Transactions and Locking is an important SQL concept for working with databases.
 
 ## Examples
-### Example 1: SELECT Example
-```sql
-SELECT SUM(invoice_total - payment_total - credit_total ) INTO sum_balance_ due_var FROM invoices WHERE vendor_id = 95;
-```
-Example SELECT statement from textbook.
 
-### Example 2: SELECT Example
-```sql
-SELECT CONCAT('Balance due: $', sum_balance_due_var) AS message;
-```
-Example SELECT statement from textbook.
+### Example 1: SQL Example 1
 
-### Example 3: DELETE Example
-```sql
-DELETE statement is run against a specific table. And an event executes at a scheduled time.
+**Difficulty:** Intermediate
 
-execute automati- cally when something happens. A trigger executes when an INSERT, UPDATE, or DELETE statement is run against a specific table. And an event executes at a scheduled time. A script that creates and calls a stored procedure The script shown in figure 13-1 creates a stored procedure named test that doesn't accept any parameters. Then, it calls this procedure to execute the state- ments that are stored within it. This provides a way for you to experiment with the procedural language features that are available from MySQL. That's why this script is used throughout this chapter. This script begins with the USE statement, which selects the AP database. Then, the DROP PROCEDURE IF EXISTS command drops the procedure named test if it already exists. This suppresses any error messages that would be displayed if you attempted to drop a procedure that didn't exist. The DELIMITER statement changes the delimiter from the default delimiter of the semicolon(;
+**Scenario:** Basic data retrieval
+
+```sql
+DROP PROCEDURE IF EXISTS command drops the procedure named test if it already exists. This suppresses any error messages that would be displayed if you attempted to drop a procedure that didn't exist. The DELIMITER statement changes the delimiter from the default delimiter of the semicolon (;
 ```
-Example DELETE statement from textbook.
+
+**Explanation:** Example SQL statement
+
+### Example 2: SQL Example 2
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic data retrieval
+
+```sql
+CREATE PROCEDURE statement, and it allows you to use delimiter from the default delimiter of the semicolon (;
+```
+
+**Explanation:** Example SQL statement
+
+### Example 3: SQL Example 3
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic data retrieval
+
+```sql
+CREATE PROCEDURE statement, and it allows you to use two front slashes (//) to identify the end of the CREATE PROCEDURE state- ment. Although we use two front slashes as the delimiter in this book, it's also common to see two dollar signs ($$) or two semicolons (;
+```
+
+**Explanation:** Example SQL statement
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Mistake 1: Syntax error
+
+**Incorrect SQL:**
+```sql
+SELECT * FORM users;
+```
+
+**Error Message:** `Error: near 'FORM': syntax error`
+
+**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Double-check SQL keyword spelling
+
+### Mistake 2: Missing semicolon
+
+**Incorrect SQL:**
+```sql
+SELECT * FROM users
+```
+
+**Error Message:** `Some databases require semicolons to end statements`
+
+**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Always end SQL statements with a semicolon
+
+## Practice Challenge
+
+**Practice using transactions with the practice schemas.**
+
+💡 **Hint:** Review the examples above and try writing your own query.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users LIMIT 5;
+```
+
+**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
+</details>
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 420, 421, 422, 423, 424, 425, 426, 427, 428, 429, 430, 431, 432*
+
+*Content generated for SQL-Adapt Learning Platform*

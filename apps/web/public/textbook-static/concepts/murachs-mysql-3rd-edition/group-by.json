@@ -1,0 +1,56 @@
+{
+  "concept_id": "group-by",
+  "title": "The GROUP BY Clause",
+  "learning_objectives": [
+    "Group rows by one or more columns",
+    "Apply aggregate functions to groups",
+    "Use HAVING to filter groups based on aggregate values",
+    "Understand the execution order of GROUP BY and HAVING"
+  ],
+  "prerequisite_concepts": [
+    "select-basic",
+    "aggregate-functions"
+  ],
+  "practice_problems": [
+    "problem-4",
+    "problem-13",
+    "problem-14"
+  ],
+  "sections": {
+    "definition": {
+      "concept_explanation": "GROUP BY organizes rows with the same values into summary rows for aggregate calculations.",
+      "visual_diagram": ""
+    },
+    "examples": [
+      {
+        "title": "Example for group-by",
+        "difficulty": "beginner",
+        "scenario": "Basic usage example",
+        "sql": "SELECT * FROM users LIMIT 5;",
+        "explanation": "See the practice problems for more examples.",
+        "expected_output": "| id | name | email | age | city |\n| --- | --- | --- | --- | --- |\n| 1 | Alice | alice@email.com | 25 | Seattle |\n| 2 | Bob | bob@email.com | 30 | Portland |\n| 3 | Charlie | charlie@email.com | 22 | Seattle |"
+      }
+    ],
+    "common_mistakes": [
+      {
+        "title": "Missing column in GROUP BY",
+        "error_sql": "SELECT city, age, COUNT(*) FROM users GROUP BY city;",
+        "error_message": "Error: column 'age' must appear in GROUP BY clause",
+        "why_it_happens": "When grouping, any non-aggregated column in SELECT must be in GROUP BY.",
+        "fix_sql": "SELECT city, age, COUNT(*) FROM users GROUP BY city, age;",
+        "key_takeaway": "Include all non-aggregated columns in GROUP BY"
+      }
+    ],
+    "practice_challenge": {
+      "description": "Find cities that have more than 2 users, ordered by user count.",
+      "hint": "Use GROUP BY with HAVING and ORDER BY.",
+      "solution": "SELECT city, COUNT(*) as user_count\nFROM users\nGROUP BY city\nHAVING COUNT(*) > 2\nORDER BY user_count DESC;",
+      "explanation": "GROUP BY groups users by city, HAVING filters groups with more than 2 users, and ORDER BY sorts the results."
+    }
+  },
+  "metadata": {
+    "difficulty": "intermediate",
+    "estimated_time_minutes": 20,
+    "source_chunks": 21
+  }
+}

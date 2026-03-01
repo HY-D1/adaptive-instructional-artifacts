@@ -1,0 +1,70 @@
+{
+  "concept_id": "triggers",
+  "title": "Triggers and Events",
+  "learning_objectives": [
+    "Understand the Triggers and Events concept in SQL"
+  ],
+  "prerequisite_concepts": [],
+  "practice_problems": [],
+  "sections": {
+    "definition": {
+      "concept_explanation": "Triggers and Events is an important SQL concept for working with databases.",
+      "visual_diagram": ""
+    },
+    "examples": [
+      {
+        "title": "SQL Example 1",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "CREATE TRIGGER vendors_before_update BEFORE UPDATE ON users FOR EACH ROW SET NEW.vendor_ state = UPPER (NEW.vendor_ state);",
+        "explanation": "Example SQL statement",
+        "expected_output": ""
+      },
+      {
+        "title": "SQL Example 2",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "create triggers and events 481 A trigger that validates line products amounts when updating an orders DELIMITER// CREATE TRIGGER invoices_before_update BEFORE UPDATE ON orders FOR EACH ROW BEGIN DECLARE sum_ line_ products amount DECIMAL (9,2);",
+        "explanation": "Example SQL statement",
+        "expected_output": ""
+      },
+      {
+        "title": "SQL Example 3",
+        "difficulty": "beginner",
+        "scenario": "Filtering data based on conditions",
+        "sql": "SELECT SUM (line_ item_amount) INTO sum_ line_ item_amount FROM invoice_line_ products WHERE invoice_id = NEW.invoice_ id;",
+        "explanation": "Example SQL statement",
+        "expected_output": "| id | name | email | age | city |\n| --- | --- | --- | --- | --- |\n| 1 | Alice | alice@email.com | 25 | Seattle |\n| 2 | Bob | bob@email.com | 30 | Portland |\n| 3 | Charlie | charlie@email.com | 22 | Seattle |"
+      }
+    ],
+    "common_mistakes": [
+      {
+        "title": "Syntax error",
+        "error_sql": "SELECT * FORM users;",
+        "error_message": "Error: near 'FORM': syntax error",
+        "why_it_happens": "Typo in SQL keyword. The correct keyword is FROM, not FORM.",
+        "fix_sql": "SELECT * FROM users;",
+        "key_takeaway": "Double-check SQL keyword spelling"
+      },
+      {
+        "title": "Missing semicolon",
+        "error_sql": "SELECT * FROM users",
+        "error_message": "Some databases require semicolons to end statements",
+        "why_it_happens": "While some SQL implementations are lenient, it's best practice to end statements with semicolons.",
+        "fix_sql": "SELECT * FROM users;",
+        "key_takeaway": "Always end SQL statements with a semicolon"
+      }
+    ],
+    "practice_challenge": {
+      "description": "Practice using triggers with the practice schemas.",
+      "hint": "Review the examples above and try writing your own query.",
+      "solution": "SELECT * FROM users LIMIT 5;",
+      "explanation": "This is a basic query to get you started. See the linked practice problems for more challenges."
+    }
+  },
+  "metadata": {
+    "difficulty": "intermediate",
+    "estimated_time_minutes": 15,
+    "source_chunks": 22
+  }
+}

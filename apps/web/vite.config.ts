@@ -101,7 +101,7 @@ function pdfIndexApiPlugin() {
               // Build index from uploaded PDF
               const result = await buildPdfIndexFromBuffer(
                 filePart.data,
-                filePart.filename,
+                filePart.filename || 'uploaded.pdf',
                 {
                   indexDir: pdfIndexDir,
                   sourcePdfDir: pdfSourceDir,

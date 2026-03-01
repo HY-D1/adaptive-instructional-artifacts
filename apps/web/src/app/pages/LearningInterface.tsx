@@ -1,49 +1,51 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useLocation, Link } from 'react-router';
+
+import {
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Pause,
+  Sparkles,
+  BookOpen,
+  Check,
+  GraduationCap,
+  Target,
+  Settings2,
+  Keyboard,
+  Zap,
+  Sprout,
+  TrendingUp
+} from 'lucide-react';
+
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Badge } from '../components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { Skeleton } from '../components/ui/skeleton';
+import { cn } from '../components/ui/utils';
 import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/SQLEditor';
 import { HintSystem } from '../components/HintSystem';
 import { ConceptCoverage } from '../components/ConceptCoverage';
 import { AskMyTextbookChat } from '../components/AskMyTextbookChat';
-import { Clock, CheckCircle2, AlertCircle, Pause, Sparkles, BookOpen, Check, GraduationCap, Target, Settings2, Terminal, Keyboard, Copy } from 'lucide-react';
-import {
-  SQLProblem,
-  InteractionEvent,
-  InstructionalUnit,
-  LearnerProfile,
-  PdfIndexProvenance,
-  RetrievedChunkInfo
-} from '../types';
+import { useLLMSettings } from '../components/LLMSettingsHelper';
+import { useScreenReaderAnnouncer } from '../components/ScreenReaderAnnouncer';
 import { sqlProblems } from '../data/problems';
+import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
+import { useUserRole } from '../hooks/useUserRole';
 import { storage } from '../lib/storage';
-import { QueryResult } from '../lib/sql-executor';
+import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content-generator';
 import { buildPdfIndexOutputFields } from '../lib/pdf-retrieval';
 import { createEventId } from '../lib/event-id';
-import {
-  startBackgroundAnalysis,
-  stopBackgroundAnalysis,
-  runAnalysisOnce,
-  AnalysisResult,
-  ANALYSIS_INTERVAL_MS
-} from '../lib/trace-analyzer';
-import {
-  canonicalizeSqlEngageSubtype,
-  getKnownSqlEngageSubtypes,
-  getSqlEngagePolicyVersion,
-  getConceptById
-} from '../data/sql-engage';
-import { useUserRole } from '../hooks/useUserRole';
-import { cn } from '../components/ui/utils';
+import { startBackgroundAnalysis, stopBackgroundAnalysis, runAnalysisOnce, ANALYSIS_INTERVAL_MS } from '../lib/trace-analyzer';
+import type { AnalysisResult } from '../lib/trace-analyzer';
 import { getConcept } from '../lib/concept-loader';
-import { useLLMSettings } from '../components/LLMSettingsHelper';
-import { useScreenReaderAnnouncer, HintAnnouncer, NotificationAnnouncer } from '../components/ScreenReaderAnnouncer';
+import { banditManager } from '../lib/learner-bandit-manager';
+import type { BanditArmId } from '../lib/learner-bandit-manager';
+import type { SQLProblem, InteractionEvent, InstructionalUnit, LearnerProfile, RetrievedChunkInfo, HDITrend } from '../types';
 
 const INSTRUCTOR_SUBTYPE_OPTIONS = getKnownSqlEngageSubtypes();
 
@@ -61,6 +63,30 @@ const difficultyColors = {
   advanced: 'bg-red-100 text-red-800 border-red-200'
 };
 
+// Week 5: Profile badge color mapping
+const profileBadgeColors: Record<string, { bg: string; text: string; border: string; icon: string }> = {
+  aggressive: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200', icon: 'text-blue-600' },
+  adaptive: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: 'text-green-600' },
+  conservative: { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-200', icon: 'text-yellow-600' },
+  'explanation-first': { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200', icon: 'text-purple-600' }
+};
+
+// Week 5: Profile display names
+const profileDisplayNames: Record<string, string> = {
+  aggressive: 'Fast Escalator',
+  adaptive: 'Adaptive',
+  conservative: 'Slow Escalator',
+  'explanation-first': 'Explanation First'
+};
+
+// Week 5: Profile hover descriptions
+const profileDescriptions: Record<string, string> = {
+  aggressive: "You're on the Fast Escalator profile - hints escalate quickly",
+  adaptive: "You're on the Adaptive profile - hints adjust to your needs",
+  conservative: "You're on the Slow Escalator profile - take your time with hints",
+  'explanation-first': "You're on the Explanation First profile - detailed help available"
+};
+
 // Format time helper
 function formatTime(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
@@ -72,6 +98,49 @@ function formatTime(ms: number): string {
     return `${hours}h ${minutes % 60}m`;
   }
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+/**
+ * Week 5: Dependency Warning Toast Component
+ * Gentle toast notification for high HDI warning
+ */
+interface DependencyWarningToastProps {
+  onClose: () => void;
+}
+
+function DependencyWarningToast({ onClose }: DependencyWarningToastProps) {
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      onClose();
+    }, 5000);
+    return () => window.clearTimeout(timer);
+  }, [onClose]);
+
+  return (
+    <div 
+      className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-4 duration-300"
+      role="alert"
+      aria-live="polite"
+      data-testid="dependency-warning-toast"
+    >
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 max-w-sm">
+        <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
+          <Sparkles className="w-4 h-4 text-amber-600" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-sm">You're doing great! 💪</p>
+          <p className="text-amber-700 text-xs mt-0.5">Try solving the next one without hints</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1 hover:bg-amber-100 rounded transition-colors shrink-0"
+          aria-label="Dismiss notification"
+        >
+          <span className="text-amber-600">×</span>
+        </button>
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -123,6 +192,22 @@ export function LearningInterface() {
     timestamp: number;
   }>>([]);
   
+  // Week 5: Profile indicator state
+  const [currentProfileId, setCurrentProfileId] = useState<BanditArmId>('adaptive');
+  const isDev = import.meta.env.DEV;
+  
+  // Week 5: HDI tracking state
+  const [currentHDI, setCurrentHDI] = useState<number>(0);
+  const [hdiTrend, setHdiTrend] = useState<HDITrend>('stable');
+  const [showDependencyWarning, setShowDependencyWarning] = useState(false);
+  const dependencyWarningShownRef = useRef(false);
+  const lastHintRequestTimeRef = useRef<number>(0);
+  
+  // Week 5: Progress hint state
+  const [progressHint, setProgressHint] = useState<string | null>(null);
+  const progressHintShownRef = useRef(false);
+  const interactionCountRef = useRef(0);
+  
   const timerRef = useRef<number | null>(null);
   const stopAnalysisRef = useRef<(() => void) | null>(null);
   const startTimeRef = useRef(startTime);
@@ -134,6 +219,160 @@ export function LearningInterface() {
   // Screen reader announcements for accessibility
   const { announcement: hintAnnouncement, announce: announceHint } = useScreenReaderAnnouncer();
   const [notificationAnnouncement, setNotificationAnnouncement] = useState('');
+
+  // Week 5: Get current escalation profile from bandit manager
+  useEffect(() => {
+    if (!learnerId) return;
+    
+    // Check for debug profile override first
+    const debugProfileOverride = localStorage.getItem('sql-adapt-debug-profile');
+    
+    // Get the current profile for this learner
+    const { profile, armId } = banditManager.selectProfileForLearner(learnerId);
+    setCurrentProfileId(armId);
+    
+    // Log profile assignment event
+    const assignmentStrategy = (localStorage.getItem('sql-adapt-debug-strategy') as 'static' | 'diagnostic' | 'bandit') || 'bandit';
+    const effectiveProfileId = debugProfileOverride || profile.id;
+    const overrideReason = debugProfileOverride ? 'debug_override' : 'bandit_selection';
+    
+    storage.logProfileAssigned({
+      learnerId,
+      problemId: currentProblem.id,
+      profileId: effectiveProfileId,
+      assignmentStrategy,
+      reason: overrideReason,
+      sessionId
+    });
+    
+    // Log bandit arm selection event
+    storage.logBanditArmSelected({
+      learnerId,
+      problemId: currentProblem.id,
+      armId,
+      selectionMethod: 'thompson_sampling',
+      armStatsAtSelection: banditManager.hasBandit(learnerId) 
+        ? banditManager.getLearnerStats(learnerId).reduce((acc, stat) => {
+            acc[stat.armId] = { mean: stat.meanReward, pulls: stat.pullCount };
+            return acc;
+          }, {} as Record<string, { mean: number; pulls: number }>)
+        : undefined,
+      sessionId
+    });
+  }, [learnerId, currentProblem.id, sessionId]);
+
+  // Week 5: Listen for HDI calculated events
+  useEffect(() => {
+    const handleHDIEvent = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        hdi: number;
+        hdiLevel: 'low' | 'medium' | 'high';
+        trend?: HDITrend;
+        learnerId: string;
+      }>;
+      
+      if (customEvent.detail.learnerId !== learnerId) return;
+      
+      setCurrentHDI(customEvent.detail.hdi);
+      if (customEvent.detail.trend) {
+        setHdiTrend(customEvent.detail.trend);
+      }
+    };
+    
+    window.addEventListener('hdi_calculated', handleHDIEvent);
+    return () => window.removeEventListener('hdi_calculated', handleHDIEvent);
+  }, [learnerId]);
+
+  // Week 5: Calculate HDI from interactions when they change
+  useEffect(() => {
+    if (!learnerId || interactions.length === 0) return;
+    
+    const sessionInteractions = interactions.filter(
+      i => i.learnerId === learnerId && i.sessionId === sessionId
+    );
+    
+    // Calculate HDI components
+    const hintViews = sessionInteractions.filter(i => i.eventType === 'hint_view').length;
+    const explanationViews = sessionInteractions.filter(i => i.eventType === 'explanation_view').length;
+    const executions = sessionInteractions.filter(i => i.eventType === 'execution').length;
+    const errors = sessionInteractions.filter(i => i.eventType === 'error').length;
+    const attempts = executions + errors;
+    
+    // Simple HDI calculation: weighted ratio of help-seeking to attempts
+    // This is a simplified version - the actual HDI calculation would be more sophisticated
+    const hpa = attempts > 0 ? hintViews / attempts : 0;
+    const er = attempts > 0 ? explanationViews / attempts : 0;
+    const hdi = Math.min(1, (hpa * 0.4 + er * 0.6));
+    
+    // Determine trend based on previous value (simplified)
+    if (hdi > currentHDI + 0.05) {
+      setHdiTrend('increasing');
+    } else if (hdi < currentHDI - 0.05) {
+      setHdiTrend('decreasing');
+    } else {
+      setHdiTrend('stable');
+    }
+    
+    setCurrentHDI(hdi);
+  }, [interactions, learnerId, sessionId, currentHDI]);
+
+  // Week 5: Check for dependency warning after hint requests
+  useEffect(() => {
+    // Only check if we just had a hint request
+    const lastInteraction = interactions[interactions.length - 1];
+    if (!lastInteraction || lastInteraction.eventType !== 'hint_view') return;
+    if (lastInteraction.timestamp === lastHintRequestTimeRef.current) return;
+    
+    lastHintRequestTimeRef.current = lastInteraction.timestamp;
+    
+    // Show warning if HDI > 0.8 and not already shown this session
+    if (currentHDI > 0.8 && !dependencyWarningShownRef.current && isStudent) {
+      setShowDependencyWarning(true);
+      dependencyWarningShownRef.current = true;
+    }
+  }, [interactions, currentHDI, isStudent]);
+
+  // Week 5: Progress hint - show occasionally based on HDI trend
+  useEffect(() => {
+    if (!isStudent) return;
+    
+    interactionCountRef.current += 1;
+    
+    // Only show progress hint every ~15 interactions
+    if (interactionCountRef.current % 15 !== 0) return;
+    
+    // Reset the shown flag every 15 interactions so hints can appear again
+    progressHintShownRef.current = false;
+    
+    // Determine hint based on trend
+    let hint: string | null = null;
+    if (hdiTrend === 'decreasing') {
+      hint = "Your independence is growing! 🌱";
+    } else if (hdiTrend === 'increasing' && currentHDI > 0.5) {
+      hint = "Take your time, read hints carefully";
+    } else if (currentHDI < 0.3) {
+      hint = "Great job solving independently! 🌟";
+    }
+    
+    if (hint) {
+      setProgressHint(hint);
+      progressHintShownRef.current = true;
+      
+      // Auto-clear after 10 seconds
+      const timer = window.setTimeout(() => {
+        setProgressHint(null);
+      }, 10000);
+      
+      return () => window.clearTimeout(timer);
+    }
+  }, [interactions, hdiTrend, currentHDI, isStudent]);
+
+  // Reset session-based flags when session changes
+  useEffect(() => {
+    dependencyWarningShownRef.current = false;
+    progressHintShownRef.current = false;
+    interactionCountRef.current = 0;
+  }, [sessionId]);
 
   // Load initial data
   useEffect(() => {
@@ -406,10 +645,10 @@ export function LearningInterface() {
     }
   };
 
-  const handleProblemChange = (id: string) => {
+  const handleProblemChange = useCallback((id: string) => {
     const problem = sqlProblems.find(p => p.id === id);
     if (!problem) {
-      console.error(`Problem not found: ${id}`);
+      // Problem not found - silently return
       return;
     }
     setCurrentProblem(problem);
@@ -425,7 +664,7 @@ export function LearningInterface() {
     setNotesActionMessage(undefined);
     setGenerationError(undefined);
     setLatestGeneratedUnit(null);
-  };
+  }, [learnerId, sessionId]);
 
   const collectNoteEvidenceIds = (
     extraIds: string[] = [],
@@ -762,51 +1001,97 @@ export function LearningInterface() {
     }
   };
 
-  const learnerSessionInteractions = interactions.filter(
-    (interaction) =>
-      interaction.learnerId === learnerId &&
-      (!sessionId || interaction.sessionId === sessionId)
-  );
-  const problemInteractions = learnerSessionInteractions.filter(i => i.problemId === currentProblem.id);
-  const latestProblemErrorEvent = [...problemInteractions]
-    .reverse()
-    .find((interaction) => interaction.eventType === 'error');
-  const latestProblemErrorSubtype = latestProblemErrorEvent?.sqlEngageSubtype || latestProblemErrorEvent?.errorSubtypeId;
-  const effectiveLastError = lastError || latestProblemErrorSubtype;
-  const showAddToNotes = escalationTriggered && !!effectiveLastError;
-  const errorCount = problemInteractions.filter(i => i.eventType === 'error').length;
-  const totalAttempts = problemInteractions.filter(
-    (interaction) => interaction.eventType === 'execution' || interaction.eventType === 'error'
-  ).length;
-  const hintViewsCount = problemInteractions.filter((interaction) => interaction.eventType === 'hint_view').length;
-  const helpRequestsCount = problemInteractions.filter(
-    (interaction) => interaction.eventType === 'hint_view' || interaction.eventType === 'explanation_view'
-  ).length;
   const timeSpent = Date.now() - startTime;
 
-  // Group problems by difficulty
-  const problemsByDifficulty = sqlProblems.reduce((acc, problem) => {
-    if (!acc[problem.difficulty]) {
-      acc[problem.difficulty] = [];
-    }
-    acc[problem.difficulty].push(problem);
-    return acc;
-  }, {} as Record<string, SQLProblem[]>);
+  // Memoized problem grouping by difficulty
+  const problemsByDifficulty = useMemo(() => 
+    sqlProblems.reduce((acc, problem) => {
+      if (!acc[problem.difficulty]) {
+        acc[problem.difficulty] = [];
+      }
+      acc[problem.difficulty].push(problem);
+      return acc;
+    }, {} as Record<string, SQLProblem[]>),
+    []
+  );
 
   const difficultyOrder = ['beginner', 'intermediate', 'advanced'];
 
-  // Helper to check if a problem has been solved (has successful execution)
-  const isProblemSolved = (problemId: string): boolean => {
-    return learnerSessionInteractions.some(
-      i => i.problemId === problemId && i.eventType === 'execution' && i.successful
-    );
-  };
+  // Memoized learner session interactions
+  const learnerSessionInteractions = useMemo(() => 
+    interactions.filter(
+      (interaction) =>
+        interaction.learnerId === learnerId &&
+        (!sessionId || interaction.sessionId === sessionId)
+    ),
+    [interactions, learnerId, sessionId]
+  );
+
+  // Memoized problem interactions
+  const problemInteractions = useMemo(() => 
+    learnerSessionInteractions.filter(i => i.problemId === currentProblem.id),
+    [learnerSessionInteractions, currentProblem.id]
+  );
+
+  // Memoized helper to check if a problem has been solved
+  const solvedProblemIds = useMemo(() => {
+    const solved = new Set<string>();
+    for (const interaction of learnerSessionInteractions) {
+      if (interaction.eventType === 'execution' && interaction.successful && interaction.problemId) {
+        solved.add(interaction.problemId);
+      }
+    }
+    return solved;
+  }, [learnerSessionInteractions]);
+
+  const isProblemSolved = useCallback((problemId: string): boolean => {
+    return solvedProblemIds.has(problemId);
+  }, [solvedProblemIds]);
 
   // Get count of solved problems
-  const solvedCount = sqlProblems.filter(p => isProblemSolved(p.id)).length;
+  const solvedCount = solvedProblemIds.size;
 
   // Calculate progress percentage
-  const progressPercentage = Math.round((solvedCount / sqlProblems.length) * 100);
+  const progressPercentage = useMemo(() => 
+    Math.round((solvedCount / sqlProblems.length) * 100),
+    [solvedCount]
+  );
+
+  // Memoized error and attempt calculations
+  const latestProblemErrorEvent = useMemo(() => 
+    [...problemInteractions]
+      .reverse()
+      .find((interaction) => interaction.eventType === 'error'),
+    [problemInteractions]
+  );
+
+  const latestProblemErrorSubtype = latestProblemErrorEvent?.sqlEngageSubtype || latestProblemErrorEvent?.errorSubtypeId;
+  const effectiveLastError = lastError || latestProblemErrorSubtype;
+  const showAddToNotes = escalationTriggered && !!effectiveLastError;
+  
+  const errorCount = useMemo(() => 
+    problemInteractions.filter(i => i.eventType === 'error').length,
+    [problemInteractions]
+  );
+  
+  const totalAttempts = useMemo(() => 
+    problemInteractions.filter(
+      (interaction) => interaction.eventType === 'execution' || interaction.eventType === 'error'
+    ).length,
+    [problemInteractions]
+  );
+  
+  const hintViewsCount = useMemo(() => 
+    problemInteractions.filter((interaction) => interaction.eventType === 'hint_view').length,
+    [problemInteractions]
+  );
+  
+  const helpRequestsCount = useMemo(() => 
+    problemInteractions.filter(
+      (interaction) => interaction.eventType === 'hint_view' || interaction.eventType === 'explanation_view'
+    ).length,
+    [problemInteractions]
+  );
 
   if (isLoading) {
     return (
@@ -833,6 +1118,11 @@ export function LearningInterface() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+        {/* Week 5: Dependency Warning Toast */}
+        {showDependencyWarning && (
+          <DependencyWarningToast onClose={() => setShowDependencyWarning(false)} />
+        )}
+
         <div className={cn(
           "border-b",
           isStudent ? "bg-gradient-to-r from-blue-50 to-white border-blue-100" : "bg-amber-50 border-amber-200"
@@ -916,6 +1206,32 @@ export function LearningInterface() {
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>Your progress: {progressPercentage}% complete</p>
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+
+                {/* Week 5: Profile Badge - DEV mode only, subtle */}
+                {isDev && isStudent && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium cursor-help transition-all hover:shadow-sm",
+                        profileBadgeColors[currentProfileId]?.bg || 'bg-gray-100',
+                        profileBadgeColors[currentProfileId]?.text || 'text-gray-700',
+                        profileBadgeColors[currentProfileId]?.border || 'border-gray-200'
+                      )}>
+                        <Zap className={cn(
+                          "size-3",
+                          profileBadgeColors[currentProfileId]?.icon || 'text-gray-500'
+                        )} />
+                        <span>{profileDisplayNames[currentProfileId] || currentProfileId}</span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      <p>{profileDescriptions[currentProfileId]}</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        HDI: {(currentHDI * 100).toFixed(0)}% • {hdiTrend}
+                      </p>
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -1197,6 +1513,22 @@ export function LearningInterface() {
                 onInteractionLogged={handleHintSystemInteraction}
               />
 
+              {/* Week 5: Progress Hint - subtle, below hint panel */}
+              {isStudent && progressHint && (
+                <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100 rounded-lg">
+                    {hdiTrend === 'decreasing' ? (
+                      <Sprout className="size-4 text-emerald-500" />
+                    ) : hdiTrend === 'increasing' ? (
+                      <TrendingUp className="size-4 text-amber-500 rotate-180" />
+                    ) : (
+                      <Sparkles className="size-4 text-emerald-500" />
+                    )}
+                    <span className="text-sm text-emerald-700">{progressHint}</span>
+                  </div>
+                </div>
+              )}
+
               {/* Week 3 Feature: Ask My Textbook Chat */}
               <AskMyTextbookChat
                 sessionId={sessionId}
@@ -1291,5 +1623,4 @@ export function LearningInterface() {
       </div>
   );
 }
-
 

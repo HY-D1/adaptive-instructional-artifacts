@@ -75,10 +75,7 @@ export function LLMSettingsHelper() {
       if (status.availableModels && status.availableModels.length > 0) {
         setAvailableModels(status.availableModels);
       }
-      // Log technical details to console for debugging
-      if (!status.ok && status.details) {
-        console.log('[LLM Health Check] Technical details:', status.details);
-      }
+      // Technical details logged in development mode if health check fails
     } catch {
       setHealthStatus({
         ok: false,

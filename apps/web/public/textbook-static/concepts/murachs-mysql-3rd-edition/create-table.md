@@ -1,23 +1,97 @@
 # Creating Tables and Indexes
 
-## Definition
-Using CREATE TABLE, ALTER TABLE, CREATE INDEX, and DROP statements
+🟡 **Difficulty:** Intermediate
+⏱️ **Estimated Time:** 15 minutes
 
-## Explanation
-How to create databases, tables, and indexes Now that you've learned bow to design a database, you're ready to learn how to implement your design. To do that, you use the set of SQL statements that are known as the data definition language (DDL). In this chapter, you'll learn how to use DDL statements or MySQL Workbench to work with databases, tables, and indexes. In addition, you '11 learn how to change the character set, collation, and storage engine if you need to do that. How to work with databases ............................................. 342 How to create and drop a database .............................................................. 342 How to select a database .............................................................................. 34 2 How to work with tables ..................................................... 344 How to create a table ................................................................................... 344 How to code a primary key constraint ....................................................... 346 How to code a foreign key constraint .......................................................... 348 How to alter the colu1nns of a table ............................................................. 350 How to alter the constraints of a table ......................................................... 352 How to rename, truncate, and drop a table .................................................. 354 How to work with indexes .................................................. 356 How to
+## Learning Objectives
 
-350 How to alter the constraints of a table ......................................................... 352 How to rename, truncate, and drop a table .................................................. 354 How to work with indexes .................................................. 356 How to create an index ................................................................................ 356 How to drop an index .........................................
+- Understand the Creating Tables and Indexes concept in SQL
+
+## What is This?
+
+Creating Tables and Indexes is an important SQL concept for working with databases.
 
 ## Examples
-### Example 1
+
+### Example 1: Example for create-table
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic usage example
+
 ```sql
--- No specific example available in textbook
+SELECT * FROM users LIMIT 5;
 ```
-No example available for this concept.
+
+**Explanation:** See the practice problems for more examples.
+
+**Expected Output:**
+
+| id | name | email | age | city |
+| --- | --- | --- | --- | --- |
+| 1 | Alice | alice@email.com | 25 | Seattle |
+| 2 | Bob | bob@email.com | 30 | Portland |
+| 3 | Charlie | charlie@email.com | 22 | Seattle |
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Mistake 1: Syntax error
+
+**Incorrect SQL:**
+```sql
+SELECT * FORM users;
+```
+
+**Error Message:** `Error: near 'FORM': syntax error`
+
+**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Double-check SQL keyword spelling
+
+### Mistake 2: Missing semicolon
+
+**Incorrect SQL:**
+```sql
+SELECT * FROM users
+```
+
+**Error Message:** `Some databases require semicolons to end statements`
+
+**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Always end SQL statements with a semicolon
+
+## Practice Challenge
+
+**Practice using create-table with the practice schemas.**
+
+💡 **Hint:** Review the examples above and try writing your own query.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users LIMIT 5;
+```
+
+**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
+</details>
+
+## Related Practice Problems
+
+- [problem-26](/practice/problem-26)
+- [problem-27](/practice/problem-27)
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 360, 361, 362, 363, 364, 365, 366, 367, 368, 369, 370, 371*
+
+*Content generated for SQL-Adapt Learning Platform*

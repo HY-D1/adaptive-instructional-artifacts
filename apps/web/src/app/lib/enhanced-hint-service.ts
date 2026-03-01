@@ -15,10 +15,10 @@
 import type { 
   InteractionEvent, 
   InstructionalUnit,
-  SqlEngageRecord,
   SQLProblem,
   RetrievedChunkInfo
 } from '../types';
+import type { SqlEngageRecord } from '../data/sql-engage';
 import { 
   GuidanceRung, 
   RUNG_DEFINITIONS,
@@ -334,13 +334,7 @@ export async function generateEnhancedHint(
   // In the future, we could enable LLM for L1 too for consistency
   const canUseLLM = resources.llm && (forceLLM || rung >= 1);
   
-  console.log('[EnhancedHint] Decision check:', { 
-    rung, 
-    forceLLM, 
-    llmAvailable: resources.llm, 
-    canUseLLM,
-    hasTextbookContent: retrievalBundle.textbookUnits?.length > 0 
-  });
+  // Debug: Enhanced hint decision check - logged in development mode
   
   // Decision: Do we have textbook content?
   const hasTextbookContent = retrievalBundle.textbookUnits && 
@@ -348,19 +342,19 @@ export async function generateEnhancedHint(
   
   // CASE 1: LLM available → Generate AI-powered hint
   if (canUseLLM) {
-    console.log('[EnhancedHint] Taking CASE 1: LLM-enhanced hint');
+    // Using LLM-enhanced hint
     return generateLLMEnhancedHint(options, retrievalBundle, resources);
   }
   
   // CASE 2: No LLM but Textbook available → Enhanced SQL-Engage with textbook refs
   if (hasTextbookContent && errorSubtypeId) {
-    console.log('[EnhancedHint] Taking CASE 2: Textbook-enhanced hint');
+    // Using textbook-enhanced hint
     return generateTextbookEnhancedHint(options, retrievalBundle, resources);
   }
   
   // CASE 3: Neither LLM nor Textbook → SQL-Engage CSV fallback
   if (errorSubtypeId) {
-    console.log('[EnhancedHint] Taking CASE 3: SQL-Engage fallback');
+    // Using SQL-Engage fallback
     return generateSqlEngageFallbackHint(errorSubtypeId, rung);
   }
   
@@ -443,7 +437,7 @@ export async function saveHintToTextbook(
   );
   
   if (result.success) {
-    console.log(`[HintSave] Saved ${rungLabels[rung]} to textbook for problem ${problemId}`);
+    // Hint saved to textbook
   }
 }
 
@@ -472,29 +466,29 @@ export async function generateAdaptiveHint(
   const prompt = buildAdaptivePrompt(context);
   
   try {
-    console.log(`[AdaptiveHint] Generating rung ${rung} hint for ${errorSubtype}...`);
+    // Generating adaptive hint
     
     // Call LLM with the adaptive prompt
     const rawOutput = await llmCall(prompt);
     
     // Debug log raw output for L3 (which seems to have issues)
     if (rung === 3) {
-      console.log(`[AdaptiveHint] L3 Raw output (${rawOutput.length} chars):`, rawOutput.slice(0, 200));
+      // Raw LLM output received
     }
     
     // Parse and validate the output
     const parsed = parseAdaptiveOutput(rawOutput, rung);
     
-    console.log(`[AdaptiveHint] Generated hint (${parsed.content.length} chars):`, parsed.content.slice(0, 50) + '...');
+    // Hint generated successfully
     
     // Extra debug for empty L3 hints
     if (rung === 3 && !parsed.content.trim()) {
-      console.warn('[AdaptiveHint] L3 hint content is empty after parsing!');
+      // L3 hint content empty after parsing
     }
     
     return parsed;
   } catch (error) {
-    console.error('[AdaptiveHint] Generation failed:', error);
+    console.error('[AdaptiveHint] Hint generation failed:', error instanceof Error ? error.message : 'Unknown error');
     throw error;
   }
 }
@@ -664,7 +658,7 @@ function parseAdaptiveOutput(rawOutput: string, rung: 1 | 2 | 3): AdaptiveHintOu
 
   // Debug logging for L1 hint issues
   if (rung === 1 && process.env.NODE_ENV !== 'production') {
-    console.log('[AdaptiveHint] Raw LLM output:', rawOutput.slice(0, 500));
+    // Raw LLM output logged in development mode
   }
 
   // Try to parse JSON responses (for backward compatibility with test mocks)
@@ -706,7 +700,7 @@ function parseAdaptiveOutput(rawOutput: string, rung: 1 | 2 | 3): AdaptiveHintOu
         sourceRefIds.push(...parsed.source_ids.filter((id: unknown) => typeof id === 'string'));
       }
       
-      console.log('[AdaptiveHint] Parsed JSON response, extracted content:', content.slice(0, 100));
+      // Parsed JSON response
     }
   } catch {
     // Not valid JSON or parsing failed, treat as plain text
@@ -766,7 +760,7 @@ function parseAdaptiveOutput(rawOutput: string, rung: 1 | 2 | 3): AdaptiveHintOu
 
   // Debug logging after cleanup (for L1 and L3 rungs which have had issues)
   if ((rung === 1 || rung === 3) && process.env.NODE_ENV !== 'production') {
-    console.log(`[AdaptiveHint] L${rung} content after cleanup:`, content.slice(0, 200) || '(empty)');
+    // Hint content after cleanup
   }
 
   // Enforce length constraints based on rung
@@ -805,7 +799,7 @@ async function generateLLMEnhancedHint(
   const { generateWithOllama } = await import('./llm-client');
   
   try {
-    console.log('[EnhancedHint] Generating adaptive LLM hint for rung', rung, '...');
+    // Generating adaptive LLM hint
     
     // Build adaptive hint context
     const problem = getProblemById(options.problemId);
@@ -849,7 +843,7 @@ async function generateLLMEnhancedHint(
     // Generate using adaptive hint algorithm
     const hintOutput = await generateAdaptiveHint(adaptiveContext, llmCall);
     
-    console.log('[EnhancedHint] Adaptive hint generated:', hintOutput.content.slice(0, 50) + '...');
+    // Adaptive hint generated successfully
     
     // Save hint to textbook for future reference
     try {

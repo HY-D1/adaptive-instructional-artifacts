@@ -38,6 +38,47 @@ interface ComparisonRow {
   avgUnitsAdded: number;
   avgDedupRate: string;
 }
+
+// Week 5: Adaptive Personalization data types
+interface ProfileDistributionData {
+  name: string;
+  value: number;
+  color: string;
+}
+
+interface BanditArmData {
+  armId: string;
+  selectionCount: number;
+  meanReward: number;
+}
+
+interface BanditRewardData {
+  timestamp: number;
+  armId: string;
+  reward: number;
+  cumulativeMean: number;
+}
+
+interface HDIDataPoint {
+  hdi: number;
+  learnerId: string;
+  timestamp: number;
+}
+
+interface HighHDIAlert {
+  learnerId: string;
+  hdi: number;
+  trend: string;
+  timestamp: number;
+}
+
+interface ProfileEffectivenessData {
+  profile: string;
+  learnerCount: number;
+  avgSuccessRate: number;
+  avgEscalations: number;
+  totalInteractions: number;
+}
 import {
   Table,
   TableBody,
@@ -76,7 +117,10 @@ import {
   BarChart3,
   PieChart as PieChartIcon,
   TrendingUp,
-  Lightbulb
+  Lightbulb,
+  Sparkles,
+  Target,
+  BrainCircuit
 } from 'lucide-react';
 import { storage } from '../lib/storage';
 import { InteractionEvent, LearnerProfile, ExperimentCondition, PdfIndexDocument } from '../types';
@@ -592,30 +636,43 @@ export function ResearchDashboard() {
     return getFilteredByTimeRange(baseFiltered);
   }, [interactions, selectedLearner, getFilteredByTimeRange]);
 
-  const errorsByType = filteredInteractions
-    .filter(i => i.eventType === 'error' && i.errorSubtypeId)
-    .reduce((acc, i) => {
-      const type = i.errorSubtypeId!;
-      acc[type] = (acc[type] || 0) + 1;
+  // Memoized error analysis calculations
+  const errorsByType = useMemo(() => 
+    filteredInteractions
+      .filter(i => i.eventType === 'error' && i.errorSubtypeId)
+      .reduce((acc, i) => {
+        const type = i.errorSubtypeId!;
+        acc[type] = (acc[type] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+    [filteredInteractions]
+  );
+
+  const errorChartData = useMemo(() => 
+    Object.entries(errorsByType).map(([name, count]) => ({
+      name: name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      count,
+      fullName: name
+    })),
+    [errorsByType]
+  );
+
+  const interactionsByType = useMemo(() => 
+    filteredInteractions.reduce((acc, i) => {
+      acc[i.eventType] = (acc[i.eventType] || 0) + 1;
       return acc;
-    }, {} as Record<string, number>);
+    }, {} as Record<string, number>),
+    [filteredInteractions]
+  );
 
-  const errorChartData = Object.entries(errorsByType).map(([name, count]) => ({
-    name: name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-    count,
-    fullName: name
-  }));
-
-  const interactionsByType = filteredInteractions.reduce((acc, i) => {
-    acc[i.eventType] = (acc[i.eventType] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const interactionChartData = Object.entries(interactionsByType).map(([name, count]) => ({
-    name: name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-    count,
-    type: name
-  }));
+  const interactionChartData = useMemo(() => 
+    Object.entries(interactionsByType).map(([name, count]) => ({
+      name: name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      count,
+      type: name
+    })),
+    [interactionsByType]
+  );
 
   // Pie chart data for event distribution
   const eventDistributionData = useMemo(() => {
@@ -693,22 +750,25 @@ export function ResearchDashboard() {
     return { strategyComparison, comparisonData };
   }, [profiles, interactions]);
 
-  const sortedTimelineInteractions = filteredInteractions
-    .slice()
-    .sort((a, b) => a.timestamp - b.timestamp);
-  const timelineStartTimestamp = sortedTimelineInteractions[0]?.timestamp ?? 0;
-  const timelineData = sortedTimelineInteractions.reduce((acc, interaction) => {
-    const minute = Math.floor((interaction.timestamp - timelineStartTimestamp) / 60000);
-    if (!acc[minute]) {
-      acc[minute] = { minute, events: 0, errors: 0, hints: 0 };
-    }
-    acc[minute].events += 1;
-    if (interaction.eventType === 'error') acc[minute].errors += 1;
-    if (interaction.eventType === 'hint_view') acc[minute].hints += 1;
-    return acc;
-  }, {} as Record<number, TimelineDataPoint>);
+  // Memoized timeline data calculation
+  const timelineChartData = useMemo(() => {
+    const sortedTimelineInteractions = filteredInteractions
+      .slice()
+      .sort((a, b) => a.timestamp - b.timestamp);
+    const timelineStartTimestamp = sortedTimelineInteractions[0]?.timestamp ?? 0;
+    const timelineData = sortedTimelineInteractions.reduce((acc, interaction) => {
+      const minute = Math.floor((interaction.timestamp - timelineStartTimestamp) / 60000);
+      if (!acc[minute]) {
+        acc[minute] = { minute, events: 0, errors: 0, hints: 0 };
+      }
+      acc[minute].events += 1;
+      if (interaction.eventType === 'error') acc[minute].errors += 1;
+      if (interaction.eventType === 'hint_view') acc[minute].hints += 1;
+      return acc;
+    }, {} as Record<number, TimelineDataPoint>);
 
-  const timelineChartData = Object.values(timelineData).sort((a, b) => a.minute - b.minute);
+    return Object.values(timelineData).sort((a, b) => a.minute - b.minute);
+  }, [filteredInteractions]);
   const traceProblemOptions = useMemo(() => {
     if (!selectedTraceLearner) return [];
     return Array.from(new Set(
@@ -788,6 +848,187 @@ export function ResearchDashboard() {
 
   const activeThresholds = orchestrator.getThresholds(selectedReplayStrategy);
   const traceStartTime = replayPolicyTrace[0]?.timestamp;
+
+  // Week 5: Adaptive Personalization Analytics
+  const week5Analytics = useMemo(() => {
+    // Filter Week 5 event types
+    const week5Events = filteredInteractions.filter(i => 
+      ['profile_assigned', 'escalation_triggered', 'profile_adjusted',
+       'bandit_arm_selected', 'bandit_reward_observed', 'bandit_updated',
+       'hdi_calculated', 'hdi_trajectory_updated', 'dependency_intervention_triggered'].includes(i.eventType)
+    );
+
+    // 1. Escalation Profile Distribution
+    const profileAssignments = week5Events.filter(e => e.eventType === 'profile_assigned');
+    const profileCounts: Record<string, number> = {};
+    profileAssignments.forEach(e => {
+      const profileId = e.payload?.profileId || e.profileId || 'unknown';
+      const normalizedProfile = profileId.toUpperCase().includes('FAST') ? 'FAST' :
+                               profileId.toUpperCase().includes('SLOW') ? 'SLOW' :
+                               profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : 'UNKNOWN';
+      profileCounts[normalizedProfile] = (profileCounts[normalizedProfile] || 0) + 1;
+    });
+    
+    const profileDistributionData: ProfileDistributionData[] = [
+      { name: 'FAST', value: profileCounts.FAST || 0, color: CHART_COLORS.error },
+      { name: 'SLOW', value: profileCounts.SLOW || 0, color: CHART_COLORS.success },
+      { name: 'ADAPTIVE', value: profileCounts.ADAPTIVE || 0, color: CHART_COLORS.primary }
+    ].filter(p => p.value > 0);
+
+    // 2. Bandit Performance
+    const armSelections = week5Events.filter(e => e.eventType === 'bandit_arm_selected');
+    const armRewards = week5Events.filter(e => e.eventType === 'bandit_reward_observed');
+    
+    // Calculate arm selection frequency
+    const armSelectionCounts: Record<string, number> = {};
+    armSelections.forEach(e => {
+      const armId = e.payload?.armId || e.selectedArm || 'unknown';
+      armSelectionCounts[armId] = (armSelectionCounts[armId] || 0) + 1;
+    });
+    
+    // Calculate mean rewards per arm
+    const armRewardSums: Record<string, number> = {};
+    const armRewardCounts: Record<string, number> = {};
+    armRewards.forEach(e => {
+      const armId = e.payload?.armId || 'unknown';
+      const reward = e.payload?.reward?.total || e.reward?.total || 0;
+      armRewardSums[armId] = (armRewardSums[armId] || 0) + reward;
+      armRewardCounts[armId] = (armRewardCounts[armId] || 0) + 1;
+    });
+    
+    const banditArmData: BanditArmData[] = Object.keys(armSelectionCounts).map(armId => ({
+      armId,
+      selectionCount: armSelectionCounts[armId] || 0,
+      meanReward: armRewardCounts[armId] ? (armRewardSums[armId] / armRewardCounts[armId]) : 0
+    })).sort((a, b) => b.selectionCount - a.selectionCount);
+
+    // Bandit reward timeline
+    let cumulativeReward = 0;
+    let rewardCount = 0;
+    const banditRewardData: BanditRewardData[] = armRewards
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .map(e => {
+        const reward = e.payload?.reward?.total || e.reward?.total || 0;
+        cumulativeReward += reward;
+        rewardCount++;
+        return {
+          timestamp: e.timestamp,
+          armId: e.payload?.armId || 'unknown',
+          reward,
+          cumulativeMean: rewardCount > 0 ? cumulativeReward / rewardCount : 0
+        };
+      });
+
+    // 3. HDI Analytics
+    const hdiEvents = week5Events.filter(e => e.eventType === 'hdi_calculated');
+    const hdiDataPoints: HDIDataPoint[] = hdiEvents.map(e => ({
+      hdi: e.payload?.hdi ?? e.hdi ?? 0,
+      learnerId: e.learnerId,
+      timestamp: e.timestamp
+    }));
+    
+    // HDI histogram bins
+    const hdiBins = [
+      { range: '0-0.2', min: 0, max: 0.2, count: 0 },
+      { range: '0.2-0.4', min: 0.2, max: 0.4, count: 0 },
+      { range: '0.4-0.6', min: 0.4, max: 0.6, count: 0 },
+      { range: '0.6-0.8', min: 0.6, max: 0.8, count: 0 },
+      { range: '0.8-1.0', min: 0.8, max: 1.0, count: 0 }
+    ];
+    
+    hdiDataPoints.forEach(point => {
+      // Handle edge case: HDI = 1.0 should go into the 0.8-1.0 bin
+      const bin = hdiBins.find(b => 
+        point.hdi >= b.min && (point.hdi < b.max || (point.hdi === 1.0 && b.max === 1.0))
+      );
+      if (bin) bin.count++;
+    });
+    
+    // High HDI alerts (> 0.8)
+    const highHDIAlerts: HighHDIAlert[] = hdiDataPoints
+      .filter(p => p.hdi > 0.8)
+      .sort((a, b) => b.hdi - a.hdi)
+      .slice(0, 10)
+      .map(p => ({
+        learnerId: p.learnerId,
+        hdi: p.hdi,
+        trend: 'stable', // Default, could be enriched with trajectory data
+        timestamp: p.timestamp
+      }));
+
+    // 4. Profile Effectiveness
+    const profileEffectiveness: Record<string, ProfileEffectivenessData> = {};
+    
+    // Initialize profiles
+    Object.keys(profileCounts).forEach(profile => {
+      if (profile !== 'UNKNOWN') {
+        profileEffectiveness[profile] = {
+          profile,
+          learnerCount: profileCounts[profile] || 0,
+          avgSuccessRate: 0,
+          avgEscalations: 0,
+          totalInteractions: 0
+        };
+      }
+    });
+    
+    // Calculate effectiveness metrics per learner
+    const learnersByProfile: Record<string, string[]> = {};
+    profileAssignments.forEach(e => {
+      const profileId = e.payload?.profileId || e.profileId || 'unknown';
+      const normalizedProfile = profileId.toUpperCase().includes('FAST') ? 'FAST' :
+                               profileId.toUpperCase().includes('SLOW') ? 'SLOW' :
+                               profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : null;
+      if (normalizedProfile && normalizedProfile !== 'UNKNOWN') {
+        if (!learnersByProfile[normalizedProfile]) learnersByProfile[normalizedProfile] = [];
+        if (!learnersByProfile[normalizedProfile].includes(e.learnerId)) {
+          learnersByProfile[normalizedProfile].push(e.learnerId);
+        }
+      }
+    });
+    
+    // Calculate metrics for each profile
+    Object.entries(learnersByProfile).forEach(([profile, learnerIds]) => {
+      let totalSuccess = 0;
+      let totalEscalations = 0;
+      let totalInteractions = 0;
+      
+      learnerIds.forEach(learnerId => {
+        const learnerEvents = filteredInteractions.filter(i => i.learnerId === learnerId);
+        const successes = learnerEvents.filter(i => i.eventType === 'execution' && i.successful).length;
+        const executions = learnerEvents.filter(i => i.eventType === 'execution').length;
+        const escalations = learnerEvents.filter(i => i.eventType === 'explanation_view').length;
+        
+        totalSuccess += executions > 0 ? (successes / executions) : 0;
+        totalEscalations += escalations;
+        totalInteractions += learnerEvents.length;
+      });
+      
+      if (profileEffectiveness[profile]) {
+        profileEffectiveness[profile].avgSuccessRate = learnerIds.length > 0 
+          ? (totalSuccess / learnerIds.length) * 100 
+          : 0;
+        profileEffectiveness[profile].avgEscalations = learnerIds.length > 0
+          ? totalEscalations / learnerIds.length
+          : 0;
+        profileEffectiveness[profile].totalInteractions = totalInteractions;
+      }
+    });
+
+    // Sort profile effectiveness by success rate (highest first)
+    const sortedProfileEffectiveness = Object.values(profileEffectiveness)
+      .sort((a, b) => b.avgSuccessRate - a.avgSuccessRate);
+
+    return {
+      week5Events,
+      profileDistributionData,
+      banditArmData,
+      banditRewardData,
+      hdiBins,
+      highHDIAlerts,
+      profileEffectivenessData: sortedProfileEffectiveness
+    };
+  }, [filteredInteractions]);
 
   // Helper to format labels consistently (extracted to reduce duplication)
   const formatLabel = (str: string, separator: '_' | '-' = '_') => 
@@ -1164,6 +1405,10 @@ export function ResearchDashboard() {
             <TabsTrigger value="trace" data-testid="instructor-trace-tab" className="flex items-center gap-1.5">
               <BarChart3 className="size-4" />
               Trace View
+            </TabsTrigger>
+            <TabsTrigger value="week5" className="flex items-center gap-1.5">
+              <Sparkles className="size-4" />
+              Week 5: Adaptive
             </TabsTrigger>
           </TabsList>
 
@@ -1545,6 +1790,262 @@ export function ResearchDashboard() {
                 <p className="text-gray-500 text-center py-8">
                   No trace events for this learner/problem slice.
                 </p>
+              )}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="week5" className="space-y-6">
+            {/* Week 5: Adaptive Personalization Tab */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* 1. Escalation Profile Distribution */}
+              <Card className="p-6">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <Target className="size-5 text-blue-600" />
+                  Escalation Profile Distribution
+                </h3>
+                {week5Analytics.profileDistributionData.length > 0 ? (
+                  <div className="flex flex-col items-center">
+                    <ResponsiveContainer width="100%" height={250}>
+                      <PieChart>
+                        <Pie
+                          data={week5Analytics.profileDistributionData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={50}
+                          outerRadius={80}
+                          paddingAngle={3}
+                          dataKey="value"
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {week5Analytics.profileDistributionData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="w-full mt-4 space-y-2">
+                      {week5Analytics.profileDistributionData.map((item) => (
+                        <div key={item.name} className="flex items-center justify-between p-2 rounded bg-gray-50">
+                          <div className="flex items-center gap-2">
+                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                            <span className="text-sm font-medium">{item.name}</span>
+                          </div>
+                          <Badge variant="outline">{item.value} learners</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-gray-500">
+                    <Target className="size-12 mx-auto mb-3 text-gray-300" />
+                    <p>No profile assignment data available</p>
+                    <p className="text-sm text-gray-400 mt-1">Complete learning sessions to see profile distribution</p>
+                  </div>
+                )}
+              </Card>
+
+              {/* 2. Bandit Performance */}
+              <Card className="p-6">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <BrainCircuit className="size-5 text-purple-600" />
+                  Bandit Performance
+                </h3>
+                {week5Analytics.banditArmData.length > 0 ? (
+                  <div className="space-y-6">
+                    {/* Arm Selection Frequency */}
+                    <div>
+                      <p className="text-sm text-gray-600 mb-2">Arm Selection Frequency</p>
+                      <ResponsiveContainer width="100%" height={150}>
+                        <BarChart data={week5Analytics.banditArmData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis dataKey="armId" tick={{ fontSize: 11 }} />
+                          <YAxis tick={{ fontSize: 11 }} />
+                          <RechartsTooltip 
+                            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                          />
+                          <Bar dataKey="selectionCount" fill={CHART_COLORS.purple} radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    
+                    {/* Mean Rewards Timeline */}
+                    {week5Analytics.banditRewardData.length > 0 && (
+                      <div>
+                        <p className="text-sm text-gray-600 mb-2">Cumulative Mean Reward</p>
+                        <ResponsiveContainer width="100%" height={120}>
+                          <LineChart data={week5Analytics.banditRewardData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                            <XAxis 
+                              dataKey="timestamp" 
+                              tickFormatter={(ts) => new Date(ts).toLocaleTimeString()}
+                              tick={{ fontSize: 9 }}
+                            />
+                            <YAxis tick={{ fontSize: 11 }} domain={[0, 1]} />
+                            <RechartsTooltip 
+                              contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                              labelFormatter={(ts) => new Date(ts).toLocaleString()}
+                            />
+                            <Line 
+                              type="monotone" 
+                              dataKey="cumulativeMean" 
+                              stroke={CHART_COLORS.success} 
+                              strokeWidth={2} 
+                              dot={false} 
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-gray-500">
+                    <BrainCircuit className="size-12 mx-auto mb-3 text-gray-300" />
+                    <p>No bandit data available</p>
+                    <p className="text-sm text-gray-400 mt-1">Bandit selections will appear as learners interact</p>
+                  </div>
+                )}
+              </Card>
+            </div>
+
+            {/* 3. HDI Analytics */}
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Activity className="size-5 text-orange-600" />
+                HDI (Hint Dependency Index) Analytics
+              </h3>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* HDI Histogram */}
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">HDI Distribution</p>
+                  {week5Analytics.hdiBins.some(b => b.count > 0) ? (
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={week5Analytics.hdiBins}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis dataKey="range" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <RechartsTooltip 
+                          contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                        />
+                        <Bar dataKey="count" fill={CHART_COLORS.orange} radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500 bg-gray-50 rounded">
+                      <p>No HDI data available</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* High HDI Alerts */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm text-gray-600">High HDI Alerts (&gt; 0.8)</p>
+                    <Badge variant="destructive" className="text-xs">
+                      {week5Analytics.highHDIAlerts.length} learners
+                    </Badge>
+                  </div>
+                  {week5Analytics.highHDIAlerts.length > 0 ? (
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                      {week5Analytics.highHDIAlerts.map((alert, idx) => (
+                        <div 
+                          key={idx} 
+                          className="flex items-center justify-between p-3 bg-red-50 border border-red-100 rounded-lg"
+                        >
+                          <div className="flex items-center gap-2">
+                            <AlertCircle className="size-4 text-red-600" />
+                            <span className="text-sm font-medium truncate max-w-[150px]">
+                              {(alert.learnerId || 'unknown').slice(0, 8)}...
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-red-700 border-red-200">
+                              HDI: {alert.hdi.toFixed(2)}
+                            </Badge>
+                            <span className="text-xs text-gray-500">
+                              {new Date(alert.timestamp).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500 bg-gray-50 rounded">
+                      <CheckCircle2 className="size-8 mx-auto mb-2 text-green-500" />
+                      <p className="text-sm">No high dependency learners</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+
+            {/* 4. Profile Effectiveness Table */}
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <TrendingUp className="size-5 text-green-600" />
+                Profile Effectiveness Comparison
+              </h3>
+              {week5Analytics.profileEffectivenessData.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Profile</TableHead>
+                        <TableHead className="text-right">Learners</TableHead>
+                        <TableHead className="text-right">Avg Success Rate</TableHead>
+                        <TableHead className="text-right">Avg Escalations</TableHead>
+                        <TableHead className="text-right">Total Interactions</TableHead>
+                        <TableHead>Performance</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {week5Analytics.profileEffectivenessData.map((row) => (
+                        <TableRow key={row.profile}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Badge 
+                                variant={row.profile === 'FAST' ? 'destructive' : row.profile === 'SLOW' ? 'default' : 'secondary'}
+                              >
+                                {row.profile}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-mono">{row.learnerCount}</TableCell>
+                          <TableCell className="text-right">
+                            <span className={`font-mono ${row.avgSuccessRate >= 70 ? 'text-green-600' : row.avgSuccessRate >= 40 ? 'text-yellow-600' : 'text-red-600'}`}>
+                              {row.avgSuccessRate.toFixed(1)}%
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right font-mono">{row.avgEscalations.toFixed(1)}</TableCell>
+                          <TableCell className="text-right font-mono">{row.totalInteractions.toLocaleString()}</TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div 
+                                  className={`h-full rounded-full ${
+                                    row.avgSuccessRate >= 70 ? 'bg-green-500' : 
+                                    row.avgSuccessRate >= 40 ? 'bg-yellow-500' : 'bg-red-500'
+                                  }`}
+                                  style={{ width: `${Math.min(row.avgSuccessRate, 100)}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-500">
+                                {row.avgSuccessRate >= 70 ? 'High' : row.avgSuccessRate >= 40 ? 'Medium' : 'Low'}
+                              </span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <TrendingUp className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>No profile effectiveness data available</p>
+                  <p className="text-sm text-gray-400 mt-1">Assign profiles to learners to see comparison</p>
+                </div>
               )}
             </Card>
           </TabsContent>

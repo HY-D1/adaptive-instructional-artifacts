@@ -1,0 +1,70 @@
+{
+  "concept_id": "delete-statement",
+  "title": "The DELETE Statement",
+  "learning_objectives": [
+    "Understand the The DELETE Statement concept in SQL"
+  ],
+  "prerequisite_concepts": [],
+  "practice_problems": [],
+  "sections": {
+    "definition": {
+      "concept_explanation": "As these two examples illustrate, the SELECT clause is actually used to do pm- jection, whereas selections in the relational algebra sense are expressed using the WHERE clause!",
+      "visual_diagram": ""
+    },
+    "examples": [
+      {
+        "title": "SQL Example 1",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "SELECT *. This notation is useful for interactive querying, but it is poor style for queries that are intended to be reused and maintained because the schema of the result is not clear from the query itself;",
+        "explanation": "Example SQL statement",
+        "expected_output": "| id | name | email | age | city |\n| --- | --- | --- | --- | --- |\n| 1 | Alice | alice@email.com | 25 | Seattle |\n| 2 | Bob | bob@email.com | 30 | Portland |\n| 3 | Charlie | charlie@email.com | 22 | Seattle |"
+      },
+      {
+        "title": "SQL Example 2",
+        "difficulty": "intermediate",
+        "scenario": "Filtering data based on conditions",
+        "sql": "SELECT clause is actually used to do pm- jection, whereas selections in the relational algebra sense are expressed using the WHERE clause! This mismatch between the naming of the selection and pro- jection operators in relational algebra and the syntax of SQL is an unfortunate historical accident. We now consider the syntax of a basic SQL query in more detail. \u2022 The from-list in the FROM clause is a list of table names. A table name can be followed by a range variable;",
+        "explanation": "Example SQL statement",
+        "expected_output": "| id | name | email | age | city |\n| --- | --- | --- | --- | --- |\n| 1 | Alice | alice@email.com | 25 | Seattle |\n| 2 | Bob | bob@email.com | 30 | Portland |\n| 3 | Charlie | charlie@email.com | 22 | Seattle |"
+      },
+      {
+        "title": "SQL Example 3",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "SELECT clause. This step leaves us with the result shown in Figure .5.9, which is a table with a single column and, a.c;",
+        "explanation": "Example SQL statement",
+        "expected_output": "| id | name | email | age | city |\n| --- | --- | --- | --- | --- |\n| 1 | Alice | alice@email.com | 25 | Seattle |\n| 2 | Bob | bob@email.com | 30 | Portland |\n| 3 | Charlie | charlie@email.com | 22 | Seattle |"
+      }
+    ],
+    "common_mistakes": [
+      {
+        "title": "Syntax error",
+        "error_sql": "SELECT * FORM users;",
+        "error_message": "Error: near 'FORM': syntax error",
+        "why_it_happens": "Typo in SQL keyword. The correct keyword is FROM, not FORM.",
+        "fix_sql": "SELECT * FROM users;",
+        "key_takeaway": "Double-check SQL keyword spelling"
+      },
+      {
+        "title": "Missing semicolon",
+        "error_sql": "SELECT * FROM users",
+        "error_message": "Some databases require semicolons to end statements",
+        "why_it_happens": "While some SQL implementations are lenient, it's best practice to end statements with semicolons.",
+        "fix_sql": "SELECT * FROM users;",
+        "key_takeaway": "Always end SQL statements with a semicolon"
+      }
+    ],
+    "practice_challenge": {
+      "description": "Practice using delete-statement with the practice schemas.",
+      "hint": "Review the examples above and try writing your own query.",
+      "solution": "SELECT * FROM users LIMIT 5;",
+      "explanation": "This is a basic query to get you started. See the linked practice problems for more challenges."
+    }
+  },
+  "metadata": {
+    "difficulty": "intermediate",
+    "estimated_time_minutes": 15,
+    "source_chunks": 17
+  }
+}

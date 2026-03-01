@@ -1,48 +1,92 @@
 # Database Design
 
-## Definition
-How to design databases using ERDs and normalization
+🟡 **Difficulty:** Intermediate
+⏱️ **Estimated Time:** 15 minutes
 
-## Explanation
+## Learning Objectives
 
-column with 1 decimal digit A column that uses the ROUND function to return the invoice_total column with no decimal digits A column that uses the TRUNCATE function to return the invoice_total column with no decimal digits 2. Write a SELECT statement that returns these columns from the Date_Sample table in the EX database: The start_date column A column that uses the DATE_FORMAT function to return the start_date column with its month name abbreviated and its month, day, and two-digit year separated by slashes A column that uses the DATE FORMAT function to return the start date - - column with its month and day returned as integers with no leading zeros, a two-digit year, and all date parts separated by slashes A column that uses the DATE_FORMAT function to return the start_date column with only the hours and minutes on a 12-hour clock with an am/pm indicator
+- Understand the Database Design concept in SQL
 
-Chapter 9 How to use functions
+## What is This?
+
+Database Design is an important SQL concept for working with databases.
 
 ## Examples
-### Example 1: SELECT Example
+
+### Example 1: Example for database-design
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic usage example
+
 ```sql
-SELECT staten1ent that returns these columns from the Invoices table: The invoice total column A column that uses the ROUND function to return the invoice total column with 1 decimal digit A column that uses the ROUND function to return the invoice_total column with no decimal digits A column that uses the TRUNCATE function to return
-
-column with 1 decimal digit A column that uses the ROUND function to return the invoice_total column with no decimal digits A column that uses the TRUNCATE function to return the invoice_total column with no decimal digits 2. Write a SELECT statement that returns these columns from the Date_Sample table in the EX database: The start_date column A column that uses the DATE_FORMAT function to return the start_date column with its month name abbreviated and its month, day, and two-digit year separated by slashes A column that uses the DATE FORMAT function to return the start date - - column with its month and day returned as integers with no leading zeros, a two-digit year, and all date parts separated by slashes A column that uses the DATE_FORMAT function to return the start_date column with only the hours and minutes on a 12-hour clock with an am/pm indicator
-
-Chapter 9 How to use functions 301 3. Write a SELECT statement that returns these columns from the Vendors table: The vendor name column The vendor_name column in all capital letters The vendor_phone column A column that displays the last four digits of each phone number When you get that working right, add the columns that follow to the result set. This is more difficult because these columns require the use of functions within functions. The vendor_phone column with the parts of the number separated by dots, as in 555.555.5555 A column that displays the second word in each vendor name if there is one and blanks if there isn't 4. Write a SELECT statement that retUIns these columns from the Invoices table: The invoice number column - The invoice date column The invoice_date column plus 30 days The payment_date column A colt1mn named days_to_pay that shows the number of days between the invoice date and the payment date The number of the invoice date's month The four-digit year of the invoice date When you have this working, add a
-
-days between the invoice date and the payment date The number of the invoice date's month The four-digit year of the invoice date When you have this working, add a WHERE clause that retrieves just the invoices for the month of May based on the invoice date, not the number of the invoice month. 5. Write a SELECT statement that returns these columns from the String_Sample table of the EX database: The emp_name column A column that displays each employee's first name A column that displays each employee's last name Use regular expression functions to get the first and last name. If a name contains three parts, everything after the first part should be considered part of the last name. Be sure to provide for last names with hypens and apostrophes. Hint: To include an apostrophe in a pattern, you can code a\ in front of it or you can enclose the pattern in double quotes. 6. Write a SELECT statement that returns these columns from the Invoice table of the AP database: The invoice number column - The balance
-
-enclose the pattern in double quotes. 6. Write a SELECT statement that returns these columns from the Invoice table of the AP database: The invoice number column - The balance due for each invoice with a balance due greater than zero A column that uses the RANK() function to rank the balance due in descending sequence
-
-Database design and implementation For large applications, a developer who specializes in database design may be responsible for designing and creating the databases that are used by production applications. This developer may also be responsible for designing and creating the databases that are used for testing those applications. Then, a database administrator (DBA) may be responsible for maintaining these databases. For smaller applications, programmers are often asked to fill one or both of these roles. In other words, programmers often need to design, create, and maintain the databases that are used for testing and production. So, whether you 're a database designer, a database administrator, or a SQL programmer, you need the skills and knowledge presented in this section. That's true even if you aren't ever called upon to design, create, or maintain a database. By understanding what's going on behind the scenes, you'll be able to use SQL more effectively. In chapter 10, you'll learn how to design a database. In chapter 11, you'll learn how to use the Data Definition Language (DDL) statements to create and maintain databases,
-
-effectively. In chapter 10, you'll learn how to design a database. In chapter 11, you'll learn how to use the Data Definition Language (DDL) statements to create and maintain databases, tables, and indexes. Finally, in chapter 12, you '11 leam how to create and maintain views, which are database objects that provide another way to look at tables.
-
-How to design a database In this chapter, you'll learn how to design a new database. This is useful information whether or not you ever design a database on your own. To illus- trate this process, I'll use the accounts payable (AP) database that you've seen throughout this book. How to design a data structure ......................................... 306 The basic steps for designing a data structure ............................................ 306 How to identify the data elements .............................................................. 308 How to subdivide the data elements ............................................................ 310 How to identify the tables and assign columns ........................................... 312 How to identify the primary and foreign keys ............................................ 314 How to enforce the relationships between tables ........................................ 316 How nor1nalization works ........................................................................... 318 How to identify the columns to be indexed ................................................. 320 How to normalize a data structure .................................... 322 The seven normal forms .............................................................................. 322 How to apply the first normal form ............................................................. 324 How to apply the second normal form ........................................................ 326 How to apply the third normal form ............................................................ 328 When and how to denormalize a data structure .......................................... 330 How to
-
-How to apply the second normal form ........................................................ 326 How to apply the third normal form ............................................................ 328 When and how to denormalize a data structure .......................................... 330 How to use MySQL Workbench for database design ..... 332 How to open an existing EER model. .......................................................... 332 How to create a new EER model ................................................................. 332 How to work with an EER model ................................................................ 334 How to work with an EER diagram ............................................................ 336 Perspective ......................................................................... 338
-
-By unde1standing the right way to design a database, you'll work more effectively as a MySQL programmer. The basic steps for designing a data structure In many cases, you can design a data structure based on an existing real-world system. The illustration at the top of figure 10-1 presents a conceptual view of how this works. Here, you can see that all of the information about the people, documents, and facilities within a real-world system is mapped to the tables, columns, and rows of a database system. As you design a data structure, each table represents one object, or entity, in the real-world system. Then, within each table, each column stores one item of information, or attribute, for the entity, and each row stores one occurrence, or instance, of the entity. This figure also presents the six steps you can follow to design a data structure. You'll learn more about each of these steps in the topics that follow. In general, though, step 1 is to identify all the data elements that need to be stored in the database. Step
-
-each of these steps in the topics that follow. In general, though, step 1 is to identify all the data elements that need to be stored in the database. Step 2 is to break complex elements down into smaller compo- nents whenever that makes sense. Step 3 is to identify the tables that will make up the system and to determine which data elements are assigned as columns in each table. Step 4 is to define the relationships between the tables by identifying the primary and foreign keys. Step 5 is to normalize the database to reduce data redt1ndancy. And step 6 is to identify the indexes that are needed for each table. To model a database system after a real-world system, you can use a technique called entity-relationship (ER) modeling. Because this is a complex subject of its own, I won't present it in this book. However, I have applied some of the basic elements of this technique to the design diagrams presented in this chapter. In effect, then, you'll be learning so1ne of the basics of this
-
-applied some of the basic elements of this technique to the design diagrams presented in this chapter. In effect, then, you'll be learning so1ne of the basics of this modeling technique.
-
-Chapter 10 Hovv to design a database 307 A database system is modeled after a real-world system Real-world system Database system People Facilities Documents Other systems Columns --=.,......■ ;
+SELECT * FROM users LIMIT 5;
 ```
-Example SELECT statement from textbook.
+
+**Explanation:** See the practice problems for more examples.
+
+**Expected Output:**
+
+| id | name | email | age | city |
+| --- | --- | --- | --- | --- |
+| 1 | Alice | alice@email.com | 25 | Seattle |
+| 2 | Bob | bob@email.com | 30 | Portland |
+| 3 | Charlie | charlie@email.com | 22 | Seattle |
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Mistake 1: Syntax error
+
+**Incorrect SQL:**
+```sql
+SELECT * FORM users;
+```
+
+**Error Message:** `Error: near 'FORM': syntax error`
+
+**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Double-check SQL keyword spelling
+
+### Mistake 2: Missing semicolon
+
+**Incorrect SQL:**
+```sql
+SELECT * FROM users
+```
+
+**Error Message:** `Some databases require semicolons to end statements`
+
+**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Always end SQL statements with a semicolon
+
+## Practice Challenge
+
+**Practice using database-design with the practice schemas.**
+
+💡 **Hint:** Review the examples above and try writing your own query.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users LIMIT 5;
+```
+
+**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
+</details>
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 320, 321, 322, 323, 324, 325, 326, 327, 328, 329, 330, 331*
+
+*Content generated for SQL-Adapt Learning Platform*

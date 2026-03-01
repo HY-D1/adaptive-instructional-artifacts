@@ -1,0 +1,70 @@
+{
+  "concept_id": "database-security",
+  "title": "Database Security",
+  "learning_objectives": [
+    "Understand the Database Security concept in SQL"
+  ],
+  "prerequisite_concepts": [],
+  "practice_problems": [],
+  "sections": {
+    "definition": {
+      "concept_explanation": "Database Security is an important SQL concept for working with databases.",
+      "visual_diagram": ""
+    },
+    "examples": [
+      {
+        "title": "SQL Example 1",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "delete data in the AP database. If you want to view tl1e privileges for a user, you can use the SHOW GRANTS statement. In this figure, for example, you can see the privileges for the user named ap_admin. Chapter 18 How to secure a database 525 A script that creates two users and grants them privileges CREATE USER ap_ admin@loc alhost IDENTIFIED BY 'password';",
+        "explanation": "Example SQL statement",
+        "expected_output": ""
+      },
+      {
+        "title": "SQL Example 2",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "CREATE USER ap_user@localhost IDENTIFIED BY 'password';",
+        "explanation": "Example SQL statement",
+        "expected_output": ""
+      },
+      {
+        "title": "SQL Example 3",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "DELETE ON ap.* TO ap_user@localhost;",
+        "explanation": "Example SQL statement",
+        "expected_output": ""
+      }
+    ],
+    "common_mistakes": [
+      {
+        "title": "Syntax error",
+        "error_sql": "SELECT * FORM users;",
+        "error_message": "Error: near 'FORM': syntax error",
+        "why_it_happens": "Typo in SQL keyword. The correct keyword is FROM, not FORM.",
+        "fix_sql": "SELECT * FROM users;",
+        "key_takeaway": "Double-check SQL keyword spelling"
+      },
+      {
+        "title": "Missing semicolon",
+        "error_sql": "SELECT * FROM users",
+        "error_message": "Some databases require semicolons to end statements",
+        "why_it_happens": "While some SQL implementations are lenient, it's best practice to end statements with semicolons.",
+        "fix_sql": "SELECT * FROM users;",
+        "key_takeaway": "Always end SQL statements with a semicolon"
+      }
+    ],
+    "practice_challenge": {
+      "description": "Practice using database-security with the practice schemas.",
+      "hint": "Review the examples above and try writing your own query.",
+      "solution": "SELECT * FROM users LIMIT 5;",
+      "explanation": "This is a basic query to get you started. See the linked practice problems for more challenges."
+    }
+  },
+  "metadata": {
+    "difficulty": "intermediate",
+    "estimated_time_minutes": 15,
+    "source_chunks": 17
+  }
+}

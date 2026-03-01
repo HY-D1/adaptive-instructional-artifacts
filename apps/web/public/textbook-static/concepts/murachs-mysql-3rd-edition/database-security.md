@@ -1,64 +1,108 @@
 # Database Security
 
-## Definition
-Managing users, privileges, roles, and securing database access
+🟡 **Difficulty:** Intermediate
+⏱️ **Estimated Time:** 15 minutes
 
-## Explanation
+## Learning Objectives
 
-query log binary log relay log process mysqld program MySQL daemon status variable system variable 1. Start MySQL Workbench and open the Client Connections window. If the process list isn't displayed, click on the Refresh button in the lower right corner to display it. Review the list to see that it includes two processes for the current database. Then, return to the Home tab, open another connection for the root user, and select a different database as the current database. Next, return to the Client Connections window to see that it includes two additional processes for the new connection. 2. Use Workbench's Server Variables window to view these status variables: connections, threads_connected, bytes_received, and bytes_sent. Read the descriptions for these variables to get an idea of what they do. 3. Use Workbench's Server Variables window to view the sys
+- Understand the Database Security concept in SQL
+
+## What is This?
+
+Database Security is an important SQL concept for working with databases.
 
 ## Examples
-### Example 1: SELECT Example
+
+### Example 1: SQL Example 1
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic data retrieval
+
 ```sql
-select a different database as the current database. Next, return to the Client Connections window to see that it includes two additional processes for the new connection. 2. Use Workbench's Server Variables window to view these status variables: connections, threads_connected, bytes_received, and bytes_sent. Read the descriptions for these variables to get an idea of what they do. 3. Use Workbench's Server Variables window to view the system variables named basedir and datadir. Note the paths to these di1ectories. Then, view the system variables named log_error and log_bin. Note whether the log_bin variable is set to a value of ON or OFF and whether the log_error variable is set
-
-Then, view the system variables named log_error and log_bin. Note whether the log_bin variable is set to a value of ON or OFF and whether the log_error variable is set to the name of an error log, indicating that it is on.
-
-Chapter 17 An. introduction to database administration 521 4. Use the Explorer (Windows) or the Finder (macOS) to view MySQL's data directory. To do that, you may have to modify your operating system settings so you can see hidden directories and files. With macOS, you may also need to change the permissions for the directory to give yourself the read privilege. Note that the subdirectories of the data directory correspond to the databases that are running on your system. If the data dilectory contains any log files, note the names of these files. 5. View the files in the AP subdirectory and note how the names of the files correspond with the tables of this database. To do this on a Mac, you may need to change the permissions for the directory to give yourself the read privilege for the directory. 6. Use Workbench's Options File window to enable the error log and the binary log, if they aren't already enabled. Use whatever directories and names you want for the logs. If you get an error indicating that access is
-
-error log and the binary log, if they aren't already enabled. Use whatever directories and names you want for the logs. If you get an error indicating that access is denied, you may need to stop Workbench and run it as an administrator. After you enable these logs, restart the server. 7. Use the Explorer (Windows) or the Finder (macOS) to find MySQL's configu- ration file. Note the directory and name of this file on your computer. 8. Use Workbench's Server Logs willdow to view the enor log. Note that it includes messages about the startup and shutdown of the server. 9. Write and execute an INSERT statement that inserts a new row into the Invoices table. 10. Use a SET statement to temporarily enable the general log. Then, to make sure that this variable was set, use a SELECT statement to view the variable. If you get an error indicating that access is denied, you may need to stop Workbench and run it as an administrator. 11. Use a SELECT statement to select all rows from the Invoices table.
-
-indicating that access is denied, you may need to stop Workbench and run it as an administrator. 11. Use a SELECT statement to select all rows from the Invoices table. 12. Use Workbench's Server Logs window to view the general log, and click on the Refresh button. Note that it includes the SELECT statement from the previous step. 13. Use a SET statement to disable the general log. Then, to make sure that this variable was set, use a SELECT statement to view the variable.
-
-How to secure a database If you have installed MySQL on your own computer and you have only been working with sample databases, security hasn't been much of a concern. However, when you use MySQL in a production environment, you must configure security to prevent misuse of your data. In this chapter, you'll learn how to do that by writing SQL statements to create users that have restricted access to your database. In addition, you'll learn how to use MySQL Workbench to perform many of the security-related tasks that you can perform with SQL code. An introduction to user accounts ..................................... 524 An introduction to SQL statements for user accounts ................................. 524 A summary of privileges ............................... H•• .. ••H.526 The four privilege levels .............................................................................. 530 The grant tables in the mysql database ........................................................ 530 How to work with users and privileges ............................ 532 How to create, rename, and drop users ....................................................... 532 How to specify user account names ............................................................ 534 How to grant privileges .................................................................................. 536 How to view privileges ................................................................................ 538 How to revoke privileges ............................................................................
-
-and drop users ....................................................... 532 How to specify user account names ............................................................ 534 How to grant privileges .................................................................................. 536 How to view privileges ................................................................................ 538 How to revoke privileges ............................................................................ 540 How to change passwords ............................................................................ 542 A script that creates users ........................................................................... 544 How to work with roles ...................................................... 546 How to create, manage, and drop roles ...................................................... 546 A script that creates users and roles ............................................................ 550 How to use MySQL Workbench ........................................ 552 How to work with users and privileges ....................................................... 552 How to connect as a user for testing ............................................................ 556 Perspective ......................................................................... 560
-
-each user. Here, the user named ap_admin is granted all the privileges on the AP database. As a result, this user can select, insert, update, and delete data from the tables of the AP database. In addition, this user has many other privileges such as creating or dropping tables, indexes, and views in the AP database. By contrast, the user named ap_user can only select, insert, update, and delete data in the AP database. If you want to view the privileges for a user, you can use the SHOW GRANTS statement. In this figure, for example, you can see the privileges for the user named ap_admin.
-
-Chapter 18 How to secure a database 525 A script that creates two users and grants them privileges CREATE USER ap_ admin@loc alhost IDENTIFIED BY 'password';
+delete data in the AP database. If you want to view tl1e privileges for a user, you can use the SHOW GRANTS statement. In this figure, for example, you can see the privileges for the user named ap_admin. Chapter 18 How to secure a database 525 A script that creates two users and grants them privileges CREATE USER ap_ admin@loc alhost IDENTIFIED BY 'password';
 ```
-Example SELECT statement from textbook.
 
-### Example 2: INSERT Example
+**Explanation:** Example SQL statement
+
+### Example 2: SQL Example 2
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic data retrieval
+
 ```sql
-INSERT statement that inserts a new row into the Invoices table. 10. Use a SET statement to temporarily enable the general log. Then, to make sure that this variable was set, use a SELECT statement to view the variable. If you get an error indicating that access is denied, you may need to stop Workbench and run it as an administrator. 11. Use a SELECT statement to select all rows from the Invoices table.
-
-indicating that access is denied, you may need to stop Workbench and run it as an administrator. 11. Use a SELECT statement to select all rows from the Invoices table. 12. Use Workbench's Server Logs window to view the general log, and click on the Refresh button. Note that it includes the SELECT statement from the previous step. 13. Use a SET statement to disable the general log. Then, to make sure that this variable was set, use a SELECT statement to view the variable.
-
-How to secure a database If you have installed MySQL on your own computer and you have only been working with sample databases, security hasn't been much of a concern. However, when you use MySQL in a production environment, you must configure security to prevent misuse of your data. In this chapter, you'll learn how to do that by writing SQL statements to create users that have restricted access to your database. In addition, you'll learn how to use MySQL Workbench to perform many of the security-related tasks that you can perform with SQL code. An introduction to user accounts ..................................... 524 An introduction to SQL statements for user accounts ................................. 524 A summary of privileges ............................... H•• .. ••H.526 The four privilege levels .............................................................................. 530 The grant tables in the mysql database ........................................................ 530 How to work with users and privileges ............................ 532 How to create, rename, and drop users ....................................................... 532 How to specify user account names ............................................................ 534 How to grant privileges .................................................................................. 536 How to view privileges ................................................................................ 538 How to revoke privileges ............................................................................
-
-and drop users ....................................................... 532 How to specify user account names ............................................................ 534 How to grant privileges .................................................................................. 536 How to view privileges ................................................................................ 538 How to revoke privileges ............................................................................ 540 How to change passwords ............................................................................ 542 A script that creates users ........................................................................... 544 How to work with roles ...................................................... 546 How to create, manage, and drop roles ...................................................... 546 A script that creates users and roles ............................................................ 550 How to use MySQL Workbench ........................................ 552 How to work with users and privileges ....................................................... 552 How to connect as a user for testing ............................................................ 556 Perspective ......................................................................... 560
-
-each user. Here, the user named ap_admin is granted all the privileges on the AP database. As a result, this user can select, insert, update, and delete data from the tables of the AP database. In addition, this user has many other privileges such as creating or dropping tables, indexes, and views in the AP database. By contrast, the user named ap_user can only select, insert, update, and delete data in the AP database. If you want to view the privileges for a user, you can use the SHOW GRANTS statement. In this figure, for example, you can see the privileges for the user named ap_admin.
-
-Chapter 18 How to secure a database 525 A script that creates two users and grants them privileges CREATE USER ap_ admin@loc alhost IDENTIFIED BY 'password';
+CREATE USER ap_user@localhost IDENTIFIED BY 'password';
 ```
-Example INSERT statement from textbook.
 
-### Example 3: DELETE Example
+**Explanation:** Example SQL statement
+
+### Example 3: SQL Example 3
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic data retrieval
+
 ```sql
-delete data from the
-
-each user. Here, the user named ap_admin is granted all the privileges on the AP database. As a result, this user can select, insert, update, and delete data from the tables of the AP database. In addition, this user has many other privileges such as creating or dropping tables, indexes, and views in the AP database. By contrast, the user named ap_user can only select, insert, update, and delete data in the AP database. If you want to view the privileges for a user, you can use the SHOW GRANTS statement. In this figure, for example, you can see the privileges for the user named ap_admin.
-
-Chapter 18 How to secure a database 525 A script that creates two users and grants them privileges CREATE USER ap_ admin@loc alhost IDENTIFIED BY 'password';
+DELETE ON ap.* TO ap_user@localhost;
 ```
-Example DELETE statement from textbook.
+
+**Explanation:** Example SQL statement
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Mistake 1: Syntax error
+
+**Incorrect SQL:**
+```sql
+SELECT * FORM users;
+```
+
+**Error Message:** `Error: near 'FORM': syntax error`
+
+**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Double-check SQL keyword spelling
+
+### Mistake 2: Missing semicolon
+
+**Incorrect SQL:**
+```sql
+SELECT * FROM users
+```
+
+**Error Message:** `Some databases require semicolons to end statements`
+
+**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Always end SQL statements with a semicolon
+
+## Practice Challenge
+
+**Practice using database-security with the practice schemas.**
+
+💡 **Hint:** Review the examples above and try writing your own query.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users LIMIT 5;
+```
+
+**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
+</details>
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 540, 541, 542, 543, 544, 545, 546, 547, 548*
+
+*Content generated for SQL-Adapt Learning Platform*

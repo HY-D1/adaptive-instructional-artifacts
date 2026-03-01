@@ -1,0 +1,63 @@
+{
+  "concept_id": "where-clause",
+  "title": "The WHERE Clause",
+  "learning_objectives": [
+    "Filter rows using comparison operators (=, <, >, <=, >=, <>)",
+    "Combine conditions with AND, OR, and NOT",
+    "Use LIKE for pattern matching with wildcards",
+    "Handle NULL values correctly with IS NULL / IS NOT NULL"
+  ],
+  "prerequisite_concepts": [
+    "select-basic"
+  ],
+  "practice_problems": [
+    "problem-2",
+    "problem-6",
+    "problem-7"
+  ],
+  "sections": {
+    "definition": {
+      "concept_explanation": "The WHERE clause filters query results by specifying conditions that rows must meet.",
+      "visual_diagram": ""
+    },
+    "examples": [
+      {
+        "title": "SQL Example 1",
+        "difficulty": "intermediate",
+        "scenario": "Basic data retrieval",
+        "sql": "SELECT statements without FROM clauses Example 1 : Testing a calculation SELECT 1000 * (1 + .1) AS 1110% More Than 1000\" 10\u00b0/4 More Than 1000 ---I -- \u25ba 1100.0 \"'-~------;",
+        "explanation": "Example SQL statement",
+        "expected_output": "| id | name | email | age | city |\n| --- | --- | --- | --- | --- |\n| 1 | Alice | alice@email.com | 25 | Seattle |\n| 2 | Bob | bob@email.com | 30 | Portland |\n| 3 | Charlie | charlie@email.com | 22 | Seattle |"
+      }
+    ],
+    "common_mistakes": [
+      {
+        "title": "Using = instead of IN for multiple values",
+        "error_sql": "SELECT * FROM users WHERE city = 'Seattle', 'Portland';",
+        "error_message": "Error: near ',': syntax error",
+        "why_it_happens": "The = operator only compares to a single value. For multiple values, use IN.",
+        "fix_sql": "SELECT * FROM users WHERE city IN ('Seattle', 'Portland');",
+        "key_takeaway": "Use IN for multiple possible values"
+      },
+      {
+        "title": "String comparison without quotes",
+        "error_sql": "SELECT * FROM users WHERE city = Seattle;",
+        "error_message": "Error: no such column: Seattle",
+        "why_it_happens": "Without quotes, SQL treats Seattle as a column name instead of a string value.",
+        "fix_sql": "SELECT * FROM users WHERE city = 'Seattle';",
+        "key_takeaway": "Always use quotes around string literals"
+      }
+    ],
+    "practice_challenge": {
+      "description": "Find all users whose email ends with '@email.com' and are under 30.",
+      "hint": "Use LIKE for pattern matching with the % wildcard.",
+      "solution": "SELECT * FROM users WHERE email LIKE '%@email.com' AND age < 30;",
+      "explanation": "LIKE '%@email.com' matches any string ending with '@email.com'. The AND operator ensures both conditions are met."
+    }
+  },
+  "metadata": {
+    "difficulty": "beginner",
+    "estimated_time_minutes": 15,
+    "source_chunks": 29
+  }
+}

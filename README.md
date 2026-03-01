@@ -5,7 +5,7 @@ An adaptive SQL learning environment where students practice SQL problems with p
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)
 ![React](https://img.shields.io/badge/React-18.3-61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-6.4-646CFF)
-![Tests](https://img.shields.io/badge/Tests-138%20passing-success)
+![Tests](https://img.shields.io/badge/Tests-265%20passing-success)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## Features
@@ -21,6 +21,12 @@ An adaptive SQL learning environment where students practice SQL problems with p
 - View learning analytics and traces
 - Export session data for analysis
 - Replay learner interactions with different policies
+
+**Adaptive Personalization (Week 5):**
+- Escalation profiles (Fast/Slow/Adaptive) based on learner behavior
+- Multi-armed bandit with Thompson sampling for optimal strategy selection
+- Hint Dependency Index (HDI) with 5 components to measure learner independence
+- Profile-aware escalation in the guidance ladder
 
 **Security:**
 - Passcode-protected instructor access (`TeachSQL2024`)
@@ -73,11 +79,23 @@ Error Pattern ──► SQL-Engage Lookup ──► Subtype Identification
                     ┌─────────────────────────┘
                     ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  Strategy-based escalation thresholds                         │
-│  • hint-only: never escalate                                  │
-│  • adaptive-low: 5 errors → escalate                          │
-│  • adaptive-medium: 3 errors → escalate                       │
-│  • adaptive-high: 2 errors → escalate                         │
+│  Escalation Profiles (Week 5)                                 │
+│  • fast-escalator: 2 errors → explanation (aggressive)        │
+│  • slow-escalator: 5 errors → explanation (conservative)      │
+│  • adaptive: Dynamic threshold based on learner history       │
+│  • explanation-first: Skip hints, go straight to explanation  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 📊 Multi-Armed Bandit (Week 5)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Thompson Sampling Bandit                                     │
+│  • 4 arms: aggressive, conservative, explanation-first        │
+│  • Per-learner bandit instances                               │
+│  • Automatic strategy optimization                            │
+│  • Profile assignment with assignment strategy                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -134,6 +152,9 @@ npm run build
 # Run all tests
 npm run test:e2e:weekly
 
+# Run unit tests
+npm run test:unit
+
 # Generate demo artifacts
 npm run demo:weekly
 
@@ -149,7 +170,7 @@ npm run gate:week3:acceptance
 │   │   ├── app/
 │   │   │   ├── components/   # React components (HintSystem, etc.)
 │   │   │   ├── pages/        # Route pages (StartPage, LearningInterface, etc.)
-│   │   │   ├── lib/          # Business logic (storage, orchestrator)
+│   │   │   ├── lib/          # Business logic (storage, orchestrator, bandit, HDI)
 │   │   │   ├── data/         # Static data (problems, SQL-Engage)
 │   │   │   └── hooks/        # Custom React hooks (useUserRole, etc.)
 │   │   └── tests/            # Playwright E2E tests (138 @weekly tests)
@@ -157,9 +178,11 @@ npm run gate:week3:acceptance
 ├── scripts/               # Utility scripts (replay, metrics)
 ├── docs/                  # Documentation
 │   ├── README.md          # Documentation index
-│   ├── progress.md        # Architecture and milestones
-│   ├── weekly-progress.md # Active checkpoint log
-│   └── week3-*.md         # Week 3 deliverables reference
+│   ├── runbooks/          # Active operational docs
+│   │   ├── progress.md    # Architecture and milestones
+│   │   └── weekly-progress.md # Active checkpoint log
+│   ├── research/          # Research and design docs
+│   └── archive/           # Historical docs
 └── dist/                  # Build outputs
 ```
 
@@ -168,22 +191,30 @@ npm run gate:week3:acceptance
 | Document | Purpose |
 |----------|---------|
 | [docs/README.md](docs/README.md) | Documentation index and navigation |
-| [docs/progress.md](docs/progress.md) | Architecture, milestones, research vision |
-| [docs/weekly-progress.md](docs/weekly-progress.md) | Active checkpoint log (every task) |
-| [docs/week3-report.md](docs/week3-report.md) | Week 3 deliverables reference |
+| [docs/runbooks/progress.md](docs/runbooks/progress.md) | Architecture, milestones, research vision |
+| [docs/runbooks/weekly-progress.md](docs/runbooks/weekly-progress.md) | Active checkpoint log (every task) |
+| [docs/research/HDI.md](docs/research/HDI.md) | Hint Dependency Index specification |
+| [docs/research/MULTI_ARMED_BANDIT.md](docs/research/MULTI_ARMED_BANDIT.md) | Bandit algorithm design |
+| [docs/research/ESCALATION_POLICIES.md](docs/research/ESCALATION_POLICIES.md) | Escalation profile design |
+| [docs/archive/archive-week3.md](docs/archive/archive-week3.md) | Week 3 deliverables reference |
 
 ## Testing
 
-The project has **138 E2E tests** covering:
+The project has **265 unit tests** and **138 E2E tests** covering:
 
 - **Bug Regression**: 87 tests (critical, high, medium priority)
+- **Week 5 Components**: 118 tests (HDI: 43, Bandit: 45, Profiles: 30)
 - **Week 4 Features**: 31 tests (role-based auth)
 - **Week 3 Features**: 20 tests (guidance ladder, source grounding, textbook)
 - **Data Integrity**: 46+ tests (event logging, validation)
 
 Run tests with:
 ```bash
+# E2E tests
 npm run test:e2e:weekly
+
+# Unit tests
+npm run test:unit
 ```
 
 ## License
@@ -192,4 +223,14 @@ MIT License - see [LICENSE](LICENSE)
 
 ## Research
 
-This project explores **dynamic instructional assembly** — content that emerges from learner interaction data. See [docs/progress.md](docs/progress.md) for the research vision and architecture details.
+This project explores **dynamic instructional assembly** — content that emerges from learner interaction data. See [docs/runbooks/progress.md](docs/runbooks/progress.md) for the research vision and architecture details.
+
+### Current Research Components (Week 5)
+
+| Component | Status | Description |
+|-----------|--------|-------------|
+| Escalation Profiles | ✅ Complete | Fast/Slow/Adaptive/Explanation-first profiles |
+| Multi-Armed Bandit | ✅ Complete | Thompson sampling with per-learner bandits |
+| HDI Calculator | ✅ Complete | 5-component dependency index |
+| Profile-Aware Escalation | ✅ Complete | Integration with guidance ladder |
+| Event Logging | ✅ Complete | All 9 Week 5 event types logged |

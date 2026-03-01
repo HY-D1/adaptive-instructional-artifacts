@@ -1,24 +1,117 @@
 # Outer Joins
 
-## Definition
-Retrieving all rows from one table and matching rows from another (LEFT, RIGHT, FULL)
+🟡 **Difficulty:** Intermediate
+⏱️ **Estimated Time:** 15 minutes
 
-## Explanation
+## Learning Objectives
 
-or left, table. Similarly, when you use a right outer join, the result set includes all the rows from the second, or right, table. The example in this figure illustrates a left outer join. Here, the Vendors table is joined with the Invoices table. In addition, the result set includes vendor rows even if no matching invoices are found. In that case, null values are returned for the columns in the Invoices table.
+- Understand the Outer Joins concept in SQL
 
-Chapter 4 How to retrieve data f rom two or m.ore tables 129 The explicit syntax for an outer join SELECT select_ list FROM table_ l {LEFTIRIGHT} [OUTER] JOIN table_ 2 ON join_condition_ l [{LEFTIRIGHT} [OUTER] JOIN table_ 3 ON join_condition_ 2] ... What outer joins do Joins of this type Retrieve unmatched rows from Left outer join Right outer join A left outer join The first (left) table The second (right) table SELECT vendor_ name, invoice_number, invoice_total FROM vendors LEFT JOIN invoices ON vendors.vendor_ id = invoices.vendor_id ORDER BY vendor_name _J vendor _name ► Abbey
+## Prerequisites
+
+Before learning this concept, you should understand:
+
+- [select-basic](./select-basic.md)
+- [joins](./joins.md)
+- [inner-join](./inner-join.md)
+
+## What is This?
+
+Outer Joins is an important SQL concept for working with databases.
+
+### Visual Diagram
+
+```
+users (LEFT)    LEFT JOIN     orders (RIGHT)
+    +----+------+                  +----------+--------+
+    |  1 |Alice |<---------------->| order_id |user_id |
+    |  2 |Bob   |<---------------->|   101    |   1    |
+    |  3 |Carol |  (included with  |   102    |   1    |
+    +----+------+       NULL)      +----------+--------+
+    Result: ALL left rows, matched with right or NULL
+```
 
 ## Examples
-### Example 1
+
+### Example 1: Example for outer-join
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic usage example
+
 ```sql
--- No specific example available in textbook
+SELECT * FROM users LIMIT 5;
 ```
-No example available for this concept.
+
+**Explanation:** See the practice problems for more examples.
+
+**Expected Output:**
+
+| id | name | email | age | city |
+| --- | --- | --- | --- | --- |
+| 1 | Alice | alice@email.com | 25 | Seattle |
+| 2 | Bob | bob@email.com | 30 | Portland |
+| 3 | Charlie | charlie@email.com | 22 | Seattle |
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+
+### Mistake 1: Syntax error
+
+**Incorrect SQL:**
+```sql
+SELECT * FORM users;
+```
+
+**Error Message:** `Error: near 'FORM': syntax error`
+
+**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Double-check SQL keyword spelling
+
+### Mistake 2: Missing semicolon
+
+**Incorrect SQL:**
+```sql
+SELECT * FROM users
+```
+
+**Error Message:** `Some databases require semicolons to end statements`
+
+**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
+
+**Corrected SQL:**
+```sql
+SELECT * FROM users;
+```
+
+💡 **Key Takeaway:** Always end SQL statements with a semicolon
+
+## Practice Challenge
+
+**Practice using outer-join with the practice schemas.**
+
+💡 **Hint:** Review the examples above and try writing your own query.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users LIMIT 5;
+```
+
+**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
+</details>
+
+## Related Practice Problems
+
+- [problem-9](/practice/problem-9)
+- [problem-10](/practice/problem-10)
 
 ---
-*Source: murachs-mysql-3rd-edition, Pages 148, 149, 150, 151, 152, 153, 154, 155*
+
+*Content generated for SQL-Adapt Learning Platform*

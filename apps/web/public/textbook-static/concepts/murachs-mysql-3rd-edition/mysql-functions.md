@@ -1,80 +1,92 @@
 # MySQL Functions
 
-## Definition
+🟡 **Difficulty:** Intermediate
+⏱️ **Estimated Time:** 15 minutes
 
-MySQL functions are pre-defined routines that perform specific operations on data. They help simplify complex queries and make your database more efficient.
+## Learning Objectives
 
-## Explanation
+- Understand the MySQL Functions concept in SQL
 
-MySQL functions are essential for performing calculations, manipulating text, and handling dates and times directly within SQL queries without needing to write additional programming code. These functions can be grouped into several categories: arithmetic, string, date and time, and aggregate functions. Understanding how to use these functions correctly is crucial for writing efficient and powerful SQL queries.
+## What is This?
+
+MySQL Functions is an important SQL concept for working with databases.
 
 ## Examples
 
-### Basic Usage of an Aggregate Function
+### Example 1: Example for mysql-functions
+
+**Difficulty:** Beginner
+
+**Scenario:** Basic usage example
 
 ```sql
--- Calculate the total amount invoiced for each account
-SELECT account_number, SUM(line_item_amount) AS total_amount FROM Invoice_Line_Items GROUP BY account_number;
+SELECT * FROM users LIMIT 5;
 ```
 
-This example demonstrates how to use the SUM function to calculate the total line item amount for each account number. The results are grouped by account number.
+**Explanation:** See the practice problems for more examples.
 
-### Practical Example: Using a String Function
+**Expected Output:**
 
-```sql
--- Concatenate vendor name and account description
-SELECT CONCAT(vendor_name, ' - ', account_description) AS vendor_info FROM Vendors JOIN Invoice_Line_Items ON Vendors.account_number = Invoice_Line_Items.account_number;
-```
-
-This practical example shows how to use the CONCAT function to combine vendor name and account description into a single column. It joins two tables based on account number.
+| id | name | email | age | city |
+| --- | --- | --- | --- | --- |
+| 1 | Alice | alice@email.com | 25 | Seattle |
+| 2 | Bob | bob@email.com | 30 | Portland |
+| 3 | Charlie | charlie@email.com | 22 | Seattle |
 
 ## Common Mistakes
 
-### Incorrectly using aggregate functions without grouping
+### Mistake 1: Syntax error
 
-**Incorrect:**
-
+**Incorrect SQL:**
 ```sql
--- This will cause an error
-SELECT SUM(line_item_amount) FROM Invoice_Line_Items;
+SELECT * FORM users;
 ```
 
-**Correct:**
+**Error Message:** `Error: near 'FORM': syntax error`
 
+**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
+
+**Corrected SQL:**
 ```sql
--- Correct usage with GROUP BY
-SELECT account_number, SUM(line_item_amount) AS total_amount FROM Invoice_Line_Items GROUP BY account_number;
+SELECT * FROM users;
 ```
 
-**Why this happens:** Aggregates like SUM and AVG require a GROUP BY clause to operate on each group of rows. Failing to include it will result in an error.
+💡 **Key Takeaway:** Double-check SQL keyword spelling
 
-### Forgetting to use parentheses with functions
+### Mistake 2: Missing semicolon
 
-**Incorrect:**
-
+**Incorrect SQL:**
 ```sql
--- This will cause an error
-SELECT SUBSTRING(vendor_name, 1, 3) vendor_name FROM Vendors;
+SELECT * FROM users
 ```
 
-**Correct:**
+**Error Message:** `Some databases require semicolons to end statements`
 
+**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
+
+**Corrected SQL:**
 ```sql
--- Correct usage with parentheses
-SELECT SUBSTRING(vendor_name, 1, 3) AS vendor_name FROM Vendors;
+SELECT * FROM users;
 ```
 
-**Why this happens:** Parentheses are necessary to define the arguments for functions. Forgetting them can lead to syntax errors.
+💡 **Key Takeaway:** Always end SQL statements with a semicolon
+
+## Practice Challenge
+
+**Practice using mysql-functions with the practice schemas.**
+
+💡 **Hint:** Review the examples above and try writing your own query.
+
+<details>
+<summary>Click to see solution</summary>
+
+```sql
+SELECT * FROM users LIMIT 5;
+```
+
+**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
+</details>
 
 ---
 
-## Practice
-
-**Question:** Write a query that calculates the average invoice total for each quarter of 2018.
-
-**Solution:** -- Calculate average invoice total per quarter
-SELECT QUARTER(invoice_date) AS quarter, AVG(invoice_total) AS avg_total FROM Invoices WHERE YEAR(invoice_date) = 2018 GROUP BY quarter;
-
----
-
-*Source: Murach's MySQL 3rd Edition*
+*Content generated for SQL-Adapt Learning Platform*

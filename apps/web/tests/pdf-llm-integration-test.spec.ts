@@ -32,8 +32,8 @@ test.describe('@integration PDF Retrieval and LLM Integration', () => {
     await page.goto('/');
     
     const result = await page.evaluate(async () => {
-      const { storage } = await import('/src/app/lib/storage.ts');
-      const { buildRetrievalBundle } = await import('/src/app/lib/retrieval-bundle.ts');
+      const { storage } = await import('../src/app/lib/storage');
+      const { buildRetrievalBundle } = await import('../src/app/lib/retrieval-bundle');
       
       // Verify no PDF index exists
       const pdfIndex = storage.getPdfIndex();
@@ -68,7 +68,7 @@ test.describe('@integration PDF Retrieval and LLM Integration', () => {
         pdfIndexExists: pdfIndex !== null,
         pdfPassagesCount: bundle.pdfPassages.length,
         hasRetrievedSourceIds: bundle.retrievedSourceIds.length > 0,
-        sourceIdsIncludeSqlEngage: bundle.retrievedSourceIds.some(id => id.includes('sql-engage')),
+        sourceIdsIncludeSqlEngage: bundle.retrievedSourceIds.some((id: string) => id.includes('sql-engage')),
         pdfIndexProvenance: bundle.pdfIndexProvenance
       };
     });
@@ -84,9 +84,9 @@ test.describe('@integration PDF Retrieval and LLM Integration', () => {
     await page.goto('/');
     
     const result = await page.evaluate(async () => {
-      const { storage } = await import('/src/app/lib/storage.ts');
-      const { buildRetrievalBundle } = await import('/src/app/lib/retrieval-bundle.ts');
-      const { retrievePdfChunks } = await import('/src/app/lib/pdf-retrieval.ts');
+      const { storage } = await import('../src/app/lib/storage');
+      const { buildRetrievalBundle } = await import('../src/app/lib/retrieval-bundle');
+      const { retrievePdfChunks } = await import('../src/app/lib/pdf-retrieval');
       
       // Save a test PDF index
       const testIndex = {
@@ -141,9 +141,9 @@ test.describe('@integration PDF Retrieval and LLM Integration', () => {
         directRetrieveCount: chunks.length,
         bundlePdfPassagesCount: bundle.pdfPassages.length,
         hasPdfIndexProvenance: bundle.pdfIndexProvenance !== null,
-        passagesHaveChunkIds: bundle.pdfPassages.every(p => p.chunkId),
-        passagesHaveDocIds: bundle.pdfPassages.every(p => p.docId),
-        passagesHavePages: bundle.pdfPassages.every(p => typeof p.page === 'number')
+        passagesHaveChunkIds: bundle.pdfPassages.every((p: { chunkId: string }) => p.chunkId),
+        passagesHaveDocIds: bundle.pdfPassages.every((p: { docId: string }) => p.docId),
+        passagesHavePages: bundle.pdfPassages.every((p: { page: number }) => typeof p.page === 'number')
       };
     });
     
@@ -159,7 +159,7 @@ test.describe('@integration PDF Retrieval and LLM Integration', () => {
     await page.goto('/');
     
     const result = await page.evaluate(async () => {
-      const { renderPrompt } = await import('/src/app/prompts/templates.ts');
+      const { renderPrompt } = await import('../src/app/prompts/templates');
       
       const prompt = renderPrompt('explanation.v1', JSON.stringify({
         learnerId: 'test',
@@ -185,7 +185,7 @@ test.describe('@integration PDF Retrieval and LLM Integration', () => {
     await page.goto('/');
     
     const result = await page.evaluate(async () => {
-      const { parseTemplateJson } = await import('/src/app/lib/content-generator.ts');
+      const { parseTemplateJson } = await import('../src/app/lib/content-generator');
       
       // Test various malformed inputs
       const testCases = [
@@ -217,9 +217,9 @@ test.describe('@integration PDF Retrieval and LLM Integration', () => {
     await page.goto('/');
     
     const result = await page.evaluate(async () => {
-      const { storage } = await import('/src/app/lib/storage.ts');
-      const { generateUnitFromLLM } = await import('/src/app/lib/content-generator.ts');
-      const { buildRetrievalBundle } = await import('/src/app/lib/retrieval-bundle.ts');
+      const { storage } = await import('../src/app/lib/storage');
+      const { generateUnitFromLLM } = await import('../src/app/lib/content-generator');
+      const { buildRetrievalBundle } = await import('../src/app/lib/retrieval-bundle');
       
       // First, set replay mode to ensure deterministic behavior
       storage.setPolicyReplayMode(true);

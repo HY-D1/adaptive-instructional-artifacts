@@ -1147,6 +1147,310 @@ class StorageManager {
     return createEventId(prefix);
   }
 
+  // ============================================================================
+  // Week 5: Adaptive Personalization Event Logging
+  // ============================================================================
+
+  /**
+   * Log profile assignment event
+   * @param learnerId - Learner identifier
+   * @param profileId - Assigned profile ID
+   * @param strategy - Assignment strategy used
+   * @param problemId - Current problem context
+   */
+  logProfileAssigned(
+    learnerId: string,
+    profileId: string,
+    strategy: 'static' | 'diagnostic' | 'bandit',
+    problemId: string
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('profile', 'assigned'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'profile_assigned',
+      problemId,
+      profileId,
+      assignmentStrategy: strategy,
+      policyVersion: 'profile-assign-v1',
+      payload: {
+        profileId,
+        strategy,
+        reason: 'bandit_selection'
+      }
+    };
+    this.saveInteraction(event);
+  }
+
+  /**
+   * Log escalation triggered event
+   * @param learnerId - Learner identifier
+   * @param profileId - Current profile ID
+   * @param errorCount - Error count at escalation
+   * @param problemId - Current problem
+   */
+  logEscalationTriggered(
+    learnerId: string,
+    profileId: string,
+    errorCount: number,
+    problemId: string
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('escalation', 'triggered'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'escalation_triggered',
+      problemId,
+      profileId,
+      policyVersion: 'escalation-trigger-v1',
+      payload: {
+        trigger: 'threshold_met',
+        errorCount,
+        profileId
+      }
+    };
+    this.saveInteraction(event);
+  }
+
+  /**
+   * Log profile adjustment event
+   * @param learnerId - Learner identifier
+   * @param previousProfileId - Previous profile
+   * @param newProfileId - New profile
+   * @param reason - Reason for adjustment
+   */
+  logProfileAdjusted(
+    learnerId: string,
+    previousProfileId: string,
+    newProfileId: string,
+    reason: string
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('profile', 'adjusted'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'profile_adjusted',
+      problemId: 'profile-change',
+      policyVersion: 'profile-adjust-v1',
+      payload: {
+        oldProfileId: previousProfileId,
+        newProfileId,
+        reason
+      }
+    };
+    this.saveInteraction(event);
+  }
+
+  /**
+   * Log bandit arm selection
+   * @param learnerId - Learner identifier
+   * @param armId - Selected arm ID
+   * @param selectionMethod - How arm was selected
+   */
+  logBanditArmSelected(
+    learnerId: string,
+    armId: string,
+    selectionMethod: 'thompson_sampling' | 'epsilon_greedy' | 'forced'
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('bandit', 'arm-selected'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'bandit_arm_selected',
+      problemId: 'bandit-selection',
+      selectedArm: armId,
+      selectionMethod: selectionMethod === 'forced' ? 'thompson_sampling' : selectionMethod,
+      policyVersion: 'bandit-arm-v1',
+      payload: {
+        armId,
+        method: selectionMethod
+      }
+    };
+    this.saveInteraction(event);
+  }
+
+  /**
+   * Log bandit reward observed
+   * @param learnerId - Learner identifier
+   * @param armId - Arm that received reward
+   * @param reward - Reward value (0-1)
+   * @param components - Individual reward components
+   */
+  logBanditRewardObserved(
+    learnerId: string,
+    armId: string,
+    reward: number,
+    components: {
+      independentSuccess: number;
+      errorReduction: number;
+      delayedRetention: number;
+      dependencyPenalty: number;
+      timeEfficiency: number;
+    }
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('bandit', 'reward'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'bandit_reward_observed',
+      problemId: 'bandit-reward',
+      reward: {
+        total: reward,
+        components
+      },
+      policyVersion: 'bandit-reward-v1',
+      payload: {
+        armId,
+        reward: {
+          total: reward,
+          components
+        }
+      }
+    };
+    this.saveInteraction(event);
+  }
+
+  /**
+   * Log bandit updated (after reward applied)
+   * @param learnerId - Learner identifier
+   * @param armId - Updated arm
+   * @param alpha - New alpha value
+   * @param beta - New beta value
+   * @param pullCount - Total pulls for arm
+   */
+  logBanditUpdated(
+    learnerId: string,
+    armId: string,
+    alpha: number,
+    beta: number,
+    pullCount: number
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('bandit', 'updated'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'bandit_updated',
+      problemId: 'bandit-update',
+      newAlpha: alpha,
+      newBeta: beta,
+      policyVersion: 'bandit-update-v1',
+      payload: {
+        armId,
+        newAlpha: alpha,
+        newBeta: beta,
+        pullCount
+      }
+    };
+    this.saveInteraction(event);
+  }
+
+  /**
+   * Log HDI calculated event
+   * @param learnerId - Learner identifier
+   * @param hdi - HDI score (0-1)
+   * @param components - Individual component scores
+   * @param problemId - Current problem context
+   */
+  logHDICalculated(
+    learnerId: string,
+    hdi: number,
+    components: {
+      hpa: number;
+      aed: number;
+      er: number;
+      reae: number;
+      iwh: number;
+    },
+    problemId: string
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('hdi', 'calculated'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'hdi_calculated',
+      problemId,
+      hdi,
+      hdiLevel: hdi < 0.33 ? 'low' : hdi < 0.66 ? 'medium' : 'high',
+      hdiComponents: components,
+      policyVersion: 'hdi-calc-v1',
+      payload: {
+        hdi,
+        hdiLevel: hdi < 0.33 ? 'low' : hdi < 0.66 ? 'medium' : 'high',
+        components
+      }
+    };
+    this.saveInteraction(event);
+  }
+
+  /**
+   * Log HDI trajectory updated
+   * @param learnerId - Learner identifier
+   * @param hdi - Current HDI
+   * @param trend - Trend direction
+   * @param slope - Rate of change
+   */
+  logHDITrajectoryUpdated(
+    learnerId: string,
+    hdi: number,
+    trend: 'increasing' | 'stable' | 'decreasing',
+    slope: number
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('hdi', 'trajectory'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'hdi_trajectory_updated',
+      problemId: 'hdi-trajectory',
+      hdi,
+      trend,
+      slope,
+      policyVersion: 'hdi-trajectory-v1',
+      payload: {
+        hdi,
+        trend,
+        slope
+      }
+    };
+    this.saveInteraction(event);
+  }
+
+  /**
+   * Log dependency intervention triggered
+   * @param learnerId - Learner identifier
+   * @param hdi - HDI score that triggered intervention
+   * @param interventionType - Type of intervention
+   */
+  logDependencyInterventionTriggered(
+    learnerId: string,
+    hdi: number,
+    interventionType: 'forced_independent' | 'profile_switch' | 'reflective_prompt'
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('intervention', 'dependency'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'dependency_intervention_triggered',
+      problemId: 'hdi-intervention',
+      hdi,
+      interventionType,
+      policyVersion: 'hdi-intervention-v1',
+      payload: {
+        hdi,
+        interventionType
+      }
+    };
+    this.saveInteraction(event);
+  }
+
   // Evidence scoring weights for coverage calculation
   // FIXED: Errors now properly penalize coverage to reflect actual mastery
   private readonly EVIDENCE_WEIGHTS = {

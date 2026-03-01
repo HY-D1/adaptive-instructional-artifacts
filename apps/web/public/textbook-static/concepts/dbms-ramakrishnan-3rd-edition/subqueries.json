@@ -1,0 +1,72 @@
+{
+  "concept_id": "subqueries",
+  "title": "Subqueries",
+  "learning_objectives": [
+    "Write subqueries in SELECT, FROM, and WHERE clauses",
+    "Understand correlated vs non-correlated subqueries",
+    "Use EXISTS and IN operators with subqueries",
+    "Know when to use subqueries vs joins"
+  ],
+  "prerequisite_concepts": [
+    "select-basic",
+    "where-clause"
+  ],
+  "practice_problems": [
+    "problem-16",
+    "problem-17",
+    "problem-18"
+  ],
+  "sections": {
+    "definition": {
+      "concept_explanation": "Subqueries is an important SQL concept for working with databases.",
+      "visual_diagram": ""
+    },
+    "examples": [
+      {
+        "title": "SQL Example 1",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "create the queries at run-time (Section 6.1.3). Cursors bridge the gap between set-valued query answers and programming languages SQL queries in application code (Section 6.1.1);",
+        "explanation": "Example SQL statement",
+        "expected_output": ""
+      },
+      {
+        "title": "SQL Example 2",
+        "difficulty": "beginner",
+        "scenario": "Basic data retrieval",
+        "sql": "INSERT INTO users VALUES (:c_sname, :csid, :crating, :cage);",
+        "explanation": "Example SQL statement",
+        "expected_output": ""
+      },
+      {
+        "title": "SQL Example 3",
+        "difficulty": "intermediate",
+        "scenario": "Filtering data based on conditions",
+        "sql": "SELECT (i.e.) a query). However, we can avoid opening a cursor if the answer contains a single row, as we see shortly. .. INSERT, DELETE, and UPDATE staternents typically require no cursor, al- though some variants of DELETE and UPDATE use a cursor. As an example, we can find the name and age of a sailor, specified by assigning a value to the host variable c~sir1, declared earlier, as follows: EXEC SQL SELECT INTO FROM WHERE S.sname, S.age :c_sname, :c_age users S S.id = :c_sid;",
+        "explanation": "Example SQL statement",
+        "expected_output": "| id | name | email | age | city |\n| --- | --- | --- | --- | --- |\n| 1 | Alice | alice@email.com | 25 | Seattle |\n| 2 | Bob | bob@email.com | 30 | Portland |\n| 3 | Charlie | charlie@email.com | 22 | Seattle |"
+      }
+    ],
+    "common_mistakes": [
+      {
+        "title": "Subquery returns multiple rows for single-row operator",
+        "error_sql": "SELECT * FROM users WHERE id = (SELECT user_id FROM orders);",
+        "error_message": "Error: subquery returns more than one row",
+        "why_it_happens": "The = operator expects a single value, but the subquery returns multiple rows.",
+        "fix_sql": "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders);",
+        "key_takeaway": "Use IN when the subquery may return multiple rows"
+      }
+    ],
+    "practice_challenge": {
+      "description": "Find users who have not placed any orders.",
+      "hint": "Use NOT EXISTS or NOT IN with a subquery.",
+      "solution": "SELECT * FROM users u\nWHERE NOT EXISTS (\n    SELECT 1 FROM orders o WHERE o.user_id = u.id\n);",
+      "explanation": "The subquery checks for orders for each user. NOT EXISTS returns users where no matching orders are found."
+    }
+  },
+  "metadata": {
+    "difficulty": "intermediate",
+    "estimated_time_minutes": 25,
+    "source_chunks": 34
+  }
+}
