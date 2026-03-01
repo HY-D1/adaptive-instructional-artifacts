@@ -130,9 +130,13 @@ function parseMarkdownContent(markdown: string): LoadedConcept['content'] {
     sections[currentSection] = sectionContent.join('\n').trim();
   }
   
+  // Handle both old format (Definition/Explanation) and new pedagogical format (What is This?)
+  const definition = sections['Definition'] || sections['What is This?'] || '';
+  const explanation = sections['Explanation'] || sections['What is This?'] || definition || '';
+  
   return {
-    definition: sections['Definition'] || '',
-    explanation: sections['Explanation'] || sections['Definition'] || '',
+    definition,
+    explanation,
     examples: parseExamples(sections['Examples'] || ''),
     commonMistakes: parseMistakes(sections['Common Mistakes'] || '')
   };
@@ -191,40 +195,69 @@ function parseMistakes(section: string): Mistake[] {
     let why = '';
     let inIncorrect = false;
     let inCorrect = false;
+    let inWhy = false;
     const incorrectLines: string[] = [];
     const correctLines: string[] = [];
     
     for (const line of lines.slice(1)) {
       const trimmed = line.trim();
+      // Strip markdown bold markers for easier matching
+      const cleanTrimmed = trimmed.replace(/\*\*/g, '');
       
-      if (trimmed.includes('❌') || trimmed.toLowerCase().includes('incorrect')) {
+      // Check for section markers (support both old and new formats)
+      if (trimmed.includes('❌') || 
+          cleanTrimmed.toLowerCase().includes('incorrect sql') ||
+          cleanTrimmed.toLowerCase().includes('incorrect:') ||
+          cleanTrimmed.toLowerCase() === 'incorrect') {
         inIncorrect = true;
         inCorrect = false;
+        inWhy = false;
         continue;
       }
-      if (trimmed.includes('✅') || trimmed.toLowerCase().includes('correct')) {
+      if (trimmed.includes('✅') || 
+          cleanTrimmed.toLowerCase().includes('corrected sql') ||
+          cleanTrimmed.toLowerCase().includes('correct sql') ||
+          cleanTrimmed.toLowerCase().includes('corrected:') ||
+          cleanTrimmed.toLowerCase().includes('correct:') ||
+          cleanTrimmed.toLowerCase() === 'corrected' ||
+          cleanTrimmed.toLowerCase() === 'correct') {
         inIncorrect = false;
         inCorrect = true;
+        inWhy = false;
         continue;
       }
-      if (trimmed.includes('💡') || trimmed.toLowerCase().includes('why')) {
+      if (trimmed.includes('💡') || 
+          cleanTrimmed.toLowerCase().includes('why it happens') ||
+          cleanTrimmed.toLowerCase().includes('why:') ||
+          cleanTrimmed.toLowerCase() === 'why' ||
+          cleanTrimmed.toLowerCase().includes('key takeaway')) {
         inIncorrect = false;
         inCorrect = false;
-        why = trimmed.replace(/^[^a-zA-Z]*/, '').trim();
+        inWhy = true;
+        // Extract why text after the label
+        const whyMatch = cleanTrimmed.match(/why it happens:?\s*(.+)/i) || 
+                        cleanTrimmed.match(/why:?\s*(.+)/i) ||
+                        cleanTrimmed.match(/key takeaway:?\s*(.+)/i);
+        if (whyMatch && whyMatch[1]) {
+          why = whyMatch[1].trim();
+        }
         continue;
       }
       
-      if (line.startsWith('```sql')) {
-        continue;
-      }
-      if (line.startsWith('```')) {
+      // Skip code block markers
+      if (line.startsWith('```sql') || line.startsWith('```')) {
         continue;
       }
       
+      // Collect content
       if (inIncorrect) {
         incorrectLines.push(line);
       } else if (inCorrect) {
         correctLines.push(line);
+      } else if (inWhy && !why && trimmed) {
+        // If we didn't capture why from the label line, capture from content
+        // Strip markdown bold markers from why text
+        why = trimmed.replace(/\*\*/g, '');
       }
     }
     
