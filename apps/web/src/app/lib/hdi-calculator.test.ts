@@ -11,6 +11,8 @@ import {
   calculateHDI,
   calculateHDIComponents,
   HDI_CALCULATOR_VERSION,
+  HDI_LEVELS,
+  classifyHDILevel,
 } from './hdi-calculator';
 
 // Helper to create mock interactions
@@ -514,5 +516,394 @@ describe('HDI Calculator', () => {
       expect(typeof HDI_CALCULATOR_VERSION).toBe('string');
       expect(HDI_CALCULATOR_VERSION).toContain('hdi-calculator');
     });
+  });
+
+  describe('HDI_LEVELS constants', () => {
+    it('thresholds are correct', () => {
+      expect(HDI_LEVELS.LOW_THRESHOLD).toBe(0.3);
+      expect(HDI_LEVELS.MEDIUM_THRESHOLD).toBe(0.6);
+      expect(HDI_LEVELS.HIGH_THRESHOLD).toBe(1.0);
+    });
+  });
+
+  describe('classifyHDILevel', () => {
+    it('classifies low correctly', () => {
+      expect(classifyHDILevel(0)).toBe('low');
+      expect(classifyHDILevel(0.29)).toBe('low');
+      expect(classifyHDILevel(0.3)).not.toBe('low');
+    });
+    
+    it('classifies medium correctly', () => {
+      expect(classifyHDILevel(0.3)).toBe('medium');
+      expect(classifyHDILevel(0.5)).toBe('medium');
+      expect(classifyHDILevel(0.6)).toBe('medium');
+    });
+    
+    it('classifies high correctly', () => {
+      expect(classifyHDILevel(0.61)).toBe('high');
+      expect(classifyHDILevel(1.0)).toBe('high');
+    });
+    
+    it('handles edge cases', () => {
+      expect(classifyHDILevel(-0.1)).toBe('low');
+      expect(classifyHDILevel(1.5)).toBe('high');
+    });
+  });
+});
+
+describe('Edge Cases - HDI Calculator', () => {
+  test('handles empty interactions', () => {
+    // All components should return 0
+    const components = calculateHDIComponents([]);
+    expect(components.hpa).toBe(0);
+    expect(components.aed).toBe(0);
+    expect(components.er).toBe(0);
+    expect(components.reae).toBe(0);
+    expect(components.iwh).toBe(0);
+    
+    // HDI should be calculated with IWH=0 -> (1-0)*0.134 = 0.134
+    const result = calculateHDI([]);
+    expect(result.hdi).toBe(0.134);
+    expect(result.level).toBe('low');
+  });
+
+  test('handles single interaction', () => {
+    // Only one event
+    // Should calculate correctly
+    const interactions = [createMockInteraction({ eventType: 'hint_request' })];
+    const result = calculateHDI(interactions);
+    
+    expect(result.hdi).toBeDefined();
+    expect(result.level).toBeDefined();
+    expect(result.components).toBeDefined();
+    expect(result.hdi).toBeGreaterThanOrEqual(0);
+    expect(result.hdi).toBeLessThanOrEqual(1);
+  });
+
+  test('handles all same timestamp', () => {
+    // All events at same time
+    // REAE calculation should still work
+    const sameTime = Date.now();
+    const interactions = [
+      createMockInteraction({ eventType: 'explanation_view', timestamp: sameTime }),
+      createMockInteraction({ eventType: 'error', timestamp: sameTime }),
+      createMockInteraction({ eventType: 'error', timestamp: sameTime }),
+    ];
+    
+    const result = calculateREAE(interactions);
+    expect(typeof result).toBe('number');
+    expect(result).toBeGreaterThanOrEqual(0);
+    expect(result).toBeLessThanOrEqual(1);
+    
+    // With same timestamp, order is preserved by sort stability
+    // Both errors have same timestamp as explanation, so they might be counted
+    const hdiResult = calculateHDI(interactions);
+    expect(hdiResult.hdi).toBeGreaterThanOrEqual(0);
+    expect(hdiResult.hdi).toBeLessThanOrEqual(1);
+  });
+
+  test('handles extreme component values - all zeros', () => {
+    // All components at 0
+    // HDI should be in [0,1]
+    const interactions = [
+      createMockInteraction({ eventType: 'execution', successful: true }),
+      createMockInteraction({ eventType: 'execution', successful: true }),
+    ];
+    
+    const components = calculateHDIComponents(interactions);
+    expect(components.hpa).toBe(0); // No hints
+    expect(components.aed).toBe(0); // No hint levels
+    expect(components.er).toBe(0); // No explanations
+    expect(components.reae).toBe(0); // No errors
+    expect(components.iwh).toBe(1); // All successes without hints
+    
+    const result = calculateHDI(interactions);
+    // With IWH=1, (1-1)*0.134 = 0, so HDI should be very low
+    expect(result.hdi).toBeGreaterThanOrEqual(0);
+    expect(result.hdi).toBeLessThanOrEqual(1);
+  });
+
+  test('handles extreme component values - all ones', () => {
+    // All components at 1
+    // HDI should be in [0,1]
+    const baseTime = Date.now();
+    const interactions = [
+      createMockInteraction({ eventType: 'explanation_view', timestamp: baseTime }),
+      createMockInteraction({ eventType: 'error', timestamp: baseTime + 100 }),
+      createMockInteraction({ eventType: 'error', timestamp: baseTime + 200 }),
+      createMockInteraction({ eventType: 'hint_request', hintLevel: 3, timestamp: baseTime + 300 }),
+      createMockInteraction({ eventType: 'execution', timestamp: baseTime + 400 }),
+      createMockInteraction({ eventType: 'hint_request', hintLevel: 3, timestamp: baseTime + 500 }),
+      createMockInteraction({ eventType: 'execution', timestamp: baseTime + 600 }),
+      createMockInteraction({ eventType: 'explanation_view', timestamp: baseTime + 700 }),
+    ];
+    
+    const result = calculateHDI(interactions);
+    expect(result.hdi).toBeGreaterThanOrEqual(0);
+    expect(result.hdi).toBeLessThanOrEqual(1);
+    // With high hint usage and errors, level should be medium or high
+    expect(['medium', 'high']).toContain(result.level);
+  });
+
+  test('handles very large interaction count', () => {
+    // 100,000 interactions
+    // Performance should be good
+    const interactions: InteractionEvent[] = [];
+    const baseTime = Date.now();
+    
+    for (let i = 0; i < 100000; i++) {
+      interactions.push(createMockInteraction({
+        eventType: i % 3 === 0 ? 'hint_request' : 'execution',
+        timestamp: baseTime + i * 1000,
+        hintLevel: i % 3 === 0 ? ((i % 3 + 1) as 1 | 2 | 3) : undefined,
+      }));
+    }
+    
+    const startTime = Date.now();
+    const result = calculateHDI(interactions);
+    const endTime = Date.now();
+    
+    // Should complete in reasonable time (less than 5 seconds)
+    expect(endTime - startTime).toBeLessThan(5000);
+    
+    expect(result.hdi).toBeGreaterThanOrEqual(0);
+    expect(result.hdi).toBeLessThanOrEqual(1);
+    expect(result.level).toBeDefined();
+  });
+
+  test('handles circular/invalid timestamps - future timestamps', () => {
+    // Future timestamps
+    const futureTime = Date.now() + 1000000000; // Far future
+    const interactions = [
+      createMockInteraction({ eventType: 'explanation_view', timestamp: futureTime }),
+      createMockInteraction({ eventType: 'error', timestamp: futureTime + 1000 }),
+    ];
+    
+    const result = calculateREAE(interactions);
+    expect(result).toBeGreaterThanOrEqual(0);
+    expect(result).toBeLessThanOrEqual(1);
+  });
+
+  test('handles circular/invalid timestamps - negative timestamps', () => {
+    // Negative timestamps
+    const interactions = [
+      createMockInteraction({ eventType: 'explanation_view', timestamp: -1000 }),
+      createMockInteraction({ eventType: 'error', timestamp: -500 }),
+    ];
+    
+    const result = calculateREAE(interactions);
+    expect(result).toBeGreaterThanOrEqual(0);
+    expect(result).toBeLessThanOrEqual(1);
+  });
+
+  test('handles NaN in component calculations', () => {
+    // Division by zero scenarios
+    // Should not return NaN
+    const interactions = [
+      createMockInteraction({ 
+        eventType: 'hint_request',
+        hintLevel: NaN as unknown as 1 | 2 | 3 
+      }),
+      createMockInteraction({ eventType: 'execution' }),
+    ];
+    
+    const result = calculateHDI(interactions);
+    expect(result.hdi).not.toBeNaN();
+    expect(result.hdi).toBeGreaterThanOrEqual(0);
+    expect(result.hdi).toBeLessThanOrEqual(1);
+  });
+
+  test('handles interactions with missing eventType', () => {
+    const interactions = [
+      createMockInteraction({ eventType: undefined as unknown as InteractionEvent['eventType'] }),
+      createMockInteraction({ eventType: 'execution' }),
+    ];
+    
+    const result = calculateHDI(interactions);
+    expect(result.hdi).not.toBeNaN();
+    expect(result.hdi).toBeGreaterThanOrEqual(0);
+    expect(result.hdi).toBeLessThanOrEqual(1);
+  });
+
+  test('handles interactions with undefined timestamp', () => {
+    const interactions = [
+      createMockInteraction({ 
+        eventType: 'explanation_view',
+        timestamp: undefined as unknown as number
+      }),
+      createMockInteraction({ 
+        eventType: 'error',
+        timestamp: undefined as unknown as number
+      }),
+    ];
+    
+    const result = calculateREAE(interactions);
+    // NaN comparisons always return false, so sorting may be inconsistent
+    expect(typeof result).toBe('number');
+  });
+
+  test('handles REAE with no errors', () => {
+    const baseTime = Date.now();
+    const interactions = [
+      createMockInteraction({ eventType: 'explanation_view', timestamp: baseTime }),
+      createMockInteraction({ eventType: 'execution', timestamp: baseTime + 1000 }),
+      createMockInteraction({ eventType: 'execution', timestamp: baseTime + 2000 }),
+    ];
+    
+    const result = calculateREAE(interactions);
+    expect(result).toBe(0);
+  });
+
+  test('handles REAE with no explanations', () => {
+    const baseTime = Date.now();
+    const interactions = [
+      createMockInteraction({ eventType: 'error', timestamp: baseTime }),
+      createMockInteraction({ eventType: 'error', timestamp: baseTime + 1000 }),
+    ];
+    
+    const result = calculateREAE(interactions);
+    expect(result).toBe(0);
+  });
+
+  test('handles IWH with no successful attempts', () => {
+    const interactions = [
+      createMockInteraction({ eventType: 'hint_request', problemId: 'p1' }),
+      createMockInteraction({ eventType: 'execution', problemId: 'p1', successful: false }),
+      createMockInteraction({ eventType: 'error', problemId: 'p1' }),
+    ];
+    
+    const result = calculateIWH(interactions);
+    expect(result).toBe(0);
+  });
+
+  test('handles AED with undefined hint levels', () => {
+    const interactions = [
+      createMockInteraction({ eventType: 'hint_request' }), // no hintLevel
+      createMockInteraction({ eventType: 'hint_view' }), // no hintLevel
+    ];
+    
+    const result = calculateAED(interactions);
+    expect(result).toBe(0); // No events with hintLevel defined
+  });
+
+  test('handles AED with hintLevel outside 1-3 range', () => {
+    const interactions = [
+      createMockInteraction({ eventType: 'hint_request', hintLevel: 0 as 1 | 2 | 3 }),
+      createMockInteraction({ eventType: 'hint_request', hintLevel: 5 as 1 | 2 | 3 }),
+      createMockInteraction({ eventType: 'hint_request', hintLevel: -1 as 1 | 2 | 3 }),
+    ];
+    
+    const result = calculateAED(interactions);
+    expect(result).toBeGreaterThanOrEqual(0);
+    expect(result).toBeLessThanOrEqual(1);
+  });
+
+  test('handles HPA with zero executions', () => {
+    const interactions = [
+      createMockInteraction({ eventType: 'hint_request' }),
+      createMockInteraction({ eventType: 'hint_request' }),
+      createMockInteraction({ eventType: 'code_change' }),
+    ];
+    
+    const result = calculateHPA(interactions);
+    expect(result).toBe(0); // No executions
+  });
+
+  test('handles ER with zero executions', () => {
+    const interactions = [
+      createMockInteraction({ eventType: 'explanation_view' }),
+      createMockInteraction({ eventType: 'explanation_view' }),
+    ];
+    
+    const result = calculateER(interactions);
+    expect(result).toBe(0); // No executions
+  });
+
+  test('handles original array mutation protection', () => {
+    const interactions = [
+      createMockInteraction({ eventType: 'hint_request', timestamp: 300 }),
+      createMockInteraction({ eventType: 'execution', timestamp: 100 }),
+      createMockInteraction({ eventType: 'error', timestamp: 200 }),
+    ];
+    
+    const originalOrder = [...interactions];
+    calculateHDI(interactions);
+    
+    // Original array should not be mutated
+    expect(interactions).toEqual(originalOrder);
+  });
+
+  test('handles null/undefined in interactions array', () => {
+    const interactions = [
+      createMockInteraction({ eventType: 'hint_request' }),
+      null as unknown as InteractionEvent,
+      undefined as unknown as InteractionEvent,
+      createMockInteraction({ eventType: 'execution' }),
+    ];
+    
+    // The function throws when encountering null/undefined items
+    // This is acceptable behavior - the calling code should sanitize inputs
+    expect(() => calculateHDI(interactions)).toThrow();
+  });
+
+  test('handles HDI boundary values', () => {
+    // Test HDI with low dependency (all successes without hints)
+    const interactionsLow = [
+      createMockInteraction({ eventType: 'execution', successful: true }),
+      createMockInteraction({ eventType: 'execution', successful: true }),
+    ];
+    const resultLow = calculateHDI(interactionsLow);
+    // With IWH=1 (all successes without hints), HDI should be low
+    expect(resultLow.hdi).toBeLessThan(0.3);
+    expect(resultLow.level).toBe('low');
+    
+    // Test HDI with high dependency (many hints and errors with executions)
+    const interactionsHigh: InteractionEvent[] = [];
+    const baseTime = Date.now();
+    
+    // Create interactions that produce high HDI:
+    // - High HPA (many hints per execution)
+    // - High AED (level 3 hints)
+    // - High ER (many explanations)
+    // - High REAE (errors after explanation)
+    // - Low IWH (no success without hints)
+    for (let i = 0; i < 20; i++) {
+      // Add hint requests (level 3 for max AED)
+      interactionsHigh.push(createMockInteraction({ 
+        eventType: 'hint_request', 
+        hintLevel: 3,
+        timestamp: baseTime + i * 200,
+        problemId: `p${i}`
+      }));
+      interactionsHigh.push(createMockInteraction({ 
+        eventType: 'hint_request', 
+        hintLevel: 3,
+        timestamp: baseTime + i * 200 + 10,
+        problemId: `p${i}`
+      }));
+      // Add execution
+      interactionsHigh.push(createMockInteraction({ 
+        eventType: 'execution',
+        timestamp: baseTime + i * 200 + 50,
+        problemId: `p${i}`
+      }));
+      // Add explanation view
+      interactionsHigh.push(createMockInteraction({ 
+        eventType: 'explanation_view',
+        timestamp: baseTime + i * 200 + 100,
+        problemId: `p${i}`
+      }));
+      // Add error after explanation
+      interactionsHigh.push(createMockInteraction({ 
+        eventType: 'error',
+        timestamp: baseTime + i * 200 + 150,
+        problemId: `p${i}`
+      }));
+    }
+    
+    const resultHigh = calculateHDI(interactionsHigh);
+    // With this pattern, HDI should be medium or high
+    expect(resultHigh.hdi).toBeGreaterThanOrEqual(0.3);
+    expect(['medium', 'high']).toContain(resultHigh.level);
   });
 });

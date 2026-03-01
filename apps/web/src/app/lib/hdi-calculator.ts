@@ -7,9 +7,38 @@
  * Version: hdi-calculator-v1
  */
 
-import type { InteractionEvent, HDIComponents, HDILevel } from '../types';
+import type { InteractionEvent, HDIComponents } from '../types';
 
 export const HDI_CALCULATOR_VERSION = 'hdi-calculator-v1';
+
+/**
+ * HDI (Hint Dependency Index) level thresholds
+ * Used for classifying learner dependency levels
+ */
+export const HDI_LEVELS = {
+  /** Low dependency - learner is independent (< 0.3) */
+  LOW_THRESHOLD: 0.3,
+  /** Medium dependency - moderate hint usage (0.3 - 0.6) */
+  MEDIUM_THRESHOLD: 0.6,
+  /** High dependency - heavy hint reliance (> 0.6) */
+  HIGH_THRESHOLD: 1.0,
+} as const;
+
+/**
+ * HDI level classification labels
+ */
+export type HDILevel = 'low' | 'medium' | 'high';
+
+/**
+ * Classify HDI score into level
+ * @param hdi - HDI score (0-1)
+ * @returns Level classification
+ */
+export function classifyHDILevel(hdi: number): HDILevel {
+  if (hdi < HDI_LEVELS.LOW_THRESHOLD) return 'low';
+  if (hdi <= HDI_LEVELS.MEDIUM_THRESHOLD) return 'medium';
+  return 'high';
+}
 
 // Weight constants for HDI calculation
 const WEIGHTS = {
@@ -207,15 +236,8 @@ export function calculateHDI(
   // Normalize to 0-1
   const normalizedHDI = Math.min(Math.max(hdi, 0), 1);
 
-  // Classify level
-  let level: HDILevel;
-  if (normalizedHDI < 0.3) {
-    level = 'low';
-  } else if (normalizedHDI <= 0.6) {
-    level = 'medium';
-  } else {
-    level = 'high';
-  }
+  // Classify level using constants
+  const level = classifyHDILevel(normalizedHDI);
 
   return {
     hdi: normalizedHDI,

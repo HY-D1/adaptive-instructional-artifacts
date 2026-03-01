@@ -339,9 +339,10 @@ export const MULTI_ARMED_BANDIT_VERSION = 'bandit-thompson-v1';
  */
 export function createEscalationProfileBandit(): MultiArmedBandit {
   return new MultiArmedBandit([
-    'fast-escalator',
-    'slow-escalator',
-    'adaptive-escalator',
+    'fast-escalator',      // aggressive - quick escalation
+    'slow-escalator',      // conservative - delayed escalation
+    'explanation-first',   // explanation priority - skip hints
+    'adaptive-escalator',  // adaptive - balanced approach
   ]);
 }
 

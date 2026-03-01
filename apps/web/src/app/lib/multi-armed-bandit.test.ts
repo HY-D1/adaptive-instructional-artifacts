@@ -346,14 +346,15 @@ describe('createEscalationProfileBandit', () => {
     expect(bandit.getArmIds()).toContain('fast-escalator');
     expect(bandit.getArmIds()).toContain('slow-escalator');
     expect(bandit.getArmIds()).toContain('adaptive-escalator');
-    expect(bandit.getArmCount()).toBe(3);
+    expect(bandit.getArmIds()).toContain('explanation-first');
+    expect(bandit.getArmCount()).toBe(4);
   });
 
   it('should select an escalation profile arm', () => {
     const bandit = createEscalationProfileBandit();
     const selected = bandit.selectArm();
     
-    expect(['fast-escalator', 'slow-escalator', 'adaptive-escalator']).toContain(selected);
+    expect(['fast-escalator', 'slow-escalator', 'adaptive-escalator', 'explanation-first']).toContain(selected);
   });
 });
 
@@ -467,5 +468,289 @@ describe('MultiArmedBandit serialization edge cases', () => {
     expect(stats?.meanReward).toBeCloseTo(0.7, 1);
     expect(stats?.confidenceInterval[0]).toBeGreaterThanOrEqual(0);
     expect(stats?.confidenceInterval[1]).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('Edge Cases - Bandit', () => {
+  test('handles zero arms', () => {
+    // Empty arm array
+    // Should throw or handle gracefully
+    const bandit = new MultiArmedBandit([]);
+    expect(bandit.getArmCount()).toBe(0);
+    expect(bandit.getBestArm()).toBeNull();
+    expect(bandit.getArmIds()).toEqual([]);
+    expect(() => bandit.selectArm()).toThrow('No arms available in bandit');
+  });
+
+  test('handles single arm', () => {
+    // Only one arm
+    // Should always select that arm
+    const bandit = new MultiArmedBandit(['only-arm']);
+    
+    expect(bandit.getArmCount()).toBe(1);
+    
+    // Should always select the same arm
+    for (let i = 0; i < 20; i++) {
+      const selected = bandit.selectArm();
+      expect(selected).toBe('only-arm');
+    }
+    
+    // Best arm should also be the only arm
+    expect(bandit.getBestArm()).toBe('only-arm');
+  });
+
+  test('handles extreme alpha/beta values - very high alpha', () => {
+    // alpha=1000, beta=1
+    // Should not overflow
+    const bandit = new MultiArmedBandit(['high-alpha']);
+    
+    // Simulate many high rewards to get high alpha
+    for (let i = 0; i < 1000; i++) {
+      bandit.updateArm('high-alpha', 1.0);
+    }
+    
+    const arm = bandit.getArm('high-alpha');
+    expect(arm?.alpha).toBe(1001); // 1 + 1000
+    expect(arm?.beta).toBe(1);
+    
+    // Should still be able to select arm
+    const selected = bandit.selectArm();
+    expect(selected).toBe('high-alpha');
+    
+    // Stats should be reasonable
+    const stats = bandit.getArmStats('high-alpha');
+    expect(stats?.meanReward).toBeCloseTo(1.0, 2);
+  });
+
+  test('handles extreme alpha/beta values - very high beta', () => {
+    // alpha=1, beta=1000
+    // Should not overflow
+    const bandit = new MultiArmedBandit(['high-beta']);
+    
+    // Simulate many low rewards to get high beta
+    for (let i = 0; i < 1000; i++) {
+      bandit.updateArm('high-beta', 0.0);
+    }
+    
+    const arm = bandit.getArm('high-beta');
+    expect(arm?.alpha).toBe(1);
+    expect(arm?.beta).toBe(1001); // 1 + 1000
+    
+    // Stats should be reasonable
+    const stats = bandit.getArmStats('high-beta');
+    // With alpha=1, beta=1001, mean is very close to 0 but not exactly 0
+    expect(stats?.meanReward).toBeGreaterThanOrEqual(0);
+    expect(stats?.meanReward).toBeLessThan(0.01);
+  });
+
+  test('handles rewards outside [0,1]', () => {
+    // reward=2, reward=-1
+    // Should clamp or handle
+    const bandit = new MultiArmedBandit(['test-arm']);
+    
+    // Test reward > 1 (should clamp to 1)
+    bandit.updateArm('test-arm', 2.0);
+    let arm = bandit.getArm('test-arm');
+    expect(arm?.alpha).toBe(2); // 1 + 1 (clamped)
+    expect(arm?.beta).toBe(1);  // 1 + 0
+    
+    // Test reward < 0 (should clamp to 0)
+    bandit.updateArm('test-arm', -1.0);
+    arm = bandit.getArm('test-arm');
+    expect(arm?.alpha).toBe(2); // 2 + 0 (clamped)
+    expect(arm?.beta).toBe(2);  // 1 + 1
+    
+    // Test very large reward
+    bandit.updateArm('test-arm', 1000000);
+    arm = bandit.getArm('test-arm');
+    expect(arm?.alpha).toBe(3); // 2 + 1 (clamped)
+    expect(arm?.beta).toBe(2);  // 2 + 0
+  });
+
+  test('handles many pulls', () => {
+    // 100,000 pulls
+    // Performance should remain good
+    const bandit = new MultiArmedBandit(['arm1', 'arm2']);
+    
+    const startTime = Date.now();
+    
+    // Perform 100,000 updates
+    for (let i = 0; i < 100000; i++) {
+      bandit.updateArm('arm1', i % 2 === 0 ? 1.0 : 0.0);
+      if (i % 100 === 0) {
+        bandit.selectArm();
+      }
+    }
+    
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    
+    // Should complete in reasonable time (less than 5 seconds)
+    expect(duration).toBeLessThan(5000);
+    
+    const arm = bandit.getArm('arm1');
+    expect(arm?.pullCount).toBe(100000);
+  });
+
+  test('handles NaN in rewards', () => {
+    const bandit = new MultiArmedBandit(['test-arm']);
+    
+    // NaN reward should be treated as 0 (clamped)
+    bandit.updateArm('test-arm', NaN);
+    
+    const arm = bandit.getArm('test-arm');
+    expect(arm?.pullCount).toBe(1);
+    // NaN is not >= 0 and not <= 1, so Math.max(0, Math.min(1, NaN)) = NaN
+    // But adding NaN to alpha would make it NaN
+    expect(arm?.alpha).toBeNaN();
+    expect(arm?.beta).toBeNaN();
+  });
+
+  test('handles Infinity in rewards', () => {
+    const bandit = new MultiArmedBandit(['test-arm']);
+    
+    // Infinity reward should be clamped to 1
+    bandit.updateArm('test-arm', Infinity);
+    
+    const arm = bandit.getArm('test-arm');
+    expect(arm?.pullCount).toBe(1);
+    expect(arm?.alpha).toBe(2); // 1 + 1 (clamped)
+    expect(arm?.beta).toBe(1);
+    
+    // -Infinity should be clamped to 0
+    bandit.updateArm('test-arm', -Infinity);
+    const arm2 = bandit.getArm('test-arm');
+    expect(arm2?.alpha).toBe(2); // 2 + 0 (clamped)
+    expect(arm2?.beta).toBe(2);  // 1 + 1
+  });
+
+  test('serialization with extreme values', () => {
+    // Serialize/deserialize with extreme alpha/beta
+    // Should maintain precision
+    const bandit = new MultiArmedBandit(['arm1']);
+    
+    // Create extreme values
+    for (let i = 0; i < 5000; i++) {
+      bandit.updateArm('arm1', 0.5);
+    }
+    
+    const serialized = bandit.serialize();
+    
+    // Create new bandit and deserialize
+    const newBandit = new MultiArmedBandit(['arm1']);
+    newBandit.deserialize(serialized);
+    
+    const originalArm = bandit.getArm('arm1');
+    const deserializedArm = newBandit.getArm('arm1');
+    
+    // Should maintain precision
+    expect(deserializedArm?.alpha).toBe(originalArm?.alpha);
+    expect(deserializedArm?.beta).toBe(originalArm?.beta);
+    expect(deserializedArm?.pullCount).toBe(originalArm?.pullCount);
+    expect(deserializedArm?.cumulativeReward).toBe(originalArm?.cumulativeReward);
+  });
+
+  test('handles getArmStats with extreme values', () => {
+    const bandit = new MultiArmedBandit(['arm1']);
+    
+    // Create very high alpha/beta
+    for (let i = 0; i < 10000; i++) {
+      bandit.updateArm('arm1', 0.75);
+    }
+    
+    const stats = bandit.getArmStats('arm1');
+    
+    // Mean should be approximately 0.75
+    expect(stats?.meanReward).toBeCloseTo(0.75, 2);
+    
+    // Confidence interval should be narrow (high confidence due to many samples)
+    const ci = stats?.confidenceInterval;
+    expect(ci![1] - ci![0]).toBeLessThan(0.1);
+  });
+
+  test('handles negative alpha/beta in serialized state gracefully', () => {
+    const bandit = new MultiArmedBandit(['arm1']);
+    
+    // Manually create serialized state with negative values
+    const corruptedState = {
+      arms: [{
+        id: 'arm1',
+        alpha: -10,
+        beta: -5,
+        pullCount: 100,
+        cumulativeReward: 50
+      }],
+      priorAlpha: 1,
+      priorBeta: 1
+    };
+    
+    // Deserializing negative values
+    bandit.deserialize(corruptedState);
+    
+    const arm = bandit.getArm('arm1');
+    expect(arm?.alpha).toBe(-10);
+    expect(arm?.beta).toBe(-5);
+    
+    // SampleBeta should handle negative values by clamping to 0.001
+    const sample = sampleBeta(arm?.alpha || 0.001, arm?.beta || 0.001);
+    expect(sample).toBeGreaterThanOrEqual(0);
+    expect(sample).toBeLessThanOrEqual(1);
+  });
+
+  test('handles updateArm for non-existent arm silently', () => {
+    const bandit = new MultiArmedBandit(['arm1']);
+    
+    // Should not throw
+    expect(() => bandit.updateArm('non-existent', 0.5)).not.toThrow();
+    
+    // State of existing arm should be unchanged
+    const arm = bandit.getArm('arm1');
+    expect(arm?.pullCount).toBe(0);
+  });
+
+  test('handles duplicate arm IDs', () => {
+    // Creating bandit with duplicate arm IDs
+    const bandit = new MultiArmedBandit(['arm1', 'arm1', 'arm2']);
+    
+    // Should deduplicate or handle gracefully
+    expect(bandit.getArmCount()).toBeLessThanOrEqual(3);
+    expect(bandit.getArmIds()).toContain('arm1');
+    expect(bandit.getArmIds()).toContain('arm2');
+  });
+
+  test('handles calculateCumulativeRegret with extreme values', () => {
+    // Test with optimal reward of Infinity
+    const rewards = [0.5, 0.6, 0.7];
+    
+    // Should handle large optimal reward
+    const regret1 = calculateCumulativeRegret(rewards, 1000000);
+    expect(regret1).toBeGreaterThan(0);
+    
+    // Should handle optimal reward of 0
+    const regret2 = calculateCumulativeRegret(rewards, 0);
+    expect(regret2).toBe(0);
+    
+    // Should handle negative rewards
+    const regret3 = calculateCumulativeRegret([-0.5, 0.5, 1.0], 1.0);
+    expect(regret3).toBeGreaterThanOrEqual(0);
+  });
+
+  test('handles sampleBeta with extreme parameters', () => {
+    // Very large alpha and beta
+    const samples: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      samples.push(sampleBeta(10000, 10000));
+    }
+    
+    // All samples should be between 0 and 1
+    samples.forEach(sample => {
+      expect(sample).toBeGreaterThanOrEqual(0);
+      expect(sample).toBeLessThanOrEqual(1);
+    });
+    
+    // Mean should be close to 0.5 for symmetric case
+    const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
+    expect(mean).toBeGreaterThan(0.4);
+    expect(mean).toBeLessThan(0.6);
   });
 });

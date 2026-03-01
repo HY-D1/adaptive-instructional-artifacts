@@ -8,11 +8,13 @@
  * Policy Version: escalation-profiles-v1
  */
 
+import type { InteractionEvent } from '../types';
+
 /**
  * Escalation profile defining thresholds and triggers for adaptive learning
  */
 export interface EscalationProfile {
-  id: 'fast-escalator' | 'slow-escalator' | 'adaptive-escalator';
+  id: 'fast-escalator' | 'slow-escalator' | 'adaptive-escalator' | 'explanation-first';
   name: string;
   description: string;
   thresholds: {
@@ -84,12 +86,32 @@ export const ADAPTIVE_ESCALATOR: EscalationProfile = {
 };
 
 /**
+ * Profile for learners who benefit from immediate explanations.
+ * Prioritizes explanations over progressive hints.
+ */
+export const EXPLANATION_FIRST: EscalationProfile = {
+  id: 'explanation-first',
+  name: 'Explanation First',
+  description: 'Prioritizes explanations over progressive hints - learners get full explanations immediately',
+  thresholds: {
+    escalate: 1,    // Immediate escalation to explanation
+    aggregate: 3,   // Quick aggregation to textbook
+  },
+  triggers: {
+    timeStuck: 60000,      // 1 minute (quick help)
+    rungExhausted: 1,      // 1 hint max
+    repeatedError: 1       // 1 repeat triggers explanation
+  }
+};
+
+/**
  * Registry of all escalation profiles by ID
  */
 export const ESCALATION_PROFILES: Record<string, EscalationProfile> = {
   'fast-escalator': FAST_ESCALATOR,
   'slow-escalator': SLOW_ESCALATOR,
   'adaptive-escalator': ADAPTIVE_ESCALATOR,
+  'explanation-first': EXPLANATION_FIRST,
 };
 
 /**
@@ -102,6 +124,8 @@ export type AssignmentStrategy = 'static' | 'diagnostic' | 'bandit';
  */
 export interface AssignmentContext {
   learnerId: string;
+  interactions?: InteractionEvent[];
+  timestamp?: number;
   diagnosticResults?: {
     persistenceScore: number;  // 0-1, higher = more persistent
     recoveryRate: number;      // 0-1, higher = recovers faster
@@ -114,6 +138,9 @@ export interface AssignmentContext {
  * @returns Numeric hash value (0-1)
  */
 function hashString(str: string): number {
+  if (!str || typeof str !== 'string') {
+    return 0;
+  }
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
@@ -193,9 +220,75 @@ export function getProfileById(id: string): EscalationProfile | undefined {
 }
 
 /**
+ * Get the escalation threshold for a profile
+ * Special handling for 'explanation-first' which has threshold = 1
+ * 
+ * @param profileId - Profile ID
+ * @returns Escalation threshold (number of hints before escalation)
+ */
+export function getProfileEscalationThreshold(profileId: string | undefined): number {
+  if (!profileId) return 3; // Default adaptive threshold
+  
+  switch (profileId) {
+    case 'fast-escalator': return 2;
+    case 'slow-escalator': return 5;
+    case 'adaptive-escalator': return 3;
+    case 'explanation-first': return 1; // Immediate escalation
+    default: return 3;
+  }
+}
+
+/**
  * Get the current policy version for escalation profiles
  * @returns Policy version string
  */
 export function getEscalationProfilesVersion(): string {
   return 'escalation-profiles-v1';
+}
+
+/**
+ * Get escalation profile for a learner using specified strategy.
+ * Convenience wrapper around assignProfile().
+ *
+ * @param learnerId - Learner identifier
+ * @param interactions - Learner's interaction history
+ * @param strategy - Assignment strategy ('static' | 'diagnostic' | 'bandit')
+ * @returns EscalationProfile for the learner
+ *
+ * @example
+ * ```typescript
+ * const profile = getProfileForLearner('learner-123', interactions, 'diagnostic');
+ * console.log(profile.name); // 'Fast Escalator'
+ * ```
+ */
+export function getProfileForLearner(
+  learnerId: string,
+  interactions: InteractionEvent[] = [],
+  strategy: AssignmentStrategy = 'static'
+): EscalationProfile {
+  const context: AssignmentContext = {
+    learnerId,
+    interactions,
+    timestamp: Date.now(),
+  };
+  return assignProfile(context, strategy);
+}
+
+/**
+ * Get escalation thresholds for a profile by ID.
+ *
+ * @param profileId - Profile identifier ('fast-escalator', 'slow-escalator', 'adaptive-escalator', 'explanation-first')
+ * @returns Thresholds object or undefined if profile not found
+ *
+ * @example
+ * ```typescript
+ * const thresholds = getProfileThresholds('fast-escalator');
+ * console.log(thresholds); // { escalate: 2, aggregate: 4 }
+ * ```
+ */
+export function getProfileThresholds(
+  profileId: string
+): { escalate: number; aggregate: number } | undefined {
+  const profile = getProfileById(profileId);
+  return profile ? { ...profile.thresholds } : undefined;
 }

@@ -125,7 +125,6 @@ export type InteractionEvent = {
   triggerInteractionIds?: string[];
   evidenceInteractionIds?: string[];
   sourceInteractionIds?: string[];
-  sourceInteractionIds?: string[];
   inputs?: Record<string, string | number | boolean | null>;
   outputs?: Record<string, string | number | boolean | null | string[]>;
   conceptIds?: string[];

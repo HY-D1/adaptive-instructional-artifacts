@@ -88,10 +88,10 @@ async function getCoverageStats(page: Page, learnerId: string): Promise<{
     for (const conceptId of allConceptIds) {
       const evidence = evidenceMap.get(conceptId);
       if (evidence) {
-        if (evidence.score >= COVERAGE_THRESHOLD) {
+        if ((evidence as { score: number }).score >= COVERAGE_THRESHOLD) {
           coveredCount++;
         }
-        totalScore += evidence.score;
+        totalScore += (evidence as { score: number }).score;
         byConfidence[(evidence as CoverageEvidence).confidence]++;
       } else {
         // Uncovered concepts count as low confidence with 0 score

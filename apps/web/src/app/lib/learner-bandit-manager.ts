@@ -14,6 +14,7 @@ import {
   FAST_ESCALATOR,
   SLOW_ESCALATOR,
   ADAPTIVE_ESCALATOR,
+  EXPLANATION_FIRST,
   type EscalationProfile,
 } from './escalation-profiles';
 import type { InteractionEvent } from '../types';
@@ -24,14 +25,7 @@ import type { InteractionEvent } from '../types';
 export const BANDIT_ARM_PROFILES = {
   aggressive: FAST_ESCALATOR,
   conservative: SLOW_ESCALATOR,
-  'explanation-first': {
-    // Special profile that skips hint ladder
-    id: 'explanation-first' as const,
-    name: 'Explanation First',
-    description: 'Skip hint ladder, go straight to explanation',
-    thresholds: { escalate: 1, aggregate: 3 },
-    triggers: { timeStuck: 60000, rungExhausted: 1, repeatedError: 1 },
-  },
+  'explanation-first': EXPLANATION_FIRST,
   adaptive: ADAPTIVE_ESCALATOR,
 } as const;
 

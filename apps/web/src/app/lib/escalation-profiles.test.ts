@@ -5,14 +5,19 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import type { InteractionEvent } from '../types';
 import {
   FAST_ESCALATOR,
   SLOW_ESCALATOR,
   ADAPTIVE_ESCALATOR,
+  EXPLANATION_FIRST,
   ESCALATION_PROFILES,
   assignProfile,
   getProfileById,
   getEscalationProfilesVersion,
+  getProfileForLearner,
+  getProfileThresholds,
+  getProfileEscalationThreshold,
   type AssignmentContext,
 } from './escalation-profiles';
 
@@ -48,10 +53,21 @@ describe('Escalation Profile Constants', () => {
   });
 
   it('should have all profiles in ESCALATION_PROFILES registry', () => {
-    expect(Object.keys(ESCALATION_PROFILES)).toHaveLength(3);
+    expect(Object.keys(ESCALATION_PROFILES)).toHaveLength(4);
     expect(ESCALATION_PROFILES['fast-escalator']).toBe(FAST_ESCALATOR);
     expect(ESCALATION_PROFILES['slow-escalator']).toBe(SLOW_ESCALATOR);
     expect(ESCALATION_PROFILES['adaptive-escalator']).toBe(ADAPTIVE_ESCALATOR);
+    expect(ESCALATION_PROFILES['explanation-first']).toBe(EXPLANATION_FIRST);
+  });
+
+  it('should define EXPLANATION_FIRST with correct thresholds', () => {
+    expect(EXPLANATION_FIRST.id).toBe('explanation-first');
+    expect(EXPLANATION_FIRST.name).toBe('Explanation First');
+    expect(EXPLANATION_FIRST.thresholds.escalate).toBe(1);
+    expect(EXPLANATION_FIRST.thresholds.aggregate).toBe(3);
+    expect(EXPLANATION_FIRST.triggers.timeStuck).toBe(60000); // 1 minute
+    expect(EXPLANATION_FIRST.triggers.rungExhausted).toBe(1);
+    expect(EXPLANATION_FIRST.triggers.repeatedError).toBe(1);
   });
 });
 
@@ -60,6 +76,7 @@ describe('getProfileById', () => {
     expect(getProfileById('fast-escalator')).toBe(FAST_ESCALATOR);
     expect(getProfileById('slow-escalator')).toBe(SLOW_ESCALATOR);
     expect(getProfileById('adaptive-escalator')).toBe(ADAPTIVE_ESCALATOR);
+    expect(getProfileById('explanation-first')).toBe(EXPLANATION_FIRST);
   });
 
   it('should return undefined for invalid ID', () => {
@@ -115,6 +132,8 @@ describe('assignProfile - static strategy', () => {
     expect(['fast-escalator', 'slow-escalator', 'adaptive-escalator']).toContain(profile.id);
   });
 });
+
+
 
 describe('assignProfile - diagnostic strategy', () => {
   it('should assign SLOW_ESCALATOR for high persistence (recoveryRate > 0.7)', () => {
@@ -314,5 +333,264 @@ describe('Profile interface properties', () => {
       expect(profile.triggers.rungExhausted).toBeGreaterThan(0);
       expect(profile.triggers.repeatedError).toBeGreaterThan(0);
     });
+  });
+});
+
+describe('Edge Cases - Escalation Profiles', () => {
+  test('handles null learnerId', () => {
+    // Should not crash, return default
+    const context: AssignmentContext = { learnerId: null as unknown as string };
+    const profile = assignProfile(context, 'static');
+    expect(profile).toBeDefined();
+    expect(['fast-escalator', 'adaptive-escalator', 'slow-escalator']).toContain(profile.id);
+  });
+
+  test('handles undefined learnerId', () => {
+    const context: AssignmentContext = { learnerId: undefined as unknown as string };
+    const profile = assignProfile(context, 'static');
+    expect(profile).toBeDefined();
+    expect(['fast-escalator', 'adaptive-escalator', 'slow-escalator']).toContain(profile.id);
+  });
+
+  test('handles empty interaction array', () => {
+    // Should return default adaptive profile when no interactions
+    const context: AssignmentContext = { 
+      learnerId: 'test-learner',
+      interactions: []
+    };
+    
+    // For static strategy, should still work based on learnerId
+    const staticProfile = assignProfile(context, 'static');
+    expect(staticProfile).toBeDefined();
+    expect(['fast-escalator', 'adaptive-escalator', 'slow-escalator']).toContain(staticProfile.id);
+    
+    // For diagnostic strategy without diagnostic results, should return adaptive
+    const diagnosticProfile = assignProfile(context, 'diagnostic');
+    expect(diagnosticProfile.id).toBe('adaptive-escalator');
+    
+    // For bandit strategy, should return adaptive
+    const banditProfile = assignProfile(context, 'bandit');
+    expect(banditProfile.id).toBe('adaptive-escalator');
+  });
+
+  test('handles very long learnerId', () => {
+    // 1000 character ID
+    const longId = 'a'.repeat(1000);
+    const context: AssignmentContext = { learnerId: longId };
+    const profile = assignProfile(context, 'static');
+    
+    expect(profile).toBeDefined();
+    expect(['fast-escalator', 'adaptive-escalator', 'slow-escalator']).toContain(profile.id);
+    
+    // Should be deterministic
+    const profile2 = assignProfile(context, 'static');
+    expect(profile.id).toBe(profile2.id);
+  });
+
+  test('handles special characters in learnerId', () => {
+    // IDs with emojis, unicode, etc.
+    const specialIds = [
+      'learner-🎓-123',
+      'learner-🚀-test',
+      '用户-123',
+      'learner-äöü-456',
+      'learner-\n\t\r-789',
+      'learner-<script>alert(1)</script>',
+      'learner-日本語-テスト',
+      'learner-🔥💻🎉',
+    ];
+    
+    specialIds.forEach(id => {
+      const context: AssignmentContext = { learnerId: id };
+      const profile = assignProfile(context, 'static');
+      expect(profile).toBeDefined();
+      expect(['fast-escalator', 'adaptive-escalator', 'slow-escalator']).toContain(profile.id);
+    });
+  });
+
+  test('handles negative error counts in diagnostic results', () => {
+    // Should clamp or handle gracefully
+    const context: AssignmentContext = {
+      learnerId: 'test',
+      diagnosticResults: {
+        persistenceScore: -0.5,
+        recoveryRate: -0.3
+      }
+    };
+    
+    // Negative scores should be treated as low persistence -> fast escalator
+    const profile = assignProfile(context, 'diagnostic');
+    expect(profile).toBeDefined();
+    expect(['fast-escalator', 'adaptive-escalator', 'slow-escalator']).toContain(profile.id);
+    
+    // Score = (-0.5 + -0.3) / 2 = -0.4, which is < 0.3, so should be fast-escalator
+    expect(profile.id).toBe('fast-escalator');
+  });
+
+  test('handles extremely high error counts in diagnostic results', () => {
+    // Values > 1
+    const context: AssignmentContext = {
+      learnerId: 'test',
+      diagnosticResults: {
+        persistenceScore: 1000000,
+        recoveryRate: 1000000
+      }
+    };
+    
+    // Very high scores should be treated as high persistence -> slow escalator
+    const profile = assignProfile(context, 'diagnostic');
+    expect(profile).toBeDefined();
+    expect(profile.id).toBe('slow-escalator');
+  });
+
+  test('handles diagnostic scores at exact boundaries', () => {
+    // Test exactly at 0.3 and 0.7 boundaries
+    const testCases = [
+      { score: 0.0, expected: 'fast-escalator' },
+      { score: 0.29, expected: 'fast-escalator' },
+      { score: 0.3, expected: 'adaptive-escalator' },
+      { score: 0.5, expected: 'adaptive-escalator' },
+      { score: 0.7, expected: 'adaptive-escalator' },
+      { score: 0.71, expected: 'slow-escalator' },
+      { score: 1.0, expected: 'slow-escalator' },
+    ];
+    
+    testCases.forEach(({ score, expected }) => {
+      const context: AssignmentContext = {
+        learnerId: 'test',
+        diagnosticResults: {
+          persistenceScore: score,
+          recoveryRate: score
+        }
+      };
+      const profile = assignProfile(context, 'diagnostic');
+      expect(profile.id).toBe(expected);
+    });
+  });
+
+  test('handles all strategies with same learner', () => {
+    // Same learner, different strategies
+    // Should produce consistent or appropriate results
+    const learnerId = 'consistent-learner-123';
+    
+    const staticProfile = assignProfile({ learnerId }, 'static');
+    const diagnosticProfile = assignProfile({ 
+      learnerId,
+      diagnosticResults: { persistenceScore: 0.5, recoveryRate: 0.5 }
+    }, 'diagnostic');
+    const banditProfile = assignProfile({ learnerId }, 'bandit');
+    
+    // All should return valid profiles
+    expect(staticProfile).toBeDefined();
+    expect(diagnosticProfile).toBeDefined();
+    expect(banditProfile).toBeDefined();
+    
+    // Static should be deterministic
+    const staticProfile2 = assignProfile({ learnerId }, 'static');
+    expect(staticProfile.id).toBe(staticProfile2.id);
+    
+    // Diagnostic with medium scores should return adaptive
+    expect(diagnosticProfile.id).toBe('adaptive-escalator');
+    
+    // Bandit should return adaptive
+    expect(banditProfile.id).toBe('adaptive-escalator');
+  });
+
+  test('handles whitespace-only learnerId', () => {
+    const whitespaceIds = ['', ' ', '   ', '\t', '\n', '\t\n  '];
+    
+    whitespaceIds.forEach(id => {
+      const context: AssignmentContext = { learnerId: id };
+      const profile = assignProfile(context, 'static');
+      expect(profile).toBeDefined();
+      expect(['fast-escalator', 'adaptive-escalator', 'slow-escalator']).toContain(profile.id);
+    });
+  });
+
+  test('handles interactions with missing properties', () => {
+    const context: AssignmentContext = {
+      learnerId: 'test',
+      interactions: [
+        { id: '1' } as unknown as InteractionEvent,
+        { eventType: 'hint_request' } as unknown as InteractionEvent,
+      ]
+    };
+    
+    // Should not crash
+    const profile = assignProfile(context, 'static');
+    expect(profile).toBeDefined();
+  });
+});
+
+describe('getProfileForLearner', () => {
+  it('returns profile for learner with static strategy', () => {
+    const interactions: InteractionEvent[] = [];
+    const profile = getProfileForLearner('learner-123', interactions, 'static');
+    
+    expect(profile).toBeDefined();
+    expect(['fast-escalator', 'slow-escalator', 'adaptive-escalator']).toContain(profile.id);
+    expect(profile.name).toBeDefined();
+  });
+  
+  it('returns profile for learner with diagnostic strategy', () => {
+    const interactions: InteractionEvent[] = [];
+    const profile = getProfileForLearner('learner-456', interactions, 'diagnostic');
+    
+    expect(profile).toBeDefined();
+    expect(profile.id).toBe('adaptive-escalator');
+  });
+  
+  it('returns profile for learner with bandit strategy', () => {
+    const interactions: InteractionEvent[] = [];
+    const profile = getProfileForLearner('learner-789', interactions, 'bandit');
+    
+    expect(profile).toBeDefined();
+    expect(profile.id).toBe('adaptive-escalator');
+  });
+
+  it('defaults to static strategy when not specified', () => {
+    const profile = getProfileForLearner('learner-abc');
+    
+    expect(profile).toBeDefined();
+    expect(['fast-escalator', 'slow-escalator', 'adaptive-escalator']).toContain(profile.id);
+  });
+
+  it('defaults to static strategy with empty interactions array', () => {
+    const profile = getProfileForLearner('learner-def', []);
+    
+    expect(profile).toBeDefined();
+    expect(['fast-escalator', 'slow-escalator', 'adaptive-escalator']).toContain(profile.id);
+  });
+});
+
+describe('getProfileThresholds', () => {
+  it('returns thresholds for fast-escalator', () => {
+    expect(getProfileThresholds('fast-escalator')).toEqual({ escalate: 2, aggregate: 4 });
+  });
+  
+  it('returns thresholds for slow-escalator', () => {
+    expect(getProfileThresholds('slow-escalator')).toEqual({ escalate: 5, aggregate: 8 });
+  });
+  
+  it('returns thresholds for adaptive-escalator', () => {
+    expect(getProfileThresholds('adaptive-escalator')).toEqual({ escalate: 3, aggregate: 6 });
+  });
+  
+  it('returns undefined for unknown profile', () => {
+    expect(getProfileThresholds('unknown')).toBeUndefined();
+  });
+
+  it('returns undefined for empty profile ID', () => {
+    expect(getProfileThresholds('')).toBeUndefined();
+  });
+
+  it('returns a copy of thresholds (not reference)', () => {
+    const thresholds = getProfileThresholds('fast-escalator');
+    expect(thresholds).toBeDefined();
+    if (thresholds) {
+      thresholds.escalate = 999;
+      // Original profile should not be modified
+      expect(FAST_ESCALATOR.thresholds.escalate).toBe(2);
+    }
   });
 });

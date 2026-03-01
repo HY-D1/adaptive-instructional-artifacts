@@ -13,6 +13,7 @@ import type { InteractionEvent } from '../types';
 import { canAutoEscalate } from '../data';
 import { FIVE_MINUTES_MS } from './trace-analyzer';
 import type { EscalationProfile } from './escalation-profiles';
+import { HDI_LEVELS, classifyHDILevel } from './hdi-calculator';
 
 // Version constant for profile-aware guidance ladder
 export const GUIDANCE_LADDER_PROFILE_VERSION = 'guidance-ladder-profile-v1';
@@ -141,6 +142,7 @@ function getProfileEscalationThreshold(
     case 'fast-escalator': return 2;  // Aggressive: 2 hints
     case 'slow-escalator': return 5;  // Conservative: 5 hints
     case 'adaptive-escalator': return 3; // Adaptive: 3 hints
+    case 'explanation-first': return 1;  // Explanation priority: 1 hint
     default: return 3;
   }
 }
