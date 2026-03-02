@@ -15,7 +15,8 @@ import {
   Keyboard,
   Zap,
   Sprout,
-  TrendingUp
+  TrendingUp,
+  X
 } from 'lucide-react';
 
 import { Card } from '../components/ui/card';
@@ -202,6 +203,21 @@ export function LearningInterface() {
   const [showDependencyWarning, setShowDependencyWarning] = useState(false);
   const dependencyWarningShownRef = useRef(false);
   const lastHintRequestTimeRef = useRef<number>(0);
+  
+  // Preview Mode: Check if instructor is previewing student view
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  useEffect(() => {
+    const previewMode = localStorage.getItem('sql-adapt-preview-mode') === 'true';
+    setIsPreviewMode(previewMode);
+  }, []);
+  
+  // Function to exit preview mode
+  const exitPreviewMode = () => {
+    localStorage.removeItem('sql-adapt-preview-mode');
+    localStorage.removeItem('sql-adapt-debug-profile');
+    localStorage.removeItem('sql-adapt-debug-strategy');
+    window.location.href = '/instructor-dashboard';
+  };
   
   // Week 5: Progress hint state
   const [progressHint, setProgressHint] = useState<string | null>(null);
@@ -1136,8 +1152,20 @@ export function LearningInterface() {
                     <GraduationCap className="size-7 text-blue-600" />
                   </div>
                   <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Practice SQL</h1>
-                    <p className="text-gray-600 text-sm">Learn SQL with personalized hints and explanations</p>
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-2xl font-bold text-gray-900">Practice SQL</h1>
+                      {isPreviewMode && (
+                        <Badge className="bg-purple-100 text-purple-800 border-purple-300">
+                          Preview Mode
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-gray-600 text-sm">
+                      {isPreviewMode 
+                        ? 'You are previewing the student experience. Click "Exit Preview" to return.'
+                        : 'Learn SQL with personalized hints and explanations'
+                      }
+                    </p>
                   </div>
                 </div>
               ) : (
@@ -1234,6 +1262,19 @@ export function LearningInterface() {
                       </p>
                     </TooltipContent>
                   </Tooltip>
+                )}
+
+                {/* Exit Preview button - Only shown in preview mode */}
+                {isPreviewMode && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={exitPreviewMode}
+                    className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                  >
+                    <X className="size-4 mr-1" />
+                    Exit Preview
+                  </Button>
                 )}
 
                 {/* Role selector - Instructors only (allows testing student view) */}
