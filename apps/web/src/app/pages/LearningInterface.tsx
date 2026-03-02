@@ -47,7 +47,7 @@ import { startBackgroundAnalysis, stopBackgroundAnalysis, runAnalysisOnce, ANALY
 import type { AnalysisResult } from '../lib/trace-analyzer';
 import { getConcept } from '../lib/concept-loader';
 import { banditManager, PROFILE_TO_ARM_ID, BANDIT_ARM_PROFILES } from '../lib/learner-bandit-manager';
-import type { EscalationProfile } from '../lib/escalation-profiles';
+import { assignProfile, getProfileById, type EscalationProfile } from '../lib/escalation-profiles';
 import type { BanditArmId } from '../lib/learner-bandit-manager';
 import type { SQLProblem, InteractionEvent, InstructionalUnit, LearnerProfile, RetrievedChunkInfo, HDITrend } from '../types';
 
@@ -148,6 +148,55 @@ function DependencyWarningToast({ onClose }: DependencyWarningToastProps) {
 }
 
 /**
+ * Map profile ID to bandit arm ID for UI display
+ * @param profileId - Escalation profile ID
+ * @returns Corresponding bandit arm ID
+ */
+function getArmIdFromProfileId(profileId: string): BanditArmId {
+  const mapping: Record<string, BanditArmId> = {
+    'fast-escalator': 'aggressive',
+    'slow-escalator': 'conservative',
+    'adaptive-escalator': 'adaptive',
+    'explanation-first': 'explanation-first'
+  };
+  return mapping[profileId] || 'adaptive';
+}
+
+/**
+ * Analyze learner interaction history for diagnostic strategy
+ * Calculates persistence score and recovery rate based on past behavior
+ * @param interactions - Learner's interaction history
+ * @returns Diagnostic results for profile assignment
+ */
+function analyzeLearnerHistory(interactions: InteractionEvent[]) {
+  const executions = interactions.filter(i => i.eventType === 'execution');
+  const errors = interactions.filter(i => i.eventType === 'error');
+  const hintRequests = interactions.filter(i => i.eventType === 'guidance_request');
+  const explanations = interactions.filter(i => i.eventType === 'explanation_view');
+  
+  const totalAttempts = executions.length + errors.length;
+  const successfulAttempts = executions.filter(e => e.successful).length;
+  
+  // Calculate persistence score: ratio of successful attempts to total attempts
+  const persistenceScore = totalAttempts > 0 ? successfulAttempts / totalAttempts : 0.5;
+  
+  // Calculate recovery rate: inverse of error rate
+  const errorRate = totalAttempts > 0 ? errors.length / totalAttempts : 0;
+  const recoveryRate = 1 - errorRate;
+  
+  // Calculate hint dependency rate
+  const hintDependencyRate = totalAttempts > 0 ? hintRequests.length / totalAttempts : 0;
+  
+  return {
+    persistenceScore: Math.max(0, Math.min(1, persistenceScore)),
+    recoveryRate: Math.max(0, Math.min(1, recoveryRate)),
+    errorRate,
+    hintDependencyRate,
+    totalAttempts
+  };
+}
+
+/**
  * LearningInterface - Main student practice page
  * 
  * Provides the SQL practice environment with:
@@ -244,59 +293,84 @@ export function LearningInterface() {
   const { announcement: hintAnnouncement, announce: announceHint } = useScreenReaderAnnouncer();
   const [notificationAnnouncement, setNotificationAnnouncement] = useState('');
 
-  // Week 5: Get current escalation profile from bandit manager
+  // Week 5: Get current escalation profile based on assignment strategy
   useEffect(() => {
     if (!learnerId) return;
     
-    // Check for debug profile override first
+    const assignmentStrategy = (localStorage.getItem('sql-adapt-debug-strategy') as 'static' | 'diagnostic' | 'bandit') || 'bandit';
     const debugProfileOverride = localStorage.getItem('sql-adapt-debug-profile');
     
-    // Get the current profile for this learner
-    const { profile, armId } = banditManager.selectProfileForLearner(learnerId);
+    let effectiveProfile: EscalationProfile;
+    let effectiveArmId: BanditArmId;
+    let selectionReason: string;
     
-    // Determine effective profile and arm ID
-    const effectiveProfileId = debugProfileOverride || profile.id;
-    const effectiveArmId = debugProfileOverride 
-      ? (PROFILE_TO_ARM_ID[effectiveProfileId] || armId)
-      : armId;
+    if (debugProfileOverride) {
+      // Debug override takes precedence over strategy
+      const profile = getProfileById(debugProfileOverride);
+      effectiveProfile = profile || BANDIT_ARM_PROFILES.adaptive;
+      effectiveArmId = PROFILE_TO_ARM_ID[debugProfileOverride] || 'adaptive';
+      selectionReason = 'debug_override';
+    } else {
+      switch (assignmentStrategy) {
+        case 'static': {
+          // Use hash-based deterministic assignment
+          effectiveProfile = assignProfile({ learnerId }, 'static');
+          effectiveArmId = getArmIdFromProfileId(effectiveProfile.id);
+          selectionReason = 'static_assignment';
+          break;
+        }
+        
+        case 'diagnostic': {
+          // Analyze learner's interaction history
+          const interactions = storage.getInteractionsByLearner(learnerId);
+          const diagnosticResults = analyzeLearnerHistory(interactions);
+          effectiveProfile = assignProfile({ learnerId, diagnosticResults }, 'diagnostic');
+          effectiveArmId = getArmIdFromProfileId(effectiveProfile.id);
+          selectionReason = 'diagnostic_assessment';
+          break;
+        }
+        
+        case 'bandit':
+        default: {
+          // Use Thompson sampling bandit selection
+          const banditResult = banditManager.selectProfileForLearner(learnerId);
+          effectiveProfile = banditResult.profile;
+          effectiveArmId = banditResult.armId;
+          selectionReason = 'bandit_selection';
+          
+          // Log bandit arm selection event
+          storage.logBanditArmSelected({
+            learnerId,
+            problemId: currentProblem.id,
+            armId: effectiveArmId,
+            selectionMethod: 'thompson_sampling',
+            armStatsAtSelection: banditManager.hasBandit(learnerId) 
+              ? banditManager.getLearnerStats(learnerId).reduce((acc, stat) => {
+                  acc[stat.armId] = { mean: stat.meanReward, pulls: stat.pullCount };
+                  return acc;
+                }, {} as Record<string, { mean: number; pulls: number }>)
+              : undefined,
+            sessionId
+          });
+          break;
+        }
+      }
+    }
     
-    // Set the arm ID for UI display (must use arm ID, not profile ID, for badge mapping)
+    // Set the arm ID for UI display
     setCurrentProfileId(effectiveArmId);
     
     // Set the escalation profile for hint system thresholds
-    const escalationProfile = BANDIT_ARM_PROFILES[effectiveArmId];
-    setCurrentEscalationProfile(escalationProfile);
+    setCurrentEscalationProfile(effectiveProfile);
     
-    // Determine assignment strategy and reason
-    const hasOverride = !!debugProfileOverride;
-    const assignmentStrategy = hasOverride ? 'static' : ((localStorage.getItem('sql-adapt-debug-strategy') as 'static' | 'diagnostic' | 'bandit') || 'bandit');
-    const overrideReason = hasOverride ? 'debug_override' : 'bandit_selection';
-    
-    // Log profile assignment event (using positional arguments)
+    // Log profile assignment event
     storage.logProfileAssigned(
       learnerId,
-      effectiveProfileId,
-      assignmentStrategy,
+      effectiveProfile.id,
+      debugProfileOverride ? 'static' : assignmentStrategy,
       currentProblem.id,
-      overrideReason
+      selectionReason
     );
-    
-    // Log bandit arm selection event (only when using bandit strategy)
-    if (!hasOverride) {
-      storage.logBanditArmSelected({
-        learnerId,
-        problemId: currentProblem.id,
-        armId,
-        selectionMethod: 'thompson_sampling',
-        armStatsAtSelection: banditManager.hasBandit(learnerId) 
-          ? banditManager.getLearnerStats(learnerId).reduce((acc, stat) => {
-              acc[stat.armId] = { mean: stat.meanReward, pulls: stat.pullCount };
-              return acc;
-            }, {} as Record<string, { mean: number; pulls: number }>)
-          : undefined,
-        sessionId
-      });
-    }
   }, [learnerId, currentProblem.id, sessionId]);
 
   // Week 5: Listen for HDI calculated events
@@ -920,10 +994,10 @@ export function LearningInterface() {
       setLatestGeneratedUnit(null);
       
       // Week 5: Record bandit outcome when problem is solved successfully
-      // Only record if not using static override (bandit is active)
+      // Only record when using bandit strategy (not static or diagnostic)
       const debugProfileOverride = localStorage.getItem('sql-adapt-debug-profile');
-      const assignmentStrategy = localStorage.getItem('sql-adapt-debug-strategy');
-      if (!debugProfileOverride && assignmentStrategy !== 'static' && learnerId) {
+      const assignmentStrategy = localStorage.getItem('sql-adapt-debug-strategy') || 'bandit';
+      if (!debugProfileOverride && assignmentStrategy === 'bandit' && learnerId) {
         try {
           // Calculate reward components
           const timeSpent = Date.now() - startTime;
