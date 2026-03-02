@@ -14,7 +14,7 @@
 
 Before learning this concept, you should understand:
 
-- [select-basic](./select-basic.md)
+- [select-basic](./select-basics.md)
 - [aggregate-functions](./aggregate-functions.md)
 
 ## What is This?

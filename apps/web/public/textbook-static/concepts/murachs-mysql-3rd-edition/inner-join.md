@@ -11,7 +11,7 @@
 
 Before learning this concept, you should understand:
 
-- [select-basic](./select-basic.md)
+- [select-basic](./select-basics.md)
 - [joins](./joins.md)
 
 ## What is This?

@@ -13,7 +13,7 @@
 
 Before learning this concept, you should understand:
 
-- [select-basic](./select-basic.md)
+- [select-basic](./select-basics.md)
 
 ## What is This?
 
