@@ -46,7 +46,8 @@ import { createEventId } from '../lib/event-id';
 import { startBackgroundAnalysis, stopBackgroundAnalysis, runAnalysisOnce, ANALYSIS_INTERVAL_MS } from '../lib/trace-analyzer';
 import type { AnalysisResult } from '../lib/trace-analyzer';
 import { getConcept } from '../lib/concept-loader';
-import { banditManager, PROFILE_TO_ARM_ID } from '../lib/learner-bandit-manager';
+import { banditManager, PROFILE_TO_ARM_ID, BANDIT_ARM_PROFILES } from '../lib/learner-bandit-manager';
+import type { EscalationProfile } from '../lib/escalation-profiles';
 import type { BanditArmId } from '../lib/learner-bandit-manager';
 import type { SQLProblem, InteractionEvent, InstructionalUnit, LearnerProfile, RetrievedChunkInfo, HDITrend } from '../types';
 
@@ -197,6 +198,7 @@ export function LearningInterface() {
   
   // Week 5: Profile indicator state
   const [currentProfileId, setCurrentProfileId] = useState<BanditArmId>('adaptive');
+  const [currentEscalationProfile, setCurrentEscalationProfile] = useState<EscalationProfile | null>(null);
   const isDev = import.meta.env.DEV;
   
   // Week 5: HDI tracking state
@@ -260,6 +262,10 @@ export function LearningInterface() {
     
     // Set the arm ID for UI display (must use arm ID, not profile ID, for badge mapping)
     setCurrentProfileId(effectiveArmId);
+    
+    // Set the escalation profile for hint system thresholds
+    const escalationProfile = BANDIT_ARM_PROFILES[effectiveArmId];
+    setCurrentEscalationProfile(escalationProfile);
     
     // Determine assignment strategy and reason
     const hasOverride = !!debugProfileOverride;
@@ -1629,6 +1635,7 @@ export function LearningInterface() {
                 recentInteractions={problemInteractions}
                 onEscalate={handleEscalate}
                 onInteractionLogged={handleHintSystemInteraction}
+                escalationProfile={currentEscalationProfile}
               />
 
               {/* Week 5: Progress Hint - subtle, below hint panel */}

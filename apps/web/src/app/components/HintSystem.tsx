@@ -27,6 +27,7 @@ import { useEnhancedHints } from '../hooks/useEnhancedHints';
 import { HintSourceStatus } from './HintSourceStatus';
 import type { EnhancedHint } from '../lib/enhanced-hint-service';
 import { useUserRole } from '../hooks/useUserRole';
+import type { EscalationProfile } from '../lib/escalation-profiles';
 
 /**
  * Props for the HintSystem component
@@ -50,6 +51,8 @@ interface HintSystemProps {
   onEscalate?: (sourceInteractionIds?: string[]) => void;
   /** Callback when a new interaction is logged */
   onInteractionLogged?: (event: InteractionEvent) => void;
+  /** Escalation profile for profile-specific thresholds (Week 5) */
+  escalationProfile?: EscalationProfile | null;
 }
 
 export function HintSystem({ 
@@ -61,7 +64,8 @@ export function HintSystem({
   knownSubtypeOverride,
   recentInteractions,
   onEscalate,
-  onInteractionLogged
+  onInteractionLogged,
+  escalationProfile
 }: HintSystemProps) {
   const [hints, setHints] = useState<string[]>([]);
   const [hintPdfPassages, setHintPdfPassages] = useState<RetrievalPdfPassage[][]>([]);
@@ -121,9 +125,10 @@ export function HintSystem({
     }
   }, [enhancedHintInfo, HINT_INFO_KEY]);
   
-  // Guidance Ladder constants
-  const MAX_HINT_LEVEL = 3; // L1-L3 hints before escalation to explanation
-  const AUTO_ESCALATION_THRESHOLD = 4; // Help request index that triggers auto-escalation
+  // Guidance Ladder constants - now profile-aware (Week 5)
+  // Get threshold from profile or use defaults (adaptive: 3 hints)
+  const maxHintLevel = escalationProfile?.triggers.rungExhausted ?? 3;
+  const autoEscalationThreshold = maxHintLevel + 1; // Threshold is one past max hints
   
   const helpFlowKeyRef = useRef('');
   const nextHelpRequestIndexRef = useRef(1);
@@ -470,9 +475,9 @@ export function HintSystem({
     const fallbackSubtype = errorSubtypeId || 'incomplete query';
     const effectiveSubtype = activeHintSubtype ||
       canonicalizeSqlEngageSubtype(overrideSubtype || fallbackSubtype);
-    // Clamp level to valid hint range - this is intentional as we only have MAX_HINT_LEVEL
-    // hint levels before escalating to explanations (help request AUTO_ESCALATION_THRESHOLD+)
-    const levelForSelection = Math.max(1, Math.min(MAX_HINT_LEVEL, helpRequestIndex)) as 1 | 2 | 3;
+    // Clamp level to valid hint range - this is intentional as we only have maxHintLevel
+    // hint levels before escalating to explanations (help request autoEscalationThreshold+)
+    const levelForSelection = Math.max(1, Math.min(maxHintLevel, helpRequestIndex)) as 1 | 2 | 3;
 
     return orchestrator.getNextHint(
       effectiveSubtype,
@@ -733,7 +738,7 @@ export function HintSystem({
     const problemTrace = getProblemTrace();
     const nextHelpRequestIndex = allocateNextHelpRequestIndex(problemTrace);
     
-    if (nextHelpRequestIndex >= 4) {
+    if (nextHelpRequestIndex >= autoEscalationThreshold) {
       setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
       // Wait for explanation to be generated
       await handleShowExplanation('auto', nextHelpRequestIndex, problemTrace);
@@ -742,7 +747,7 @@ export function HintSystem({
     }
     
     // Determine rung level for this hint
-    const levelForSelection = Math.max(1, Math.min(MAX_HINT_LEVEL, nextHelpRequestIndex)) as 1 | 2 | 3;
+    const levelForSelection = Math.max(1, Math.min(maxHintLevel, nextHelpRequestIndex)) as 1 | 2 | 3;
     
     // Try to generate enhanced hint (uses LLM/Textbook if available)
     let hintSelection: {
@@ -805,7 +810,7 @@ export function HintSystem({
     // Log interaction with escalation metadata
     // will_escalate indicates that viewing this hint will trigger auto-escalation
     // This happens at max hint level when no explanation has been shown yet
-    const willEscalate = hintSelection!.hintLevel === MAX_HINT_LEVEL && !showExplanation;
+    const willEscalate = hintSelection!.hintLevel === maxHintLevel && !showExplanation;
     
     const hintEvent: InteractionEvent = {
       id: buildHelpEventId('hint', nextHelpRequestIndex),
@@ -856,7 +861,7 @@ export function HintSystem({
     setIsProcessingHint(false);
 
     // Escalate automatically after max hint level reached.
-    if (hintSelection.hintLevel === MAX_HINT_LEVEL && !showExplanation) {
+    if (hintSelection.hintLevel === maxHintLevel && !showExplanation) {
       // Week 3 D8: Log escalation event before transitioning
       storage.logGuidanceEscalate({
         learnerId,
@@ -904,7 +909,7 @@ export function HintSystem({
     calculateHelpRequestIndex(getProblemTrace()),
     nextHelpRequestIndexRef.current
   );
-  const primaryActionLabel = nextHelpRequestIndex >= 4
+  const primaryActionLabel = nextHelpRequestIndex >= autoEscalationThreshold
     ? 'Get More Help'
     : hints.length === 0
       ? 'Request Hint'
@@ -914,7 +919,7 @@ export function HintSystem({
   const hintProgress = showExplanation 
     ? Math.min(viewedHintsCount + 1, 4)  // Hints + explanation
     : Math.min(viewedHintsCount, 3);      // Just hints
-  const stepMessage = nextHelpRequestIndex >= 4
+  const stepMessage = nextHelpRequestIndex >= autoEscalationThreshold
     ? 'You are in explanation mode. Additional help requests provide deeper explanation support.'
     : `Request ${hintProgress} gives Hint ${hintProgress}.`;
 
