@@ -540,7 +540,7 @@ export function InstructorDashboard() {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate('/textbook-review')}>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate('/textbook')}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-start gap-4">
@@ -548,8 +548,8 @@ export function InstructorDashboard() {
                     <BookOpen className="size-6 text-emerald-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-lg">Textbook Review</h3>
-                    <p className="text-sm text-gray-600 mt-1">Review student textbooks and identify misconceptions</p>
+                    <h3 className="font-semibold text-lg">My Textbook</h3>
+                    <p className="text-sm text-gray-600 mt-1">View your accumulated notes and explanations</p>
                   </div>
                 </div>
                 <ChevronRight className="size-5 text-gray-400" />
@@ -580,6 +580,35 @@ export function InstructorDashboard() {
                 <Play className="size-4 mr-2" />
                 Launch Preview
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Data Storage Info Card */}
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardContent className="p-6">
+            <div className="flex items-start gap-4">
+              <div className="p-3 rounded-lg bg-amber-100">
+                <AlertCircle className="size-6 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-lg text-amber-900">About Data Storage</h3>
+                <p className="text-sm text-amber-800 mt-1">
+                  All learning data is stored locally in your browser. Student progress, textbooks, and interactions 
+                  are saved per-browser and cannot be accessed across different devices or browsers. For a full 
+                  classroom management system with cloud storage, a backend integration would be required.
+                </p>
+                <div className="mt-3 flex gap-4 text-xs text-amber-700">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                    Demo Mode Available
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                    Local Storage Only
+                  </span>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -904,9 +933,9 @@ export function InstructorDashboard() {
                 </CardTitle>
                 <CardDescription>Recent activity and progress for each student</CardDescription>
               </div>
-              <Button variant="outline" size="sm" onClick={() => navigate('/textbook-review')}>
+              <Button variant="outline" size="sm" onClick={() => navigate('/textbook')}>
                 <BookOpen className="size-4 mr-1" />
-                View Textbooks
+                My Textbook
               </Button>
             </div>
           </CardHeader>
@@ -1076,20 +1105,38 @@ export function InstructorDashboard() {
                   Cancel
                 </Button>
                 <Button
-                  onClick={() => {
+                  onClick={(e) => {
+                    // Prevent any default form submission behavior
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
                     // Save the preview profile override to localStorage
                     localStorage.setItem('sql-adapt-debug-profile', `${previewProfile}-escalator`);
                     // Also set assignment strategy to static for consistent experience
                     localStorage.setItem('sql-adapt-debug-strategy', 'static');
                     // Set a preview mode flag to indicate we're in preview mode
                     localStorage.setItem('sql-adapt-preview-mode', 'true');
+                    
+                    // Verify localStorage was set correctly
+                    const verifyPreview = localStorage.getItem('sql-adapt-preview-mode');
+                    const verifyProfile = localStorage.getItem('sql-adapt-debug-profile');
+                    console.log('[Student Preview] Starting preview mode:', {
+                      previewMode: verifyPreview,
+                      profile: verifyProfile
+                    });
+                    
                     // Close modal first
                     setShowPreviewModal(false);
-                    // Use full page reload to ensure LearningInterface reads the debug keys fresh
-                    // This is necessary because the component is already mounted and won't re-read localStorage
-                    window.location.href = '/practice';
+                    
+                    // Use setTimeout to ensure state updates and localStorage writes complete
+                    // before navigation starts
+                    setTimeout(() => {
+                      // Use window.location.assign for more reliable navigation
+                      window.location.assign('/practice');
+                    }, 10);
                   }}
                   className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  type="button"
                 >
                   <Play className="size-4 mr-2" />
                   Start Preview

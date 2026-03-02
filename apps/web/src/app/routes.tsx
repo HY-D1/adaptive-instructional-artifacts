@@ -15,7 +15,8 @@ import { storage } from './lib/storage';
 import { 
   ROUTES, 
   protectRoute, 
-  getDefaultRouteForRole
+  getDefaultRouteForRole,
+  isPreviewModeActive
 } from './lib/auth-guard';
 import type { GuardResult } from './lib/auth-guard';
 
@@ -59,6 +60,7 @@ function createProtectedLoader(options?: {
  * Component wrapper that enforces role-based access
  * Redirects if not authorized
  * Note: Loader should handle redirects, this is a fallback
+ * Preview mode allows instructors to access student routes
  */
 function ProtectedRoute({ 
   children, 
@@ -72,6 +74,11 @@ function ProtectedRoute({
   // Not authenticated - redirect to home (start page)
   if (!profile) {
     return <Navigate to={ROUTES.HOME} replace />;
+  }
+  
+  // Preview mode: instructors can access student routes
+  if (requiredRole === 'student' && profile.role === 'instructor' && isPreviewModeActive()) {
+    return <>{children}</>; // Allow access
   }
   
   // Role check
