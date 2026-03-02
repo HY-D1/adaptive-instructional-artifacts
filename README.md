@@ -149,7 +149,7 @@ StartPage → Role Selection → Student/Instructor Profile
 |-------|------------|---------|
 | Framework | React | 18.3.1 |
 | Language | TypeScript | 5.9+ |
-| Build Tool | Vite | 6.4 |
+| Build Tool | Vite | 6.4.1 |
 | Styling | Tailwind CSS | 4.1 |
 | UI Components | Radix UI primitives + MUI | 7.3 |
 | Router | React Router | 7.13 |
@@ -311,7 +311,7 @@ npm run pdf:query
 
 ## Testing
 
-The project has **265 unit tests** and **138 E2E tests** covering:
+The project has **~302 unit tests** and **~380 E2E tests** covering:
 
 - **Bug Regression**: 87 tests (critical, high, medium priority)
 - **Week 5 Components**: 118 tests (HDI: 43, Bandit: 45, Profiles: 30)
@@ -323,9 +323,9 @@ The project has **265 unit tests** and **138 E2E tests** covering:
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| Unit Tests | 265 | Vitest-based unit and integration tests |
-| E2E Tests | 138 | Playwright browser tests |
-| **Total** | **403** | **All tests passing** |
+| Unit Tests | ~302 | Vitest-based unit and integration tests |
+| E2E Tests | ~380 | Playwright browser tests (31 files) |
+| **Total** | **~682** | **All tests passing** |
 
 ## CI/CD Pipeline
 
@@ -439,5 +439,5 @@ This project explores **dynamic instructional assembly** — content that emerge
 
 ---
 
-*Last updated: 2026-02-28*  
+*Last updated: 2026-03-02*  
 *Project Status: Week 5 Complete — 403 total tests passing*
