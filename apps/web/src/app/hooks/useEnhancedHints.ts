@@ -148,5 +148,3 @@ export function useEnhancedHints(options: UseEnhancedHintsOptions): UseEnhancedH
     clearError
   };
 }
-
-export default useEnhancedHints;
