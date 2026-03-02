@@ -16,7 +16,9 @@ import {
   Zap,
   Sprout,
   TrendingUp,
-  X
+  X,
+  Eye,
+  LogOut
 } from 'lucide-react';
 
 import { Card } from '../components/ui/card';
@@ -213,9 +215,13 @@ export function LearningInterface() {
   
   // Function to exit preview mode
   const exitPreviewMode = () => {
-    localStorage.removeItem('sql-adapt-preview-mode');
-    localStorage.removeItem('sql-adapt-debug-profile');
-    localStorage.removeItem('sql-adapt-debug-strategy');
+    try {
+      localStorage.removeItem('sql-adapt-preview-mode');
+      localStorage.removeItem('sql-adapt-debug-profile');
+      localStorage.removeItem('sql-adapt-debug-strategy');
+    } catch (error) {
+      console.error('[Preview] Failed to clear preview mode:', error);
+    }
     window.location.href = '/instructor-dashboard';
   };
   
@@ -1139,6 +1145,35 @@ export function LearningInterface() {
           <DependencyWarningToast onClose={() => setShowDependencyWarning(false)} />
         )}
 
+        {/* Preview Mode Banner - Canvas LMS Style */}
+        {isPreviewMode && (
+          <div className="bg-purple-600 text-white px-4 py-3 sticky top-0 z-50">
+            <div className="container mx-auto flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-1.5 bg-purple-500 rounded-lg">
+                  <Eye className="size-5" />
+                </div>
+                <div>
+                  <span className="font-semibold">Student Preview Mode</span>
+                  <span className="hidden sm:inline text-purple-200 ml-2">
+                    You are viewing the platform as a student would see it
+                  </span>
+                </div>
+              </div>
+              <Button 
+                variant="secondary" 
+                size="sm"
+                onClick={exitPreviewMode}
+                className="bg-white text-purple-700 hover:bg-purple-50 border-0 font-medium"
+                aria-label="Exit Student Preview mode and return to instructor dashboard"
+              >
+                <LogOut className="size-4 mr-2" aria-hidden="true" />
+                Exit Preview
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className={cn(
           "border-b",
           isStudent ? "bg-gradient-to-r from-blue-50 to-white border-blue-100" : "bg-amber-50 border-amber-200"
@@ -1271,8 +1306,9 @@ export function LearningInterface() {
                     size="sm"
                     onClick={exitPreviewMode}
                     className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                    aria-label="Exit Student Preview mode and return to instructor dashboard"
                   >
-                    <X className="size-4 mr-1" />
+                    <LogOut className="size-4 mr-2" aria-hidden="true" />
                     Exit Preview
                   </Button>
                 )}

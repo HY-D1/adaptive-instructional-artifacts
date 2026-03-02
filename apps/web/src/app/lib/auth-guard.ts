@@ -75,6 +75,7 @@ export function getDefaultRouteForRole(role: UserRole | null | undefined): strin
 
 /**
  * Require a specific role - returns redirect path if unauthorized
+ * Preview mode allows instructors to satisfy student role requirement
  * @returns null if authorized, redirect path if unauthorized
  */
 export function requireRole(role: UserRole): string | null {
@@ -83,6 +84,11 @@ export function requireRole(role: UserRole): string | null {
   if (!profile) {
     // Redirect to home (start page) since there's no dedicated login page
     return ROUTES.HOME;
+  }
+  
+  // Preview mode: instructors can satisfy student role requirement
+  if (role === 'student' && profile.role === 'instructor' && isPreviewModeActive()) {
+    return null; // Allow access
   }
   
   if (profile.role !== role) {

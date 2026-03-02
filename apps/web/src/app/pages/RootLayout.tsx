@@ -8,6 +8,7 @@ import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
 import { useUserRole } from '../hooks/useUserRole';
 import { useSessionPersistence } from '../hooks/useSessionPersistence';
 import { storage } from '../lib/storage';
+import { isPreviewModeActive } from '../lib/auth-guard';
 
 /**
  * Sync toast notification component
@@ -165,7 +166,9 @@ export function RootLayout() {
   };
 
   // Redirect instructor accessing student-only pages to instructor dashboard
-  if (!isRoleLoading && isInstructor && (isPracticePage || isTextbookPage)) {
+  // BUT allow access in preview mode
+  const isInPreviewMode = isPreviewModeActive();
+  if (!isRoleLoading && isInstructor && !isInPreviewMode && (isPracticePage || isTextbookPage)) {
     return <Navigate to="/instructor-dashboard" replace />;
   }
 
