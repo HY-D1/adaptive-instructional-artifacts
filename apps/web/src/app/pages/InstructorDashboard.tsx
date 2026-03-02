@@ -1081,11 +1081,13 @@ export function InstructorDashboard() {
                     localStorage.setItem('sql-adapt-debug-profile', `${previewProfile}-escalator`);
                     // Also set assignment strategy to static for consistent experience
                     localStorage.setItem('sql-adapt-debug-strategy', 'static');
-                    // Navigate to practice as student role
-                    localStorage.setItem('sql-adapt-user-role', 'student');
-                    // Close modal and navigate
+                    // Set a preview mode flag to indicate we're in preview mode
+                    localStorage.setItem('sql-adapt-preview-mode', 'true');
+                    // Close modal first
                     setShowPreviewModal(false);
-                    navigate('/practice');
+                    // Use full page reload to ensure LearningInterface reads the debug keys fresh
+                    // This is necessary because the component is already mounted and won't re-read localStorage
+                    window.location.href = '/practice';
                   }}
                   className="flex-1 bg-blue-600 hover:bg-blue-700"
                 >
