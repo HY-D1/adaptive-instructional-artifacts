@@ -1162,7 +1162,8 @@ class StorageManager {
     learnerId: string,
     profileId: string,
     strategy: 'static' | 'diagnostic' | 'bandit',
-    problemId: string
+    problemId: string,
+    reason: string = 'bandit_selection'
   ): void {
     const event: InteractionEvent = {
       id: createEventId('profile', 'assigned'),
@@ -1177,7 +1178,7 @@ class StorageManager {
       payload: {
         profileId,
         strategy,
-        reason: 'bandit_selection'
+        reason
       }
     };
     this.saveInteraction(event);

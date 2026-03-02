@@ -173,16 +173,18 @@ export function RootLayout() {
   }
 
   // Build navigation items based on role
-  const navItems = isInstructor
+  // When in preview mode, show student navigation even for instructors
+  const showStudentNav = !isInstructor || isInPreviewMode;
+  const navItems = showStudentNav
     ? [
-        { to: '/instructor-dashboard', label: 'Dashboard', icon: BarChart3, isActive: isInstructorPage },
-        { to: '/research', label: 'Research', icon: Book, isActive: isResearchPage },
-        { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },
-      ]
-    : [
         { to: '/concepts', label: 'Learn', icon: Book, isActive: isConceptsPage },
         { to: '/practice', label: 'Practice', icon: Code, isActive: isPracticePage },
         { to: '/textbook', label: 'My Textbook', icon: Book, isActive: isTextbookPage },
+        { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },
+      ]
+    : [
+        { to: '/instructor-dashboard', label: 'Dashboard', icon: BarChart3, isActive: isInstructorPage },
+        { to: '/research', label: 'Research', icon: Book, isActive: isResearchPage },
         { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },
       ];
 

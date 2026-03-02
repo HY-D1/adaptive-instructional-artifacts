@@ -38,6 +38,17 @@ export const BANDIT_ARM_PROFILES = {
 export type BanditArmId = keyof typeof BANDIT_ARM_PROFILES;
 
 /**
+ * Reverse mapping from profile ID to bandit arm ID
+ * Used for UI display when profile override is active
+ */
+export const PROFILE_TO_ARM_ID: Record<string, BanditArmId> = {
+  'fast-escalator': 'aggressive',
+  'slow-escalator': 'conservative',
+  'adaptive-escalator': 'adaptive',
+  'explanation-first': 'explanation-first',
+};
+
+/**
  * Outcome data for recording a learning interaction result
  */
 export interface LearningOutcome {
