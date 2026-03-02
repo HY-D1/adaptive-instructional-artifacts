@@ -61,7 +61,7 @@ export function ScreenReaderAnnouncer({
  * Static aria-live region for hint announcements
  * Place this near the hint system component
  */
-export function HintAnnouncer({ message }: { message: string }) {
+function HintAnnouncer({ message }: { message: string }) {
   return (
     <div
       role="region"
@@ -78,7 +78,7 @@ export function HintAnnouncer({ message }: { message: string }) {
 /**
  * Static aria-live region for notification announcements
  */
-export function NotificationAnnouncer({ message }: { message: string }) {
+function NotificationAnnouncer({ message }: { message: string }) {
   return (
     <div
       role="status"

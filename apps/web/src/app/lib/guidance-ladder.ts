@@ -378,7 +378,7 @@ export function recordRungAttempt(state: GuidanceLadderState): GuidanceLadderSta
  * @param rung - Target rung level
  * @returns Validation result with violations array
  */
-export function validateContentForRung(
+function validateContentForRung(
   content: string,
   rung: GuidanceRung
 ): { valid: boolean; violations: string[] } {

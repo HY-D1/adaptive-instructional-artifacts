@@ -78,7 +78,7 @@ export function useLearningData(): UseLearningDataReturn {
  * Simplified version for just loading profiles
  * Used by InstructorDashboard for basic data loading
  */
-export function useLearnerProfiles(): { profiles: LearnerProfile[]; loadProfiles: () => void } {
+function useLearnerProfiles(): { profiles: LearnerProfile[]; loadProfiles: () => void } {
   const [profiles, setProfiles] = useState<LearnerProfile[]>([]);
 
   const loadProfiles = useCallback(() => {
@@ -96,7 +96,7 @@ export function useLearnerProfiles(): { profiles: LearnerProfile[]; loadProfiles
  * Hook for loading both profiles and interactions
  * Used by InstructorDashboard
  */
-export function useLearnerData(): {
+function useLearnerData(): {
   profiles: LearnerProfile[];
   interactions: InteractionEvent[];
   loadData: () => void;

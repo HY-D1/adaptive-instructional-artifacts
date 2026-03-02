@@ -391,7 +391,7 @@ export function ConceptTag({
  * Button to add content to My Textbook
  * @param props - Button props with click handler and state flags
  */
-export function AddToTextbookButton({
+function AddToTextbookButton({
   onClick,
   disabled = false,
   loading = false
