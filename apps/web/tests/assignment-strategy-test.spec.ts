@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { setupTest } from './test-helpers';
 
-test.describe('@no-external Assignment Strategy System Test', () => {
+test.describe('@no-external @weekly Assignment Strategy System Test', () => {
   test.beforeEach(async ({ page }) => {
     await setupTest(page);
   });
