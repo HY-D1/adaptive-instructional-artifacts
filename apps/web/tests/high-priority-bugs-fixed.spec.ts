@@ -35,7 +35,7 @@ import {
 // Test Suite: High Priority Bug Fixes
 // =============================================================================
 
-test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
+test.describe('@weekly @high-priority-bugs High Priority Bug Fixes', () => {
 
   test.beforeEach(async ({ page }) => {
     // Stub LLM calls to prevent ECONNREFUSED errors
@@ -58,7 +58,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
       });
     });
 
-    // Idempotent init script - only runs once per test
+    // Idempotent init script with unique ID for test isolation
     await page.addInitScript(() => {
       const FLAG = '__pw_seeded__';
       if (localStorage.getItem(FLAG) === '1') return;
@@ -66,9 +66,10 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
       localStorage.clear();
       sessionStorage.clear();
       localStorage.setItem('sql-adapt-welcome-seen', 'true');
-      // Set up student profile to bypass role selection
+      // Set up student profile with unique ID for test isolation
+      const uniqueId = `test-user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
-        id: 'test-user',
+        id: uniqueId,
         name: 'Test User',
         role: 'student',
         createdAt: Date.now()
@@ -87,11 +88,11 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 1: Stale Session ID Closure
   // ===========================================================================
-  test('@high-priority-bugs Stale Session ID: hint system uses current session, not stale', async ({ page }) => {
+  test('@weekly @high-priority-bugs Stale Session ID: hint system uses current session, not stale', async ({ page }) => {
     // Simplified test: Verify hints use the CURRENT session ID
-    // Set up a specific session ID before page load
-    const testLearnerId = 'learner-1';
-    const testSessionId = `session-${testLearnerId}-test-${Date.now()}`;
+    // Set up a specific session ID before page load with unique IDs for test isolation
+    const testLearnerId = `learner-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const testSessionId = `session-${testLearnerId}-${Date.now()}`;
     
     await page.addInitScript(({ learnerId, sessionId }) => {
       window.localStorage.setItem('sql-learning-active-session', sessionId);
@@ -136,7 +137,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     expect(latestHint.learnerId).toBe(testLearnerId);
   });
 
-  test('@high-priority-bugs Stale Session ID: session change clears hint flow state', async ({ page }) => {
+  test('@weekly @high-priority-bugs Stale Session ID: session change clears hint flow state', async ({ page }) => {
     await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -175,7 +176,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 2: TextbookPage Reactive Updates
   // ===========================================================================
-  test('@high-priority-bugs TextbookPage Reactive: textbook updates when storage changes', async ({ page }) => {
+  test('@weekly @high-priority-bugs TextbookPage Reactive: textbook updates when storage changes', async ({ page }) => {
     // Seed initial textbook data
     await page.addInitScript(() => {
       window.localStorage.setItem('sql-learning-textbook', JSON.stringify({
@@ -280,7 +281,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     expect(units.some((u: any) => u.title === 'New Note Added')).toBe(true);
   });
 
-  test('@high-priority-bugs TextbookPage Reactive: cross-tab storage changes are detected', async ({ page }) => {
+  test('@weekly @high-priority-bugs TextbookPage Reactive: cross-tab storage changes are detected', async ({ page }) => {
     await page.goto('/textbook?learnerId=learner-1');
     await expect(page.getByRole('heading', { name: 'My Textbook', level: 1 })).toBeVisible();
     
@@ -297,7 +298,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 3: Profile Save Race Condition
   // ===========================================================================
-  test('@high-priority-bugs Profile Save Race: concurrent updates preserve all data', async ({ page }) => {
+  test('@weekly @high-priority-bugs Profile Save Race: concurrent updates preserve all data', async ({ page }) => {
     await page.goto('/practice');
     await seedValidProfile(page, 'learner-race-test');
     
@@ -344,7 +345,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     expect(finalProfile.interactionCount).toBeGreaterThanOrEqual(3);
   });
 
-  test('@high-priority-bugs Profile Save Race: version-based optimistic locking works', async ({ page }) => {
+  test('@weekly @high-priority-bugs Profile Save Race: version-based optimistic locking works', async ({ page }) => {
     await page.goto('/practice');
     
     // Seed profile with version
@@ -371,7 +372,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 4: Import Validation
   // ===========================================================================
-  test('@high-priority-bugs Import Validation: rejects non-object data', async ({ page }) => {
+  test('@weekly @high-priority-bugs Import Validation: rejects non-object data', async ({ page }) => {
     await page.goto('/practice');
     
     const validationResults = await page.evaluate(() => {
@@ -403,7 +404,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     expect(validationResults).toContain('array-is-valid-root: true');
   });
 
-  test('@high-priority-bugs Import Validation: validates required interaction fields', async ({ page }) => {
+  test('@weekly @high-priority-bugs Import Validation: validates required interaction fields', async ({ page }) => {
     await page.goto('/practice');
     
     const validationResults = await page.evaluate(() => {
@@ -427,7 +428,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     expect(validationResults[3].isValid).toBe(true);  // valid data
   });
 
-  test('@high-priority-bugs Import Validation: validates profile structure', async ({ page }) => {
+  test('@weekly @high-priority-bugs Import Validation: validates profile structure', async ({ page }) => {
     await page.goto('/practice');
     
     const validationResults = await page.evaluate(() => {
@@ -448,7 +449,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     expect(validationResults[2].isValid).toBe(false);
   });
 
-  test('@high-priority-bugs Import Validation: validates textbooks object structure', async ({ page }) => {
+  test('@weekly @high-priority-bugs Import Validation: validates textbooks object structure', async ({ page }) => {
     await page.goto('/practice');
     
     const validationResults = await page.evaluate(() => {
@@ -474,7 +475,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 5: Evidence Deep Clone
   // ===========================================================================
-  test('@high-priority-bugs Evidence Deep Clone: mutations do not affect stored evidence', async ({ page }) => {
+  test('@weekly @high-priority-bugs Evidence Deep Clone: mutations do not affect stored evidence', async ({ page }) => {
     await page.goto('/practice');
     
     // Seed profile with evidence
@@ -527,7 +528,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     expect(profile).toBeTruthy();
   });
 
-  test('@high-priority-bugs Evidence Deep Clone: deep cloning preserves evidence isolation', async ({ page }) => {
+  test('@weekly @high-priority-bugs Evidence Deep Clone: deep cloning preserves evidence isolation', async ({ page }) => {
     await page.goto('/practice');
     
     const cloneTest = await page.evaluate(() => {
@@ -567,7 +568,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 6: DML Grading
   // ===========================================================================
-  test('@high-priority-bugs DML Grading: failed DML returns match: false', async ({ page }) => {
+  test('@weekly @high-priority-bugs DML Grading: failed DML returns match: false', async ({ page }) => {
     await page.goto('/practice');
     
     // Test DML statement that should fail
@@ -584,7 +585,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     expect(errorEvents.length).toBeGreaterThan(0);
   });
 
-  test('@high-priority-bugs DML Grading: DELETE with no matching rows handled correctly', async ({ page }) => {
+  test('@weekly @high-priority-bugs DML Grading: DELETE with no matching rows handled correctly', async ({ page }) => {
     await page.goto('/practice');
     
     const gradingTest = await page.evaluate(() => {
@@ -624,7 +625,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 7: Result Order Independent
   // ===========================================================================
-  test('@high-priority-bugs Result Order Independent: row order does not matter in comparison', async ({ page }) => {
+  test('@weekly @high-priority-bugs Result Order Independent: row order does not matter in comparison', async ({ page }) => {
     await page.goto('/practice');
     
     const comparisonTest = await page.evaluate(() => {
@@ -698,7 +699,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     expect(comparisonTest.expectedSize).toBe(3);
   });
 
-  test('@high-priority-bugs Result Order Independent: duplicate rows handled correctly', async ({ page }) => {
+  test('@weekly @high-priority-bugs Result Order Independent: duplicate rows handled correctly', async ({ page }) => {
     await page.goto('/practice');
     
     const duplicateTest = await page.evaluate(() => {
@@ -764,7 +765,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 8: Schema Parsing with Semicolons in Strings
   // ===========================================================================
-  test('@high-priority-bugs Schema Parsing: semicolons in strings do not break parsing', async ({ page }) => {
+  test('@weekly @high-priority-bugs Schema Parsing: semicolons in strings do not break parsing', async ({ page }) => {
     await page.goto('/practice');
     
     const parsingTest = await page.evaluate(() => {
@@ -822,7 +823,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     expect(parsingTest.hasCreateTable2).toBe(true);
   });
 
-  test('@high-priority-bugs Schema Parsing: escaped quotes handled correctly', async ({ page }) => {
+  test('@weekly @high-priority-bugs Schema Parsing: escaped quotes handled correctly', async ({ page }) => {
     await page.goto('/practice');
     
     const quoteTest = await page.evaluate(() => {
@@ -848,7 +849,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 9: Missing 17 Subtypes (All 23 subtypes have ladder guidance)
   // ===========================================================================
-  test('@high-priority-bugs Missing 17 Subtypes: all 23 canonical subtypes have ladder guidance', async ({ page }) => {
+  test('@weekly @high-priority-bugs Missing 17 Subtypes: all 23 canonical subtypes have ladder guidance', async ({ page }) => {
     await page.goto('/practice');
     
     const subtypeTest = await page.evaluate(() => {
@@ -894,7 +895,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     expect(subtypeTest.allSubtypesPresent).toBe(true);
   });
 
-  test('@high-priority-bugs Missing 17 Subtypes: guidance has 3 levels for each subtype', async ({ page }) => {
+  test('@weekly @high-priority-bugs Missing 17 Subtypes: guidance has 3 levels for each subtype', async ({ page }) => {
     await page.goto('/practice');
     
     const guidanceTest = await page.evaluate(() => {
@@ -926,7 +927,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 10: Subtype Reset (Hint flow doesn't reset incorrectly)
   // ===========================================================================
-  test('@high-priority-bugs Subtype Reset: hint flow does not reset on same problem', async ({ page }) => {
+  test('@weekly @high-priority-bugs Subtype Reset: hint flow does not reset on same problem', async ({ page }) => {
     await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -955,7 +956,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     await expect(page.getByTestId('hint-label-2')).toBeVisible();
   });
 
-  test('@high-priority-bugs Subtype Reset: hint flow resets on problem change', async ({ page }) => {
+  test('@weekly @high-priority-bugs Subtype Reset: hint flow resets on problem change', async ({ page }) => {
     await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -977,7 +978,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 11: Consistent Index (Help indices are consistent)
   // ===========================================================================
-  test('@high-priority-bugs Consistent Index: help indices are sequential without gaps', async ({ page }) => {
+  test('@weekly @high-priority-bugs Consistent Index: help indices are sequential without gaps', async ({ page }) => {
     await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -1017,7 +1018,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     expect(indices[3]).toBeGreaterThanOrEqual(4);
   });
 
-  test('@high-priority-bugs Consistent Index: no duplicate help indices', async ({ page }) => {
+  test('@weekly @high-priority-bugs Consistent Index: no duplicate help indices', async ({ page }) => {
     await page.goto('/practice');
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -1049,7 +1050,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 12: Coverage Stats (All 6 concepts are counted)
   // ===========================================================================
-  test('@high-priority-bugs Coverage Stats: all 6 concepts are included in stats', async ({ page }) => {
+  test('@weekly @high-priority-bugs Coverage Stats: all 6 concepts are included in stats', async ({ page }) => {
     await page.goto('/practice');
     
     const coverageTest = await page.evaluate(() => {
@@ -1094,7 +1095,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     expect(coverageTest.conceptsInStats).toBe(6);
   });
 
-  test('@high-priority-bugs Coverage Stats: uncovered concepts count as low confidence', async ({ page }) => {
+  test('@weekly @high-priority-bugs Coverage Stats: uncovered concepts count as low confidence', async ({ page }) => {
     await page.goto('/');
     
     const uncoveredTest = await page.evaluate(() => {
@@ -1131,7 +1132,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
     expect(uncoveredTest.total).toBe(6);  // all concepts counted
   });
 
-  test('@high-priority-bugs Coverage Stats: calculates correct coverage percentage', async ({ page }) => {
+  test('@weekly @high-priority-bugs Coverage Stats: calculates correct coverage percentage', async ({ page }) => {
     await page.goto('/');
     
     const percentageTest = await page.evaluate(() => {
@@ -1165,7 +1166,7 @@ test.describe('@high-priority-bugs High Priority Bug Fixes', () => {
 // Integration Tests for High Priority Bugs
 // =============================================================================
 
-test.describe('@high-priority-bugs Integration Tests', () => {
+test.describe('@weekly @high-priority-bugs Integration Tests', () => {
 
   test.beforeEach(async ({ page }) => {
     // Stub LLM calls to prevent ECONNREFUSED errors

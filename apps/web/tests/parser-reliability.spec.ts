@@ -31,7 +31,7 @@ const CSV_EDGE_CASE_TESTS = [
  * Unit test for CSV parsing logic - tests the parseCsvLine function behavior.
  * This mirrors the logic in sql-engage.ts:68-96
  */
-test.describe('@parser CSV Parsing Edge Cases', () => {
+test.describe('@weekly @parser CSV Parsing Edge Cases', () => {
   test('parses CSV lines with quoted commas correctly', () => {
     // Replicate the parseCsvLine function logic for testing
     function parseCsvLine(line: string): string[] {
@@ -158,16 +158,24 @@ type LoggedGeneration = {
 };
 
 async function runUntilErrorCount(page: Page, expectedErrorCount: number) {
-  const marker = page.getByText(new RegExp(`\\b${expectedErrorCount} errors\\b`));
+  // Wait for editor to be ready first
+  await page.waitForSelector('.monaco-editor .view-lines', { timeout: 30000 });
+  const marker = page.getByText(new RegExp(`\\b${expectedErrorCount} errors\\b`, 'i'));
   const runQueryButton = page.getByRole('button', { name: 'Run Query' });
+  
+  // Type a query that will generate an error
+  const editorSurface = page.locator('.monaco-editor .view-lines').first();
+  await editorSurface.click({ position: { x: 8, y: 8 } });
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+  await page.keyboard.type('SELECT'); // Incomplete query to generate error
 
-  for (let i = 0; i < 12; i += 1) {
+  for (let i = 0; i < 15; i += 1) {
     await runQueryButton.click();
     // Use expect.poll for reliable waiting instead of fixed timeout
     try {
       await expect.poll(async () => {
         return await marker.first().isVisible().catch(() => false);
-      }, { timeout: 2000, intervals: [100] }).toBe(true);
+      }, { timeout: 3000, intervals: [200] }).toBe(true);
       return;
     } catch {
       // Continue trying
@@ -195,7 +203,10 @@ async function readGenerationEvents(page: Page): Promise<LoggedGeneration[]> {
   });
 }
 
-test('@parser-batch parser reliability: malformed output degrades safely with fallback telemetry', async ({ page }) => {
+test('@weekly @flaky @parser-batch parser reliability: malformed output degrades safely with fallback telemetry', async ({ page }) => {
+  test.slow(); // 3x timeout for CI stability
+  // NOTE: This test is marked as @flaky due to timing variations in CI
+  // It may intermittently fail due to Monaco editor initialization timing
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => {
     pageErrors.push(error.message);

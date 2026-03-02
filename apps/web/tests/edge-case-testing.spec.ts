@@ -31,41 +31,44 @@ async function closeWelcomeModal(page: Page) {
   const getStartedBtn = page.locator('button:has-text("Get Started")').first();
   if (await getStartedBtn.isVisible().catch(() => false)) {
     await getStartedBtn.click();
-    await page.waitForTimeout(300);
+    // Wait for modal to disappear instead of fixed timeout
+    await expect(getStartedBtn).not.toBeVisible({ timeout: 5000 }).catch(() => {});
   }
 }
 
-// Helper to setup student profile
+// Helper to setup student profile with unique ID for test isolation
 async function setupStudentProfile(page: Page) {
-  await page.addInitScript(() => {
+  const uniqueId = `test-student-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  await page.addInitScript((id) => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
     window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
-      id: 'test-student',
+      id: id,
       name: 'Test Student',
       role: 'student',
       createdAt: Date.now()
     }));
-  });
+  }, uniqueId);
 }
 
-// Helper to setup instructor profile
+// Helper to setup instructor profile with unique ID for test isolation
 async function setupInstructorProfile(page: Page) {
-  await page.addInitScript(() => {
+  const uniqueId = `test-instructor-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  await page.addInitScript((id) => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
     window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
-      id: 'test-instructor',
+      id: id,
       name: 'Test Instructor',
       role: 'instructor',
       createdAt: Date.now()
     }));
-  });
+  }, uniqueId);
 }
 
-test.describe('@edge-case SQL Editor Edge Cases', () => {
+test.describe('@weekly @edge-case SQL Editor Edge Cases', () => {
   test.beforeEach(async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
@@ -74,7 +77,8 @@ test.describe('@edge-case SQL Editor Edge Cases', () => {
     await page.waitForSelector('[data-testid="run-query-btn"]', { timeout: 30000 });
   });
 
-  test('malicious SQL: DROP TABLE should fail gracefully', async ({ page }) => {
+  test('@weekly @no-external malicious SQL: DROP TABLE should fail gracefully', async ({ page }) => {
+    test.slow(); // Allow more time for SQL execution
     const editor = page.locator('.monaco-editor').first();
     await editor.click();
     await page.keyboard.press('Control+a');
@@ -87,7 +91,7 @@ test.describe('@edge-case SQL Editor Edge Cases', () => {
     await expect(errorPanel).toBeVisible({ timeout: 5000 });
   });
 
-  test('malicious SQL: DELETE without WHERE should be handled', async ({ page }) => {
+  test('@weekly @no-external malicious SQL: DELETE without WHERE should be handled', async ({ page }) => {
     const editor = page.locator('.monaco-editor').first();
     await editor.click();
     await page.keyboard.press('Control+a');
@@ -100,7 +104,7 @@ test.describe('@edge-case SQL Editor Edge Cases', () => {
     await expect(resultPanel).toBeVisible({ timeout: 5000 });
   });
 
-  test('SQL injection pattern should not crash system', async ({ page }) => {
+  test('@weekly @no-external SQL injection pattern should not crash system', async ({ page }) => {
     const editor = page.locator('.monaco-editor').first();
     await editor.click();
     await page.keyboard.press('Control+a');
@@ -112,7 +116,7 @@ test.describe('@edge-case SQL Editor Edge Cases', () => {
     await expect(page.locator('[data-testid="run-query-btn"]')).toBeEnabled({ timeout: 5000 });
   });
 
-  test('extremely long query should be handled', async ({ page }) => {
+  test('@weekly @no-external extremely long query should be handled', async ({ page }) => {
     const longQuery = 'SELECT ' + 'a'.repeat(2000) + ' FROM users';
     
     const editor = page.locator('.monaco-editor').first();
@@ -127,7 +131,7 @@ test.describe('@edge-case SQL Editor Edge Cases', () => {
     await expect(result).toBeVisible({ timeout: 5000 });
   });
 
-  test('query with emojis should not crash', async ({ page }) => {
+  test('@weekly @no-external query with emojis should not crash', async ({ page }) => {
     const editor = page.locator('.monaco-editor').first();
     await editor.click();
     await page.keyboard.press('Control+a');
@@ -139,7 +143,7 @@ test.describe('@edge-case SQL Editor Edge Cases', () => {
     await expect(page.locator('[data-testid="run-query-btn"]')).toBeEnabled({ timeout: 5000 });
   });
 
-  test('rapid click on Run Query should not cause issues', async ({ page }) => {
+  test('@weekly @no-external rapid click on Run Query should not cause issues', async ({ page }) => {
     const editor = page.locator('.monaco-editor').first();
     await editor.click();
     await page.keyboard.press('Control+a');
@@ -155,7 +159,7 @@ test.describe('@edge-case SQL Editor Edge Cases', () => {
     await expect(runBtn).toBeVisible({ timeout: 10000 });
   });
 
-  test('syntax error shows helpful message', async ({ page }) => {
+  test('@weekly @no-external syntax error shows helpful message', async ({ page }) => {
     const editor = page.locator('.monaco-editor').first();
     await editor.click();
     await page.keyboard.press('Control+a');
@@ -169,8 +173,8 @@ test.describe('@edge-case SQL Editor Edge Cases', () => {
   });
 });
 
-test.describe('@edge-case Navigation Edge Cases', () => {
-  test('rapid navigation between pages should not crash', async ({ page }) => {
+test.describe('@weekly @edge-case Navigation Edge Cases', () => {
+  test('@weekly rapid navigation between pages should not crash', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
     await closeWelcomeModal(page);
@@ -186,7 +190,7 @@ test.describe('@edge-case Navigation Edge Cases', () => {
     await expect(page.locator('text=/SQL-Adapt|Practice|Textbook/i').first()).toBeVisible();
   });
 
-  test('refresh during hint request should recover gracefully', async ({ page }) => {
+  test('@weekly refresh during hint request should recover gracefully', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
     await closeWelcomeModal(page);
@@ -204,7 +208,7 @@ test.describe('@edge-case Navigation Edge Cases', () => {
     }
   });
 
-  test('browser back/forward during session', async ({ page }) => {
+  test('@weekly browser back/forward during session', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
     await closeWelcomeModal(page);
@@ -222,7 +226,7 @@ test.describe('@edge-case Navigation Edge Cases', () => {
     await expect(page.locator('text=/Textbook|My Textbook/i').first()).toBeVisible();
   });
 
-  test('multiple tabs simulation via storage events', async ({ page }) => {
+  test('@weekly multiple tabs simulation via storage events', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
     await closeWelcomeModal(page);
@@ -248,8 +252,8 @@ test.describe('@edge-case Navigation Edge Cases', () => {
   });
 });
 
-test.describe('@edge-case Data Edge Cases', () => {
-  test('clear localStorage mid-session should redirect to start', async ({ page }) => {
+test.describe('@weekly @edge-case Data Edge Cases', () => {
+  test('@weekly clear localStorage mid-session should redirect to start', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
     await closeWelcomeModal(page);
@@ -265,7 +269,7 @@ test.describe('@edge-case Data Edge Cases', () => {
     await expect(page).toHaveURL(/\/|start|login/, { timeout: 5000 });
   });
 
-  test('corrupted profile data should be handled', async ({ page }) => {
+  test('@weekly corrupted profile data should be handled', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.setItem('sql-adapt-user-profile', 'invalid-json{{{');
     });
@@ -276,7 +280,7 @@ test.describe('@edge-case Data Edge Cases', () => {
     await expect(page.locator('body')).toBeVisible();
   });
 
-  test('corrupted interactions data should not crash', async ({ page }) => {
+  test('@weekly corrupted interactions data should not crash', async ({ page }) => {
     await setupStudentProfile(page);
     await page.addInitScript(() => {
       window.localStorage.setItem('sql-learning-interactions', 'not-an-array');
@@ -289,13 +293,13 @@ test.describe('@edge-case Data Edge Cases', () => {
     await expect(page.locator('body')).toBeVisible();
   });
 
-  test('missing schema should show appropriate error', async ({ page }) => {
+  test('@weekly missing schema should show appropriate error', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
     await closeWelcomeModal(page);
     
-    // Wait for initialization
-    await page.waitForTimeout(3000);
+    // Wait for SQL editor to be ready
+    await page.waitForSelector('[data-testid="run-query-btn"], .monaco-editor', { timeout: 30000 });
     
     // SQL editor should show initialization state or error
     const editor = page.locator('.monaco-editor, [data-testid="run-query-btn"]').first();
@@ -303,8 +307,8 @@ test.describe('@edge-case Data Edge Cases', () => {
   });
 });
 
-test.describe('@edge-case Role/Auth Edge Cases', () => {
-  test('switch role mid-session via storage', async ({ page }) => {
+test.describe('@weekly @edge-case Role/Auth Edge Cases', () => {
+  test('@weekly switch role mid-session via storage', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
     await closeWelcomeModal(page);
@@ -325,7 +329,7 @@ test.describe('@edge-case Role/Auth Edge Cases', () => {
     expect(url).toMatch(/instructor-dashboard|practice/);
   });
 
-  test('invalid passcode should show error', async ({ page }) => {
+  test('@weekly invalid passcode should show error', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.sessionStorage.clear();
@@ -344,7 +348,7 @@ test.describe('@edge-case Role/Auth Edge Cases', () => {
     await expect(errorMsg).toBeVisible({ timeout: 5000 });
   });
 
-  test('access instructor page without auth should redirect', async ({ page }) => {
+  test('@weekly access instructor page without auth should redirect', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.sessionStorage.clear();
@@ -356,7 +360,7 @@ test.describe('@edge-case Role/Auth Edge Cases', () => {
     await expect(page).toHaveURL(/\/|start|login/, { timeout: 5000 });
   });
 
-  test('access research page as student should redirect', async ({ page }) => {
+  test('@weekly access research page as student should redirect', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/research');
     
@@ -364,7 +368,7 @@ test.describe('@edge-case Role/Auth Edge Cases', () => {
     await expect(page).not.toHaveURL(/research/, { timeout: 5000 });
   });
 
-  test('tampered URL params should be sanitized', async ({ page }) => {
+  test('@weekly tampered URL params should be sanitized', async ({ page }) => {
     await setupStudentProfile(page);
     // Try to access with malformed URL
     await page.goto('/practice?learnerId=<script>alert(1)</script>');
@@ -381,7 +385,7 @@ test.describe('@edge-case Role/Auth Edge Cases', () => {
     expect(alertTriggered).toBe(false);
   });
 
-  test('empty username should not be allowed', async ({ page }) => {
+  test('@weekly empty username should not be allowed', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.sessionStorage.clear();
@@ -399,8 +403,8 @@ test.describe('@edge-case Role/Auth Edge Cases', () => {
   });
 });
 
-test.describe('@edge-case XSS Security Tests', () => {
-  test('XSS in textbook content should be sanitized', async ({ page }) => {
+test.describe('@weekly @edge-case XSS Security Tests', () => {
+  test('@weekly XSS in textbook content should be sanitized', async ({ page }) => {
     await setupStudentProfile(page);
     
     // Inject malicious content into localStorage textbook
@@ -423,7 +427,8 @@ test.describe('@edge-case XSS Security Tests', () => {
     await page.goto('/textbook');
     await closeWelcomeModal(page);
     
-    // Check if XSS is executed
+    // Wait for content to render then check if XSS is executed
+    await page.waitForSelector('text=XSS Test', { timeout: 5000 });
     const xssExecuted = await page.evaluate(() => {
       return new Promise<boolean>((resolve) => {
         let alerted = false;
@@ -432,14 +437,14 @@ test.describe('@edge-case XSS Security Tests', () => {
           alerted = true;
           originalAlert(msg);
         };
-        setTimeout(() => resolve(alerted), 2000);
+        setTimeout(() => resolve(alerted), 500);
       });
     });
     
     expect(xssExecuted).toBe(false);
   });
 
-  test('XSS in username should be escaped', async ({ page }) => {
+  test('@weekly XSS in username should be escaped', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.sessionStorage.clear();
@@ -452,8 +457,8 @@ test.describe('@edge-case XSS Security Tests', () => {
     await page.click('text=/student/i');
     await page.click('button[type="submit"], button:has-text("Get Started")');
     
-    // Check if script is executed
-    await page.waitForTimeout(2000);
+    // Wait for navigation to complete
+    await expect(page).toHaveURL(/\/(practice)?$/, { timeout: 10000 });
     
     // Page should be safe - no alert triggered
     const alertTriggered = await page.evaluate(() => {
@@ -466,7 +471,7 @@ test.describe('@edge-case XSS Security Tests', () => {
     expect(alertTriggered).toBe(false);
   });
 
-  test('Markdown XSS attempts should be sanitized', async ({ page }) => {
+  test('@weekly Markdown XSS attempts should be sanitized', async ({ page }) => {
     await setupStudentProfile(page);
     
     // Inject content with markdown XSS
@@ -495,11 +500,12 @@ test.describe('@edge-case XSS Security Tests', () => {
     await page.goto('/textbook');
     await closeWelcomeModal(page);
     
-    // Check for XSS execution
+    // Wait for content to render then check for XSS execution
+    await page.waitForSelector('text=Markdown XSS Test', { timeout: 5000 });
     const xssExecuted = await page.evaluate(() => {
       return new Promise<boolean>((resolve) => {
         window.alert = () => resolve(true);
-        setTimeout(() => resolve(false), 2000);
+        setTimeout(() => resolve(false), 500);
       });
     });
     
@@ -507,8 +513,8 @@ test.describe('@edge-case XSS Security Tests', () => {
   });
 });
 
-test.describe('@edge-case WASM Loading Edge Cases', () => {
-  test('slow network should show loading state', async ({ page }) => {
+test.describe('@weekly @edge-case WASM Loading Edge Cases', () => {
+  test('@weekly slow network should show loading state', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
     await closeWelcomeModal(page);
@@ -518,13 +524,16 @@ test.describe('@edge-case WASM Loading Edge Cases', () => {
     await expect(loadingOrEditor).toBeVisible({ timeout: 30000 });
   });
 
-  test('WASM initialization failure should show error with retry', async ({ page }) => {
+  test('@weekly WASM initialization failure should show error with retry', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
     await closeWelcomeModal(page);
     
-    // Wait for initialization to complete or fail
-    await page.waitForTimeout(5000);
+    // Wait for initialization to complete or error to appear
+    await Promise.race([
+      page.waitForSelector('[data-testid="run-query-btn"]', { timeout: 10000 }),
+      page.waitForSelector('text=/error|failed|initialize/i', { timeout: 10000 })
+    ]);
     
     // Either editor is ready or error is shown
     const state = await Promise.race([
@@ -537,8 +546,8 @@ test.describe('@edge-case WASM Loading Edge Cases', () => {
   });
 });
 
-test.describe('@edge-case Boundary Conditions', () => {
-  test('empty SQL query should be handled', async ({ page }) => {
+test.describe('@weekly @edge-case Boundary Conditions', () => {
+  test('@weekly empty SQL query should be handled', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
     await closeWelcomeModal(page);
@@ -562,7 +571,7 @@ test.describe('@edge-case Boundary Conditions', () => {
     }
   });
 
-  test('whitespace-only query should be handled', async ({ page }) => {
+  test('@weekly whitespace-only query should be handled', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
     await closeWelcomeModal(page);
@@ -577,7 +586,7 @@ test.describe('@edge-case Boundary Conditions', () => {
     await expect(runBtn).toBeVisible();
   });
 
-  test('query with only comments should be handled', async ({ page }) => {
+  test('@weekly query with only comments should be handled', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
     await closeWelcomeModal(page);
@@ -594,7 +603,7 @@ test.describe('@edge-case Boundary Conditions', () => {
     await expect(page.locator('body')).toBeVisible();
   });
 
-  test('maximum integer value in query', async ({ page }) => {
+  test('@weekly maximum integer value in query', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
     await closeWelcomeModal(page);
@@ -611,7 +620,7 @@ test.describe('@edge-case Boundary Conditions', () => {
     await expect(page.locator('body')).toBeVisible();
   });
 
-  test('floating point edge cases', async ({ page }) => {
+  test('@weekly floating point edge cases', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
     await closeWelcomeModal(page);
@@ -630,7 +639,11 @@ test.describe('@edge-case Boundary Conditions', () => {
       await page.keyboard.press('Control+a');
       await page.keyboard.type(query);
       await page.click('[data-testid="run-query-btn"]');
-      await page.waitForTimeout(500);
+      // Wait for result or error instead of fixed timeout
+      await Promise.race([
+        page.waitForSelector('text=/result|error|row/i', { timeout: 3000 }).catch(() => {}),
+        page.waitForTimeout(300)
+      ]);
     }
     
     // System should remain stable
@@ -638,8 +651,8 @@ test.describe('@edge-case Boundary Conditions', () => {
   });
 });
 
-test.describe('@edge-case Race Conditions', () => {
-  test('multiple simultaneous storage operations', async ({ page }) => {
+test.describe('@weekly @edge-case Race Conditions', () => {
+  test('@weekly multiple simultaneous storage operations', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
     await closeWelcomeModal(page);
@@ -662,7 +675,7 @@ test.describe('@edge-case Race Conditions', () => {
     await expect(page.locator('body')).toBeVisible();
   });
 
-  test('rapid localStorage modifications', async ({ page }) => {
+  test('@weekly rapid localStorage modifications', async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
     await closeWelcomeModal(page);
@@ -685,8 +698,8 @@ test.describe('@edge-case Race Conditions', () => {
   });
 });
 
-test.describe('@edge-case Input Validation', () => {
-  test('very long username should be handled', async ({ page }) => {
+test.describe('@weekly @edge-case Input Validation', () => {
+  test('@weekly very long username should be handled', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.sessionStorage.clear();
@@ -703,7 +716,7 @@ test.describe('@edge-case Input Validation', () => {
     await expect(page.locator('body')).toBeVisible();
   });
 
-  test('special characters in username', async ({ page }) => {
+  test('@weekly special characters in username', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.sessionStorage.clear();

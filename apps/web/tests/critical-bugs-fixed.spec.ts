@@ -34,7 +34,7 @@ import {
 // Test Suite: Critical Bug Fixes
 // =============================================================================
 
-test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
+test.describe('@weekly @no-external @critical-bugs Critical Bug Fixes Regression Tests', () => {
 
   test.beforeEach(async ({ page }) => {
     // Stub LLM calls to prevent ECONNREFUSED errors
@@ -57,7 +57,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
       });
     });
 
-    // Idempotent init script - only runs once per test
+    // Idempotent init script with unique ID for test isolation
     await page.addInitScript(() => {
       const FLAG = '__pw_seeded__';
       if (localStorage.getItem(FLAG) === '1') return;
@@ -65,9 +65,10 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
       localStorage.clear();
       sessionStorage.clear();
       localStorage.setItem('sql-adapt-welcome-seen', 'true');
-      // Set up student profile to bypass role selection
+      // Set up student profile with unique ID for test isolation
+      const uniqueId = `test-user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
-        id: 'test-user',
+        id: uniqueId,
         name: 'Test User',
         role: 'student',
         createdAt: Date.now()
@@ -86,7 +87,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // ===========================================================================
   // BUG FIX 1: PDF Index Corruption
   // ===========================================================================
-  test('@critical-bugs PDF Index Corruption: getPdfIndex does not corrupt storage when normalization fails', async ({ page }) => {
+  test('@weekly @no-external @critical-bugs PDF Index Corruption: getPdfIndex does not corrupt storage when normalization fails', async ({ page }) => {
     // Seed corrupted PDF index data that would fail normalization
     await page.addInitScript(() => {
       window.localStorage.setItem('sql-learning-pdf-index', '{"corrupted": true, "noChunks": []}');
@@ -116,7 +117,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     await expect(runQueryButton).toBeEnabled();
   });
 
-  test('@critical-bugs PDF Index Corruption: invalid chunks are filtered without crashing', async ({ page }) => {
+  test('@weekly @no-external @critical-bugs PDF Index Corruption: invalid chunks are filtered without crashing', async ({ page }) => {
     // Seed PDF index with some valid and some invalid chunks
     await page.addInitScript(() => {
       const invalidIndex = {
@@ -154,7 +155,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // BUG FIX 2: SQL Type Coercion
   // ===========================================================================
 
-  test('@critical-bugs SQL Type Coercion: floating point comparison uses epsilon tolerance', async ({ page }) => {
+  test('@weekly @no-external @critical-bugs SQL Type Coercion: floating point comparison uses epsilon tolerance', async ({ page }) => {
     await page.goto('/practice');
     const floatCheck = await page.evaluate(() => {
       const FLOAT_EPSILON = 0.01;
@@ -202,7 +203,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // ===========================================================================
   // BUG FIX 4: XSS Sanitization
   // ===========================================================================
-  test('@critical-bugs XSS Sanitization: script tags are removed from note content', async ({ page }) => {
+  test('@weekly @no-external @critical-bugs XSS Sanitization: script tags are removed from note content', async ({ page }) => {
     const xssPayload = '<script>window.__XSS_TEST__ = true;</script>';
     
     await page.addInitScript((payload) => {
@@ -247,7 +248,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     expect(xssCheck.scriptInDom).toBe(false);
   });
 
-  test('@critical-bugs XSS Sanitization: javascript: URLs are blocked in links', async ({ page }) => {
+  test('@weekly @no-external @critical-bugs XSS Sanitization: javascript: URLs are blocked in links', async ({ page }) => {
     const linkPayload = '[Click me](javascript:alert("xss"))';
     
     await page.addInitScript((payload) => {
@@ -291,7 +292,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     expect(linkCheck.javascriptLinks).toBe(0);
   });
 
-  test('@critical-bugs XSS Sanitization: event handlers are stripped from HTML', async ({ page }) => {
+  test('@weekly @no-external @critical-bugs XSS Sanitization: event handlers are stripped from HTML', async ({ page }) => {
     const htmlPayload = '<img src=x onerror=alert("xss")>';
     
     await page.addInitScript((payload) => {
@@ -339,7 +340,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // ===========================================================================
   // BUG FIX 5: Cache Key Uniqueness
   // ===========================================================================
-  test('@critical-bugs Cache Key Uniqueness: cache keys include learnerId to prevent cross-user pollution', async ({ page }) => {
+  test('@weekly @no-external @critical-bugs Cache Key Uniqueness: cache keys include learnerId to prevent cross-user pollution', async ({ page }) => {
     await page.addInitScript(() => {
       // Set up student profile to bypass role selection
       window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
@@ -439,7 +440,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // ===========================================================================
   // BUG FIX 8: Timestamp Preservation
   // ===========================================================================
-  test('@critical-bugs Timestamp Preservation: addedTimestamp is preserved on note updates', async ({ page }) => {
+  test('@weekly @no-external @critical-bugs Timestamp Preservation: addedTimestamp is preserved on note updates', async ({ page }) => {
     const originalTimestamp = Date.now() - 86400000; // 1 day ago
     const unitId = 'unit-timestamp-test';
     
@@ -504,7 +505,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // ===========================================================================
   // BUG FIX 9: Monaco Editor Disposal
   // ===========================================================================
-  test('@critical-bugs Monaco Editor Disposal: editor is cleaned up on navigation', async ({ page }) => {
+  test('@weekly @no-external @critical-bugs Monaco Editor Disposal: editor is cleaned up on navigation', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
 
@@ -536,7 +537,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // ===========================================================================
   // BUG FIX 10: Blob URL Cleanup
   // ===========================================================================
-  test('@critical-bugs Blob URL Cleanup: export creates valid download without leaking blob URLs', async ({ page }) => {
+  test('@weekly @no-external @critical-bugs Blob URL Cleanup: export creates valid download without leaking blob URLs', async ({ page }) => {
     await page.addInitScript(() => {
       // Seed some data to export
       const now = Date.now();
@@ -609,7 +610,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // BUG FIX 11: Interaction Save with Quota
   // ===========================================================================
 
-  test('@critical-bugs Interaction Save with Quota: saveInteraction returns quota status', async ({ page }) => {
+  test('@weekly @no-external @critical-bugs Interaction Save with Quota: saveInteraction returns quota status', async ({ page }) => {
     await page.goto('/practice');
 
     // Verify saveInteraction signature supports quota handling
@@ -645,7 +646,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // ===========================================================================
   // BUG FIX 13: Cache Provenance Update
   // ===========================================================================
-  test('@critical-bugs Cache Provenance Update: cached units update their provenance', async ({ page }) => {
+  test('@weekly @no-external @critical-bugs Cache Provenance Update: cached units update their provenance', async ({ page }) => {
     const now = Date.now();
     const originalCreatedAt = now - 3600000; // 1 hour ago
     
@@ -712,7 +713,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
   // ===========================================================================
   // BUG FIX 14: Error Boundary
   // ===========================================================================
-  test('@critical-bugs Error Boundary: errors are caught and displayed gracefully', async ({ page }) => {
+  test('@weekly @no-external @critical-bugs Error Boundary: errors are caught and displayed gracefully', async ({ page }) => {
     await page.goto('/');
     // Authenticated students are redirected to /practice
     await expect(page.getByRole('heading', { name: 'Practice SQL' })).toBeVisible();
@@ -741,7 +742,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
     expect(isErrorBoundaryVisible).toBe(false);
   });
 
-  test('@critical-bugs Error Boundary: error boundary renders fallback UI on component errors', async ({ page }) => {
+  test('@weekly @no-external @critical-bugs Error Boundary: error boundary renders fallback UI on component errors', async ({ page }) => {
     await page.goto('/practice');
 
     // Verify error boundary fallback UI structure exists in the app
@@ -767,7 +768,7 @@ test.describe('@critical-bugs Critical Bug Fixes Regression Tests', () => {
 // Additional Integration Tests for Critical Paths
 // =============================================================================
 
-test.describe('@critical-bugs Integration Tests for Critical Bug Fixes', () => {
+test.describe('@weekly @no-external @critical-bugs Integration Tests for Critical Bug Fixes', () => {
 
 
 

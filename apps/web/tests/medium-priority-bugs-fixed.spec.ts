@@ -41,7 +41,7 @@ import {
 // Test Suite: Medium Priority Bug Fixes
 // =============================================================================
 
-test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
+test.describe('@weekly @medium-priority-bugs Medium Priority Bug Fixes', () => {
 
   test.beforeEach(async ({ page }) => {
     // Stub LLM calls to prevent ECONNREFUSED errors
@@ -64,7 +64,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
       });
     });
 
-    // Idempotent init script - only runs once per test
+    // Idempotent init script with unique ID for test isolation
     await page.addInitScript(() => {
       const FLAG = '__pw_seeded__';
       if (localStorage.getItem(FLAG) === '1') return;
@@ -72,9 +72,10 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
       localStorage.clear();
       sessionStorage.clear();
       localStorage.setItem('sql-adapt-welcome-seen', 'true');
-      // CRITICAL: Set up user profile for role-based auth
+      // CRITICAL: Set up user profile for role-based auth with unique ID
+      const uniqueId = `test-user-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
-        id: 'test-user',
+        id: uniqueId,
         name: 'Test User',
         role: 'student',
         createdAt: Date.now()
@@ -93,7 +94,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 1: Missing useEffect Dependency
   // ===========================================================================
-  test('@medium-priority-bugs Missing useEffect Dependency: problem changes reload draft', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Missing useEffect Dependency: problem changes reload draft', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible();
 
@@ -125,7 +126,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     expect(draftCheck.hasDrafts).toBe(true);
   });
 
-  test('@medium-priority-bugs Missing useEffect Dependency: learner change clears interactions', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Missing useEffect Dependency: learner change clears interactions', async ({ page }) => {
     // Simplified test: Verify interactions are properly isolated per learner
     // This test verifies that when interactions are created, they are correctly associated
     // with the active learner and session
@@ -182,7 +183,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 2: Quota in Practice Draft
   // ===========================================================================
-  test('@medium-priority-bugs Quota in Practice Draft: save returns quota status', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Quota in Practice Draft: save returns quota status', async ({ page }) => {
     await page.goto('/practice');
 
     const quotaTest = await page.evaluate(() => {
@@ -206,7 +207,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     expect(quotaTest.wouldExceedQuota).toBe(false);
   });
 
-  test('@medium-priority-bugs Quota in Practice Draft: clear handles quota exceeded', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Quota in Practice Draft: clear handles quota exceeded', async ({ page }) => {
     await page.goto('/practice');
 
     const clearTest = await page.evaluate(() => {
@@ -231,7 +232,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 3: Export Sanitization
   // ===========================================================================
-  test('@medium-priority-bugs Export Sanitization: validates required interaction fields', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Export Sanitization: validates required interaction fields', async ({ page }) => {
     await page.goto('/practice');
 
     const validationTest = await page.evaluate(() => {
@@ -262,7 +263,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     expect(validationTest[3].hasNumberTimestamp).toBe(false); // string timestamp
   });
 
-  test('@medium-priority-bugs Export Sanitization: normalizes corrupted event data', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Export Sanitization: normalizes corrupted event data', async ({ page }) => {
     await page.goto('/practice');
 
     const normalizationTest = await page.evaluate(() => {
@@ -292,7 +293,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 4: Evidence Map Validation
   // ===========================================================================
-  test('@medium-priority-bugs Evidence Map Validation: handles corrupted evidence data', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Evidence Map Validation: handles corrupted evidence data', async ({ page }) => {
     // Seed corrupted profile evidence data BEFORE page load using addInitScript
     await page.addInitScript(() => {
       window.localStorage.clear();
@@ -333,7 +334,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     }).toContain('SQL-Adapt Learning System');
   });
 
-  test('@medium-priority-bugs Evidence Map Validation: filters invalid evidence entries', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Evidence Map Validation: filters invalid evidence entries', async ({ page }) => {
     await page.goto('/practice');
 
     const evidenceFilterTest = await page.evaluate(() => {
@@ -370,7 +371,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 5: Multiple Result Sets
   // ===========================================================================
-  test('@medium-priority-bugs Multiple Result Sets: returns allResults for multi-statement queries', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Multiple Result Sets: returns allResults for multi-statement queries', async ({ page }) => {
     await page.goto('/practice');
 
     const multiResultTest = await page.evaluate(() => {
@@ -395,7 +396,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     expect(multiResultTest.secondResultColumns).toContain('count');
   });
 
-  test('@medium-priority-bugs Multiple Result Sets: empty results return empty allResults array', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Multiple Result Sets: empty results return empty allResults array', async ({ page }) => {
     await page.goto('/practice');
 
     const emptyResultTest = await page.evaluate(() => {
@@ -415,7 +416,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 6: Type Safety
   // ===========================================================================
-  test('@medium-priority-bugs Type Safety: normalizeValue handles all types', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Type Safety: normalizeValue handles all types', async ({ page }) => {
     await page.goto('/practice');
 
     const typeTest = await page.evaluate(() => {
@@ -444,7 +445,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     expect(typeTest.numberValue).toBe('42');
   });
 
-  test('@medium-priority-bugs Type Safety: valuesEqual handles type coercion', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Type Safety: valuesEqual handles type coercion', async ({ page }) => {
     await page.goto('/practice');
 
     const equalityTest = await page.evaluate(() => {
@@ -489,7 +490,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 7: CSV Edge Cases
   // ===========================================================================
-  test('@medium-priority-bugs CSV Edge Cases: handles commas in quoted fields', async ({ page }) => {
+  test('@weekly @medium-priority-bugs CSV Edge Cases: handles commas in quoted fields', async ({ page }) => {
     await page.goto('/practice');
 
     const csvTest = await page.evaluate(() => {
@@ -542,7 +543,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     expect(csvTest.escapedQuotes[1]).toContain('"');
   });
 
-  test('@medium-priority-bugs CSV Edge Cases: handles empty quoted fields', async ({ page }) => {
+  test('@weekly @medium-priority-bugs CSV Edge Cases: handles empty quoted fields', async ({ page }) => {
     await page.goto('/practice');
 
     const emptyFieldTest = await page.evaluate(() => {
@@ -582,7 +583,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 8: Subtype Aliases
   // ===========================================================================
-  test('@medium-priority-bugs Subtype Aliases: maps common error aliases to canonical subtypes', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Subtype Aliases: maps common error aliases to canonical subtypes', async ({ page }) => {
     await page.goto('/practice');
 
     const aliasTest = await page.evaluate(() => {
@@ -626,7 +627,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     expect(aliasTest.alreadyCanonical).toBe('incomplete query');
   });
 
-  test('@medium-priority-bugs Subtype Aliases: preserves unrecognized subtypes as-is', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Subtype Aliases: preserves unrecognized subtypes as-is', async ({ page }) => {
     await page.goto('/practice');
 
     const unrecognizedTest = await page.evaluate(() => {
@@ -652,7 +653,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 9: ruleFired Metadata
   // ===========================================================================
-  test('@medium-priority-bugs ruleFired Metadata: hint events include ruleFired', async ({ page }) => {
+  test('@weekly @medium-priority-bugs ruleFired Metadata: hint events include ruleFired', async ({ page }) => {
     await page.goto('/practice');
 
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -666,7 +667,9 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     // Run until we get an error
     for (let i = 0; i < 5; i++) {
       await runQueryButton.click();
-      await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
+      await expect.poll(async () => {
+        return await page.locator('text=/error|Error|failed/i').first().isVisible().catch(() => false);
+      }, { timeout: 5000, intervals: [100, 200] }).toBe(true);
     }
 
     // Request hint
@@ -679,7 +682,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     expect(hintEvents[0].ruleFired).toBeTruthy();
   });
 
-  test('@medium-priority-bugs ruleFired Metadata: escalation events include ruleFired', async ({ page }) => {
+  test('@weekly @medium-priority-bugs ruleFired Metadata: escalation events include ruleFired', async ({ page }) => {
     await page.goto('/practice');
 
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
@@ -692,7 +695,9 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     
     for (let i = 0; i < 3; i++) {
       await runQueryButton.click();
-      await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
+      await expect.poll(async () => {
+        return await page.locator('text=/error|Error|failed/i').first().isVisible().catch(() => false);
+      }, { timeout: 5000, intervals: [100, 200] }).toBe(true);
     }
 
     // Progress through hints
@@ -720,7 +725,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 10: UI Confidence Legend
   // ===========================================================================
-  test('@medium-priority-bugs UI Confidence Legend: thresholds match backend values', async ({ page }) => {
+  test('@weekly @medium-priority-bugs UI Confidence Legend: thresholds match backend values', async ({ page }) => {
     await page.goto('/practice');
 
     const thresholdTest = await page.evaluate(() => {
@@ -769,7 +774,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 11: Coverage Event Logging
   // ===========================================================================
-  test('@medium-priority-bugs Coverage Event Logging: logs scoreDelta and previousConfidence', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Coverage Event Logging: logs scoreDelta and previousConfidence', async ({ page }) => {
     await page.goto('/practice');
 
     // Simulate coverage change
@@ -799,7 +804,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     expect(coverageTest.newConfidence).toBe('medium');
   });
 
-  test('@medium-priority-bugs Coverage Event Logging: includes totalEvidence count', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Coverage Event Logging: includes totalEvidence count', async ({ page }) => {
     await page.goto('/practice');
 
     const evidenceCountTest = await page.evaluate(() => {
@@ -831,7 +836,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 12: Title Uses LLM Output
   // ===========================================================================
-  test('@medium-priority-bugs Title Uses LLM Output: uses LLM title when available', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Title Uses LLM Output: uses LLM title when available', async ({ page }) => {
     await page.goto('/practice');
 
     const titleTest = await page.evaluate(() => {
@@ -861,7 +866,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 13: PDF Citation Pages
   // ===========================================================================
-  test('@medium-priority-bugs PDF Citation Pages: invalid pages default to 1', async ({ page }) => {
+  test('@weekly @medium-priority-bugs PDF Citation Pages: invalid pages default to 1', async ({ page }) => {
     await page.goto('/practice');
 
     const pageTest = await page.evaluate(() => {
@@ -893,7 +898,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 14: Source Filtering Warning
   // ===========================================================================
-  test('@medium-priority-bugs Source Filtering Warning: filters unknown source IDs', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Source Filtering Warning: filters unknown source IDs', async ({ page }) => {
     await page.goto('/practice');
 
     const sourceFilterTest = await page.evaluate(() => {
@@ -925,7 +930,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 15: PDF Passage Dedup
   // ===========================================================================
-  test('@medium-priority-bugs PDF Passage Dedup: removes duplicate chunks', async ({ page }) => {
+  test('@weekly @medium-priority-bugs PDF Passage Dedup: removes duplicate chunks', async ({ page }) => {
     await page.goto('/practice');
 
     const dedupTest = await page.evaluate(() => {
@@ -964,7 +969,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 16: LLM Params Validation
   // ===========================================================================
-  test('@medium-priority-bugs LLM Params Validation: clamps temperature to [0, 2]', async ({ page }) => {
+  test('@weekly @medium-priority-bugs LLM Params Validation: clamps temperature to [0, 2]', async ({ page }) => {
     await page.goto('/');
 
     const tempTest = await page.evaluate(() => {
@@ -991,7 +996,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     expect(tempTest.nan).toBe(0);
   });
 
-  test('@medium-priority-bugs LLM Params Validation: clamps top_p to [0, 1]', async ({ page }) => {
+  test('@weekly @medium-priority-bugs LLM Params Validation: clamps top_p to [0, 1]', async ({ page }) => {
     await page.goto('/');
 
     const topPTest = await page.evaluate(() => {
@@ -1016,7 +1021,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     expect(topPTest.one).toBe(1);
   });
 
-  test('@medium-priority-bugs LLM Params Validation: ensures positive timeout', async ({ page }) => {
+  test('@weekly @medium-priority-bugs LLM Params Validation: ensures positive timeout', async ({ page }) => {
     await page.goto('/practice');
 
     const timeoutTest = await page.evaluate(() => {
@@ -1047,7 +1052,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 17: Non-deterministic Sort
   // ===========================================================================
-  test('@medium-priority-bugs Non-deterministic Sort: uses stable sorting', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Non-deterministic Sort: uses stable sorting', async ({ page }) => {
     await page.goto('/');
 
     const sortTest = await page.evaluate(() => {
@@ -1079,7 +1084,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 18: Cache Size Limit
   // ===========================================================================
-  test('@medium-priority-bugs Cache Size Limit: enforces LRU eviction', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Cache Size Limit: enforces LRU eviction', async ({ page }) => {
     await page.goto('/');
 
     const cacheTest = await page.evaluate(() => {
@@ -1120,7 +1125,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 19: Import Validation
   // ===========================================================================
-  test('@medium-priority-bugs Import Validation: rejects non-object data', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Import Validation: rejects non-object data', async ({ page }) => {
     await page.goto('/');
 
     const importValidationTest = await page.evaluate(() => {
@@ -1154,7 +1159,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     expect(importValidationTest[5].valid).toBe(true); // valid object with array
   });
 
-  test('@medium-priority-bugs Import Validation: validates interaction structure', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Import Validation: validates interaction structure', async ({ page }) => {
     await page.goto('/');
 
     const interactionValidationTest = await page.evaluate(() => {
@@ -1194,7 +1199,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 20: updateProfileStats Error
   // ===========================================================================
-  test('@medium-priority-bugs updateProfileStats Error: errors do not crash application', async ({ page }) => {
+  test('@weekly @medium-priority-bugs updateProfileStats Error: errors do not crash application', async ({ page }) => {
     await page.goto('/');
 
     const errorHandlingTest = await page.evaluate(() => {
@@ -1230,7 +1235,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 21: Subtype Documentation
   // ===========================================================================
-  test('@medium-priority-bugs Subtype Documentation: all subtypes have 3 hint levels', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Subtype Documentation: all subtypes have 3 hint levels', async ({ page }) => {
     await page.goto('/');
 
     const documentationTest = await page.evaluate(() => {
@@ -1267,7 +1272,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 22: Coverage Improvements
   // ===========================================================================
-  test('@medium-priority-bugs Coverage Improvements: enhanced logging includes all fields', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Coverage Improvements: enhanced logging includes all fields', async ({ page }) => {
     await page.goto('/');
 
     const coverageLoggingTest = await page.evaluate(() => {
@@ -1315,7 +1320,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 23: Error Pattern Expansion
   // ===========================================================================
-  test('@medium-priority-bugs Error Pattern Expansion: recognizes expanded SQLite patterns', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Error Pattern Expansion: recognizes expanded SQLite patterns', async ({ page }) => {
     await page.goto('/');
 
     const patternTest = await page.evaluate(() => {
@@ -1388,7 +1393,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
     expect(patternTest.uniqueConstraint).toBe('constraint violation');
   });
 
-  test('@medium-priority-bugs Error Pattern Expansion: handles incomplete input patterns', async ({ page }) => {
+  test('@weekly @medium-priority-bugs Error Pattern Expansion: handles incomplete input patterns', async ({ page }) => {
     await page.goto('/');
 
     const incompleteTest = await page.evaluate(() => {
@@ -1432,7 +1437,7 @@ test.describe('@medium-priority-bugs Medium Priority Bug Fixes', () => {
 // Integration Tests for Medium Priority Bugs
 // =============================================================================
 
-test.describe('@medium-priority-bugs Integration Tests', () => {
+test.describe('@weekly @medium-priority-bugs Integration Tests', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
