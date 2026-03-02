@@ -1210,8 +1210,8 @@ export function LearningInterface() {
                   </Tooltip>
                 )}
 
-                {/* Week 5: Profile Badge - DEV mode only, subtle */}
-                {isDev && isStudent && (
+                {/* Week 5: Profile Badge - DEV mode + Instructors Only (for testing/debugging) */}
+                {isDev && isInstructor && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className={cn(
@@ -1236,7 +1236,7 @@ export function LearningInterface() {
                   </Tooltip>
                 )}
 
-                {/* Role selector - only show for instructors or in dev mode */}
+                {/* Role selector - Instructors only (allows testing student view) */}
                 {isInstructor && (
                   <Select value={role} onValueChange={(value) => {
                     localStorage.setItem('sql-adapt-user-role', value);

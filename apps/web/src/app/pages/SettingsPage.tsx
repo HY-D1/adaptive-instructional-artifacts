@@ -255,8 +255,8 @@ export function SettingsPage() {
           </Card>
         </div>
 
-        {/* Week 5 Testing Controls - DEV Mode Only */}
-        {isDev && (
+        {/* Week 5 Testing Controls - DEV Mode + Instructors Only */}
+        {isDev && isInstructor && (
           <Card className="mt-6 p-6 max-w-5xl border-amber-300" data-testid="week5-debug-controls">
             <CardHeader className="px-0 pt-0">
               <div className="flex items-center gap-3">

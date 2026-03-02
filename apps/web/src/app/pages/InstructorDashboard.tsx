@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, Link } from 'react-router';
 
 import {
   BarChart3,
@@ -14,7 +14,10 @@ import {
   Target,
   Activity,
   ChevronRight,
-  FileText
+  FileText,
+  Eye,
+  Play,
+  X
 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -360,6 +363,11 @@ export function InstructorDashboard() {
   // Handle intervention trigger
   const [interveningStudents, setInterveningStudents] = useState<Set<string>>(new Set());
   
+  // Student Preview state
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewProfile, setPreviewProfile] = useState<'fast' | 'slow' | 'adaptive' | 'explanation-first'>('adaptive');
+  const [previewProblem, setPreviewProblem] = useState<string>('problem-1');
+  
   const handleTriggerIntervention = async (student: StudentAdaptiveProfile) => {
     // Set loading state for this student
     setInterveningStudents(prev => new Set(prev).add(student.learnerId));
@@ -549,6 +557,32 @@ export function InstructorDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Student Preview Card */}
+        <Card className="border-blue-200 bg-gradient-to-r from-blue-50 to-white">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-start gap-4">
+                <div className="p-3 rounded-lg bg-blue-100">
+                  <Eye className="size-6 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg text-blue-900">Student Preview Mode</h3>
+                  <p className="text-sm text-blue-700 mt-1">
+                    Experience the platform as a student without logging out. Test different escalation profiles and see what students see.
+                  </p>
+                </div>
+              </div>
+              <Button 
+                onClick={() => setShowPreviewModal(true)}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Play className="size-4 mr-2" />
+                Launch Preview
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Adaptive Learning Insights Section (Week 5) */}
         <div className="space-y-6">
@@ -954,6 +988,113 @@ export function InstructorDashboard() {
       {toastMessage && (
         <div className="fixed bottom-4 right-4 bg-gray-900 text-white px-4 py-2 rounded-lg shadow-lg animate-in fade-in slide-in-from-bottom-2">
           {toastMessage}
+        </div>
+      )}
+
+      {/* Student Preview Modal */}
+      {showPreviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Eye className="size-6 text-white" />
+                  <h2 className="text-xl font-bold text-white">Student Preview</h2>
+                </div>
+                <button
+                  onClick={() => setShowPreviewModal(false)}
+                  className="p-1 hover:bg-white/20 rounded-full transition-colors"
+                >
+                  <X className="size-5 text-white" />
+                </button>
+              </div>
+              <p className="text-blue-100 text-sm mt-1">
+                Configure preview settings and experience the platform as a student
+              </p>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-6">
+              {/* Profile Selection */}
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-gray-700">
+                  Escalation Profile
+                </label>
+                <p className="text-xs text-gray-500">
+                  Choose how hints will escalate during the preview
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { id: 'fast', label: 'Fast Escalator', desc: 'Quick intervention', color: 'border-red-200 hover:bg-red-50' },
+                    { id: 'slow', label: 'Slow Escalator', desc: 'Extended exploration', color: 'border-blue-200 hover:bg-blue-50' },
+                    { id: 'adaptive', label: 'Adaptive', desc: 'Balanced approach', color: 'border-green-200 hover:bg-green-50' },
+                    { id: 'explanation-first', label: 'Explanation First', desc: 'Immediate help', color: 'border-purple-200 hover:bg-purple-50' },
+                  ].map((profile) => (
+                    <button
+                      key={profile.id}
+                      onClick={() => setPreviewProfile(profile.id as typeof previewProfile)}
+                      className={`p-3 border-2 rounded-lg text-left transition-all ${
+                        previewProfile === profile.id 
+                          ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
+                          : `border-gray-200 ${profile.color}`
+                      }`}
+                    >
+                      <p className={`font-medium text-sm ${
+                        previewProfile === profile.id ? 'text-blue-900' : 'text-gray-900'
+                      }`}>
+                        {profile.label}
+                      </p>
+                      <p className={`text-xs mt-1 ${
+                        previewProfile === profile.id ? 'text-blue-600' : 'text-gray-500'
+                      }`}>
+                        {profile.desc}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Info Box */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-amber-900 mb-2">What to expect</h4>
+                <ul className="text-xs text-amber-700 space-y-1 list-disc ml-4">
+                  <li>You'll see the student interface without instructor controls</li>
+                  <li>No debug panels or testing controls will be visible</li>
+                  <li>Your interactions won't affect real student data</li>
+                  <li>Use the Role selector in the header to return to instructor view</li>
+                </ul>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowPreviewModal(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    // Save the preview profile override to localStorage
+                    localStorage.setItem('sql-adapt-debug-profile', `${previewProfile}-escalator`);
+                    // Also set assignment strategy to static for consistent experience
+                    localStorage.setItem('sql-adapt-debug-strategy', 'static');
+                    // Navigate to practice as student role
+                    localStorage.setItem('sql-adapt-user-role', 'student');
+                    // Close modal and navigate
+                    setShowPreviewModal(false);
+                    navigate('/practice');
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                >
+                  <Play className="size-4 mr-2" />
+                  Start Preview
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
