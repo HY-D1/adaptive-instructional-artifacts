@@ -184,6 +184,12 @@ export async function setupTest(page: Page) {
  * this is not needed.
  */
 export async function completeStartPageFlow(page: Page, username: string = 'TestStudent') {
+  // Set welcome-seen flag to prevent modal from appearing
+  await page.addInitScript(() => {
+    window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    window.localStorage.setItem('sql-adapt-welcome-disabled', 'true');
+  });
+  
   // Wait for StartPage heading
   await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible({ timeout: 10000 });
   
