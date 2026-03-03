@@ -375,11 +375,6 @@ export function InstructorDashboard() {
   const [previewProfile, setPreviewProfile] = useState<'fast' | 'slow' | 'adaptive' | 'explanation-first'>('adaptive');
   const [previewProblem, setPreviewProblem] = useState<string>('problem-1');
 
-  // DEBUG: Track showPreviewModal changes
-  useEffect(() => {
-    console.log('[DEBUG] showPreviewModal changed to:', showPreviewModal);
-  }, [showPreviewModal]);
-
   
   const handleTriggerIntervention = async (student: StudentAdaptiveProfile) => {
     // Set loading state for this student
@@ -598,15 +593,11 @@ export function InstructorDashboard() {
                 <button
                   type="button"
                   onClick={(e) => {
-                    console.log('[DEBUG] Launch Preview button clicked!', e);
-                    console.log('[DEBUG] Current showPreviewModal state:', showPreviewModal);
-                    
-                    // Aggressive event prevention to stop page refresh
+                    // Prevent any default behavior
                     e.preventDefault();
                     e.stopPropagation();
                     
                     setShowPreviewModal(true);
-                    console.log('[DEBUG] Called setShowPreviewModal(true)');
                   }}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center gap-2 active:scale-95 transition-transform cursor-pointer"
                   data-testid="launch-preview-button"
@@ -1056,13 +1047,9 @@ export function InstructorDashboard() {
       )}
 
       {/* Student Preview Modal - Using Dialog Component with Portal */}
-      {console.log('[DEBUG] About to render Dialog, showPreviewModal:', showPreviewModal)}
       <Dialog 
         open={showPreviewModal} 
-        onOpenChange={(open) => {
-          console.log('[DEBUG] Dialog onOpenChange called:', open);
-          setShowPreviewModal(open);
-        }}
+        onOpenChange={setShowPreviewModal}
         key={`preview-modal-${showPreviewModal}`}
       >
         <DialogContent className="sm:max-w-lg p-0 overflow-hidden">
@@ -1161,14 +1148,6 @@ export function InstructorDashboard() {
                     localStorage.setItem('sql-adapt-debug-strategy', 'static');
                     // Set a preview mode flag to indicate we're in preview mode
                     localStorage.setItem('sql-adapt-preview-mode', 'true');
-                    
-                    // Verify localStorage was set correctly
-                    const verifyPreview = localStorage.getItem('sql-adapt-preview-mode');
-                    const verifyProfile = localStorage.getItem('sql-adapt-debug-profile');
-                    console.log('[Student Preview] Starting preview mode:', {
-                      previewMode: verifyPreview,
-                      profile: verifyProfile
-                    });
                     
                     // Close modal first
                     setShowPreviewModal(false);

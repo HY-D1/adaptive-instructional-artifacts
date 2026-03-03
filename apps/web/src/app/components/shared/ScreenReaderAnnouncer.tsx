@@ -58,41 +58,6 @@ export function ScreenReaderAnnouncer({
 }
 
 /**
- * Static aria-live region for hint announcements
- * Place this near the hint system component
- */
-function HintAnnouncer({ message }: { message: string }) {
-  return (
-    <div
-      role="region"
-      aria-live="polite"
-      aria-atomic="true"
-      aria-label="Hint announcements"
-      className="sr-only"
-    >
-      {message}
-    </div>
-  );
-}
-
-/**
- * Static aria-live region for notification announcements
- */
-function NotificationAnnouncer({ message }: { message: string }) {
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      aria-atomic="true"
-      aria-label="Notifications"
-      className="sr-only"
-    >
-      {message}
-    </div>
-  );
-}
-
-/**
  * Hook for managing screen reader announcements
  */
 export function useScreenReaderAnnouncer() {

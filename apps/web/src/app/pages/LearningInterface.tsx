@@ -1017,7 +1017,7 @@ export function LearningInterface() {
             hdiScore: currentHDI,
           });
           
-          console.log('[Bandit] Recorded outcome for', currentProfileId, { solved: true, errorCount, usedExplanation });
+          // Bandit outcome recorded
         } catch (error) {
           console.error('[Bandit] Failed to record outcome:', error);
         }

@@ -387,43 +387,4 @@ export function ConceptTag({
   );
 }
 
-/**
- * Button to add content to My Textbook
- * @param props - Button props with click handler and state flags
- */
-function AddToTextbookButton({
-  onClick,
-  disabled = false,
-  loading = false
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  loading?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled || loading}
-      className={cn(
-        'w-full sm:flex-1 inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium',
-        'transition-colors h-9',
-        disabled 
-          ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-          : 'bg-purple-600 text-white hover:bg-purple-700 shadow-sm hover:shadow'
-      )}
-    >
-      {loading ? (
-        <>
-          <div className="size-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-          <span>Adding...</span>
-        </>
-      ) : (
-        <>
-          <Bookmark className="size-4" />
-          <span className="hidden sm:inline">Save to Notes</span>
-          <span className="sm:hidden">Save</span>
-        </>
-      )}
-    </button>
-  );
-}
+
