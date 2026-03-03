@@ -40,7 +40,7 @@ import {
   DialogTitle,
   DialogDescription
 } from '../components/ui/dialog';
-import { storage } from '../lib/storage/storage';
+import { storage, broadcastSync } from '../lib/storage/storage';
 import { useUserRole } from '../hooks/useUserRole';
 import type { LearnerProfile, InteractionEvent } from '../types';
 
@@ -1148,6 +1148,8 @@ export function InstructorDashboard() {
                     localStorage.setItem('sql-adapt-debug-strategy', 'static');
                     // Set a preview mode flag to indicate we're in preview mode
                     localStorage.setItem('sql-adapt-preview-mode', 'true');
+                    // Broadcast to other tabs for cross-tab sync
+                    broadcastSync('sql-adapt-preview-mode', 'true');
                     
                     // Close modal first
                     setShowPreviewModal(false);

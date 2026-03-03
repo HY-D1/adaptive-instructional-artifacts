@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('SettingsPage Screenshots', () => {
+test.describe('@weekly SettingsPage Screenshots', () => {
   test('instructor settings with debug panel', async ({ page }) => {
     await page.addInitScript(() => {
       localStorage.setItem('sql-adapt-user-profile', JSON.stringify({

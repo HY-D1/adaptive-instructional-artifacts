@@ -2800,3 +2800,112 @@ class StorageManager {
 }
 
 export const storage = new StorageManager();
+
+// ============================================================================
+// Cross-Tab Synchronization for Preview Mode
+// ============================================================================
+
+/**
+ * Broadcast channel key for cross-tab sync
+ * Uses a special key that triggers StorageEvent without persisting data
+ */
+const SYNC_CHANNEL = 'sql-adapt-sync';
+
+/**
+ * Preview mode storage key
+ */
+const PREVIEW_MODE_KEY = 'sql-adapt-preview-mode';
+
+/**
+ * Broadcast a sync event to all tabs
+ * Uses the "set then remove" technique to trigger StorageEvent
+ * without actually persisting the sync message
+ * 
+ * @param key - The storage key that changed
+ * @param value - The new value (or null if removed)
+ */
+export function broadcastSync(key: string, value: string | null) {
+  const event = { key, value, timestamp: Date.now() };
+  try {
+    // Set item to trigger StorageEvent in other tabs
+    localStorage.setItem(SYNC_CHANNEL, JSON.stringify(event));
+    // Immediately remove to avoid persisting sync messages
+    localStorage.removeItem(SYNC_CHANNEL);
+  } catch (error) {
+    // Silently fail if localStorage is unavailable (e.g., private mode)
+    console.warn('[Sync] Failed to broadcast sync event:', error);
+  }
+}
+
+/**
+ * Subscribe to cross-tab sync events
+ * Returns an unsubscribe function to clean up the listener
+ * 
+ * @param callback - Function to call when a sync event is received
+ * @returns Unsubscribe function
+ */
+export function subscribeToSync(callback: (key: string, value: string | null) => void): () => void {
+  const handler = (e: StorageEvent) => {
+    // Only respond to our sync channel
+    if (e.key !== SYNC_CHANNEL || !e.newValue) {
+      return;
+    }
+    
+    try {
+      const event = JSON.parse(e.newValue) as { key: string; value: string | null; timestamp: number };
+      
+      // Validate event structure
+      if (typeof event.key !== 'string') {
+        console.warn('[Sync] Invalid sync event: missing key');
+        return;
+      }
+      
+      // Ignore events older than 5 seconds (flood protection)
+      const age = Date.now() - (event.timestamp || 0);
+      if (age > 5000) {
+        return;
+      }
+      
+      callback(event.key, event.value);
+    } catch (error) {
+      // Ignore invalid events - corrupted JSON or unexpected format
+      console.warn('[Sync] Failed to parse sync event:', error);
+    }
+  };
+  
+  window.addEventListener('storage', handler);
+  
+  // Return unsubscribe function
+  return () => {
+    window.removeEventListener('storage', handler);
+  };
+}
+
+/**
+ * Set preview mode with cross-tab sync
+ * Updates localStorage and broadcasts to other tabs
+ * 
+ * @param enabled - Whether preview mode should be enabled
+ */
+export function setPreviewModeWithSync(enabled: boolean): void {
+  const value = String(enabled);
+  localStorage.setItem(PREVIEW_MODE_KEY, value);
+  broadcastSync(PREVIEW_MODE_KEY, value);
+}
+
+/**
+ * Get preview mode from localStorage
+ * @returns True if preview mode is enabled
+ */
+export function getPreviewMode(): boolean {
+  return localStorage.getItem(PREVIEW_MODE_KEY) === 'true';
+}
+
+/**
+ * Clear preview mode with cross-tab sync
+ * Removes from localStorage and broadcasts to other tabs
+ */
+export function clearPreviewModeWithSync(): void {
+  localStorage.removeItem(PREVIEW_MODE_KEY);
+  broadcastSync(PREVIEW_MODE_KEY, null);
+}

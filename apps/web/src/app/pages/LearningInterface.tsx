@@ -37,7 +37,7 @@ import { useScreenReaderAnnouncer } from '../components/shared/ScreenReaderAnnou
 import { sqlProblems } from '../data/problems';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
-import { storage } from '../lib/storage/storage';
+import { storage, subscribeToSync } from '../lib/storage/storage';
 import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content/content-generator';
@@ -47,6 +47,8 @@ import { startBackgroundAnalysis, stopBackgroundAnalysis, runAnalysisOnce, ANALY
 import type { AnalysisResult } from '../lib/trace-analyzer';
 import { getConcept } from '../lib/content/concept-loader';
 import { banditManager, PROFILE_TO_ARM_ID, BANDIT_ARM_PROFILES } from '../lib/ml/learner-bandit-manager';
+import { calculateHDI, calculateHDIComponents } from '../lib/ml/hdi-calculator';
+import type { HDIComponents, HDILevel } from '../types';
 import { safeGetStrategy, safeGetProfileOverride } from '../lib/storage/storage-validation';
 import { assignProfile, getProfileById, type EscalationProfile } from '../lib/ml/escalation-profiles';
 import type { BanditArmId } from '../lib/ml/learner-bandit-manager';
@@ -251,10 +253,13 @@ export function LearningInterface() {
   const [currentEscalationProfile, setCurrentEscalationProfile] = useState<EscalationProfile | null>(null);
   const isDev = import.meta.env.DEV;
   
-  // Week 5: HDI tracking state
+  // Week 5: HDI tracking state (unified 5-component calculator)
   const [currentHDI, setCurrentHDI] = useState<number>(0);
+  const [hdiLevel, setHdiLevel] = useState<HDILevel>('low');
+  const [hdiComponents, setHdiComponents] = useState<HDIComponents | null>(null);
   const [hdiTrend, setHdiTrend] = useState<HDITrend>('stable');
   const [showDependencyWarning, setShowDependencyWarning] = useState(false);
+  const [hdiRefreshKey, setHdiRefreshKey] = useState(0);
   const dependencyWarningShownRef = useRef(false);
   const lastHintRequestTimeRef = useRef<number>(0);
   
@@ -263,6 +268,17 @@ export function LearningInterface() {
   useEffect(() => {
     const previewMode = localStorage.getItem('sql-adapt-preview-mode') === 'true';
     setIsPreviewMode(previewMode);
+  }, []);
+  
+  // Subscribe to cross-tab sync for preview mode changes
+  useEffect(() => {
+    const unsubscribe = subscribeToSync((key, value) => {
+      if (key === 'sql-adapt-preview-mode') {
+        // Update preview mode state when changed in another tab
+        setIsPreviewMode(value === 'true');
+      }
+    });
+    return unsubscribe;
   }, []);
   
   // Function to exit preview mode
@@ -396,38 +412,42 @@ export function LearningInterface() {
     return () => window.removeEventListener('hdi_calculated', handleHDIEvent);
   }, [learnerId]);
 
-  // Week 5: Calculate HDI from interactions when they change
+  // Week 5: Calculate HDI using unified 5-component calculator
   useEffect(() => {
-    if (!learnerId || interactions.length === 0) return;
+    if (!learnerId) return;
     
-    const sessionInteractions = interactions.filter(
-      i => i.learnerId === learnerId && i.sessionId === sessionId
-    );
+    // Get all interactions for this learner (not just session-scoped)
+    const allLearnerInteractions = storage.getInteractionsByLearner(learnerId);
     
-    // Calculate HDI components
-    const hintViews = sessionInteractions.filter(i => i.eventType === 'hint_view').length;
-    const explanationViews = sessionInteractions.filter(i => i.eventType === 'explanation_view').length;
-    const executions = sessionInteractions.filter(i => i.eventType === 'execution').length;
-    const errors = sessionInteractions.filter(i => i.eventType === 'error').length;
-    const attempts = executions + errors;
+    // Calculate full HDI with all 5 components
+    const result = calculateHDI(allLearnerInteractions);
     
-    // Simple HDI calculation: weighted ratio of help-seeking to attempts
-    // This is a simplified version - the actual HDI calculation would be more sophisticated
-    const hpa = attempts > 0 ? hintViews / attempts : 0;
-    const er = attempts > 0 ? explanationViews / attempts : 0;
-    const hdi = Math.min(1, (hpa * 0.4 + er * 0.6));
-    
-    // Determine trend based on previous value (simplified)
-    if (hdi > currentHDI + 0.05) {
+    // Determine trend based on previous value
+    if (result.hdi > currentHDI + 0.05) {
       setHdiTrend('increasing');
-    } else if (hdi < currentHDI - 0.05) {
+    } else if (result.hdi < currentHDI - 0.05) {
       setHdiTrend('decreasing');
     } else {
       setHdiTrend('stable');
     }
     
-    setCurrentHDI(hdi);
-  }, [interactions, learnerId, sessionId, currentHDI]);
+    setCurrentHDI(result.hdi);
+    setHdiLevel(result.level);
+    setHdiComponents(result.components);
+    
+    // Dispatch custom event for other components
+    const hdiEvent = new CustomEvent('hdi_calculated', {
+      detail: {
+        hdi: result.hdi,
+        hdiLevel: result.level,
+        components: result.components,
+        trend: result.hdi > currentHDI + 0.05 ? 'increasing' : 
+               result.hdi < currentHDI - 0.05 ? 'decreasing' : 'stable',
+        learnerId
+      }
+    });
+    window.dispatchEvent(hdiEvent);
+  }, [learnerId, interactions, hdiRefreshKey, currentHDI]);
 
   // Week 5: Check for dependency warning after hint requests
   useEffect(() => {
@@ -1796,6 +1816,186 @@ export function LearningInterface() {
                   <div className="text-gray-600">Time spent:</div>
                   <div className="font-medium text-right">
                     {formatTime(timeSpent)}
+                  </div>
+                </div>
+              </Card>
+
+              {/* Week 5: Unified HDI Display with 5 Components */}
+              <Card className="p-4 bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-indigo-900">Hint Dependency Index</h3>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge 
+                        variant="outline" 
+                        className={cn(
+                          "text-xs",
+                          hdiLevel === 'low' && "bg-green-100 text-green-800 border-green-300",
+                          hdiLevel === 'medium' && "bg-yellow-100 text-yellow-800 border-yellow-300",
+                          hdiLevel === 'high' && "bg-red-100 text-red-800 border-red-300"
+                        )}
+                      >
+                        {hdiLevel === 'low' && <Check className="size-3 mr-1" />}
+                        {hdiLevel.charAt(0).toUpperCase() + hdiLevel.slice(1)}
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>HDI Level: {hdiLevel} dependency on hints</p>
+                      <p className="text-xs text-gray-400">Score: {(currentHDI * 100).toFixed(1)}%</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                
+                {/* Overall HDI Score */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm text-indigo-700 font-medium">Overall HDI</span>
+                    <span className="text-lg font-bold text-indigo-900">{(currentHDI * 100).toFixed(1)}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-indigo-200 rounded-full overflow-hidden">
+                    <div 
+                      className={cn(
+                        "h-full rounded-full transition-all duration-500",
+                        hdiLevel === 'low' && "bg-green-500",
+                        hdiLevel === 'medium' && "bg-yellow-500",
+                        hdiLevel === 'high' && "bg-red-500"
+                      )}
+                      style={{ width: `${currentHDI * 100}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* 5 Component Breakdown */}
+                {hdiComponents && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-indigo-600 font-medium mb-2">Component Breakdown</p>
+                    
+                    {/* HPA - Hints Per Attempt */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600 w-12 shrink-0">HPA</span>
+                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-indigo-500 rounded-full"
+                              style={{ width: `${hdiComponents.hpa * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono text-gray-700 w-10 text-right">
+                            {hdiComponents.hpa.toFixed(2)}
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">
+                        <p className="font-medium">Hints Per Attempt (HPA)</p>
+                        <p className="text-xs text-gray-400">Ratio of hint requests to problem attempts</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    {/* AED - Average Escalation Depth */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600 w-12 shrink-0">AED</span>
+                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-indigo-500 rounded-full"
+                              style={{ width: `${hdiComponents.aed * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono text-gray-700 w-10 text-right">
+                            {hdiComponents.aed.toFixed(2)}
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">
+                        <p className="font-medium">Average Escalation Depth (AED)</p>
+                        <p className="text-xs text-gray-400">Average hint level used (1-3), normalized</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    {/* ER - Explanation Rate */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600 w-12 shrink-0">ER</span>
+                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-indigo-500 rounded-full"
+                              style={{ width: `${hdiComponents.er * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono text-gray-700 w-10 text-right">
+                            {hdiComponents.er.toFixed(2)}
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">
+                        <p className="font-medium">Explanation Rate (ER)</p>
+                        <p className="text-xs text-gray-400">Ratio of explanation views to attempts</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    {/* REAE - Repeated Error After Explanation */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600 w-12 shrink-0">REAE</span>
+                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-indigo-500 rounded-full"
+                              style={{ width: `${hdiComponents.reae * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono text-gray-700 w-10 text-right">
+                            {hdiComponents.reae.toFixed(2)}
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">
+                        <p className="font-medium">Repeated Error After Explanation (REAE)</p>
+                        <p className="text-xs text-gray-400">Errors made after viewing explanations</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    {/* IWH - Improvement Without Hint */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600 w-12 shrink-0">IWH</span>
+                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-green-500 rounded-full"
+                              style={{ width: `${hdiComponents.iwh * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono text-gray-700 w-10 text-right">
+                            {hdiComponents.iwh.toFixed(2)}
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">
+                        <p className="font-medium">Improvement Without Hint (IWH)</p>
+                        <p className="text-xs text-gray-400">Successful attempts without using hints</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                )}
+
+                {/* Trend Indicator */}
+                <div className="mt-3 pt-3 border-t border-indigo-100">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-indigo-600">Trend:</span>
+                    <span className={cn(
+                      "font-medium",
+                      hdiTrend === 'decreasing' && "text-green-600",
+                      hdiTrend === 'increasing' && "text-amber-600",
+                      hdiTrend === 'stable' && "text-gray-600"
+                    )}>
+                      {hdiTrend === 'decreasing' && '↓ Improving'}
+                      {hdiTrend === 'increasing' && '↑ Rising'}
+                      {hdiTrend === 'stable' && '→ Stable'}
+                    </span>
                   </div>
                 </div>
               </Card>

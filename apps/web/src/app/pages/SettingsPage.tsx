@@ -11,6 +11,7 @@ import {
   Target,
   BrainCircuit,
   GitBranch,
+  Eye,
 } from 'lucide-react';
 
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
@@ -35,9 +36,10 @@ import { banditManager, BANDIT_ARM_PROFILES } from '../lib/ml/learner-bandit-man
 import type { BanditArmId } from '../lib/ml/learner-bandit-manager';
 import { assignProfile } from '../lib/escalation-profiles';
 import type { AssignmentStrategy } from '../lib/escalation-profiles';
-import { storage } from '../lib/storage/storage';
+import { storage, broadcastSync } from '../lib/storage/storage';
 import type { InteractionEvent } from '../types';
 import { calculateHDIData, filterOutHDIEvents, formatHDIDetailed } from '../lib/ml/hdi-debug';
+import { Switch } from '../components/ui/switch';
 
 // DEV mode check
 const isDev = import.meta.env.DEV;
@@ -62,6 +64,11 @@ export function SettingsPage() {
   const { isInstructor, profile } = useUserRole();
   const learnerId = profile?.id;
   const { addToast } = useToast();
+  
+  // Preview mode state (for instructors)
+  const [isPreviewMode, setIsPreviewMode] = useState(() => {
+    return localStorage.getItem('sql-adapt-preview-mode') === 'true';
+  });
 
   // Week 5 Testing Controls State
   const [profileOverride, setProfileOverride] = useState<ProfileOverrideId>('auto');
@@ -96,6 +103,21 @@ export function SettingsPage() {
       setAssignmentStrategy(savedStrategy as AssignmentStrategy);
     }
   }, []);
+  
+  // Handle preview mode toggle with cross-tab sync
+  const handlePreviewModeChange = useCallback((enabled: boolean) => {
+    setIsPreviewMode(enabled);
+    localStorage.setItem('sql-adapt-preview-mode', String(enabled));
+    broadcastSync('sql-adapt-preview-mode', String(enabled));
+    
+    addToast({
+      type: 'success',
+      title: enabled ? 'Preview Mode Enabled' : 'Preview Mode Disabled',
+      message: enabled 
+        ? 'You are now previewing the student view. Other tabs have been synced.'
+        : 'Preview mode has been turned off. Other tabs have been synced.',
+    });
+  }, [addToast]);
 
   // Calculate HDI score and count events - memoized for performance
   const hdiData = useMemo(() => {
@@ -522,6 +544,51 @@ export function SettingsPage() {
                 </p>
               </div>
             </CardContent>
+          </Card>
+        )}
+
+        {/* Preview Mode Section - Instructors Only */}
+        {isInstructor && (
+          <Card className="mt-6 p-6 max-w-5xl border-blue-200" data-testid="preview-mode-section">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Eye className="size-5 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Student Preview Mode
+                </h2>
+                <p className="text-sm text-gray-500">
+                  Preview how the learning interface appears to students
+                </p>
+              </div>
+              <Switch
+                checked={isPreviewMode}
+                onCheckedChange={handlePreviewModeChange}
+                data-testid="preview-mode-toggle"
+              />
+            </div>
+            <div className="space-y-2 text-sm text-gray-600">
+              <p>
+                <strong>Preview Mode</strong> allows instructors to experience the platform 
+                as a student would, including the same hint escalation profiles and 
+                adaptive learning features.
+              </p>
+              {isPreviewMode && (
+                <div className="mt-3 p-3 bg-blue-50 rounded-md">
+                  <p className="text-blue-700">
+                    Preview mode is currently <strong>enabled</strong>. Visit the{' '}
+                    <a href="/practice" className="underline font-medium">
+                      Practice page
+                    </a>{' '}
+                    to see the student view.
+                  </p>
+                </div>
+              )}
+              <p className="text-xs text-gray-400 mt-2">
+                Changes are synchronized across all open tabs automatically.
+              </p>
+            </div>
           </Card>
         )}
 
