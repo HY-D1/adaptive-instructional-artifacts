@@ -7,11 +7,11 @@ import { expect, test } from '@playwright/test';
  * information architecture of the Hint Dependency Index display.
  */
 
-// Helper to complete start page flow
+// Helper to complete start page flow (matches shared helper approach)
 async function completeStartPageFlow(page: any, name: string = 'TestUser') {
   await page.goto('/');
-  await page.waitForSelector('[data-testid="start-page"]', { timeout: 5000 });
-  await page.fill('input[name="userName"]', name);
+  await page.waitForSelector('text=SQL-Adapt Learning System', { timeout: 10000 });
+  await page.fill('input[placeholder="Enter your username"]', name);
   await page.click('text=Student');
   await page.click('button:has-text("Get Started")');
   await page.waitForURL('**/practice', { timeout: 5000 });
