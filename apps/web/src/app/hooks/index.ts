@@ -14,5 +14,5 @@ export {
   useSaveProfile, 
   useClearProfile 
 } from './useSessionPersistence';
-export { useLearningData, useLearnerProfiles, useLearnerData } from './useLearningData';
+export { useLearningData } from './useLearningData';
 export { useEnhancedHints } from './useEnhancedHints';
