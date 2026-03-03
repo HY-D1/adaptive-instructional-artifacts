@@ -352,7 +352,7 @@ export function createEscalationProfileBandit(): MultiArmedBandit {
  * @param actualReward - Reward received
  * @returns Regret value (non-negative)
  */
-function calculateRegret(
+export function calculateRegret(
   optimalReward: number,
   actualReward: number
 ): number {
@@ -365,7 +365,7 @@ function calculateRegret(
  * @param optimalReward - Optimal reward per round
  * @returns Cumulative regret
  */
-function calculateCumulativeRegret(
+export function calculateCumulativeRegret(
   rewards: number[],
   optimalReward: number
 ): number {

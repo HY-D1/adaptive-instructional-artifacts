@@ -261,7 +261,7 @@ export function getEscalationProfilesVersion(): string {
  * console.log(profile.name); // 'Fast Escalator'
  * ```
  */
-function getProfileForLearner(
+export function getProfileForLearner(
   learnerId: string,
   interactions: InteractionEvent[] = [],
   strategy: AssignmentStrategy = 'static'
@@ -286,7 +286,7 @@ function getProfileForLearner(
  * console.log(thresholds); // { escalate: 2, aggregate: 4 }
  * ```
  */
-function getProfileThresholds(
+export function getProfileThresholds(
   profileId: string
 ): { escalate: number; aggregate: number } | undefined {
   const profile = getProfileById(profileId);
