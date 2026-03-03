@@ -11,7 +11,7 @@
  */
 
 import { test, expect, Page, Locator } from '@playwright/test';
-import { replaceEditorText, getEditorText, waitForEditorReady } from '../../apps/web/tests/test-helpers';
+import { replaceEditorText, getEditorText, waitForEditorReady } from '../helpers/test-helpers';
 
 // =============================================================================
 // Test Data

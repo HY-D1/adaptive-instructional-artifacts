@@ -215,8 +215,8 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 npm run build
 
 # Run all tests
-npm run test:e2e:weekly    # ~380 E2E tests
-npm run test:unit          # ~316 unit tests
+npm run test:e2e:weekly    # 380 E2E tests
+npm run test:unit          # 316 unit tests
 
 # Generate demo artifacts
 npm run demo:weekly
@@ -257,7 +257,7 @@ npm run pdf:query
 │   │   │   ├── lib/             # Business logic (storage, orchestrator, bandit, HDI)
 │   │   │   ├── data/            # Static data (problems, SQL-Engage)
 │   │   │   └── hooks/           # Custom React hooks (useUserRole, etc.)
-│   │   └── tests/               # Playwright E2E tests (138 @weekly tests)
+│   │   └── tests/               # Playwright E2E tests (380 @weekly tests)
 │   └── vite.config.ts
 ├── scripts/                     # Utility scripts (replay, metrics)
 ├── docs/                        # Documentation
@@ -308,6 +308,9 @@ npm run pdf:query
 | Escalation Profiles | `escalation-profiles-v1` | `apps/web/src/app/lib/escalation-profiles.ts` |
 | Bandit Algorithm | `bandit-thompson-v1` | `apps/web/src/app/lib/multi-armed-bandit.ts` |
 | HDI Calculator | `hdi-5component-v1` | `apps/web/src/app/lib/hdi-calculator.ts` |
+| Storage Validation | `storage-validation-v1` | `apps/web/src/app/lib/storage-validation.ts` |
+| Toast System | `toast-system-v1` | `apps/web/src/app/components/ui/toast.tsx` |
+| Confirmation Dialogs | `confirm-dialog-v1` | `apps/web/src/app/components/ui/confirm-dialog.tsx` |
 
 ## Testing
 
@@ -440,4 +443,4 @@ This project explores **dynamic instructional assembly** — content that emerge
 ---
 
 *Last updated: 2026-03-02*  
-*Project Status: Week 5 Complete — 696 total tests passing*
+*Project Status: Week 5 Complete — 696 total tests passing (316 unit + 380 E2E), escalation profiles, bandit, HDI calculator, storage validation, toast notifications, and confirmation dialogs active*
