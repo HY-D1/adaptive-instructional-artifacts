@@ -25,7 +25,7 @@ import {
   VALID_PROFILE_IDS,
   VALID_STRATEGIES,
   STORAGE_KEYS,
-} from './storage-validation';
+} from './storage/storage-validation';
 import type { UserProfile } from '../types';
 
 // ============================================================================
@@ -726,7 +726,7 @@ describe('storage-validation comprehensive tests', () => {
       expect(result).toBe(false);
       expect(mockStorage.getItem(STORAGE_KEYS.PROFILE_OVERRIDE)).toBeNull();
       expect(consoleSpy.error).toHaveBeenCalledWith(
-        '[Storage] Attempted to set invalid profile: invalid'
+        '[Storage Validation] Invalid profile ID rejected: invalid'
       );
     });
 

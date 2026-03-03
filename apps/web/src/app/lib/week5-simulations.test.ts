@@ -32,14 +32,14 @@ import {
   createEscalationProfileBandit,
   sampleBeta,
   sampleGamma,
-} from './multi-armed-bandit';
+} from './ml/multi-armed-bandit';
 
 import {
   LearnerBanditManager,
   BANDIT_ARM_PROFILES,
   type LearningOutcome,
   type BanditArmId,
-} from './learner-bandit-manager';
+} from './ml/learner-bandit-manager';
 
 import {
   calculateHDI,
@@ -49,7 +49,7 @@ import {
   calculateER,
   calculateREAE,
   calculateIWH,
-} from './hdi-calculator';
+} from './ml/hdi-calculator';
 
 import {
   createInitialLadderState,
@@ -61,7 +61,7 @@ import {
   type EscalationTrigger,
 } from './guidance-ladder';
 
-import { calculateReward, type RewardComponents } from './reward-calculator';
+import { calculateReward, type RewardComponents } from './ml/reward-calculator';
 
 // =============================================================================
 // Test Helpers
