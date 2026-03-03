@@ -3,7 +3,7 @@
  * Tests retrieval grounding determinism without requiring a browser/Playwright
  * 
  * This replaces the Playwright test at:
- * apps/web/tests/retrieval-grounding.spec.ts (now disabled)
+ * tests/e2e/integration/retrieval-grounding.spec.ts (now disabled)
  * 
  * Run with: npx vitest run
  */
