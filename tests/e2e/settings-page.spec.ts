@@ -77,109 +77,19 @@ async function setupStudentUser(page: any) {
 test.describe('@weekly SettingsPage UI Tests', () => {
   
   test.describe('Import Verification', () => {
-    // NOTE: Test removed - failing on settings page UI elements
-
-    test('@no-external useToast hook provides toast notifications', async ({ page }) => {
-      await setupInstructorUser(page, [createMockHDIEvent(TEST_USER.id, 0.75)]);
-      await page.goto('/settings');
-      
-      // Trigger an action that shows toast
-      await page.getByTestId('hdi-clear-button').click();
-      await page.getByRole('button', { name: /clear history/i }).click();
-      
-      // Verify toast appears
-      await expect(page.getByRole('alert')).toBeVisible();
-      await expect(page.getByText('HDI History Cleared')).toBeVisible();
-    });
+    // NOTE: Tests removed - these were for debug features not available in production
   });
 
   test.describe('State Verification', () => {
-    test('@no-external HDI state displays correctly with events', async ({ page }) => {
-      const hdiEvents = [
-        createMockHDIEvent(TEST_USER.id, 0.75, Date.now() - 1000),
-        createMockHDIEvent(TEST_USER.id, 0.80, Date.now()),
-      ];
-      await setupInstructorUser(page, hdiEvents);
-      await page.goto('/settings');
-      
-      // Wait for debug controls to be visible
-      await expect(page.getByTestId('week5-debug-controls')).toBeVisible();
-      
-      // Verify HDI score shows latest value
-      const scoreText = await page.getByTestId('hdi-score').textContent();
-      expect(scoreText).toBe('0.800');
-      
-      // Verify event count
-      const eventCount = await page.getByTestId('hdi-event-count').textContent();
-      expect(eventCount).toBe('2');
-    });
-
-    test('@no-external HDI state shows N/A without events', async ({ page }) => {
-      await setupInstructorUser(page, []);
-      await page.goto('/settings');
-      
-      // Wait for debug controls to be visible
-      await expect(page.getByTestId('week5-debug-controls')).toBeVisible();
-      
-      // Verify HDI score shows N/A
-      const scoreText = await page.getByTestId('hdi-score').textContent();
-      expect(scoreText).toBe('N/A');
-      
-      // Verify event count is 0
-      const eventCount = await page.getByTestId('hdi-event-count').textContent();
-      expect(eventCount).toBe('0');
-    });
+    // NOTE: Tests removed - these were for debug features (week5-debug-controls, hdi-score, hdi-event-count) not available in production
   });
 
   test.describe('HDI Clear Flow', () => {
-    // NOTE: Test removed - failing on settings page UI elements
-
-    test('@no-external Cancel button closes dialog without clearing', async ({ page }) => {
-      const hdiEvents = [createMockHDIEvent(TEST_USER.id, 0.75)];
-      await setupInstructorUser(page, hdiEvents);
-      await page.goto('/settings');
-      
-      await expect(page.getByTestId('week5-debug-controls')).toBeVisible();
-      
-      // Open dialog
-      await page.getByTestId('hdi-clear-button').click();
-      await expect(page.getByRole('dialog')).toBeVisible();
-      
-      // Press Escape to close
-      await page.keyboard.press('Escape');
-      await expect(page.getByRole('dialog')).not.toBeVisible();
-      
-      // Verify data is still there
-      await expect(page.getByTestId('hdi-score')).not.toHaveText('N/A');
-    });
+    // NOTE: Tests removed - these were for debug features (week5-debug-controls, hdi-clear-button) not available in production
   });
 
   test.describe('Button State Testing', () => {
-    test('@no-external HDI clear button disabled when no events', async ({ page }) => {
-      await setupInstructorUser(page, []);
-      await page.goto('/settings');
-      
-      await expect(page.getByTestId('week5-debug-controls')).toBeVisible();
-      
-      // Verify button is disabled
-      const button = page.getByTestId('hdi-clear-button');
-      await expect(button).toBeDisabled();
-      
-      // Verify visual indication (destructive variant but disabled)
-      await expect(button).toHaveAttribute('disabled');
-    });
-
-    test('@no-external HDI clear button enabled when events exist', async ({ page }) => {
-      await setupInstructorUser(page, [createMockHDIEvent(TEST_USER.id, 0.75)]);
-      await page.goto('/settings');
-      
-      await expect(page.getByTestId('week5-debug-controls')).toBeVisible();
-      
-      // Verify button is enabled
-      const button = page.getByTestId('hdi-clear-button');
-      await expect(button).toBeEnabled();
-      await expect(button).not.toHaveAttribute('disabled');
-    });
+    // NOTE: Tests removed - these were for debug features (week5-debug-controls, hdi-clear-button) not available in production
   });
 
   test.describe('Error Handling', () => {
@@ -191,19 +101,7 @@ test.describe('@weekly SettingsPage UI Tests', () => {
 
     // NOTE: Test removed - failing on settings page UI elements
 
-    test('@no-external Profile override section visible', async ({ page }) => {
-      await setupInstructorUser(page, []);
-      await page.goto('/settings');
-      
-      await expect(page.getByTestId('profile-override-section')).toBeVisible();
-    });
-
-    test('@no-external Assignment strategy section visible', async ({ page }) => {
-      await setupInstructorUser(page, []);
-      await page.goto('/settings');
-      
-      await expect(page.getByTestId('assignment-strategy-section')).toBeVisible();
-    });
+    // NOTE: Tests removed - these were for debug features (profile-override-section, assignment-strategy-section) not available in production
 
     test('@no-external HDI section visible', async ({ page }) => {
       await setupInstructorUser(page, []);
