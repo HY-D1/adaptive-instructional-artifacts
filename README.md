@@ -5,7 +5,7 @@ An adaptive SQL learning environment exploring **dynamic instructional assembly*
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-blue)
 ![React](https://img.shields.io/badge/React-18.3-61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-6.4-646CFF)
-![Tests](https://img.shields.io/badge/Tests-403%20passing-success)
+![Tests](https://img.shields.io/badge/Tests-696%20passing-success)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## Table of Contents
@@ -215,8 +215,8 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 npm run build
 
 # Run all tests
-npm run test:e2e:weekly    # 138 E2E tests
-npm run test:unit          # 265 unit tests
+npm run test:e2e:weekly    # ~380 E2E tests
+npm run test:unit          # ~316 unit tests
 
 # Generate demo artifacts
 npm run demo:weekly
@@ -311,7 +311,7 @@ npm run pdf:query
 
 ## Testing
 
-The project has **~302 unit tests** and **~380 E2E tests** covering:
+The project has **316 unit tests** and **380 E2E tests** covering:
 
 - **Bug Regression**: 87 tests (critical, high, medium priority)
 - **Week 5 Components**: 118 tests (HDI: 43, Bandit: 45, Profiles: 30)
@@ -323,16 +323,16 @@ The project has **~302 unit tests** and **~380 E2E tests** covering:
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| Unit Tests | ~302 | Vitest-based unit and integration tests |
-| E2E Tests | ~380 | Playwright browser tests (31 files) |
-| **Total** | **~682** | **All tests passing** |
+| Unit Tests | 316 | Vitest-based unit and integration tests |
+| E2E Tests | 380 | Playwright browser tests (35 files) |
+| **Total** | **696** | **All tests passing** |
 
 ## CI/CD Pipeline
 
 GitHub Actions workflow (`.github/workflows/regression-gate.yml`) runs on every PR/push:
 
 1. **Build**: `npm run build`
-2. **Test**: 265 unit tests + 138 @weekly E2E tests (2 parallel shards)
+2. **Test**: 316 unit tests + 380 @weekly E2E tests (2 parallel shards)
 3. **Demo**: Generate demo artifacts
 4. **Validate**: SQL-Engage concept mapping
 5. **Gates**: Week 2 + Week 3 + Week 5 acceptance gates
@@ -440,4 +440,4 @@ This project explores **dynamic instructional assembly** — content that emerge
 ---
 
 *Last updated: 2026-03-02*  
-*Project Status: Week 5 Complete — 403 total tests passing*
+*Project Status: Week 5 Complete — 696 total tests passing*

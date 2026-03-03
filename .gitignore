@@ -48,6 +48,7 @@ chat-history/
 .aider*
 prompt-history/
 EDGE_CASE_TEST_REPORT.md
+REORGANIZATION_PLAN.md
 
 # Architecture diagrams (local only)
 diagrams/
@@ -77,3 +78,7 @@ TEXTBOOK_INTEGRATION_PLAN.md
 
 # Test output logs
 test-output.log
+
+# Root-level test screenshots
+/concept-*.png
+/concepts-*.png
