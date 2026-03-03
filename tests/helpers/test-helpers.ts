@@ -43,30 +43,6 @@ export async function getEditorText(page: Page): Promise<string> {
 }
 
 // =============================================================================
-// Interaction Helpers
-// =============================================================================
-
-/**
- * Run queries until the error count reaches the expected value
- */
-export async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedErrorCount: number) {
-  const marker = page.getByText(new RegExp(`\\b${expectedErrorCount}\\s+error(s)?\\b`, 'i'));
-  for (let i = 0; i < 12; i += 1) {
-    await runQueryButton.click();
-    // Use expect.poll for reliable waiting instead of fixed timeout
-    try {
-      await expect.poll(async () => {
-        return await marker.first().isVisible().catch(() => false);
-      }, { timeout: 2000, intervals: [100] }).toBe(true);
-      return;
-    } catch {
-      // Continue trying
-    }
-  }
-  throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
-}
-
-// =============================================================================
 // Storage Helpers
 // =============================================================================
 
@@ -97,11 +73,23 @@ export async function getExplanationEventsFromStorage(page: Page): Promise<any[]
 }
 
 /**
- * Get coverage change events from localStorage
+ * Run queries until the error count reaches the expected value
  */
-export async function getCoverageEventsFromStorage(page: Page): Promise<any[]> {
-  const interactions = await getAllInteractionsFromStorage(page);
-  return interactions.filter((i: any) => i.eventType === 'coverage_change');
+export async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedErrorCount: number) {
+  const marker = page.getByText(new RegExp(`\\b${expectedErrorCount}\\s+error(s)?\\b`, 'i'));
+  for (let i = 0; i < 12; i += 1) {
+    await runQueryButton.click();
+    // Use expect.poll for reliable waiting instead of fixed timeout
+    try {
+      await expect.poll(async () => {
+        return await marker.first().isVisible().catch(() => false);
+      }, { timeout: 2000, intervals: [100] }).toBe(true);
+      return;
+    } catch {
+      // Continue trying
+    }
+  }
+  throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
 }
 
 /**
@@ -137,9 +125,13 @@ export async function getTextbookUnits(page: Page, learnerId: string): Promise<a
   }, learnerId);
 }
 
-// =============================================================================
-// Setup Helpers
-// =============================================================================
+/**
+ * Get coverage change events from localStorage
+ */
+export async function getCoverageEventsFromStorage(page: Page): Promise<any[]> {
+  const interactions = await getAllInteractionsFromStorage(page);
+  return interactions.filter((i: any) => i.eventType === 'coverage_change');
+}
 
 /**
  * Seed a valid learner profile in localStorage
@@ -164,6 +156,10 @@ export async function seedValidProfile(page: Page, learnerId: string) {
   }, learnerId);
 }
 
+// =============================================================================
+// Setup Helpers
+// =============================================================================
+
 /**
  * Common test setup - clears storage and sets welcome flag
  */
@@ -174,10 +170,6 @@ export async function setupTest(page: Page) {
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
   });
 }
-
-// =============================================================================
-// StartPage Flow Helpers
-// =============================================================================
 
 /**
  * Complete the StartPage authentication flow for tests

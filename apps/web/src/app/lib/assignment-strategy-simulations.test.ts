@@ -407,11 +407,12 @@ describe('Assignment Strategy: Diagnostic', () => {
     expect(strugglingDiagnostic.persistenceScore).toBeLessThan(0.3);
 
     // Create history for persistent learner
+    // Use more attempts for statistical stability with randomness
     const persistentInteractions = createDiagnosticHistory('persistent-learner', {
       successRate: 0.9,
       hintUsageRate: 0.2,
       explanationUsageRate: 0.1,
-      totalAttempts: 10,
+      totalAttempts: 50,
     });
 
     const persistentDiagnostic = analyzeLearnerHistory(persistentInteractions);
