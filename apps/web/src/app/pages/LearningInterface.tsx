@@ -47,6 +47,7 @@ import { startBackgroundAnalysis, stopBackgroundAnalysis, runAnalysisOnce, ANALY
 import type { AnalysisResult } from '../lib/trace-analyzer';
 import { getConcept } from '../lib/content/concept-loader';
 import { banditManager, PROFILE_TO_ARM_ID, BANDIT_ARM_PROFILES } from '../lib/ml/learner-bandit-manager';
+import { safeGetStrategy, safeGetProfileOverride } from '../lib/storage/storage-validation';
 import { assignProfile, getProfileById, type EscalationProfile } from '../lib/ml/escalation-profiles';
 import type { BanditArmId } from '../lib/ml/learner-bandit-manager';
 import type { SQLProblem, InteractionEvent, InstructionalUnit, LearnerProfile, RetrievedChunkInfo, HDITrend } from '../types';
@@ -297,8 +298,8 @@ export function LearningInterface() {
   useEffect(() => {
     if (!learnerId) return;
     
-    const assignmentStrategy = (localStorage.getItem('sql-adapt-debug-strategy') as 'static' | 'diagnostic' | 'bandit') || 'bandit';
-    const debugProfileOverride = localStorage.getItem('sql-adapt-debug-profile');
+    const assignmentStrategy = safeGetStrategy();
+    const debugProfileOverride = safeGetProfileOverride();
     
     let effectiveProfile: EscalationProfile;
     let effectiveArmId: BanditArmId;
@@ -995,8 +996,8 @@ export function LearningInterface() {
       
       // Week 5: Record bandit outcome when problem is solved successfully
       // Only record when using bandit strategy (not static or diagnostic)
-      const debugProfileOverride = localStorage.getItem('sql-adapt-debug-profile');
-      const assignmentStrategy = localStorage.getItem('sql-adapt-debug-strategy') || 'bandit';
+      const debugProfileOverride = safeGetProfileOverride();
+      const assignmentStrategy = safeGetStrategy();
       if (!debugProfileOverride && assignmentStrategy === 'bandit' && learnerId) {
         try {
           // Calculate reward components

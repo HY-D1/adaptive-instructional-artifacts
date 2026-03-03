@@ -39,6 +39,17 @@ import {
   filterUnitsByStatus,
   type CreateUnitInput
 } from './textbook-units';
+import {
+  isValidProfileId,
+  isValidStrategy,
+  parseBooleanString,
+  safeGetProfileOverride,
+  safeGetStrategy,
+  safeGetPreviewMode,
+  safeSetProfileOverride,
+  safeSetStrategy,
+  isValidUserProfile
+} from './storage-validation';
 
 /**
  * StorageManager - Local storage manager for interaction traces and learner state
@@ -153,19 +164,20 @@ class StorageManager {
         return null;
       }
 
-      const parsed = JSON.parse(raw) as Partial<UserProfile>;
-      const validated = this.validateProfile(parsed);
+      const parsed = JSON.parse(raw);
       
-      if (!validated) {
-        // Corrupted profile data - clean up
+      // Use shared validation function
+      if (!isValidUserProfile(parsed)) {
+        console.warn('[Storage] Invalid user profile found, clearing');
         try {
           localStorage.removeItem(this.USER_PROFILE_KEY);
         } catch {
           // Ignore cleanup errors
         }
+        return null;
       }
       
-      return validated;
+      return parsed as UserProfile;
     } catch {
       // Corrupted profile data or localStorage access denied
       try {
@@ -203,11 +215,11 @@ class StorageManager {
         return { profile: null, success: true };
       }
 
-      const parsed = JSON.parse(raw) as Partial<UserProfile>;
-      const validated = this.validateProfile(parsed);
+      const parsed = JSON.parse(raw);
       
-      if (!validated) {
-        // Invalid profile - clean up
+      // Use shared validation function
+      if (!isValidUserProfile(parsed)) {
+        console.warn('[Storage] Invalid user profile found, clearing');
         try {
           localStorage.removeItem(this.USER_PROFILE_KEY);
         } catch {
@@ -216,7 +228,7 @@ class StorageManager {
         return { profile: null, success: false, error: new Error('Invalid profile data') };
       }
       
-      return { profile: validated, success: true };
+      return { profile: parsed as UserProfile, success: true };
     } catch (error) {
       // Corrupted profile data or localStorage access denied
       try {
@@ -2734,6 +2746,56 @@ class StorageManager {
       hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
     }
     return hash.toString(16);
+  }
+
+  // ============================================================================
+  // Storage Validation
+  // ============================================================================
+
+  /**
+   * Validate localStorage data integrity
+   * Detects and reports corrupted or invalid entries
+   * @returns Validation result with list of errors
+   */
+  validateStorage(): { valid: boolean; errors: string[] } {
+    const errors: string[] = [];
+    
+    try {
+      // Check user profile
+      const profileJson = localStorage.getItem(this.USER_PROFILE_KEY);
+      if (profileJson) {
+        try {
+          const profile = JSON.parse(profileJson);
+          if (!isValidUserProfile(profile)) {
+            errors.push('Invalid user profile');
+          }
+        } catch {
+          errors.push('Corrupted user profile (invalid JSON)');
+        }
+      }
+      
+      // Check strategy
+      const strategy = localStorage.getItem('sql-adapt-debug-strategy');
+      if (strategy && !isValidStrategy(strategy)) {
+        errors.push(`Invalid strategy: ${strategy}`);
+      }
+      
+      // Check profile override
+      const profileOverride = localStorage.getItem('sql-adapt-debug-profile');
+      if (profileOverride && !isValidProfileId(profileOverride)) {
+        errors.push(`Invalid profile override: ${profileOverride}`);
+      }
+      
+      // Check preview mode (should be 'true' or 'false' or null)
+      const previewMode = localStorage.getItem('sql-adapt-preview-mode');
+      if (previewMode !== null && previewMode !== 'true' && previewMode !== 'false') {
+        errors.push(`Invalid preview mode value: ${previewMode}`);
+      }
+    } catch (error) {
+      errors.push(`Storage validation error: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    
+    return { valid: errors.length === 0, errors };
   }
 }
 
