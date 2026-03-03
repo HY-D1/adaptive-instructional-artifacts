@@ -1,7 +1,7 @@
 import { createBrowserRouter, Navigate, redirect } from 'react-router';
 import type { LoaderFunction } from 'react-router';
 
-import { RouteError } from './components/RouteError';
+import { RouteError } from './components/layout/RouteError';
 import { RootLayout } from './pages/RootLayout';
 import { TextbookPage } from './pages/TextbookPage';
 import { ResearchPage } from './pages/ResearchPage';
@@ -11,7 +11,7 @@ import { LearningInterface } from './pages/LearningInterface';
 import { SettingsPage } from './pages/SettingsPage';
 import { ConceptLibraryPage } from './pages/ConceptLibraryPage';
 import { ConceptDetailPage } from './pages/ConceptDetailPage';
-import { storage } from './lib/storage';
+import { storage } from './lib/storage/storage';
 import { 
   ROUTES, 
   protectRoute, 

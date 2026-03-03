@@ -1,6 +1,6 @@
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { ResearchDashboard } from '../components/ResearchDashboard';
+import { ResearchDashboard } from '../components/features/research/ResearchDashboard';
 import { ArrowLeft, Lock, GraduationCap } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import { useUserRole } from '../hooks/useUserRole';

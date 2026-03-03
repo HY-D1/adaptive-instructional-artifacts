@@ -15,7 +15,7 @@ import {
   MessageCircle 
 } from 'lucide-react';
 
-import { AdaptiveTextbook } from '../components/AdaptiveTextbook';
+import { AdaptiveTextbook } from '../components/features/textbook/AdaptiveTextbook';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -25,7 +25,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/toolti
 import { Skeleton } from '../components/ui/skeleton';
 import { conceptNodes } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
-import { storage } from '../lib/storage';
+import { storage } from '../lib/storage/storage';
 import type { InteractionEvent } from '../types';
 
 const getSubtypeLabel = (interaction: InteractionEvent) =>

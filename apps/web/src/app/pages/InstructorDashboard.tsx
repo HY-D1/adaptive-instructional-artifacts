@@ -40,7 +40,7 @@ import {
   DialogTitle,
   DialogDescription
 } from '../components/ui/dialog';
-import { storage } from '../lib/storage';
+import { storage } from '../lib/storage/storage';
 import { useUserRole } from '../hooks/useUserRole';
 import type { LearnerProfile, InteractionEvent } from '../types';
 

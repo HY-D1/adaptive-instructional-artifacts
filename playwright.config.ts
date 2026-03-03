@@ -6,7 +6,7 @@ const BASE_URL = `http://${HOST}:${PORT}`;
 const IS_CI = !!process.env.CI;
 
 export default defineConfig({
-  testDir: './apps/web/tests',
+  testDir: './tests/e2e',
   timeout: 60_000,
   globalTimeout: 600_000,
   expect: {

@@ -26,16 +26,16 @@ import {
 } from '../components/ui/select';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { Separator } from '../components/ui/separator';
-import { PdfUploader } from '../components/PdfUploader';
-import { LLMSettingsHelper } from '../components/LLMSettingsHelper';
+import { PdfUploader } from '../components/features/textbook/PdfUploader';
+import { LLMSettingsHelper } from '../components/shared/LLMSettingsHelper';
 import { useUserRole } from '../hooks/useUserRole';
-import { banditManager, BANDIT_ARM_PROFILES } from '../lib/learner-bandit-manager';
-import type { BanditArmId } from '../lib/learner-bandit-manager';
+import { banditManager, BANDIT_ARM_PROFILES } from '../lib/ml/learner-bandit-manager';
+import type { BanditArmId } from '../lib/ml/learner-bandit-manager';
 import { assignProfile } from '../lib/escalation-profiles';
 import type { AssignmentStrategy } from '../lib/escalation-profiles';
-import { storage } from '../lib/storage';
+import { storage } from '../lib/storage/storage';
 import type { InteractionEvent } from '../types';
-import { calculateHDIData, filterOutHDIEvents, formatHDIDetailed } from '../lib/hdi-debug';
+import { calculateHDIData, filterOutHDIEvents, formatHDIDetailed } from '../lib/ml/hdi-debug';
 
 // DEV mode check
 const isDev = import.meta.env.DEV;

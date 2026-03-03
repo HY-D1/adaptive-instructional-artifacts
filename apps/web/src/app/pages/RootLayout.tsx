@@ -2,12 +2,12 @@ import { Outlet, Link, useLocation, Navigate, useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Book, BarChart3, Code, HelpCircle, Menu, X, Keyboard, GraduationCap, LogOut, RefreshCw, AlertCircle, Users, Settings } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
-import { WelcomeModal } from '../components/WelcomeModal';
+import { WelcomeModal } from '../components/shared/WelcomeModal';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
 import { useUserRole } from '../hooks/useUserRole';
 import { useSessionPersistence } from '../hooks/useSessionPersistence';
-import { storage } from '../lib/storage';
+import { storage } from '../lib/storage/storage';
 import { isPreviewModeActive } from '../lib/auth-guard';
 
 /**

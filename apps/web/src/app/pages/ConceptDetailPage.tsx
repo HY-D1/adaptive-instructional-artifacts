@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router';
 import { useEffect, useState } from 'react';
-import { loadConceptContent, getProblemsForConcept, type LoadedConcept, type CodeExample, type Mistake } from '../lib/concept-loader';
+import { loadConceptContent, getProblemsForConcept, type LoadedConcept, type CodeExample, type Mistake } from '../lib/content/concept-loader';
 import { ChevronLeft, BookOpen, Clock, Dumbbell, AlertCircle, CheckCircle, XCircle, Lightbulb, Play } from 'lucide-react';
 
 export function ConceptDetailPage() {

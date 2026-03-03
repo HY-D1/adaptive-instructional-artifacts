@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { listConcepts } from '../lib/concept-loader';
+import { listConcepts } from '../lib/content/concept-loader';
 import { BookOpen, Clock, GraduationCap } from 'lucide-react';
 
 export function ConceptLibraryPage() {
