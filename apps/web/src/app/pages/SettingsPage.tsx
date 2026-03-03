@@ -26,9 +26,11 @@ import {
 } from '../components/ui/select';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { Separator } from '../components/ui/separator';
+import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { PdfUploader } from '../components/features/textbook/PdfUploader';
 import { LLMSettingsHelper } from '../components/shared/LLMSettingsHelper';
 import { useUserRole } from '../hooks/useUserRole';
+import { useToast } from '../components/ui/toast';
 import { banditManager, BANDIT_ARM_PROFILES } from '../lib/ml/learner-bandit-manager';
 import type { BanditArmId } from '../lib/ml/learner-bandit-manager';
 import { assignProfile } from '../lib/escalation-profiles';
@@ -59,6 +61,7 @@ const DEBUG_KEYS = {
 export function SettingsPage() {
   const { isInstructor, profile } = useUserRole();
   const learnerId = profile?.id;
+  const { addToast } = useToast();
 
   // Week 5 Testing Controls State
   const [profileOverride, setProfileOverride] = useState<ProfileOverrideId>('auto');
@@ -75,6 +78,9 @@ export function SettingsPage() {
   >([]);
   const [selectedArm, setSelectedArm] = useState<BanditArmId>('adaptive');
   const [refreshKey, setRefreshKey] = useState<number>(0);
+  
+  // Confirmation dialog states
+  const [showClearHdiDialog, setShowClearHdiDialog] = useState(false);
 
   // Load initial values from localStorage (DEV mode only)
   useEffect(() => {
@@ -139,18 +145,33 @@ export function SettingsPage() {
     localStorage.setItem(DEBUG_KEYS.ASSIGNMENT_STRATEGY, value);
   }, []);
 
-  // HDI Reset Handler
+  // HDI Reset Handler with confirmation and feedback
   const handleClearHdiHistory = useCallback(() => {
     if (!learnerId) return;
 
-    const interactions = storage.getAllInteractions();
-    const filteredInteractions = filterOutHDIEvents(interactions, learnerId);
+    try {
+      const interactions = storage.getAllInteractions();
+      const filteredInteractions = filterOutHDIEvents(interactions, learnerId);
 
-    localStorage.setItem('sql-learning-interactions', JSON.stringify(filteredInteractions));
-    setHdiScore(null);
-    setHdiEventCount(0);
-    setRefreshKey((k) => k + 1);
-  }, [learnerId]);
+      localStorage.setItem('sql-learning-interactions', JSON.stringify(filteredInteractions));
+      setHdiScore(null);
+      setHdiEventCount(0);
+      setRefreshKey((k) => k + 1);
+      
+      addToast({
+        type: 'success',
+        title: 'HDI History Cleared',
+        message: 'All HDI-related events have been removed.',
+      });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Failed to Clear History',
+        message: error instanceof Error ? error.message : 'An error occurred',
+      });
+    }
+    setShowClearHdiDialog(false);
+  }, [learnerId, addToast]);
 
   // Force Arm Selection Handler
   const handleForceArmSelection = useCallback(() => {
@@ -287,24 +308,25 @@ export function SettingsPage() {
                   </h3>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Select
-                    value={profileOverride}
-                    onValueChange={(value) =>
-                      handleProfileOverrideChange(value as ProfileOverrideId)
-                    }
-                    data-testid="profile-override-select"
-                  >
-                    <SelectTrigger className="w-[250px]">
-                      <SelectValue placeholder="Select profile" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PROFILE_OPTIONS.map((option) => (
-                        <SelectItem key={option.id} value={option.id}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div data-testid="profile-override-select">
+                    <Select
+                      value={profileOverride}
+                      onValueChange={(value) =>
+                        handleProfileOverrideChange(value as ProfileOverrideId)
+                      }
+                    >
+                      <SelectTrigger className="w-[250px]">
+                        <SelectValue placeholder="Select profile" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PROFILE_OPTIONS.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <Button
                     variant="outline"
                     size="sm"
@@ -389,7 +411,7 @@ export function SettingsPage() {
                   <Button
                     variant="destructive"
                     size="sm"
-                    onClick={handleClearHdiHistory}
+                    onClick={() => setShowClearHdiDialog(true)}
                     disabled={hdiEventCount === 0}
                     data-testid="hdi-clear-button"
                   >
@@ -473,22 +495,23 @@ export function SettingsPage() {
                 {/* Force Arm Selection */}
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-gray-600">Force arm selection:</span>
-                  <Select
-                    value={selectedArm}
-                    onValueChange={(value) => setSelectedArm(value as BanditArmId)}
-                    data-testid="force-arm-select"
-                  >
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue placeholder="Select arm" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(BANDIT_ARM_PROFILES).map((armId) => (
-                        <SelectItem key={armId} value={armId}>
-                          {BANDIT_ARM_PROFILES[armId as BanditArmId].name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div data-testid="force-arm-select">
+                    <Select
+                      value={selectedArm}
+                      onValueChange={(value) => setSelectedArm(value as BanditArmId)}
+                    >
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Select arm" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.keys(BANDIT_ARM_PROFILES).map((armId) => (
+                          <SelectItem key={armId} value={armId}>
+                            {BANDIT_ARM_PROFILES[armId as BanditArmId].name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <Button size="sm" onClick={handleForceArmSelection} data-testid="force-arm-apply">
                     Apply
                   </Button>
@@ -531,6 +554,17 @@ export function SettingsPage() {
           </div>
         </Card>
       </div>
+      
+      {/* Confirmation Dialogs */}
+      <ConfirmDialog
+        isOpen={showClearHdiDialog}
+        onClose={() => setShowClearHdiDialog(false)}
+        onConfirm={handleClearHdiHistory}
+        title="Clear HDI History"
+        description={`This will permanently delete ${hdiEventCount} HDI-related event(s). This action cannot be undone.`}
+        confirmText="Clear History"
+        variant="destructive"
+      />
     </div>
   );
 }

@@ -454,24 +454,39 @@ export function safeSetPreviewMode(enabled: boolean): boolean {
  * }
  * ```
  */
+function getCircularReplacer(): (_key: string, value: unknown) => unknown {
+  const seen = new WeakSet();
+  return (_key: string, value: unknown) => {
+    if (value !== null && typeof value === 'object') {
+      if (seen.has(value)) {
+        return '[Circular]';
+      }
+      seen.add(value);
+    }
+    return value;
+  };
+}
+
 export function safeSetUserProfile(
   profile: UserProfile,
   key: string = 'sql-adapt-user-profile'
 ): boolean {
-  if (!isValidUserProfile(profile)) {
+  // Normalize createdAt BEFORE validation
+  const normalized = {
+    ...profile,
+    createdAt:
+      typeof profile.createdAt === 'number' && Number.isFinite(profile.createdAt)
+        ? profile.createdAt
+        : Date.now()
+  };
+
+  if (!isValidUserProfile(normalized)) {
     console.error('[Storage] Attempted to set invalid user profile');
     return false;
   }
 
   try {
-    const normalized = {
-      ...profile,
-      createdAt:
-        typeof profile.createdAt === 'number'
-          ? profile.createdAt
-          : Date.now()
-    };
-    localStorage.setItem(key, JSON.stringify(normalized));
+    localStorage.setItem(key, JSON.stringify(normalized, getCircularReplacer()));
     return true;
   } catch (error) {
     console.error('[Storage] Error saving user profile:', error);
