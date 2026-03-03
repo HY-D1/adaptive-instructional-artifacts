@@ -384,7 +384,7 @@ test.describe('@weekly Role System', () => {
       await expect(page).toHaveURL(/\/research$/);
       
       // Assert - Research page loaded (indicates navigation worked)
-      await expect(page.getByRole('heading', { name: /Research/i })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Research Dashboard' })).toBeVisible();
     });
 
     test('logout button is visible in navigation', async ({ page }) => {
