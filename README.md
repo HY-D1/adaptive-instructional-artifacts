@@ -143,6 +143,118 @@ StartPage → Role Selection → Student/Instructor Profile
           Explanation View → textbook_add Event → My Notes
 ```
 
+### 🎯 Adaptive Personalization Architecture (Week 5)
+
+The Week 5 enhancement introduces a personalized escalation system that adapts to individual learner behavior patterns.
+
+#### Escalation Profiles
+
+Four learner profiles determine how quickly hints escalate through the guidance ladder:
+
+| Profile | Escalation | Thresholds | Best For |
+|---------|-----------|------------|----------|
+| **Fast-Escalator** | Rapid (1-2 hints) | `escalate: 2, aggregate: 1` | Impatient learners, time-constrained |
+| **Slow-Escalator** | Gradual (3-5 hints) | `escalate: 4, aggregate: 2` | Methodical learners, beginners |
+| **Adaptive-Escalator** | Dynamic | Varies by HDI trajectory | Most learners (default) |
+| **Explanation-First** | Immediate LLM | Skip ladder → direct explanation | Advanced learners, HDI ≥ 0.7 |
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    ESCALATION PROFILES                          │
+├─────────────────────────────────────────────────────────────────┤
+│  Fast        Slow       Adaptive        Explanation-First       │
+│   │           │            │                    │               │
+│   ▼           ▼            ▼                    ▼               │
+│  L1→L3     L1→L2→L3    L1→L2→?→L3           LLM Only           │
+│   ↓           ↓            ↓                                    │
+│  LLM        LLM         Bandit decides                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Multi-Armed Bandit (Thompson Sampling)
+
+Each learner has a personal bandit instance that optimizes profile selection:
+
+- **Arms**: The 4 escalation profiles
+- **Algorithm**: Thompson Sampling with Beta(α, β) distributions
+- **Reward**: +1 for successful resolution, -1 for repeated help requests
+- **Update**: After each interaction, the selected arm's α/β updates
+
+```typescript
+// Bandit arm state per learner
+interface BanditArm {
+  id: string;           // Profile ID
+  alpha: number;        // Success count + prior
+  beta: number;         // Failure count + prior
+  pullCount: number;    // Times selected
+  cumulativeReward: number;
+}
+
+// Selection: sample from Beta(α, β), pick highest
+const samples = arms.map(arm => sampleBeta(arm.alpha, arm.beta));
+const selectedArm = arms[argmax(samples)];
+```
+
+#### Hint Dependency Index (HDI)
+
+Five-component metric measuring learner independence (0-1 scale):
+
+| Component | Code | Description | Weight |
+|-----------|------|-------------|--------|
+| Hints Per Attempt | HPA | Average hints requested per problem | 20% |
+| Avg Escalation Depth | AED | How far up the ladder learner goes | 20% |
+| Explanation Rate | ER | How often LLM explanations are needed | 20% |
+| Repeated Error After Explanation | REAE | Error recurrence post-help | 20% |
+| Improvement Without Hint | IWH | Success rate without assistance | 20% |
+
+```
+HDI = 0.20×HPA + 0.20×AED + 0.20×ER + 0.20×REAE + 0.20×IWH
+
+Interpretation:
+- HDI < 0.4: High dependency (Slow profile recommended)
+- HDI 0.4-0.7: Medium dependency (Adaptive profile)
+- HDI > 0.7: Low dependency (Explanation-first eligible)
+```
+
+#### Profile-Aware Escalation Flow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Student requests help on SQL problem                           │
+└─────────────────────────┬───────────────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Check: Has profile been assigned?                              │
+│  ├─ Yes → Use assigned profile                                  │
+│  └─ No  → Run bandit selection → Assign profile                 │
+└─────────────────────────┬───────────────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Apply Profile Thresholds to Guidance Ladder                    │
+│  ├─ Fast:      Skip L2, early escalation                        │
+│  ├─ Slow:      Full ladder, late escalation                     │
+│  ├─ Adaptive:  HDI-informed dynamic thresholds                  │
+│  └─ Expl-First: Bypass ladder → LLM explanation                 │
+└─────────────────────────┬───────────────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Log event: profile_assigned / escalation_triggered             │
+│  Update: HDI trajectory, bandit rewards                         │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Event Logging (Week 5)
+
+All personalization decisions are logged for analysis:
+
+| Event Type | Trigger | Data Logged |
+|------------|---------|-------------|
+| `profile_assigned` | Initial profile selection | profileId, assignmentMethod |
+| `bandit_arm_selected` | Bandit makes selection | armId, samples, exploration |
+| `bandit_reward_observed` | Outcome known | reward, armPulled, context |
+| `escalation_triggered` | Threshold crossed | triggerType, fromRung, toRung |
+| `hdi_calculated` | Periodic recalculation | hdi, components, windowSize |
+
 ## Technology Stack
 
 | Layer | Technology | Version |
