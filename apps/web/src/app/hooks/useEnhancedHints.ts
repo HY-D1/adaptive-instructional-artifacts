@@ -15,7 +15,7 @@ import {
   preloadHintContext,
   type EnhancedHint,
   type AvailableResources
-} from '../lib/enhanced-hint-service';
+} from '../lib/ml/enhanced-hint-service';
 
 export type UseEnhancedHintsOptions = {
   learnerId: string;

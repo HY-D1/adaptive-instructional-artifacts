@@ -828,8 +828,8 @@ export function AskMyTextbookChat({
     
     try {
       // Import LLM modules dynamically
-      const { generateGuidance } = await import('../lib/llm-contracts');
-      const { generateWithOllama } = await import('../lib/llm-client');
+      const { generateGuidance } = await import('../../../lib/api/llm-contracts');
+      const { generateWithOllama } = await import('../../../lib/api/llm-client');
       
       // Build context from sources
       const contextParts: string[] = [];

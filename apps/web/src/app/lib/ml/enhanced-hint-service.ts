@@ -29,9 +29,9 @@ import {
   getSqlEngageRowsBySubtype,
   canonicalizeSqlEngageSubtype
 } from '../../data/sql-engage';
-import { storage } from './storage';
-import { createEventId } from './event-id';
-import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
+import { storage } from '../storage/storage';
+import { createEventId } from '../utils/event-id';
+import { buildRetrievalBundle, RetrievalBundle } from '../content/retrieval-bundle';
 import { getProblemById } from '../../data/problems';
 
 /**
@@ -388,8 +388,8 @@ export async function saveHintToTextbook(
   sourceRefIds: string[]
 ): Promise<void> {
   // Import storage dynamically to avoid circular deps
-  const { storage } = await import('./storage');
-  const { createEventId } = await import('./event-id');
+  const { storage } = await import('../storage/storage');
+  const { createEventId } = await import('../utils/event-id');
   
   // Build a descriptive title based on rung and error
   const rungLabels = { 1: 'Quick Hint', 2: 'Guidance', 3: 'Detailed Help' };
@@ -796,7 +796,7 @@ async function generateLLMEnhancedHint(
   }
 
   // Import LLM client dynamically to avoid circular dependencies
-  const { generateWithOllama } = await import('./llm-client');
+  const { generateWithOllama } = await import('../api/llm-client');
   
   try {
     // Generating adaptive LLM hint

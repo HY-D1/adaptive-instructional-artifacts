@@ -7,7 +7,7 @@
  * Uses page numbers as the common reference point for lookup.
  */
 
-import { storage } from './storage';
+import { storage } from '../storage/storage';
 import { PdfIndexChunk } from '../../types';
 
 /**

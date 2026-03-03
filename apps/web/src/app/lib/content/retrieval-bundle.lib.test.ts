@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
 import { getDeterministicSqlEngageAnchor } from '../../data/sql-engage';
-import { storage } from './storage';
+import { storage } from '../storage/storage';
 import { SQLProblem, InteractionEvent } from '../../types';
 
 // Test configuration
