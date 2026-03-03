@@ -8,7 +8,7 @@
  * Policy Version: escalation-profiles-v1
  */
 
-import type { InteractionEvent } from '../types';
+import type { InteractionEvent } from '../../types';
 
 /**
  * Escalation profile defining thresholds and triggers for adaptive learning

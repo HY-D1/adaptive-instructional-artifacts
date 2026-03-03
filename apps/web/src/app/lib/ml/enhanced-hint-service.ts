@@ -17,8 +17,8 @@ import type {
   InstructionalUnit,
   SQLProblem,
   RetrievedChunkInfo
-} from '../types';
-import type { SqlEngageRecord } from '../data/sql-engage';
+} from '../../types';
+import type { SqlEngageRecord } from '../../data/sql-engage';
 import { 
   GuidanceRung, 
   RUNG_DEFINITIONS,
@@ -28,11 +28,11 @@ import {
   getProgressiveSqlEngageHintText,
   getSqlEngageRowsBySubtype,
   canonicalizeSqlEngageSubtype
-} from '../data/sql-engage';
+} from '../../data/sql-engage';
 import { storage } from './storage';
 import { createEventId } from './event-id';
 import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
-import { getProblemById } from '../data/problems';
+import { getProblemById } from '../../data/problems';
 
 /**
  * Available resource types for hint generation

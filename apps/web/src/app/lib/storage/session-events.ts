@@ -12,7 +12,7 @@
  * @module session-events
  */
 
-import type { UserProfile } from '../types';
+import type { UserProfile } from '../../types';
 
 /**
  * Session event types

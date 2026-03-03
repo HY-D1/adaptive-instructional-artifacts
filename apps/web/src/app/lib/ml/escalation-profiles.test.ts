@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { InteractionEvent } from '../types';
+import type { InteractionEvent } from '../../types';
 import {
   FAST_ESCALATOR,
   SLOW_ESCALATOR,

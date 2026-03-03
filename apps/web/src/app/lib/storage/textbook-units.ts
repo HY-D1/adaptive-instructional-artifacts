@@ -7,7 +7,7 @@
  * - Revision tracking
  */
 
-import type { InstructionalUnit, SaveTextbookUnitResult, TextbookUnitStatus } from '../types';
+import type { InstructionalUnit, SaveTextbookUnitResult, TextbookUnitStatus } from '../../types';
 import type { LLMGuidanceOutput } from './llm-contracts';
 
 // Quality score weights (must sum to 1.0)

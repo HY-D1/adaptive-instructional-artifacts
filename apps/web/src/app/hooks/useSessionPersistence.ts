@@ -16,8 +16,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import type { UserProfile } from '../types';
-import { storage } from '../lib/storage';
-import { emitProfileUpdated, emitProfileCleared } from '../lib/session-events';
+import { storage } from '../lib/storage/storage';
+import { emitProfileUpdated, emitProfileCleared } from '../lib/storage/session-events';
 
 /**
  * Source of the last sync operation

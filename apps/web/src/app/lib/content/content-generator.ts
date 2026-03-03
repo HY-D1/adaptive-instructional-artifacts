@@ -5,13 +5,13 @@ import {
   SQLProblem,
   InteractionEvent,
   PdfCitation
-} from '../types';
-import { createInputHash, stableStringify } from './hash';
-import { generateWithOllama, OLLAMA_MODEL } from './llm-client';
+} from '../../types';
+import { createInputHash, stableStringify } from '../utils/hash';
+import { generateWithOllama, OLLAMA_MODEL } from '../api/llm-client';
 import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
-import { renderPrompt, TemplateId } from '../prompts/templates';
-import { storage } from './storage';
-import { calculateQualityScore } from './textbook-units';
+import { renderPrompt, TemplateId } from '../../prompts/templates';
+import { storage } from '../storage/storage';
+import { calculateQualityScore } from '../storage/textbook-units';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 

@@ -1,6 +1,6 @@
-import { PDF_EMBEDDING_DIMENSION } from './pdf-index-config';
-import { storage } from './storage';
-import { PdfIndexChunk, PdfIndexDocument, PdfIndexProvenance } from '../types';
+import { PDF_EMBEDDING_DIMENSION } from '../pdf-index-config';
+import { storage } from '../storage/storage';
+import { PdfIndexChunk, PdfIndexDocument, PdfIndexProvenance } from '../../types';
 
 /**
  * Build output fields for PDF index provenance

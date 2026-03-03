@@ -15,7 +15,7 @@ import {
   createMockHDITrajectory,
   HDI_EVENT_TYPES,
 } from './hdi-debug';
-import type { InteractionEvent } from '../types';
+import type { InteractionEvent } from '../../types';
 
 describe('HDI Debug Utilities', () => {
   const mockLearnerId = 'test-learner-123';

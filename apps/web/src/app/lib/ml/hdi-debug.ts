@@ -7,7 +7,7 @@
  * @module hdi-debug
  */
 
-import type { InteractionEvent } from '../types';
+import type { InteractionEvent } from '../../types';
 
 /**
  * HDI event types that should be tracked and can be cleared

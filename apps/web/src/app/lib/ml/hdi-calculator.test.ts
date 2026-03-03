@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { InteractionEvent } from '../types';
+import type { InteractionEvent } from '../../types';
 
 // Import the functions to test
 import {

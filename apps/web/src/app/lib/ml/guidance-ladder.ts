@@ -9,8 +9,8 @@
  * Policy Version: guidance-ladder-profile-v1
  */
 
-import type { InteractionEvent } from '../types';
-import { canAutoEscalate } from '../data';
+import type { InteractionEvent } from '../../types';
+import { canAutoEscalate } from '../../data';
 import { FIVE_MINUTES_MS } from './trace-analyzer';
 import type { EscalationProfile } from './escalation-profiles';
 import { HDI_LEVELS, classifyHDILevel } from './hdi-calculator';

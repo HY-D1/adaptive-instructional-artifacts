@@ -17,19 +17,19 @@ import {
   TextbookUnitAction,
   UserProfile,
   UserRole
-} from '../types';
-import { createEventId } from './event-id';
+} from '../../types';
+import { createEventId } from '../utils/event-id';
 import {
   canonicalizeSqlEngageSubtype,
   getConceptIdsForSqlEngageSubtype,
   getDeterministicSqlEngageAnchor,
   getSqlEngagePolicyVersion
-} from '../data/sql-engage';
+} from '../../data/sql-engage';
 import {
   PDF_CHUNKER_VERSION,
   PDF_EMBEDDING_MODEL_ID,
   PDF_INDEX_SCHEMA_VERSION
-} from './pdf-index-config';
+} from '../pdf-index-config';
 import {
   upsertTextbookUnit,
   buildNewUnit,

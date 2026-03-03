@@ -11,9 +11,9 @@
  * - Logged with: grounded: true/false, sourceRefIdsCount
  */
 
-import type { GuidanceRung } from './guidance-ladder';
-import type { RetrievalBundle } from './retrieval-bundle';
-import type { InstructionalUnit } from '../types';
+import type { GuidanceRung } from '../ml/guidance-ladder';
+import type { RetrievalBundle } from '../content/retrieval-bundle';
+import type { InstructionalUnit } from '../../types';
 
 /**
  * Metadata for validated LLM output

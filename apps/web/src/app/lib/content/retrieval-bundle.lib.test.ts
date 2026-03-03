@@ -10,9 +10,9 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
-import { getDeterministicSqlEngageAnchor } from '../data/sql-engage';
+import { getDeterministicSqlEngageAnchor } from '../../data/sql-engage';
 import { storage } from './storage';
-import { SQLProblem, InteractionEvent } from '../types';
+import { SQLProblem, InteractionEvent } from '../../types';
 
 // Test configuration
 const learnerId = 'determinism-learner';

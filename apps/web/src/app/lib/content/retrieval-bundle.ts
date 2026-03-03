@@ -1,4 +1,4 @@
-import { SQLProblem, InteractionEvent, PdfIndexProvenance, InstructionalUnit } from '../types';
+import { SQLProblem, InteractionEvent, PdfIndexProvenance, InstructionalUnit } from '../../types';
 import {
   canonicalizeSqlEngageSubtype,
   getConceptById,
@@ -6,12 +6,12 @@ import {
   getDeterministicSqlEngageAnchor,
   getProgressiveSqlEngageHintText,
   getSqlEngageRowsBySubtype
-} from '../data/sql-engage';
+} from '../../data/sql-engage';
 import {
   getConceptFromRegistry
-} from '../data';
-import { getActivePdfIndexProvenance, retrievePdfChunks } from './pdf-retrieval';
-import { retrieveSourcePassages, RetrievedSourcePassage } from './source-ref-lookup';
+} from '../../data';
+import { getActivePdfIndexProvenance, retrievePdfChunks } from '../api/pdf-retrieval';
+import { retrieveSourcePassages, RetrievedSourcePassage } from '../utils/source-ref-lookup';
 import { getConceptChunks } from './concept-loader';
 
 /**

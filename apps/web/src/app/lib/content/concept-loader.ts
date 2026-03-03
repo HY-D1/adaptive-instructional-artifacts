@@ -1,6 +1,6 @@
-import { storage } from './storage';
-import type { PdfIndexChunk, SQLProblem } from '../types';
-import { sqlProblems } from '../data/problems';
+import { storage } from '../storage/storage';
+import type { PdfIndexChunk, SQLProblem } from '../../types';
+import { sqlProblems } from '../../data/problems';
 
 // Types
 export interface ConceptInfo {

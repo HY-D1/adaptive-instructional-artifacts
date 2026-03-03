@@ -23,7 +23,7 @@ import {
   EXPLANATION_FIRST,
   type EscalationProfile,
 } from './escalation-profiles';
-import type { InteractionEvent } from '../types';
+import type { InteractionEvent } from '../../types';
 
 /**
  * Bandit arm IDs and their corresponding escalation profiles

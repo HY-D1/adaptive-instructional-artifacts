@@ -7,7 +7,7 @@
  * Version: hdi-calculator-v1
  */
 
-import type { InteractionEvent, HDIComponents } from '../types';
+import type { InteractionEvent, HDIComponents } from '../../types';
 
 export const HDI_CALCULATOR_VERSION = 'hdi-calculator-v1';
 

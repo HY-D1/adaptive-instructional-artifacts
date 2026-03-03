@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { storage } from '../lib/storage';
+import { storage } from '../lib/storage/storage';
 import type { InteractionEvent, LearnerProfile } from '../types';
 
 /**

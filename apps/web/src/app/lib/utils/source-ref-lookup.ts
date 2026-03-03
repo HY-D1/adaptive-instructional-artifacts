@@ -8,7 +8,7 @@
  */
 
 import { storage } from './storage';
-import { PdfIndexChunk } from '../types';
+import { PdfIndexChunk } from '../../types';
 
 /**
  * Retrieved source passage with actual text content

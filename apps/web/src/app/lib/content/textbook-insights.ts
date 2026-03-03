@@ -1,5 +1,5 @@
-import { InstructionalUnit, InteractionEvent } from '../types';
-import { conceptNodes, getConceptById, getConceptIdsForSqlEngageSubtype } from '../data/sql-engage';
+import { InstructionalUnit, InteractionEvent } from '../../types';
+import { conceptNodes, getConceptById, getConceptIdsForSqlEngageSubtype } from '../../data/sql-engage';
 
 /**
  * Card displaying a common misconception pattern
