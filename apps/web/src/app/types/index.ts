@@ -98,7 +98,11 @@ export type InteractionEvent = {
     // Week 5: HDI - Hint Dependency Index (Component 9)
     | 'hdi_calculated'
     | 'hdi_trajectory_updated'
-    | 'dependency_intervention_triggered';
+    | 'dependency_intervention_triggered'
+    // Component 10: Knowledge Consolidation (Reinforcement)
+    | 'reinforcement_scheduled'
+    | 'reinforcement_prompt_shown'
+    | 'reinforcement_response';
   problemId: string;
   code?: string;
   error?: string;
@@ -189,6 +193,14 @@ export type InteractionEvent = {
   trend?: 'increasing' | 'stable' | 'decreasing';
   slope?: number;
   interventionType?: 'forced_independent' | 'profile_switch' | 'reflective_prompt';
+  // Component 10: Knowledge Consolidation
+  scheduleId?: string;
+  promptId?: string;
+  promptType?: 'mcq' | 'sql_completion' | 'concept_explanation';
+  response?: string;
+  isCorrect?: boolean;
+  scheduledTime?: number;
+  shownTime?: number;
   // Additional metadata for logging/debugging
   payload?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
@@ -623,4 +635,24 @@ export interface HDIComponents {
   er: number;   // Explanation Rate
   reae: number; // Repeated Error After Explanation
   iwh: number;  // Improvement Without Hint
+}
+
+// Component 10: Knowledge Consolidation Types
+export interface ReinforcementSchedule {
+  id: string;
+  unitId: string;
+  learnerId: string;
+  conceptId: string;
+  createdAt: number;
+  scheduledPrompts: ScheduledPrompt[];
+}
+
+export interface ScheduledPrompt {
+  id: string;
+  delayDays: number;
+  promptType: 'mcq' | 'sql_completion' | 'concept_explanation';
+  status: 'pending' | 'shown' | 'completed' | 'dismissed';
+  scheduledTime: number;
+  shownTime?: number;
+  completedTime?: number;
 }

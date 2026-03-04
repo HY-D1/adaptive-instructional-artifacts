@@ -16,7 +16,9 @@ import {
   GuidanceEscalationTrigger,
   TextbookUnitAction,
   UserProfile,
-  UserRole
+  UserRole,
+  ReinforcementSchedule,
+  ScheduledPrompt
 } from '../../types';
 import { createEventId } from '../utils/event-id';
 import {
@@ -80,6 +82,8 @@ class StorageManager {
   private readonly PDF_UPLOADS_KEY = 'sql-learning-pdf-uploads';
   /** Key for current user identity (single active user profile) - used for role-based auth (Week 4) */
   private readonly USER_PROFILE_KEY = 'sql-adapt-user-profile'; // Week 4: Aligned with existing app key
+  /** Key for reinforcement schedules (Component 10: Knowledge Consolidation) */
+  private readonly REINFORCEMENT_SCHEDULES_KEY = 'sql-learning-reinforcement-schedules';
 
   // Legacy keys for backward compatibility (tests and old data)
   private readonly LEGACY_PROFILES_KEY = 'sql-adapt-profiles';
@@ -1459,6 +1463,227 @@ class StorageManager {
       payload: {
         hdi,
         interventionType
+      }
+    };
+    this.saveInteraction(event);
+  }
+
+  // ============================================================================
+  // Component 10: Knowledge Consolidation (Reinforcement)
+  // ============================================================================
+
+  /**
+   * Save a reinforcement schedule for spaced repetition prompts.
+   * Used by Knowledge Consolidation component to track scheduled review prompts.
+   * @param schedule - Reinforcement schedule to save
+   * @returns Save result with quota info
+   */
+  saveReinforcementSchedule(schedule: ReinforcementSchedule): { success: boolean; quotaExceeded?: boolean } {
+    const schedules = this.getAllReinforcementSchedules();
+    const existingIndex = schedules.findIndex(s => s.id === schedule.id);
+    
+    if (existingIndex >= 0) {
+      schedules[existingIndex] = schedule;
+    } else {
+      schedules.push(schedule);
+    }
+    
+    const result = this.safeSetItem(this.REINFORCEMENT_SCHEDULES_KEY, JSON.stringify(schedules));
+    if (!result.success && result.quotaExceeded) {
+      console.warn('[Storage] Failed to save reinforcement schedule: LocalStorage quota exceeded');
+    }
+    return result;
+  }
+
+  /**
+   * Get all reinforcement schedules for a specific learner.
+   * @param learnerId - Learner identifier
+   * @returns Array of reinforcement schedules
+   */
+  getReinforcementSchedules(learnerId: string): ReinforcementSchedule[] {
+    const schedules = this.getAllReinforcementSchedules();
+    return schedules.filter(s => s.learnerId === learnerId);
+  }
+
+  /**
+   * Update the status of a scheduled prompt.
+   * Used to mark prompts as shown, completed, or dismissed.
+   * @param scheduleId - Schedule identifier
+   * @param promptId - Prompt identifier
+   * @param status - New status for the prompt
+   * @param metadata - Optional metadata (shownTime, completedTime, etc.)
+   * @returns True if update was successful
+   */
+  updatePromptStatus(
+    scheduleId: string,
+    promptId: string,
+    status: ScheduledPrompt['status'],
+    metadata?: { shownTime?: number; completedTime?: number }
+  ): boolean {
+    const schedules = this.getAllReinforcementSchedules();
+    const schedule = schedules.find(s => s.id === scheduleId);
+    
+    if (!schedule) {
+      console.warn(`[Storage] Reinforcement schedule ${scheduleId} not found`);
+      return false;
+    }
+    
+    const prompt = schedule.scheduledPrompts.find(p => p.id === promptId);
+    if (!prompt) {
+      console.warn(`[Storage] Scheduled prompt ${promptId} not found in schedule ${scheduleId}`);
+      return false;
+    }
+    
+    prompt.status = status;
+    if (metadata?.shownTime !== undefined) {
+      prompt.shownTime = metadata.shownTime;
+    }
+    if (metadata?.completedTime !== undefined) {
+      prompt.completedTime = metadata.completedTime;
+    }
+    
+    const result = this.safeSetItem(this.REINFORCEMENT_SCHEDULES_KEY, JSON.stringify(schedules));
+    if (!result.success) {
+      console.warn('[Storage] Failed to update prompt status: LocalStorage quota exceeded or other error');
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Get prompts that are due for display (scheduled time <= current time).
+   * @param learnerId - Learner identifier
+   * @param currentTime - Current timestamp (defaults to Date.now())
+   * @returns Array of due prompts with their parent schedules
+   */
+  getDuePrompts(
+    learnerId: string,
+    currentTime: number = Date.now()
+  ): Array<{ schedule: ReinforcementSchedule; prompt: ScheduledPrompt }> {
+    const schedules = this.getReinforcementSchedules(learnerId);
+    const duePrompts: Array<{ schedule: ReinforcementSchedule; prompt: ScheduledPrompt }> = [];
+    
+    for (const schedule of schedules) {
+      for (const prompt of schedule.scheduledPrompts) {
+        if (prompt.status === 'pending' && prompt.scheduledTime <= currentTime) {
+          duePrompts.push({ schedule, prompt });
+        }
+      }
+    }
+    
+    // Sort by scheduled time (earliest first)
+    return duePrompts.sort((a, b) => a.prompt.scheduledTime - b.prompt.scheduledTime);
+  }
+
+  /**
+   * Get all reinforcement schedules from storage.
+   * @returns Array of all schedules
+   */
+  private getAllReinforcementSchedules(): ReinforcementSchedule[] {
+    return this.readParsedStorage<ReinforcementSchedule[]>(this.REINFORCEMENT_SCHEDULES_KEY, []);
+  }
+
+  /**
+   * Log reinforcement scheduled event.
+   * Called when a new reinforcement schedule is created.
+   * @param learnerId - Learner identifier
+   * @param unitId - Textbook unit ID being reinforced
+   * @param conceptId - Concept being reinforced
+   * @param scheduleId - Schedule identifier
+   */
+  logReinforcementScheduled(
+    learnerId: string,
+    unitId: string,
+    conceptId: string,
+    scheduleId: string
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('reinforcement', 'scheduled'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'reinforcement_scheduled',
+      problemId: 'reinforcement',
+      scheduleId,
+      conceptIds: [conceptId],
+      policyVersion: 'reinforcement-schedule-v1',
+      payload: {
+        unitId,
+        conceptId,
+        scheduleId
+      }
+    };
+    this.saveInteraction(event);
+  }
+
+  /**
+   * Log reinforcement prompt shown event.
+   * Called when a scheduled prompt is displayed to the learner.
+   * @param learnerId - Learner identifier
+   * @param scheduleId - Schedule identifier
+   * @param promptId - Prompt identifier
+   * @param promptType - Type of prompt shown
+   */
+  logReinforcementPromptShown(
+    learnerId: string,
+    scheduleId: string,
+    promptId: string,
+    promptType: string
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('reinforcement', 'prompt-shown'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'reinforcement_prompt_shown',
+      problemId: 'reinforcement',
+      scheduleId,
+      promptId,
+      promptType: promptType as 'mcq' | 'sql_completion' | 'concept_explanation',
+      shownTime: Date.now(),
+      policyVersion: 'reinforcement-prompt-v1',
+      payload: {
+        scheduleId,
+        promptId,
+        promptType
+      }
+    };
+    this.saveInteraction(event);
+  }
+
+  /**
+   * Log reinforcement response event.
+   * Called when a learner responds to a reinforcement prompt.
+   * @param learnerId - Learner identifier
+   * @param scheduleId - Schedule identifier
+   * @param promptId - Prompt identifier
+   * @param response - Learner's response
+   * @param isCorrect - Whether the response was correct
+   */
+  logReinforcementResponse(
+    learnerId: string,
+    scheduleId: string,
+    promptId: string,
+    response: string,
+    isCorrect: boolean
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('reinforcement', 'response'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'reinforcement_response',
+      problemId: 'reinforcement',
+      scheduleId,
+      promptId,
+      response,
+      isCorrect,
+      policyVersion: 'reinforcement-response-v1',
+      payload: {
+        scheduleId,
+        promptId,
+        isCorrect,
+        responseLength: response?.length || 0
       }
     };
     this.saveInteraction(event);
