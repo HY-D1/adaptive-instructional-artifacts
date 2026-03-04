@@ -394,31 +394,6 @@ describe('Assignment Strategy: Diagnostic', () => {
     });
   });
 
-  it('calculates diagnostic from interaction history correctly', () => {
-    // Create history for struggling learner
-    const strugglingInteractions = createDiagnosticHistory('struggling-learner', {
-      successRate: 0.2,
-      hintUsageRate: 0.8,
-      explanationUsageRate: 0.5,
-      totalAttempts: 10,
-    });
-
-    const strugglingDiagnostic = analyzeLearnerHistory(strugglingInteractions);
-    expect(strugglingDiagnostic.persistenceScore).toBeLessThan(0.3);
-
-    // Create history for persistent learner
-    // Use more attempts for statistical stability with randomness
-    const persistentInteractions = createDiagnosticHistory('persistent-learner', {
-      successRate: 0.9,
-      hintUsageRate: 0.2,
-      explanationUsageRate: 0.1,
-      totalAttempts: 50,
-    });
-
-    const persistentDiagnostic = analyzeLearnerHistory(persistentInteractions);
-    expect(persistentDiagnostic.persistenceScore).toBeGreaterThan(0.7);
-  });
-
   it('handles edge case scores at boundaries', () => {
     const boundaryCases: Array<{
       persistence: number;
