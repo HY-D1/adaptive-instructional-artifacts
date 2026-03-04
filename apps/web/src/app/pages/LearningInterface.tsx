@@ -1438,9 +1438,11 @@ export function LearningInterface() {
                     </TooltipTrigger>
                     <TooltipContent side="bottom">
                       <p>{profileDescriptions[currentProfileId]}</p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        HDI: {(currentHDI * 100).toFixed(0)}% • {hdiTrend}
-                      </p>
+                      {isInstructor && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          HDI: {(currentHDI * 100).toFixed(0)}% • {hdiTrend}
+                        </p>
+                      )}
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -1825,7 +1827,8 @@ export function LearningInterface() {
                 </div>
               </Card>
 
-              {/* Week 5: Unified HDI Display with 5 Components */}
+              {/* Week 5: Unified HDI Display with 5 Components - INSTRUCTOR ONLY */}
+              {isInstructor && (
               <Card className="p-4 bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-indigo-900">Hint Dependency Index</h3>
@@ -2004,6 +2007,7 @@ export function LearningInterface() {
                   </div>
                 </div>
               </Card>
+              )}
 
               {/* Keyboard Shortcuts Help */}
               <Card className="p-4 bg-slate-50 border-slate-200">

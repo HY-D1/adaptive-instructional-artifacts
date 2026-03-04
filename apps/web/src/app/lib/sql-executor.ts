@@ -327,15 +327,16 @@ export class SQLExecutor {
       }
 
       // Map all results for potential multi-statement queries
-      const allResults: SingleQueryResult[] = results.map((r: { columns: string[]; values: unknown[][] }) => ({
-        columns: r.columns,
+      // Note: sql.js may minify 'columns' to 'lc' in production builds
+      const allResults: SingleQueryResult[] = results.map((r) => ({
+        columns: (r as unknown as { columns?: string[]; lc?: string[] }).columns ?? (r as unknown as { lc: string[] }).lc,
         values: r.values as unknown[][]
       }));
 
       const result = results[0];
       return {
         success: true,
-        columns: result.columns,
+        columns: (result as unknown as { columns?: string[]; lc?: string[] }).columns ?? (result as unknown as { lc: string[] }).lc,
         values: result.values as unknown[][],
         allResults,
         executionTime
