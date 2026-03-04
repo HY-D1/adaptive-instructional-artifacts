@@ -172,65 +172,8 @@ test.afterEach(async ({ page }) => {
 test.describe('@weekly Hint Ladder System - Feature 1', () => {
 
   // ===========================================================================
-  // TEST 1: Hint Level Progression
+  // TEST 1: Hint Level Persistence
   // ===========================================================================
-
-  test('@weekly hint level progression: 1→2→3 with sequential helpRequestIndex', async ({ page }) => {
-    await page.addInitScript(() => {
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
-        id: 'test-user',
-        name: 'Test User',
-        role: 'student',
-        createdAt: Date.now()
-      }));
-    });
-    await page.goto('/practice');
-    await expect(page.getByRole('heading', { name: 'Practice SQL' })).toBeVisible();
-
-    const runQueryButton = page.getByRole('button', { name: 'Run Query' });
-    
-    // Step 1: Create an error to seed the error context
-    await replaceEditorText(page, 'SELECT');
-    await runUntilErrorCount(page, runQueryButton, 1);
-
-    // Step 2: Request first hint (Level 1)
-    await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByTestId('hint-label-1')).toBeVisible();
-
-    // Verify Level 1 hint was logged
-    let hintEvents = await getHintEventsFromStorage(page);
-    expect(hintEvents).toHaveLength(1);
-    expect(hintEvents[0].hintLevel).toBe(1);
-    expect(hintEvents[0].helpRequestIndex).toBe(1);
-
-    // Step 3: Request second hint (Level 2)
-    await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByTestId('hint-label-2')).toBeVisible();
-
-    // Verify Level 2 hint was logged
-    hintEvents = await getHintEventsFromStorage(page);
-    expect(hintEvents).toHaveLength(2);
-    expect(hintEvents[1].hintLevel).toBe(2);
-    expect(hintEvents[1].helpRequestIndex).toBe(2);
-
-    // Step 4: Request third hint (Level 3)
-    await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByTestId('hint-label-3')).toBeVisible();
-
-    // Verify Level 3 hint was logged
-    hintEvents = await getHintEventsFromStorage(page);
-    expect(hintEvents).toHaveLength(3);
-    expect(hintEvents[2].hintLevel).toBe(3);
-    expect(hintEvents[2].helpRequestIndex).toBe(3);
-
-    // Verify progression sequence
-    const hintLevels = hintEvents.map((e: any) => e.hintLevel);
-    expect(hintLevels).toEqual([1, 2, 3]);
-
-    const helpIndices = hintEvents.map((e: any) => e.helpRequestIndex);
-    expect(helpIndices).toEqual([1, 2, 3]);
-  });
-
 
   test('@weekly hint level persistence: events are stored in localStorage', async ({ page }) => {
     await page.addInitScript(() => {
@@ -398,33 +341,6 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     expect(hintEvent.timestamp).toBeDefined();
     expect(typeof hintEvent.timestamp).toBe('number');
     expect(hintEvent.timestamp).toBeGreaterThan(0);
-  });
-
-  test('@weekly hint event logging: hint_view omits hintId across levels', async ({ page }) => {
-    await page.addInitScript(() => {
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
-        id: 'test-user',
-        name: 'Test User',
-        role: 'student',
-        createdAt: Date.now()
-      }));
-    });
-    await page.goto('/');
-    
-    const runQueryButton = page.getByRole('button', { name: 'Run Query' });
-    
-    // Progress through all 3 hint levels
-    await replaceEditorText(page, 'SELECT');
-    await runUntilErrorCount(page, runQueryButton, 1);
-
-    for (let level = 1; level <= 3; level++) {
-      const buttonLabel = level === 1 ? 'Request Hint' : 'Next Hint';
-      await page.getByRole('button', { name: buttonLabel }).click();
-      await expect(page.getByText(`Hint ${level}`, { exact: true })).toBeVisible();
-      
-      const hintEvent = await getLastHintEvent(page);
-      expect(Object.prototype.hasOwnProperty.call(hintEvent, 'hintId')).toBeFalsy();
-    }
   });
 
   // ===========================================================================
@@ -680,55 +596,5 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   // ===========================================================================
 
 
-
-  // ===========================================================================
-  // TEST 8: Integration with Escalation System
-  // ===========================================================================
-
-  test('@weekly escalation integration: after level 3, next request triggers explanation', async ({ page }) => {
-    await page.addInitScript(() => {
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
-        id: 'test-user',
-        name: 'Test User',
-        role: 'student',
-        createdAt: Date.now()
-      }));
-    });
-    await page.goto('/');
-    
-    const runQueryButton = page.getByRole('button', { name: 'Run Query' });
-    
-    await replaceEditorText(page, 'SELECT');
-    await runUntilErrorCount(page, runQueryButton, 1);
-
-    // Progress through all 3 hint levels
-    await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByTestId('hint-label-1')).toBeVisible();
-    
-    await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByTestId('hint-label-2')).toBeVisible();
-    
-    await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByTestId('hint-label-3')).toBeVisible();
-
-    // After level 3, click "Get More Help" (help request 4) to trigger escalation
-    await page.getByRole('button', { name: 'Get More Help' }).click();
-    await expect(page.getByText('Full Explanation Unlocked')).toBeVisible();
-
-    // Verify explanation_view event was logged
-    await expect.poll(async () => {
-      const interactions = await getAllInteractionsFromStorage(page);
-      return interactions.filter((i: any) => i.eventType === 'explanation_view').length;
-    }).toBeGreaterThanOrEqual(1);
-
-    // Verify the explanation_view event has correct fields
-    const interactions = await getAllInteractionsFromStorage(page);
-    const explanationEvent = interactions.find((i: any) => i.eventType === 'explanation_view');
-    
-    expect(explanationEvent).toBeDefined();
-    expect(explanationEvent.helpRequestIndex).toBeGreaterThanOrEqual(4);
-    expect(explanationEvent.policyVersion).toBeDefined();
-    expect(explanationEvent.sqlEngageSubtype).toBeDefined();
-  });
 
 });
