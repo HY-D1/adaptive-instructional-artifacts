@@ -15,7 +15,10 @@ import {
   Keyboard,
   Zap,
   Sprout,
-  TrendingUp
+  TrendingUp,
+  X,
+  Eye,
+  LogOut
 } from 'lucide-react';
 
 import { Card } from '../components/ui/card';
@@ -25,26 +28,30 @@ import { Badge } from '../components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { Skeleton } from '../components/ui/skeleton';
 import { cn } from '../components/ui/utils';
-import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/SQLEditor';
-import { HintSystem } from '../components/HintSystem';
-import { ConceptCoverage } from '../components/ConceptCoverage';
-import { AskMyTextbookChat } from '../components/AskMyTextbookChat';
-import { useLLMSettings } from '../components/LLMSettingsHelper';
-import { useScreenReaderAnnouncer } from '../components/ScreenReaderAnnouncer';
+import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/features/sql/SQLEditor';
+import { HintSystem } from '../components/features/hints/HintSystem';
+import { ConceptCoverage } from '../components/features/research/ConceptCoverage';
+import { AskMyTextbookChat } from '../components/features/chat/AskMyTextbookChat';
+import { useLLMSettings } from '../components/shared/LLMSettingsHelper';
+import { useScreenReaderAnnouncer } from '../components/shared/ScreenReaderAnnouncer';
 import { sqlProblems } from '../data/problems';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
-import { storage } from '../lib/storage';
+import { storage, subscribeToSync } from '../lib/storage/storage';
 import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
-import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content-generator';
-import { buildPdfIndexOutputFields } from '../lib/pdf-retrieval';
-import { createEventId } from '../lib/event-id';
+import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content/content-generator';
+import { buildPdfIndexOutputFields } from '../lib/api/pdf-retrieval';
+import { createEventId } from '../lib/utils/event-id';
 import { startBackgroundAnalysis, stopBackgroundAnalysis, runAnalysisOnce, ANALYSIS_INTERVAL_MS } from '../lib/trace-analyzer';
 import type { AnalysisResult } from '../lib/trace-analyzer';
-import { getConcept } from '../lib/concept-loader';
-import { banditManager } from '../lib/learner-bandit-manager';
-import type { BanditArmId } from '../lib/learner-bandit-manager';
+import { getConcept } from '../lib/content/concept-loader';
+import { banditManager, PROFILE_TO_ARM_ID, BANDIT_ARM_PROFILES } from '../lib/ml/learner-bandit-manager';
+import { calculateHDI, calculateHDIComponents } from '../lib/ml/hdi-calculator';
+import type { HDIComponents, HDILevel } from '../types';
+import { safeGetStrategy, safeGetProfileOverride } from '../lib/storage/storage-validation';
+import { assignProfile, getProfileById, type EscalationProfile } from '../lib/ml/escalation-profiles';
+import type { BanditArmId } from '../lib/ml/learner-bandit-manager';
 import type { SQLProblem, InteractionEvent, InstructionalUnit, LearnerProfile, RetrievedChunkInfo, HDITrend } from '../types';
 
 const INSTRUCTOR_SUBTYPE_OPTIONS = getKnownSqlEngageSubtypes();
@@ -144,6 +151,55 @@ function DependencyWarningToast({ onClose }: DependencyWarningToastProps) {
 }
 
 /**
+ * Map profile ID to bandit arm ID for UI display
+ * @param profileId - Escalation profile ID
+ * @returns Corresponding bandit arm ID
+ */
+function getArmIdFromProfileId(profileId: string): BanditArmId {
+  const mapping: Record<string, BanditArmId> = {
+    'fast-escalator': 'aggressive',
+    'slow-escalator': 'conservative',
+    'adaptive-escalator': 'adaptive',
+    'explanation-first': 'explanation-first'
+  };
+  return mapping[profileId] || 'adaptive';
+}
+
+/**
+ * Analyze learner interaction history for diagnostic strategy
+ * Calculates persistence score and recovery rate based on past behavior
+ * @param interactions - Learner's interaction history
+ * @returns Diagnostic results for profile assignment
+ */
+function analyzeLearnerHistory(interactions: InteractionEvent[]) {
+  const executions = interactions.filter(i => i.eventType === 'execution');
+  const errors = interactions.filter(i => i.eventType === 'error');
+  const hintRequests = interactions.filter(i => i.eventType === 'guidance_request');
+  const explanations = interactions.filter(i => i.eventType === 'explanation_view');
+  
+  const totalAttempts = executions.length + errors.length;
+  const successfulAttempts = executions.filter(e => e.successful).length;
+  
+  // Calculate persistence score: ratio of successful attempts to total attempts
+  const persistenceScore = totalAttempts > 0 ? successfulAttempts / totalAttempts : 0.5;
+  
+  // Calculate recovery rate: inverse of error rate
+  const errorRate = totalAttempts > 0 ? errors.length / totalAttempts : 0;
+  const recoveryRate = 1 - errorRate;
+  
+  // Calculate hint dependency rate
+  const hintDependencyRate = totalAttempts > 0 ? hintRequests.length / totalAttempts : 0;
+  
+  return {
+    persistenceScore: Math.max(0, Math.min(1, persistenceScore)),
+    recoveryRate: Math.max(0, Math.min(1, recoveryRate)),
+    errorRate,
+    hintDependencyRate,
+    totalAttempts
+  };
+}
+
+/**
  * LearningInterface - Main student practice page
  * 
  * Provides the SQL practice environment with:
@@ -194,14 +250,48 @@ export function LearningInterface() {
   
   // Week 5: Profile indicator state
   const [currentProfileId, setCurrentProfileId] = useState<BanditArmId>('adaptive');
+  const [currentEscalationProfile, setCurrentEscalationProfile] = useState<EscalationProfile | null>(null);
   const isDev = import.meta.env.DEV;
   
-  // Week 5: HDI tracking state
+  // Week 5: HDI tracking state (unified 5-component calculator)
   const [currentHDI, setCurrentHDI] = useState<number>(0);
+  const [hdiLevel, setHdiLevel] = useState<HDILevel>('low');
+  const [hdiComponents, setHdiComponents] = useState<HDIComponents | null>(null);
   const [hdiTrend, setHdiTrend] = useState<HDITrend>('stable');
   const [showDependencyWarning, setShowDependencyWarning] = useState(false);
+  const [hdiRefreshKey, setHdiRefreshKey] = useState(0);
   const dependencyWarningShownRef = useRef(false);
   const lastHintRequestTimeRef = useRef<number>(0);
+  
+  // Preview Mode: Check if instructor is previewing student view
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  useEffect(() => {
+    const previewMode = localStorage.getItem('sql-adapt-preview-mode') === 'true';
+    setIsPreviewMode(previewMode);
+  }, []);
+  
+  // Subscribe to cross-tab sync for preview mode changes
+  useEffect(() => {
+    const unsubscribe = subscribeToSync((key, value) => {
+      if (key === 'sql-adapt-preview-mode') {
+        // Update preview mode state when changed in another tab
+        setIsPreviewMode(value === 'true');
+      }
+    });
+    return unsubscribe;
+  }, []);
+  
+  // Function to exit preview mode
+  const exitPreviewMode = () => {
+    try {
+      localStorage.removeItem('sql-adapt-preview-mode');
+      localStorage.removeItem('sql-adapt-debug-profile');
+      localStorage.removeItem('sql-adapt-debug-strategy');
+    } catch (error) {
+      console.error('[Preview] Failed to clear preview mode:', error);
+    }
+    window.location.href = '/instructor-dashboard';
+  };
   
   // Week 5: Progress hint state
   const [progressHint, setProgressHint] = useState<string | null>(null);
@@ -220,45 +310,84 @@ export function LearningInterface() {
   const { announcement: hintAnnouncement, announce: announceHint } = useScreenReaderAnnouncer();
   const [notificationAnnouncement, setNotificationAnnouncement] = useState('');
 
-  // Week 5: Get current escalation profile from bandit manager
+  // Week 5: Get current escalation profile based on assignment strategy
   useEffect(() => {
     if (!learnerId) return;
     
-    // Check for debug profile override first
-    const debugProfileOverride = localStorage.getItem('sql-adapt-debug-profile');
+    const assignmentStrategy = safeGetStrategy();
+    const debugProfileOverride = safeGetProfileOverride();
     
-    // Get the current profile for this learner
-    const { profile, armId } = banditManager.selectProfileForLearner(learnerId);
-    setCurrentProfileId(armId);
+    let effectiveProfile: EscalationProfile;
+    let effectiveArmId: BanditArmId;
+    let selectionReason: string;
+    
+    if (debugProfileOverride) {
+      // Debug override takes precedence over strategy
+      const profile = getProfileById(debugProfileOverride);
+      effectiveProfile = profile || BANDIT_ARM_PROFILES.adaptive;
+      effectiveArmId = PROFILE_TO_ARM_ID[debugProfileOverride] || 'adaptive';
+      selectionReason = 'debug_override';
+    } else {
+      switch (assignmentStrategy) {
+        case 'static': {
+          // Use hash-based deterministic assignment
+          effectiveProfile = assignProfile({ learnerId }, 'static');
+          effectiveArmId = getArmIdFromProfileId(effectiveProfile.id);
+          selectionReason = 'static_assignment';
+          break;
+        }
+        
+        case 'diagnostic': {
+          // Analyze learner's interaction history
+          const interactions = storage.getInteractionsByLearner(learnerId);
+          const diagnosticResults = analyzeLearnerHistory(interactions);
+          effectiveProfile = assignProfile({ learnerId, diagnosticResults }, 'diagnostic');
+          effectiveArmId = getArmIdFromProfileId(effectiveProfile.id);
+          selectionReason = 'diagnostic_assessment';
+          break;
+        }
+        
+        case 'bandit':
+        default: {
+          // Use Thompson sampling bandit selection
+          const banditResult = banditManager.selectProfileForLearner(learnerId);
+          effectiveProfile = banditResult.profile;
+          effectiveArmId = banditResult.armId;
+          selectionReason = 'bandit_selection';
+          
+          // Log bandit arm selection event
+          storage.logBanditArmSelected({
+            learnerId,
+            problemId: currentProblem.id,
+            armId: effectiveArmId,
+            selectionMethod: 'thompson_sampling',
+            armStatsAtSelection: banditManager.hasBandit(learnerId) 
+              ? banditManager.getLearnerStats(learnerId).reduce((acc, stat) => {
+                  acc[stat.armId] = { mean: stat.meanReward, pulls: stat.pullCount };
+                  return acc;
+                }, {} as Record<string, { mean: number; pulls: number }>)
+              : undefined,
+            sessionId
+          });
+          break;
+        }
+      }
+    }
+    
+    // Set the arm ID for UI display
+    setCurrentProfileId(effectiveArmId);
+    
+    // Set the escalation profile for hint system thresholds
+    setCurrentEscalationProfile(effectiveProfile);
     
     // Log profile assignment event
-    const assignmentStrategy = (localStorage.getItem('sql-adapt-debug-strategy') as 'static' | 'diagnostic' | 'bandit') || 'bandit';
-    const effectiveProfileId = debugProfileOverride || profile.id;
-    const overrideReason = debugProfileOverride ? 'debug_override' : 'bandit_selection';
-    
-    storage.logProfileAssigned({
+    storage.logProfileAssigned(
       learnerId,
-      problemId: currentProblem.id,
-      profileId: effectiveProfileId,
-      assignmentStrategy,
-      reason: overrideReason,
-      sessionId
-    });
-    
-    // Log bandit arm selection event
-    storage.logBanditArmSelected({
-      learnerId,
-      problemId: currentProblem.id,
-      armId,
-      selectionMethod: 'thompson_sampling',
-      armStatsAtSelection: banditManager.hasBandit(learnerId) 
-        ? banditManager.getLearnerStats(learnerId).reduce((acc, stat) => {
-            acc[stat.armId] = { mean: stat.meanReward, pulls: stat.pullCount };
-            return acc;
-          }, {} as Record<string, { mean: number; pulls: number }>)
-        : undefined,
-      sessionId
-    });
+      effectiveProfile.id,
+      debugProfileOverride ? 'static' : assignmentStrategy,
+      currentProblem.id,
+      selectionReason
+    );
   }, [learnerId, currentProblem.id, sessionId]);
 
   // Week 5: Listen for HDI calculated events
@@ -283,38 +412,42 @@ export function LearningInterface() {
     return () => window.removeEventListener('hdi_calculated', handleHDIEvent);
   }, [learnerId]);
 
-  // Week 5: Calculate HDI from interactions when they change
+  // Week 5: Calculate HDI using unified 5-component calculator
   useEffect(() => {
-    if (!learnerId || interactions.length === 0) return;
+    if (!learnerId) return;
     
-    const sessionInteractions = interactions.filter(
-      i => i.learnerId === learnerId && i.sessionId === sessionId
-    );
+    // Get all interactions for this learner (not just session-scoped)
+    const allLearnerInteractions = storage.getInteractionsByLearner(learnerId);
     
-    // Calculate HDI components
-    const hintViews = sessionInteractions.filter(i => i.eventType === 'hint_view').length;
-    const explanationViews = sessionInteractions.filter(i => i.eventType === 'explanation_view').length;
-    const executions = sessionInteractions.filter(i => i.eventType === 'execution').length;
-    const errors = sessionInteractions.filter(i => i.eventType === 'error').length;
-    const attempts = executions + errors;
+    // Calculate full HDI with all 5 components
+    const result = calculateHDI(allLearnerInteractions);
     
-    // Simple HDI calculation: weighted ratio of help-seeking to attempts
-    // This is a simplified version - the actual HDI calculation would be more sophisticated
-    const hpa = attempts > 0 ? hintViews / attempts : 0;
-    const er = attempts > 0 ? explanationViews / attempts : 0;
-    const hdi = Math.min(1, (hpa * 0.4 + er * 0.6));
-    
-    // Determine trend based on previous value (simplified)
-    if (hdi > currentHDI + 0.05) {
+    // Determine trend based on previous value
+    if (result.hdi > currentHDI + 0.05) {
       setHdiTrend('increasing');
-    } else if (hdi < currentHDI - 0.05) {
+    } else if (result.hdi < currentHDI - 0.05) {
       setHdiTrend('decreasing');
     } else {
       setHdiTrend('stable');
     }
     
-    setCurrentHDI(hdi);
-  }, [interactions, learnerId, sessionId, currentHDI]);
+    setCurrentHDI(result.hdi);
+    setHdiLevel(result.level);
+    setHdiComponents(result.components);
+    
+    // Dispatch custom event for other components
+    const hdiEvent = new CustomEvent('hdi_calculated', {
+      detail: {
+        hdi: result.hdi,
+        hdiLevel: result.level,
+        components: result.components,
+        trend: result.hdi > currentHDI + 0.05 ? 'increasing' : 
+               result.hdi < currentHDI - 0.05 ? 'decreasing' : 'stable',
+        learnerId
+      }
+    });
+    window.dispatchEvent(hdiEvent);
+  }, [learnerId, interactions, hdiRefreshKey, currentHDI]);
 
   // Week 5: Check for dependency warning after hint requests
   useEffect(() => {
@@ -880,6 +1013,37 @@ export function LearningInterface() {
       setNotesActionMessage(undefined);
       setGenerationError(undefined);
       setLatestGeneratedUnit(null);
+      
+      // Week 5: Record bandit outcome when problem is solved successfully
+      // Only record when using bandit strategy (not static or diagnostic)
+      const debugProfileOverride = safeGetProfileOverride();
+      const assignmentStrategy = safeGetStrategy();
+      if (!debugProfileOverride && assignmentStrategy === 'bandit' && learnerId) {
+        try {
+          // Calculate reward components
+          const timeSpent = Date.now() - startTime;
+          const sessionInteractions = storage
+            .getInteractionsByLearner(learnerId)
+            .filter((i) => i.sessionId === sessionId && i.problemId === currentProblem.id);
+          const errorCount = sessionInteractions.filter((i) => i.eventType === 'error').length;
+          const usedExplanation = sessionInteractions.some((i) => i.eventType === 'explanation_view');
+          
+          banditManager.recordOutcome(learnerId, currentProfileId, {
+            solved: true,
+            usedExplanation,
+            errorCount,
+            baselineErrors: 3, // Expected baseline
+            timeSpentMs: timeSpent,
+            medianTimeMs: 300000, // 5 minutes as baseline
+            hdiScore: currentHDI,
+          });
+          
+          // Bandit outcome recorded
+        } catch (error) {
+          console.error('[Bandit] Failed to record outcome:', error);
+        }
+      }
+      
       return;
     }
 
@@ -1123,6 +1287,35 @@ export function LearningInterface() {
           <DependencyWarningToast onClose={() => setShowDependencyWarning(false)} />
         )}
 
+        {/* Preview Mode Banner - Canvas LMS Style */}
+        {isPreviewMode && (
+          <div className="bg-purple-600 text-white px-4 py-3 sticky top-0 z-50">
+            <div className="container mx-auto flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-1.5 bg-purple-500 rounded-lg">
+                  <Eye className="size-5" />
+                </div>
+                <div>
+                  <span className="font-semibold">Student Preview Mode</span>
+                  <span className="hidden sm:inline text-purple-200 ml-2">
+                    You are viewing the platform as a student would see it
+                  </span>
+                </div>
+              </div>
+              <Button 
+                variant="secondary" 
+                size="sm"
+                onClick={exitPreviewMode}
+                className="bg-white text-purple-700 hover:bg-purple-50 border-0 font-medium"
+                aria-label="Exit Student Preview mode and return to instructor dashboard"
+              >
+                <LogOut className="size-4 mr-2" aria-hidden="true" />
+                Exit Preview
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className={cn(
           "border-b",
           isStudent ? "bg-gradient-to-r from-blue-50 to-white border-blue-100" : "bg-amber-50 border-amber-200"
@@ -1136,8 +1329,20 @@ export function LearningInterface() {
                     <GraduationCap className="size-7 text-blue-600" />
                   </div>
                   <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Practice SQL</h1>
-                    <p className="text-gray-600 text-sm">Learn SQL with personalized hints and explanations</p>
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-2xl font-bold text-gray-900">Practice SQL</h1>
+                      {isPreviewMode && (
+                        <Badge className="bg-purple-100 text-purple-800 border-purple-300">
+                          Preview Mode
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-gray-600 text-sm">
+                      {isPreviewMode 
+                        ? 'You are previewing the student experience. Click "Exit Preview" to return.'
+                        : 'Learn SQL with personalized hints and explanations'
+                      }
+                    </p>
                   </div>
                 </div>
               ) : (
@@ -1210,8 +1415,8 @@ export function LearningInterface() {
                   </Tooltip>
                 )}
 
-                {/* Week 5: Profile Badge - DEV mode only, subtle */}
-                {isDev && isStudent && (
+                {/* Week 5: Profile Badge - DEV mode + Instructors Only (for testing/debugging) */}
+                {isDev && isInstructor && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className={cn(
@@ -1236,7 +1441,21 @@ export function LearningInterface() {
                   </Tooltip>
                 )}
 
-                {/* Role selector - only show for instructors or in dev mode */}
+                {/* Exit Preview button - Only shown in preview mode */}
+                {isPreviewMode && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={exitPreviewMode}
+                    className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                    aria-label="Exit Student Preview mode and return to instructor dashboard"
+                  >
+                    <LogOut className="size-4 mr-2" aria-hidden="true" />
+                    Exit Preview
+                  </Button>
+                )}
+
+                {/* Role selector - Instructors only (allows testing student view) */}
                 {isInstructor && (
                   <Select value={role} onValueChange={(value) => {
                     localStorage.setItem('sql-adapt-user-role', value);
@@ -1511,6 +1730,7 @@ export function LearningInterface() {
                 recentInteractions={problemInteractions}
                 onEscalate={handleEscalate}
                 onInteractionLogged={handleHintSystemInteraction}
+                escalationProfile={currentEscalationProfile}
               />
 
               {/* Week 5: Progress Hint - subtle, below hint panel */}
@@ -1596,6 +1816,186 @@ export function LearningInterface() {
                   <div className="text-gray-600">Time spent:</div>
                   <div className="font-medium text-right">
                     {formatTime(timeSpent)}
+                  </div>
+                </div>
+              </Card>
+
+              {/* Week 5: Unified HDI Display with 5 Components */}
+              <Card className="p-4 bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-semibold text-indigo-900">Hint Dependency Index</h3>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge 
+                        variant="outline" 
+                        className={cn(
+                          "text-xs",
+                          hdiLevel === 'low' && "bg-green-100 text-green-800 border-green-300",
+                          hdiLevel === 'medium' && "bg-yellow-100 text-yellow-800 border-yellow-300",
+                          hdiLevel === 'high' && "bg-red-100 text-red-800 border-red-300"
+                        )}
+                      >
+                        {hdiLevel === 'low' && <Check className="size-3 mr-1" />}
+                        {hdiLevel.charAt(0).toUpperCase() + hdiLevel.slice(1)}
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>HDI Level: {hdiLevel} dependency on hints</p>
+                      <p className="text-xs text-gray-400">Score: {(currentHDI * 100).toFixed(1)}%</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                
+                {/* Overall HDI Score */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm text-indigo-700 font-medium">Overall HDI</span>
+                    <span className="text-lg font-bold text-indigo-900">{(currentHDI * 100).toFixed(1)}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-indigo-200 rounded-full overflow-hidden">
+                    <div 
+                      className={cn(
+                        "h-full rounded-full transition-all duration-500",
+                        hdiLevel === 'low' && "bg-green-500",
+                        hdiLevel === 'medium' && "bg-yellow-500",
+                        hdiLevel === 'high' && "bg-red-500"
+                      )}
+                      style={{ width: `${currentHDI * 100}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* 5 Component Breakdown */}
+                {hdiComponents && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-indigo-600 font-medium mb-2">Component Breakdown</p>
+                    
+                    {/* HPA - Hints Per Attempt */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600 w-12 shrink-0">HPA</span>
+                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-indigo-500 rounded-full"
+                              style={{ width: `${hdiComponents.hpa * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono text-gray-700 w-10 text-right">
+                            {hdiComponents.hpa.toFixed(2)}
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">
+                        <p className="font-medium">Hints Per Attempt (HPA)</p>
+                        <p className="text-xs text-gray-400">Ratio of hint requests to problem attempts</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    {/* AED - Average Escalation Depth */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600 w-12 shrink-0">AED</span>
+                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-indigo-500 rounded-full"
+                              style={{ width: `${hdiComponents.aed * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono text-gray-700 w-10 text-right">
+                            {hdiComponents.aed.toFixed(2)}
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">
+                        <p className="font-medium">Average Escalation Depth (AED)</p>
+                        <p className="text-xs text-gray-400">Average hint level used (1-3), normalized</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    {/* ER - Explanation Rate */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600 w-12 shrink-0">ER</span>
+                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-indigo-500 rounded-full"
+                              style={{ width: `${hdiComponents.er * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono text-gray-700 w-10 text-right">
+                            {hdiComponents.er.toFixed(2)}
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">
+                        <p className="font-medium">Explanation Rate (ER)</p>
+                        <p className="text-xs text-gray-400">Ratio of explanation views to attempts</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    {/* REAE - Repeated Error After Explanation */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600 w-12 shrink-0">REAE</span>
+                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-indigo-500 rounded-full"
+                              style={{ width: `${hdiComponents.reae * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono text-gray-700 w-10 text-right">
+                            {hdiComponents.reae.toFixed(2)}
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">
+                        <p className="font-medium">Repeated Error After Explanation (REAE)</p>
+                        <p className="text-xs text-gray-400">Errors made after viewing explanations</p>
+                      </TooltipContent>
+                    </Tooltip>
+
+                    {/* IWH - Improvement Without Hint */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-600 w-12 shrink-0">IWH</span>
+                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-green-500 rounded-full"
+                              style={{ width: `${hdiComponents.iwh * 100}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-mono text-gray-700 w-10 text-right">
+                            {hdiComponents.iwh.toFixed(2)}
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">
+                        <p className="font-medium">Improvement Without Hint (IWH)</p>
+                        <p className="text-xs text-gray-400">Successful attempts without using hints</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                )}
+
+                {/* Trend Indicator */}
+                <div className="mt-3 pt-3 border-t border-indigo-100">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-indigo-600">Trend:</span>
+                    <span className={cn(
+                      "font-medium",
+                      hdiTrend === 'decreasing' && "text-green-600",
+                      hdiTrend === 'increasing' && "text-amber-600",
+                      hdiTrend === 'stable' && "text-gray-600"
+                    )}>
+                      {hdiTrend === 'decreasing' && '↓ Improving'}
+                      {hdiTrend === 'increasing' && '↑ Rising'}
+                      {hdiTrend === 'stable' && '→ Stable'}
+                    </span>
                   </div>
                 </div>
               </Card>

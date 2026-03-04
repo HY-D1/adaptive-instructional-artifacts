@@ -1,0 +1,371 @@
+import { LLMGenerationParams } from '../../types';
+import { isDemoMode, shouldAttemptLLM } from '../utils/demo-mode';
+
+export const OLLAMA_MODEL = 'qwen2.5:1.5b-instruct';
+const OLLAMA_PROXY_BASE = '/ollama';
+const OLLAMA_LOCAL_URL = 'http://127.0.0.1:11434';
+const HEALTHCHECK_TIMEOUT_MS = 8000;
+const PROBE_PROMPT = 'Reply with exactly: OLLAMA_OK';
+const PROBE_TIMEOUT_MS = 12000;
+const PROBE_WARMUP_TIMEOUT_MS = 30000;
+
+/**
+ * Options for Ollama generation
+ */
+export type OllamaGenerateOptions = {
+  /** Model to use for generation */
+  model?: string;
+  /** Generation parameters */
+  params?: Partial<LLMGenerationParams>;
+};
+
+/**
+ * Health status for Ollama service
+ */
+export type OllamaHealthStatus = {
+  /** Whether service is healthy */
+  ok: boolean;
+  /** Status message (user-friendly for UI) */
+  message: string;
+  /** Technical details for debugging (console only) */
+  details?: string;
+  /** List of available models */
+  availableModels?: string[];
+  /** Response from probe prompt */
+  probeResponse?: string;
+};
+
+/**
+ * Error type for Ollama client failures
+ */
+export type OllamaClientError = Error & {
+  /** HTTP status code if applicable */
+  status?: number;
+  /** Error code category */
+  code: 'NETWORK' | 'TIMEOUT' | 'HTTP' | 'INVALID_RESPONSE';
+};
+
+const DEFAULT_PARAMS: LLMGenerationParams = {
+  temperature: 0,
+  top_p: 1,
+  stream: false,
+  timeoutMs: 25000
+};
+
+function buildClientError(
+  code: OllamaClientError['code'],
+  message: string,
+  status?: number
+): OllamaClientError {
+  const error = new Error(message) as OllamaClientError;
+  error.code = code;
+  error.status = status;
+  return error;
+}
+
+function getErrorMessage(error: unknown): string {
+  const clientError = error as Partial<OllamaClientError>;
+  if (clientError.code === 'TIMEOUT') return clientError.message || 'request timed out';
+  if (clientError.code === 'NETWORK') return clientError.message || 'network error';
+  if (clientError.code === 'HTTP') return clientError.message || `HTTP ${clientError.status || 'error'}`;
+  if (clientError.code === 'INVALID_RESPONSE') return clientError.message || 'invalid response payload';
+  const genericMessage = (error as Error)?.message;
+  return genericMessage || 'unknown error';
+}
+
+function compactMessage(message: string): string {
+  return message
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function formatAvailableModels(models: string[]): string {
+  if (models.length === 0) return 'none reported';
+  const preview = models.slice(0, 4).join(', ');
+  return models.length > 4 ? `${preview}, ...` : preview;
+}
+
+function buildServiceDownMessage(details: string): { userMessage: string; technicalDetails: string } {
+  const normalizedDetails = compactMessage(details);
+  const technicalDetails = `Could not reach local Ollama via ${OLLAMA_PROXY_BASE} -> ${OLLAMA_LOCAL_URL}.${normalizedDetails ? ` Details: ${normalizedDetails}.` : ''}`;
+  const userMessage = 'Ollama is not running. Start Ollama to enable AI-powered hints.';
+  return { userMessage, technicalDetails };
+}
+
+async function readResponseText(response: Response): Promise<string> {
+  try {
+    const text = await response.text();
+    return compactMessage(text).slice(0, 220);
+  } catch {
+    return '';
+  }
+}
+
+function normalizeProbeResponse(text: string): string {
+  return compactMessage(text).slice(0, 120);
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return (error as Partial<OllamaClientError>)?.code === 'TIMEOUT';
+}
+
+async function runHealthProbe(model: string): Promise<{
+  response: string;
+  usedWarmupRetry: boolean;
+}> {
+  try {
+    const probe = await generateWithOllama(PROBE_PROMPT, {
+      model,
+      params: {
+        temperature: 0,
+        top_p: 1,
+        stream: false,
+        timeoutMs: PROBE_TIMEOUT_MS
+      }
+    });
+    return {
+      response: normalizeProbeResponse(probe.text),
+      usedWarmupRetry: false
+    };
+  } catch (firstError) {
+    if (!isTimeoutError(firstError)) {
+      throw firstError;
+    }
+
+    const warmupProbe = await generateWithOllama(PROBE_PROMPT, {
+      model,
+      params: {
+        temperature: 0,
+        top_p: 1,
+        stream: false,
+        timeoutMs: PROBE_WARMUP_TIMEOUT_MS
+      }
+    });
+
+    return {
+      response: normalizeProbeResponse(warmupProbe.text),
+      usedWarmupRetry: true
+    };
+  }
+}
+
+function validateLLMParams(params: LLMGenerationParams): LLMGenerationParams {
+  const validated = { ...params };
+  
+  // Clamp temperature to valid range [0, 2]
+  if (typeof validated.temperature !== 'number' || !Number.isFinite(validated.temperature)) {
+    validated.temperature = DEFAULT_PARAMS.temperature;
+  } else {
+    validated.temperature = Math.max(0, Math.min(2, validated.temperature));
+  }
+  
+  // Clamp top_p to valid range [0, 1]
+  if (typeof validated.top_p !== 'number' || !Number.isFinite(validated.top_p)) {
+    validated.top_p = DEFAULT_PARAMS.top_p;
+  } else {
+    validated.top_p = Math.max(0, Math.min(1, validated.top_p));
+  }
+  
+  // Ensure timeout is a positive integer
+  if (typeof validated.timeoutMs !== 'number' || !Number.isFinite(validated.timeoutMs) || validated.timeoutMs <= 0) {
+    validated.timeoutMs = DEFAULT_PARAMS.timeoutMs;
+  }
+  
+  // Ensure stream is boolean
+  if (typeof validated.stream !== 'boolean') {
+    validated.stream = DEFAULT_PARAMS.stream;
+  }
+  
+  return validated;
+}
+
+/**
+ * Generate text using Ollama LLM service
+ * @param prompt - Prompt text to send
+ * @param options - Generation options
+ * @returns Promise resolving to generated text and metadata
+ * @throws OllamaClientError on failure
+ */
+/**
+ * Get the selected model from localStorage or use default
+ */
+function getSelectedModel(): string {
+  // Guard for SSR - localStorage is not available on server
+  if (typeof window === 'undefined') {
+    return OLLAMA_MODEL;
+  }
+  try {
+    const saved = localStorage.getItem('sql-adapt-llm-settings');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.model && typeof parsed.model === 'string') {
+        return parsed.model;
+      }
+    }
+  } catch {
+    // Ignore parse errors, fall back to default
+  }
+  return OLLAMA_MODEL;
+}
+
+export async function generateWithOllama(prompt: string, options?: OllamaGenerateOptions): Promise<{
+  text: string;
+  model: string;
+  params: LLMGenerationParams;
+}> {
+  // In demo mode, immediately throw a network error so fallback kicks in
+  if (!shouldAttemptLLM()) {
+    throw buildClientError('NETWORK', 'Demo mode: LLM not available, using fallback hints.');
+  }
+  
+  const model = options?.model || getSelectedModel();
+  const rawParams: LLMGenerationParams = {
+    ...DEFAULT_PARAMS,
+    ...(options?.params || {})
+  };
+  const params = validateLLMParams(rawParams);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), params.timeoutMs);
+
+  try {
+    const response = await fetch('/ollama/api/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model,
+        prompt,
+        stream: params.stream,
+        options: {
+          temperature: params.temperature,
+          top_p: params.top_p
+        }
+      }),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw buildClientError('HTTP', `Ollama HTTP ${response.status}: ${body}`, response.status);
+    }
+
+    const payload = await response.json();
+    if (!payload || typeof payload.response !== 'string') {
+      throw buildClientError('INVALID_RESPONSE', 'Ollama returned an unexpected response payload.');
+    }
+
+    return {
+      text: payload.response,
+      model,
+      params
+    };
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') {
+      throw buildClientError('TIMEOUT', `Ollama request timed out after ${params.timeoutMs}ms.`);
+    }
+    if ((error as OllamaClientError).code) {
+      throw error;
+    }
+    throw buildClientError('NETWORK', (error as Error).message || 'Failed to reach Ollama.');
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
+ * Check Ollama service health and model availability
+ * @param model - Model to check (defaults to OLLAMA_MODEL)
+ * @returns Health status with message and available models
+ */
+export async function checkOllamaHealth(model: string = OLLAMA_MODEL): Promise<OllamaHealthStatus> {
+  // In demo mode, return a friendly message immediately
+  if (isDemoMode()) {
+    return {
+      ok: true,
+      message: '🎓 Demo Mode: AI features use pre-built content. No local setup needed!',
+      availableModels: [OLLAMA_MODEL],
+      probeResponse: 'DEMO_MODE_ACTIVE'
+    };
+  }
+  
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), HEALTHCHECK_TIMEOUT_MS);
+
+  try {
+    const response = await fetch('/ollama/api/tags', {
+      method: 'GET',
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const body = await readResponseText(response);
+      const details = body ? `status ${response.status}: ${body}` : `status ${response.status}`;
+      const { userMessage, technicalDetails } = buildServiceDownMessage(details);
+      return {
+        ok: false,
+        message: userMessage,
+        details: technicalDetails
+      };
+    }
+
+    const payload = await response.json();
+    const availableModels = Array.isArray(payload?.models)
+      ? payload.models.map((entry: { name?: string }) => entry?.name).filter(Boolean)
+      : [];
+
+    if (availableModels.includes(model)) {
+      try {
+        const probe = await runHealthProbe(model);
+        const probeResponse = probe.response;
+        const warmupSuffix = probe.usedWarmupRetry ? ' after warm-up retry' : '';
+        return {
+          ok: true,
+          message: `Connected. Model '${model}' is available and replied: "${probeResponse || '[empty response]'}"${warmupSuffix}.`,
+          availableModels,
+          probeResponse
+        };
+      } catch (error) {
+        if (isTimeoutError(error)) {
+          return {
+            ok: false,
+            message: `Connected and model '${model}' is available, but test generation timed out (${PROBE_TIMEOUT_MS}ms + warm-up retry ${PROBE_WARMUP_TIMEOUT_MS}ms). The model is likely still loading; retry Test LLM or run "ollama run ${model} \\"${PROBE_PROMPT}\\"" once to warm it up.`,
+            availableModels
+          };
+        }
+
+        const details = getErrorMessage(error);
+        return {
+          ok: false,
+          message: `Connected and model '${model}' is available, but test generation failed: ${details}.`,
+          availableModels
+        };
+      }
+    }
+
+    return {
+      ok: false,
+      message: `Model '${model}' not found. Run 'ollama pull ${model}'.`,
+      details: `Model '${model}' not available. Available models: ${formatAvailableModels(availableModels)}.`,
+      availableModels
+    };
+  } catch (error) {
+    if ((error as Error).name === 'AbortError') {
+      const { userMessage, technicalDetails } = buildServiceDownMessage(`timed out after ${HEALTHCHECK_TIMEOUT_MS}ms while calling /api/tags`);
+      return {
+        ok: false,
+        message: userMessage,
+        details: technicalDetails
+      };
+    }
+    const { userMessage, technicalDetails } = buildServiceDownMessage(getErrorMessage(error));
+    return {
+      ok: false,
+      message: userMessage,
+      details: technicalDetails
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}

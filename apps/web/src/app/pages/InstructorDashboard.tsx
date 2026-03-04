@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, Link } from 'react-router';
 
 import {
   BarChart3,
@@ -14,7 +14,10 @@ import {
   Target,
   Activity,
   ChevronRight,
-  FileText
+  FileText,
+  Eye,
+  Play,
+  X
 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -30,7 +33,14 @@ import {
   TableHeader,
   TableRow
 } from '../components/ui/table';
-import { storage } from '../lib/storage';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from '../components/ui/dialog';
+import { storage, broadcastSync } from '../lib/storage/storage';
 import { useUserRole } from '../hooks/useUserRole';
 import type { LearnerProfile, InteractionEvent } from '../types';
 
@@ -360,6 +370,12 @@ export function InstructorDashboard() {
   // Handle intervention trigger
   const [interveningStudents, setInterveningStudents] = useState<Set<string>>(new Set());
   
+  // Student Preview state
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewProfile, setPreviewProfile] = useState<'fast' | 'slow' | 'adaptive' | 'explanation-first'>('adaptive');
+  const [previewProblem, setPreviewProblem] = useState<string>('problem-1');
+
+  
   const handleTriggerIntervention = async (student: StudentAdaptiveProfile) => {
     // Set loading state for this student
     setInterveningStudents(prev => new Set(prev).add(student.learnerId));
@@ -532,7 +548,7 @@ export function InstructorDashboard() {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate('/textbook-review')}>
+          <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate('/textbook')}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-start gap-4">
@@ -540,8 +556,8 @@ export function InstructorDashboard() {
                     <BookOpen className="size-6 text-emerald-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-lg">Textbook Review</h3>
-                    <p className="text-sm text-gray-600 mt-1">Review student textbooks and identify misconceptions</p>
+                    <h3 className="font-semibold text-lg">My Textbook</h3>
+                    <p className="text-sm text-gray-600 mt-1">View your accumulated notes and explanations</p>
                   </div>
                 </div>
                 <ChevronRight className="size-5 text-gray-400" />
@@ -549,6 +565,79 @@ export function InstructorDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Student Preview Card */}
+        <Card 
+          className="border-blue-200 bg-gradient-to-r from-blue-50 to-white"
+          onClick={(e) => {
+            // Prevent any card-level click from refreshing page
+            if ((e.target as HTMLElement).tagName !== 'BUTTON') {
+              e.preventDefault();
+            }
+          }}
+        >
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-start gap-4">
+                <div className="p-3 rounded-lg bg-blue-100">
+                  <Eye className="size-6 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg text-blue-900">Student Preview Mode</h3>
+                  <p className="text-sm text-blue-700 mt-1">
+                    Experience the platform as a student without logging out. Test different escalation profiles and see what students see.
+                  </p>
+                </div>
+              </div>
+              <div onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    // Prevent any default behavior
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    setShowPreviewModal(true);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center gap-2 active:scale-95 transition-transform cursor-pointer"
+                  data-testid="launch-preview-button"
+                >
+                  <Play className="size-4" />
+                  Launch Preview
+                </button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Data Storage Info Card */}
+        <Card className="border-amber-200 bg-amber-50/50">
+          <CardContent className="p-6">
+            <div className="flex items-start gap-4">
+              <div className="p-3 rounded-lg bg-amber-100">
+                <AlertCircle className="size-6 text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-lg text-amber-900">About Data Storage</h3>
+                <p className="text-sm text-amber-800 mt-1">
+                  All learning data is stored locally in your browser. Student progress, textbooks, and interactions 
+                  are saved per-browser and cannot be accessed across different devices or browsers. For a full 
+                  classroom management system with cloud storage, a backend integration would be required.
+                </p>
+                <div className="mt-3 flex gap-4 text-xs text-amber-700">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                    Demo Mode Available
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                    Local Storage Only
+                  </span>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Adaptive Learning Insights Section (Week 5) */}
         <div className="space-y-6">
@@ -870,9 +959,9 @@ export function InstructorDashboard() {
                 </CardTitle>
                 <CardDescription>Recent activity and progress for each student</CardDescription>
               </div>
-              <Button variant="outline" size="sm" onClick={() => navigate('/textbook-review')}>
+              <Button variant="outline" size="sm" onClick={() => navigate('/textbook')}>
                 <BookOpen className="size-4 mr-1" />
-                View Textbooks
+                My Textbook
               </Button>
             </div>
           </CardHeader>
@@ -956,6 +1045,136 @@ export function InstructorDashboard() {
           {toastMessage}
         </div>
       )}
+
+      {/* Student Preview Modal - Using Dialog Component with Portal */}
+      <Dialog 
+        open={showPreviewModal} 
+        onOpenChange={setShowPreviewModal}
+        key={`preview-modal-${showPreviewModal}`}
+      >
+        <DialogContent className="sm:max-w-lg p-0 overflow-hidden">
+          {/* Modal Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+            <DialogHeader className="space-y-1">
+              <div className="flex items-center gap-3">
+                <Eye className="size-6 text-white" />
+                <DialogTitle className="text-xl font-bold text-white">Student Preview</DialogTitle>
+              </div>
+              <DialogDescription className="text-blue-100 text-sm">
+                Configure preview settings and experience the platform as a student
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          {/* Modal Content */}
+          <div className="p-6 space-y-6">
+            {/* Profile Selection */}
+            <div className="space-y-3">
+              <label aria-label="Escalation Profile" className="text-sm font-medium text-gray-700">
+                Escalation Profile
+              </label>
+              <p className="text-xs text-gray-500">
+                Choose how hints will escalate during the preview
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { id: 'fast', label: 'Fast Escalator', desc: 'Quick intervention', color: 'border-red-200 hover:bg-red-50' },
+                  { id: 'slow', label: 'Slow Escalator', desc: 'Extended exploration', color: 'border-blue-200 hover:bg-blue-50' },
+                  { id: 'adaptive', label: 'Adaptive', desc: 'Balanced approach', color: 'border-green-200 hover:bg-green-50' },
+                  { id: 'explanation-first', label: 'Explanation First', desc: 'Immediate help', color: 'border-purple-200 hover:bg-purple-50' },
+                ].map((profile) => (
+                  <button
+                    key={profile.id}
+                    onClick={() => setPreviewProfile(profile.id as typeof previewProfile)}
+                    className={`p-3 border-2 rounded-lg text-left transition-all ${
+                      previewProfile === profile.id 
+                        ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
+                        : `border-gray-200 ${profile.color}`
+                    }`}
+                  >
+                    <p className={`font-medium text-sm ${
+                      previewProfile === profile.id ? 'text-blue-900' : 'text-gray-900'
+                    }`}>
+                      {profile.label}
+                    </p>
+                    <p className={`text-xs mt-1 ${
+                      previewProfile === profile.id ? 'text-blue-600' : 'text-gray-500'
+                    }`}>
+                      {profile.desc}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Info Box */}
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-amber-900 mb-2">What to expect</h4>
+              <ul className="text-xs text-amber-700 space-y-1 list-disc ml-4">
+                <li>You'll see the student interface without instructor controls</li>
+                <li>No debug panels or testing controls will be visible</li>
+                <li>Your interactions won't affect real student data</li>
+                <li>Use the Role selector in the header to return to instructor view</li>
+              </ul>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowPreviewModal(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={(e) => {
+                  // Prevent any default form submission behavior
+                  e.preventDefault();
+                  e.stopPropagation();
+                  
+                  try {
+                    // Save the preview profile override to localStorage
+                    // Map UI values to actual profile IDs (explanation-first doesn't have -escalator suffix)
+                    const profileIdMap: Record<string, string> = {
+                      'fast': 'fast-escalator',
+                      'slow': 'slow-escalator',
+                      'adaptive': 'adaptive-escalator',
+                      'explanation-first': 'explanation-first'
+                    };
+                    const actualProfileId = profileIdMap[previewProfile] || `${previewProfile}-escalator`;
+                    localStorage.setItem('sql-adapt-debug-profile', actualProfileId);
+                    // Also set assignment strategy to static for consistent experience
+                    localStorage.setItem('sql-adapt-debug-strategy', 'static');
+                    // Set a preview mode flag to indicate we're in preview mode
+                    localStorage.setItem('sql-adapt-preview-mode', 'true');
+                    // Broadcast to other tabs for cross-tab sync
+                    broadcastSync('sql-adapt-preview-mode', 'true');
+                    
+                    // Close modal first
+                    setShowPreviewModal(false);
+                    
+                    // Use setTimeout to ensure state updates and localStorage writes complete
+                    // before navigation starts (100ms for reliability)
+                    setTimeout(() => {
+                      // Use window.location.assign for more reliable navigation
+                      window.location.assign('/practice');
+                    }, 100);
+                  } catch (error) {
+                    console.error('[Student Preview] Failed to start preview mode:', error);
+                    alert('Failed to start preview mode. Please check browser storage permissions and try again.');
+                  }
+                }}
+                className="flex-1 bg-blue-600 hover:bg-blue-700"
+                type="button"
+              >
+                <Play className="size-4 mr-2" />
+                Start Preview
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

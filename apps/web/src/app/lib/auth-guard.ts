@@ -3,7 +3,7 @@
  * Week 4: Authentication and authorization utilities
  */
 
-import { storage } from './storage';
+import { storage } from './storage/storage';
 import type { UserRole } from '../types';
 
 // Route paths
@@ -22,13 +22,43 @@ const ROLE_ROUTES: Record<UserRole, string[]> = {
   instructor: ['/', '/textbook', '/research', '/instructor-dashboard'],
 };
 
+// Preview mode localStorage key (must match InstructorDashboard.tsx)
+const PREVIEW_MODE_KEY = 'sql-adapt-preview-mode';
+
+/**
+ * Check if preview mode is active
+ * Preview mode allows instructors to access student routes
+ */
+export function isPreviewModeActive(): boolean {
+  if (typeof window === 'undefined') {
+    return false; // SSR safety
+  }
+  try {
+    return localStorage.getItem(PREVIEW_MODE_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Check if a route is accessible by a given role
+ * Preview mode allows instructors to access student routes
  */
 export function canAccessRoute(role: UserRole | null | undefined, path: string): boolean {
   if (!role) {
     return false;
   }
+  
+  // Preview mode: instructors can access student routes
+  if (role === 'instructor' && isPreviewModeActive()) {
+    // Allow access to all student routes during preview
+    const studentRoutes = ROLE_ROUTES['student'];
+    const isStudentRoute = studentRoutes.some(route => path === route || path.startsWith(`${route}/`));
+    if (isStudentRoute) {
+      return true;
+    }
+  }
+  
   const allowedRoutes = ROLE_ROUTES[role];
   return allowedRoutes.some(route => path === route || path.startsWith(`${route}/`));
 }
@@ -45,6 +75,7 @@ export function getDefaultRouteForRole(role: UserRole | null | undefined): strin
 
 /**
  * Require a specific role - returns redirect path if unauthorized
+ * Preview mode allows instructors to satisfy student role requirement
  * @returns null if authorized, redirect path if unauthorized
  */
 export function requireRole(role: UserRole): string | null {
@@ -53,6 +84,11 @@ export function requireRole(role: UserRole): string | null {
   if (!profile) {
     // Redirect to home (start page) since there's no dedicated login page
     return ROUTES.HOME;
+  }
+  
+  // Preview mode: instructors can satisfy student role requirement
+  if (role === 'student' && profile.role === 'instructor' && isPreviewModeActive()) {
+    return null; // Allow access
   }
   
   if (profile.role !== role) {
@@ -112,6 +148,7 @@ export interface GuardResult {
 /**
  * Combined guard for protected routes
  * Checks authentication and role authorization
+ * Preview mode allows instructors to access student routes
  */
 export function protectRoute(options: { 
   requiredRole?: UserRole;
@@ -128,6 +165,11 @@ export function protectRoute(options: {
   // Not authenticated - redirect to home (start page)
   if (!profile) {
     return { allowed: false, redirect: ROUTES.HOME };
+  }
+  
+  // Preview mode: instructors can access student routes
+  if (options.requiredRole === 'student' && profile.role === 'instructor' && isPreviewModeActive()) {
+    return { allowed: true };
   }
   
   // Specific role required
@@ -167,6 +209,7 @@ export function checkRouteAccess(
 /**
  * Navigation guard for React Router loader functions
  * Returns a Response for redirects, null for allowed access
+ * Preview mode allows instructors to access student routes
  */
 export function loaderGuard(
   request: Request,
@@ -180,6 +223,11 @@ export function loaderGuard(
       status: 302,
       headers: { Location: ROUTES.HOME },
     });
+  }
+  
+  // Preview mode: instructors can access student routes
+  if (options?.requiredRole === 'student' && profile.role === 'instructor' && isPreviewModeActive()) {
+    return null; // Allow access
   }
   
   // Role check

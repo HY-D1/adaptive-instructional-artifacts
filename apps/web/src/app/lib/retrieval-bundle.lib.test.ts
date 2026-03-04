@@ -3,15 +3,15 @@
  * Tests retrieval grounding determinism without requiring a browser/Playwright
  * 
  * This replaces the Playwright test at:
- * apps/web/tests/retrieval-grounding.spec.ts (now disabled)
+ * tests/e2e/integration/retrieval-grounding.spec.ts (now disabled)
  * 
  * Run with: npx vitest run
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
+import { buildRetrievalBundle, RetrievalBundle } from './content/retrieval-bundle';
 import { getDeterministicSqlEngageAnchor } from '../data/sql-engage';
-import { storage } from './storage';
+import { storage } from './storage/storage';
 import { SQLProblem, InteractionEvent } from '../types';
 
 // Test configuration

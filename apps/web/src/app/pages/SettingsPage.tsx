@@ -11,6 +11,7 @@ import {
   Target,
   BrainCircuit,
   GitBranch,
+  Eye,
 } from 'lucide-react';
 
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card';
@@ -26,16 +27,19 @@ import {
 } from '../components/ui/select';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { Separator } from '../components/ui/separator';
-import { PdfUploader } from '../components/PdfUploader';
-import { LLMSettingsHelper } from '../components/LLMSettingsHelper';
+import { ConfirmDialog } from '../components/ui/confirm-dialog';
+import { PdfUploader } from '../components/features/textbook/PdfUploader';
+import { LLMSettingsHelper } from '../components/shared/LLMSettingsHelper';
 import { useUserRole } from '../hooks/useUserRole';
-import { banditManager, BANDIT_ARM_PROFILES } from '../lib/learner-bandit-manager';
-import type { BanditArmId } from '../lib/learner-bandit-manager';
+import { useToast } from '../components/ui/toast';
+import { banditManager, BANDIT_ARM_PROFILES } from '../lib/ml/learner-bandit-manager';
+import type { BanditArmId } from '../lib/ml/learner-bandit-manager';
 import { assignProfile } from '../lib/escalation-profiles';
 import type { AssignmentStrategy } from '../lib/escalation-profiles';
-import { storage } from '../lib/storage';
+import { storage, broadcastSync } from '../lib/storage/storage';
 import type { InteractionEvent } from '../types';
-import { calculateHDIData, filterOutHDIEvents, formatHDIDetailed } from '../lib/hdi-debug';
+import { calculateHDIData, filterOutHDIEvents, formatHDIDetailed } from '../lib/ml/hdi-debug';
+import { Switch } from '../components/ui/switch';
 
 // DEV mode check
 const isDev = import.meta.env.DEV;
@@ -59,6 +63,12 @@ const DEBUG_KEYS = {
 export function SettingsPage() {
   const { isInstructor, profile } = useUserRole();
   const learnerId = profile?.id;
+  const { addToast } = useToast();
+  
+  // Preview mode state (for instructors)
+  const [isPreviewMode, setIsPreviewMode] = useState(() => {
+    return localStorage.getItem('sql-adapt-preview-mode') === 'true';
+  });
 
   // Week 5 Testing Controls State
   const [profileOverride, setProfileOverride] = useState<ProfileOverrideId>('auto');
@@ -75,6 +85,9 @@ export function SettingsPage() {
   >([]);
   const [selectedArm, setSelectedArm] = useState<BanditArmId>('adaptive');
   const [refreshKey, setRefreshKey] = useState<number>(0);
+  
+  // Confirmation dialog states
+  const [showClearHdiDialog, setShowClearHdiDialog] = useState(false);
 
   // Load initial values from localStorage (DEV mode only)
   useEffect(() => {
@@ -90,6 +103,21 @@ export function SettingsPage() {
       setAssignmentStrategy(savedStrategy as AssignmentStrategy);
     }
   }, []);
+  
+  // Handle preview mode toggle with cross-tab sync
+  const handlePreviewModeChange = useCallback((enabled: boolean) => {
+    setIsPreviewMode(enabled);
+    localStorage.setItem('sql-adapt-preview-mode', String(enabled));
+    broadcastSync('sql-adapt-preview-mode', String(enabled));
+    
+    addToast({
+      type: 'success',
+      title: enabled ? 'Preview Mode Enabled' : 'Preview Mode Disabled',
+      message: enabled 
+        ? 'You are now previewing the student view. Other tabs have been synced.'
+        : 'Preview mode has been turned off. Other tabs have been synced.',
+    });
+  }, [addToast]);
 
   // Calculate HDI score and count events - memoized for performance
   const hdiData = useMemo(() => {
@@ -139,18 +167,33 @@ export function SettingsPage() {
     localStorage.setItem(DEBUG_KEYS.ASSIGNMENT_STRATEGY, value);
   }, []);
 
-  // HDI Reset Handler
+  // HDI Reset Handler with confirmation and feedback
   const handleClearHdiHistory = useCallback(() => {
     if (!learnerId) return;
 
-    const interactions = storage.getAllInteractions();
-    const filteredInteractions = filterOutHDIEvents(interactions, learnerId);
+    try {
+      const interactions = storage.getAllInteractions();
+      const filteredInteractions = filterOutHDIEvents(interactions, learnerId);
 
-    localStorage.setItem('sql-learning-interactions', JSON.stringify(filteredInteractions));
-    setHdiScore(null);
-    setHdiEventCount(0);
-    setRefreshKey((k) => k + 1);
-  }, [learnerId]);
+      localStorage.setItem('sql-learning-interactions', JSON.stringify(filteredInteractions));
+      setHdiScore(null);
+      setHdiEventCount(0);
+      setRefreshKey((k) => k + 1);
+      
+      addToast({
+        type: 'success',
+        title: 'HDI History Cleared',
+        message: 'All HDI-related events have been removed.',
+      });
+    } catch (error) {
+      addToast({
+        type: 'error',
+        title: 'Failed to Clear History',
+        message: error instanceof Error ? error.message : 'An error occurred',
+      });
+    }
+    setShowClearHdiDialog(false);
+  }, [learnerId, addToast]);
 
   // Force Arm Selection Handler
   const handleForceArmSelection = useCallback(() => {
@@ -255,8 +298,8 @@ export function SettingsPage() {
           </Card>
         </div>
 
-        {/* Week 5 Testing Controls - DEV Mode Only */}
-        {isDev && (
+        {/* Week 5 Testing Controls - DEV Mode + Instructors Only */}
+        {isDev && isInstructor && (
           <Card className="mt-6 p-6 max-w-5xl border-amber-300" data-testid="week5-debug-controls">
             <CardHeader className="px-0 pt-0">
               <div className="flex items-center gap-3">
@@ -287,24 +330,25 @@ export function SettingsPage() {
                   </h3>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Select
-                    value={profileOverride}
-                    onValueChange={(value) =>
-                      handleProfileOverrideChange(value as ProfileOverrideId)
-                    }
-                    data-testid="profile-override-select"
-                  >
-                    <SelectTrigger className="w-[250px]">
-                      <SelectValue placeholder="Select profile" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {PROFILE_OPTIONS.map((option) => (
-                        <SelectItem key={option.id} value={option.id}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div data-testid="profile-override-select">
+                    <Select
+                      value={profileOverride}
+                      onValueChange={(value) =>
+                        handleProfileOverrideChange(value as ProfileOverrideId)
+                      }
+                    >
+                      <SelectTrigger className="w-[250px]">
+                        <SelectValue placeholder="Select profile" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PROFILE_OPTIONS.map((option) => (
+                          <SelectItem key={option.id} value={option.id}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <Button
                     variant="outline"
                     size="sm"
@@ -389,7 +433,7 @@ export function SettingsPage() {
                   <Button
                     variant="destructive"
                     size="sm"
-                    onClick={handleClearHdiHistory}
+                    onClick={() => setShowClearHdiDialog(true)}
                     disabled={hdiEventCount === 0}
                     data-testid="hdi-clear-button"
                   >
@@ -473,22 +517,23 @@ export function SettingsPage() {
                 {/* Force Arm Selection */}
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-gray-600">Force arm selection:</span>
-                  <Select
-                    value={selectedArm}
-                    onValueChange={(value) => setSelectedArm(value as BanditArmId)}
-                    data-testid="force-arm-select"
-                  >
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue placeholder="Select arm" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.keys(BANDIT_ARM_PROFILES).map((armId) => (
-                        <SelectItem key={armId} value={armId}>
-                          {BANDIT_ARM_PROFILES[armId as BanditArmId].name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div data-testid="force-arm-select">
+                    <Select
+                      value={selectedArm}
+                      onValueChange={(value) => setSelectedArm(value as BanditArmId)}
+                    >
+                      <SelectTrigger className="w-[200px]">
+                        <SelectValue placeholder="Select arm" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.keys(BANDIT_ARM_PROFILES).map((armId) => (
+                          <SelectItem key={armId} value={armId}>
+                            {BANDIT_ARM_PROFILES[armId as BanditArmId].name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <Button size="sm" onClick={handleForceArmSelection} data-testid="force-arm-apply">
                     Apply
                   </Button>
@@ -499,6 +544,51 @@ export function SettingsPage() {
                 </p>
               </div>
             </CardContent>
+          </Card>
+        )}
+
+        {/* Preview Mode Section - Instructors Only */}
+        {isInstructor && (
+          <Card className="mt-6 p-6 max-w-5xl border-blue-200" data-testid="preview-mode-section">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Eye className="size-5 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Student Preview Mode
+                </h2>
+                <p className="text-sm text-gray-500">
+                  Preview how the learning interface appears to students
+                </p>
+              </div>
+              <Switch
+                checked={isPreviewMode}
+                onCheckedChange={handlePreviewModeChange}
+                data-testid="preview-mode-toggle"
+              />
+            </div>
+            <div className="space-y-2 text-sm text-gray-600">
+              <p>
+                <strong>Preview Mode</strong> allows instructors to experience the platform 
+                as a student would, including the same hint escalation profiles and 
+                adaptive learning features.
+              </p>
+              {isPreviewMode && (
+                <div className="mt-3 p-3 bg-blue-50 rounded-md">
+                  <p className="text-blue-700">
+                    Preview mode is currently <strong>enabled</strong>. Visit the{' '}
+                    <a href="/practice" className="underline font-medium">
+                      Practice page
+                    </a>{' '}
+                    to see the student view.
+                  </p>
+                </div>
+              )}
+              <p className="text-xs text-gray-400 mt-2">
+                Changes are synchronized across all open tabs automatically.
+              </p>
+            </div>
           </Card>
         )}
 
@@ -531,6 +621,17 @@ export function SettingsPage() {
           </div>
         </Card>
       </div>
+      
+      {/* Confirmation Dialogs */}
+      <ConfirmDialog
+        isOpen={showClearHdiDialog}
+        onClose={() => setShowClearHdiDialog(false)}
+        onConfirm={handleClearHdiHistory}
+        title="Clear HDI History"
+        description={`This will permanently delete ${hdiEventCount} HDI-related event(s). This action cannot be undone.`}
+        confirmText="Clear History"
+        variant="destructive"
+      />
     </div>
   );
 }

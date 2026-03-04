@@ -19,10 +19,10 @@ import {
   AutoCreationResult,
   AutoCreatedUnitInfo
 } from '../types';
-import { storage } from './storage';
-import { createEventId } from './event-id';
+import { storage } from './storage/storage';
+import { createEventId } from './utils/event-id';
 import { canonicalizeSqlEngageSubtype, getConceptIdsForSqlEngageSubtype } from '../data/sql-engage';
-import { generateUnitFromLLM, buildBundleForCurrentProblem } from './content-generator';
+import { generateUnitFromLLM, buildBundleForCurrentProblem } from './content/content-generator';
 import { sqlProblems } from '../data/problems';
 
 // Constants for analysis configuration

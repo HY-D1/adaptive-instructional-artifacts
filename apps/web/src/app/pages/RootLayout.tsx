@@ -2,12 +2,13 @@ import { Outlet, Link, useLocation, Navigate, useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Book, BarChart3, Code, HelpCircle, Menu, X, Keyboard, GraduationCap, LogOut, RefreshCw, AlertCircle, Users, Settings } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
-import { WelcomeModal } from '../components/WelcomeModal';
+import { WelcomeModal } from '../components/shared/WelcomeModal';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
 import { useUserRole } from '../hooks/useUserRole';
 import { useSessionPersistence } from '../hooks/useSessionPersistence';
-import { storage } from '../lib/storage';
+import { storage } from '../lib/storage/storage';
+import { isPreviewModeActive } from '../lib/auth-guard';
 
 /**
  * Sync toast notification component
@@ -165,21 +166,25 @@ export function RootLayout() {
   };
 
   // Redirect instructor accessing student-only pages to instructor dashboard
-  if (!isRoleLoading && isInstructor && (isPracticePage || isTextbookPage)) {
+  // BUT allow access in preview mode
+  const isInPreviewMode = isPreviewModeActive();
+  if (!isRoleLoading && isInstructor && !isInPreviewMode && (isPracticePage || isTextbookPage)) {
     return <Navigate to="/instructor-dashboard" replace />;
   }
 
   // Build navigation items based on role
-  const navItems = isInstructor
+  // When in preview mode, show student navigation even for instructors
+  const showStudentNav = !isInstructor || isInPreviewMode;
+  const navItems = showStudentNav
     ? [
-        { to: '/instructor-dashboard', label: 'Dashboard', icon: BarChart3, isActive: isInstructorPage },
-        { to: '/research', label: 'Research', icon: Book, isActive: isResearchPage },
-        { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },
-      ]
-    : [
         { to: '/concepts', label: 'Learn', icon: Book, isActive: isConceptsPage },
         { to: '/practice', label: 'Practice', icon: Code, isActive: isPracticePage },
         { to: '/textbook', label: 'My Textbook', icon: Book, isActive: isTextbookPage },
+        { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },
+      ]
+    : [
+        { to: '/instructor-dashboard', label: 'Dashboard', icon: BarChart3, isActive: isInstructorPage },
+        { to: '/research', label: 'Research', icon: Book, isActive: isResearchPage },
         { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },
       ];
 

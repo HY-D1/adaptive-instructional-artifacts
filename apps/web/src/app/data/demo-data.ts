@@ -1,4 +1,4 @@
-import { storage } from '../lib/storage';
+import { storage } from '../lib/storage/storage';
 import { LearnerProfile } from '../types';
 import { sqlProblems } from './problems';
 import { getSqlEngagePolicyVersion } from './sql-engage';

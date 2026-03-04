@@ -36,6 +36,7 @@ SETTINGS_PAGE_WEEK5_TEST_REPORT.md
 WEEK5_INDICATORS_TEST_REPORT.md
 BUILD_TEST_REPORT.md
 CONCEPT_COMPARISON.md
+BANDIT_TEST_REPORT.md
 
 # Agent/LLM conversation files (temporary context)
 *.llm-context.md
@@ -47,6 +48,12 @@ chat-history/
 .aider*
 prompt-history/
 EDGE_CASE_TEST_REPORT.md
+REORGANIZATION_PLAN.md
+PROFILE_VALIDATION_SIMULATION_REPORT.md
+PROFILE_VALIDATION_TEST_MATRIX.md
+CORRUPTION_TEST_REPORT.md
+PROFILE_VALIDATION_TEST_REPORT.md
+*.md
 
 # Architecture diagrams (local only)
 diagrams/
@@ -76,3 +83,7 @@ TEXTBOOK_INTEGRATION_PLAN.md
 
 # Test output logs
 test-output.log
+
+# Root-level test screenshots
+/concept-*.png
+/concepts-*.png

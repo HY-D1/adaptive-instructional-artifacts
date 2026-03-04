@@ -2249,8 +2249,21 @@ class StorageManager {
       }
 
       // Update evidence-based coverage for all valid concept IDs in the event
+      // Skip system-level events that don't have associated SQL concepts
+      const SYSTEM_EVENT_TYPES = new Set([
+        'profile_assigned',
+        'bandit_arm_selected',
+        'bandit_reward_observed',
+        'bandit_updated',
+        'hdi_calculated',
+        'hdi_trajectory_updated',
+        'dependency_intervention_triggered',
+        'escalation_triggered',
+        'profile_adjusted'
+      ]);
+      
       const conceptIds = this.extractConceptIdsFromEvent(event);
-      if (conceptIds.length === 0) {
+      if (conceptIds.length === 0 && !SYSTEM_EVENT_TYPES.has(event.eventType)) {
         console.warn(`[Storage] No valid concept IDs found for event ${event.id} (type: ${event.eventType})`);
       }
       for (const conceptId of conceptIds) {

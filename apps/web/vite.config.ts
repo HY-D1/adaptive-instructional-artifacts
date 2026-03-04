@@ -182,6 +182,23 @@ function parseMultipart(buffer: Buffer, boundary: string): Array<{ name?: string
 }
 
 // WASM serving plugin - ensures correct MIME type for .wasm files
+// Lodash resolution fix for Rollup - handles lodash internal modules that Rollup can't resolve
+// This plugin resolves lodash internal module paths correctly when they use .js extension
+function lodashResolvePlugin() {
+  return {
+    name: 'lodash-resolve',
+    enforce: 'pre',
+    resolveId(id: string, importer: string | undefined) {
+      // Handle bare relative imports within lodash (ensure .js extension)
+      if (id.startsWith('./_') && importer?.includes('/lodash/') && !id.endsWith('.js')) {
+        const resolvedPath = path.resolve(path.dirname(importer), id + '.js');
+        return resolvedPath;
+      }
+      return null;
+    }
+  };
+}
+
 function wasmServePlugin() {
   // Shared middleware handler for both dev and preview servers
   const wasmMiddleware = (req: any, res: any, next: () => void) => {
@@ -239,7 +256,9 @@ export default defineConfig({
   // App lives in apps/web; keep dist artifacts in the repository-level dist/.
   root: path.resolve(__dirname),
   plugins: [
-    // WASM plugin must be first to intercept requests before SPA fallback
+    // Lodash resolution fix must be first to handle Rollup resolution issues
+    lodashResolvePlugin(),
+    // WASM plugin must be early to intercept requests before SPA fallback
     wasmServePlugin(),
     react(),
     pdfIndexApiPlugin(),
@@ -250,9 +269,17 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  optimizeDeps: {
+    include: ['recharts', 'lodash'],
+  },
   build: {
     outDir: path.resolve(__dirname, '../../dist/app'),
     emptyOutDir: false,
+    commonjsOptions: {
+      transformMixedEsModules: true,
+      ignoreTryCatch: true,
+      include: [/node_modules/],
+    },
   },
   preview: {
     port: 4173,

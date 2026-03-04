@@ -1,7 +1,7 @@
 import { createBrowserRouter, Navigate, redirect } from 'react-router';
 import type { LoaderFunction } from 'react-router';
 
-import { RouteError } from './components/RouteError';
+import { RouteError } from './components/layout/RouteError';
 import { RootLayout } from './pages/RootLayout';
 import { TextbookPage } from './pages/TextbookPage';
 import { ResearchPage } from './pages/ResearchPage';
@@ -11,11 +11,12 @@ import { LearningInterface } from './pages/LearningInterface';
 import { SettingsPage } from './pages/SettingsPage';
 import { ConceptLibraryPage } from './pages/ConceptLibraryPage';
 import { ConceptDetailPage } from './pages/ConceptDetailPage';
-import { storage } from './lib/storage';
+import { storage } from './lib/storage/storage';
 import { 
   ROUTES, 
   protectRoute, 
-  getDefaultRouteForRole
+  getDefaultRouteForRole,
+  isPreviewModeActive
 } from './lib/auth-guard';
 import type { GuardResult } from './lib/auth-guard';
 
@@ -59,6 +60,7 @@ function createProtectedLoader(options?: {
  * Component wrapper that enforces role-based access
  * Redirects if not authorized
  * Note: Loader should handle redirects, this is a fallback
+ * Preview mode allows instructors to access student routes
  */
 function ProtectedRoute({ 
   children, 
@@ -72,6 +74,11 @@ function ProtectedRoute({
   // Not authenticated - redirect to home (start page)
   if (!profile) {
     return <Navigate to={ROUTES.HOME} replace />;
+  }
+  
+  // Preview mode: instructors can access student routes
+  if (requiredRole === 'student' && profile.role === 'instructor' && isPreviewModeActive()) {
+    return <>{children}</>; // Allow access
   }
   
   // Role check
