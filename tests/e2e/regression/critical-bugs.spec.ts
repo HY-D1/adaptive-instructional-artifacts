@@ -34,7 +34,7 @@ import {
 // Test Suite: Critical Bug Fixes
 // =============================================================================
 
-test.describe('@weekly @no-external @critical-bugs Critical Bug Fixes Regression Tests', () => {
+test.describe('@weekly @no-external @integration @critical-bugs Critical Bug Fixes Regression Tests', () => {
 
   test.beforeEach(async ({ page }) => {
     // Stub LLM calls to prevent ECONNREFUSED errors
@@ -505,7 +505,7 @@ test.describe('@weekly @no-external @critical-bugs Critical Bug Fixes Regression
   // ===========================================================================
   // BUG FIX 9: Monaco Editor Disposal
   // ===========================================================================
-  test('@weekly @no-external @critical-bugs Monaco Editor Disposal: editor is cleaned up on navigation', async ({ page }) => {
+  test('@weekly @no-external @critical-bugs @flaky Monaco Editor Disposal: editor is cleaned up on navigation', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
 

@@ -35,7 +35,7 @@ import {
 // Test Suite: High Priority Bug Fixes
 // =============================================================================
 
-test.describe('@weekly @high-priority-bugs High Priority Bug Fixes', () => {
+test.describe('@weekly @integration @high-priority-bugs High Priority Bug Fixes', () => {
 
   test.beforeEach(async ({ page }) => {
     // Stub LLM calls to prevent ECONNREFUSED errors

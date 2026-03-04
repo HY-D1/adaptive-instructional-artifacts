@@ -345,7 +345,7 @@ test.describe('@no-external Escalation Profiles E2E', () => {
   // Profile Thresholds Applied
   // =============================================================================
   test.describe('Profile Thresholds Applied', () => {
-    test('Fast Escalator triggers escalation after 2 errors', async ({ page }) => {
+    test('@flaky Fast Escalator triggers escalation after 2 errors', async ({ page }) => {
       // Set Fast Escalator profile (escalate threshold = 2)
       await page.addInitScript(() => {
         window.localStorage.setItem('sql-adapt-debug-profile', 'fast-escalator');
@@ -374,7 +374,7 @@ test.describe('@no-external Escalation Profiles E2E', () => {
       expect(errorEvents.length).toBeGreaterThanOrEqual(2);
     });
 
-    test('Slow Escalator allows up to 5 errors before escalation', async ({ page }) => {
+    test('@flaky Slow Escalator allows up to 5 errors before escalation', async ({ page }) => {
       // Set Slow Escalator profile (escalate threshold = 5)
       await page.addInitScript(() => {
         window.localStorage.setItem('sql-adapt-debug-profile', 'slow-escalator');

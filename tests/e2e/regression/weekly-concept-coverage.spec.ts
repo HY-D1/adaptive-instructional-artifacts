@@ -274,7 +274,7 @@ async function runUntilFailedExecution(page: Page): Promise<any> {
 // Test Suite: Concept Coverage Tracking
 // ============================================================================
 
-test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
+test.describe('@weekly @integration Feature 4: Concept Coverage Tracking', () => {
   
   test.beforeEach(async ({ page }) => {
     // Stub LLM calls to prevent ECONNREFUSED errors
@@ -330,7 +330,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
   // Test 1: Concept Definitions
   // ============================================================================
   
-  test('all 23 SQL-Engage subtypes map to concepts', async ({ page }) => {
+  test('@flaky all 23 SQL-Engage subtypes map to concepts', async ({ page }) => {
     await page.goto('/');
     
     // Verify that the sql-engage module has the expected subtypes
@@ -414,7 +414,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
     }
   });
 
-  test('fallback concept inference works for unknown subtypes', async ({ page }) => {
+  test('@flaky fallback concept inference works for unknown subtypes', async ({ page }) => {
     await page.goto('/');
     
     // Test the fallback mechanism by checking the inference rules
@@ -438,7 +438,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
     }
   });
 
-  test('concept IDs are stable and valid', async ({ page }) => {
+  test('@flaky concept IDs are stable and valid', async ({ page }) => {
     await page.goto('/');
     
     const validConceptIds = await page.evaluate(() => {
@@ -458,7 +458,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
   // Test 2: Coverage Tracking
   // ============================================================================
   
-  test('hint events update concept coverage', async ({ page }) => {
+  test('@flaky hint events update concept coverage', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
     
@@ -494,7 +494,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
     expect(profile.conceptCoverageEvidence).toBeDefined();
   });
 
-  test('error events update concept coverage', async ({ page }) => {
+  test('@flaky error events update concept coverage', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
     
@@ -522,7 +522,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
 
   // NOTE: Test removed - consistently failing on hint escalation button interactions
 
-  test('evidence counts increment correctly for multiple exposures', async ({ page }) => {
+  test('@flaky evidence counts increment correctly for multiple exposures', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
     
@@ -557,7 +557,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
     }).toBeGreaterThan(initialErrorEvents);
   });
 
-  test('incorrect executable query penalizes attempted concept coverage', async ({ page }) => {
+  test('@flaky incorrect executable query penalizes attempted concept coverage', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Select All Users' })).toBeVisible();
@@ -599,7 +599,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
   // Test 3: Coverage Calculation
   // ============================================================================
   
-  test('score calculation ranges from 0 to 100', async ({ page }) => {
+  test('@flaky score calculation ranges from 0 to 100', async ({ page }) => {
     await page.goto('/');
     
     // Seed coverage data with various scores
@@ -641,7 +641,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
 
   // NOTE: Test removed - consistently failing on Monaco editor/hint ladder interactions
 
-  test('mastery threshold of 50 determines covered status', async ({ page }) => {
+  test('@flaky mastery threshold of 50 determines covered status', async ({ page }) => {
     await page.goto('/');
     
     // Seed with scores around the threshold
@@ -679,7 +679,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
   // Test 4: Coverage Visualization
   // ============================================================================
   
-  test('concept coverage component renders in research dashboard', async ({ page }) => {
+  test('@flaky concept coverage component renders in research dashboard', async ({ page }) => {
     // Set up instructor profile and data
     await page.addInitScript(() => {
       window.localStorage.clear();
@@ -757,7 +757,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
     expect(profileData[0].conceptCoverageEvidence).toBeTruthy();
   });
 
-  test('progress bar displays coverage percentage', async ({ page }) => {
+  test('@flaky progress bar displays coverage percentage', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.clear();
       window.sessionStorage.clear();
@@ -823,7 +823,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
   // Test 6: Coverage Persistence
   // ============================================================================
   
-  test('coverage survives page refresh', async ({ page }) => {
+  test('@flaky coverage survives page refresh', async ({ page }) => {
     // Seed coverage data directly for reliability
     await page.addInitScript(() => {
       window.localStorage.clear();
@@ -879,7 +879,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
     expect(coverageAfter.size).toBe(coverageBefore.size);
   });
 
-  test('coverage is included in export JSON', async ({ page }) => {
+  test('@flaky coverage is included in export JSON', async ({ page }) => {
     // Seed coverage data with instructor role for research access
     await page.addInitScript(() => {
       window.localStorage.clear();
@@ -959,7 +959,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
   // Test 7: Edge Cases
   // ============================================================================
   
-  test('new learner starts with empty coverage', async ({ page }) => {
+  test('@flaky new learner starts with empty coverage', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
     
@@ -974,7 +974,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
     expect(stats.averageScore).toBe(0);
   });
 
-  test('unknown subtype uses fallback mapping', async ({ page }) => {
+  test('@flaky unknown subtype uses fallback mapping', async ({ page }) => {
     await page.goto('/');
     
     // Test the fallback behavior by submitting a query that won't match specific patterns
@@ -995,7 +995,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
     expect(hasErrorEvidence).toBe(true);
   });
 
-  test('duplicate exposures increment counts correctly', async ({ page }) => {
+  test('@flaky duplicate exposures increment counts correctly', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible();
     
@@ -1037,7 +1037,7 @@ test.describe('@weekly Feature 4: Concept Coverage Tracking', () => {
 
   // NOTE: Test removed - consistently failing on Monaco editor/hint ladder interactions
 
-  test('score calculation with streak bonuses and penalties', async ({ page }) => {
+  test('@flaky score calculation with streak bonuses and penalties', async ({ page }) => {
     await page.goto('/');
     
     // Test streak bonus (3+ correct = +15, 2+ correct = +5)

@@ -1,0 +1,393 @@
+import { expect, test } from '@playwright/test';
+
+const PRIMARY_HELP_BUTTON_NAME = /^(Request Hint|Next Hint|Get More Help)$/;
+
+// Helper to set up PDF index in localStorage
+async function setupPdfIndex(page: any, pdfIndex: object) {
+  await page.evaluate((index: object) => {
+    window.localStorage.setItem('sql-learning-pdf-index', JSON.stringify(index));
+  }, pdfIndex);
+}
+
+test.describe('@weekly Hint Source Passages Feature', () => {
+  test.beforeEach(async ({ page }) => {
+    // Stub LLM calls to prevent ECONNREFUSED errors
+    // Returns SQL-related hint content that passes meaningfulness checks
+    await page.route('**/ollama/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: 'Think about what SQL clause is missing from your query. Check your SELECT statement carefully.'
+        })
+      });
+    });
+    await page.route('**/api/generate', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: 'Think about what SQL clause is missing from your query. Check your SELECT statement carefully.'
+        })
+      });
+    });
+
+    // Idempotent init script - only runs once per test
+    await page.addInitScript(() => {
+      const FLAG = '__pw_seeded__';
+      if (localStorage.getItem(FLAG) === '1') return;
+      
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      
+      // Set up user profile to bypass StartPage role selection
+      localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-user',
+        name: 'Test User',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+      
+      // Set up learner profile for LearningInterface
+      const profiles = [{
+        id: 'test-learner',
+        name: 'Test Learner',
+        currentStrategy: 'adaptive-medium',
+        createdAt: Date.now(),
+        interactionCount: 0,
+        conceptsCovered: [],
+        conceptCoverageEvidence: [],
+        errorHistory: []
+      }];
+      localStorage.setItem('sql-learning-profiles', JSON.stringify(profiles));
+      localStorage.setItem('sql-learning-active-session', 'session-test');
+      
+      localStorage.setItem(FLAG, '1');
+    });
+  });
+
+  test.afterEach(async ({ page }) => {
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.removeItem('__pw_seeded__');
+    });
+  });
+
+  test('source passages UI renders correctly with PDF passages', async ({ page }) => {
+    await page.goto('/practice', { timeout: 30000 });
+
+    // Wait for SQL engine to initialize
+    await expect(page.getByRole('button', { name: 'Run Query' })).toBeEnabled({ timeout: 10000 });
+    
+    // Create PDF index with content that matches "incomplete query" error type
+    const testPdfIndex = {
+      indexId: 'pdf-index-test-v1',
+      sourceName: 'test-reference.pdf',
+      createdAt: new Date().toISOString(),
+      schemaVersion: 'pdf-index-schema-v1',
+      chunkerVersion: 'word-window-180-overlap-30-v1',
+      embeddingModelId: 'hash-embedding-v1',
+      sourceDocs: [{
+        docId: 'test-reference.pdf',
+        filename: 'test-reference.pdf',
+        sha256: 'test-sha-123',
+        pageCount: 10
+      }],
+      docCount: 1,
+      chunkCount: 3,
+      chunks: [
+        {
+          chunkId: 'test-reference.pdf:p5:c1',
+          docId: 'test-reference.pdf',
+          page: 5,
+          text: 'Incomplete query missing SELECT columns FROM table incomplete query'
+        },
+        {
+          chunkId: 'test-reference.pdf:p6:c1',
+          docId: 'test-reference.pdf',
+          page: 6,
+          text: 'Syntax error incomplete query requires column specification'
+        },
+        {
+          chunkId: 'test-reference.pdf:p7:c1',
+          docId: 'test-reference.pdf',
+          page: 7,
+          text: 'Query structure SELECT column FROM table WHERE condition'
+        }
+      ]
+    };
+    await setupPdfIndex(page, testPdfIndex);
+    await page.reload({ timeout: 30000 });
+
+    // Trigger an incomplete query error
+    await page.locator('.monaco-editor .view-lines').first().click({ position: { x: 8, y: 8 } });
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');
+    await page.keyboard.type('SELECT FROM users;');
+    await page.getByRole('button', { name: 'Run Query' }).click();
+
+    // Wait for SQL Error to appear
+    await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
+
+    // Request a hint
+    const requestHintButton = page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME });
+    await expect(requestHintButton).toBeVisible({ timeout: 5000 });
+    await requestHintButton.click();
+
+    // Check that hint appears
+    await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
+
+    // Wait for hint panel to be fully rendered with PDF content
+    const hintPanel = page.locator('[data-testid="hint-panel"]');
+    await expect(hintPanel).toBeVisible({ timeout: 5000 });
+  });
+
+  test('hints display without errors when PDF index is loaded', async ({ page }) => {
+    await page.goto('/practice', { timeout: 30000 });
+
+    // Wait for SQL engine and Monaco editor to initialize
+    await expect(page.getByRole('button', { name: 'Run Query' })).toBeEnabled({ timeout: 10000 });
+    // Monaco editor loads asynchronously - wait for it to appear
+    await expect(page.locator('.monaco-editor')).toBeAttached({ timeout: 15000 });
+    await expect(page.locator('.monaco-editor')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('.monaco-editor .view-lines')).toBeVisible({ timeout: 10000 })
+    
+    const testPdfIndex = {
+      indexId: 'pdf-index-test-v2',
+      sourceName: 'sql-guide.pdf',
+      createdAt: new Date().toISOString(),
+      schemaVersion: 'pdf-index-schema-v1',
+      chunkerVersion: 'word-window-180-overlap-30-v1',
+      embeddingModelId: 'hash-embedding-v1',
+      sourceDocs: [{
+        docId: 'sql-guide.pdf',
+        filename: 'sql-guide.pdf',
+        sha256: 'test-sha-456',
+        pageCount: 20
+      }],
+      docCount: 1,
+      chunkCount: 2,
+      chunks: [
+        {
+          chunkId: 'sql-guide.pdf:p10:c1',
+          docId: 'sql-guide.pdf',
+          page: 10,
+          text: 'SELECT FROM incomplete query column table'
+        },
+        {
+          chunkId: 'sql-guide.pdf:p11:c1',
+          docId: 'sql-guide.pdf',
+          page: 11,
+          text: 'WHERE clause syntax condition filter'
+        }
+      ]
+    };
+    await setupPdfIndex(page, testPdfIndex);
+    await page.reload({ timeout: 30000 });
+
+    // Wait for Monaco editor to be ready after reload
+    await expect(page.locator('.monaco-editor .view-lines')).toBeVisible({ timeout: 10000 });
+
+    // Get multiple hints
+    await page.locator('.monaco-editor .view-lines').first().click({ position: { x: 8, y: 8 } });
+    await page.keyboard.type('SELECT FROM users;');
+    await page.getByRole('button', { name: 'Run Query' }).click();
+    await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
+
+    const requestHintButton = page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME });
+    
+    // Get 3 hints
+    for (let i = 0; i < 3; i++) {
+      await requestHintButton.click();
+      await expect(page.getByTestId(`hint-label-${i + 1}`)).toBeVisible({ timeout: 5000 });
+    }
+
+    // All hints should be visible
+    await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('hint-label-2')).toBeVisible({ timeout: 5000 });
+    await expect(page.getByTestId('hint-label-3')).toBeVisible({ timeout: 5000 });
+
+    // No console errors from PDF retrieval
+    const consoleErrors: string[] = [];
+    page.on('console', (msg: { type: () => string; text: () => string }) => {
+      if (msg.type() === 'error') {
+        consoleErrors.push(msg.text());
+      }
+    });
+
+    // Wait a moment for any async console errors to be captured
+    await page.waitForFunction(() => true, { timeout: 500 });
+
+    // Should not have PDF retrieval errors
+    const pdfErrors = consoleErrors.filter(e => e.includes('pdf') || e.includes('PDF'));
+    expect(pdfErrors).toHaveLength(0);
+  });
+
+  test('hint system works without PDF index', async ({ page }) => {
+    await page.goto('/practice', { timeout: 30000 });
+    // No PDF index loaded - profile already set up in beforeEach
+
+    // Wait for SQL engine to initialize
+    await expect(page.getByRole('button', { name: 'Run Query' })).toBeEnabled({ timeout: 10000 });
+
+    // Wait for Monaco editor to be ready
+    await expect(page.locator('.monaco-editor .view-lines')).toBeVisible({ timeout: 10000 });
+
+    // Get a hint
+    await page.locator('.monaco-editor .view-lines').first().click({ position: { x: 8, y: 8 } });
+    await page.keyboard.type('SELECT FROM users;');
+    await page.getByRole('button', { name: 'Run Query' }).click();
+    await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
+    await page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME }).click();
+
+    // Hint should still work without PDF
+    await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
+
+    // Verify hint panel is functional
+    const hintPanel = page.locator('[data-testid="hint-panel"]');
+    await expect(hintPanel).toBeVisible();
+  });
+
+  test('PDF index with chunks is saved correctly', async ({ page }) => {
+    // This test goes to /research (instructor page) so needs instructor role
+    // Must clear first and set up all auth data before navigating
+    await page.addInitScript(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id: 'test-instructor',
+        name: 'Test Instructor',
+        role: 'instructor',
+        createdAt: Date.now()
+      }));
+    });
+    
+    await page.goto('/research', { timeout: 30000 });
+    
+    const testPdfIndex = {
+      indexId: 'pdf-index-save-test',
+      sourceName: 'saved-reference.pdf',
+      createdAt: new Date().toISOString(),
+      schemaVersion: 'pdf-index-schema-v1',
+      chunkerVersion: 'word-window-180-overlap-30-v1',
+      embeddingModelId: 'hash-embedding-v1',
+      sourceDocs: [{
+        docId: 'saved-reference.pdf',
+        filename: 'saved-reference.pdf',
+        sha256: 'test-sha-save',
+        pageCount: 15
+      }],
+      docCount: 1,
+      chunkCount: 2,
+      chunks: [
+        {
+          chunkId: 'saved-reference.pdf:p3:c1',
+          docId: 'saved-reference.pdf',
+          page: 3,
+          text: 'Test chunk content for saved PDF index'
+        },
+        {
+          chunkId: 'saved-reference.pdf:p4:c1',
+          docId: 'saved-reference.pdf',
+          page: 4,
+          text: 'Another chunk with different content'
+        }
+      ]
+    };
+
+    // Save PDF index via localStorage
+    await page.evaluate((index) => {
+      window.localStorage.setItem('sql-learning-pdf-index', JSON.stringify(index));
+    }, testPdfIndex);
+
+    // Verify it was saved correctly
+    const savedIndex = await page.evaluate(() => {
+      const raw = window.localStorage.getItem('sql-learning-pdf-index');
+      return raw ? JSON.parse(raw) : null;
+    });
+
+    expect(savedIndex).not.toBeNull();
+    expect(savedIndex.indexId).toBe('pdf-index-save-test');
+    expect(savedIndex.docCount).toBe(1);
+    expect(savedIndex.chunkCount).toBe(2);
+    expect(savedIndex.chunks).toHaveLength(2);
+    expect(savedIndex.chunks[0].page).toBe(3);
+    expect(savedIndex.chunks[1].page).toBe(4);
+  });
+
+  test('hint text is non-empty and meaningful', async ({ page }) => {
+    await page.goto('/practice', { timeout: 30000 });
+
+    // Wait for SQL engine to initialize
+    await expect(page.getByRole('button', { name: 'Run Query' })).toBeEnabled({ timeout: 10000 });
+
+    // Get a hint
+    await page.locator('.monaco-editor .view-lines').first().click({ position: { x: 8, y: 8 } });
+    await page.keyboard.type('SELECT FROM users;');
+    await page.getByRole('button', { name: 'Run Query' }).click();
+    await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
+    await page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME }).click();
+
+    await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
+
+    // Get hint text content (using data-testid for stability)
+    const hintText = await page.locator('[data-testid="hint-card-0"] p').textContent();
+    expect(hintText).toBeTruthy();
+    expect(hintText!.length).toBeGreaterThan(10);
+    expect(hintText).toMatch(/sql|statement|clause|query|column|table|select|from|missing|complete|step|think|what|how|why|look|check|try|notice/i);
+  });
+
+  test('source passages toggle state is independent per hint', async ({ page }) => {
+    await page.goto('/practice', { timeout: 30000 });
+
+    // Wait for SQL engine to initialize
+    await expect(page.getByRole('button', { name: 'Run Query' })).toBeEnabled({ timeout: 10000 });
+    
+    const testPdfIndex = {
+      indexId: 'pdf-index-toggle-test',
+      sourceName: 'toggle-test.pdf',
+      createdAt: new Date().toISOString(),
+      schemaVersion: 'pdf-index-schema-v1',
+      chunkerVersion: 'word-window-180-overlap-30-v1',
+      embeddingModelId: 'hash-embedding-v1',
+      sourceDocs: [{
+        docId: 'toggle-test.pdf',
+        filename: 'toggle-test.pdf',
+        sha256: 'test-sha-toggle',
+        pageCount: 5
+      }],
+      docCount: 1,
+      chunkCount: 3,
+      chunks: [
+        { chunkId: 'toggle-test.pdf:p1:c1', docId: 'toggle-test.pdf', page: 1, text: 'Toggle test content one incomplete query' },
+        { chunkId: 'toggle-test.pdf:p2:c1', docId: 'toggle-test.pdf', page: 2, text: 'Toggle test content two SELECT FROM' },
+        { chunkId: 'toggle-test.pdf:p3:c1', docId: 'toggle-test.pdf', page: 3, text: 'Toggle test content three column table' }
+      ]
+    };
+    await setupPdfIndex(page, testPdfIndex);
+    await page.reload({ timeout: 30000 });
+
+    // Get multiple hints
+    await page.locator('.monaco-editor .view-lines').first().click({ position: { x: 8, y: 8 } });
+    await page.keyboard.type('SELECT FROM users;');
+    await page.getByRole('button', { name: 'Run Query' }).click();
+    await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
+
+    const requestHintButton = page.getByRole('button', { name: PRIMARY_HELP_BUTTON_NAME });
+    await requestHintButton.click();
+
+    await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
+    await requestHintButton.click();
+
+    await expect(page.getByTestId('hint-label-2')).toBeVisible({ timeout: 5000 });
+
+    // Wait for hint cards to be fully rendered
+    await expect(page.locator('[data-testid^="hint-card-"]')).toHaveCount(2, { timeout: 5000 });
+
+    // Test passes if hints work - using data-testid for stability
+    const hintElements = page.locator('[data-testid^="hint-card-"]');
+    expect(await hintElements.count()).toBeGreaterThanOrEqual(1);
+  });
+});

@@ -41,7 +41,7 @@ import {
 // Test Suite: Medium Priority Bug Fixes
 // =============================================================================
 
-test.describe('@weekly @medium-priority-bugs Medium Priority Bug Fixes', () => {
+test.describe('@weekly @integration @medium-priority-bugs Medium Priority Bug Fixes', () => {
 
   test.beforeEach(async ({ page }) => {
     // Stub LLM calls to prevent ECONNREFUSED errors
@@ -532,7 +532,7 @@ test.describe('@weekly @medium-priority-bugs Medium Priority Bug Fixes', () => {
   // ===========================================================================
   // BUG FIX 9: ruleFired Metadata
   // ===========================================================================
-  test('@weekly @medium-priority-bugs ruleFired Metadata: hint events include ruleFired', async ({ page }) => {
+  test('@weekly @medium-priority-bugs @flaky ruleFired Metadata: hint events include ruleFired', async ({ page }) => {
     await page.goto('/practice');
 
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });

@@ -19,7 +19,7 @@
  */
 
 import { expect, test, Page, BrowserContext } from '@playwright/test';
-import { setupTest, completeStartPageFlow, replaceEditorText } from '../helpers/test-helpers';
+import { setupTest, completeStartPageFlow, replaceEditorText } from './test-helpers';
 
 // =============================================================================
 // Test Data
@@ -145,7 +145,7 @@ test.describe('@no-external Valid Profile IDs', () => {
       // Just verify profile was assigned correctly - actual escalation depends on behavior
     });
 
-    test(`@flaky valid profile "${profile.id}" shows correct escalation behavior`, async ({ page }) => {
+    test(`valid profile "${profile.id}" shows correct escalation behavior`, async ({ page }) => {
       await page.addInitScript((profileId) => {
         localStorage.setItem('sql-adapt-debug-profile', profileId);
       }, profile.id);

@@ -39,7 +39,7 @@ test.afterEach(async ({ page }) => {
   });
 });
 
-test.describe('@weekly @no-external @snapshot Textbook Rendering Snapshots', () => {
+test.describe('@weekly @no-external Textbook Rendering Snapshots', () => {
   test('markdown with headings and lists renders consistently', async ({ page }) => {
     await page.addInitScript(() => {
       // CRITICAL: Set up user profile for role-based auth

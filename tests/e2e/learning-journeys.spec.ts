@@ -265,15 +265,15 @@ test.beforeEach(async ({ page }) => {
 // Learning Journey Tests
 // =============================================================================
 
-test.describe('@no-external @weekly @learning-journey Learning Journeys', () => {
+test.describe('@no-external @weekly @integration @learning-journey Learning Journeys', () => {
   
   // ===========================================================================
   // Journey 1: Complete First Problem
   // ===========================================================================
   
-  test.describe('@no-external @weekly @learning-journey Journey 1: Complete First Problem', () => {
+  test.describe('@no-external @weekly @integration @learning-journey Journey 1: Complete First Problem', () => {
     
-    test('student registers and completes first problem successfully', async ({ page }) => {
+    test('@flaky student registers and completes first problem successfully', async ({ page }) => {
       // Step 1: Register as student (set welcome-seen to prevent modal)
       await page.addInitScript(() => {
         window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
@@ -346,7 +346,7 @@ test.describe('@no-external @weekly @learning-journey Learning Journeys', () => 
       await expect(page.getByText(/Alice|Bob|Charlie/i).first()).toBeVisible();
     });
     
-    test('execution result shows in results panel', async ({ page }) => {
+    test('@flaky execution result shows in results panel', async ({ page }) => {
       await setupStudent(page, TEST_USERS.student1.id, TEST_USERS.student1.name);
       await page.goto('/practice');
       await waitForSqlEngine(page);

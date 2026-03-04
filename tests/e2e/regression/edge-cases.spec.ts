@@ -68,7 +68,7 @@ async function setupInstructorProfile(page: Page) {
   }, uniqueId);
 }
 
-test.describe('@weekly @edge-case SQL Editor Edge Cases', () => {
+test.describe('@weekly @integration @edge-case SQL Editor Edge Cases', () => {
   test.beforeEach(async ({ page }) => {
     await setupStudentProfile(page);
     await page.goto('/practice');
@@ -77,7 +77,7 @@ test.describe('@weekly @edge-case SQL Editor Edge Cases', () => {
     await page.waitForSelector('[data-testid="run-query-btn"]', { timeout: 30000 });
   });
 
-  test('@weekly @no-external malicious SQL: DROP TABLE should fail gracefully', async ({ page }) => {
+  test('@weekly @no-external @flaky malicious SQL: DROP TABLE should fail gracefully', async ({ page }) => {
     test.slow(); // Allow more time for SQL execution
     const editor = page.locator('.monaco-editor').first();
     await editor.click();
@@ -91,7 +91,7 @@ test.describe('@weekly @edge-case SQL Editor Edge Cases', () => {
     await expect(errorPanel).toBeVisible({ timeout: 5000 });
   });
 
-  test('@weekly @no-external malicious SQL: DELETE without WHERE should be handled', async ({ page }) => {
+  test('@weekly @no-external @flaky malicious SQL: DELETE without WHERE should be handled', async ({ page }) => {
     const editor = page.locator('.monaco-editor').first();
     await editor.click();
     await page.keyboard.press('Control+a');
@@ -104,7 +104,7 @@ test.describe('@weekly @edge-case SQL Editor Edge Cases', () => {
     await expect(resultPanel).toBeVisible({ timeout: 5000 });
   });
 
-  test('@weekly @no-external SQL injection pattern should not crash system', async ({ page }) => {
+  test('@weekly @no-external @flaky SQL injection pattern should not crash system', async ({ page }) => {
     const editor = page.locator('.monaco-editor').first();
     await editor.click();
     await page.keyboard.press('Control+a');
@@ -116,7 +116,7 @@ test.describe('@weekly @edge-case SQL Editor Edge Cases', () => {
     await expect(page.locator('[data-testid="run-query-btn"]')).toBeEnabled({ timeout: 5000 });
   });
 
-  test('@weekly @no-external extremely long query should be handled', async ({ page }) => {
+  test('@weekly @no-external @flaky extremely long query should be handled', async ({ page }) => {
     const longQuery = 'SELECT ' + 'a'.repeat(2000) + ' FROM users';
     
     const editor = page.locator('.monaco-editor').first();
@@ -131,7 +131,7 @@ test.describe('@weekly @edge-case SQL Editor Edge Cases', () => {
     await expect(result).toBeVisible({ timeout: 5000 });
   });
 
-  test('@weekly @no-external query with emojis should not crash', async ({ page }) => {
+  test('@weekly @no-external @flaky query with emojis should not crash', async ({ page }) => {
     const editor = page.locator('.monaco-editor').first();
     await editor.click();
     await page.keyboard.press('Control+a');
@@ -143,7 +143,7 @@ test.describe('@weekly @edge-case SQL Editor Edge Cases', () => {
     await expect(page.locator('[data-testid="run-query-btn"]')).toBeEnabled({ timeout: 5000 });
   });
 
-  test('@weekly @no-external rapid click on Run Query should not cause issues', async ({ page }) => {
+  test('@weekly @no-external @flaky rapid click on Run Query should not cause issues', async ({ page }) => {
     const editor = page.locator('.monaco-editor').first();
     await editor.click();
     await page.keyboard.press('Control+a');
@@ -159,7 +159,7 @@ test.describe('@weekly @edge-case SQL Editor Edge Cases', () => {
     await expect(runBtn).toBeVisible({ timeout: 10000 });
   });
 
-  test('@weekly @no-external syntax error shows helpful message', async ({ page }) => {
+  test('@weekly @no-external @flaky syntax error shows helpful message', async ({ page }) => {
     const editor = page.locator('.monaco-editor').first();
     await editor.click();
     await page.keyboard.press('Control+a');

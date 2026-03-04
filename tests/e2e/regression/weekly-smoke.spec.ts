@@ -42,7 +42,7 @@ async function runUntilErrorCount(page: Page, runQueryButton: Locator, expectedE
   throw new Error(`Expected error count to reach ${expectedErrorCount}, but it did not.`);
 }
 
-test('@weekly smoke: practice editor draft persists across textbook navigation', async ({ page }) => {
+test('@weekly @integration smoke: practice editor draft persists across textbook navigation', async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -64,7 +64,7 @@ test('@weekly smoke: practice editor draft persists across textbook navigation',
     const button = page.getByRole('button', { name: 'Run Query' });
     const isEnabled = await button.isEnabled().catch(() => false);
     return isEnabled;
-  }, { timeout: 60000, intervals: [500, 1000, 2000] }).toBe(true);
+  }, { timeout: 30000, intervals: [500, 1000] }).toBe(true);
 
   const marker = 'keep-me-week2-draft-persistence';
   const sql = `-- ${marker}\nSELECT * FROM users;`;
