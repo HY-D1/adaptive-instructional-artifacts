@@ -37,7 +37,7 @@ import { useScreenReaderAnnouncer } from '../components/shared/ScreenReaderAnnou
 import { sqlProblems } from '../data/problems';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
-import { storage, subscribeToSync } from '../lib/storage/storage';
+import { storage, subscribeToSync, clearAllDebugSettingsWithSync } from '../lib/storage/storage';
 import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content/content-generator';
@@ -270,12 +270,18 @@ export function LearningInterface() {
     setIsPreviewMode(previewMode);
   }, []);
   
-  // Subscribe to cross-tab sync for preview mode changes
+  // State refresh trigger for debug profile/strategy cross-tab sync
+  const [debugRefreshKey, setDebugRefreshKey] = useState(0);
+  
+  // Subscribe to cross-tab sync for preview mode and debug state changes
   useEffect(() => {
     const unsubscribe = subscribeToSync((key, value) => {
       if (key === 'sql-adapt-preview-mode') {
         // Update preview mode state when changed in another tab
         setIsPreviewMode(value === 'true');
+      } else if (key === 'sql-adapt-debug-profile' || key === 'sql-adapt-debug-strategy') {
+        // Trigger re-calculation of escalation profile when debug settings change
+        setDebugRefreshKey(prev => prev + 1);
       }
     });
     return unsubscribe;
@@ -284,9 +290,7 @@ export function LearningInterface() {
   // Function to exit preview mode
   const exitPreviewMode = () => {
     try {
-      localStorage.removeItem('sql-adapt-preview-mode');
-      localStorage.removeItem('sql-adapt-debug-profile');
-      localStorage.removeItem('sql-adapt-debug-strategy');
+      clearAllDebugSettingsWithSync();
     } catch (error) {
       console.error('[Preview] Failed to clear preview mode:', error);
     }
@@ -388,7 +392,7 @@ export function LearningInterface() {
       currentProblem.id,
       selectionReason
     );
-  }, [learnerId, currentProblem.id, sessionId]);
+  }, [learnerId, currentProblem.id, sessionId, debugRefreshKey]);
 
   // Week 5: Listen for HDI calculated events
   useEffect(() => {

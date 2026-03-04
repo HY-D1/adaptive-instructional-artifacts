@@ -40,7 +40,7 @@ import {
   DialogTitle,
   DialogDescription
 } from '../components/ui/dialog';
-import { storage, broadcastSync } from '../lib/storage/storage';
+import { storage, broadcastSync, setDebugProfileWithSync, setDebugStrategyWithSync } from '../lib/storage/storage';
 import { useUserRole } from '../hooks/useUserRole';
 import type { LearnerProfile, InteractionEvent } from '../types';
 
@@ -1134,7 +1134,7 @@ export function InstructorDashboard() {
                   e.stopPropagation();
                   
                   try {
-                    // Save the preview profile override to localStorage
+                    // Save the preview profile override to localStorage with cross-tab sync
                     // Map UI values to actual profile IDs (explanation-first doesn't have -escalator suffix)
                     const profileIdMap: Record<string, string> = {
                       'fast': 'fast-escalator',
@@ -1143,9 +1143,10 @@ export function InstructorDashboard() {
                       'explanation-first': 'explanation-first'
                     };
                     const actualProfileId = profileIdMap[previewProfile] || `${previewProfile}-escalator`;
-                    localStorage.setItem('sql-adapt-debug-profile', actualProfileId);
-                    // Also set assignment strategy to static for consistent experience
-                    localStorage.setItem('sql-adapt-debug-strategy', 'static');
+                    // Set debug profile with cross-tab sync
+                    setDebugProfileWithSync(actualProfileId);
+                    // Also set assignment strategy to static for consistent experience (with sync)
+                    setDebugStrategyWithSync('static');
                     // Set a preview mode flag to indicate we're in preview mode
                     localStorage.setItem('sql-adapt-preview-mode', 'true');
                     // Broadcast to other tabs for cross-tab sync

@@ -2802,7 +2802,7 @@ class StorageManager {
 export const storage = new StorageManager();
 
 // ============================================================================
-// Cross-Tab Synchronization for Preview Mode
+// Cross-Tab Synchronization for Preview Mode and Debug State
 // ============================================================================
 
 /**
@@ -2812,9 +2812,11 @@ export const storage = new StorageManager();
 const SYNC_CHANNEL = 'sql-adapt-sync';
 
 /**
- * Preview mode storage key
+ * Storage keys for synced state
  */
 const PREVIEW_MODE_KEY = 'sql-adapt-preview-mode';
+const DEBUG_PROFILE_KEY = 'sql-adapt-debug-profile';
+const DEBUG_STRATEGY_KEY = 'sql-adapt-debug-strategy';
 
 /**
  * Broadcast a sync event to all tabs
@@ -2908,4 +2910,66 @@ export function getPreviewMode(): boolean {
 export function clearPreviewModeWithSync(): void {
   localStorage.removeItem(PREVIEW_MODE_KEY);
   broadcastSync(PREVIEW_MODE_KEY, null);
+}
+
+/**
+ * Set debug profile override with cross-tab sync
+ * Updates localStorage and broadcasts to other tabs
+ * 
+ * @param profileId - The profile ID to set (or null to clear)
+ */
+export function setDebugProfileWithSync(profileId: string | null): void {
+  if (profileId === null) {
+    localStorage.removeItem(DEBUG_PROFILE_KEY);
+    broadcastSync(DEBUG_PROFILE_KEY, null);
+  } else {
+    localStorage.setItem(DEBUG_PROFILE_KEY, profileId);
+    broadcastSync(DEBUG_PROFILE_KEY, profileId);
+  }
+}
+
+/**
+ * Get debug profile override from localStorage
+ * @returns The profile ID or null if not set
+ */
+export function getDebugProfile(): string | null {
+  return localStorage.getItem(DEBUG_PROFILE_KEY);
+}
+
+/**
+ * Set debug strategy with cross-tab sync
+ * Updates localStorage and broadcasts to other tabs
+ * 
+ * @param strategy - The strategy to set (or null to clear)
+ */
+export function setDebugStrategyWithSync(strategy: string | null): void {
+  if (strategy === null) {
+    localStorage.removeItem(DEBUG_STRATEGY_KEY);
+    broadcastSync(DEBUG_STRATEGY_KEY, null);
+  } else {
+    localStorage.setItem(DEBUG_STRATEGY_KEY, strategy);
+    broadcastSync(DEBUG_STRATEGY_KEY, strategy);
+  }
+}
+
+/**
+ * Get debug strategy from localStorage
+ * @returns The strategy or null if not set
+ */
+export function getDebugStrategy(): string | null {
+  return localStorage.getItem(DEBUG_STRATEGY_KEY);
+}
+
+/**
+ * Clear all debug settings with cross-tab sync
+ * Removes preview mode, profile override, and strategy from localStorage
+ * and broadcasts changes to other tabs
+ */
+export function clearAllDebugSettingsWithSync(): void {
+  localStorage.removeItem(PREVIEW_MODE_KEY);
+  localStorage.removeItem(DEBUG_PROFILE_KEY);
+  localStorage.removeItem(DEBUG_STRATEGY_KEY);
+  broadcastSync(PREVIEW_MODE_KEY, null);
+  broadcastSync(DEBUG_PROFILE_KEY, null);
+  broadcastSync(DEBUG_STRATEGY_KEY, null);
 }
