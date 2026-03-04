@@ -1712,6 +1712,7 @@ export function LearningInterface() {
 
               <div className="h-[350px] sm:h-[450px] lg:h-[550px]">
                 <SQLEditor
+                  key={currentProblem.id}
                   problem={currentProblem}
                   code={sqlDraft}
                   onExecute={handleExecute}

@@ -205,6 +205,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
       await exec.initialize(problem.schema);
       if (!signal?.aborted) {
         setExecutor(exec);
+        activeExecutorRef.current = exec;  // Sync ref for immediate access
         setInitStatus('ready');
         // SQL executor initialized successfully
         return exec;
@@ -265,7 +266,9 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
 
   // Helper to check correctness given a result (used for immediate feedback)
   const checkCorrectnessForResult = (result: QueryResult): { match: boolean; mode: 'result' | 'exec-only' } | null => {
-    if (!result.success || !executor) return null;
+    // Use ref for immediate access to avoid stale closure issues
+    const currentExecutor = activeExecutorRef.current || executor;
+    if (!result.success || !currentExecutor) return null;
 
     const hasExpectedResult = problem.expectedResult && problem.expectedResult.length > 0;
     const gradingMode = problem.gradingMode ?? (hasExpectedResult ? 'result' : 'exec-only');
@@ -274,8 +277,19 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
       return { match: result.success, mode: 'exec-only' };
     }
     
-    const actualResults = executor.formatResults(result);
-    const comparison = executor.compareResults(actualResults, problem.expectedResult!);
+    // Defensive: log if formatResults returns empty unexpectedly
+    const actualResults = currentExecutor.formatResults(result);
+    if (actualResults.length === 0 && result.values && result.values.length > 0) {
+      console.warn('[SQLEditor] formatResults returned empty but result.values has data', {
+        resultSuccess: result.success,
+        hasColumns: !!result.columns,
+        columnsLength: result.columns?.length,
+        hasValues: !!result.values,
+        valuesLength: result.values?.length
+      });
+    }
+    
+    const comparison = currentExecutor.compareResults(actualResults, problem.expectedResult!);
     
     return { match: comparison.match, mode: 'result' };
   };
