@@ -13,7 +13,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import type { InteractionEvent, HDILevel } from '../types';
-import type { EscalationProfile } from './escalation-profiles';
+import type { EscalationProfile } from './ml/escalation-profiles';
 
 // Import modules to test
 import {
@@ -25,7 +25,7 @@ import {
   EXPLANATION_FIRST,
   type AssignmentContext,
   type AssignmentStrategy,
-} from './escalation-profiles';
+} from './ml/escalation-profiles';
 
 import {
   MultiArmedBandit,
@@ -59,7 +59,7 @@ import {
   determineNextAction,
   type GuidanceLadderState,
   type EscalationTrigger,
-} from './guidance-ladder';
+} from './ml/guidance-ladder';
 
 import { calculateReward, type RewardComponents } from './ml/reward-calculator';
 

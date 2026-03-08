@@ -250,6 +250,43 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ---
 
+## PDF/Textbook Processing
+
+> ⚠️ **External Dependency Required**: The PDF processing pipeline requires an external helper tool (`algl-pdf-helper`) that is **not included** in this repository.
+
+### What is `algl-pdf-helper`?
+
+The `algl-pdf-helper` is a separate repository/workspace containing proprietary PDF processing utilities used to:
+- Extract and process textbook PDF content
+- Generate structured concept mappings
+- Export processed content to the application's textbook system
+
+### Script References in package.json
+
+The following npm scripts reference this external tool:
+
+| Script | Command | Purpose |
+|--------|---------|---------|
+| `textbook:process` | `cd ../algl-pdf-helper && ./start.sh` | Process PDF files and generate textbook content |
+| `textbook:export` | `cd ../algl-pdf-helper && algl-pdf export` | Export processed content to the application |
+
+### If the Helper is Not Available
+
+**Cloning this repository alone is not sufficient** to reproduce the full PDF processing pipeline. If you do not have access to `algl-pdf-helper`:
+
+1. **Use the built-in PDF index commands** (sufficient for most development):
+   ```bash
+   npm run pdf:index    # Build search index from PDF files
+   npm run pdf:search   # Search the index
+   npm run pdf:query    # Query with natural language
+   ```
+
+2. **The application includes pre-processed textbook content** in `apps/web/public/textbook-static/` that is sufficient for development and testing.
+
+3. **To obtain the helper tool**: Contact the project maintainers for access to the `algl-pdf-helper` repository.
+
+---
+
 ## Access Guide
 
 ### Student Access
@@ -265,6 +302,8 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 2. Enter the passcode when prompted: `TeachSQL2024`
 3. View student analytics, concept coverage, and learning traces
 4. Export data for further analysis
+
+> **⚠️ Security Note**: Instructor authentication is client-side only and intended for demo purposes. The passcode is exposed in the frontend bundle (`VITE_INSTRUCTOR_PASSCODE`), making it accessible to anyone with browser devtools. For production use with real student data, implement proper server-side authentication.
 
 ### Route Access Matrix
 
@@ -397,7 +436,6 @@ All documentation is organized under `docs/`:
 | [docs/research/ARTIFACT_PACKAGING.md](./docs/research/ARTIFACT_PACKAGING.md) | Artifact bundle requirements |
 | [docs/runbooks/progress.md](./docs/runbooks/progress.md) | Architecture & milestones |
 | [docs/runbooks/weekly-progress.md](./docs/runbooks/weekly-progress.md) | Active checkpoint log |
-| [docs/README.md](./docs/README.md) | Documentation index |
 | [AGENTS.md](./AGENTS.md) | Agent workflow policy |
 
 ---

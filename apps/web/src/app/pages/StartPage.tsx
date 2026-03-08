@@ -75,6 +75,9 @@ export function StartPage() {
     
     if (!username.trim() || !selectedRole) return;
 
+    // NOTE: This is client-side-only authentication suitable for demo purposes.
+    // VITE_INSTRUCTOR_PASSCODE is exposed in the frontend bundle.
+    // For production use, implement server-side authentication.
     // Validate passcode for instructor role
     if (selectedRole === 'instructor') {
       if (passcode !== INSTRUCTOR_PASSCODE) {
