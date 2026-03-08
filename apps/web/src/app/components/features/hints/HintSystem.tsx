@@ -916,11 +916,10 @@ export function HintSystem({
     : hints.length === 0
       ? 'Request Hint'
       : 'Next Hint';
-  // Count hints that have been actually viewed
-  const viewedHintsCount = hints.length;
+  // Count hints that have been actually viewed - use hints.length directly to ensure sync
   const hintProgress = showExplanation 
-    ? Math.min(viewedHintsCount + 1, 4)  // Hints + explanation
-    : Math.min(viewedHintsCount, 3);      // Just hints
+    ? Math.min(hints.length + 1, 4)  // Hints + explanation mode
+    : Math.min(hints.length, 3);      // Just hints (capped at 3)
   const stepMessage = nextHelpRequestIndex >= autoEscalationThreshold
     ? 'You are in explanation mode. Additional help requests provide deeper explanation support.'
     : `Request ${hintProgress} gives Hint ${hintProgress}.`;

@@ -89,17 +89,25 @@ function SessionExpired({ onRedirect }: SessionExpiredProps) {
 export function RootLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { role, isStudent, isInstructor, isLoading: isRoleLoading, clearProfile } = useUserRole();
-  const [showWelcome, setShowWelcome] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
-  // Session persistence hook for cross-tab sync
+  // Session persistence hook for cross-tab sync (must come before useUserRole)
   const {
     showSyncToast,
     dismissToast,
     profile: syncedProfile,
+    isLoading: isSessionLoading,
     isSessionExpired
   } = useSessionPersistence();
+  
+  // Pass synced profile from useSessionPersistence to useUserRole
+  // This ensures role is always synchronized with the storage-synced profile
+  const { role, isStudent, isInstructor, isLoading: isRoleLoading, clearProfile } = useUserRole({
+    syncedProfile,
+    syncedLoading: isSessionLoading
+  });
+  
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     try {
