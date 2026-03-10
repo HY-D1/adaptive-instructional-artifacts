@@ -196,7 +196,7 @@ Every learner action and every system decision is logged with a stable schema fo
 }
 ```
 
-See LOGGING_SPECIFICATION.md in the research documentation for complete schema.
+See the research documentation for logging schema details.
 
 ---
 
@@ -402,10 +402,6 @@ npm run pdf:query
 │   │   └── integration/         # Integration tests
 │   └── helpers/                 # Test helpers
 ├── scripts/                     # Utility scripts (replay, metrics)
-├── docs/                        # Documentation
-│   ├── research/                # Research architecture docs
-│   ├── runbooks/                # Operational runbooks
-│   └── README.md                # Documentation index
 ├── dist/                        # Build outputs
 ├── package.json                 # Dependencies and scripts
 ├── playwright.config.ts         # E2E test configuration
