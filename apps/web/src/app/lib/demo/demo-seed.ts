@@ -388,12 +388,14 @@ function createLearnerProfiles(): Record<string, LearnerProfile> {
   return {
     [DEMO_LEARNER_1.id]: {
       id: DEMO_LEARNER_1.id,
-      conceptsCovered: new Set(['select-basics', 'where-clause', 'comparison-operators']),
+      // Use array instead of Set - storage layer expects arrays for serialization
+      conceptsCovered: ['select-basics', 'where-clause', 'comparison-operators'] as any,
       lastActive: now - 2 * 24 * 60 * 60 * 1000,
     },
     [DEMO_LEARNER_2.id]: {
       id: DEMO_LEARNER_2.id,
-      conceptsCovered: new Set(['join-operations', 'table-relationships']),
+      // Use array instead of Set - storage layer expects arrays for serialization
+      conceptsCovered: ['join-operations', 'table-relationships'] as any,
       lastActive: now - 1 * 24 * 60 * 60 * 1000,
     },
   };
@@ -424,7 +426,8 @@ export function seedDemoDataset(): {
       };
     }
     
-    // Build export-shaped data structure for storage.importData()
+    // Build data structure matching storage.importData() expectations
+    // Keys must match: interactions, profiles, textbooks
     const demoData = {
       exportPolicyVersion: 'demo-seed-v1',
       exportDate: new Date().toISOString(),
@@ -438,17 +441,17 @@ export function seedDemoDataset(): {
         },
       },
       interactions: createDemoInteractions(),
-      textbook: createDemoTextbookUnits(),
-      learnerProfiles: createLearnerProfiles(),
-      userProfiles: DEMO_LEARNERS,
+      textbooks: createDemoTextbookUnits(),  // CHANGED: was 'textbook'
+      profiles: Object.values(createLearnerProfiles()),  // CHANGED: was 'learnerProfiles', must be array
+      // NOTE: userProfiles are NOT imported via importData() - they are handled separately
     };
     
     // Update summary counts
     demoData.summary.totalInteractions = demoData.interactions.length;
     
-    // Use storage.importData to load the demo data (uses canonical keys internally)
-    const importJson = JSON.stringify(demoData);
-    const result = storage.importData(importJson);
+    // Use storage.importData to load the demo data
+    // IMPORTANT: pass object directly, NOT JSON string
+    const result = storage.importData(demoData);
     
     if (!result.success) {
       return { 
@@ -458,7 +461,7 @@ export function seedDemoDataset(): {
     }
     
     // Count total units
-    const totalUnits = Object.values(demoData.textbook).reduce(
+    const totalUnits = Object.values(demoData.textbooks).reduce(
       (sum, units) => sum + units.length, 0
     );
     
