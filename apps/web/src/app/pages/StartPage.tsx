@@ -11,8 +11,17 @@ import { cn } from '../components/ui/utils';
 import { storage } from '../lib/storage/storage';
 import type { UserRole, UserProfile } from '../types';
 
-// Instructor passcode from environment variable with fallback
-const INSTRUCTOR_PASSCODE = import.meta.env.VITE_INSTRUCTOR_PASSCODE || 'TeachSQL2024';
+/**
+ * Instructor passcode configuration
+ * - DEV: fallback passcode is allowed for development convenience
+ * - Production: VITE_INSTRUCTOR_PASSCODE must be set
+ */
+const ENV_PASSCODE = import.meta.env.VITE_INSTRUCTOR_PASSCODE;
+const IS_DEV = import.meta.env.DEV;
+const INSTRUCTOR_PASSCODE = ENV_PASSCODE || (IS_DEV ? 'TeachSQL2024' : '');
+
+// Production validation check
+const isProductionPasscodeConfigured = IS_DEV || (ENV_PASSCODE && ENV_PASSCODE.length > 0);
 
 /**
  * StartPage - Entry point for the application
@@ -123,6 +132,67 @@ export function StartPage() {
           <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           <span>Loading...</span>
         </div>
+      </div>
+    );
+  }
+
+  // Show error if production passcode is not configured
+  if (!isProductionPasscodeConfigured) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+        {/* Header */}
+        <header className="bg-white border-b">
+          <div className="container mx-auto px-4 h-16 flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+              <Database className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="font-bold text-xl text-gray-900">SQL-Adapt</h1>
+              <p className="text-xs text-gray-500">Learning System</p>
+            </div>
+          </div>
+        </header>
+
+        {/* Main Content - Configuration Error */}
+        <main className="flex-1 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg">
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
+                  <Lock className="w-6 h-6 text-amber-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-amber-900 mb-2">
+                    Instructor Access Not Configured
+                  </h2>
+                  <p className="text-amber-800 mb-4">
+                    This application is running in production mode without a configured instructor passcode.
+                  </p>
+                  <div className="bg-white rounded p-4 text-sm text-gray-700 space-y-2">
+                    <p><strong>To enable instructor access:</strong></p>
+                    <ol className="list-decimal list-inside space-y-1 ml-2">
+                      <li>Set the <code className="bg-gray-100 px-1 rounded">VITE_INSTRUCTOR_PASSCODE</code> environment variable</li>
+                      <li>Rebuild and redeploy the application</li>
+                    </ol>
+                    <p className="mt-3 text-xs text-gray-500">
+                      Example: <code className="bg-gray-100 px-1 rounded">VITE_INSTRUCTOR_PASSCODE=YourSecurePasscode123</code>
+                    </p>
+                  </div>
+                  <p className="mt-4 text-xs text-amber-700">
+                    Student access is still available without configuration.
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Allow student access even without instructor config */}
+            <div className="mt-6 text-center">
+              <Button onClick={() => navigate('/')} variant="outline">
+                Continue as Student
+              </Button>
+            </div>
+          </div>
+        </main>
       </div>
     );
   }

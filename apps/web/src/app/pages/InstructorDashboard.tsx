@@ -17,7 +17,9 @@ import {
   FileText,
   Eye,
   Play,
-  X
+  X,
+  Database,
+  RotateCcw
 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -41,6 +43,7 @@ import {
   DialogDescription
 } from '../components/ui/dialog';
 import { storage, broadcastSync, setDebugProfileWithSync, setDebugStrategyWithSync } from '../lib/storage/storage';
+import { seedDemoDataset, resetDemoDataset, hasDemoData } from '../lib/demo/demo-seed';
 import { useUserRole } from '../hooks/useUserRole';
 import type { LearnerProfile, InteractionEvent } from '../types';
 
@@ -146,6 +149,12 @@ export function InstructorDashboard() {
   const [interactions, setInteractions] = useState<InteractionEvent[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [demoDataExists, setDemoDataExists] = useState(false);
+
+  // Check for demo data on mount
+  useEffect(() => {
+    setDemoDataExists(hasDemoData());
+  }, [profiles, interactions]);
 
   // Redirect students away from instructor pages
   useEffect(() => {
@@ -466,6 +475,35 @@ export function InstructorDashboard() {
     }
   };
 
+  const handleSeedDemo = () => {
+    const result = seedDemoDataset();
+    if (result.success) {
+      setToastMessage(`Demo data seeded: ${result.learners} learners, ${result.interactions} events, ${result.units} units`);
+      // Reload data
+      const allProfiles = storage.getAllProfiles().map(p => storage.getProfile(p.id)).filter(Boolean) as LearnerProfile[];
+      const allInteractions = storage.getAllInteractions();
+      setProfiles(allProfiles);
+      setInteractions(allInteractions);
+      setDemoDataExists(true);
+    } else {
+      setToastMessage(`Failed to seed demo data: ${result.error}`);
+    }
+  };
+
+  const handleResetDemo = () => {
+    if (confirm('Are you sure you want to reset all data? This cannot be undone.')) {
+      const result = resetDemoDataset();
+      if (result.success) {
+        setToastMessage('All data has been reset');
+        setProfiles([]);
+        setInteractions([]);
+        setDemoDataExists(false);
+      } else {
+        setToastMessage(`Failed to reset data: ${result.error}`);
+      }
+    }
+  };
+
   if (isLoading || isDataLoading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
@@ -504,6 +542,30 @@ export function InstructorDashboard() {
                 <Users className="size-3 mr-1" />
                 {classStats.totalStudents} Students
               </Badge>
+            </div>
+            {/* Demo Data Controls */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSeedDemo}
+                disabled={demoDataExists}
+                className="gap-2"
+                data-testid="seed-demo-button"
+              >
+                <Database className="w-4 h-4" />
+                Seed Demo Data
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleResetDemo}
+                className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                data-testid="reset-demo-button"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Reset Demo Data
+              </Button>
             </div>
           </div>
         </div>
