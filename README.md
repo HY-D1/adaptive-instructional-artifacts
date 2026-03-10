@@ -196,7 +196,7 @@ Every learner action and every system decision is logged with a stable schema fo
 }
 ```
 
-See [docs/research/LOGGING_SPECIFICATION.md](./docs/research/LOGGING_SPECIFICATION.md) for complete schema.
+See LOGGING_SPECIFICATION.md in the research documentation for complete schema.
 
 ---
 
@@ -412,31 +412,6 @@ npm run pdf:query
 ├── vitest.config.ts             # Unit test configuration
 └── vercel.json                  # Vercel deployment config
 ```
-
----
-
-## Documentation
-
-All documentation is organized under `docs/`:
-
-| Category | Location | Contents |
-|----------|----------|----------|
-| **Research** | [`docs/research/`](./docs/research/) | Architecture, 17 components, specifications |
-| **Runbooks** | [`docs/runbooks/`](./docs/runbooks/) | Operational guides, progress tracking |
-| **Reports** | [`docs/reports/`](./docs/reports/) | Test reports, validation, benchmarks |
-| **Archive** | [`docs/archive/`](./docs/archive/) | Historical/outdated documentation |
-
-### Key Documents
-
-| Document | Purpose |
-|----------|---------|
-| [docs/research/PROJECT_OVERVIEW.md](./docs/research/PROJECT_OVERVIEW.md) | Executive summary & research vision |
-| [docs/research/RESEARCH_ARCHITECTURE.md](./docs/research/RESEARCH_ARCHITECTURE.md) | System architecture & 17 components |
-| [docs/research/LOGGING_SPECIFICATION.md](./docs/research/LOGGING_SPECIFICATION.md) | Event schema & reproducibility contract |
-| [docs/research/ARTIFACT_PACKAGING.md](./docs/research/ARTIFACT_PACKAGING.md) | Artifact bundle requirements |
-| [docs/runbooks/progress.md](./docs/runbooks/progress.md) | Architecture & milestones |
-| [docs/runbooks/weekly-progress.md](./docs/runbooks/weekly-progress.md) | Active checkpoint log |
-| [AGENTS.md](./AGENTS.md) | Agent workflow policy |
 
 ---
 

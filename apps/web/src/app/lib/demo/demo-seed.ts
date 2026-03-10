@@ -451,12 +451,13 @@ export function seedDemoDataset(): {
     
     // Use storage.importData to load the demo data
     // IMPORTANT: pass object directly, NOT JSON string
-    const result = storage.importData(demoData);
-    
-    if (!result.success) {
+    // NOTE: importData() returns void; success = no exception thrown
+    try {
+      storage.importData(demoData);
+    } catch (importError) {
       return { 
         success: false, 
-        error: result.error || 'Import failed - check storage quota' 
+        error: importError instanceof Error ? importError.message : 'Import failed - check storage quota'
       };
     }
     
