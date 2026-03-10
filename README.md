@@ -4,7 +4,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-blue)
 ![React](https://img.shields.io/badge/React-18.3-61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-6.4-646CFF)
-![Tests](https://img.shields.io/badge/Tests-696%20passing-success)
+![Tests](https://img.shields.io/badge/Tests-~696%20expected-informational)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
@@ -456,7 +456,7 @@ The project has **316 unit tests** and **380 E2E tests** covering:
 |----------|-------|-------------|
 | Unit Tests | 316 | Vitest-based unit and integration tests |
 | E2E Tests | 380 | Playwright browser tests |
-| **Total** | **696** | **All tests passing** |
+| **Total** | **~696** | **Test suite: 316 unit + 380 E2E (run `npm run test:e2e:weekly` to verify)** |
 
 ---
 
@@ -600,4 +600,4 @@ MIT License - see [LICENSE](LICENSE)
 ---
 
 *Last updated: 2026-03-03*  
-*Project Status: Week 5 Complete — 696 total tests passing (316 unit + 380 E2E), escalation profiles, bandit, HDI calculator active*
+*Project Status: Week 5 Complete — ~696 total tests expected (verify with `npm run test:e2e:weekly`), escalation profiles, bandit, HDI calculator active*
