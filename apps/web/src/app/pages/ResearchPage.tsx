@@ -2,7 +2,6 @@ import { Button } from '../components/ui/button';
 import { ResearchDashboard } from '../components/features/research/ResearchDashboard';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router';
-import { useUserRole } from '../hooks/useUserRole';
 
 /**
  * ResearchPage - Research analytics and strategy comparison
@@ -13,7 +12,6 @@ import { useUserRole } from '../hooks/useUserRole';
  */
 export function ResearchPage() {
   const navigate = useNavigate();
-  const { isInstructor } = useUserRole();
 
   return (
     <div className="min-h-screen bg-gray-50">
