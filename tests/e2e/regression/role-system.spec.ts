@@ -290,6 +290,49 @@ test.describe('@weekly Role System', () => {
       // Assert - Should be redirected to instructor dashboard
       await expect(page).toHaveURL(/\/instructor-dashboard$/);
     });
+
+    test('Instructor can access /textbook for learner inspection', async ({ page }) => {
+      // Arrange - Create instructor profile
+      const instructorProfile: UserProfile = {
+        id: 'user-instructor-textbook',
+        name: 'TestInstructor',
+        role: 'instructor',
+        createdAt: Date.now(),
+      };
+      
+      await page.addInitScript((profile) => {
+        window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(profile));
+        window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      }, instructorProfile);
+      
+      // Act - Access textbook directly
+      await page.goto('/textbook');
+      
+      // Assert - Should stay on textbook page (not redirected)
+      await expect(page).toHaveURL(/\/textbook$/);
+      await expect(page.getByRole('heading', { name: /My Textbook|My Learning Journey/i })).toBeVisible();
+    });
+
+    test('Instructor can access /textbook with learnerId query param', async ({ page }) => {
+      // Arrange - Create instructor profile
+      const instructorProfile: UserProfile = {
+        id: 'user-instructor-inspect',
+        name: 'TestInstructor',
+        role: 'instructor',
+        createdAt: Date.now(),
+      };
+      
+      await page.addInitScript((profile) => {
+        window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify(profile));
+        window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      }, instructorProfile);
+      
+      // Act - Access textbook with learnerId
+      await page.goto('/textbook?learnerId=learner-1');
+      
+      // Assert - Should stay on textbook page with query param
+      await expect(page).toHaveURL(/\/textbook\?learnerId=learner-1$/);
+    });
   });
 
   // ===========================================================================

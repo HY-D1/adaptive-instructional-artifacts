@@ -173,10 +173,11 @@ export function RootLayout() {
     navigate('/');
   };
 
-  // Redirect instructor accessing student-only pages to instructor dashboard
+  // Redirect instructor accessing /practice (student-only) to instructor dashboard
   // BUT allow access in preview mode
+  // Instructors ARE allowed to access /textbook for learner inspection
   const isInPreviewMode = isPreviewModeActive();
-  if (!isRoleLoading && isInstructor && !isInPreviewMode && (isPracticePage || isTextbookPage)) {
+  if (!isRoleLoading && isInstructor && !isInPreviewMode && isPracticePage) {
     return <Navigate to="/instructor-dashboard" replace />;
   }
 
