@@ -134,7 +134,7 @@ export function StartPage() {
   }
 
   // Check if instructor access is configured
-  const isInstructorConfigured = ENV_PASSCODE && ENV_PASSCODE.length > 0;
+  const isInstructorConfigured = INSTRUCTOR_PASSCODE.length > 0;
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">

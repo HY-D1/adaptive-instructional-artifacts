@@ -187,16 +187,26 @@ export function InstructorDashboard() {
   const hasRealData = profiles.length > 0 || interactions.length > 0;
   const showDemoData = DEMO_MODE && !hasRealData;
 
+  // Normalize profiles once at load time - ensures consistent data quality
+  const normalizedProfiles = useMemo(() => {
+    return profiles.map(p => ({
+      ...p,
+      name: p.name || p.id,
+      createdAt: p.createdAt || Date.now(),
+      lastActive: p.lastActive || p.createdAt || Date.now(),
+    }));
+  }, [profiles]);
+
   // Calculate class statistics
   const classStats: ClassStats = useMemo(() => {
-    // Use real profiles if available, otherwise use demo students in dev mode
-    const studentList = hasRealData ? profiles : (showDemoData ? DEMO_STUDENTS : []);
+    // Use normalized profiles if available, otherwise use demo students in dev mode
+    const studentList = hasRealData ? normalizedProfiles : (showDemoData ? DEMO_STUDENTS : []);
     const totalStudents = studentList.length;
     const activeToday = studentList.filter(s => Date.now() - s.lastActive < 86400000).length;
     
     // Calculate average progress based on concept coverage
-    const avgProgress = profiles.length > 0
-      ? Math.round(profiles.reduce((sum, p) => sum + p.conceptsCovered.size, 0) / profiles.length / 6 * 100)
+    const avgProgress = normalizedProfiles.length > 0
+      ? Math.round(normalizedProfiles.reduce((sum, p) => sum + p.conceptsCovered.size, 0) / normalizedProfiles.length / 6 * 100)
       : (showDemoData ? 45 : 0);
 
     // Use real interactions or add demo interactions in dev mode
@@ -240,7 +250,7 @@ export function InstructorDashboard() {
       commonErrors: commonErrors.length > 0 ? commonErrors : [],
       conceptMastery
     };
-  }, [profiles, interactions, hasRealData, showDemoData]);
+  }, [normalizedProfiles, interactions, hasRealData, showDemoData]);
 
   // Memoized helper to calculate student adaptive profiles
   const studentAdaptiveProfiles = useMemo(() => {
@@ -274,7 +284,7 @@ export function InstructorDashboard() {
     const allLearnerIds = new Set([
       ...Object.keys(latestProfiles),
       ...Object.keys(latestHDI),  // Also include learners with HDI events (critical for adaptive stats)
-      ...profiles.map(p => p.id)
+      ...normalizedProfiles.map(p => p.id)
     ]);
 
     // Use demo data in dev mode if no real data
@@ -296,7 +306,7 @@ export function InstructorDashboard() {
       });
     } else {
       allLearnerIds.forEach(learnerId => {
-        const profile = profiles.find(p => p.id === learnerId);
+        const profile = normalizedProfiles.find(p => p.id === learnerId);
         const profileEvent = latestProfiles[learnerId];
         const hdiEvent = latestHDI[learnerId];
         const history = hdiHistory[learnerId] || [];
@@ -324,7 +334,7 @@ export function InstructorDashboard() {
 
         studentProfiles.push({
           learnerId,
-          name: profile?.name || learnerId,
+          name: profile?.name ?? learnerId,  // already normalized
           profile: profileEvent?.payload?.profile || 'adaptive',
           strategy: profileEvent?.payload?.strategy || 'static',
           hdi: (hdiEvent?.payload?.hdi ?? hdiEvent?.hdi) || 0.5,
@@ -335,7 +345,7 @@ export function InstructorDashboard() {
     }
 
     return { studentProfiles, useDemo };
-  }, [interactions, profiles, showDemoData]);
+  }, [interactions, normalizedProfiles, showDemoData]);
 
   // Calculate adaptive learning statistics from profiles
   const adaptiveStats: AdaptiveStats = useMemo(() => {
@@ -913,7 +923,7 @@ export function InstructorDashboard() {
                   ))}
                 </TableBody>
               </Table>
-              {!showDemoData && profiles.length === 0 && (
+              {!showDemoData && normalizedProfiles.length === 0 && (
                 <div className="text-center py-8 text-gray-500">
                   <p>No adaptive data available yet. Students need to interact with the system.</p>
                 </div>
@@ -1040,13 +1050,13 @@ export function InstructorDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(hasRealData ? profiles.map(p => ({ 
+                  {(hasRealData ? normalizedProfiles.map(p => ({ 
                     id: p.id, 
-                    name: p.name || p.id, 
+                    name: p.name,  // already normalized
                     email: `${p.id}@local`, 
-                    lastActive: p.lastActive || p.createdAt || Date.now() 
+                    lastActive: p.lastActive  // already normalized
                   })) : showDemoData ? DEMO_STUDENTS : []).map((student) => {
-                    const profile = profiles.find(p => p.id === student.id);
+                    const profile = normalizedProfiles.find(p => p.id === student.id);
                     // Deterministic pseudo-random based on student ID to avoid hydration mismatch
                     const conceptsCount = profile?.conceptsCovered.size || (student.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0) % 4) + 1;
                     const isActive = student.lastActive && Date.now() - student.lastActive < 3600000;

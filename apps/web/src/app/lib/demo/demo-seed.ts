@@ -546,36 +546,99 @@ export function seedDemoDataset(): {
 }
 
 /**
- * Reset demo data using storage.clearAll()
- * Optionally preserves non-demo data if needed
+ * Demo learner IDs for filtering
+ */
+const DEMO_LEARNER_IDS = new Set(DEMO_LEARNERS.map(l => l.id));
+
+/**
+ * Reset demo data using selective removal
+ * Preserves non-demo data and current user profile/session
  */
 export function resetDemoDataset(): { 
   success: boolean; 
   preservedLearners?: number;
+  removedLearners?: number;
   error?: string 
 } {
   try {
-    // Check if there's any non-demo data to preserve
+    // Step 1: Get current user profile (to preserve it)
+    const currentUserProfile = storage.getUserProfile();
+    
+    // Step 2: Get all data
     const allInteractions = storage.getAllInteractions();
+    const allTextbooks = storage.getAllTextbooks();
+    const allProfiles = storage.getAllProfiles();
+    
+    // Step 3: Filter out demo learner interactions
     const nonDemoInteractions = allInteractions.filter(
-      i => !DEMO_LEARNERS.some(dl => dl.id === i.learnerId)
+      i => !DEMO_LEARNER_IDS.has(i.learnerId)
     );
+    const removedInteractions = allInteractions.length - nonDemoInteractions.length;
     
-    const hasNonDemoData = nonDemoInteractions.length > 0;
+    // Step 4: Filter out demo learner textbooks
+    const nonDemoTextbooks: Record<string, InstructionalUnit[]> = {};
+    for (const [learnerId, units] of Object.entries(allTextbooks)) {
+      if (!DEMO_LEARNER_IDS.has(learnerId)) {
+        nonDemoTextbooks[learnerId] = units;
+      }
+    }
+    const removedTextbookLearners = Object.keys(allTextbooks).filter(id => DEMO_LEARNER_IDS.has(id)).length;
     
-    if (hasNonDemoData) {
-      // Option: Filter out demo data and re-save non-demo
-      // For now, we use clearAll() as specified in requirements
-      // but this preserves the option to implement filtered reset later
+    // Step 5: Filter out demo learner profiles
+    const nonDemoProfiles = allProfiles.filter(
+      p => !DEMO_LEARNER_IDS.has(p.id)
+    );
+    const removedProfiles = allProfiles.length - nonDemoProfiles.length;
+    
+    // Step 6: Clear all storage
+    storage.clearAll();
+    
+    // Step 7: Restore non-demo data
+    if (nonDemoInteractions.length > 0 || Object.keys(nonDemoTextbooks).length > 0 || nonDemoProfiles.length > 0) {
+      const restoreData = {
+        exportPolicyVersion: 'demo-reset-restore-v1',
+        exportDate: new Date().toISOString(),
+        summary: {
+          totalInteractions: nonDemoInteractions.length,
+          uniqueLearners: Object.keys(nonDemoTextbooks).concat(nonDemoProfiles.map(p => p.id)),
+          uniqueProblems: [...new Set(nonDemoInteractions.map(i => i.problemId).filter(Boolean))],
+          dateRange: {
+            start: nonDemoInteractions.length > 0 
+              ? new Date(Math.min(...nonDemoInteractions.map(i => i.timestamp))).toISOString()
+              : new Date().toISOString(),
+            end: nonDemoInteractions.length > 0
+              ? new Date(Math.max(...nonDemoInteractions.map(i => i.timestamp))).toISOString()
+              : new Date().toISOString(),
+          },
+        },
+        interactions: nonDemoInteractions,
+        textbooks: nonDemoTextbooks,
+        profiles: nonDemoProfiles,
+      };
+      
+      storage.importData(restoreData);
     }
     
-    // Use storage.clearAll() - the canonical reset method
-    // This clears ALL data including demo data
-    storage.clearAll();
+    // Step 8: Restore current user profile if it existed (and wasn't a demo learner)
+    if (currentUserProfile && !DEMO_LEARNER_IDS.has(currentUserProfile.id)) {
+      storage.saveUserProfile(currentUserProfile);
+    }
+    
+    // Log the reset for debugging
+    console.log('[DemoSeed] Demo data reset complete:', {
+      removedInteractions,
+      removedTextbookLearners,
+      removedProfiles,
+      preservedInteractions: nonDemoInteractions.length,
+      preservedTextbookLearners: Object.keys(nonDemoTextbooks).length,
+      preservedProfiles: nonDemoProfiles.length,
+      currentUserPreserved: currentUserProfile ? !DEMO_LEARNER_IDS.has(currentUserProfile.id) : false,
+    });
     
     return { 
       success: true,
-      preservedLearners: 0, // clearAll removes everything
+      preservedLearners: nonDemoProfiles.length,
+      removedLearners: removedProfiles,
     };
   } catch (error) {
     console.error('[DemoSeed] Failed to reset demo dataset:', error);

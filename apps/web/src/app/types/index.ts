@@ -234,6 +234,8 @@ export type LearnerProfile = {
     escalationThreshold: number; // Number of failed attempts before escalation
     aggregationDelay: number; // Time before aggregating into textbook
   };
+  createdAt?: number;
+  lastActive?: number;
 };
 
 export type CoverageStats = {
