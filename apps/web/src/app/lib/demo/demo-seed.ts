@@ -382,20 +382,72 @@ WHERE o.total > 100;
 
 /**
  * Create learner profiles for storage
+ * Returns complete LearnerProfile objects matching the type definition
  */
 function createLearnerProfiles(): Record<string, LearnerProfile> {
   const now = Date.now();
+  
+  // Helper to create coverage evidence for a concept
+  const createEvidence = (conceptId: string, score: number, confidence: 'low' | 'medium' | 'high') => ({
+    conceptId,
+    score,
+    confidence,
+    lastUpdated: now - 2 * 24 * 60 * 60 * 1000,
+    evidenceCounts: {
+      successfulExecution: score > 50 ? 2 : 1,
+      hintViewed: 1,
+      explanationViewed: score > 60 ? 1 : 0,
+      errorEncountered: 1,
+      notesAdded: score > 70 ? 1 : 0,
+    },
+    streakCorrect: score > 75 ? 2 : 0,
+    streakIncorrect: score < 50 ? 1 : 0,
+  });
+  
   return {
     [DEMO_LEARNER_1.id]: {
       id: DEMO_LEARNER_1.id,
-      // Use array instead of Set - storage layer expects arrays for serialization
-      conceptsCovered: ['select-basics', 'where-clause', 'comparison-operators'] as any,
+      name: DEMO_LEARNER_1.name,
+      // Use Set for in-memory representation (storage layer handles serialization)
+      conceptsCovered: new Set(['select-basics', 'where-clause', 'comparison-operators']),
+      // Map of conceptId -> ConceptCoverageEvidence
+      conceptCoverageEvidence: new Map([
+        ['select-basics', createEvidence('select-basics', 85, 'high')],
+        ['where-clause', createEvidence('where-clause', 72, 'medium')],
+        ['comparison-operators', createEvidence('comparison-operators', 65, 'medium')],
+      ]),
+      // Error history: errorSubtypeId -> count
+      errorHistory: new Map([
+        ['missing-where-predicate', 2],
+        ['syntax-error', 1],
+      ]),
+      interactionCount: 8,
+      currentStrategy: 'adaptive-medium',
+      preferences: {
+        escalationThreshold: 2,
+        aggregationDelay: 300000, // 5 minutes
+      },
+      createdAt: DEMO_LEARNER_1.createdAt,
       lastActive: now - 2 * 24 * 60 * 60 * 1000,
     },
     [DEMO_LEARNER_2.id]: {
       id: DEMO_LEARNER_2.id,
-      // Use array instead of Set - storage layer expects arrays for serialization
-      conceptsCovered: ['join-operations', 'table-relationships'] as any,
+      name: DEMO_LEARNER_2.name,
+      conceptsCovered: new Set(['join-operations', 'table-relationships']),
+      conceptCoverageEvidence: new Map([
+        ['join-operations', createEvidence('join-operations', 58, 'medium')],
+        ['table-relationships', createEvidence('table-relationships', 45, 'low')],
+      ]),
+      errorHistory: new Map([
+        ['missing-join-condition', 3],
+      ]),
+      interactionCount: 6,
+      currentStrategy: 'adaptive-low',
+      preferences: {
+        escalationThreshold: 3,
+        aggregationDelay: 600000, // 10 minutes
+      },
+      createdAt: DEMO_LEARNER_2.createdAt,
       lastActive: now - 1 * 24 * 60 * 60 * 1000,
     },
   };

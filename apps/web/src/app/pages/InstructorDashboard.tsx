@@ -1044,7 +1044,7 @@ export function InstructorDashboard() {
                     id: p.id, 
                     name: p.name || p.id, 
                     email: `${p.id}@local`, 
-                    lastActive: p.createdAt || Date.now() 
+                    lastActive: p.lastActive || p.createdAt || Date.now() 
                   })) : showDemoData ? DEMO_STUDENTS : []).map((student) => {
                     const profile = profiles.find(p => p.id === student.id);
                     // Deterministic pseudo-random based on student ID to avoid hydration mismatch
