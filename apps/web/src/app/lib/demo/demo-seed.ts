@@ -480,6 +480,18 @@ export function seedDemoDataset(): {
     
     // Build data structure matching storage.importData() expectations
     // Keys must match: interactions, profiles, textbooks
+    const rawProfiles = createLearnerProfiles();
+    
+    // Convert Set/Map to arrays for JSON serialization before importData
+    // storage.importData() does JSON.stringify() which turns Set/Map into {}
+    // storage.getProfile() expects arrays and reconstructs Set/Map from them
+    const serializedProfiles = Object.values(rawProfiles).map(profile => ({
+      ...profile,
+      conceptsCovered: Array.from(profile.conceptsCovered),
+      conceptCoverageEvidence: Array.from(profile.conceptCoverageEvidence.entries()),
+      errorHistory: Array.from(profile.errorHistory.entries()),
+    }));
+    
     const demoData = {
       exportPolicyVersion: 'demo-seed-v1',
       exportDate: new Date().toISOString(),
@@ -494,7 +506,7 @@ export function seedDemoDataset(): {
       },
       interactions: createDemoInteractions(),
       textbooks: createDemoTextbookUnits(),  // CHANGED: was 'textbook'
-      profiles: Object.values(createLearnerProfiles()),  // CHANGED: was 'learnerProfiles', must be array
+      profiles: serializedProfiles,  // Serialized: Set->array, Map->[key,value][]
       // NOTE: userProfiles are NOT imported via importData() - they are handled separately
     };
     
