@@ -15,6 +15,7 @@ import {
   getLearnerProfile,
   getAllLearnerProfiles,
   updateProfileFromEvent,
+  appendProfileEvents,
 } from '../db/index.js';
 import type { 
   ApiResponse, 
@@ -97,12 +98,30 @@ const updateFromEventSchema = z.object({
     response: z.string().optional(),
     isCorrect: z.boolean().optional(),
     unitId: z.string().optional(),
-    action: z.string().optional(),
+    action: z.enum(['created', 'updated']).optional(),
     sourceInteractionIds: z.array(z.string()).optional(),
     retrievedSourceIds: z.array(z.string()).optional(),
     payload: z.record(z.unknown()).optional(),
     metadata: z.record(z.unknown()).optional(),
   }),
+});
+
+const batchEventsSchema = z.object({
+  events: z.array(z.object({
+    learnerId: z.string(),
+    sessionId: z.string().optional(),
+    timestamp: z.string(),
+    eventType: z.string().transform(val => val as import('../types.js').EventType),
+    problemId: z.string(),
+    problemSetId: z.string().optional(),
+    problemNumber: z.number().optional(),
+    code: z.string().optional(),
+    error: z.string().optional(),
+    errorSubtypeId: z.string().optional(),
+    conceptIds: z.array(z.string()).optional(),
+    metadata: z.record(z.unknown()).optional(),
+    payload: z.record(z.unknown()).optional(),
+  })),
 });
 
 // Generate UUID
@@ -399,7 +418,7 @@ router.put('/:id/profile', async (req, res) => {
 });
 
 // ============================================================================
-// POST /api/learners/:id/profile/events - Update profile from events
+// POST /api/learners/:id/profile/events - Update profile from single event
 // ============================================================================
 
 router.post('/:id/profile/events', async (req, res) => {
@@ -442,6 +461,58 @@ router.post('/:id/profile/events', async (req, res) => {
     const response: ApiResponse<never> = {
       success: false,
       error: 'Failed to update profile from event',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    };
+    res.status(500).json(response);
+  }
+});
+
+// ============================================================================
+// POST /api/learners/:id/profile/events/batch - Batch update profile from events
+// ============================================================================
+
+router.post('/:id/profile/events/batch', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const parseResult = batchEventsSchema.safeParse(req.body);
+
+    if (!parseResult.success) {
+      const response: ApiResponse<never> = {
+        success: false,
+        error: 'Validation failed',
+        message: parseResult.error.message,
+      };
+      res.status(400).json(response);
+      return;
+    }
+
+    const { events } = parseResult.data;
+    
+    // Ensure all events have the correct learnerId
+    events.forEach(event => {
+      event.learnerId = id;
+    });
+
+    const profile = await appendProfileEvents(id, events);
+
+    if (!profile) {
+      const response: ApiResponse<never> = {
+        success: false,
+        error: 'Learner not found',
+      };
+      res.status(404).json(response);
+      return;
+    }
+
+    const response: ApiResponse<LearnerProfile> = {
+      success: true,
+      data: profile,
+    };
+    res.json(response);
+  } catch (error) {
+    const response: ApiResponse<never> = {
+      success: false,
+      error: 'Failed to batch update profile from events',
       message: error instanceof Error ? error.message : 'Unknown error',
     };
     res.status(500).json(response);

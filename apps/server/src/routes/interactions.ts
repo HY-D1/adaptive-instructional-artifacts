@@ -24,7 +24,7 @@ import type {
 const router = Router();
 
 // ============================================================================
-// Validation Schemas - Full InteractionEvent Schema
+// Validation Schemas - Full InteractionEvent Schema (Lossless)
 // ============================================================================
 
 const hdiComponentsSchema = z.object({
@@ -35,6 +35,25 @@ const hdiComponentsSchema = z.object({
   iwh: z.number(),
 });
 
+const banditRewardSchema = z.object({
+  total: z.number(),
+  components: z.object({
+    independentSuccess: z.number(),
+    errorReduction: z.number(),
+    delayedRetention: z.number(),
+    dependencyPenalty: z.number(),
+    timeEfficiency: z.number(),
+  }),
+});
+
+const retrievedChunkSchema = z.object({
+  docId: z.string(),
+  page: z.number().optional(),
+  chunkId: z.string().optional(),
+  score: z.number().optional(),
+  snippet: z.string().optional(),
+});
+
 const createInteractionSchema = z.object({
   // Required fields
   learnerId: z.string().min(1),
@@ -43,7 +62,7 @@ const createInteractionSchema = z.object({
   eventType: z.string(),
   problemId: z.string().min(1),
   
-  // Optional fields for full lossless logging
+  // Problem context
   problemSetId: z.string().optional(),
   problemNumber: z.number().optional(),
   
@@ -53,31 +72,101 @@ const createInteractionSchema = z.object({
   errorSubtypeId: z.string().optional(),
   executionTimeMs: z.number().optional(),
   
-  // Escalation fields (CRITICAL for replay)
+  // Hint/Explanation fields
+  hintId: z.string().optional(),
+  explanationId: z.string().optional(),
+  hintText: z.string().optional(),
+  hintLevel: z.number().optional(),
+  helpRequestIndex: z.number().optional(),
+  sqlEngageSubtype: z.string().optional(),
+  sqlEngageRowId: z.string().optional(),
+  
+  // Policy/Execution fields
+  policyVersion: z.string().optional(),
+  timeSpent: z.number().optional(),
+  successful: z.boolean().optional(),
+  ruleFired: z.string().optional(),
+  templateId: z.string().optional(),
+  inputHash: z.string().optional(),
+  model: z.string().optional(),
+  
+  // Textbook fields
+  noteId: z.string().optional(),
+  noteTitle: z.string().optional(),
+  noteContent: z.string().optional(),
+  
+  // Source/Retrieval fields
+  retrievedSourceIds: z.array(z.string()).optional(),
+  retrievedChunks: z.array(retrievedChunkSchema).optional(),
+  triggerInteractionIds: z.array(z.string()).optional(),
+  evidenceInteractionIds: z.array(z.string()).optional(),
+  sourceInteractionIds: z.array(z.string()).optional(),
+  
+  // I/O fields
+  inputs: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+  outputs: z.record(z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.string())])).optional(),
+  
+  // Concept fields
+  conceptId: z.string().optional(),
+  conceptIds: z.array(z.string()).optional(),
+  
+  // Guidance Ladder fields
+  requestType: z.enum(['hint', 'explanation', 'textbook']).optional(),
+  currentRung: z.number().optional(),
   rung: z.number().optional(),
+  grounded: z.boolean().optional(),
+  contentLength: z.number().optional(),
   fromRung: z.number().optional(),
   toRung: z.number().optional(),
   trigger: z.string().optional(),
   
-  // Concept fields
-  conceptIds: z.array(z.string()).optional(),
+  // Textbook Unit fields
+  unitId: z.string().optional(),
+  action: z.enum(['created', 'updated']).optional(),
+  dedupeKey: z.string().optional(),
+  revisionCount: z.number().optional(),
+  
+  // Source view fields
+  passageCount: z.number().optional(),
+  expanded: z.boolean().optional(),
+  
+  // Chat fields
+  chatMessage: z.string().optional(),
+  chatResponse: z.string().optional(),
+  chatQuickChip: z.string().optional(),
+  savedToNotes: z.boolean().optional(),
+  textbookUnitsRetrieved: z.array(z.string()).optional(),
+  
+  // Escalation Profile fields (Week 5)
+  profileId: z.string().optional(),
+  assignmentStrategy: z.enum(['static', 'diagnostic', 'bandit']).optional(),
+  previousThresholds: z.object({ escalate: z.number(), aggregate: z.number() }).optional(),
+  newThresholds: z.object({ escalate: z.number(), aggregate: z.number() }).optional(),
+  
+  // Bandit fields (Week 5)
+  selectedArm: z.string().optional(),
+  selectionMethod: z.enum(['thompson_sampling', 'epsilon_greedy']).optional(),
+  armStatsAtSelection: z.record(z.object({ mean: z.number(), pulls: z.number() })).optional(),
+  reward: banditRewardSchema.optional(),
+  newAlpha: z.number().optional(),
+  newBeta: z.number().optional(),
   
   // HDI fields
   hdi: z.number().optional(),
   hdiLevel: z.enum(['low', 'medium', 'high']).optional(),
   hdiComponents: hdiComponentsSchema.optional(),
+  trend: z.enum(['increasing', 'stable', 'decreasing']).optional(),
+  slope: z.number().optional(),
+  interventionType: z.enum(['forced_independent', 'profile_switch', 'reflective_prompt']).optional(),
   
   // Reinforcement fields
   scheduleId: z.string().optional(),
   promptId: z.string().optional(),
+  promptType: z.enum(['mcq', 'sql_completion', 'concept_explanation']).optional(),
   response: z.string().optional(),
   isCorrect: z.boolean().optional(),
-  
-  // Provenance fields
-  unitId: z.string().optional(),
-  action: z.string().optional(),
-  sourceInteractionIds: z.array(z.string()).optional(),
-  retrievedSourceIds: z.array(z.string()).optional(),
+  scheduledTime: z.number().optional(),
+  shownTime: z.number().optional(),
   
   // Legacy fields for backward compatibility
   payload: z.record(z.unknown()).optional(),

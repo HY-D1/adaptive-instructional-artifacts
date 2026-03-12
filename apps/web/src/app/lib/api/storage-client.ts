@@ -53,7 +53,138 @@ interface BackendInteraction {
   timestamp: string;
   eventType: string;
   problemId: string;
-  payload: Record<string, unknown>;
+  
+  // Problem context
+  problemSetId?: string;
+  problemNumber?: number;
+  
+  // Code/Error fields
+  code?: string;
+  error?: string;
+  errorSubtypeId?: string;
+  executionTimeMs?: number;
+  
+  // Hint/Explanation fields
+  hintId?: string;
+  explanationId?: string;
+  hintText?: string;
+  hintLevel?: number;
+  helpRequestIndex?: number;
+  sqlEngageSubtype?: string;
+  sqlEngageRowId?: string;
+  
+  // Policy fields
+  policyVersion?: string;
+  timeSpent?: number;
+  successful?: boolean;
+  ruleFired?: string;
+  templateId?: string;
+  inputHash?: string;
+  model?: string;
+  
+  // Textbook fields
+  noteId?: string;
+  noteTitle?: string;
+  noteContent?: string;
+  
+  // Source/Retrieval fields
+  retrievedSourceIds?: string[];
+  retrievedChunks?: Array<{
+    docId: string;
+    page?: number;
+    chunkId?: string;
+    score?: number;
+    snippet?: string;
+  }>;
+  triggerInteractionIds?: string[];
+  evidenceInteractionIds?: string[];
+  sourceInteractionIds?: string[];
+  
+  // I/O fields
+  inputs?: Record<string, string | number | boolean | null>;
+  outputs?: Record<string, string | number | boolean | null | string[]>;
+  
+  // Concept fields
+  conceptId?: string;
+  conceptIds?: string[];
+  
+  // Guidance Ladder fields
+  requestType?: 'hint' | 'explanation' | 'textbook';
+  currentRung?: number;
+  rung?: number;
+  grounded?: boolean;
+  contentLength?: number;
+  fromRung?: number;
+  toRung?: number;
+  trigger?: string;
+  
+  // Textbook Unit fields
+  unitId?: string;
+  action?: 'created' | 'updated';
+  dedupeKey?: string;
+  revisionCount?: number;
+  
+  // Source view fields
+  passageCount?: number;
+  expanded?: boolean;
+  
+  // Chat fields
+  chatMessage?: string;
+  chatResponse?: string;
+  chatQuickChip?: string;
+  savedToNotes?: boolean;
+  textbookUnitsRetrieved?: string[];
+  
+  // Escalation Profile fields (Week 5)
+  profileId?: string;
+  assignmentStrategy?: 'static' | 'diagnostic' | 'bandit';
+  previousThresholds?: { escalate: number; aggregate: number };
+  newThresholds?: { escalate: number; aggregate: number };
+  
+  // Bandit fields (Week 5)
+  selectedArm?: string;
+  selectionMethod?: 'thompson_sampling' | 'epsilon_greedy';
+  armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
+  reward?: {
+    total: number;
+    components: {
+      independentSuccess: number;
+      errorReduction: number;
+      delayedRetention: number;
+      dependencyPenalty: number;
+      timeEfficiency: number;
+    };
+  };
+  newAlpha?: number;
+  newBeta?: number;
+  
+  // HDI fields (Week 5)
+  hdi?: number;
+  hdiLevel?: 'low' | 'medium' | 'high';
+  hdiComponents?: {
+    hpa: number;
+    aed: number;
+    er: number;
+    reae: number;
+    iwh: number;
+  };
+  trend?: 'increasing' | 'stable' | 'decreasing';
+  slope?: number;
+  interventionType?: 'forced_independent' | 'profile_switch' | 'reflective_prompt';
+  
+  // Reinforcement fields (Week 5)
+  scheduleId?: string;
+  promptId?: string;
+  promptType?: 'mcq' | 'sql_completion' | 'concept_explanation';
+  response?: string;
+  isCorrect?: boolean;
+  scheduledTime?: number;
+  shownTime?: number;
+  
+  // Legacy fields
+  payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  
   createdAt: string;
 }
 
@@ -328,7 +459,7 @@ export async function updateProfileFromEvent(
 
 /**
  * Convert frontend InteractionEvent to backend format
- * Preserves ALL fields for research replay
+ * Preserves ALL fields for research replay - LOSSLESS
  */
 function convertToBackendInteraction(event: InteractionEvent): Partial<BackendInteraction> {
   return {
@@ -349,33 +480,103 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
     errorSubtypeId: event.errorSubtypeId,
     executionTimeMs: event.executionTimeMs,
     
-    // Escalation fields (CRITICAL for replay)
+    // Hint/Explanation fields
+    hintId: event.hintId,
+    explanationId: event.explanationId,
+    hintText: event.hintText,
+    hintLevel: event.hintLevel,
+    helpRequestIndex: event.helpRequestIndex,
+    sqlEngageSubtype: event.sqlEngageSubtype,
+    sqlEngageRowId: event.sqlEngageRowId,
+    
+    // Policy/Execution fields
+    policyVersion: event.policyVersion,
+    timeSpent: event.timeSpent,
+    successful: event.successful,
+    ruleFired: event.ruleFired,
+    templateId: event.templateId,
+    inputHash: event.inputHash,
+    model: event.model,
+    
+    // Textbook fields
+    noteId: event.noteId,
+    noteTitle: event.noteTitle,
+    noteContent: event.noteContent,
+    
+    // Source/Retrieval fields
+    retrievedSourceIds: event.retrievedSourceIds,
+    retrievedChunks: event.retrievedChunks,
+    triggerInteractionIds: event.triggerInteractionIds,
+    evidenceInteractionIds: event.evidenceInteractionIds,
+    sourceInteractionIds: event.sourceInteractionIds,
+    
+    // I/O fields
+    inputs: event.inputs,
+    outputs: event.outputs,
+    
+    // Concept fields (both single and array forms)
+    conceptId: event.conceptIds?.[0], // Primary concept
+    conceptIds: event.conceptIds,
+    
+    // Guidance Ladder fields
+    requestType: event.requestType,
+    currentRung: event.currentRung,
     rung: event.rung,
+    grounded: event.grounded,
+    contentLength: event.contentLength,
     fromRung: event.fromRung,
     toRung: event.toRung,
     trigger: event.trigger,
     
-    // Concept fields
-    conceptIds: event.conceptIds,
+    // Textbook Unit fields
+    unitId: event.unitId,
+    action: event.action,
+    dedupeKey: event.dedupeKey,
+    revisionCount: event.revisionCount,
     
-    // HDI/CSI fields
+    // Source view fields
+    passageCount: event.passageCount,
+    expanded: event.expanded,
+    
+    // Chat fields
+    chatMessage: event.chatMessage,
+    chatResponse: event.chatResponse,
+    chatQuickChip: event.chatQuickChip,
+    savedToNotes: event.savedToNotes,
+    textbookUnitsRetrieved: event.textbookUnitsRetrieved,
+    
+    // Escalation Profile fields (Week 5)
+    profileId: event.profileId,
+    assignmentStrategy: event.assignmentStrategy,
+    previousThresholds: event.previousThresholds,
+    newThresholds: event.newThresholds,
+    
+    // Bandit fields (Week 5)
+    selectedArm: event.selectedArm,
+    selectionMethod: event.selectionMethod,
+    armStatsAtSelection: event.armStatsAtSelection,
+    reward: event.reward,
+    newAlpha: event.newAlpha,
+    newBeta: event.newBeta,
+    
+    // HDI fields (Week 5)
     hdi: event.hdi,
     hdiLevel: event.hdiLevel,
     hdiComponents: event.hdiComponents,
+    trend: event.trend,
+    slope: event.slope,
+    interventionType: event.interventionType,
     
-    // Reinforcement fields
+    // Reinforcement fields (Week 5)
     scheduleId: event.scheduleId,
     promptId: event.promptId,
+    promptType: event.promptType,
     response: event.response,
     isCorrect: event.isCorrect,
+    scheduledTime: event.scheduledTime,
+    shownTime: event.shownTime,
     
-    // Provenance fields
-    unitId: event.unitId,
-    action: event.action,
-    sourceInteractionIds: event.sourceInteractionIds,
-    retrievedSourceIds: event.retrievedSourceIds,
-    
-    // Legacy payload for extensibility
+    // Legacy payload for extensibility/backward compatibility
     payload: event.payload,
     metadata: event.metadata,
   };
@@ -413,6 +614,7 @@ export async function logInteractionsBatch(events: InteractionEvent[]): Promise<
 
 /**
  * Convert backend interaction to frontend InteractionEvent
+ * Restores ALL fields - LOSSLESS reconstruction
  */
 function convertToFrontendEvent(i: BackendInteraction): InteractionEvent {
   return {
@@ -422,28 +624,113 @@ function convertToFrontendEvent(i: BackendInteraction): InteractionEvent {
     timestamp: new Date(i.timestamp).getTime(),
     eventType: i.eventType as InteractionEvent['eventType'],
     problemId: i.problemId,
+    
+    // Problem context
     problemSetId: i.problemSetId,
     problemNumber: i.problemNumber,
+    
+    // Code/Error fields
     code: i.code,
     error: i.error,
     errorSubtypeId: i.errorSubtypeId,
     executionTimeMs: i.executionTimeMs,
-    rung: i.rung,
-    fromRung: i.fromRung,
-    toRung: i.toRung,
-    trigger: i.trigger,
-    conceptIds: i.conceptIds,
+    
+    // Hint/Explanation fields
+    hintId: i.hintId,
+    explanationId: i.explanationId,
+    hintText: i.hintText,
+    hintLevel: i.hintLevel as 1 | 2 | 3 | undefined,
+    helpRequestIndex: i.helpRequestIndex,
+    sqlEngageSubtype: i.sqlEngageSubtype,
+    sqlEngageRowId: i.sqlEngageRowId,
+    
+    // Policy/Execution fields
+    policyVersion: i.policyVersion,
+    timeSpent: i.timeSpent,
+    successful: i.successful,
+    ruleFired: i.ruleFired,
+    templateId: i.templateId,
+    inputHash: i.inputHash,
+    model: i.model,
+    
+    // Textbook fields
+    noteId: i.noteId,
+    noteTitle: i.noteTitle,
+    noteContent: i.noteContent,
+    
+    // Source/Retrieval fields
+    retrievedSourceIds: i.retrievedSourceIds,
+    retrievedChunks: i.retrievedChunks,
+    triggerInteractionIds: i.triggerInteractionIds,
+    evidenceInteractionIds: i.evidenceInteractionIds,
+    sourceInteractionIds: i.sourceInteractionIds,
+    
+    // I/O fields
+    inputs: i.inputs,
+    outputs: i.outputs,
+    
+    // Concept fields
+    conceptIds: i.conceptIds || (i.conceptId ? [i.conceptId] : undefined),
+    
+    // Guidance Ladder fields
+    requestType: i.requestType,
+    currentRung: i.currentRung as 1 | 2 | 3 | undefined,
+    rung: i.rung as 1 | 2 | 3 | undefined,
+    grounded: i.grounded,
+    contentLength: i.contentLength,
+    fromRung: i.fromRung as 1 | 2 | 3 | undefined,
+    toRung: i.toRung as 1 | 2 | 3 | undefined,
+    trigger: i.trigger as InteractionEvent['trigger'],
+    
+    // Textbook Unit fields
+    unitId: i.unitId,
+    action: i.action,
+    dedupeKey: i.dedupeKey,
+    revisionCount: i.revisionCount,
+    
+    // Source view fields
+    passageCount: i.passageCount,
+    expanded: i.expanded,
+    
+    // Chat fields
+    chatMessage: i.chatMessage,
+    chatResponse: i.chatResponse,
+    chatQuickChip: i.chatQuickChip,
+    savedToNotes: i.savedToNotes,
+    textbookUnitsRetrieved: i.textbookUnitsRetrieved,
+    
+    // Escalation Profile fields (Week 5)
+    profileId: i.profileId,
+    assignmentStrategy: i.assignmentStrategy,
+    previousThresholds: i.previousThresholds,
+    newThresholds: i.newThresholds,
+    
+    // Bandit fields (Week 5)
+    selectedArm: i.selectedArm,
+    selectionMethod: i.selectionMethod,
+    armStatsAtSelection: i.armStatsAtSelection,
+    reward: i.reward,
+    newAlpha: i.newAlpha,
+    newBeta: i.newBeta,
+    
+    // HDI fields (Week 5)
     hdi: i.hdi,
     hdiLevel: i.hdiLevel,
     hdiComponents: i.hdiComponents,
+    trend: i.trend,
+    slope: i.slope,
+    interventionType: i.interventionType,
+    
+    // Reinforcement fields (Week 5)
     scheduleId: i.scheduleId,
     promptId: i.promptId,
+    promptType: i.promptType,
     response: i.response,
     isCorrect: i.isCorrect,
-    unitId: i.unitId,
-    action: i.action,
-    sourceInteractionIds: i.sourceInteractionIds,
-    retrievedSourceIds: i.retrievedSourceIds,
+    scheduledTime: i.scheduledTime,
+    shownTime: i.shownTime,
+    
+    // Legacy payload/metadata
     payload: i.payload,
     metadata: i.metadata,
   };

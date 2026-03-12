@@ -102,7 +102,12 @@ export type InteractionEvent = {
     // Component 10: Knowledge Consolidation (Reinforcement)
     | 'reinforcement_scheduled'
     | 'reinforcement_prompt_shown'
-    | 'reinforcement_response';
+    | 'reinforcement_response'
+    // Knowledge-Structure Adaptive Features
+    | 'prerequisite_violation_detected'
+    | 'mastery_updated'
+    | 'reflection_quality_assessed'
+    | 'learning_path_recommended';
   problemId: string;
   code?: string;
   error?: string;
@@ -204,6 +209,9 @@ export type InteractionEvent = {
   isCorrect?: boolean;
   scheduledTime?: number;
   shownTime?: number;
+  
+  // Week 6: Experimental condition tracking
+  conditionId?: string;
   // Additional metadata for logging/debugging
   payload?: Record<string, unknown>;
   metadata?: Record<string, unknown>;

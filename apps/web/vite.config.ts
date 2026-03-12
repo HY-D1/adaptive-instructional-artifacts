@@ -14,6 +14,7 @@ import { loadOrBuildPdfIndexFromDisk, buildPdfIndexFromBuffer } from './src/serv
 const wasmFilePath = path.resolve(__dirname, 'public/sql-wasm.wasm')
 
 const ollamaTarget = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434'
+const backendTarget = process.env.VITE_BACKEND_URL || 'http://127.0.0.1:3001'
 const repoRoot = path.resolve(__dirname, '../..')
 const pdfIndexDir = process.env.PDF_INDEX_DIR || path.resolve(repoRoot, 'dist/pdf-index')
 const pdfSourceDir = process.env.PDF_SOURCE_DIR || path.resolve(repoRoot, 'dist')
@@ -293,6 +294,11 @@ export default defineConfig({
         target: ollamaTarget,
         changeOrigin: true,
         rewrite: (requestPath) => requestPath.replace(/^\/ollama/, '')
+      },
+      '/api': {
+        // Proxy API requests to backend server in development
+        target: backendTarget,
+        changeOrigin: true,
       }
     }
   },

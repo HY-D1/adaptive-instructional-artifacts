@@ -3,7 +3,7 @@
  * Express server with SQLite database
  */
 
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -16,16 +16,15 @@ import { interactionsRouter } from './routes/interactions.js';
 import { textbooksRouter } from './routes/textbooks.js';
 import { sessionsRouter } from './routes/sessions.js';
 import { researchRouter } from './routes/research.js';
+import { pdfIndexRouter } from './routes/pdf-index.js';
+import { llmRouter } from './routes/llm.js';
+import { ENABLE_PDF_INDEX, ENABLE_LLM, PORT, CORS_ORIGIN, getFeatureStatus, OLLAMA_BASE_URL } from './config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Load environment variables
 const envPath = path.resolve(__dirname, '../.env');
 dotenv.config({ path: envPath });
-
-// Configuration
-const PORT = parseInt(process.env.PORT || '3001', 10);
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
 // Ensure data directory exists
 const DATA_DIR = path.resolve(__dirname, '../data');
@@ -45,10 +44,10 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logging middleware
-app.use((req, _res, next) => {
+app.use((req: Request, _res: Response, next: NextFunction) => {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] ${req.method} ${req.path}`);
   next();
@@ -58,11 +57,14 @@ app.use((req, _res, next) => {
 // Health Check
 // ============================================================================
 
-app.get('/health', (_req, res) => {
+app.get('/health', async (_req: Request, res: Response) => {
+  const featureStatus = await getFeatureStatus();
+  
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
+    features: featureStatus,
   });
 });
 
@@ -77,58 +79,111 @@ app.use('/api/sessions', sessionsRouter);
 app.use('/api/research', researchRouter);
 
 // ============================================================================
-// Hosted Mode: PDF Index Stub Routes
-// Returns 503 Service Unavailable with clear messaging for hosted deployments
+// PDF Index Routes
+// Enabled when ENABLE_PDF_INDEX=true
 // ============================================================================
 
-app.get('/api/pdf-index/load', (_req, res) => {
-  res.status(503).json({
-    error: 'PDF index not available in hosted mode',
-    mode: 'deterministic-only',
-    message: 'Using SQL-Engage templates instead of PDF sources'
-  });
+app.use('/api/pdf-index', pdfIndexRouter);
+
+// ============================================================================
+// LLM Routes
+// Enabled when ENABLE_LLM=true
+// ============================================================================
+
+app.use('/api/llm', llmRouter);
+
+// ============================================================================
+// Legacy Hosted Mode Routes (Backward Compatibility)
+// These routes redirect to the new API routes
+// ============================================================================
+
+// Legacy Ollama proxy routes - redirect to new LLM routes
+app.post('/ollama/api/generate', async (req: Request, res: Response) => {
+  if (!ENABLE_LLM) {
+    res.status(503).json({
+      error: 'LLM generation not available',
+      mode: 'deterministic-only',
+      message: 'Set ENABLE_LLM=true to enable LLM features',
+    });
+    return;
+  }
+  
+  // Forward to new route handler
+  req.url = '/api/llm/generate';
+  llmRouter(req, res, () => {});
 });
 
-app.post('/api/pdf-index/load', (_req, res) => {
-  res.status(503).json({
-    error: 'PDF index not available in hosted mode',
-    mode: 'deterministic-only',
-    message: 'Using SQL-Engage templates instead of PDF sources'
-  });
-});
-
-app.post('/api/pdf-index/upload', (_req, res) => {
-  res.status(503).json({
-    error: 'PDF upload not available in hosted mode',
-    mode: 'deterministic-only',
-    message: 'PDF upload requires local server deployment'
-  });
+app.get('/ollama/api/tags', async (_req: Request, res: Response) => {
+  if (!ENABLE_LLM) {
+    res.json({ models: [] });
+    return;
+  }
+  
+  try {
+    const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(5000),
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      res.json(data);
+      return;
+    }
+    
+    res.json({ models: [] });
+  } catch {
+    res.json({ models: [] });
+  }
 });
 
 // ============================================================================
-// Hosted Mode: Ollama Proxy Stub Routes
-// Returns 503 or empty responses for hosted deployments without LLM
+// Server Status Display
 // ============================================================================
 
-app.post('/ollama/api/generate', (_req, res) => {
-  res.status(503).json({
-    error: 'LLM generation not available in hosted mode',
-    mode: 'deterministic-only',
-    message: 'Using deterministic template-based generation'
-  });
-});
+function displayServerStatus() {
+  console.log(`
+╔════════════════════════════════════════════════════════════╗
+║                                                            ║
+║   SQL-Adapt Backend API Server                             ║
+║                                                            ║
+║   🚀 Server running on http://localhost:${PORT}              ║
+║   📊 API endpoints available at /api/*                     ║
+║   💾 Database: SQLite                                      ║
+║                                                            ║`);
 
-app.get('/ollama/api/tags', (_req, res) => {
-  // Return empty models array to indicate no Ollama available
-  res.json({ models: [] });
-});
+  // PDF Index status
+  if (ENABLE_PDF_INDEX) {
+    console.log(`║   📄 PDF Index: ENABLED                                    ║`);
+    console.log(`║      → POST /api/pdf-index/load                            ║`);
+    console.log(`║      → POST /api/pdf-index/upload                          ║`);
+    console.log(`║      → GET  /api/pdf-index/status                          ║`);
+  } else {
+    console.log(`║   📄 PDF Index: DISABLED (set ENABLE_PDF_INDEX=true)       ║`);
+  }
+
+  // LLM status
+  if (ENABLE_LLM) {
+    console.log(`║   🤖 LLM Proxy: ENABLED                                    ║`);
+    console.log(`║      → Ollama: ${OLLAMA_BASE_URL}`.padEnd(59) + '║');
+    console.log(`║      → POST /api/llm/generate                              ║`);
+    console.log(`║      → GET  /api/llm/models                                ║`);
+    console.log(`║      → GET  /api/llm/status                                ║`);
+  } else {
+    console.log(`║   🤖 LLM Proxy: DISABLED (set ENABLE_LLM=true)             ║`);
+  }
+
+  console.log(`║                                                            ║
+╚════════════════════════════════════════════════════════════╝
+  `);
+}
 
 // ============================================================================
 // Error Handling
 // ============================================================================
 
 // 404 handler
-app.use((_req, res) => {
+app.use((_req: Request, res: Response) => {
   res.status(404).json({
     success: false,
     error: 'Not Found',
@@ -137,7 +192,7 @@ app.use((_req, res) => {
 });
 
 // Global error handler
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Error:', err);
   res.status(500).json({
     success: false,
@@ -157,17 +212,7 @@ async function startServer() {
 
     // Start server
     const server = app.listen(PORT, () => {
-      console.log(`
-╔════════════════════════════════════════════════════════════╗
-║                                                            ║
-║   SQL-Adapt Backend API Server                             ║
-║                                                            ║
-║   🚀 Server running on http://localhost:${PORT}              ║
-║   📊 API endpoints available at /api/*                     ║
-║   💾 Database: SQLite                                      ║
-║                                                            ║
-╚════════════════════════════════════════════════════════════╝
-      `);
+      displayServerStatus();
     });
 
     // Graceful shutdown

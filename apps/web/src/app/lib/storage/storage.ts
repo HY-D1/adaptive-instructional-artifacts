@@ -54,6 +54,7 @@ import {
 } from './storage-validation';
 import { reinforcementManager } from '../content/reinforcement-manager';
 import { scoreSelfExplanation, type ReflectionQualityScore } from '../content/self-explanation-scorer';
+import learnerProfileClient from '../api/learner-profile-client';
 
 /**
  * StorageManager - Local storage manager for interaction traces and learner state
@@ -2624,6 +2625,12 @@ class StorageManager {
       }
 
       this.saveProfile(profile);
+      
+      // Sync with backend for class-wide analytics
+      // Fire-and-forget: don't block on backend sync
+      this.syncProfileWithBackend(event.learnerId, event).catch((error) => {
+        console.debug('[Storage] Backend sync failed (offline mode):', error);
+      });
     } catch (error) {
       // Log error but don't crash - profile stats are non-critical
       console.error('Failed to update profile stats from event:', error);
@@ -2635,6 +2642,36 @@ class StorageManager {
           error: error.message
         });
       }
+    }
+  }
+  
+  /**
+   * Sync profile with backend for class-wide analytics
+   * Handles offline mode gracefully by queueing updates
+   */
+  private async syncProfileWithBackend(learnerId: string, event: InteractionEvent): Promise<void> {
+    // Key events that trigger profile updates
+    const KEY_EVENTS = new Set([
+      'error',
+      'execution',
+      'hint_view',
+      'explanation_view',
+      'textbook_unit_upsert',
+      'profile_assigned',
+      'hdi_calculated',
+    ]);
+    
+    if (!KEY_EVENTS.has(event.eventType)) {
+      return; // Skip non-essential events
+    }
+    
+    try {
+      // Update backend profile from event
+      await learnerProfileClient.updateProfileFromEvent(learnerId, event);
+      console.debug(`[Storage] Profile synced for ${learnerId} after ${event.eventType}`);
+    } catch (error) {
+      // Update will be queued for retry - don't throw
+      console.debug(`[Storage] Profile sync queued for ${learnerId}`);
     }
   }
 

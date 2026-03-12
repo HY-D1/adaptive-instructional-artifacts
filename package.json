@@ -6,11 +6,12 @@
   "scripts": {
     "build": "npx vite build --config apps/web/vite.config.ts",
     "dev": "npx vite --config apps/web/vite.config.ts",
+    "dev:full": "concurrently \"npm run server:dev\" \"npm run dev\" --names \"SERVER,WEB\" --prefix-colors \"blue,green\" --kill-others",
     "server:dev": "cd apps/server && npm run dev",
     "server:build": "cd apps/server && npm run build",
     "server:start": "cd apps/server && npm run start",
     "server:db:init": "cd apps/server && npm run db:init",
-    "dev:full": "concurrently \"npm run server:dev\" \"npm run dev\" --names \"SERVER,WEB\" --prefix-colors \"blue,green\" --kill-others",
+    "server:db:migrate": "cd apps/server && npm run db:migrate",
     "test:unit": "npx vitest run",
     "test:e2e": "npx playwright test -c playwright.config.ts",
     "test:e2e:weekly": "CI=1 npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@(integration|flaky)'",
@@ -42,7 +43,9 @@
     "check:source-grounding": "node scripts/check-source-grounding.mjs",
     "textbook:process": "echo 'Run: cd ../algl-pdf-helper && ./start.sh'",
     "textbook:export": "echo 'Run: cd ../algl-pdf-helper && algl-pdf export'",
-    "textbook:verify": "ls -la apps/web/public/textbook-static/ 2>/dev/null || echo 'No textbook-static content. Run: npm run textbook:process'"
+    "textbook:verify": "ls -la apps/web/public/textbook-static/ 2>/dev/null || echo 'No textbook-static content. Run: npm run textbook:process'",
+    "install:all": "npm install && cd apps/server && npm install",
+    "deploy:backend": "npm run server:build && cd apps/server && npm start"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

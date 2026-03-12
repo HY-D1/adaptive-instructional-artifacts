@@ -28,6 +28,7 @@ import { HintSourceStatus } from './HintSourceStatus';
 import type { EnhancedHint } from '../../../lib/ml/enhanced-hint-service';
 import { useUserRole } from '../../../hooks/useUserRole';
 import type { EscalationProfile } from '../../../lib/ml/escalation-profiles';
+import type { SessionConfig } from '../../../types';
 
 /**
  * Props for the HintSystem component
@@ -53,6 +54,8 @@ interface HintSystemProps {
   onInteractionLogged?: (event: InteractionEvent) => void;
   /** Escalation profile for profile-specific thresholds (Week 5) */
   escalationProfile?: EscalationProfile | null;
+  /** Session configuration for experimental conditions (Week 6) */
+  sessionConfig?: SessionConfig | null;
 }
 
 export function HintSystem({ 
@@ -65,7 +68,8 @@ export function HintSystem({
   recentInteractions,
   onEscalate,
   onInteractionLogged,
-  escalationProfile
+  escalationProfile,
+  sessionConfig
 }: HintSystemProps) {
   const [hints, setHints] = useState<string[]>([]);
   const [hintPdfPassages, setHintPdfPassages] = useState<RetrievalPdfPassage[][]>([]);
@@ -717,6 +721,16 @@ export function HintSystem({
     }
     setIsProcessingHint(true);
 
+    // Week 6: Immediate explanation mode - skip hints, go straight to explanation
+    if (sessionConfig?.immediateExplanationMode && !showExplanation) {
+      const problemTrace = getProblemTrace();
+      setShowExplanation(true);
+      setCurrentRung(2);
+      await handleShowExplanation('manual', undefined, problemTrace);
+      setIsProcessingHint(false);
+      return;
+    }
+
     // Week 3 D8: Log guidance request event
     storage.logGuidanceRequest({
       learnerId,
@@ -843,7 +857,8 @@ export function HintSystem({
         is_enhanced: hintSelection!.isEnhanced,
         llm_failed: hintSelection!.llmFailed || false,
         llm_error_message: hintSelection!.llmErrorMessage || null
-      }
+      },
+      conditionId: sessionConfig?.conditionId
     };
     storage.saveInteraction(hintEvent);
     onInteractionLogged?.(hintEvent);
@@ -892,7 +907,7 @@ export function HintSystem({
 
 
   const decision = profile
-    ? orchestrator.makeDecision(profile, scopedInteractions, problemId)
+    ? orchestrator.makeDecision(profile, scopedInteractions, problemId, { sessionConfig })
     : { decision: 'show_hint' as const, reasoning: 'Learner profile unavailable' };
 
   // Empty state when no profile exists
@@ -1220,6 +1235,8 @@ export function HintSystem({
             <p className="text-xs text-gray-400">Progresses through L1 → L2 → L3 hints</p>
           </TooltipContent>
         </Tooltip>
+        {/* Week 6: Conditionally hide Add to Textbook button if textbookDisabled */}
+        {(!sessionConfig?.textbookDisabled) && (
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -1256,6 +1273,7 @@ export function HintSystem({
             )}
           </TooltipContent>
         </Tooltip>
+        )}
       </div>
 
       {showExplanation && (

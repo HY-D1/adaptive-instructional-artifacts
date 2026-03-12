@@ -11,6 +11,8 @@ import type {
   CreateLearnerRequest,
   UpdateLearnerRequest,
   LearnerProfile,
+  LearnerProfileRow,
+  ConceptCoverageEvidence,
   Interaction,
   CreateInteractionRequest,
   InteractionQueryParams,
@@ -114,17 +116,27 @@ export async function initializeSchema(): Promise<void> {
 
   await runAsync(database, `CREATE INDEX IF NOT EXISTS idx_learners_role ON learners(role)`);
 
-  // Learner profiles table (rich profile data as JSON)
+  // Learner profiles table (rich profile data with structured fields + JSON extensibility)
   await runAsync(database, `
     CREATE TABLE IF NOT EXISTS learner_profiles (
       learner_id TEXT PRIMARY KEY,
-      profile_json TEXT NOT NULL,
+      profile_json TEXT NOT NULL DEFAULT '{}',
+      concept_coverage TEXT NOT NULL DEFAULT '{}',
+      concept_evidence TEXT NOT NULL DEFAULT '{}',
+      error_history TEXT NOT NULL DEFAULT '{}',
+      interaction_count INTEGER NOT NULL DEFAULT 0,
+      strategy TEXT NOT NULL DEFAULT 'adaptive',
+      preferences TEXT NOT NULL DEFAULT '{"escalationThreshold": 2, "aggregationDelay": 300000}',
+      last_activity_at TEXT,
+      profile_data TEXT NOT NULL DEFAULT '{}',
       updated_at TEXT NOT NULL,
       FOREIGN KEY (learner_id) REFERENCES learners(id) ON DELETE CASCADE
     )
   `);
 
   await runAsync(database, `CREATE INDEX IF NOT EXISTS idx_profiles_updated ON learner_profiles(updated_at)`);
+  await runAsync(database, `CREATE INDEX IF NOT EXISTS idx_profiles_strategy ON learner_profiles(strategy)`);
+  await runAsync(database, `CREATE INDEX IF NOT EXISTS idx_profiles_activity ON learner_profiles(last_activity_at)`);
 
   // Interactions table (append-only logging)
   await runAsync(database, `
@@ -312,9 +324,12 @@ async function createDefaultProfile(learnerId: string, name: string): Promise<Le
     preferences: {
       escalationThreshold: 2,
       aggregationDelay: 300000, // 5 minutes in ms
+      autoTextbookEnabled: true,
+      notificationsEnabled: true,
     },
     createdAt: now,
     lastActive: now,
+    extendedData: {},
   };
 
   await saveLearnerProfile(profile);
@@ -334,59 +349,134 @@ async function updateProfileName(learnerId: string, name: string): Promise<void>
 }
 
 /**
- * Save (create or update) a full learner profile
+ * Save (create or update) a full learner profile with structured fields
  */
 export async function saveLearnerProfile(profile: LearnerProfile): Promise<void> {
   const db = getDb();
   const now = new Date().toISOString();
 
   const sql = `
-    INSERT INTO learner_profiles (learner_id, profile_json, updated_at)
-    VALUES (?, ?, ?)
+    INSERT INTO learner_profiles (
+      learner_id, profile_json, concept_coverage, concept_evidence, 
+      error_history, interaction_count, strategy, preferences, 
+      last_activity_at, profile_data, updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(learner_id) DO UPDATE SET
       profile_json = excluded.profile_json,
+      concept_coverage = excluded.concept_coverage,
+      concept_evidence = excluded.concept_evidence,
+      error_history = excluded.error_history,
+      interaction_count = excluded.interaction_count,
+      strategy = excluded.strategy,
+      preferences = excluded.preferences,
+      last_activity_at = excluded.last_activity_at,
+      profile_data = excluded.profile_data,
       updated_at = excluded.updated_at
   `;
 
   await runAsync(db, sql, [
     profile.id,
     JSON.stringify(profile),
+    JSON.stringify(profile.conceptsCovered),
+    JSON.stringify(profile.conceptCoverageEvidence),
+    JSON.stringify(profile.errorHistory),
+    profile.interactionCount,
+    profile.currentStrategy,
+    JSON.stringify(profile.preferences),
+    profile.lastActive ? new Date(profile.lastActive).toISOString() : null,
+    JSON.stringify(profile.extendedData || {}),
     now
   ]);
 }
 
 /**
- * Get a learner's full profile
+ * Get a learner's full profile with structured fields
  */
 export async function getLearnerProfile(learnerId: string): Promise<LearnerProfile | null> {
-  const sql = 'SELECT profile_json FROM learner_profiles WHERE learner_id = ?';
-  const row = await getAsync<{ profile_json: string }>(getDb(), sql, [learnerId]);
+  const sql = `
+    SELECT 
+      learner_id, profile_json, concept_coverage, concept_evidence,
+      error_history, interaction_count, strategy, preferences,
+      last_activity_at, profile_data
+    FROM learner_profiles 
+    WHERE learner_id = ?
+  `;
+  const row = await getAsync<LearnerProfileRow>(getDb(), sql, [learnerId]);
 
   if (!row) return null;
   
   try {
-    return JSON.parse(row.profile_json) as LearnerProfile;
-  } catch {
+    // Parse structured fields
+    const conceptCoverage = JSON.parse(row.concept_coverage) as string[];
+    const conceptEvidence = JSON.parse(row.concept_evidence) as Record<string, ConceptCoverageEvidence>;
+    const errorHistory = JSON.parse(row.error_history) as Record<string, number>;
+    const preferences = JSON.parse(row.preferences) as LearnerProfile['preferences'];
+    const extendedData = JSON.parse(row.profile_data) as Record<string, unknown>;
+    
+    return {
+      id: row.learner_id,
+      name: '', // Will be populated from learner record
+      conceptsCovered: conceptCoverage,
+      conceptCoverageEvidence: conceptEvidence,
+      errorHistory: errorHistory,
+      interactionCount: row.interaction_count,
+      currentStrategy: row.strategy,
+      preferences: preferences,
+      createdAt: row.last_activity_at ? new Date(row.last_activity_at).getTime() : Date.now(),
+      lastActive: row.last_activity_at ? new Date(row.last_activity_at).getTime() : Date.now(),
+      extendedData: extendedData,
+    };
+  } catch (error) {
+    console.error('Failed to parse learner profile:', error);
     return null;
   }
 }
 
 /**
- * Get all learner profiles
+ * Get all learner profiles with structured fields
  */
 export async function getAllLearnerProfiles(): Promise<LearnerProfile[]> {
-  const sql = 'SELECT profile_json FROM learner_profiles';
-  const rows = await allAsync<{ profile_json: string }>(getDb(), sql);
+  const sql = `
+    SELECT 
+      lp.learner_id, lp.profile_json, lp.concept_coverage, lp.concept_evidence,
+      lp.error_history, lp.interaction_count, lp.strategy, lp.preferences,
+      lp.last_activity_at, lp.profile_data,
+      l.name as learner_name
+    FROM learner_profiles lp
+    JOIN learners l ON lp.learner_id = l.id
+  `;
+  const rows = await allAsync<LearnerProfileRow & { learner_name: string }>(getDb(), sql);
   
-  return rows
-    .map(row => {
-      try {
-        return JSON.parse(row.profile_json) as LearnerProfile;
-      } catch {
-        return null;
-      }
-    })
-    .filter((p): p is LearnerProfile => p !== null);
+  const profiles: LearnerProfile[] = [];
+  
+  for (const row of rows) {
+    try {
+      const conceptCoverage = JSON.parse(row.concept_coverage) as string[];
+      const conceptEvidence = JSON.parse(row.concept_evidence) as Record<string, ConceptCoverageEvidence>;
+      const errorHistory = JSON.parse(row.error_history) as Record<string, number>;
+      const preferences = JSON.parse(row.preferences) as LearnerProfile['preferences'];
+      const extendedData = JSON.parse(row.profile_data) as Record<string, unknown>;
+      
+      profiles.push({
+        id: row.learner_id,
+        name: row.learner_name,
+        conceptsCovered: conceptCoverage,
+        conceptCoverageEvidence: conceptEvidence,
+        errorHistory: errorHistory,
+        interactionCount: row.interaction_count,
+        currentStrategy: row.strategy,
+        preferences: preferences,
+        createdAt: row.last_activity_at ? new Date(row.last_activity_at).getTime() : Date.now(),
+        lastActive: row.last_activity_at ? new Date(row.last_activity_at).getTime() : Date.now(),
+        extendedData: extendedData,
+      });
+    } catch {
+      // Skip invalid rows
+    }
+  }
+  
+  return profiles;
 }
 
 /**
@@ -424,9 +514,12 @@ export async function updateProfileFromEvent(
       preferences: {
         escalationThreshold: 2,
         aggregationDelay: 300000,
+        autoTextbookEnabled: true,
+        notificationsEnabled: true,
       },
       createdAt: Date.now(),
       lastActive: Date.now(),
+      extendedData: {},
     };
   }
 
@@ -526,6 +619,126 @@ export async function updateProfileFromEvent(
   return profile;
 }
 
+/**
+ * Append multiple event-derived updates to a learner profile
+ * Optimized for batch processing of events
+ */
+export async function appendProfileEvents(
+  learnerId: string,
+  events: CreateInteractionRequest[]
+): Promise<LearnerProfile | null> {
+  // Get current profile
+  let profile = await getLearnerProfile(learnerId);
+  if (!profile) {
+    const learner = await getLearnerById(learnerId);
+    if (!learner) return null;
+    profile = {
+      id: learnerId,
+      name: learner.name,
+      conceptsCovered: [],
+      conceptCoverageEvidence: {},
+      errorHistory: {},
+      interactionCount: 0,
+      currentStrategy: 'adaptive',
+      preferences: {
+        escalationThreshold: 2,
+        aggregationDelay: 300000,
+        autoTextbookEnabled: true,
+        notificationsEnabled: true,
+      },
+      createdAt: Date.now(),
+      lastActive: Date.now(),
+      extendedData: {},
+    };
+  }
+
+  // Process each event
+  for (const event of events) {
+    profile.interactionCount++;
+    profile.lastActive = Date.now();
+
+    // Update error history
+    if (event.eventType === 'error' && event.errorSubtypeId) {
+      profile.errorHistory[event.errorSubtypeId] = 
+        (profile.errorHistory[event.errorSubtypeId] || 0) + 1;
+    }
+
+    // Update concept coverage evidence
+    if (event.conceptIds && event.conceptIds.length > 0) {
+      for (const conceptId of event.conceptIds) {
+        if (!profile.conceptsCovered.includes(conceptId)) {
+          profile.conceptsCovered.push(conceptId);
+        }
+
+        if (!profile.conceptCoverageEvidence[conceptId]) {
+          profile.conceptCoverageEvidence[conceptId] = {
+            conceptId,
+            score: 50,
+            confidence: 'low',
+            lastUpdated: Date.now(),
+            evidenceCounts: {
+              successfulExecution: 0,
+              hintViewed: 0,
+              explanationViewed: 0,
+              errorEncountered: 0,
+              notesAdded: 0,
+            },
+            streakCorrect: 0,
+            streakIncorrect: 0,
+          };
+        }
+
+        const evidence = profile.conceptCoverageEvidence[conceptId];
+        evidence.lastUpdated = Date.now();
+
+        switch (event.eventType) {
+          case 'execution':
+            if (event.metadata?.successful || event.payload?.successful) {
+              evidence.evidenceCounts.successfulExecution++;
+              evidence.streakCorrect++;
+              evidence.streakIncorrect = 0;
+              evidence.score = Math.min(100, evidence.score + 5);
+            }
+            break;
+          case 'error':
+            evidence.evidenceCounts.errorEncountered++;
+            evidence.streakIncorrect++;
+            evidence.streakCorrect = 0;
+            evidence.score = Math.max(0, evidence.score - 5);
+            break;
+          case 'hint_view':
+            evidence.evidenceCounts.hintViewed++;
+            break;
+          case 'explanation_view':
+            evidence.evidenceCounts.explanationViewed++;
+            break;
+          case 'textbook_unit_upsert':
+            evidence.evidenceCounts.notesAdded++;
+            break;
+        }
+
+        const totalEvidence = 
+          evidence.evidenceCounts.successfulExecution +
+          evidence.evidenceCounts.hintViewed +
+          evidence.evidenceCounts.explanationViewed +
+          evidence.evidenceCounts.errorEncountered +
+          evidence.evidenceCounts.notesAdded;
+
+        if (totalEvidence >= 10) {
+          evidence.confidence = 'high';
+        } else if (totalEvidence >= 5) {
+          evidence.confidence = 'medium';
+        } else {
+          evidence.confidence = 'low';
+        }
+      }
+    }
+  }
+
+  await saveLearnerProfile(profile);
+  return profile;
+}
+
 // ============================================================================
 // Interaction Operations
 // ============================================================================
@@ -534,35 +747,37 @@ export async function createInteraction(id: string, data: CreateInteractionReque
   const db = getDb();
   const now = new Date().toISOString();
 
-  const interaction: Interaction = {
-    id,
-    learnerId: data.learnerId,
-    sessionId: data.sessionId || null,
-    timestamp: data.timestamp,
-    eventType: data.eventType,
-    problemId: data.problemId,
-    payload: data.payload || {},
-    createdAt: now,
-  };
+  // Build full payload with ALL fields for lossless storage
+  const fullPayload = buildInteractionPayload(data);
 
   await runAsync(db, `
     INSERT INTO interactions (id, learner_id, session_id, timestamp, event_type, problem_id, payload, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `, [
-    interaction.id,
-    interaction.learnerId,
-    interaction.sessionId,
-    interaction.timestamp,
-    interaction.eventType,
-    interaction.problemId,
-    JSON.stringify(interaction.payload),
-    interaction.createdAt
+    id,
+    data.learnerId,
+    data.sessionId || null,
+    data.timestamp,
+    data.eventType,
+    data.problemId,
+    JSON.stringify(fullPayload),
+    now
   ]);
 
   // Also update the learner profile from this event
   await updateProfileFromEvent(data.learnerId, data);
 
-  return interaction;
+  // Return full interaction with all fields
+  return rowToInteraction({
+    id,
+    learner_id: data.learnerId,
+    session_id: data.sessionId || null,
+    timestamp: data.timestamp,
+    event_type: data.eventType,
+    problem_id: data.problemId,
+    payload: JSON.stringify(fullPayload),
+    created_at: now,
+  });
 }
 
 export async function createInteractionsBatch(events: CreateInteractionRequest[]): Promise<Interaction[]> {
@@ -577,34 +792,37 @@ export async function createInteractionsBatch(events: CreateInteractionRequest[]
 
   for (const event of events) {
     const id = generateId();
-    const interaction: Interaction = {
-      id,
-      learnerId: event.learnerId,
-      sessionId: event.sessionId || null,
-      timestamp: event.timestamp,
-      eventType: event.eventType,
-      problemId: event.problemId,
-      payload: event.payload || {},
-      createdAt: now,
-    };
+    
+    // Build full payload with ALL fields for lossless storage
+    const fullPayload = buildInteractionPayload(event);
 
     await new Promise<void>((resolve, reject) => {
       stmt.run([
-        interaction.id,
-        interaction.learnerId,
-        interaction.sessionId,
-        interaction.timestamp,
-        interaction.eventType,
-        interaction.problemId,
-        JSON.stringify(interaction.payload),
-        interaction.createdAt
+        id,
+        event.learnerId,
+        event.sessionId || null,
+        event.timestamp,
+        event.eventType,
+        event.problemId,
+        JSON.stringify(fullPayload),
+        now
       ], (err) => {
         if (err) reject(err);
         else resolve();
       });
     });
 
-    interactions.push(interaction);
+    // Reconstruct full interaction from stored data
+    interactions.push(rowToInteraction({
+      id,
+      learner_id: event.learnerId,
+      session_id: event.sessionId || null,
+      timestamp: event.timestamp,
+      event_type: event.eventType,
+      problem_id: event.problemId,
+      payload: JSON.stringify(fullPayload),
+      created_at: now,
+    }));
     
     // Update profile from this event
     await updateProfileFromEvent(event.learnerId, event);
@@ -959,6 +1177,124 @@ interface InteractionRow {
   created_at: string;
 }
 
+/**
+ * Build full payload from CreateInteractionRequest
+ * Stores ALL fields for lossless replay
+ */
+function buildInteractionPayload(data: CreateInteractionRequest): Record<string, unknown> {
+  return {
+    // Problem context
+    problemSetId: data.problemSetId,
+    problemNumber: data.problemNumber,
+    
+    // Code/Error fields
+    code: data.code,
+    error: data.error,
+    errorSubtypeId: data.errorSubtypeId,
+    executionTimeMs: data.executionTimeMs,
+    
+    // Hint/Explanation fields
+    hintId: data.hintId,
+    explanationId: data.explanationId,
+    hintText: data.hintText,
+    hintLevel: data.hintLevel,
+    helpRequestIndex: data.helpRequestIndex,
+    sqlEngageSubtype: data.sqlEngageSubtype,
+    sqlEngageRowId: data.sqlEngageRowId,
+    
+    // Policy/Execution fields
+    policyVersion: data.policyVersion,
+    timeSpent: data.timeSpent,
+    successful: data.successful,
+    ruleFired: data.ruleFired,
+    templateId: data.templateId,
+    inputHash: data.inputHash,
+    model: data.model,
+    
+    // Textbook fields
+    noteId: data.noteId,
+    noteTitle: data.noteTitle,
+    noteContent: data.noteContent,
+    
+    // Source/Retrieval fields
+    retrievedSourceIds: data.retrievedSourceIds,
+    retrievedChunks: data.retrievedChunks,
+    triggerInteractionIds: data.triggerInteractionIds,
+    evidenceInteractionIds: data.evidenceInteractionIds,
+    sourceInteractionIds: data.sourceInteractionIds,
+    
+    // I/O fields
+    inputs: data.inputs,
+    outputs: data.outputs,
+    
+    // Concept fields
+    conceptId: data.conceptId,
+    conceptIds: data.conceptIds,
+    
+    // Guidance Ladder fields
+    requestType: data.requestType,
+    currentRung: data.currentRung,
+    rung: data.rung,
+    grounded: data.grounded,
+    contentLength: data.contentLength,
+    fromRung: data.fromRung,
+    toRung: data.toRung,
+    trigger: data.trigger,
+    
+    // Textbook Unit fields
+    unitId: data.unitId,
+    action: data.action,
+    dedupeKey: data.dedupeKey,
+    revisionCount: data.revisionCount,
+    
+    // Source view fields
+    passageCount: data.passageCount,
+    expanded: data.expanded,
+    
+    // Chat fields
+    chatMessage: data.chatMessage,
+    chatResponse: data.chatResponse,
+    chatQuickChip: data.chatQuickChip,
+    savedToNotes: data.savedToNotes,
+    textbookUnitsRetrieved: data.textbookUnitsRetrieved,
+    
+    // Escalation Profile fields (Week 5)
+    profileId: data.profileId,
+    assignmentStrategy: data.assignmentStrategy,
+    previousThresholds: data.previousThresholds,
+    newThresholds: data.newThresholds,
+    
+    // Bandit fields (Week 5)
+    selectedArm: data.selectedArm,
+    selectionMethod: data.selectionMethod,
+    armStatsAtSelection: data.armStatsAtSelection,
+    reward: data.reward,
+    newAlpha: data.newAlpha,
+    newBeta: data.newBeta,
+    
+    // HDI fields
+    hdi: data.hdi,
+    hdiLevel: data.hdiLevel,
+    hdiComponents: data.hdiComponents,
+    trend: data.trend,
+    slope: data.slope,
+    interventionType: data.interventionType,
+    
+    // Reinforcement fields
+    scheduleId: data.scheduleId,
+    promptId: data.promptId,
+    promptType: data.promptType,
+    response: data.response,
+    isCorrect: data.isCorrect,
+    scheduledTime: data.scheduledTime,
+    shownTime: data.shownTime,
+    
+    // Legacy fields
+    payload: data.payload,
+    metadata: data.metadata,
+  };
+}
+
 interface TextbookRow {
   id: string;
   learner_id: string;
@@ -993,15 +1329,128 @@ function rowToLearner(row: LearnerRow): Learner {
 }
 
 function rowToInteraction(row: InteractionRow): Interaction {
+  // Parse payload which contains all extended fields
+  const payload = JSON.parse(row.payload) as Record<string, unknown>;
+  
   return {
+    // Core fields from columns
     id: row.id,
     learnerId: row.learner_id,
     sessionId: row.session_id,
     timestamp: row.timestamp,
     eventType: row.event_type,
     problemId: row.problem_id,
-    payload: JSON.parse(row.payload),
     createdAt: row.created_at,
+    
+    // Problem context from payload
+    problemSetId: payload.problemSetId as string | undefined,
+    problemNumber: payload.problemNumber as number | undefined,
+    
+    // Code/Error fields from payload
+    code: payload.code as string | undefined,
+    error: payload.error as string | undefined,
+    errorSubtypeId: payload.errorSubtypeId as string | undefined,
+    executionTimeMs: payload.executionTimeMs as number | undefined,
+    
+    // Hint/Explanation fields from payload
+    hintId: payload.hintId as string | undefined,
+    explanationId: payload.explanationId as string | undefined,
+    hintText: payload.hintText as string | undefined,
+    hintLevel: payload.hintLevel as number | undefined,
+    helpRequestIndex: payload.helpRequestIndex as number | undefined,
+    sqlEngageSubtype: payload.sqlEngageSubtype as string | undefined,
+    sqlEngageRowId: payload.sqlEngageRowId as string | undefined,
+    
+    // Policy/Execution fields from payload
+    policyVersion: payload.policyVersion as string | undefined,
+    timeSpent: payload.timeSpent as number | undefined,
+    successful: payload.successful as boolean | undefined,
+    ruleFired: payload.ruleFired as string | undefined,
+    templateId: payload.templateId as string | undefined,
+    inputHash: payload.inputHash as string | undefined,
+    model: payload.model as string | undefined,
+    
+    // Textbook fields from payload
+    noteId: payload.noteId as string | undefined,
+    noteTitle: payload.noteTitle as string | undefined,
+    noteContent: payload.noteContent as string | undefined,
+    
+    // Source/Retrieval fields from payload
+    retrievedSourceIds: payload.retrievedSourceIds as string[] | undefined,
+    retrievedChunks: payload.retrievedChunks as Interaction['retrievedChunks'],
+    triggerInteractionIds: payload.triggerInteractionIds as string[] | undefined,
+    evidenceInteractionIds: payload.evidenceInteractionIds as string[] | undefined,
+    sourceInteractionIds: payload.sourceInteractionIds as string[] | undefined,
+    
+    // I/O fields from payload
+    inputs: payload.inputs as Interaction['inputs'],
+    outputs: payload.outputs as Interaction['outputs'],
+    
+    // Concept fields from payload
+    conceptId: payload.conceptId as string | undefined,
+    conceptIds: payload.conceptIds as string[] | undefined,
+    
+    // Guidance Ladder fields from payload
+    requestType: payload.requestType as 'hint' | 'explanation' | 'textbook' | undefined,
+    currentRung: payload.currentRung as number | undefined,
+    rung: payload.rung as number | undefined,
+    grounded: payload.grounded as boolean | undefined,
+    contentLength: payload.contentLength as number | undefined,
+    fromRung: payload.fromRung as number | undefined,
+    toRung: payload.toRung as number | undefined,
+    trigger: payload.trigger as string | undefined,
+    
+    // Textbook Unit fields from payload
+    unitId: payload.unitId as string | undefined,
+    action: payload.action as 'created' | 'updated' | undefined,
+    dedupeKey: payload.dedupeKey as string | undefined,
+    revisionCount: payload.revisionCount as number | undefined,
+    
+    // Source view fields from payload
+    passageCount: payload.passageCount as number | undefined,
+    expanded: payload.expanded as boolean | undefined,
+    
+    // Chat fields from payload
+    chatMessage: payload.chatMessage as string | undefined,
+    chatResponse: payload.chatResponse as string | undefined,
+    chatQuickChip: payload.chatQuickChip as string | undefined,
+    savedToNotes: payload.savedToNotes as boolean | undefined,
+    textbookUnitsRetrieved: payload.textbookUnitsRetrieved as string[] | undefined,
+    
+    // Escalation Profile fields from payload
+    profileId: payload.profileId as string | undefined,
+    assignmentStrategy: payload.assignmentStrategy as 'static' | 'diagnostic' | 'bandit' | undefined,
+    previousThresholds: payload.previousThresholds as { escalate: number; aggregate: number } | undefined,
+    newThresholds: payload.newThresholds as { escalate: number; aggregate: number } | undefined,
+    
+    // Bandit fields from payload
+    selectedArm: payload.selectedArm as string | undefined,
+    selectionMethod: payload.selectionMethod as 'thompson_sampling' | 'epsilon_greedy' | undefined,
+    armStatsAtSelection: payload.armStatsAtSelection as Record<string, { mean: number; pulls: number }> | undefined,
+    reward: payload.reward as Interaction['reward'],
+    newAlpha: payload.newAlpha as number | undefined,
+    newBeta: payload.newBeta as number | undefined,
+    
+    // HDI fields from payload
+    hdi: payload.hdi as number | undefined,
+    hdiLevel: payload.hdiLevel as 'low' | 'medium' | 'high' | undefined,
+    hdiComponents: payload.hdiComponents as Interaction['hdiComponents'],
+    trend: payload.trend as 'increasing' | 'stable' | 'decreasing' | undefined,
+    slope: payload.slope as number | undefined,
+    interventionType: payload.interventionType as 'forced_independent' | 'profile_switch' | 'reflective_prompt' | undefined,
+    
+    // Reinforcement fields from payload
+    scheduleId: payload.scheduleId as string | undefined,
+    promptId: payload.promptId as string | undefined,
+    promptType: payload.promptType as 'mcq' | 'sql_completion' | 'concept_explanation' | undefined,
+    response: payload.response as string | undefined,
+    isCorrect: payload.isCorrect as boolean | undefined,
+    scheduledTime: payload.scheduledTime as number | undefined,
+    shownTime: payload.shownTime as number | undefined,
+    
+    // Legacy payload/metadata for extensibility
+    payload: payload.payload as Record<string, unknown> | undefined,
+    metadata: payload.metadata as Record<string, unknown> | undefined,
   };
 }
 

@@ -45,6 +45,8 @@ import {
 import { storage, broadcastSync, setDebugProfileWithSync, setDebugStrategyWithSync } from '../lib/storage';
 import { seedDemoDataset, resetDemoDataset, hasDemoData } from '../lib/demo/demo-seed';
 import { useUserRole } from '../hooks/useUserRole';
+import { useAllLearnerProfiles } from '../hooks/useLearnerProfile';
+import learnerProfileClient from '../lib/api/learner-profile-client';
 import type { LearnerProfile, InteractionEvent } from '../types';
 
 // Helper function to safely format dates
@@ -144,12 +146,32 @@ interface AdaptiveStats {
  */
 export function InstructorDashboard() {
   const navigate = useNavigate();
-  const { isStudent, isLoading } = useUserRole();
+  const { isStudent, isLoading: isRoleLoading } = useUserRole();
+  
+  // Use backend profiles with automatic synchronization
+  const {
+    profiles: backendProfiles,
+    isLoading: isProfilesLoading,
+    refresh: refreshProfiles,
+    totalInteractionCount: backendTotalInteractions,
+    averageConceptCoverage: backendAvgCoverage,
+  } = useAllLearnerProfiles();
+  
   const [profiles, setProfiles] = useState<LearnerProfile[]>([]);
   const [interactions, setInteractions] = useState<InteractionEvent[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [demoDataExists, setDemoDataExists] = useState(false);
+  const [isBackendAvailable, setIsBackendAvailable] = useState(false);
+
+  // Check backend availability
+  useEffect(() => {
+    const checkBackend = async () => {
+      const available = await learnerProfileClient.checkBackendHealth();
+      setIsBackendAvailable(available);
+    };
+    checkBackend();
+  }, []);
 
   // Check for demo data on mount
   useEffect(() => {
@@ -158,22 +180,32 @@ export function InstructorDashboard() {
 
   // Redirect students away from instructor pages
   useEffect(() => {
-    if (!isLoading && isStudent) {
+    if (!isRoleLoading && isStudent) {
       navigate('/', { replace: true });
     }
-  }, [isStudent, isLoading, navigate]);
+  }, [isStudent, isRoleLoading, navigate]);
 
-  // Load data from storage
+  // Load data from backend or fallback to local storage
   useEffect(() => {
-    const loadData = () => {
-      const allProfiles = storage.getAllProfiles().map(p => storage.getProfile(p.id)).filter(Boolean) as LearnerProfile[];
-      const allInteractions = storage.getAllInteractions();
-      setProfiles(allProfiles);
-      setInteractions(allInteractions);
+    const loadData = async () => {
+      setIsDataLoading(true);
+      
+      // Try backend first
+      if (isBackendAvailable && backendProfiles.length > 0) {
+        setProfiles(backendProfiles);
+      } else {
+        // Fallback to localStorage
+        const allProfiles = storage.getAllProfiles().map(p => storage.getProfile(p.id)).filter(Boolean) as LearnerProfile[];
+        const allInteractions = storage.getAllInteractions();
+        setProfiles(allProfiles);
+        setInteractions(allInteractions);
+      }
+      
       setIsDataLoading(false);
     };
+    
     loadData();
-  }, []);
+  }, [isBackendAvailable, backendProfiles]);
 
   // Toast auto-hide
   useEffect(() => {
@@ -188,12 +220,22 @@ export function InstructorDashboard() {
   const showDemoData = DEMO_MODE && !hasRealData;
 
   // Normalize profiles once at load time - ensures consistent data quality
+  // Backend profiles are already normalized, local profiles need normalization
   const normalizedProfiles = useMemo(() => {
     return profiles.map(p => ({
       ...p,
       name: p.name || p.id,
       createdAt: p.createdAt || Date.now(),
       lastActive: p.lastActive || p.createdAt || Date.now(),
+      // Ensure conceptsCovered is a Set (backend returns array)
+      conceptsCovered: p.conceptsCovered instanceof Set ? p.conceptsCovered : new Set(p.conceptsCovered || []),
+      // Ensure Maps are properly initialized
+      conceptCoverageEvidence: p.conceptCoverageEvidence instanceof Map 
+        ? p.conceptCoverageEvidence 
+        : new Map(Object.entries(p.conceptCoverageEvidence || {})),
+      errorHistory: p.errorHistory instanceof Map 
+        ? p.errorHistory 
+        : new Map(Object.entries(p.errorHistory || {})),
     }));
   }, [profiles]);
 
@@ -202,15 +244,20 @@ export function InstructorDashboard() {
     // Use normalized profiles if available, otherwise use demo students in dev mode
     const studentList = hasRealData ? normalizedProfiles : (showDemoData ? DEMO_STUDENTS : []);
     const totalStudents = studentList.length;
-    const activeToday = studentList.filter(s => Date.now() - s.lastActive < 86400000).length;
+    const activeToday = studentList.filter(s => Date.now() - (s.lastActive || 0) < 86400000).length;
     
     // Calculate average progress based on concept coverage
-    const avgProgress = normalizedProfiles.length > 0
-      ? Math.round(normalizedProfiles.reduce((sum, p) => sum + p.conceptsCovered.size, 0) / normalizedProfiles.length / 6 * 100)
-      : (showDemoData ? 45 : 0);
+    // Use backend average if available, otherwise calculate from profiles
+    const avgProgress = isBackendAvailable && backendAvgCoverage > 0
+      ? Math.round((backendAvgCoverage / 6) * 100)
+      : normalizedProfiles.length > 0
+        ? Math.round(normalizedProfiles.reduce((sum, p) => sum + (p.conceptsCovered?.size || 0), 0) / normalizedProfiles.length / 6 * 100)
+        : (showDemoData ? 45 : 0);
 
-    // Use real interactions or add demo interactions in dev mode
-    const totalInteractions = interactions.length + (showDemoData ? DEMO_STATS.interactions : 0);
+    // Use real interactions or backend total, add demo interactions in dev mode
+    const totalInteractions = isBackendAvailable && backendTotalInteractions > 0
+      ? backendTotalInteractions
+      : interactions.length + (showDemoData ? DEMO_STATS.interactions : 0);
 
     // Analyze common errors from real data
     const errorCounts = interactions
@@ -514,7 +561,7 @@ export function InstructorDashboard() {
     }
   };
 
-  if (isLoading || isDataLoading) {
+  if (isRoleLoading || isDataLoading || isProfilesLoading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto space-y-6">
@@ -546,6 +593,11 @@ export function InstructorDashboard() {
               {showDemoData && (
                 <Badge variant="secondary" className="text-sm px-3 py-1 bg-amber-100 text-amber-800 hover:bg-amber-100">
                   Demo Mode
+                </Badge>
+              )}
+              {isBackendAvailable && (
+                <Badge variant="outline" className="text-sm px-3 py-1 bg-green-50 text-green-700 border-green-200">
+                  Backend Connected
                 </Badge>
               )}
               <Badge variant="outline" className="text-sm px-3 py-1">
@@ -684,28 +736,37 @@ export function InstructorDashboard() {
         </Card>
 
         {/* Data Storage Info Card */}
-        <Card className="border-amber-200 bg-amber-50/50">
+        <Card className={isBackendAvailable ? "border-green-200 bg-green-50/50" : "border-amber-200 bg-amber-50/50"}>
           <CardContent className="p-6">
             <div className="flex items-start gap-4">
-              <div className="p-3 rounded-lg bg-amber-100">
-                <AlertCircle className="size-6 text-amber-600" />
+              <div className={`p-3 rounded-lg ${isBackendAvailable ? "bg-green-100" : "bg-amber-100"}`}>
+                <AlertCircle className={`size-6 ${isBackendAvailable ? "text-green-600" : "text-amber-600"}`} />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-lg text-amber-900">About Data Storage</h3>
-                <p className="text-sm text-amber-800 mt-1">
-                  All learning data is stored locally in your browser. Student progress, textbooks, and interactions 
-                  are saved per-browser and cannot be accessed across different devices or browsers. For a full 
-                  classroom management system with cloud storage, a backend integration would be required.
+                <h3 className={`font-semibold text-lg ${isBackendAvailable ? "text-green-900" : "text-amber-900"}`}>
+                  {isBackendAvailable ? "Backend Storage Active" : "About Data Storage"}
+                </h3>
+                <p className={`text-sm mt-1 ${isBackendAvailable ? "text-green-800" : "text-amber-800"}`}>
+                  {isBackendAvailable 
+                    ? "Learner profiles are being persisted to the backend database. This enables class-wide analytics across all devices and sessions. Data is automatically synchronized and can be reconstructed from event history."
+                    : "All learning data is stored locally in your browser. Student progress, textbooks, and interactions are saved per-browser and cannot be accessed across different devices or browsers. For a full classroom management system with cloud storage, a backend integration would be required."
+                  }
                 </p>
-                <div className="mt-3 flex gap-4 text-xs text-amber-700">
+                <div className={`mt-3 flex gap-4 text-xs ${isBackendAvailable ? "text-green-700" : "text-amber-700"}`}>
                   <span className="flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full bg-green-500"></span>
                     Demo Mode Available
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                    Local Storage Only
+                    <span className={`w-2 h-2 rounded-full ${isBackendAvailable ? "bg-green-500" : "bg-amber-500"}`}></span>
+                    {isBackendAvailable ? "Backend Storage" : "Local Storage Only"}
                   </span>
+                  {isBackendAvailable && (
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                      {backendProfiles.length} Profile{backendProfiles.length !== 1 ? 's' : ''} Synced
+                    </span>
+                  )}
                 </div>
               </div>
             </div>

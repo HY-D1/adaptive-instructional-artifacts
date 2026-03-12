@@ -32,6 +32,17 @@ export interface UpdateLearnerRequest {
 // ============================================================================
 
 /**
+ * Learner preferences for personalization
+ */
+export interface LearnerPreferences {
+  escalationThreshold: number;
+  aggregationDelay: number;
+  autoTextbookEnabled?: boolean;
+  notificationsEnabled?: boolean;
+  theme?: 'light' | 'dark' | 'system';
+}
+
+/**
  * Concept coverage evidence for a single concept
  * Tracks how the learner has interacted with this concept
  */
@@ -52,23 +63,42 @@ export interface ConceptCoverageEvidence {
 }
 
 /**
+ * Concept coverage map - tracks which concepts learner has encountered
+ */
+export interface ConceptCoverage {
+  concepts: string[];
+  mastered: string[];
+  struggling: string[];
+  lastUpdated: number;
+}
+
+/**
+ * Error history entry with metadata
+ */
+export interface ErrorHistoryEntry {
+  count: number;
+  lastOccurred: number;
+  firstOccurred: number;
+  conceptIds: string[];
+}
+
+/**
  * Full learner profile with concept coverage, evidence, and learning state
- * This is stored as JSON in the learner_profiles table
+ * Stored in learner_profiles table with both structured columns and JSON extensibility
  */
 export interface LearnerProfile {
   id: string;
   name: string;
   conceptsCovered: string[]; // Set serialized as array
   conceptCoverageEvidence: Record<string, ConceptCoverageEvidence>; // Map serialized as object
-  errorHistory: Record<string, number>; // Map serialized as object
+  errorHistory: Record<string, number>; // Map serialized as object (subtype -> count)
   interactionCount: number;
   currentStrategy: string;
-  preferences: {
-    escalationThreshold: number;
-    aggregationDelay: number;
-  };
+  preferences: LearnerPreferences;
   createdAt: number;
   lastActive: number;
+  // Extended profile data (stored in profile_data JSON column)
+  extendedData?: Record<string, unknown>;
 }
 
 /**
@@ -81,11 +111,9 @@ export interface SaveLearnerProfileRequest {
   errorHistory?: Record<string, number>;
   interactionCount?: number;
   currentStrategy?: string;
-  preferences?: {
-    escalationThreshold: number;
-    aggregationDelay: number;
-  };
+  preferences?: LearnerPreferences;
   lastActive?: number;
+  extendedData?: Record<string, unknown>;
 }
 
 /**
@@ -93,6 +121,36 @@ export interface SaveLearnerProfileRequest {
  */
 export interface UpdateProfileFromEventRequest {
   event: CreateInteractionRequest;
+}
+
+/**
+ * Profile update event - partial update for event-driven profile changes
+ */
+export interface ProfileUpdateEvent {
+  learnerId: string;
+  eventType: 'error' | 'success' | 'hint_request' | 'explanation_view' | 'notes_added';
+  timestamp: number;
+  problemId: string;
+  conceptIds?: string[];
+  errorSubtypeId?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Database row for learner_profiles table
+ */
+export interface LearnerProfileRow {
+  learner_id: string;
+  profile_json: string;
+  concept_coverage: string;
+  concept_evidence: string;
+  error_history: string;
+  interaction_count: number;
+  strategy: string;
+  preferences: string;
+  last_activity_at: string | null;
+  profile_data: string;
+  updated_at: string;
 }
 
 // ============================================================================
@@ -134,6 +192,31 @@ export interface HDIComponents {
 }
 
 /**
+ * Retrieved chunk info for source grounding
+ */
+export interface RetrievedChunkInfo {
+  docId: string;
+  page?: number;
+  chunkId?: string;
+  score?: number;
+  snippet?: string;
+}
+
+/**
+ * Bandit reward components
+ */
+export interface BanditReward {
+  total: number;
+  components: {
+    independentSuccess: number;
+    errorReduction: number;
+    delayedRetention: number;
+    dependencyPenalty: number;
+    timeEfficiency: number;
+  };
+}
+
+/**
  * Full InteractionEvent - Lossless logging for research replay
  * Mirrors the frontend InteractionEvent exactly
  */
@@ -153,31 +236,101 @@ export interface Interaction {
   errorSubtypeId?: string;
   executionTimeMs?: number;
   
+  // Hint/Explanation fields
+  hintId?: string;
+  explanationId?: string;
+  hintText?: string;
+  hintLevel?: number;
+  helpRequestIndex?: number;
+  sqlEngageSubtype?: string;
+  sqlEngageRowId?: string;
+  
+  // Policy/Execution fields
+  policyVersion?: string;
+  timeSpent?: number;
+  successful?: boolean;
+  ruleFired?: string;
+  templateId?: string;
+  inputHash?: string;
+  model?: string;
+  
+  // Textbook fields
+  noteId?: string;
+  noteTitle?: string;
+  noteContent?: string;
+  
+  // Source/Retrieval fields
+  retrievedSourceIds?: string[];
+  retrievedChunks?: RetrievedChunkInfo[];
+  triggerInteractionIds?: string[];
+  evidenceInteractionIds?: string[];
+  sourceInteractionIds?: string[];
+  
+  // I/O fields
+  inputs?: Record<string, string | number | boolean | null>;
+  outputs?: Record<string, string | number | boolean | null | string[]>;
+  
+  // Concept fields
+  conceptId?: string;
+  conceptIds?: string[];
+  
   // Escalation fields (CRITICAL for replay)
+  requestType?: 'hint' | 'explanation' | 'textbook';
+  currentRung?: number;
   rung?: number;
+  grounded?: boolean;
+  contentLength?: number;
   fromRung?: number;
   toRung?: number;
   trigger?: string;
   
-  // Concept fields
-  conceptIds?: string[];
+  // Textbook Unit fields
+  unitId?: string;
+  action?: 'created' | 'updated';
+  dedupeKey?: string;
+  revisionCount?: number;
+  
+  // Source view fields
+  passageCount?: number;
+  expanded?: boolean;
+  
+  // Chat fields
+  chatMessage?: string;
+  chatResponse?: string;
+  chatQuickChip?: string;
+  savedToNotes?: boolean;
+  textbookUnitsRetrieved?: string[];
+  
+  // Escalation Profile fields (Week 5)
+  profileId?: string;
+  assignmentStrategy?: 'static' | 'diagnostic' | 'bandit';
+  previousThresholds?: { escalate: number; aggregate: number };
+  newThresholds?: { escalate: number; aggregate: number };
+  
+  // Bandit fields (Week 5)
+  selectedArm?: string;
+  selectionMethod?: 'thompson_sampling' | 'epsilon_greedy';
+  armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
+  reward?: BanditReward;
+  newAlpha?: number;
+  newBeta?: number;
   
   // HDI/CSI fields
   hdi?: number;
   hdiLevel?: 'low' | 'medium' | 'high';
   hdiComponents?: HDIComponents;
+  trend?: 'increasing' | 'stable' | 'decreasing';
+  slope?: number;
+  interventionType?: 'forced_independent' | 'profile_switch' | 'reflective_prompt';
   
   // Reinforcement fields
   scheduleId?: string;
   promptId?: string;
+  promptType?: 'mcq' | 'sql_completion' | 'concept_explanation';
   response?: string;
   isCorrect?: boolean;
-  
-  // Provenance fields
-  unitId?: string;
-  action?: string;
-  sourceInteractionIds?: string[];
-  retrievedSourceIds?: string[];
+  scheduledTime?: number;
+  shownTime?: number;
   
   // Legacy payload for extensibility/backward compatibility
   payload?: Record<string, unknown>;
@@ -188,7 +341,7 @@ export interface Interaction {
 
 /**
  * CreateInteractionRequest - All fields optional for flexibility
- * Required fields: learnerId, timestamp, eventType
+ * Required fields: learnerId, timestamp, eventType, problemId
  */
 export interface CreateInteractionRequest {
   learnerId: string;
@@ -205,31 +358,101 @@ export interface CreateInteractionRequest {
   errorSubtypeId?: string;
   executionTimeMs?: number;
   
+  // Hint/Explanation fields
+  hintId?: string;
+  explanationId?: string;
+  hintText?: string;
+  hintLevel?: number;
+  helpRequestIndex?: number;
+  sqlEngageSubtype?: string;
+  sqlEngageRowId?: string;
+  
+  // Policy/Execution fields
+  policyVersion?: string;
+  timeSpent?: number;
+  successful?: boolean;
+  ruleFired?: string;
+  templateId?: string;
+  inputHash?: string;
+  model?: string;
+  
+  // Textbook fields
+  noteId?: string;
+  noteTitle?: string;
+  noteContent?: string;
+  
+  // Source/Retrieval fields
+  retrievedSourceIds?: string[];
+  retrievedChunks?: RetrievedChunkInfo[];
+  triggerInteractionIds?: string[];
+  evidenceInteractionIds?: string[];
+  sourceInteractionIds?: string[];
+  
+  // I/O fields
+  inputs?: Record<string, string | number | boolean | null>;
+  outputs?: Record<string, string | number | boolean | null | string[]>;
+  
+  // Concept fields
+  conceptId?: string;
+  conceptIds?: string[];
+  
   // Escalation fields (CRITICAL for replay)
+  requestType?: 'hint' | 'explanation' | 'textbook';
+  currentRung?: number;
   rung?: number;
+  grounded?: boolean;
+  contentLength?: number;
   fromRung?: number;
   toRung?: number;
   trigger?: string;
   
-  // Concept fields
-  conceptIds?: string[];
+  // Textbook Unit fields
+  unitId?: string;
+  action?: 'created' | 'updated';
+  dedupeKey?: string;
+  revisionCount?: number;
+  
+  // Source view fields
+  passageCount?: number;
+  expanded?: boolean;
+  
+  // Chat fields
+  chatMessage?: string;
+  chatResponse?: string;
+  chatQuickChip?: string;
+  savedToNotes?: boolean;
+  textbookUnitsRetrieved?: string[];
+  
+  // Escalation Profile fields (Week 5)
+  profileId?: string;
+  assignmentStrategy?: 'static' | 'diagnostic' | 'bandit';
+  previousThresholds?: { escalate: number; aggregate: number };
+  newThresholds?: { escalate: number; aggregate: number };
+  
+  // Bandit fields (Week 5)
+  selectedArm?: string;
+  selectionMethod?: 'thompson_sampling' | 'epsilon_greedy';
+  armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
+  reward?: BanditReward;
+  newAlpha?: number;
+  newBeta?: number;
   
   // HDI/CSI fields
   hdi?: number;
   hdiLevel?: 'low' | 'medium' | 'high';
   hdiComponents?: HDIComponents;
+  trend?: 'increasing' | 'stable' | 'decreasing';
+  slope?: number;
+  interventionType?: 'forced_independent' | 'profile_switch' | 'reflective_prompt';
   
   // Reinforcement fields
   scheduleId?: string;
   promptId?: string;
+  promptType?: 'mcq' | 'sql_completion' | 'concept_explanation';
   response?: string;
   isCorrect?: boolean;
-  
-  // Provenance fields
-  unitId?: string;
-  action?: string;
-  sourceInteractionIds?: string[];
-  retrievedSourceIds?: string[];
+  scheduledTime?: number;
+  shownTime?: number;
   
   // Legacy payload for extensibility
   payload?: Record<string, unknown>;
