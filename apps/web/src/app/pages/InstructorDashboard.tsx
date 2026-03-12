@@ -501,10 +501,10 @@ export function InstructorDashboard() {
   };
 
   const handleResetDemo = () => {
-    if (confirm('Are you sure you want to reset all data? This cannot be undone.')) {
+    if (confirm('Are you sure you want to reset demo data? This will remove all demo learners and their data.')) {
       const result = resetDemoDataset();
       if (result.success) {
-        setToastMessage('All data has been reset');
+        setToastMessage('Demo data has been reset');
         setProfiles([]);
         setInteractions([]);
         setDemoDataExists(false);
@@ -553,30 +553,31 @@ export function InstructorDashboard() {
                 {classStats.totalStudents} Students
               </Badge>
             </div>
-            {/* Demo Data Controls */}
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSeedDemo}
-                disabled={demoDataExists}
-                className="gap-2"
-                data-testid="seed-demo-button"
-              >
-                <Database className="w-4 h-4" />
-                Seed Demo Data
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleResetDemo}
-                className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                data-testid="reset-demo-button"
-              >
-                <RotateCcw className="w-4 h-4" />
-                Reset Demo Data
-              </Button>
-            </div>
+            {DEMO_MODE && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSeedDemo}
+                  disabled={demoDataExists}
+                  className="gap-2"
+                  data-testid="seed-demo-button"
+                >
+                  <Database className="w-4 h-4" />
+                  Seed Demo Data
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResetDemo}
+                  className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  data-testid="reset-demo-button"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Reset Demo Data
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>

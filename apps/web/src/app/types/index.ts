@@ -124,6 +124,9 @@ export type InteractionEvent = {
   noteId?: string;
   noteTitle?: string;
   noteContent?: string;
+  problemSetId?: string;
+  problemNumber?: number;
+  executionTimeMs?: number;
   retrievedSourceIds?: string[];
   retrievedChunks?: RetrievedChunkInfo[];
   triggerInteractionIds?: string[];

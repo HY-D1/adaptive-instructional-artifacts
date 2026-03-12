@@ -50,10 +50,7 @@ function createDemoInteractions(): InteractionEvent[] {
     timestamp: baseTime1,
     eventType: 'execution',
     problemId: 'p1-select-basics',
-    problemSetId: 'sql-basics',
-    problemNumber: 1,
     code: 'SELECT * FROM users',
-    executionTimeMs: 45,
     sessionId: 'demo-sess-1',
   });
   
@@ -64,8 +61,6 @@ function createDemoInteractions(): InteractionEvent[] {
     timestamp: baseTime1 + 60000,
     eventType: 'hint_request',
     problemId: 'p2-where-clause',
-    problemSetId: 'sql-basics',
-    problemNumber: 2,
     sessionId: 'demo-sess-1',
   });
   
@@ -76,10 +71,9 @@ function createDemoInteractions(): InteractionEvent[] {
     timestamp: baseTime1 + 62000,
     eventType: 'hint_view',
     problemId: 'p2-where-clause',
-    problemSetId: 'sql-basics',
-    problemNumber: 2,
     sessionId: 'demo-sess-1',
-    metadata: { rung: 1, conceptId: 'where-clause' },
+    rung: 1,
+    conceptIds: ['where-clause'],
   });
   
   // 4. Error - syntax issue
@@ -89,8 +83,6 @@ function createDemoInteractions(): InteractionEvent[] {
     timestamp: baseTime1 + 120000,
     eventType: 'error',
     problemId: 'p2-where-clause',
-    problemSetId: 'sql-basics',
-    problemNumber: 2,
     sessionId: 'demo-sess-1',
     errorSubtypeId: 'missing-where-predicate',
     code: 'SELECT * FROM users WHERE',
@@ -103,10 +95,10 @@ function createDemoInteractions(): InteractionEvent[] {
     timestamp: baseTime1 + 180000,
     eventType: 'guidance_escalate',
     problemId: 'p2-where-clause',
-    problemSetId: 'sql-basics',
-    problemNumber: 2,
     sessionId: 'demo-sess-1',
-    metadata: { fromRung: 1, toRung: 2, trigger: 'error_after_hint' },
+    fromRung: 1,
+    toRung: 2,
+    trigger: 'repeated_error',
   });
   
   // 6. Explanation view (rung 2 - with sources)
@@ -116,15 +108,10 @@ function createDemoInteractions(): InteractionEvent[] {
     timestamp: baseTime1 + 185000,
     eventType: 'explanation_view',
     problemId: 'p2-where-clause',
-    problemSetId: 'sql-basics',
-    problemNumber: 2,
     sessionId: 'demo-sess-1',
-    metadata: { 
-      rung: 2, 
-      hasSources: true, 
-      conceptIds: ['where-clause', 'sql-syntax', 'comparison-operators'],
-      grounded: true,
-    },
+    rung: 2,
+    conceptIds: ['where-clause', 'sql-syntax', 'comparison-operators'],
+    grounded: true,
   });
   
   // 7. Textbook unit created (key event!)
@@ -134,13 +121,11 @@ function createDemoInteractions(): InteractionEvent[] {
     timestamp: baseTime1 + 300000,
     eventType: 'textbook_unit_upsert',
     problemId: 'p2-where-clause',
-    problemSetId: 'sql-basics',
-    problemNumber: 2,
     sessionId: 'demo-sess-1',
+    unitId: 'demo-unit-1',
+    action: 'created',
     metadata: { 
-      unitId: 'demo-unit-1', 
       conceptId: 'where-clause',
-      action: 'created',
     },
   });
   
@@ -151,10 +136,7 @@ function createDemoInteractions(): InteractionEvent[] {
     timestamp: baseTime1 + 400000,
     eventType: 'execution',
     problemId: 'p2-where-clause',
-    problemSetId: 'sql-basics',
-    problemNumber: 2,
     code: "SELECT * FROM users WHERE age > 18",
-    executionTimeMs: 52,
     sessionId: 'demo-sess-1',
   });
   
@@ -168,8 +150,6 @@ function createDemoInteractions(): InteractionEvent[] {
     timestamp: baseTime2,
     eventType: 'hint_request',
     problemId: 'p3-join-operations',
-    problemSetId: 'sql-basics',
-    problemNumber: 3,
     sessionId: 'demo-sess-2',
   });
   
@@ -180,8 +160,6 @@ function createDemoInteractions(): InteractionEvent[] {
     timestamp: baseTime2 + 90000,
     eventType: 'error',
     problemId: 'p3-join-operations',
-    problemSetId: 'sql-basics',
-    problemNumber: 3,
     sessionId: 'demo-sess-2',
     errorSubtypeId: 'missing-join-condition',
     code: 'SELECT * FROM orders JOIN customers',
@@ -194,14 +172,9 @@ function createDemoInteractions(): InteractionEvent[] {
     timestamp: baseTime2 + 150000,
     eventType: 'explanation_view',
     problemId: 'p3-join-operations',
-    problemSetId: 'sql-basics',
-    problemNumber: 3,
     sessionId: 'demo-sess-2',
-    metadata: { 
-      rung: 2, 
-      hasSources: true, 
-      conceptIds: ['join-operations', 'table-relationships'],
-    },
+    rung: 2,
+    conceptIds: ['join-operations', 'table-relationships'],
   });
   
   // 12. Textbook unit created
@@ -211,13 +184,11 @@ function createDemoInteractions(): InteractionEvent[] {
     timestamp: baseTime2 + 250000,
     eventType: 'textbook_unit_upsert',
     problemId: 'p3-join-operations',
-    problemSetId: 'sql-basics',
-    problemNumber: 3,
     sessionId: 'demo-sess-2',
+    unitId: 'demo-unit-2',
+    action: 'created',
     metadata: { 
-      unitId: 'demo-unit-2', 
       conceptId: 'join-operations',
-      action: 'created',
     },
   });
   
@@ -240,7 +211,8 @@ function createDemoInteractions(): InteractionEvent[] {
     eventType: 'hdi_calculated',
     problemId: 'system',
     sessionId: 'demo-sess-1',
-    metadata: { hdi: 0.45, hdiLevel: 'medium' },
+    hdi: 0.45,
+    hdiLevel: 'medium',
   });
   
   return interactions;
@@ -550,9 +522,19 @@ export function seedDemoDataset(): {
  */
 const DEMO_LEARNER_IDS = new Set(DEMO_LEARNERS.map(l => l.id));
 
+// Storage keys for preservation (must match storage.ts)
+const ACTIVE_SESSION_KEY = 'sql-learning-active-session';
+const PRACTICE_DRAFTS_KEY = 'sql-learning-practice-drafts';
+const LLM_CACHE_KEY = 'sql-learning-llm-cache';
+const REPLAY_MODE_KEY = 'sql-learning-policy-replay-mode';
+const PDF_INDEX_KEY = 'sql-learning-pdf-index';
+const PDF_UPLOADS_KEY = 'sql-learning-pdf-uploads';
+const REINFORCEMENT_SCHEDULES_KEY = 'sql-learning-reinforcement-schedules';
+
 /**
  * Reset demo data using selective removal
  * Preserves non-demo data and current user profile/session
+ * Also preserves: active session, practice drafts, LLM cache, replay mode, PDF index
  */
 export function resetDemoDataset(): { 
   success: boolean; 
@@ -564,18 +546,27 @@ export function resetDemoDataset(): {
     // Step 1: Get current user profile (to preserve it)
     const currentUserProfile = storage.getUserProfile();
     
-    // Step 2: Get all data
+    // Step 2: Get all data that needs filtering
     const allInteractions = storage.getAllInteractions();
     const allTextbooks = storage.getAllTextbooks();
     const allProfiles = storage.getAllProfiles();
     
-    // Step 3: Filter out demo learner interactions
+    // Step 3: Preserve critical non-learner data (read directly from localStorage)
+    const activeSession = localStorage.getItem(ACTIVE_SESSION_KEY);
+    const practiceDrafts = localStorage.getItem(PRACTICE_DRAFTS_KEY);
+    const llmCache = localStorage.getItem(LLM_CACHE_KEY);
+    const replayMode = localStorage.getItem(REPLAY_MODE_KEY);
+    const pdfIndex = localStorage.getItem(PDF_INDEX_KEY);
+    const pdfUploads = localStorage.getItem(PDF_UPLOADS_KEY);
+    const reinforcementSchedules = localStorage.getItem(REINFORCEMENT_SCHEDULES_KEY);
+    
+    // Step 4: Filter out demo learner interactions
     const nonDemoInteractions = allInteractions.filter(
       i => !DEMO_LEARNER_IDS.has(i.learnerId)
     );
     const removedInteractions = allInteractions.length - nonDemoInteractions.length;
     
-    // Step 4: Filter out demo learner textbooks
+    // Step 5: Filter out demo learner textbooks
     const nonDemoTextbooks: Record<string, InstructionalUnit[]> = {};
     for (const [learnerId, units] of Object.entries(allTextbooks)) {
       if (!DEMO_LEARNER_IDS.has(learnerId)) {
@@ -584,16 +575,16 @@ export function resetDemoDataset(): {
     }
     const removedTextbookLearners = Object.keys(allTextbooks).filter(id => DEMO_LEARNER_IDS.has(id)).length;
     
-    // Step 5: Filter out demo learner profiles
+    // Step 6: Filter out demo learner profiles
     const nonDemoProfiles = allProfiles.filter(
       p => !DEMO_LEARNER_IDS.has(p.id)
     );
     const removedProfiles = allProfiles.length - nonDemoProfiles.length;
     
-    // Step 6: Clear all storage
+    // Step 7: Clear all storage via storage.clearAll()
     storage.clearAll();
     
-    // Step 7: Restore non-demo data
+    // Step 8: Restore non-demo learner data
     if (nonDemoInteractions.length > 0 || Object.keys(nonDemoTextbooks).length > 0 || nonDemoProfiles.length > 0) {
       const restoreData = {
         exportPolicyVersion: 'demo-reset-restore-v1',
@@ -619,9 +610,32 @@ export function resetDemoDataset(): {
       storage.importData(restoreData);
     }
     
-    // Step 8: Restore current user profile if it existed (and wasn't a demo learner)
+    // Step 9: Restore current user profile if it existed (and wasn't a demo learner)
     if (currentUserProfile && !DEMO_LEARNER_IDS.has(currentUserProfile.id)) {
       storage.saveUserProfile(currentUserProfile);
+    }
+    
+    // Step 10: Restore preserved non-learner data
+    if (activeSession !== null) {
+      localStorage.setItem(ACTIVE_SESSION_KEY, activeSession);
+    }
+    if (practiceDrafts !== null) {
+      localStorage.setItem(PRACTICE_DRAFTS_KEY, practiceDrafts);
+    }
+    if (llmCache !== null) {
+      localStorage.setItem(LLM_CACHE_KEY, llmCache);
+    }
+    if (replayMode !== null) {
+      localStorage.setItem(REPLAY_MODE_KEY, replayMode);
+    }
+    if (pdfIndex !== null) {
+      localStorage.setItem(PDF_INDEX_KEY, pdfIndex);
+    }
+    if (pdfUploads !== null) {
+      localStorage.setItem(PDF_UPLOADS_KEY, pdfUploads);
+    }
+    if (reinforcementSchedules !== null) {
+      localStorage.setItem(REINFORCEMENT_SCHEDULES_KEY, reinforcementSchedules);
     }
     
     // Log the reset for debugging
@@ -633,6 +647,15 @@ export function resetDemoDataset(): {
       preservedTextbookLearners: Object.keys(nonDemoTextbooks).length,
       preservedProfiles: nonDemoProfiles.length,
       currentUserPreserved: currentUserProfile ? !DEMO_LEARNER_IDS.has(currentUserProfile.id) : false,
+      preservedKeys: {
+        activeSession: activeSession !== null,
+        practiceDrafts: practiceDrafts !== null,
+        llmCache: llmCache !== null,
+        replayMode: replayMode !== null,
+        pdfIndex: pdfIndex !== null,
+        pdfUploads: pdfUploads !== null,
+        reinforcementSchedules: reinforcementSchedules !== null,
+      },
     });
     
     return { 
