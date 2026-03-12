@@ -9,7 +9,7 @@ import type { TextbookUnitStatus } from '../../../types';
 import { Link } from 'react-router';
 import { renderTextbookContent } from '../../../lib/content/textbook-renderer';
 import { InstructionalUnit, InteractionEvent } from '../../../types';
-import { storage } from '../../../lib/storage/storage';
+import { storage } from '../../../lib/storage';
 import { getConceptById } from '../../../data/sql-engage';
 import { buildTextbookInsights, SortMode } from '../../../lib/content/textbook-insights';
 import { 

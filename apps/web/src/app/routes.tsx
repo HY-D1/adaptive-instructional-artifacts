@@ -11,7 +11,7 @@ import { LearningInterface } from './pages/LearningInterface';
 import { SettingsPage } from './pages/SettingsPage';
 import { ConceptLibraryPage } from './pages/ConceptLibraryPage';
 import { ConceptDetailPage } from './pages/ConceptDetailPage';
-import { storage } from './lib/storage/storage';
+import { storage } from './lib/storage';
 import { 
   ROUTES, 
   protectRoute, 

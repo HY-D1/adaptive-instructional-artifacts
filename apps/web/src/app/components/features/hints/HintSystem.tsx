@@ -7,7 +7,7 @@ import DOMPurify from 'dompurify';
 import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen, Loader2, HelpCircle, Sparkles, AlertCircle } from 'lucide-react';
 import { HelpEventType, InteractionEvent } from '../../../types';
 import { orchestrator } from '../../../lib/adaptive-orchestrator';
-import { storage } from '../../../lib/storage/storage';
+import { storage } from '../../../lib/storage';
 import { createEventId } from '../../../lib/utils/event-id';
 import {
   canonicalizeSqlEngageSubtype

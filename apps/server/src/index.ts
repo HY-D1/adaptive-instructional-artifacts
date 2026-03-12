@@ -77,6 +77,53 @@ app.use('/api/sessions', sessionsRouter);
 app.use('/api/research', researchRouter);
 
 // ============================================================================
+// Hosted Mode: PDF Index Stub Routes
+// Returns 503 Service Unavailable with clear messaging for hosted deployments
+// ============================================================================
+
+app.get('/api/pdf-index/load', (_req, res) => {
+  res.status(503).json({
+    error: 'PDF index not available in hosted mode',
+    mode: 'deterministic-only',
+    message: 'Using SQL-Engage templates instead of PDF sources'
+  });
+});
+
+app.post('/api/pdf-index/load', (_req, res) => {
+  res.status(503).json({
+    error: 'PDF index not available in hosted mode',
+    mode: 'deterministic-only',
+    message: 'Using SQL-Engage templates instead of PDF sources'
+  });
+});
+
+app.post('/api/pdf-index/upload', (_req, res) => {
+  res.status(503).json({
+    error: 'PDF upload not available in hosted mode',
+    mode: 'deterministic-only',
+    message: 'PDF upload requires local server deployment'
+  });
+});
+
+// ============================================================================
+// Hosted Mode: Ollama Proxy Stub Routes
+// Returns 503 or empty responses for hosted deployments without LLM
+// ============================================================================
+
+app.post('/ollama/api/generate', (_req, res) => {
+  res.status(503).json({
+    error: 'LLM generation not available in hosted mode',
+    mode: 'deterministic-only',
+    message: 'Using deterministic template-based generation'
+  });
+});
+
+app.get('/ollama/api/tags', (_req, res) => {
+  // Return empty models array to indicate no Ollama available
+  res.json({ models: [] });
+});
+
+// ============================================================================
 // Error Handling
 // ============================================================================
 

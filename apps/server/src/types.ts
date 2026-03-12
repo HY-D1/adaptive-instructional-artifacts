@@ -28,6 +28,74 @@ export interface UpdateLearnerRequest {
 }
 
 // ============================================================================
+// Learner Profile Types (Full Rich Profile)
+// ============================================================================
+
+/**
+ * Concept coverage evidence for a single concept
+ * Tracks how the learner has interacted with this concept
+ */
+export interface ConceptCoverageEvidence {
+  conceptId: string;
+  score: number; // 0-100 cumulative score
+  confidence: 'low' | 'medium' | 'high';
+  lastUpdated: number;
+  evidenceCounts: {
+    successfulExecution: number;
+    hintViewed: number;
+    explanationViewed: number;
+    errorEncountered: number;
+    notesAdded: number;
+  };
+  streakCorrect: number;
+  streakIncorrect: number;
+}
+
+/**
+ * Full learner profile with concept coverage, evidence, and learning state
+ * This is stored as JSON in the learner_profiles table
+ */
+export interface LearnerProfile {
+  id: string;
+  name: string;
+  conceptsCovered: string[]; // Set serialized as array
+  conceptCoverageEvidence: Record<string, ConceptCoverageEvidence>; // Map serialized as object
+  errorHistory: Record<string, number>; // Map serialized as object
+  interactionCount: number;
+  currentStrategy: string;
+  preferences: {
+    escalationThreshold: number;
+    aggregationDelay: number;
+  };
+  createdAt: number;
+  lastActive: number;
+}
+
+/**
+ * Request to create/update a full learner profile
+ */
+export interface SaveLearnerProfileRequest {
+  name?: string;
+  conceptsCovered?: string[];
+  conceptCoverageEvidence?: Record<string, ConceptCoverageEvidence>;
+  errorHistory?: Record<string, number>;
+  interactionCount?: number;
+  currentStrategy?: string;
+  preferences?: {
+    escalationThreshold: number;
+    aggregationDelay: number;
+  };
+  lastActive?: number;
+}
+
+/**
+ * Request to update profile from a single event
+ */
+export interface UpdateProfileFromEventRequest {
+  event: CreateInteractionRequest;
+}
+
+// ============================================================================
 // Interaction/Event Types
 // ============================================================================
 
@@ -54,6 +122,21 @@ export type EventType =
   | 'hdi_trajectory_updated'
   | 'dependency_intervention_triggered';
 
+/**
+ * HDI (Hint Dependency Index) Components
+ */
+export interface HDIComponents {
+  hpa: number;   // Hints Per Attempt
+  aed: number;   // Average Escalation Depth
+  er: number;    // Explanation Rate
+  reae: number;  // Repeated Error After Explanation
+  iwh: number;   // Improvement Without Hint
+}
+
+/**
+ * Full InteractionEvent - Lossless logging for research replay
+ * Mirrors the frontend InteractionEvent exactly
+ */
 export interface Interaction {
   id: string;
   learnerId: string;
@@ -61,17 +144,96 @@ export interface Interaction {
   timestamp: string;
   eventType: EventType;
   problemId: string;
-  payload: Record<string, unknown>;
+  problemSetId?: string;
+  problemNumber?: number;
+  
+  // Code/Error fields
+  code?: string;
+  error?: string;
+  errorSubtypeId?: string;
+  executionTimeMs?: number;
+  
+  // Escalation fields (CRITICAL for replay)
+  rung?: number;
+  fromRung?: number;
+  toRung?: number;
+  trigger?: string;
+  
+  // Concept fields
+  conceptIds?: string[];
+  
+  // HDI/CSI fields
+  hdi?: number;
+  hdiLevel?: 'low' | 'medium' | 'high';
+  hdiComponents?: HDIComponents;
+  
+  // Reinforcement fields
+  scheduleId?: string;
+  promptId?: string;
+  response?: string;
+  isCorrect?: boolean;
+  
+  // Provenance fields
+  unitId?: string;
+  action?: string;
+  sourceInteractionIds?: string[];
+  retrievedSourceIds?: string[];
+  
+  // Legacy payload for extensibility/backward compatibility
+  payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+  
   createdAt: string;
 }
 
+/**
+ * CreateInteractionRequest - All fields optional for flexibility
+ * Required fields: learnerId, timestamp, eventType
+ */
 export interface CreateInteractionRequest {
   learnerId: string;
   sessionId?: string;
   timestamp: string;
   eventType: EventType;
   problemId: string;
+  problemSetId?: string;
+  problemNumber?: number;
+  
+  // Code/Error fields
+  code?: string;
+  error?: string;
+  errorSubtypeId?: string;
+  executionTimeMs?: number;
+  
+  // Escalation fields (CRITICAL for replay)
+  rung?: number;
+  fromRung?: number;
+  toRung?: number;
+  trigger?: string;
+  
+  // Concept fields
+  conceptIds?: string[];
+  
+  // HDI/CSI fields
+  hdi?: number;
+  hdiLevel?: 'low' | 'medium' | 'high';
+  hdiComponents?: HDIComponents;
+  
+  // Reinforcement fields
+  scheduleId?: string;
+  promptId?: string;
+  response?: string;
+  isCorrect?: boolean;
+  
+  // Provenance fields
+  unitId?: string;
+  action?: string;
+  sourceInteractionIds?: string[];
+  retrievedSourceIds?: string[];
+  
+  // Legacy payload for extensibility
   payload?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface BatchInteractionRequest {

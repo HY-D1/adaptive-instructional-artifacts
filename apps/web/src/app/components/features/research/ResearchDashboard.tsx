@@ -96,6 +96,13 @@ interface ReinforcementDataPoint {
   retentionLevel?: string;
   isCorrect?: boolean;
 }
+
+// Week 6: Rich Research Dashboard Metrics
+interface ResearchMetrics {
+  clusters: LearnerCluster[];
+  errorTransitions: ErrorTransitionStats;
+  selectedMasteryLearner: string;
+}
 import {
   Table,
   TableBody,
@@ -140,13 +147,19 @@ import {
   BrainCircuit,
   BookOpen
 } from 'lucide-react';
-import { storage } from '../../../lib/storage/storage';
+import { storage } from '../../../lib/storage';
 import { InteractionEvent, LearnerProfile, ExperimentCondition, PdfIndexDocument } from '../../../types';
+import { type ReflectionQualityScore } from '../../../lib/content/self-explanation-scorer';
 import { orchestrator, ReplayDecisionPoint, AutoEscalationMode } from '../../../lib/adaptive-orchestrator';
 import { checkOllamaHealth, OLLAMA_MODEL } from '../../../lib/api/llm-client';
 import { loadOrBuildPdfIndex, uploadPdfAndBuildIndex } from '../../../lib/pdf-index-loader';
 import { isDemoMode, getDemoModeMessage, DEMO_MODE_VERSION } from '../../../lib/utils/demo-mode';
 import { createEventId } from '../../../lib/utils/event-id';
+import { clusterLearners, LearnerCluster } from '../../../lib/research/learner-clustering';
+import { buildErrorTransitionMatrix, buildErrorTransitionStats, getErrorRecoveryPatterns, ErrorTransitionStats } from '../../../lib/research/error-transitions';
+import { EscalationHeatmap } from '../../research/EscalationHeatmap';
+import { ErrorTransitionView, ErrorChainView, ErrorRecoveryView } from '../../research/ErrorTransitionView';
+import { MasteryTimeline } from '../../research/MasteryTimeline';
 
 const experimentConditions: ExperimentCondition[] = [
   {
@@ -200,6 +213,32 @@ const CHART_COLORS = {
   orange: '#f97316'
 };
 
+// Helper component for quality dimension bars
+function DimensionBar({ label, value }: { label: string; value: number }) {
+  const colorClass = value >= 70 
+    ? 'bg-green-500' 
+    : value >= 40 
+      ? 'bg-yellow-500' 
+      : 'bg-red-500';
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs w-20 text-gray-600">{label}</span>
+      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div 
+          className={`h-full rounded-full ${colorClass}`}
+          style={{ width: `${value}%` }}
+        />
+      </div>
+      <span className={`text-xs w-8 text-right font-medium ${
+        value >= 70 ? 'text-green-600' : value >= 40 ? 'text-yellow-600' : 'text-red-600'
+      }`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 export function ResearchDashboard() {
   const [interactions, setInteractions] = useState<InteractionEvent[]>([]);
   const [profiles, setProfiles] = useState<LearnerProfile[]>([]);
@@ -232,6 +271,7 @@ export function ResearchDashboard() {
   
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedMasteryLearner, setSelectedMasteryLearner] = useState<string>('');
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 500);
@@ -868,6 +908,27 @@ export function ResearchDashboard() {
   const traceStartTime = replayPolicyTrace[0]?.timestamp;
 
   // Week 5: Adaptive Personalization Analytics
+  // Week 6: Rich Research Dashboard Metrics
+  const researchMetrics = useMemo<ResearchMetrics>(() => {
+    const clusters = profiles.length > 0 
+      ? clusterLearners(profiles, filteredInteractions, 3)
+      : [];
+    
+    const errorTransitions = buildErrorTransitionStats(filteredInteractions);
+    
+    return {
+      clusters,
+      errorTransitions,
+      selectedMasteryLearner: selectedMasteryLearner || (profiles[0]?.id ?? '')
+    };
+  }, [profiles, filteredInteractions, selectedMasteryLearner]);
+
+  useEffect(() => {
+    if (!selectedMasteryLearner && profiles.length > 0) {
+      setSelectedMasteryLearner(profiles[0].id);
+    }
+  }, [profiles, selectedMasteryLearner]);
+
   const week5Analytics = useMemo(() => {
     // Filter Week 5 event types (including Component 10: Reinforcement)
     const week5Events = filteredInteractions.filter(i => 
@@ -875,8 +936,92 @@ export function ResearchDashboard() {
        'bandit_arm_selected', 'bandit_reward_observed', 'bandit_updated',
        'hdi_calculated', 'hdi_trajectory_updated', 'dependency_intervention_triggered',
        // Component 10: Knowledge Consolidation events
-       'reinforcement_scheduled', 'reinforcement_prompt_shown', 'reinforcement_response'].includes(i.eventType)
+       'reinforcement_scheduled', 'reinforcement_prompt_shown', 'reinforcement_response',
+       // Week 6: Session Configuration events
+       'session_created',
+       // Knowledge-Structure Layer: Prerequisite violations
+       'prerequisite_violation_detected'].includes(i.eventType)
     );
+    
+    // Knowledge-Structure Layer: Prerequisite Violation Analytics
+    const violationEvents = filteredInteractions.filter(
+      i => i.eventType === 'prerequisite_violation_detected'
+    );
+    
+    const violationStats = {
+      total: violationEvents.length,
+      byConcept: {} as Record<string, number>,
+      byMissingPrerequisite: {} as Record<string, number>,
+      bySeverity: { low: 0, medium: 0, high: 0 } as Record<'low' | 'medium' | 'high', number>,
+      recent: violationEvents.slice(-10).reverse().map(e => ({
+        conceptAttempted: e.metadata?.conceptAttempted as string || e.conceptIds?.[0] || 'unknown',
+        missingPrerequisites: (e.metadata?.missingPrerequisites as string[]) || [],
+        severity: (e.metadata?.severity as 'low' | 'medium' | 'high') || 'low',
+        timestamp: e.timestamp,
+        learnerId: e.learnerId
+      }))
+    };
+    
+    violationEvents.forEach(e => {
+      const conceptId = e.metadata?.conceptAttempted as string || e.conceptIds?.[0] || 'unknown';
+      const severity = (e.metadata?.severity as 'low' | 'medium' | 'high') || 'low';
+      const missing = (e.metadata?.missingPrerequisites as string[]) || [];
+      
+      violationStats.byConcept[conceptId] = (violationStats.byConcept[conceptId] || 0) + 1;
+      violationStats.bySeverity[severity]++;
+      
+      missing.forEach(prereq => {
+        violationStats.byMissingPrerequisite[prereq] = 
+          (violationStats.byMissingPrerequisite[prereq] || 0) + 1;
+      });
+    });
+
+    // Week 6: Condition Statistics
+    const sessionCreatedEvents = week5Events.filter(e => e.eventType === 'session_created');
+    const conditionStats: Record<string, { 
+      count: number; 
+      learnerIds: string[];
+      avgHDI: number;
+      hdiValues: number[];
+    }> = {};
+    
+    sessionCreatedEvents.forEach(e => {
+      const condition = e.conditionId || 'unknown';
+      if (!conditionStats[condition]) {
+        conditionStats[condition] = { 
+          count: 0, 
+          learnerIds: [],
+          avgHDI: 0,
+          hdiValues: []
+        };
+      }
+      conditionStats[condition].count++;
+      if (!conditionStats[condition].learnerIds.includes(e.learnerId)) {
+        conditionStats[condition].learnerIds.push(e.learnerId);
+      }
+    });
+    
+    // Calculate HDI per condition from hdi_calculated events
+    const hdiEvents = week5Events.filter(e => e.eventType === 'hdi_calculated');
+    Object.keys(conditionStats).forEach(condition => {
+      const conditionLearners = conditionStats[condition].learnerIds;
+      const conditionHdiEvents = hdiEvents.filter(e => conditionLearners.includes(e.learnerId));
+      const hdiValues = conditionHdiEvents.map(e => e.hdi || e.payload?.hdi || 0).filter(h => h > 0);
+      
+      conditionStats[condition].hdiValues = hdiValues;
+      conditionStats[condition].avgHDI = hdiValues.length > 0 
+        ? hdiValues.reduce((a, b) => a + b, 0) / hdiValues.length 
+        : 0;
+    });
+    
+    // Convert to array for display
+    const conditionStatsArray = Object.entries(conditionStats).map(([condition, stats]) => ({
+      condition,
+      sessionCount: stats.count,
+      learnerCount: stats.learnerIds.length,
+      avgHDI: stats.avgHDI,
+      avgHdiDisplay: stats.avgHDI.toFixed(2)
+    })).sort((a, b) => b.sessionCount - a.sessionCount);
 
     // 1. Escalation Profile Distribution
     const profileAssignments = week5Events.filter(e => e.eventType === 'profile_assigned');
@@ -940,8 +1085,8 @@ export function ResearchDashboard() {
       });
 
     // 3. HDI Analytics
-    const hdiEvents = week5Events.filter(e => e.eventType === 'hdi_calculated');
-    const hdiDataPoints: HDIDataPoint[] = hdiEvents.map(e => ({
+    const hdiCalcEvents = week5Events.filter(e => e.eventType === 'hdi_calculated');
+    const hdiDataPoints: HDIDataPoint[] = hdiCalcEvents.map(e => ({
       hdi: e.payload?.hdi ?? e.hdi ?? 0,
       learnerId: e.learnerId,
       timestamp: e.timestamp
@@ -1069,6 +1214,48 @@ export function ResearchDashboard() {
       }))
       .sort((a, b) => a.timestamp - b.timestamp);
 
+    // RQS: Self-Explanation Quality Analytics
+    const qualityEvents = filteredInteractions.filter(i => 
+      i.metadata?.selfExplanationQuality !== undefined
+    );
+    
+    let qualityStats: {
+      averageQuality: number;
+      totalScored: number;
+      distribution: { excellent: number; good: number; needsWork: number };
+      dimensionAverages: {
+        paraphrase: number;
+        length: number;
+        conceptKeywords: number;
+        exampleInclusion: number;
+        structuralCompleteness: number;
+      };
+    } | null = null;
+    
+    if (qualityEvents.length > 0) {
+      const scores = qualityEvents.map(e => e.metadata!.selfExplanationQuality as number);
+      const dimensions = qualityEvents
+        .map(e => e.metadata!.qualityDimensions as ReflectionQualityScore['dimensions'])
+        .filter((d): d is ReflectionQualityScore['dimensions'] => !!d);
+      
+      qualityStats = {
+        averageQuality: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+        totalScored: qualityEvents.length,
+        distribution: {
+          excellent: scores.filter(s => s >= 80).length,
+          good: scores.filter(s => s >= 60 && s < 80).length,
+          needsWork: scores.filter(s => s < 60).length
+        },
+        dimensionAverages: dimensions.length > 0 ? {
+          paraphrase: Math.round(dimensions.reduce((a, d) => a + d.paraphrase, 0) / dimensions.length),
+          length: Math.round(dimensions.reduce((a, d) => a + d.length, 0) / dimensions.length),
+          conceptKeywords: Math.round(dimensions.reduce((a, d) => a + d.conceptKeywords, 0) / dimensions.length),
+          exampleInclusion: Math.round(dimensions.reduce((a, d) => a + d.exampleInclusion, 0) / dimensions.length),
+          structuralCompleteness: Math.round(dimensions.reduce((a, d) => a + d.structuralCompleteness, 0) / dimensions.length)
+        } : { paraphrase: 0, length: 0, conceptKeywords: 0, exampleInclusion: 0, structuralCompleteness: 0 }
+      };
+    }
+
     return {
       week5Events,
       profileDistributionData,
@@ -1078,7 +1265,10 @@ export function ResearchDashboard() {
       highHDIAlerts,
       profileEffectivenessData: sortedProfileEffectiveness,
       reinforcementStats,
-      reinforcementTimeline
+      reinforcementTimeline,
+      conditionStats: conditionStatsArray,
+      qualityStats,
+      violationStats
     };
   }, [filteredInteractions]);
 
@@ -1465,6 +1655,22 @@ export function ResearchDashboard() {
             <TabsTrigger value="reinforcement" className="flex items-center gap-1.5">
               <BookOpen className="size-4" />
               Knowledge Consolidation
+            </TabsTrigger>
+            <TabsTrigger value="clustering" className="flex items-center gap-1.5">
+              <Users className="size-4" />
+              Clustering
+            </TabsTrigger>
+            <TabsTrigger value="heatmap" className="flex items-center gap-1.5">
+              <BarChart3 className="size-4" />
+              Heatmap
+            </TabsTrigger>
+            <TabsTrigger value="transitions" className="flex items-center gap-1.5">
+              <TrendingUp className="size-4" />
+              Error Transitions
+            </TabsTrigger>
+            <TabsTrigger value="mastery" className="flex items-center gap-1.5">
+              <Target className="size-4" />
+              Mastery Timeline
             </TabsTrigger>
           </TabsList>
 
@@ -2104,6 +2310,280 @@ export function ResearchDashboard() {
                 </div>
               )}
             </Card>
+
+            {/* Knowledge-Structure Layer: Prerequisite Violation Statistics */}
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <AlertCircle className="size-5 text-amber-600" />
+                Prerequisite Violations
+              </h3>
+              {week5Analytics.violationStats.total > 0 ? (
+                <div className="space-y-6">
+                  {/* Summary Stats */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="p-3 bg-gray-50 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-amber-600">
+                        {week5Analytics.violationStats.total}
+                      </p>
+                      <p className="text-xs text-gray-600">Total Violations</p>
+                    </div>
+                    <div className="p-3 bg-red-50 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-red-600">
+                        {week5Analytics.violationStats.bySeverity.high}
+                      </p>
+                      <p className="text-xs text-red-600">High Severity</p>
+                    </div>
+                    <div className="p-3 bg-yellow-50 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-yellow-600">
+                        {Object.keys(week5Analytics.violationStats.byConcept).length}
+                      </p>
+                      <p className="text-xs text-yellow-700">Concepts Affected</p>
+                    </div>
+                  </div>
+                  
+                  {/* Most problematic concepts */}
+                  {Object.keys(week5Analytics.violationStats.byConcept).length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-2">
+                        Most Problematic Concepts
+                      </p>
+                      <div className="space-y-2">
+                        {Object.entries(week5Analytics.violationStats.byConcept)
+                          .sort((a, b) => b[1] - a[1])
+                          .slice(0, 5)
+                          .map(([conceptId, count]) => (
+                            <div key={conceptId} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                              <span className="text-sm capitalize">
+                                {conceptId.replace(/-/g, ' ')}
+                              </span>
+                              <Badge variant="outline">{count} violations</Badge>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Most commonly missing prerequisites */}
+                  {Object.keys(week5Analytics.violationStats.byMissingPrerequisite).length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-2">
+                        Most Commonly Missing Prerequisites
+                      </p>
+                      <div className="space-y-2">
+                        {Object.entries(week5Analytics.violationStats.byMissingPrerequisite)
+                          .sort((a, b) => b[1] - a[1])
+                          .slice(0, 5)
+                          .map(([prereq, count]) => (
+                            <div key={prereq} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                              <span className="text-sm capitalize">
+                                {prereq.replace(/-/g, ' ')}
+                              </span>
+                              <Badge variant="outline">{count} times</Badge>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Severity breakdown */}
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Severity Breakdown</p>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden flex">
+                        <div 
+                          className="bg-red-500 h-full"
+                          style={{ 
+                            width: `${week5Analytics.violationStats.total > 0 
+                              ? (week5Analytics.violationStats.bySeverity.high / week5Analytics.violationStats.total) * 100 
+                              : 0}%` 
+                          }}
+                        />
+                        <div 
+                          className="bg-yellow-500 h-full"
+                          style={{ 
+                            width: `${week5Analytics.violationStats.total > 0 
+                              ? (week5Analytics.violationStats.bySeverity.medium / week5Analytics.violationStats.total) * 100 
+                              : 0}%` 
+                          }}
+                        />
+                        <div 
+                          className="bg-green-500 h-full"
+                          style={{ 
+                            width: `${week5Analytics.violationStats.total > 0 
+                              ? (week5Analytics.violationStats.bySeverity.low / week5Analytics.violationStats.total) * 100 
+                              : 0}%` 
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-600 mt-1">
+                      <span className="text-red-600">
+                        High: {week5Analytics.violationStats.bySeverity.high}
+                      </span>
+                      <span className="text-yellow-600">
+                        Medium: {week5Analytics.violationStats.bySeverity.medium}
+                      </span>
+                      <span className="text-green-600">
+                        Low: {week5Analytics.violationStats.bySeverity.low}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <AlertCircle className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>No prerequisite violations detected</p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Violations are logged when learners attempt concepts without prerequisites
+                  </p>
+                </div>
+              )}
+            </Card>
+
+            {/* Week 6: Condition Statistics */}
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Target className="size-5 text-purple-600" />
+                Experimental Condition Statistics
+              </h3>
+              {week5Analytics.conditionStats.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Condition</TableHead>
+                        <TableHead className="text-right">Sessions</TableHead>
+                        <TableHead className="text-right">Learners</TableHead>
+                        <TableHead className="text-right">Avg HDI</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {week5Analytics.conditionStats.map((row) => (
+                        <TableRow key={row.condition}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Badge 
+                                variant="outline"
+                                className={
+                                  row.condition === 'aggressive' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                                  row.condition === 'conservative' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
+                                  row.condition === 'adaptive' ? 'bg-green-100 text-green-800 border-green-200' :
+                                  row.condition === 'explanation_first' ? 'bg-purple-100 text-purple-800 border-purple-200' :
+                                  'bg-gray-100 text-gray-800 border-gray-200'
+                                }
+                              >
+                                {row.condition}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-mono">{row.sessionCount}</TableCell>
+                          <TableCell className="text-right font-mono">{row.learnerCount}</TableCell>
+                          <TableCell className="text-right">
+                            <span className={`font-mono ${
+                              row.avgHDI <= 0.33 ? 'text-green-600' : 
+                              row.avgHDI <= 0.66 ? 'text-yellow-600' : 
+                              'text-red-600'
+                            }`}>
+                              {row.avgHdiDisplay}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <Target className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>No condition statistics available</p>
+                  <p className="text-sm text-gray-400 mt-1">Create sessions to see experimental condition comparison</p>
+                </div>
+              )}
+            </Card>
+
+            {/* Self-Explanation Quality Analytics */}
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <BrainCircuit className="size-5 text-purple-600" />
+                Self-Explanation Quality (RQS)
+              </h3>
+              {week5Analytics.qualityStats ? (
+                <div className="space-y-6">
+                  {/* Overall Stats */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="p-4 bg-purple-50 rounded-lg text-center">
+                      <p className="text-sm text-purple-600 mb-1">Average Quality</p>
+                      <p className="text-2xl font-bold text-purple-900">{week5Analytics.qualityStats.averageQuality}/100</p>
+                    </div>
+                    <div className="p-4 bg-blue-50 rounded-lg text-center">
+                      <p className="text-sm text-blue-600 mb-1">Total Scored</p>
+                      <p className="text-2xl font-bold text-blue-900">{week5Analytics.qualityStats.totalScored}</p>
+                    </div>
+                    <div className="p-4 bg-green-50 rounded-lg text-center">
+                      <p className="text-sm text-green-600 mb-1">Excellent Rate</p>
+                      <p className="text-2xl font-bold text-green-900">
+                        {Math.round((week5Analytics.qualityStats.distribution.excellent / week5Analytics.qualityStats.totalScored) * 100)}%
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Distribution */}
+                  <div>
+                    <p className="text-sm text-gray-600 mb-3">Quality Distribution</p>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs w-20">Excellent (80-100)</span>
+                        <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-green-500 rounded-full"
+                            style={{ width: `${(week5Analytics.qualityStats.distribution.excellent / week5Analytics.qualityStats.totalScored) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-xs w-8 text-right">{week5Analytics.qualityStats.distribution.excellent}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs w-20">Good (60-79)</span>
+                        <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-blue-500 rounded-full"
+                            style={{ width: `${(week5Analytics.qualityStats.distribution.good / week5Analytics.qualityStats.totalScored) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-xs w-8 text-right">{week5Analytics.qualityStats.distribution.good}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs w-20">Needs Work (&lt;60)</span>
+                        <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-red-500 rounded-full"
+                            style={{ width: `${(week5Analytics.qualityStats.distribution.needsWork / week5Analytics.qualityStats.totalScored) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-xs w-8 text-right">{week5Analytics.qualityStats.distribution.needsWork}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dimension Averages */}
+                  <div>
+                    <p className="text-sm text-gray-600 mb-3">Average Dimension Scores</p>
+                    <div className="space-y-2">
+                      <DimensionBar label="Originality" value={week5Analytics.qualityStats.dimensionAverages.paraphrase} />
+                      <DimensionBar label="Length" value={week5Analytics.qualityStats.dimensionAverages.length} />
+                      <DimensionBar label="Keywords" value={week5Analytics.qualityStats.dimensionAverages.conceptKeywords} />
+                      <DimensionBar label="Examples" value={week5Analytics.qualityStats.dimensionAverages.exampleInclusion} />
+                      <DimensionBar label="Structure" value={week5Analytics.qualityStats.dimensionAverages.structuralCompleteness} />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <BrainCircuit className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>No quality data available</p>
+                  <p className="text-sm text-gray-400 mt-1">Learners need to save notes with reflections to see quality scores</p>
+                </div>
+              )}
+            </Card>
           </TabsContent>
 
           <TabsContent value="reinforcement" className="space-y-6">
@@ -2255,6 +2735,164 @@ export function ResearchDashboard() {
                   <Clock className="size-12 mx-auto mb-3 text-gray-300" />
                   <p>No reinforcement activity yet</p>
                   <p className="text-sm text-gray-400 mt-1">Schedule reinforcement by saving textbook units</p>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="clustering" className="space-y-6">
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Users className="size-5 text-blue-600" />
+                Learner Behavior Clusters
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Learners are automatically grouped based on HDI, escalation rate, and independence metrics using k-means clustering.
+              </p>
+              
+              {researchMetrics.clusters.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {researchMetrics.clusters.map((cluster) => (
+                    <Card key={cluster.id} className="p-4 border-l-4 border-l-blue-500">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-semibold text-gray-800">{cluster.name}</h4>
+                        <Badge variant="secondary">{cluster.members.length} learners</Badge>
+                      </div>
+                      
+                      <div className="space-y-2 mb-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-500">Avg HDI</span>
+                          <span className={`font-mono ${
+                            cluster.centroids.hdi < 0.3 ? 'text-green-600' : 
+                            cluster.centroids.hdi < 0.6 ? 'text-yellow-600' : 'text-red-600'
+                          }`}>
+                            {cluster.centroids.hdi.toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-500">Escalation Rate</span>
+                          <span className="font-mono">{(cluster.centroids.escalationRate * 100).toFixed(0)}%</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-500">Independence</span>
+                          <span className="font-mono">{(cluster.centroids.independence * 100).toFixed(0)}%</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-1">
+                        {cluster.characteristics.map((trait, idx) => (
+                          <Badge key={idx} variant="outline" className="text-xs bg-gray-50">
+                            {trait}
+                          </Badge>
+                        ))}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <Users className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>No clustering data available</p>
+                  <p className="text-sm text-gray-400 mt-1">Add learner profiles to see behavior clusters</p>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="heatmap" className="space-y-6">
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <BarChart3 className="size-5 text-purple-600" />
+                Escalation Heatmap
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Visual representation of escalation patterns across learners and problems. 
+                Darker colors indicate higher rung usage.
+              </p>
+              <EscalationHeatmap interactions={filteredInteractions} />
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="transitions" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="p-6">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <TrendingUp className="size-5 text-red-600" />
+                  Error Transition Matrix
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Shows which error types most commonly follow others, revealing patterns in learner struggles.
+                </p>
+                <ErrorTransitionView matrix={researchMetrics.errorTransitions.transitions} />
+              </Card>
+
+              <Card className="p-6">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <AlertCircle className="size-5 text-orange-600" />
+                  Error Recovery Patterns
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Percentage of successful recoveries after each error type.
+                </p>
+                <ErrorRecoveryView 
+                  patterns={getErrorRecoveryPatterns(filteredInteractions)} 
+                />
+              </Card>
+            </div>
+
+            {researchMetrics.errorTransitions.errorChains.length > 0 && (
+              <Card className="p-6">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <Activity className="size-5 text-amber-600" />
+                  Common Error Chains
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Sequences of errors that occur consecutively, appearing at least twice in the data.
+                </p>
+                <ErrorChainView chains={researchMetrics.errorTransitions.errorChains} />
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="mastery" className="space-y-6">
+            <Card className="p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Target className="size-5 text-green-600" />
+                    Concept Mastery Timeline
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Chronological view of concept interactions for a specific learner.
+                  </p>
+                </div>
+                <Select 
+                  value={selectedMasteryLearner} 
+                  onValueChange={setSelectedMasteryLearner}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Select learner" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {profiles.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {selectedMasteryLearner ? (
+                <MasteryTimeline 
+                  interactions={filteredInteractions} 
+                  learnerId={selectedMasteryLearner}
+                  maxEvents={25}
+                />
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <Target className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>Select a learner to view their mastery timeline</p>
                 </div>
               )}
             </Card>

@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
 import { useUserRole } from '../hooks/useUserRole';
 import { useSessionPersistence } from '../hooks/useSessionPersistence';
-import { storage } from '../lib/storage/storage';
+import { storage } from '../lib/storage';
 import { isPreviewModeActive } from '../lib/auth-guard';
 
 /**

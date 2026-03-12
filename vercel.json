@@ -1,4 +1,8 @@
 {
+  "_comment": "SQL-Adapt Vercel Configuration - Hosted Mode (Deterministic)",
+  "_note": "This app runs in deterministic mode on Vercel without LLM/PDF features.",
+  "_note2": "PDF and Ollama endpoints are stubbed to return 503 in hosted mode.",
+  "_note3": "For full features with LLM/PDF, deploy the backend server separately.",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
   "headers": [
     {

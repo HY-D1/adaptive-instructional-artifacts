@@ -36,7 +36,7 @@ import { banditManager, BANDIT_ARM_PROFILES } from '../lib/ml/learner-bandit-man
 import type { BanditArmId } from '../lib/ml/learner-bandit-manager';
 import { assignProfile } from '../lib/ml/escalation-profiles';
 import type { AssignmentStrategy } from '../lib/ml/escalation-profiles';
-import { storage, broadcastSync } from '../lib/storage/storage';
+import { storage, broadcastSync } from '../lib/storage';
 import type { InteractionEvent } from '../types';
 import { calculateHDIData, filterOutHDIEvents, formatHDIDetailed } from '../lib/ml/hdi-debug';
 import { Switch } from '../components/ui/switch';

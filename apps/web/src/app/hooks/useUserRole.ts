@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { UserRole, UserProfile } from '../types';
-import { storage } from '../lib/storage/storage';
+import { storage } from '../lib/storage';
 
 const DEFAULT_ROLE: UserRole = 'student';
 

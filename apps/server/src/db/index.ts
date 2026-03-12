@@ -10,6 +10,7 @@ import type {
   Learner,
   CreateLearnerRequest,
   UpdateLearnerRequest,
+  LearnerProfile,
   Interaction,
   CreateInteractionRequest,
   InteractionQueryParams,
@@ -100,7 +101,7 @@ function allAsync<T>(db: sqlite3.Database, sql: string, params: unknown[] = []):
 export async function initializeSchema(): Promise<void> {
   const database = getDb();
 
-  // Learners table
+  // Learners table (basic auth info)
   await runAsync(database, `
     CREATE TABLE IF NOT EXISTS learners (
       id TEXT PRIMARY KEY,
@@ -112,6 +113,18 @@ export async function initializeSchema(): Promise<void> {
   `);
 
   await runAsync(database, `CREATE INDEX IF NOT EXISTS idx_learners_role ON learners(role)`);
+
+  // Learner profiles table (rich profile data as JSON)
+  await runAsync(database, `
+    CREATE TABLE IF NOT EXISTS learner_profiles (
+      learner_id TEXT PRIMARY KEY,
+      profile_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (learner_id) REFERENCES learners(id) ON DELETE CASCADE
+    )
+  `);
+
+  await runAsync(database, `CREATE INDEX IF NOT EXISTS idx_profiles_updated ON learner_profiles(updated_at)`);
 
   // Interactions table (append-only logging)
   await runAsync(database, `
@@ -227,6 +240,9 @@ export async function createLearner(id: string, data: CreateLearnerRequest): Pro
     VALUES (?, ?, ?, ?, ?)
   `, [learner.id, learner.name, learner.role, learner.createdAt, learner.updatedAt]);
   
+  // Create default profile for the learner
+  await createDefaultProfile(id, data.name);
+  
   return learner;
 }
 
@@ -252,6 +268,9 @@ export async function updateLearner(id: string, data: UpdateLearnerRequest): Pro
   if (data.name !== undefined) {
     updates.push('name = ?');
     values.push(data.name);
+    
+    // Also update profile name
+    await updateProfileName(id, data.name);
   }
   if (data.role !== undefined) {
     updates.push('role = ?');
@@ -271,6 +290,240 @@ export async function deleteLearner(id: string): Promise<boolean> {
   const db = getDb();
   const result = await runAsync(db, 'DELETE FROM learners WHERE id = ?', [id]);
   return result.changes > 0;
+}
+
+// ============================================================================
+// Learner Profile Operations
+// ============================================================================
+
+/**
+ * Create a default profile for a new learner
+ */
+async function createDefaultProfile(learnerId: string, name: string): Promise<LearnerProfile> {
+  const now = Date.now();
+  const profile: LearnerProfile = {
+    id: learnerId,
+    name,
+    conceptsCovered: [],
+    conceptCoverageEvidence: {},
+    errorHistory: {},
+    interactionCount: 0,
+    currentStrategy: 'adaptive',
+    preferences: {
+      escalationThreshold: 2,
+      aggregationDelay: 300000, // 5 minutes in ms
+    },
+    createdAt: now,
+    lastActive: now,
+  };
+
+  await saveLearnerProfile(profile);
+  return profile;
+}
+
+/**
+ * Update profile name when learner name changes
+ */
+async function updateProfileName(learnerId: string, name: string): Promise<void> {
+  const profile = await getLearnerProfile(learnerId);
+  if (profile) {
+    profile.name = name;
+    profile.lastActive = Date.now();
+    await saveLearnerProfile(profile);
+  }
+}
+
+/**
+ * Save (create or update) a full learner profile
+ */
+export async function saveLearnerProfile(profile: LearnerProfile): Promise<void> {
+  const db = getDb();
+  const now = new Date().toISOString();
+
+  const sql = `
+    INSERT INTO learner_profiles (learner_id, profile_json, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(learner_id) DO UPDATE SET
+      profile_json = excluded.profile_json,
+      updated_at = excluded.updated_at
+  `;
+
+  await runAsync(db, sql, [
+    profile.id,
+    JSON.stringify(profile),
+    now
+  ]);
+}
+
+/**
+ * Get a learner's full profile
+ */
+export async function getLearnerProfile(learnerId: string): Promise<LearnerProfile | null> {
+  const sql = 'SELECT profile_json FROM learner_profiles WHERE learner_id = ?';
+  const row = await getAsync<{ profile_json: string }>(getDb(), sql, [learnerId]);
+
+  if (!row) return null;
+  
+  try {
+    return JSON.parse(row.profile_json) as LearnerProfile;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get all learner profiles
+ */
+export async function getAllLearnerProfiles(): Promise<LearnerProfile[]> {
+  const sql = 'SELECT profile_json FROM learner_profiles';
+  const rows = await allAsync<{ profile_json: string }>(getDb(), sql);
+  
+  return rows
+    .map(row => {
+      try {
+        return JSON.parse(row.profile_json) as LearnerProfile;
+      } catch {
+        return null;
+      }
+    })
+    .filter((p): p is LearnerProfile => p !== null);
+}
+
+/**
+ * Update learner's last active timestamp
+ */
+export async function updateLearnerActivity(learnerId: string): Promise<void> {
+  const profile = await getLearnerProfile(learnerId);
+  if (profile) {
+    profile.lastActive = Date.now();
+    await saveLearnerProfile(profile);
+  }
+}
+
+/**
+ * Update profile from a single event
+ * Derives state changes from interaction events
+ */
+export async function updateProfileFromEvent(
+  learnerId: string,
+  event: CreateInteractionRequest
+): Promise<LearnerProfile | null> {
+  // Get current profile or create default
+  let profile = await getLearnerProfile(learnerId);
+  if (!profile) {
+    const learner = await getLearnerById(learnerId);
+    if (!learner) return null;
+    profile = {
+      id: learnerId,
+      name: learner.name,
+      conceptsCovered: [],
+      conceptCoverageEvidence: {},
+      errorHistory: {},
+      interactionCount: 0,
+      currentStrategy: 'adaptive',
+      preferences: {
+        escalationThreshold: 2,
+        aggregationDelay: 300000,
+      },
+      createdAt: Date.now(),
+      lastActive: Date.now(),
+    };
+  }
+
+  // Update interaction count and last active
+  profile.interactionCount++;
+  profile.lastActive = Date.now();
+
+  // Update error history
+  if (event.eventType === 'error' && event.errorSubtypeId) {
+    profile.errorHistory[event.errorSubtypeId] = 
+      (profile.errorHistory[event.errorSubtypeId] || 0) + 1;
+  }
+
+  // Update concept coverage evidence
+  if (event.conceptIds && event.conceptIds.length > 0) {
+    for (const conceptId of event.conceptIds) {
+      // Add to covered concepts if not present
+      if (!profile.conceptsCovered.includes(conceptId)) {
+        profile.conceptsCovered.push(conceptId);
+      }
+
+      // Initialize or get existing evidence
+      if (!profile.conceptCoverageEvidence[conceptId]) {
+        profile.conceptCoverageEvidence[conceptId] = {
+          conceptId,
+          score: 50,
+          confidence: 'low',
+          lastUpdated: Date.now(),
+          evidenceCounts: {
+            successfulExecution: 0,
+            hintViewed: 0,
+            explanationViewed: 0,
+            errorEncountered: 0,
+            notesAdded: 0,
+          },
+          streakCorrect: 0,
+          streakIncorrect: 0,
+        };
+      }
+
+      const evidence = profile.conceptCoverageEvidence[conceptId];
+      evidence.lastUpdated = Date.now();
+
+      // Update based on event type
+      switch (event.eventType) {
+        case 'execution':
+          if (event.metadata?.successful || event.payload?.successful) {
+            evidence.evidenceCounts.successfulExecution++;
+            evidence.streakCorrect++;
+            evidence.streakIncorrect = 0;
+            // Increase score on success
+            evidence.score = Math.min(100, evidence.score + 5);
+          }
+          break;
+
+        case 'error':
+          evidence.evidenceCounts.errorEncountered++;
+          evidence.streakIncorrect++;
+          evidence.streakCorrect = 0;
+          // Decrease score on error
+          evidence.score = Math.max(0, evidence.score - 5);
+          break;
+
+        case 'hint_view':
+          evidence.evidenceCounts.hintViewed++;
+          break;
+
+        case 'explanation_view':
+          evidence.evidenceCounts.explanationViewed++;
+          break;
+
+        case 'textbook_unit_upsert':
+          evidence.evidenceCounts.notesAdded++;
+          break;
+      }
+
+      // Update confidence based on evidence quantity
+      const totalEvidence = 
+        evidence.evidenceCounts.successfulExecution +
+        evidence.evidenceCounts.hintViewed +
+        evidence.evidenceCounts.explanationViewed +
+        evidence.evidenceCounts.errorEncountered +
+        evidence.evidenceCounts.notesAdded;
+
+      if (totalEvidence >= 10) {
+        evidence.confidence = 'high';
+      } else if (totalEvidence >= 5) {
+        evidence.confidence = 'medium';
+      } else {
+        evidence.confidence = 'low';
+      }
+    }
+  }
+
+  // Save updated profile
+  await saveLearnerProfile(profile);
+  return profile;
 }
 
 // ============================================================================
@@ -305,6 +558,9 @@ export async function createInteraction(id: string, data: CreateInteractionReque
     JSON.stringify(interaction.payload),
     interaction.createdAt
   ]);
+
+  // Also update the learner profile from this event
+  await updateProfileFromEvent(data.learnerId, data);
 
   return interaction;
 }
@@ -349,6 +605,9 @@ export async function createInteractionsBatch(events: CreateInteractionRequest[]
     });
 
     interactions.push(interaction);
+    
+    // Update profile from this event
+    await updateProfileFromEvent(event.learnerId, event);
   }
 
   stmt.finalize();

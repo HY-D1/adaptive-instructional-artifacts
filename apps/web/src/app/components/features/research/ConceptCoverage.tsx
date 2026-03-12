@@ -18,7 +18,7 @@ import {
   Target
 } from 'lucide-react';
 import { conceptNodes } from '../../../data/sql-engage';
-import { storage } from '../../../lib/storage/storage';
+import { storage } from '../../../lib/storage';
 import { ConceptCoverageEvidence, LearnerProfile, CoverageStats } from '../../../types';
 
 interface ConceptCoverageProps {

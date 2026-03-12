@@ -255,20 +255,106 @@ class DualStorageManager {
   }
 
   // ============================================================================
-  // Profile Operations
+  // Profile Operations (Full Learner Profile)
   // ============================================================================
 
-  saveProfile(profile: LearnerProfile): void {
+  /**
+   * Save a learner's full profile to backend and localStorage
+   */
+  async saveProfile(profile: LearnerProfile): Promise<void> {
+    // Always save to localStorage as primary source
     localStorageManager.saveProfile(profile);
     
-    // Sync to backend
+    // Sync to backend if available
     if (this.shouldUseBackend()) {
-      // Backend doesn't have full profile support yet
+      try {
+        await storageClient.saveProfile(profile);
+      } catch (err) {
+        console.warn('[DualStorage] Failed to sync profile to backend:', err);
+      }
     }
   }
 
-  getProfile(learnerId: string): LearnerProfile | null {
+  /**
+   * Get a learner's full profile
+   * Prefers backend if available, falls back to localStorage
+   */
+  async getProfile(learnerId: string): Promise<LearnerProfile | null> {
+    // Try backend first if available
+    if (this.shouldUseBackend()) {
+      try {
+        const backendProfile = await storageClient.getProfile(learnerId);
+        if (backendProfile) {
+          // Sync to localStorage for offline access
+          localStorageManager.saveProfile(backendProfile);
+          return backendProfile;
+        }
+      } catch (err) {
+        console.warn('[DualStorage] Failed to get profile from backend, using localStorage:', err);
+      }
+    }
+    
+    // Fall back to localStorage
     return localStorageManager.getProfile(learnerId);
+  }
+
+  /**
+   * Get all learner profiles (for instructor dashboard)
+   */
+  async getAllProfiles(): Promise<LearnerProfile[]> {
+    if (this.shouldUseBackend()) {
+      try {
+        const profiles = await storageClient.getAllProfiles();
+        if (profiles.length > 0) {
+          return profiles;
+        }
+      } catch (err) {
+        console.warn('[DualStorage] Failed to get profiles from backend:', err);
+      }
+    }
+    
+    // Fall back to localStorage - get from current user's export
+    const exportData = localStorageManager.exportData();
+    // Note: localStorage only has current user's profile, not all users
+    return [];
+  }
+
+  /**
+   * Update profile from a single event
+   * Sends event to backend which derives the state changes
+   */
+  async updateProfileFromEvent(learnerId: string, event: InteractionEvent): Promise<LearnerProfile | null> {
+    // Always update localStorage first
+    const localProfile = localStorageManager.getProfile(learnerId);
+    if (localProfile) {
+      // Update local profile from event
+      localProfile.interactionCount++;
+      localProfile.lastActive = Date.now();
+      
+      if (event.errorSubtypeId) {
+        const currentCount = localProfile.errorHistory.get(event.errorSubtypeId) || 0;
+        localProfile.errorHistory.set(event.errorSubtypeId, currentCount + 1);
+      }
+      
+      if (event.conceptIds) {
+        for (const conceptId of event.conceptIds) {
+          localProfile.conceptsCovered.add(conceptId);
+        }
+      }
+      
+      localStorageManager.saveProfile(localProfile);
+    }
+    
+    // Sync to backend if available
+    if (this.shouldUseBackend()) {
+      try {
+        return await storageClient.updateProfileFromEvent(learnerId, event);
+      } catch (err) {
+        console.warn('[DualStorage] Failed to update profile on backend:', err);
+      }
+    }
+    
+    return localProfile;
   }
 
   // ============================================================================
@@ -291,9 +377,14 @@ class DualStorageManager {
     // If using backend, try to get all learners' data
     if (this.shouldUseBackend()) {
       try {
-        const stats = await storageClient.getClassStats();
+        const [stats, profiles] = await Promise.all([
+          storageClient.getClassStats(),
+          storageClient.getAllProfiles().catch(() => []),
+        ]);
+        
         if (stats) {
           console.log('[DualStorage] Backend stats:', stats);
+          console.log('[DualStorage] Backend profiles:', profiles.length);
         }
       } catch (error) {
         console.warn('[DualStorage] Failed to get backend stats:', error);

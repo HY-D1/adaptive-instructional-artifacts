@@ -42,7 +42,7 @@ import {
   DialogTitle,
   DialogDescription
 } from '../components/ui/dialog';
-import { storage, broadcastSync, setDebugProfileWithSync, setDebugStrategyWithSync } from '../lib/storage/storage';
+import { storage, broadcastSync, setDebugProfileWithSync, setDebugStrategyWithSync } from '../lib/storage';
 import { seedDemoDataset, resetDemoDataset, hasDemoData } from '../lib/demo/demo-seed';
 import { useUserRole } from '../hooks/useUserRole';
 import type { LearnerProfile, InteractionEvent } from '../types';

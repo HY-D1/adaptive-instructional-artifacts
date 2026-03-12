@@ -1,6 +1,7 @@
 /**
  * Research API Routes
  * Instructor/researcher endpoints for data export and analysis
+ * Returns full InteractionEvents for research replay
  */
 
 import { Router } from 'express';
@@ -77,9 +78,21 @@ router.get('/learner/:id/trajectory', async (req, res) => {
     const uniqueProblems = new Set(interactions.map(i => i.problemId));
     const hintsRequested = interactions.filter(i => i.eventType === 'hint_request').length;
     const explanationsViewed = interactions.filter(i => i.eventType === 'explanation_view').length;
+    const escalations = interactions.filter(i => i.eventType === 'guidance_escalate').length;
     const uniqueSessions = new Set(interactions.map(i => i.sessionId).filter(Boolean));
+    
+    // Calculate HDI stats if available
+    const hdiReadings = interactions
+      .filter(i => i.hdi !== undefined)
+      .map(i => i.hdi as number);
+    const averageHdi = hdiReadings.length > 0 
+      ? hdiReadings.reduce((a, b) => a + b, 0) / hdiReadings.length 
+      : undefined;
 
-    const trajectory: LearnerTrajectory = {
+    const trajectory: LearnerTrajectory & { 
+      hdiStats?: { average: number; readings: number; lastLevel?: string };
+      escalationCount?: number;
+    } = {
       learner,
       interactions,
       textbookUnits,
@@ -91,9 +104,20 @@ router.get('/learner/:id/trajectory', async (req, res) => {
         textbookUnitsCreated: textbookUnits.length,
         sessionCount: uniqueSessions.size,
       },
+      escalationCount: escalations,
     };
+    
+    // Add HDI stats if available
+    if (averageHdi !== undefined) {
+      const lastHdi = interactions.find(i => i.hdiLevel !== undefined);
+      trajectory.hdiStats = {
+        average: Math.round(averageHdi * 100) / 100,
+        readings: hdiReadings.length,
+        lastLevel: lastHdi?.hdiLevel,
+      };
+    }
 
-    const response: ApiResponse<LearnerTrajectory> = {
+    const response: ApiResponse<typeof trajectory> = {
       success: true,
       data: trajectory,
     };
@@ -109,7 +133,7 @@ router.get('/learner/:id/trajectory', async (req, res) => {
 });
 
 // ============================================================================
-// GET /api/research/export - Full dataset export
+// GET /api/research/export - Full dataset export (lossless)
 // ============================================================================
 
 router.get('/export', async (req, res) => {
@@ -149,6 +173,13 @@ router.get('/export', async (req, res) => {
       allTextbookUnits.push({ learnerId: learner.id, units });
     }
 
+    // Calculate summary statistics
+    const escalationEvents = filteredInteractions.filter(i => i.eventType === 'guidance_escalate');
+    const hdiEvents = filteredInteractions.filter(i => i.hdi !== undefined);
+    const banditEvents = filteredInteractions.filter(i => 
+      ['bandit_arm_selected', 'bandit_reward_observed', 'bandit_updated'].includes(i.eventType)
+    );
+
     const exportData = {
       exportedAt: new Date().toISOString(),
       filters: {
@@ -161,14 +192,25 @@ router.get('/export', async (req, res) => {
         learnerCount: learners.length,
         interactionCount: filteredInteractions.length,
         textbookUnitCount: allTextbookUnits.reduce((sum, l) => sum + l.units.length, 0),
+        escalationEventCount: escalationEvents.length,
+        hdiReadingCount: hdiEvents.length,
+        banditEventCount: banditEvents.length,
+        fieldsPreserved: [
+          'id', 'learnerId', 'sessionId', 'timestamp', 'eventType', 'problemId',
+          'problemSetId', 'problemNumber', 'code', 'error', 'errorSubtypeId',
+          'executionTimeMs', 'rung', 'fromRung', 'toRung', 'trigger', 'conceptIds',
+          'hdi', 'hdiLevel', 'hdiComponents', 'scheduleId', 'promptId', 'response',
+          'isCorrect', 'unitId', 'action', 'sourceInteractionIds', 'retrievedSourceIds',
+          'payload', 'metadata', 'createdAt'
+        ],
       },
       learners,
-      interactions: filteredInteractions,
+      interactions: filteredInteractions, // Full events preserved
       textbookUnits: allTextbookUnits,
     };
 
     if (format === 'csv') {
-      // Export as CSV for interactions
+      // Export interactions as CSV with all fields
       const interactionsCsv = convertInteractionsToCsv(filteredInteractions);
       
       res.setHeader('Content-Type', 'text/csv');
@@ -206,12 +248,20 @@ router.get('/learners', async (_req, res) => {
         const textbookUnits = await getTextbookByLearner(learner.id);
         const uniqueProblems = new Set(interactions.map(i => i.problemId));
         
+        // Get escalation and HDI stats
+        const escalationCount = interactions.filter(i => i.eventType === 'guidance_escalate').length;
+        const hdiReadings = interactions.filter(i => i.hdi !== undefined);
+        const lastHdi = hdiReadings.length > 0 ? hdiReadings[0] : undefined;
+        
         return {
           ...learner,
           stats: {
             totalInteractions: interactions.length,
             problemsAttempted: uniqueProblems.size,
             textbookUnitsCreated: textbookUnits.length,
+            escalationCount,
+            hdiReadingCount: hdiReadings.length,
+            lastHdiLevel: lastHdi?.hdiLevel,
             lastActivity: interactions.length > 0 ? interactions[0].timestamp : null,
           },
         };
@@ -245,7 +295,31 @@ function convertInteractionsToCsv(interactions: Interaction[]): string {
     'timestamp',
     'eventType',
     'problemId',
+    'problemSetId',
+    'problemNumber',
+    'code',
+    'error',
+    'errorSubtypeId',
+    'executionTimeMs',
+    'rung',
+    'fromRung',
+    'toRung',
+    'trigger',
+    'conceptIds',
+    'hdi',
+    'hdiLevel',
+    'hdiComponents',
+    'scheduleId',
+    'promptId',
+    'response',
+    'isCorrect',
+    'unitId',
+    'action',
+    'sourceInteractionIds',
+    'retrievedSourceIds',
     'payload',
+    'metadata',
+    'createdAt',
   ];
 
   const escapeCsv = (value: string): string => {
@@ -262,7 +336,31 @@ function convertInteractionsToCsv(interactions: Interaction[]): string {
     i.timestamp,
     i.eventType,
     i.problemId,
-    escapeCsv(JSON.stringify(i.payload)),
+    i.problemSetId || '',
+    i.problemNumber?.toString() || '',
+    escapeCsv(i.code || ''),
+    escapeCsv(i.error || ''),
+    i.errorSubtypeId || '',
+    i.executionTimeMs?.toString() || '',
+    i.rung?.toString() || '',
+    i.fromRung?.toString() || '',
+    i.toRung?.toString() || '',
+    i.trigger || '',
+    escapeCsv(JSON.stringify(i.conceptIds || [])),
+    i.hdi?.toString() || '',
+    i.hdiLevel || '',
+    escapeCsv(JSON.stringify(i.hdiComponents || {})),
+    i.scheduleId || '',
+    i.promptId || '',
+    escapeCsv(i.response || ''),
+    i.isCorrect?.toString() || '',
+    i.unitId || '',
+    i.action || '',
+    escapeCsv(JSON.stringify(i.sourceInteractionIds || [])),
+    escapeCsv(JSON.stringify(i.retrievedSourceIds || [])),
+    escapeCsv(JSON.stringify(i.payload || {})),
+    escapeCsv(JSON.stringify(i.metadata || {})),
+    i.createdAt,
   ]);
 
   return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');

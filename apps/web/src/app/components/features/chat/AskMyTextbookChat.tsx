@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 // Note: Using div with overflow-auto instead of ScrollArea
 import { cn } from '../../ui/utils';
-import { storage } from '../../../lib/storage/storage';
+import { storage } from '../../../lib/storage';
 import { createEventId } from '../../../lib/utils/event-id';
 import type { InteractionEvent, InstructionalUnit } from '../../../types';
 import { buildRetrievalBundle } from '../../../lib/content/retrieval-bundle';

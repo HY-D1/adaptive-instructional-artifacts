@@ -53,6 +53,7 @@ import {
   isValidUserProfile
 } from './storage-validation';
 import { reinforcementManager } from '../content/reinforcement-manager';
+import { scoreSelfExplanation, type ReflectionQualityScore } from '../content/self-explanation-scorer';
 
 /**
  * StorageManager - Local storage manager for interaction traces and learner state
@@ -2024,6 +2025,100 @@ class StorageManager {
       success: saveResult.success,
       quotaExceeded: saveResult.quotaExceeded
     };
+  }
+
+  /**
+   * Save textbook unit with learner notes and quality scoring
+   * 
+   * This method extends saveTextbookUnitV2 with self-explanation quality scoring.
+   * It scores the learner's notes and logs the quality metrics with the save event.
+   * 
+   * @param learnerId - Learner identifier
+   * @param input - Unit creation input
+   * @param problemId - Problem ID for logging
+   * @param learnerNotes - Optional learner notes to score
+   * @returns Save result with quality score
+   */
+  saveTextbookUnitWithNotes(
+    learnerId: string,
+    input: CreateUnitInput,
+    problemId?: string,
+    learnerNotes?: string
+): SaveTextbookUnitResult & {
+    action: 'created' | 'updated';
+    why: string;
+    qualityScore?: ReflectionQualityScore;
+    competitionResult?: ReturnType<typeof competeAndSelectBestUnit>['result'];
+  } {
+    // Score self-explanation if notes provided
+    let qualityScore: ReflectionQualityScore | undefined;
+    
+    if (learnerNotes && learnerNotes.trim().length >= 10) {
+      qualityScore = scoreSelfExplanation({
+        text: learnerNotes,
+        originalProblem: problemId || '',
+        conceptIds: input.conceptIds || [],
+        learnerId
+      });
+    }
+
+    // Enhance input with quality metadata
+    const inputWithQuality: CreateUnitInput = {
+      ...input,
+      metadata: {
+        ...input.metadata,
+        learnerNotes,
+        selfExplanationQuality: qualityScore?.overall,
+        qualityDimensions: qualityScore?.dimensions,
+        qualityFeedback: qualityScore?.feedback,
+        qualityIssues: qualityScore?.flaggedIssues,
+        qualityScoredAt: qualityScore ? Date.now() : undefined
+      }
+    };
+
+    // Save using the standard V2 method
+    const result = this.saveTextbookUnitV2(learnerId, inputWithQuality, problemId);
+
+    // Log quality score as a separate event if scored
+    if (qualityScore && problemId) {
+      this.logSelfExplanationQuality(learnerId, problemId, qualityScore, result.unit.id);
+    }
+
+    return {
+      ...result,
+      qualityScore
+    };
+  }
+
+  /**
+   * Log self-explanation quality event
+   * @param learnerId - Learner identifier
+   * @param problemId - Problem identifier
+   * @param qualityScore - Quality score result
+   * @param unitId - Unit ID associated with the notes
+   */
+  private logSelfExplanationQuality(
+    learnerId: string,
+    problemId: string,
+    qualityScore: ReflectionQualityScore,
+    unitId: string
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('quality', 'self-explanation'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'textbook_unit_upsert',
+      problemId,
+      unitId,
+      metadata: {
+        selfExplanationQuality: qualityScore.overall,
+        qualityDimensions: qualityScore.dimensions,
+        qualityFeedback: qualityScore.feedback,
+        qualityIssues: qualityScore.flaggedIssues
+      }
+    };
+    this.saveInteraction(event);
   }
 
   /**

@@ -8,6 +8,8 @@ import type {
   UserProfile,
   InteractionEvent,
   InstructionalUnit,
+  LearnerProfile,
+  ConceptCoverageEvidence,
 } from '@/app/types';
 
 // API Configuration
@@ -68,6 +70,22 @@ interface BackendUnit {
   status: 'primary' | 'alternative' | 'archived';
   createdAt: string;
   updatedAt: string;
+}
+
+interface BackendLearnerProfile {
+  id: string;
+  name: string;
+  conceptsCovered: string[];
+  conceptCoverageEvidence: Record<string, ConceptCoverageEvidence>;
+  errorHistory: Record<string, number>;
+  interactionCount: number;
+  currentStrategy: string;
+  preferences: {
+    escalationThreshold: number;
+    aggregationDelay: number;
+  };
+  createdAt: number;
+  lastActive: number;
 }
 
 interface SessionData {
@@ -140,7 +158,7 @@ export async function checkBackendHealth(): Promise<boolean> {
 }
 
 // ============================================================================
-// Learner API
+// Learner API (Basic Info)
 // ============================================================================
 
 export async function createLearner(profile: UserProfile): Promise<boolean> {
@@ -191,59 +209,249 @@ export async function updateLearner(
 }
 
 // ============================================================================
-// Interactions API
+// Learner Profile API (Full Rich Profiles)
 // ============================================================================
 
-export async function logInteraction(event: InteractionEvent): Promise<boolean> {
-  const response = await fetchApi<BackendInteraction>('/interactions', {
-    method: 'POST',
+/**
+ * Get a learner's full profile with concept coverage, evidence, etc.
+ */
+export async function getProfile(learnerId: string): Promise<LearnerProfile | null> {
+  const response = await fetchApi<BackendLearnerProfile>(`/learners/${learnerId}/profile`);
+  if (!response.success || !response.data) return null;
+  
+  const data = response.data;
+  return {
+    id: data.id,
+    name: data.name,
+    conceptsCovered: new Set(data.conceptsCovered),
+    conceptCoverageEvidence: new Map(Object.entries(data.conceptCoverageEvidence)),
+    errorHistory: new Map(Object.entries(data.errorHistory)),
+    interactionCount: data.interactionCount,
+    currentStrategy: data.currentStrategy as LearnerProfile['currentStrategy'],
+    preferences: data.preferences,
+    createdAt: data.createdAt,
+    lastActive: data.lastActive,
+  };
+}
+
+/**
+ * Save a learner's full profile
+ */
+export async function saveProfile(profile: LearnerProfile): Promise<boolean> {
+  const response = await fetchApi<BackendLearnerProfile>(`/learners/${profile.id}/profile`, {
+    method: 'PUT',
     body: JSON.stringify({
-      learnerId: event.learnerId,
-      sessionId: event.sessionId,
-      timestamp: new Date(event.timestamp).toISOString(),
-      eventType: event.eventType,
-      problemId: event.problemId,
-      payload: {
-        code: event.code,
-        error: event.error,
-        errorSubtype: event.errorSubtype,
-        guidanceRung: event.guidanceRung,
-        contentId: event.contentId,
-        duration: event.duration,
-        metadata: event.metadata,
-      },
+      name: profile.name,
+      conceptsCovered: Array.from(profile.conceptsCovered),
+      conceptCoverageEvidence: Object.fromEntries(profile.conceptCoverageEvidence),
+      errorHistory: Object.fromEntries(profile.errorHistory),
+      interactionCount: profile.interactionCount,
+      currentStrategy: profile.currentStrategy,
+      preferences: profile.preferences,
+      lastActive: profile.lastActive,
     }),
   });
   return response.success;
 }
 
-export async function logInteractionsBatch(events: InteractionEvent[]): Promise<boolean> {
-  if (events.length === 0) return true;
+/**
+ * Get all learner profiles (for instructor dashboard)
+ */
+export async function getAllProfiles(): Promise<LearnerProfile[]> {
+  const response = await fetchApi<BackendLearnerProfile[]>('/learners/profiles');
+  if (!response.success || !response.data) return [];
   
-  const response = await fetchApi<{ count: number }>('/interactions/batch', {
+  return response.data.map(data => ({
+    id: data.id,
+    name: data.name,
+    conceptsCovered: new Set(data.conceptsCovered),
+    conceptCoverageEvidence: new Map(Object.entries(data.conceptCoverageEvidence)),
+    errorHistory: new Map(Object.entries(data.errorHistory)),
+    interactionCount: data.interactionCount,
+    currentStrategy: data.currentStrategy as LearnerProfile['currentStrategy'],
+    preferences: data.preferences,
+    createdAt: data.createdAt,
+    lastActive: data.lastActive,
+  }));
+}
+
+/**
+ * Update profile from a single event (server-side derivation)
+ */
+export async function updateProfileFromEvent(
+  learnerId: string,
+  event: InteractionEvent
+): Promise<LearnerProfile | null> {
+  const response = await fetchApi<BackendLearnerProfile>(`/learners/${learnerId}/profile/events`, {
     method: 'POST',
     body: JSON.stringify({
-      events: events.map(event => ({
+      event: {
         learnerId: event.learnerId,
         sessionId: event.sessionId,
         timestamp: new Date(event.timestamp).toISOString(),
         eventType: event.eventType,
         problemId: event.problemId,
-        payload: {
-          code: event.code,
-          error: event.error,
-          errorSubtype: event.errorSubtype,
-          guidanceRung: event.guidanceRung,
-          contentId: event.contentId,
-          duration: event.duration,
-          metadata: event.metadata,
+        problemSetId: event.problemSetId,
+        problemNumber: event.problemNumber,
+        code: event.code,
+        error: event.error,
+        errorSubtypeId: event.errorSubtypeId,
+        conceptIds: event.conceptIds,
+        metadata: {
+          successful: event.successful,
+          ...event.metadata,
         },
-      })),
+      },
     }),
+  });
+  
+  if (!response.success || !response.data) return null;
+  
+  const data = response.data;
+  return {
+    id: data.id,
+    name: data.name,
+    conceptsCovered: new Set(data.conceptsCovered),
+    conceptCoverageEvidence: new Map(Object.entries(data.conceptCoverageEvidence)),
+    errorHistory: new Map(Object.entries(data.errorHistory)),
+    interactionCount: data.interactionCount,
+    currentStrategy: data.currentStrategy as LearnerProfile['currentStrategy'],
+    preferences: data.preferences,
+    createdAt: data.createdAt,
+    lastActive: data.lastActive,
+  };
+}
+
+// ============================================================================
+// Interactions API - Lossless Logging (Full Event Schema)
+// ============================================================================
+
+/**
+ * Convert frontend InteractionEvent to backend format
+ * Preserves ALL fields for research replay
+ */
+function convertToBackendInteraction(event: InteractionEvent): Partial<BackendInteraction> {
+  return {
+    // Required fields
+    learnerId: event.learnerId,
+    sessionId: event.sessionId,
+    timestamp: new Date(event.timestamp).toISOString(),
+    eventType: event.eventType,
+    problemId: event.problemId,
+    
+    // Problem context
+    problemSetId: event.problemSetId,
+    problemNumber: event.problemNumber,
+    
+    // Code/Error fields
+    code: event.code,
+    error: event.error,
+    errorSubtypeId: event.errorSubtypeId,
+    executionTimeMs: event.executionTimeMs,
+    
+    // Escalation fields (CRITICAL for replay)
+    rung: event.rung,
+    fromRung: event.fromRung,
+    toRung: event.toRung,
+    trigger: event.trigger,
+    
+    // Concept fields
+    conceptIds: event.conceptIds,
+    
+    // HDI/CSI fields
+    hdi: event.hdi,
+    hdiLevel: event.hdiLevel,
+    hdiComponents: event.hdiComponents,
+    
+    // Reinforcement fields
+    scheduleId: event.scheduleId,
+    promptId: event.promptId,
+    response: event.response,
+    isCorrect: event.isCorrect,
+    
+    // Provenance fields
+    unitId: event.unitId,
+    action: event.action,
+    sourceInteractionIds: event.sourceInteractionIds,
+    retrievedSourceIds: event.retrievedSourceIds,
+    
+    // Legacy payload for extensibility
+    payload: event.payload,
+    metadata: event.metadata,
+  };
+}
+
+/**
+ * Log a single interaction event (lossless)
+ * Sends complete InteractionEvent to backend
+ */
+export async function logInteraction(event: InteractionEvent): Promise<boolean> {
+  const backendEvent = convertToBackendInteraction(event);
+  
+  const response = await fetchApi<BackendInteraction>('/interactions', {
+    method: 'POST',
+    body: JSON.stringify(backendEvent),
   });
   return response.success;
 }
 
+/**
+ * Log multiple interaction events in batch (lossless)
+ * Sends complete InteractionEvents to backend
+ */
+export async function logInteractionsBatch(events: InteractionEvent[]): Promise<boolean> {
+  if (events.length === 0) return true;
+  
+  const backendEvents = events.map(convertToBackendInteraction);
+  
+  const response = await fetchApi<{ count: number }>('/interactions/batch', {
+    method: 'POST',
+    body: JSON.stringify({ events: backendEvents }),
+  });
+  return response.success;
+}
+
+/**
+ * Convert backend interaction to frontend InteractionEvent
+ */
+function convertToFrontendEvent(i: BackendInteraction): InteractionEvent {
+  return {
+    id: i.id,
+    learnerId: i.learnerId,
+    sessionId: i.sessionId || undefined,
+    timestamp: new Date(i.timestamp).getTime(),
+    eventType: i.eventType as InteractionEvent['eventType'],
+    problemId: i.problemId,
+    problemSetId: i.problemSetId,
+    problemNumber: i.problemNumber,
+    code: i.code,
+    error: i.error,
+    errorSubtypeId: i.errorSubtypeId,
+    executionTimeMs: i.executionTimeMs,
+    rung: i.rung,
+    fromRung: i.fromRung,
+    toRung: i.toRung,
+    trigger: i.trigger,
+    conceptIds: i.conceptIds,
+    hdi: i.hdi,
+    hdiLevel: i.hdiLevel,
+    hdiComponents: i.hdiComponents,
+    scheduleId: i.scheduleId,
+    promptId: i.promptId,
+    response: i.response,
+    isCorrect: i.isCorrect,
+    unitId: i.unitId,
+    action: i.action,
+    sourceInteractionIds: i.sourceInteractionIds,
+    retrievedSourceIds: i.retrievedSourceIds,
+    payload: i.payload,
+    metadata: i.metadata,
+  };
+}
+
+/**
+ * Get interactions for a learner (returns full events)
+ */
 export async function getInteractions(
   learnerId?: string,
   options?: {
@@ -268,21 +476,7 @@ export async function getInteractions(
     return { events: [], total: 0 };
   }
 
-  const events: InteractionEvent[] = response.data.data.map(i => ({
-    id: i.id,
-    learnerId: i.learnerId,
-    sessionId: i.sessionId || undefined,
-    timestamp: new Date(i.timestamp).getTime(),
-    eventType: i.eventType as InteractionEvent['eventType'],
-    problemId: i.problemId,
-    code: i.payload.code as string | undefined,
-    error: i.payload.error as string | undefined,
-    errorSubtype: i.payload.errorSubtype as string | undefined,
-    guidanceRung: i.payload.guidanceRung as number | undefined,
-    contentId: i.payload.contentId as string | undefined,
-    duration: i.payload.duration as number | undefined,
-    metadata: i.payload.metadata as Record<string, unknown> | undefined,
-  }));
+  const events: InteractionEvent[] = response.data.data.map(convertToFrontendEvent);
 
   return { events, total: response.data.pagination.total };
 }
@@ -400,14 +594,7 @@ export async function getLearnerTrajectory(learnerId: string): Promise<{
   if (!response.success || !response.data) return null;
 
   return {
-    interactions: response.data.interactions.map(i => ({
-      id: i.id,
-      learnerId: i.learnerId,
-      sessionId: i.sessionId || undefined,
-      timestamp: new Date(i.timestamp).getTime(),
-      eventType: i.eventType as InteractionEvent['eventType'],
-      problemId: i.problemId,
-    })),
+    interactions: response.data.interactions.map(convertToFrontendEvent),
     textbookUnits: response.data.textbookUnits.map(u => ({
       id: u.unitId,
       type: u.type,
@@ -428,19 +615,29 @@ export async function getLearnerTrajectory(learnerId: string): Promise<{
 export const storageClient = {
   isBackendAvailable,
   checkBackendHealth,
+  // Learner basic operations
   createLearner,
   getLearner,
   getAllLearners,
   updateLearner,
+  // Full profile operations
+  getProfile,
+  saveProfile,
+  getAllProfiles,
+  updateProfileFromEvent,
+  // Interactions
   logInteraction,
   logInteractionsBatch,
   getInteractions,
+  // Textbook
   getTextbook,
   saveTextbookUnit,
   deleteTextbookUnit,
+  // Session
   getSession,
   saveSession,
   clearSession,
+  // Research
   getClassStats,
   getLearnerTrajectory,
 };

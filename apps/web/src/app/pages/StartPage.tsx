@@ -8,7 +8,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { cn } from '../components/ui/utils';
-import { storage } from '../lib/storage/storage';
+import { storage } from '../lib/storage';
 import type { UserRole, UserProfile } from '../types';
 
 /**

@@ -38,7 +38,7 @@ import { useScreenReaderAnnouncer } from '../components/shared/ScreenReaderAnnou
 import { sqlProblems } from '../data/problems';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
-import { storage, subscribeToSync, clearAllDebugSettingsWithSync } from '../lib/storage/storage';
+import { storage, subscribeToSync, clearAllDebugSettingsWithSync } from '../lib/storage';
 import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content/content-generator';
@@ -55,6 +55,9 @@ import { assignProfile, getProfileById, type EscalationProfile } from '../lib/ml
 import type { BanditArmId } from '../lib/ml/learner-bandit-manager';
 import type { SQLProblem, InteractionEvent, InstructionalUnit, LearnerProfile, RetrievedChunkInfo, HDITrend } from '../types';
 import { reinforcementManager, type ActivePrompt } from '../lib/content/reinforcement-manager';
+import { detectPrerequisiteViolation, logPrerequisiteViolation, type PrerequisiteViolation } from '../lib/content/prerequisite-detector';
+import { checkPrerequisites } from '../lib/content/prerequisite-checker';
+import { getUnlockedConcepts } from '../data/concept-graph';
 
 const INSTRUCTOR_SUBTYPE_OPTIONS = getKnownSqlEngageSubtypes();
 
@@ -1046,6 +1049,19 @@ export function LearningInterface() {
       setLastErrorEventId(event.id);
       setNotesActionMessage(undefined);
       setGenerationError(undefined);
+      
+      // Knowledge-Structure Layer: Check for prerequisite violations on error
+      const learnerProfile = storage.getProfile(learnerId);
+      if (learnerProfile) {
+        const violation = detectPrerequisiteViolation(event, learnerProfile);
+        if (violation) {
+          logPrerequisiteViolation(violation);
+          // Show warning toast for high-severity violations
+          if (violation.severity === 'high') {
+            setProgressHint(`You might be missing prerequisites: ${violation.suggestedRemediation.slice(0, 2).join(', ')}`);
+          }
+        }
+      }
     }
 
     if (result.success) {
@@ -1606,6 +1622,30 @@ export function LearningInterface() {
                         );
                       })}
                     </div>
+                    
+                    {/* Week 6: Condition indicator - subtle experimental condition badge */}
+                    {sessionConfig && (
+                      <div className="flex items-center gap-2 mt-3 text-xs">
+                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded">
+                          Condition: {sessionConfig.conditionId}
+                        </span>
+                        {sessionConfig.textbookDisabled && (
+                          <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded">
+                            Textbook Disabled
+                          </span>
+                        )}
+                        {sessionConfig.immediateExplanationMode && (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                            Explanation-First Mode
+                          </span>
+                        )}
+                        {sessionConfig.adaptiveLadderDisabled && (
+                          <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded">
+                            Static Ladder
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   
                   {/* Enhanced Problem Selector with difficulty, concepts, and solved status */}
@@ -1844,6 +1884,43 @@ export function LearningInterface() {
               )}
 
               <ConceptCoverage learnerId={learnerId} />
+
+              {/* Knowledge-Structure Layer: Prerequisite Warnings */}
+              {currentProblem.concepts.some(conceptId => {
+                const profile = storage.getProfile(learnerId);
+                if (!profile) return false;
+                const status = checkPrerequisites(conceptId, profile.conceptsCovered);
+                return !status.ready;
+              }) && (
+                <Card className="p-4 bg-amber-50 border-amber-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="size-4 text-amber-600" />
+                    <h3 className="font-semibold text-amber-900">Prerequisites Needed</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {currentProblem.concepts.map(conceptId => {
+                      const profile = storage.getProfile(learnerId);
+                      if (!profile) return null;
+                      const status = checkPrerequisites(conceptId, profile.conceptsCovered);
+                      if (status.ready) return null;
+                      
+                      return (
+                        <div key={conceptId} className="text-sm">
+                          <p className="text-amber-800 font-medium">
+                            {conceptId.replace(/-/g, ' ')}
+                          </p>
+                          {status.missing.length > 0 && (
+                            <p className="text-amber-700 text-xs mt-0.5">
+                              Missing: {status.missing.slice(0, 2).join(', ')}
+                              {status.missing.length > 2 && ` +${status.missing.length - 2} more`}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              )}
 
               <Card className="p-4">
                 <h3 className="font-semibold mb-3">Session Stats</h3>

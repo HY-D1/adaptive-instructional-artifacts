@@ -1,6 +1,7 @@
 /**
  * Interactions API Routes
- * Event logging (append-only) with query capabilities
+ * Event logging (append-only) with lossless preservation of all fields
+ * Supports full InteractionEvent schema for research replay
  */
 
 import { Router } from 'express';
@@ -22,14 +23,65 @@ import type {
 
 const router = Router();
 
-// Validation schemas
+// ============================================================================
+// Validation Schemas - Full InteractionEvent Schema
+// ============================================================================
+
+const hdiComponentsSchema = z.object({
+  hpa: z.number(),
+  aed: z.number(),
+  er: z.number(),
+  reae: z.number(),
+  iwh: z.number(),
+});
+
 const createInteractionSchema = z.object({
+  // Required fields
   learnerId: z.string().min(1),
-  sessionId: z.string().min(1).optional(),
+  sessionId: z.string().optional(),
   timestamp: z.string().datetime(),
   eventType: z.string(),
   problemId: z.string().min(1),
+  
+  // Optional fields for full lossless logging
+  problemSetId: z.string().optional(),
+  problemNumber: z.number().optional(),
+  
+  // Code/Error fields
+  code: z.string().optional(),
+  error: z.string().optional(),
+  errorSubtypeId: z.string().optional(),
+  executionTimeMs: z.number().optional(),
+  
+  // Escalation fields (CRITICAL for replay)
+  rung: z.number().optional(),
+  fromRung: z.number().optional(),
+  toRung: z.number().optional(),
+  trigger: z.string().optional(),
+  
+  // Concept fields
+  conceptIds: z.array(z.string()).optional(),
+  
+  // HDI fields
+  hdi: z.number().optional(),
+  hdiLevel: z.enum(['low', 'medium', 'high']).optional(),
+  hdiComponents: hdiComponentsSchema.optional(),
+  
+  // Reinforcement fields
+  scheduleId: z.string().optional(),
+  promptId: z.string().optional(),
+  response: z.string().optional(),
+  isCorrect: z.boolean().optional(),
+  
+  // Provenance fields
+  unitId: z.string().optional(),
+  action: z.string().optional(),
+  sourceInteractionIds: z.array(z.string()).optional(),
+  retrievedSourceIds: z.array(z.string()).optional(),
+  
+  // Legacy fields for backward compatibility
   payload: z.record(z.unknown()).optional(),
+  metadata: z.record(z.unknown()).optional(),
 }) as z.ZodType<CreateInteractionRequest>;
 
 const batchInteractionsSchema = z.object({
@@ -88,7 +140,7 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================================================
-// POST /api/interactions - Log single event
+// POST /api/interactions - Log single event (lossless)
 // ============================================================================
 
 router.post('/', async (req, res) => {
@@ -125,7 +177,7 @@ router.post('/', async (req, res) => {
 });
 
 // ============================================================================
-// POST /api/interactions/batch - Log multiple events
+// POST /api/interactions/batch - Log multiple events (lossless)
 // ============================================================================
 
 router.post('/batch', async (req, res) => {
@@ -164,7 +216,7 @@ router.post('/batch', async (req, res) => {
 });
 
 // ============================================================================
-// GET /api/interactions/export - Research export
+// GET /api/interactions/export - Research export (full events)
 // ============================================================================
 
 router.get('/export', async (req, res) => {
@@ -178,19 +230,8 @@ router.get('/export', async (req, res) => {
     const interactions = await getAllInteractionsForExport(startDate, endDate, learnerIds, eventTypesParam);
 
     if (format === 'csv') {
-      // Convert to CSV
-      const headers = ['id', 'learnerId', 'sessionId', 'timestamp', 'eventType', 'problemId', 'payload'];
-      const rows = interactions.map(i => [
-        i.id,
-        i.learnerId,
-        i.sessionId || '',
-        i.timestamp,
-        i.eventType,
-        i.problemId,
-        JSON.stringify(i.payload),
-      ]);
-      
-      const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      // Convert to CSV with ALL fields for research
+      const csv = convertInteractionsToCsv(interactions);
       
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader('Content-Disposition', 'attachment; filename="interactions.csv"');
@@ -198,13 +239,21 @@ router.get('/export', async (req, res) => {
       return;
     }
 
-    // Default JSON format
+    // Default JSON format - full events preserved
     res.json({
       success: true,
       data: interactions,
       meta: {
         count: interactions.length,
         exportedAt: new Date().toISOString(),
+        fields: [
+          'id', 'learnerId', 'sessionId', 'timestamp', 'eventType', 'problemId',
+          'problemSetId', 'problemNumber', 'code', 'error', 'errorSubtypeId',
+          'executionTimeMs', 'rung', 'fromRung', 'toRung', 'trigger', 'conceptIds',
+          'hdi', 'hdiLevel', 'hdiComponents', 'scheduleId', 'promptId', 'response',
+          'isCorrect', 'unitId', 'action', 'sourceInteractionIds', 'retrievedSourceIds',
+          'payload', 'metadata', 'createdAt'
+        ],
       },
     });
   } catch (error) {
@@ -216,5 +265,88 @@ router.get('/export', async (req, res) => {
     res.status(500).json(response);
   }
 });
+
+// ============================================================================
+// Helper: Convert interactions to CSV with all fields
+// ============================================================================
+
+function convertInteractionsToCsv(interactions: Interaction[]): string {
+  const headers = [
+    'id',
+    'learnerId',
+    'sessionId',
+    'timestamp',
+    'eventType',
+    'problemId',
+    'problemSetId',
+    'problemNumber',
+    'code',
+    'error',
+    'errorSubtypeId',
+    'executionTimeMs',
+    'rung',
+    'fromRung',
+    'toRung',
+    'trigger',
+    'conceptIds',
+    'hdi',
+    'hdiLevel',
+    'hdiComponents',
+    'scheduleId',
+    'promptId',
+    'response',
+    'isCorrect',
+    'unitId',
+    'action',
+    'sourceInteractionIds',
+    'retrievedSourceIds',
+    'payload',
+    'metadata',
+    'createdAt',
+  ];
+
+  const escapeCsv = (value: string): string => {
+    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+      return `"${value.replace(/"/g, '""')}"`;
+    }
+    return value;
+  };
+
+  const rows = interactions.map(i => [
+    i.id,
+    i.learnerId,
+    i.sessionId || '',
+    i.timestamp,
+    i.eventType,
+    i.problemId,
+    i.problemSetId || '',
+    i.problemNumber?.toString() || '',
+    escapeCsv(i.code || ''),
+    escapeCsv(i.error || ''),
+    i.errorSubtypeId || '',
+    i.executionTimeMs?.toString() || '',
+    i.rung?.toString() || '',
+    i.fromRung?.toString() || '',
+    i.toRung?.toString() || '',
+    i.trigger || '',
+    escapeCsv(JSON.stringify(i.conceptIds || [])),
+    i.hdi?.toString() || '',
+    i.hdiLevel || '',
+    escapeCsv(JSON.stringify(i.hdiComponents || {})),
+    i.scheduleId || '',
+    i.promptId || '',
+    escapeCsv(i.response || ''),
+    i.isCorrect?.toString() || '',
+    i.unitId || '',
+    i.action || '',
+    escapeCsv(JSON.stringify(i.sourceInteractionIds || [])),
+    escapeCsv(JSON.stringify(i.retrievedSourceIds || [])),
+    escapeCsv(JSON.stringify(i.payload || {})),
+    escapeCsv(JSON.stringify(i.metadata || {})),
+    i.createdAt,
+  ]);
+
+  return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+}
 
 export { router as interactionsRouter };

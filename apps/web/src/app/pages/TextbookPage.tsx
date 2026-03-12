@@ -25,7 +25,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/toolti
 import { Skeleton } from '../components/ui/skeleton';
 import { conceptNodes } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
-import { storage } from '../lib/storage/storage';
+import { storage } from '../lib/storage';
 import type { InteractionEvent } from '../types';
 
 const getSubtypeLabel = (interaction: InteractionEvent) =>
