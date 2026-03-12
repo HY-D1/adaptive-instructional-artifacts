@@ -32,6 +32,7 @@ import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/features/sql/S
 import { HintSystem } from '../components/features/hints/HintSystem';
 import { ConceptCoverage } from '../components/features/research/ConceptCoverage';
 import { AskMyTextbookChat } from '../components/features/chat/AskMyTextbookChat';
+import { ReinforcementPrompt } from '../components/ReinforcementPrompt';
 import { useLLMSettings } from '../components/shared/LLMSettingsHelper';
 import { useScreenReaderAnnouncer } from '../components/shared/ScreenReaderAnnouncer';
 import { sqlProblems } from '../data/problems';
@@ -53,6 +54,7 @@ import { safeGetStrategy, safeGetProfileOverride } from '../lib/storage/storage-
 import { assignProfile, getProfileById, type EscalationProfile } from '../lib/ml/escalation-profiles';
 import type { BanditArmId } from '../lib/ml/learner-bandit-manager';
 import type { SQLProblem, InteractionEvent, InstructionalUnit, LearnerProfile, RetrievedChunkInfo, HDITrend } from '../types';
+import { reinforcementManager, type ActivePrompt } from '../lib/content/reinforcement-manager';
 
 const INSTRUCTOR_SUBTYPE_OPTIONS = getKnownSqlEngageSubtypes();
 
@@ -239,6 +241,11 @@ export function LearningInterface() {
     isRunning: boolean;
     lastResult?: AnalysisResult;
   }>({ isRunning: false });
+  
+  // Reinforcement prompt state (Component 10: Knowledge Consolidation)
+  const [activeReinforcement, setActiveReinforcement] = useState<ActivePrompt | null>(null);
+  const [reinforcementPromptNumber, setReinforcementPromptNumber] = useState(1);
+  const [reinforcementTotalPrompts] = useState(3);
   
   // Auto-creation notification state
   const [autoCreationNotifications, setAutoCreationNotifications] = useState<Array<{
@@ -745,6 +752,37 @@ export function LearningInterface() {
       }
     };
   }, [learnerId, sessionId]);
+
+  // Effect 3: Reinforcement prompt checking - periodic check for due prompts
+  useEffect(() => {
+    if (!learnerId || !sessionId) return;
+
+    // Check immediately on mount/session change
+    const checkForPrompts = () => {
+      if (activeReinforcement) return; // Don't show new prompt if one is active
+      
+      const duePrompts = reinforcementManager.getDuePrompts(learnerId);
+      if (duePrompts.length > 0) {
+        const prompt = duePrompts[0];
+        setActiveReinforcement(prompt);
+        setReinforcementPromptNumber(1); // Could calculate based on schedule
+        
+        // Log that prompt was shown
+        reinforcementManager.markPromptShown(prompt.scheduleId, prompt.promptId, learnerId);
+      }
+    };
+
+    // Initial check after a short delay (let the page load first)
+    const initialTimeout = window.setTimeout(checkForPrompts, 5000);
+
+    // Set up periodic checking every 30 seconds
+    const checkInterval = window.setInterval(checkForPrompts, 30000);
+
+    return () => {
+      window.clearTimeout(initialTimeout);
+      window.clearInterval(checkInterval);
+    };
+  }, [learnerId, sessionId, activeReinforcement]);
 
   // Learner switching is now handled via "Switch User" in the top navigation
   // The learnerId state remains for data tracking purposes
@@ -2029,6 +2067,37 @@ export function LearningInterface() {
             </div>
           </div>
         </div>
+
+        {/* Reinforcement Prompt Modal - Component 10: Knowledge Consolidation */}
+        {activeReinforcement && (
+          <ReinforcementPrompt
+            prompt={activeReinforcement}
+            promptNumber={reinforcementPromptNumber}
+            totalPrompts={reinforcementTotalPrompts}
+            onResponse={(response, isCorrect, responseTimeMs) => {
+              reinforcementManager.recordResponse(
+                activeReinforcement.scheduleId,
+                activeReinforcement.promptId,
+                learnerId,
+                response,
+                isCorrect,
+                responseTimeMs
+              );
+              // Keep the prompt visible briefly to show feedback, then dismiss
+              window.setTimeout(() => {
+                setActiveReinforcement(null);
+              }, 2000);
+            }}
+            onDismiss={() => {
+              reinforcementManager.dismissPrompt(
+                activeReinforcement.scheduleId,
+                activeReinforcement.promptId,
+                learnerId
+              );
+              setActiveReinforcement(null);
+            }}
+          />
+        )}
       </div>
   );
 }

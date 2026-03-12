@@ -6,6 +6,11 @@
   "scripts": {
     "build": "npx vite build --config apps/web/vite.config.ts",
     "dev": "npx vite --config apps/web/vite.config.ts",
+    "server:dev": "cd apps/server && npm run dev",
+    "server:build": "cd apps/server && npm run build",
+    "server:start": "cd apps/server && npm run start",
+    "server:db:init": "cd apps/server && npm run db:init",
+    "dev:full": "concurrently \"npm run server:dev\" \"npm run dev\" --names \"SERVER,WEB\" --prefix-colors \"blue,green\" --kill-others",
     "test:unit": "npx vitest run",
     "test:e2e": "npx playwright test -c playwright.config.ts",
     "test:e2e:weekly": "CI=1 npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@(integration|flaky)'",
@@ -22,6 +27,7 @@
     "replay:gate": "node scripts/replay-checksum-gate.mjs",
     "replay:gate:update": "node scripts/replay-checksum-gate.mjs --update",
     "replay": "node scripts/replay-toy.mjs",
+    "replay:experiment": "node scripts/replay-experiment.mjs",
     "check:concept-map": "node scripts/check-sql-engage-concept-map.mjs",
     "gate:weekly:acceptance": "cd dist/weekly-demo && jq -e '[.interactions[] | select(.eventType==\"hint_view\") | .hintLevel] | max == 3' export.json && jq -e '[.interactions[] | select(.eventType==\"hint_view\") | has(\"hintId\")] | any == false' export.json && jq -e '[.interactions[] | has(\"sessionId\") and (.sessionId!=\"\")] | all == true' export.json && jq -e '[.interactions[] | select(.eventType==\"hint_view\") | (has(\"sqlEngageSubtype\") and has(\"sqlEngageRowId\") and has(\"policyVersion\") and (.sqlEngageSubtype!=\"\") and (.sqlEngageRowId!=\"\") and (.policyVersion!=\"\")) ] | all == true' export.json && jq -e '[.interactions[] | select(.eventType==\"explanation_view\")] | length >= 1' export.json && jq -e '[.interactions[] | select(.eventType==\"hint_view\" or .eventType==\"explanation_view\")] | length >= 4' export.json",
     "gate:textbook:content": "cd dist/weekly-demo && jq -e '[.interactions[] | select(.eventType==\"textbook_add\")] | length >= 1' export.json && jq -e '[.interactions[] | select(.eventType==\"textbook_add\") | has(\"noteTitle\") and (.noteTitle!=\"\") and (.noteTitle!=null)] | all' export.json && jq -e '[.interactions[] | select(.eventType==\"textbook_add\") | has(\"noteContent\") and (.noteContent!=\"\") and (.noteContent!=null)] | all' export.json && jq -e '[.interactions[] | select(.eventType==\"textbook_add\") | has(\"conceptIds\") and (.conceptIds | length > 0)] | all' export.json && jq -e '[.interactions[] | select(.eventType==\"textbook_add\") | has(\"evidenceInteractionIds\") and (.evidenceInteractionIds | length > 0)] | all' export.json",
@@ -71,6 +77,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.53.0",
+    "concurrently": "^9.1.2",
     "@tailwindcss/vite": "4.1.12",
     "@types/node": "^25.3.3",
     "@types/react-dom": "^19.2.3",

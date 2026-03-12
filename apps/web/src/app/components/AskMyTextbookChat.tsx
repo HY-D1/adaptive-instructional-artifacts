@@ -31,7 +31,7 @@ import {
 // Note: Using div with overflow-auto instead of ScrollArea
 import { cn } from './ui/utils';
 import { storage } from '../lib/storage';
-import { createEventId } from '../lib/event-id';
+import { createEventId } from '../lib/utils/event-id';
 import type { InteractionEvent, InstructionalUnit } from '../types';
 import { buildRetrievalBundle } from '../lib/retrieval-bundle';
 import { getProblemById } from '../data/problems';

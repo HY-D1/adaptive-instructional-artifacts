@@ -642,6 +642,26 @@ export interface HDIComponents {
   iwh: number;  // Improvement Without Hint
 }
 
+// Week 6: Session Configuration for Experimental Control
+export interface SessionConfig {
+  sessionId: string;
+  learnerId: string;
+  
+  // Experimental toggles
+  textbookDisabled: boolean;
+  adaptiveLadderDisabled: boolean;
+  immediateExplanationMode: boolean;
+  staticHintMode: boolean;
+  
+  // Policy assignment
+  escalationPolicy: 'aggressive' | 'conservative' | 'explanation_first' | 'adaptive' | 'no_hints';
+  
+  // Randomization
+  conditionId: string; // For A/B test group assignment
+  
+  createdAt: number;
+}
+
 // Component 10: Knowledge Consolidation Types
 export interface ReinforcementSchedule {
   id: string;

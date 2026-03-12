@@ -8,7 +8,7 @@ import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen, Loader2, HelpCir
 import { HelpEventType, InteractionEvent } from '../types';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { storage } from '../lib/storage';
-import { createEventId } from '../lib/event-id';
+import { createEventId } from '../lib/utils/event-id';
 import {
   canonicalizeSqlEngageSubtype
 } from '../data/sql-engage';

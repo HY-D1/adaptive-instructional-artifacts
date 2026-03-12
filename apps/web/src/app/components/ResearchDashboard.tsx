@@ -127,8 +127,8 @@ import { InteractionEvent, LearnerProfile, ExperimentCondition, PdfIndexDocument
 import { orchestrator, ReplayDecisionPoint, AutoEscalationMode } from '../lib/adaptive-orchestrator';
 import { checkOllamaHealth, OLLAMA_MODEL } from '../lib/llm-client';
 import { loadOrBuildPdfIndex, uploadPdfAndBuildIndex } from '../lib/pdf-index-loader';
-import { isDemoMode, getDemoModeMessage, DEMO_MODE_VERSION } from '../lib/demo-mode';
-import { createEventId } from '../lib/event-id';
+import { isDemoMode, getDemoModeMessage, DEMO_MODE_VERSION } from '../lib/utils/demo-mode';
+import { createEventId } from '../lib/utils/event-id';
 
 const experimentConditions: ExperimentCondition[] = [
   {

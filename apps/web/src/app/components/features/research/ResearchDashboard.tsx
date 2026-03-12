@@ -79,6 +79,23 @@ interface ProfileEffectivenessData {
   avgEscalations: number;
   totalInteractions: number;
 }
+
+// Component 10: Reinforcement data types
+interface ReinforcementStats {
+  totalScheduled: number;
+  totalShown: number;
+  totalResponded: number;
+  responseRate: number;
+  averageRetentionScore: number;
+}
+
+interface ReinforcementDataPoint {
+  timestamp: number;
+  learnerId: string;
+  eventType: 'scheduled' | 'shown' | 'response';
+  retentionLevel?: string;
+  isCorrect?: boolean;
+}
 import {
   Table,
   TableBody,
@@ -120,7 +137,8 @@ import {
   Lightbulb,
   Sparkles,
   Target,
-  BrainCircuit
+  BrainCircuit,
+  BookOpen
 } from 'lucide-react';
 import { storage } from '../../../lib/storage/storage';
 import { InteractionEvent, LearnerProfile, ExperimentCondition, PdfIndexDocument } from '../../../types';
@@ -851,11 +869,13 @@ export function ResearchDashboard() {
 
   // Week 5: Adaptive Personalization Analytics
   const week5Analytics = useMemo(() => {
-    // Filter Week 5 event types
+    // Filter Week 5 event types (including Component 10: Reinforcement)
     const week5Events = filteredInteractions.filter(i => 
       ['profile_assigned', 'escalation_triggered', 'profile_adjusted',
        'bandit_arm_selected', 'bandit_reward_observed', 'bandit_updated',
-       'hdi_calculated', 'hdi_trajectory_updated', 'dependency_intervention_triggered'].includes(i.eventType)
+       'hdi_calculated', 'hdi_trajectory_updated', 'dependency_intervention_triggered',
+       // Component 10: Knowledge Consolidation events
+       'reinforcement_scheduled', 'reinforcement_prompt_shown', 'reinforcement_response'].includes(i.eventType)
     );
 
     // 1. Escalation Profile Distribution
@@ -1019,6 +1039,36 @@ export function ResearchDashboard() {
     const sortedProfileEffectiveness = Object.values(profileEffectiveness)
       .sort((a, b) => b.avgSuccessRate - a.avgSuccessRate);
 
+    // Component 10: Reinforcement Analytics
+    const reinforcementScheduled = week5Events.filter(e => e.eventType === 'reinforcement_scheduled');
+    const reinforcementShown = week5Events.filter(e => e.eventType === 'reinforcement_prompt_shown');
+    const reinforcementResponses = week5Events.filter(e => e.eventType === 'reinforcement_response');
+    
+    const reinforcementStats: ReinforcementStats = {
+      totalScheduled: reinforcementScheduled.length,
+      totalShown: reinforcementShown.length,
+      totalResponded: reinforcementResponses.length,
+      responseRate: reinforcementShown.length > 0 
+        ? reinforcementResponses.length / reinforcementShown.length 
+        : 0,
+      averageRetentionScore: reinforcementResponses.length > 0
+        ? reinforcementResponses.filter(r => r.isCorrect).length / reinforcementResponses.length
+        : 0
+    };
+    
+    // Reinforcement timeline data
+    const reinforcementTimeline: ReinforcementDataPoint[] = week5Events
+      .filter(e => ['reinforcement_scheduled', 'reinforcement_prompt_shown', 'reinforcement_response'].includes(e.eventType))
+      .map(e => ({
+        timestamp: e.timestamp,
+        learnerId: e.learnerId,
+        eventType: e.eventType === 'reinforcement_scheduled' ? 'scheduled' :
+                    e.eventType === 'reinforcement_prompt_shown' ? 'shown' : 'response',
+        retentionLevel: e.response,
+        isCorrect: e.isCorrect
+      }))
+      .sort((a, b) => a.timestamp - b.timestamp);
+
     return {
       week5Events,
       profileDistributionData,
@@ -1026,7 +1076,9 @@ export function ResearchDashboard() {
       banditRewardData,
       hdiBins,
       highHDIAlerts,
-      profileEffectivenessData: sortedProfileEffectiveness
+      profileEffectivenessData: sortedProfileEffectiveness,
+      reinforcementStats,
+      reinforcementTimeline
     };
   }, [filteredInteractions]);
 
@@ -1409,6 +1461,10 @@ export function ResearchDashboard() {
             <TabsTrigger value="week5" className="flex items-center gap-1.5">
               <Sparkles className="size-4" />
               Week 5: Adaptive
+            </TabsTrigger>
+            <TabsTrigger value="reinforcement" className="flex items-center gap-1.5">
+              <BookOpen className="size-4" />
+              Knowledge Consolidation
             </TabsTrigger>
           </TabsList>
 
@@ -2045,6 +2101,160 @@ export function ResearchDashboard() {
                   <TrendingUp className="size-12 mx-auto mb-3 text-gray-300" />
                   <p>No profile effectiveness data available</p>
                   <p className="text-sm text-gray-400 mt-1">Assign profiles to learners to see comparison</p>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="reinforcement" className="space-y-6">
+            {/* Component 10: Knowledge Consolidation Analytics */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Reinforcement Stats Overview */}
+              <Card className="p-6">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <BookOpen className="size-5 text-blue-600" />
+                  Reinforcement Overview
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <p className="text-sm text-blue-600 mb-1">Total Scheduled</p>
+                    <p className="text-2xl font-bold text-blue-900">{week5Analytics.reinforcementStats.totalScheduled}</p>
+                  </div>
+                  <div className="p-4 bg-green-50 rounded-lg">
+                    <p className="text-sm text-green-600 mb-1">Response Rate</p>
+                    <p className="text-2xl font-bold text-green-900">
+                      {(week5Analytics.reinforcementStats.responseRate * 100).toFixed(0)}%
+                    </p>
+                  </div>
+                  <div className="p-4 bg-purple-50 rounded-lg">
+                    <p className="text-sm text-purple-600 mb-1">Prompts Shown</p>
+                    <p className="text-2xl font-bold text-purple-900">{week5Analytics.reinforcementStats.totalShown}</p>
+                  </div>
+                  <div className="p-4 bg-amber-50 rounded-lg">
+                    <p className="text-sm text-amber-600 mb-1">Avg Retention Score</p>
+                    <p className="text-2xl font-bold text-amber-900">
+                      {(week5Analytics.reinforcementStats.averageRetentionScore * 100).toFixed(0)}%
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Retention Level Distribution */}
+              <Card className="p-6">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <TrendingUp className="size-5 text-green-600" />
+                  Retention Levels
+                </h3>
+                {week5Analytics.reinforcementTimeline.filter(t => t.eventType === 'response').length > 0 ? (
+                  <div className="space-y-4">
+                    {(() => {
+                      const responses = week5Analytics.reinforcementTimeline.filter(t => t.eventType === 'response');
+                      const remembered = responses.filter(r => r.retentionLevel === 'remembered').length;
+                      const partial = responses.filter(r => r.retentionLevel === 'partial').length;
+                      const forgotten = responses.filter(r => r.retentionLevel === 'forgotten').length;
+                      const total = responses.length;
+                      
+                      return (
+                        <>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-green-500" />
+                                Remembered
+                              </span>
+                              <span className="font-medium">{total > 0 ? ((remembered / total) * 100).toFixed(0) : 0}%</span>
+                            </div>
+                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-green-500 rounded-full" style={{ width: `${total > 0 ? (remembered / total) * 100 : 0}%` }} />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-yellow-500" />
+                                Partial
+                              </span>
+                              <span className="font-medium">{total > 0 ? ((partial / total) * 100).toFixed(0) : 0}%</span>
+                            </div>
+                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${total > 0 ? (partial / total) * 100 : 0}%` }} />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-red-500" />
+                                Forgotten
+                              </span>
+                              <span className="font-medium">{total > 0 ? ((forgotten / total) * 100).toFixed(0) : 0}%</span>
+                            </div>
+                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-red-500 rounded-full" style={{ width: `${total > 0 ? (forgotten / total) * 100 : 0}%` }} />
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <BookOpen className="size-12 mx-auto mb-3 text-gray-300" />
+                    <p>No reinforcement data available</p>
+                    <p className="text-sm text-gray-400 mt-1">Reinforcement prompts will appear as learners save notes</p>
+                  </div>
+                )}
+              </Card>
+            </div>
+
+            {/* Reinforcement Timeline */}
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Clock className="size-5 text-purple-600" />
+                Reinforcement Activity Timeline
+              </h3>
+              {week5Analytics.reinforcementTimeline.length > 0 ? (
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  {week5Analytics.reinforcementTimeline.map((event, idx) => (
+                    <div 
+                      key={idx}
+                      className={`flex items-center justify-between p-3 rounded-lg ${
+                        event.eventType === 'scheduled' ? 'bg-blue-50' :
+                        event.eventType === 'shown' ? 'bg-purple-50' :
+                        event.isCorrect ? 'bg-green-50' : 'bg-yellow-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className="text-xs">
+                          {event.eventType === 'scheduled' && <span className="text-blue-600">Scheduled</span>}
+                          {event.eventType === 'shown' && <span className="text-purple-600">Shown</span>}
+                          {event.eventType === 'response' && <span className="text-green-600">Response</span>}
+                        </Badge>
+                        <span className="text-sm text-gray-600">
+                          {new Date(event.timestamp).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {event.retentionLevel && (
+                          <Badge className={
+                            event.retentionLevel === 'remembered' ? 'bg-green-100 text-green-800' :
+                            event.retentionLevel === 'partial' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }>
+                            {event.retentionLevel}
+                          </Badge>
+                        )}
+                        <span className="text-xs text-gray-500">
+                          {event.learnerId.slice(0, 8)}...
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <Clock className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>No reinforcement activity yet</p>
+                  <p className="text-sm text-gray-400 mt-1">Schedule reinforcement by saving textbook units</p>
                 </div>
               )}
             </Card>

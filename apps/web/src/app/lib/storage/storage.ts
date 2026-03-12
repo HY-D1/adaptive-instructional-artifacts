@@ -52,6 +52,7 @@ import {
   safeSetStrategy,
   isValidUserProfile
 } from './storage-validation';
+import { reinforcementManager } from '../content/reinforcement-manager';
 
 /**
  * StorageManager - Local storage manager for interaction traces and learner state
@@ -1963,6 +1964,16 @@ class StorageManager {
         console.warn('Failed to save textbook unit: quota exceeded or other error');
       }
 
+      // Component 10: Schedule reinforcement for newly created units
+      // This is a new unit, so schedule reinforcement prompts
+      try {
+        reinforcementManager.scheduleForUnit(primaryUnit, learnerId, {
+          useTestDelays: false // Use production delays (1-3-7 days) by default
+        });
+      } catch (error) {
+        console.warn('[Reinforcement] Failed to schedule reinforcement:', error);
+      }
+
       return {
         action: 'created',
         unit: primaryUnit,
@@ -1982,6 +1993,15 @@ class StorageManager {
 
     if (result.action === 'created') {
       textbooks[learnerId].push(result.unit);
+      
+      // Component 10: Schedule reinforcement for newly created units
+      try {
+        reinforcementManager.scheduleForUnit(result.unit, learnerId, {
+          useTestDelays: false // Use production delays (1-3-7 days) by default
+        });
+      } catch (error) {
+        console.warn('[Reinforcement] Failed to schedule reinforcement:', error);
+      }
     } else {
       // Replace existing unit with updated version
       const dedupeKey = generateDedupeKey(result.unit);
