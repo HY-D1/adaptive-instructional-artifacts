@@ -9,12 +9,16 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { cn } from '../components/ui/utils';
 import { storage } from '../lib/storage';
+import { isInstructorModeAvailable, isHostedMode, logRuntimeConfig } from '../lib/runtime-config';
 import type { UserRole, UserProfile } from '../types';
 
 /**
  * Instructor passcode configuration
  * - DEV: fallback passcode is allowed for development convenience
  * - Production: VITE_INSTRUCTOR_PASSCODE must be set
+ * 
+ * NOTE: Use isInstructorModeAvailable() from runtime-config for feature detection.
+ * This local constant is kept for the actual passcode validation.
  */
 const ENV_PASSCODE = import.meta.env.VITE_INSTRUCTOR_PASSCODE;
 const IS_DEV = import.meta.env.DEV;
@@ -39,6 +43,11 @@ export function StartPage() {
   const [passcodeError, setPasscodeError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Log runtime configuration in development
+  useEffect(() => {
+    logRuntimeConfig();
+  }, []);
 
   // Check for existing profile on mount and redirect if found
   useEffect(() => {
@@ -133,8 +142,9 @@ export function StartPage() {
     );
   }
 
-  // Check if instructor access is configured
-  const isInstructorConfigured = INSTRUCTOR_PASSCODE.length > 0;
+  // Check if instructor access is configured using runtime-config
+  const isInstructorConfigured = isInstructorModeAvailable();
+  const hostedMode = isHostedMode();
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -325,6 +335,36 @@ export function StartPage() {
               </p>
             )}
           </form>
+
+          {/* Feature Availability Notice */}
+          {!isInstructorConfigured && (
+            <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-800">
+                <strong>Instructor mode not configured.</strong>{' '}
+                Set <code className="bg-amber-100 px-1 rounded">VITE_INSTRUCTOR_PASSCODE</code>{' '}
+                environment variable and redeploy to enable instructor access.
+              </p>
+            </div>
+          )}
+          
+          {hostedMode && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-xs text-blue-700">
+                <strong>Running in static hosting mode.</strong>{' '}
+                LLM and PDF features require a backend server. 
+                See{' '}
+                <a 
+                  href="https://github.com/your-org/sql-adapt#deployment" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="underline hover:text-blue-900"
+                >
+                  deployment documentation
+                </a>{' '}
+                for full-stack setup.
+              </p>
+            </div>
+          )}
 
           {/* Footer */}
           <div className="mt-8 text-center">

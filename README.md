@@ -225,6 +225,65 @@ See the research documentation for logging schema details.
 
 ---
 
+## Deployment
+
+### Production Deployment
+
+#### Environment Variables
+
+**Required for Production:**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_INSTRUCTOR_PASSCODE` | **Yes** | Passcode for instructor role access. **Must be set** for production deployments. Falls back to `TeachSQL2024` in development only. |
+
+**Optional Environment Variables:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_OLLAMA_URL` | - | Local Ollama instance URL. **Not available on Vercel** (no server-side execution). |
+| `VITE_ENABLE_LLM` | `false` | Enable LLM-powered features. Requires local Ollama. |
+| `VITE_ENABLE_PDF_INDEX` | `false` | Enable PDF indexing features. Requires backend server. |
+| `VITE_API_BASE_URL` | - | Backend API URL for full-stack mode. Leave empty for static hosting. |
+
+> **⚠️ Important**: Variables prefixed with `VITE_` are embedded in the frontend bundle at **build time**. Changing them on Vercel requires a **redeployment** to take effect.
+
+#### Vercel Deployment Checklist
+
+- [ ] **Framework Preset**: Set to "Vite"
+- [ ] **Root Directory**: Set to repository root (`./`), NOT `apps/web`
+- [ ] **Build Command**: `npm run build`
+- [ ] **Output Directory**: `dist/app`
+- [ ] **Environment Variables**: Add `VITE_INSTRUCTOR_PASSCODE` with your secure passcode
+- [ ] **Redeploy**: Trigger a new deployment after adding environment variables
+
+#### Feature Availability by Deployment Mode
+
+| Feature | Local Dev | Vercel Static | Full-Stack |
+|---------|-----------|---------------|------------|
+| SQL Practice | ✅ | ✅ | ✅ |
+| Student Textbook | ✅ | ✅ | ✅ |
+| Instructor Dashboard | ✅ (with passcode) | ✅ (with passcode) | ✅ (with passcode) |
+| LLM Explanations | ✅ (local Ollama) | ❌ | ✅ (with backend proxy) |
+| PDF Index Search | ✅ (backend required) | ❌ | ✅ (with backend) |
+
+### Vercel Configuration
+
+This project is configured for deployment on Vercel with the following settings:
+
+| Setting | Value | Description |
+|---------|-------|-------------|
+| **Root Directory** | Repository root (`./`) | MUST be repo root, NOT `apps/web` |
+| **Output Directory** | `dist/app` | Build output from Vite |
+| **Build Command** | `npm run build` | Defined in root `package.json` |
+| **Framework Preset** | Vite | Auto-detected or explicitly set |
+
+> **⚠️ Important**: The Root Directory MUST be the repository root, not `apps/web`. The build runs from root via `npm run build` → `npx vite build --config apps/web/vite.config.ts`, and the Vite config uses `../..` relative paths that resolve from the repo root.
+
+These settings are pinned in `vercel.json` to prevent deployment drift between the repository and Vercel dashboard.
+
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -570,5 +629,12 @@ MIT License - see [LICENSE](LICENSE)
 
 ---
 
-*Last updated: 2026-03-10*  
-*Project Status: Phase 1 Active — Route contracts fixed, Demo feature added*
+## Changelog
+
+### 2026-03-11
+- **Deployment**: Pinned Vercel build/output config to repo-root Vite build. Added explicit `framework`, `buildCommand`, and `outputDirectory` to `vercel.json` to prevent deployment drift.
+
+---
+
+*Last updated: 2026-03-11*  
+*Project Status: Phase 1 Active — Route contracts fixed, Demo feature added, Vercel config pinned*

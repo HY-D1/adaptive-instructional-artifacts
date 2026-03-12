@@ -154,6 +154,7 @@ import { orchestrator, ReplayDecisionPoint, AutoEscalationMode } from '../../../
 import { checkOllamaHealth, OLLAMA_MODEL } from '../../../lib/api/llm-client';
 import { loadOrBuildPdfIndex, uploadPdfAndBuildIndex } from '../../../lib/pdf-index-loader';
 import { isDemoMode, getDemoModeMessage, DEMO_MODE_VERSION } from '../../../lib/utils/demo-mode';
+import { isHostedMode, getHostedModeMessage } from '../../../lib/runtime-config';
 import { createEventId } from '../../../lib/utils/event-id';
 import { clusterLearners, LearnerCluster } from '../../../lib/research/learner-clustering';
 import { buildErrorTransitionMatrix, buildErrorTransitionStats, getErrorRecoveryPatterns, ErrorTransitionStats } from '../../../lib/research/error-transitions';
@@ -259,6 +260,9 @@ export function ResearchDashboard() {
   const [pdfIndexStatus, setPdfIndexStatus] = useState<'idle' | 'loading' | 'ready' | 'error' | 'warning'>('idle');
   const [pdfIndexError, setPdfIndexError] = useState<string | null>(null);
   
+  // Hosted mode detection
+  const [hostedMode, setHostedMode] = useState<boolean>(false);
+  
   // Time range filter
   const [timeRange, setTimeRange] = useState<string>('all');
   
@@ -279,6 +283,8 @@ export function ResearchDashboard() {
   }, []);
 
   useEffect(() => {
+    // Detect hosted mode on mount
+    setHostedMode(isHostedMode());
     loadData();
   }, []);
 
@@ -1466,16 +1472,16 @@ export function ResearchDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium">
-                    {isDemoMode() ? '🎓 Demo Mode' : 'LLM Health Check'}
+                    {hostedMode ? '🌐 Hosted Mode' : isDemoMode() ? '🎓 Demo Mode' : 'LLM Health Check'}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {isDemoMode() ? DEMO_MODE_VERSION : `Target model: ${OLLAMA_MODEL}`}
+                    {hostedMode ? 'Deterministic fallback active' : isDemoMode() ? DEMO_MODE_VERSION : `Target model: ${OLLAMA_MODEL}`}
                   </p>
                   <p className={`text-xs ${llmHealthOk === null ? 'text-gray-600' : llmHealthOk ? 'text-emerald-700' : 'text-red-700'}`}>
-                    {isDemoMode() ? getDemoModeMessage() : llmHealthMessage}
+                    {hostedMode ? getHostedModeMessage() : isDemoMode() ? getDemoModeMessage() : llmHealthMessage}
                   </p>
                 </div>
-                {!isDemoMode() && (
+                {!hostedMode && !isDemoMode() && (
                   <Button size="sm" variant="outline" onClick={handleLLMHealthCheck} disabled={isCheckingLLM}>
                     {isCheckingLLM ? 'Checking...' : 'Test LLM'}
                   </Button>
@@ -1515,40 +1521,47 @@ export function ResearchDashboard() {
                       <PdfIndexErrorDisplay error={pdfIndexError} />
                     </div>
                   )}
+                  {hostedMode && (
+                    <p className="text-[11px] text-amber-600 mt-2">
+                      PDF upload/build unavailable in hosted mode
+                    </p>
+                  )}
                 </div>
-                <div className="flex flex-col gap-2">
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    onChange={handlePdfUpload}
-                    id="pdf-upload-input"
-                    className="hidden"
-                    disabled={pdfIndexStatus === 'loading'}
-                  />
-                  <label htmlFor="pdf-upload-input">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      asChild
+                {!hostedMode && (
+                  <div className="flex flex-col gap-2">
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={handlePdfUpload}
+                      id="pdf-upload-input"
+                      className="hidden"
                       disabled={pdfIndexStatus === 'loading'}
+                    />
+                    <label htmlFor="pdf-upload-input">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                        disabled={pdfIndexStatus === 'loading'}
+                      >
+                        <span className="cursor-pointer">
+                          <FileUp className="size-3 mr-1" />
+                          {pdfIndexStatus === 'loading' ? 'Processing...' : 'Upload PDF'}
+                        </span>
+                      </Button>
+                    </label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleLoadPdfIndex}
+                      data-testid="pdf-index-load-button"
+                      disabled={pdfIndexStatus === 'loading'}
+                      className="text-xs"
                     >
-                      <span className="cursor-pointer">
-                        <FileUp className="size-3 mr-1" />
-                        {pdfIndexStatus === 'loading' ? 'Processing...' : 'Upload PDF'}
-                      </span>
+                      Load from Disk
                     </Button>
-                  </label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleLoadPdfIndex}
-                    data-testid="pdf-index-load-button"
-                    disabled={pdfIndexStatus === 'loading'}
-                    className="text-xs"
-                  >
-                    Load from Disk
-                  </Button>
-                </div>
+                  </div>
+                )}
               </div>
             </Card>
           </div>

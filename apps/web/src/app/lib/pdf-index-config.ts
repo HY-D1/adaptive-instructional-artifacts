@@ -92,8 +92,13 @@ export const PDF_INDEX_CHUNKS_FILENAME = 'chunks.json';
  * Base URL for API requests
  * In development, this is empty (same origin with Vite proxy)
  * In production, this should point to the backend server
+ * 
+ * NOTE: This file is imported by vite.config.ts (Node.js context) where
+ * import.meta.env is not available. We safely check for its existence.
  */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) 
+  ? import.meta.env.VITE_API_BASE_URL 
+  : '';
 
 /**
  * API endpoint for loading PDF index
@@ -325,7 +330,13 @@ export async function uploadPdf(file: File): Promise<{
  * Check if PDF index feature is enabled via environment
  * This is a client-side check that reads the VITE_ENABLE_PDF_INDEX env var
  * Note: The actual enforcement happens on the backend
+ * 
+ * NOTE: This module may be imported by vite.config.ts (Node.js context) where
+ * import.meta.env is not available. We safely check for its existence.
  */
 export function isPdfIndexFeatureEnabled(): boolean {
+  if (typeof import.meta === 'undefined' || !import.meta.env) {
+    return false;
+  }
   return import.meta.env.VITE_ENABLE_PDF_INDEX === 'true';
 }

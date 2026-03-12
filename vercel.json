@@ -1,10 +1,9 @@
 {
-  "_comment": "SQL-Adapt Vercel Configuration",
-  "_note": "For full features with LLM/PDF, deploy the backend server separately.",
-  "_note2": "Set VITE_API_BASE_URL to your backend URL for API features.",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist/app",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/index.html" },
-    { "source": "/ollama/(.*)", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
@@ -12,13 +11,15 @@
       "source": "/sql-wasm.wasm",
       "headers": [
         { "key": "Content-Type", "value": "application/wasm" },
-        { "key": "Cache-Control", "value": "public, max-age=3600" }
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }
       ]
     },
     {
-      "source": "/assets/(.*)",
+      "source": "/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }
       ]
     }
   ]

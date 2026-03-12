@@ -6,6 +6,7 @@ import {
   PDF_INDEX_SCHEMA_VERSION
 } from './pdf-index-config';
 import { PdfIndexDocument } from '../types';
+import { isHostedMode, getPDFUnavailableError } from './runtime-config';
 
 /**
  * Response type for PDF index load/upload operations
@@ -27,6 +28,11 @@ export type PdfIndexLoadResponse = {
  * @throws Error if service is unreachable or returns invalid data
  */
 export async function loadOrBuildPdfIndex(): Promise<PdfIndexLoadResponse> {
+  // Check for hosted mode - PDF index building requires Vite dev server
+  if (isHostedMode()) {
+    throw new Error(getPDFUnavailableError());
+  }
+  
   let response: Response;
   try {
     response = await fetch(PDF_INDEX_LOAD_ENDPOINT, {
@@ -65,6 +71,11 @@ export async function loadOrBuildPdfIndex(): Promise<PdfIndexLoadResponse> {
  * @throws Error if upload fails or service is unreachable
  */
 export async function uploadPdfAndBuildIndex(file: File): Promise<PdfIndexLoadResponse> {
+  // Check for hosted mode - PDF upload requires Vite dev server
+  if (isHostedMode()) {
+    throw new Error(getPDFUnavailableError());
+  }
+  
   const formData = new FormData();
   formData.append('pdf', file);
 

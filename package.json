@@ -45,7 +45,10 @@
     "textbook:export": "echo 'Run: cd ../algl-pdf-helper && algl-pdf export'",
     "textbook:verify": "ls -la apps/web/public/textbook-static/ 2>/dev/null || echo 'No textbook-static content. Run: npm run textbook:process'",
     "install:all": "npm install && cd apps/server && npm install",
-    "deploy:backend": "npm run server:build && cd apps/server && npm start"
+    "deploy:backend": "npm run server:build && cd apps/server && npm start",
+    "vercel:pull": "vercel pull --yes --environment=preview",
+    "vercel:build": "vercel build",
+    "vercel:preview": "vercel deploy --prebuilt"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",

@@ -1,5 +1,6 @@
 import { LLMGenerationParams } from '../../types';
 import { isDemoMode, shouldAttemptLLM } from '../utils/demo-mode';
+import { isHostedMode, getLLMUnavailableError } from '../runtime-config';
 
 export const OLLAMA_MODEL = 'qwen2.5:1.5b-instruct';
 const HEALTHCHECK_TIMEOUT_MS = 8000;
@@ -221,6 +222,11 @@ export async function generateWithOllama(prompt: string, options?: OllamaGenerat
   model: string;
   params: LLMGenerationParams;
 }> {
+  // In hosted mode, immediately throw a network error so fallback kicks in
+  if (isHostedMode()) {
+    throw buildClientError('NOT_ENABLED', getLLMUnavailableError());
+  }
+  
   // In demo mode, immediately throw a network error so fallback kicks in
   if (!shouldAttemptLLM()) {
     throw buildClientError('NOT_ENABLED', 'Demo mode: LLM not available, using fallback hints.');
@@ -342,6 +348,17 @@ export async function isLLMAvailable(): Promise<boolean> {
  * @returns Health status with message and available models
  */
 export async function checkOllamaHealth(model: string = OLLAMA_MODEL): Promise<OllamaHealthStatus> {
+  // In hosted mode, return a clear message that LLM is unavailable
+  if (isHostedMode()) {
+    return {
+      ok: true,
+      message: '🌐 Hosted Mode: AI features use deterministic content. Run locally for LLM.',
+      availableModels: [],
+      probeResponse: 'HOSTED_MODE_ACTIVE',
+      enabled: false,
+    };
+  }
+  
   // In demo mode, return a friendly message immediately
   if (isDemoMode()) {
     return {
