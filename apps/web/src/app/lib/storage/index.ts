@@ -50,11 +50,14 @@ export {
   setDebugStrategyWithSync,
   getDebugStrategy,
   clearAllDebugSettingsWithSync,
-  // Week 6: Session Configuration for Experimental Control
-  saveSessionConfigToStorage,
-  loadSessionConfigFromStorage,
-  clearSessionConfigFromStorage,
 } from './storage';
+
+// Week 6: Session Configuration for Experimental Control
+export {
+  saveSessionConfig as saveSessionConfigToStorage,
+  loadSessionConfig as loadSessionConfigFromStorage,
+  clearSessionConfig as clearSessionConfigFromStorage,
+} from '../experiments/condition-assignment';
 
 // ============================================================================
 // Storage Client (for direct backend access when needed)

@@ -37,7 +37,12 @@ import type { BanditArmId } from '../lib/ml/learner-bandit-manager';
 import { assignProfile } from '../lib/ml/escalation-profiles';
 import type { AssignmentStrategy } from '../lib/ml/escalation-profiles';
 import { storage, broadcastSync } from '../lib/storage';
-import type { InteractionEvent } from '../types';
+import type { InteractionEvent, SessionConfig } from '../types';
+import {
+  loadSessionConfig,
+  saveSessionConfig,
+  clearSessionConfig,
+} from '../lib/experiments/condition-assignment';
 import { calculateHDIData, filterOutHDIEvents, formatHDIDetailed } from '../lib/ml/hdi-debug';
 import { Switch } from '../components/ui/switch';
 
@@ -86,8 +91,56 @@ export function SettingsPage() {
   const [selectedArm, setSelectedArm] = useState<BanditArmId>('adaptive');
   const [refreshKey, setRefreshKey] = useState<number>(0);
   
+  // Week 6: Session Config State
+  const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
+  
   // Confirmation dialog states
   const [showClearHdiDialog, setShowClearHdiDialog] = useState(false);
+
+  // Load session config on mount
+  useEffect(() => {
+    const config = loadSessionConfig();
+    setSessionConfig(config);
+  }, []);
+
+  // Handle toggle changes
+  const handleToggleChange = useCallback((toggleName: keyof Pick<SessionConfig, 'textbookDisabled' | 'adaptiveLadderDisabled' | 'immediateExplanationMode' | 'staticHintMode'>, value: boolean) => {
+    if (!learnerId) return;
+    
+    const currentConfig = sessionConfig;
+    const newConfig: SessionConfig = {
+      sessionId: currentConfig?.sessionId || `session-${Date.now()}`,
+      learnerId,
+      textbookDisabled: toggleName === 'textbookDisabled' ? value : (currentConfig?.textbookDisabled ?? false),
+      adaptiveLadderDisabled: toggleName === 'adaptiveLadderDisabled' ? value : (currentConfig?.adaptiveLadderDisabled ?? false),
+      immediateExplanationMode: toggleName === 'immediateExplanationMode' ? value : (currentConfig?.immediateExplanationMode ?? false),
+      staticHintMode: toggleName === 'staticHintMode' ? value : (currentConfig?.staticHintMode ?? false),
+      escalationPolicy: currentConfig?.escalationPolicy || 'adaptive',
+      conditionId: currentConfig?.conditionId || 'manual',
+      createdAt: currentConfig?.createdAt || Date.now(),
+    };
+    
+    saveSessionConfig(newConfig);
+    setSessionConfig(newConfig);
+    
+    addToast({
+      type: 'success',
+      title: 'Toggle Updated',
+      message: `${toggleName} is now ${value ? 'enabled' : 'disabled'}`,
+    });
+  }, [learnerId, sessionConfig, addToast]);
+
+  // Reset all toggles
+  const handleResetToggles = useCallback(() => {
+    clearSessionConfig();
+    setSessionConfig(null);
+    
+    addToast({
+      type: 'success',
+      title: 'Toggles Reset',
+      message: 'All experimental toggles have been reset to defaults',
+    });
+  }, [addToast]);
 
   // Load initial values from localStorage (DEV mode only)
   useEffect(() => {
@@ -542,6 +595,109 @@ export function SettingsPage() {
                   Manually select a bandit arm to influence future escalation profile
                   assignments
                 </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Week 6: Session Experimental Toggles - Instructors Only */}
+        {isInstructor && (
+          <Card className="mt-6 p-6 max-w-5xl border-indigo-200" data-testid="experimental-toggles-section">
+            <CardHeader className="px-0 pt-0">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-100 rounded-lg">
+                  <FlaskConical className="size-5 text-indigo-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-semibold text-gray-900">
+                    Session Experimental Toggles
+                  </CardTitle>
+                  <p className="text-sm text-gray-500">
+                    Configure experimental features for the current learning session
+                  </p>
+                </div>
+                <Badge variant="secondary" className="ml-auto">
+                  Week 6
+                </Badge>
+              </div>
+            </CardHeader>
+
+            <CardContent className="px-0 pb-0 space-y-6">
+              {/* Textbook Disabled */}
+              <div className="flex items-center justify-between" data-testid="toggle-textbook-disabled">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-medium text-gray-900">Disable Textbook</h3>
+                  <p className="text-xs text-gray-500">
+                    Hide the &quot;Ask My Textbook&quot; chat interface for this session
+                  </p>
+                </div>
+                <Switch
+                  checked={sessionConfig?.textbookDisabled ?? false}
+                  onCheckedChange={(checked) => handleToggleChange('textbookDisabled', checked)}
+                />
+              </div>
+
+              <Separator />
+
+              {/* Adaptive Ladder Disabled */}
+              <div className="flex items-center justify-between" data-testid="toggle-adaptive-ladder">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-medium text-gray-900">Disable Adaptive Ladder</h3>
+                  <p className="text-xs text-gray-500">
+                    Use static escalation profiles instead of bandit-adaptive selection
+                  </p>
+                </div>
+                <Switch
+                  checked={sessionConfig?.adaptiveLadderDisabled ?? false}
+                  onCheckedChange={(checked) => handleToggleChange('adaptiveLadderDisabled', checked)}
+                />
+              </div>
+
+              <Separator />
+
+              {/* Immediate Explanation Mode */}
+              <div className="flex items-center justify-between" data-testid="toggle-immediate-explanation">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-medium text-gray-900">Immediate Explanation Mode</h3>
+                  <p className="text-xs text-gray-500">
+                    Skip hints entirely - go straight to explanation on help request
+                  </p>
+                </div>
+                <Switch
+                  checked={sessionConfig?.immediateExplanationMode ?? false}
+                  onCheckedChange={(checked) => handleToggleChange('immediateExplanationMode', checked)}
+                />
+              </div>
+
+              <Separator />
+
+              {/* Static Hint Mode */}
+              <div className="flex items-center justify-between" data-testid="toggle-static-hint">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-medium text-gray-900">Static Hint Mode</h3>
+                  <p className="text-xs text-gray-500">
+                    Use deterministic (non-adaptive) hint escalation
+                  </p>
+                </div>
+                <Switch
+                  checked={sessionConfig?.staticHintMode ?? false}
+                  onCheckedChange={(checked) => handleToggleChange('staticHintMode', checked)}
+                />
+              </div>
+
+              <Separator />
+
+              {/* Reset Toggles Button */}
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResetToggles}
+                  data-testid="reset-toggles-button"
+                >
+                  <RotateCcw className="size-4 mr-1" />
+                  Reset All Toggles
+                </Button>
               </div>
             </CardContent>
           </Card>
