@@ -344,7 +344,7 @@ describe('Deterministic Textbook Generator', () => {
       expect(unit.id).toMatch(/^unit-deterministic-/);
       expect(unit.type).toBe('explanation');
       expect(unit.conceptId).toBeTruthy();
-      expect(unit.conceptIds.length).toBeGreaterThan(0);
+      expect(unit.conceptIds?.length).toBeGreaterThan(0);
       expect(unit.title).toBeTruthy();
       expect(unit.content).toBeTruthy();
       expect(unit.addedTimestamp).toBeGreaterThan(0);

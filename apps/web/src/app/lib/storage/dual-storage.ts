@@ -21,8 +21,8 @@ import type {
   InstructionalUnit,
   LearnerProfile,
   SaveTextbookUnitResult,
-  CreateUnitInput,
 } from '@/app/types';
+import type { CreateUnitInput } from './textbook-units';
 
 // Configuration
 const USE_BACKEND = import.meta.env.VITE_USE_BACKEND === 'true' || !!import.meta.env.VITE_API_URL;
@@ -405,6 +405,8 @@ class DualStorageManager {
         sourceInteractionIds: localResult.unit.sourceInteractionIds,
         provenance: localResult.unit.provenance,
         status: localResult.unit.status,
+        prerequisites: localResult.unit.prerequisites,
+        addedTimestamp: localResult.unit.addedTimestamp,
       };
       
       storageClient.saveTextbookUnit(learnerId, unit).then(backendSuccess => {

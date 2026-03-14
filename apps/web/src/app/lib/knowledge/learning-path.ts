@@ -12,7 +12,7 @@
  * - Support multiple learning path strategies
  */
 
-import type { LearnerProfile, ConceptNode } from '../../types';
+import type { LearnerProfile, ConceptNode, InteractionEvent } from '../../types';
 import { buildConceptGraph, type ConceptGraph, getLearningPath } from '../../data/concept-graph';
 import { storage } from '../storage/storage';
 import { createEventId } from '../utils/event-id';
@@ -304,7 +304,7 @@ function buildPathNodes(
       prerequisites: node.prerequisites,
       status: coveredConcepts.has(conceptId) 
         ? 'completed' 
-        : node.prerequisites.every(p => coveredConcepts.has(p))
+        : node.prerequisites.every((p: string) => coveredConcepts.has(p))
           ? 'available'
           : 'locked'
     });
@@ -320,7 +320,7 @@ function calculateNodeDepth(conceptId: string, graph: ConceptGraph): number {
   const node = graph.get(conceptId);
   if (!node || node.prerequisites.length === 0) return 0;
   
-  const prereqDepths = node.prerequisites.map(p => calculateNodeDepth(p, graph));
+  const prereqDepths = node.prerequisites.map((p: string) => calculateNodeDepth(p, graph));
   return Math.max(...prereqDepths) + 1;
 }
 

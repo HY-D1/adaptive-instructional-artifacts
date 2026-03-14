@@ -17,11 +17,22 @@ import {
   ConceptGap,
   UnitRecommendation,
   AutoCreationResult,
-  AutoCreatedUnitInfo,
-  ConceptMastery,
-  MasteryLevel,
-  PrerequisiteViolation
+  AutoCreatedUnitInfo
 } from '../types';
+
+export type { AnalysisResult };
+
+// Local type definitions for concept mastery analysis
+type MasteryLevel = 'none' | 'beginner' | 'developing' | 'proficient' | 'mastered';
+
+interface ConceptMastery {
+  conceptId: string;
+  level: MasteryLevel;
+  score: number; // 0-100
+  confidence: number;
+  lastAssessed: number;
+  evidenceCount: number;
+}
 import { storage } from './storage/storage';
 import { createEventId } from './utils/event-id';
 import { canonicalizeSqlEngageSubtype, getConceptIdsForSqlEngageSubtype } from '../data/sql-engage';
@@ -35,7 +46,8 @@ import {
 } from './knowledge/mastery-engine';
 import { 
   getViolationSummary, 
-  checkProblemReadiness 
+  checkProblemReadiness,
+  type PrerequisiteViolation
 } from './knowledge/prerequisite-monitor';
 
 // Constants for analysis configuration
@@ -1226,7 +1238,7 @@ function logKnowledgeAnalysis(
     eventType: 'concept_extraction',
     problemId: 'knowledge-structure',
     inputs: {
-      masteredCount: analysis.mastery.stats.mastered,
+      masteredCount: analysis.mastery.stats.byLevel.mastered,
       atRiskCount: analysis.mastery.atRisk.length,
       weakAreasCount: analysis.mastery.weakAreas.length,
       recentViolations: analysis.prerequisites.recentViolations.length,

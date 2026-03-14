@@ -325,7 +325,7 @@ describe('storage-validation comprehensive tests', () => {
         desc: '-Infinity createdAt' 
       },
       { 
-        input: { id: 'test', name: 'Test', role: 'student' }, 
+        input: { id: 'test', name: 'Test', role: 'student' as const }, 
         expected: false, 
         desc: 'missing createdAt' 
       },
@@ -345,12 +345,12 @@ describe('storage-validation comprehensive tests', () => {
         desc: 'empty object' 
       },
       { 
-        input: { id: 123, name: 'Test', role: 'student', createdAt: 123 }, 
+        input: { id: 123, name: 'Test', role: 'student' as const, createdAt: 123 }, 
         expected: false, 
         desc: 'id is number' 
       },
       { 
-        input: { id: 'test', name: 123, role: 'student', createdAt: 123 }, 
+        input: { id: 'test', name: 123, role: 'student' as const, createdAt: 123 }, 
         expected: false, 
         desc: 'name is number' 
       },
@@ -360,12 +360,12 @@ describe('storage-validation comprehensive tests', () => {
         desc: 'role is number' 
       },
       { 
-        input: { id: 'test', name: 'Test', role: 'student', createdAt: '123' }, 
+        input: { id: 'test', name: 'Test', role: 'student' as const, createdAt: '123' }, 
         expected: false, 
         desc: 'createdAt is string' 
       },
       { 
-        input: { id: 'test', name: 'Test', role: 'instructor', createdAt: 123 }, 
+        input: { id: 'test', name: 'Test', role: 'instructor' as const, createdAt: 123 }, 
         expected: true, 
         desc: 'valid instructor role' 
       },
@@ -869,7 +869,7 @@ describe('storage-validation comprehensive tests', () => {
         const profile = {
           id: 'test',
           name: longName,
-          role: 'student',
+          role: 'student' as const,
           createdAt: 123,
         };
         
@@ -883,7 +883,7 @@ describe('storage-validation comprehensive tests', () => {
         const profile = {
           id: longId,
           name: 'Test',
-          role: 'student',
+          role: 'student' as const,
           createdAt: 123,
         };
         
@@ -897,7 +897,7 @@ describe('storage-validation comprehensive tests', () => {
         const profile = {
           id: 'test',
           name: 'Test 👨‍💻 User 🚀',
-          role: 'student',
+          role: 'student' as const,
           createdAt: 123,
         };
         
@@ -910,7 +910,7 @@ describe('storage-validation comprehensive tests', () => {
         const profile = {
           id: '用户-123',
           name: '测试用户',
-          role: 'student',
+          role: 'student' as const,
           createdAt: 123,
         };
         
@@ -1001,7 +1001,7 @@ describe('storage-validation comprehensive tests', () => {
         // This throws during JSON.stringify
         let error: Error | undefined;
         try {
-          safeSetUserProfile(profile as UserProfile);
+          safeSetUserProfile(profile as unknown as UserProfile);
         } catch (e) {
           error = e as Error;
         }
@@ -1018,7 +1018,7 @@ describe('storage-validation comprehensive tests', () => {
         const profile = {
           id: 'test',
           name: 'Test',
-          role: 'student',
+          role: 'student' as const,
           createdAt: Number.MAX_VALUE,
         };
         
@@ -1115,7 +1115,7 @@ describe('storage-validation comprehensive tests', () => {
       safeSetStrategy('static');
       
       // Corrupt one value
-      mockStorage.setItem(STORAGE_KEYS.PREFILE_OVERRIDE, 'invalid');
+      mockStorage.setItem(STORAGE_KEYS.PROFILE_OVERRIDE, 'invalid');
       
       // Should still return partial results
       const summary = getStorageSummary();
@@ -1342,4 +1342,5 @@ export function runManualTests(): void {
 }
 
 // Export for external testing
-export { TestResult, runTest, printResults };
+export type { TestResult };
+export { runTest, printResults };

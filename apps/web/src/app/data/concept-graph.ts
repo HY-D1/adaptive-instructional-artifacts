@@ -20,6 +20,11 @@ export interface ConceptNode {
 }
 
 /**
+ * Concept graph type - Map of concept ID to ConceptNode
+ */
+export type ConceptGraph = Map<string, ConceptNode>;
+
+/**
  * Core concept dependency graph with 30 concepts
  * Prerequisites define a directed acyclic graph (DAG) for learning progression
  */
@@ -315,7 +320,7 @@ export const CONCEPT_GRAPH: Record<string, ConceptNode> = {
  * Build the concept graph and derive unlocks from prerequisites
  * @returns Map of concept ID to ConceptNode with derived unlocks
  */
-export function buildConceptGraph(): Map<string, ConceptNode> {
+export function buildConceptGraph(): ConceptGraph {
   const graph = new Map<string, ConceptNode>();
   
   // Deep copy nodes to avoid mutating the source
@@ -406,6 +411,17 @@ export function getUnlockedConcepts(conceptId: string): string[] {
   const graph = buildConceptGraph();
   const node = graph.get(conceptId);
   return node?.unlocks || [];
+}
+
+/**
+ * Get prerequisites for a concept
+ * @param conceptId - Concept to get prerequisites for
+ * @returns Array of prerequisite concept IDs
+ */
+export function getPrerequisites(conceptId: string): string[] {
+  const graph = buildConceptGraph();
+  const node = graph.get(conceptId);
+  return node?.prerequisites || [];
 }
 
 /**

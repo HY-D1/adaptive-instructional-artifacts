@@ -6,7 +6,7 @@ import {
   InteractionEvent,
   PdfCitation
 } from '../types';
-import { createInputHash, stableStringify } from './hash';
+import { createInputHash, stableStringify } from './utils/hash';
 import { generateWithOllama, OLLAMA_MODEL } from './llm-client';
 import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
 import { renderPrompt, TemplateId } from '../prompts/templates';

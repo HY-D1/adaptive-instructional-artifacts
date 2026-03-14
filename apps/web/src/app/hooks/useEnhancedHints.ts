@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { InteractionEvent, InstructionalUnit } from '../types';
-import type { GuidanceRung } from '../lib/guidance-ladder';
+import type { GuidanceRung } from '../lib/ml/guidance-ladder';
 import {
   generateEnhancedHint,
   checkAvailableResources,

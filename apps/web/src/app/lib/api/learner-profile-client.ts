@@ -430,7 +430,7 @@ async function applyEventToLocalProfile(
       conceptCoverageEvidence: new Map(),
       errorHistory: new Map(),
       interactionCount: 0,
-      currentStrategy: 'adaptive',
+      currentStrategy: 'adaptive-medium',
       preferences: {
         escalationThreshold: 2,
         aggregationDelay: 300000,

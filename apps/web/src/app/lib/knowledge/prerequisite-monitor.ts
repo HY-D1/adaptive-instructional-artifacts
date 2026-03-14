@@ -143,7 +143,7 @@ function checkConceptViolation(
   const coveredConcepts = profile.conceptsCovered;
   
   // Check direct prerequisites
-  const missingPrereqs = node.prerequisites.filter(p => !coveredConcepts.has(p));
+  const missingPrereqs = node.prerequisites.filter((p: string) => !coveredConcepts.has(p));
   
   if (missingPrereqs.length === 0) return null;
   

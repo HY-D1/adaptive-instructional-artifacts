@@ -574,7 +574,7 @@ class StorageManager {
    * @returns Uploaded PDF list
    */
   getUploadedPdfFiles(): { files: Array<{ docId: string; filename: string; pageCount: number; chunkCount: number; uploadedAt: number }>; lastUpdated: number } {
-    const raw = this.readParsedStorage<{ files: Array<{ docId: string; filename: string; pageCount: number; chunkCount: number; uploadedAt: number }>; lastUpdated: number }>(this.PDF_UPLOADS_KEY, null);
+    const raw = this.readParsedStorage<{ files: Array<{ docId: string; filename: string; pageCount: number; chunkCount: number; uploadedAt: number }>; lastUpdated: number } | null>(this.PDF_UPLOADS_KEY, null);
     if (raw && Array.isArray(raw.files)) {
       return raw;
     }
@@ -914,7 +914,7 @@ class StorageManager {
       }
       
       // Ensure all covered concepts have evidence entries
-      const conceptsCovered = new Set((profile.conceptsCovered || []) as any);
+      const conceptsCovered = new Set((profile.conceptsCovered || []) as string[]);
       for (const conceptId of conceptsCovered) {
         if (!evidenceMap.has(conceptId)) {
           evidenceMap.set(conceptId, this.createDefaultEvidence(conceptId, now));
@@ -2183,6 +2183,10 @@ class StorageManager {
     return {
       ...(existing || {}),
       ...(incoming || {}),
+      model: incoming?.model || existing?.model || 'unknown',
+      params: incoming?.params || existing?.params || { temperature: 0.7, top_p: 0.9, stream: false, timeoutMs: 30000 },
+      templateId: incoming?.templateId || existing?.templateId || 'template-unknown',
+      inputHash: incoming?.inputHash || existing?.inputHash || '',
       createdAt,
       retrievedSourceIds: mergedRetrievedSourceIds,
       retrievedPdfCitations: mergedPdfCitations.length > 0 ? mergedPdfCitations : (existing?.retrievedPdfCitations || incoming?.retrievedPdfCitations),
@@ -2528,7 +2532,7 @@ class StorageManager {
           coveredCount++;
         }
         totalScore += evidence.score;
-        byConfidence[evidence.confidence]++;
+        byConfidence[evidence.confidence as 'low' | 'medium' | 'high']++;
         
         // Score distribution
         if (evidence.score <= 25) scoreDistribution['0-25']++;

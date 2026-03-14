@@ -787,6 +787,8 @@ export async function getTextbook(learnerId: string): Promise<InstructionalUnit[
     sourceInteractionIds: u.sourceInteractionIds,
     provenance: undefined,
     status: u.status,
+    prerequisites: [],
+    addedTimestamp: Date.now(),
   }));
 }
 
@@ -891,6 +893,8 @@ export async function getLearnerTrajectory(learnerId: string): Promise<{
       content: u.content,
       sourceInteractionIds: u.sourceInteractionIds,
       status: u.status,
+      prerequisites: [],
+      addedTimestamp: Date.now(),
     })),
   };
 }

@@ -394,7 +394,7 @@ export class ReinforcementManager {
       outputs: {
         promptCount: schedule.scheduledPrompts.length,
         promptTypes: schedule.scheduledPrompts.map(p => p.promptType),
-        delays: schedule.scheduledPrompts.map(p => p.delayDays)
+        delays: schedule.scheduledPrompts.map(p => p.delayDays).join(',')
       }
     };
 

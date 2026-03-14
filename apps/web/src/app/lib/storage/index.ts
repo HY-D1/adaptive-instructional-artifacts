@@ -32,8 +32,8 @@ export type {
   SessionConfig,
 } from '../../types';
 
-// Export CreateUnitInput from storage-local
-export type { CreateUnitInput } from './storage';
+// Export CreateUnitInput from textbook-units
+export type { CreateUnitInput } from './textbook-units';
 
 // ============================================================================
 // Cross-Tab Sync Utilities (from storage-local - localStorage only)

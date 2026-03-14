@@ -12,7 +12,8 @@ import {
   canonicalizeSqlEngageSubtype,
   getDeterministicSqlEngageAnchor,
   getProgressiveSqlEngageHintText,
-  getSqlEngagePolicyVersion
+  getSqlEngagePolicyVersion,
+  type SqlEngageRecord
 } from '../data/sql-engage';
 
 const POLICY_REPLAY_EVENT_TYPES: InteractionEvent['eventType'][] = [
@@ -422,9 +423,9 @@ export class AdaptiveOrchestrator {
     anchor?: { feedback_target: string; intended_learning_outcome: string }
   ): string {
     const concept = getConceptById(conceptId);
-    const level1 = getProgressiveSqlEngageHintText(errorSubtypeId, 1, anchor);
-    const level2 = getProgressiveSqlEngageHintText(errorSubtypeId, 2, anchor);
-    const level3 = getProgressiveSqlEngageHintText(errorSubtypeId, 3, anchor);
+    const level1 = getProgressiveSqlEngageHintText(errorSubtypeId, 1, anchor as SqlEngageRecord);
+    const level2 = getProgressiveSqlEngageHintText(errorSubtypeId, 2, anchor as SqlEngageRecord);
+    const level3 = getProgressiveSqlEngageHintText(errorSubtypeId, 3, anchor as SqlEngageRecord);
 
     return `
 # ${concept?.name || 'SQL Concept'}
@@ -496,7 +497,7 @@ ${units.filter(u => u.conceptId === c?.id).map(u => `- ${u.title}`).join('\n')}
 
 ### Key Takeaways
 
-${c?.examples.map((ex, i) => `${i + 1}. Review this pattern: \`${ex}\``).join('\n')}
+${c?.examples.map((ex: string, i: number) => `${i + 1}. Review this pattern: \`${ex}\``).join('\n')}
 `).join('\n')}
 
 ---

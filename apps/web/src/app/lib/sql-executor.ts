@@ -283,7 +283,7 @@ export class SQLExecutor {
     
     // Execute schema setup using sql.js built-in exec which handles multiple statements
     try {
-      this.db.exec(cleanSchema);
+      this.db!.exec(cleanSchema);
     } catch (error: any) {
       console.error('Schema initialization error:', error);
       throw error;

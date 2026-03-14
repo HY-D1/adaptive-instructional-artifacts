@@ -263,19 +263,8 @@ export function canEscalate(
       );
       
       // Check if help was reopened after being dismissed
-      const lastHintDismissal = [...problemInteractions]
-        .reverse()
-        .find((i) => i.eventType === 'hint_dismiss' || i.eventType === 'help_close');
-      
-      const reopenedAfterDismissal = lastHintDismissal && 
-        hintRequests.some((h) => h.timestamp > lastHintDismissal.timestamp);
-
-      if (reopenedAfterDismissal) {
-        return {
-          allowed: true,
-          reason: 'Help reopened after previous dismissal'
-        };
-      }
+      // Note: hint_dismiss and help_close events not currently tracked
+      // Future: Add these event types to track dismissal/reopen patterns
       return { allowed: false, reason: 'Help not reopened after dismissal' };
     }
 

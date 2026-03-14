@@ -145,7 +145,7 @@ export function getMasterySnapshot(learnerId: string): MasterySnapshot {
   for (const conceptId of graph.keys()) {
     const evidence = profile?.conceptCoverageEvidence.get(conceptId);
     
-    if (evidence) {
+    if (evidence && profile) {
       const mastery = buildConceptMastery(conceptId, evidence, profile);
       masteries.set(conceptId, mastery);
       totalScore += mastery.score;

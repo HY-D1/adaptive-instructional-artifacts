@@ -368,7 +368,7 @@ export function InstructorDashboard() {
         if (history.length >= 2) {
           const sorted = history.sort((a, b) => a.timestamp - b.timestamp);
           const recent = sorted.slice(-3);
-          const values = recent.map(e => e.payload?.hdi || 0);
+          const values = recent.map(e => (e.payload?.hdi as number) || 0);
           if (values.length >= 2) {
             const first = values[0];
             const last = values[values.length - 1];
@@ -382,9 +382,9 @@ export function InstructorDashboard() {
         studentProfiles.push({
           learnerId,
           name: profile?.name ?? learnerId,  // already normalized
-          profile: profileEvent?.payload?.profile || 'adaptive',
-          strategy: profileEvent?.payload?.strategy || 'static',
-          hdi: (hdiEvent?.payload?.hdi ?? hdiEvent?.hdi) || 0.5,
+          profile: (profileEvent?.payload?.profile as 'fast' | 'slow' | 'adaptive') || 'adaptive',
+          strategy: (profileEvent?.payload?.strategy as 'static' | 'diagnostic' | 'bandit') || 'static',
+          hdi: ((hdiEvent?.payload?.hdi as number) ?? (hdiEvent?.hdi as number)) || 0.5,
           hdiTrend,
           lastUpdated: hdiEvent?.timestamp || Date.now()
         });
@@ -409,7 +409,7 @@ export function InstructorDashboard() {
     };
 
     // Get bandit pulls from events
-    const banditEvents = interactions.filter(e => e.eventType === 'bandit_pull');
+    const banditEvents = interactions.filter(e => e.eventType === 'bandit_arm_selected');
     const banditPulls = useDemo 
       ? DEMO_ADAPTIVE_DATA.banditPulls
       : {
@@ -463,8 +463,7 @@ export function InstructorDashboard() {
     };
 
     // Save to storage
-    const existing = storage.getAllInteractions();
-    storage.saveInteractions([...existing, interventionEvent]);
+    storage.saveInteraction(interventionEvent);
     
     // Simulate brief delay for UX
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -966,11 +965,10 @@ export function InstructorDashboard() {
                                   reason: 'instructor_override'
                                 }
                               };
-                              const existing = storage.getAllInteractions();
-                              storage.saveInteractions([...existing, overrideEvent]);
+                              storage.saveInteraction(overrideEvent);
                               setToastMessage(`Profile updated for ${student.name}`);
                               // Refresh data
-                              setInteractions([...existing, overrideEvent]);
+                              setInteractions([...storage.getAllInteractions()]);
                             }
                           }}
                           defaultValue=""
