@@ -6,6 +6,8 @@
  * Simulates multiple policies against the same learner traces and generates
  * comprehensive comparison reports with statistical analysis.
  * 
+ * Uses canonical policy definitions from policy-definitions.json
+ * 
  * Usage:
  *   node scripts/replay-experiment.mjs [options]
  * 
@@ -19,7 +21,7 @@
  * Example:
  *   node scripts/replay-experiment.mjs --policies aggressive,conservative --format csv
  * 
- * @version replay-experiment-v1
+ * @version replay-experiment-v2
  */
 
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
@@ -34,66 +36,8 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 // Configuration
 const DEFAULT_INPUT = path.join(REPO_ROOT, 'dist/replay/real/export.json');
 const DEFAULT_OUTPUT = path.join(REPO_ROOT, 'dist/replay/experiment');
-const REPLAY_VERSION = 'replay-experiment-v1';
-const POLICY_SEMANTICS_VERSION = 'policy-definitions-v1';
-
-// All available policies
-const ALL_POLICIES = [
-  'aggressive',
-  'conservative', 
-  'explanation_first',
-  'adaptive',
-  'no_hints'
-];
-
-// Policy definitions (mirrored from TypeScript for replay)
-const POLICY_DEFINITIONS = {
-  aggressive: {
-    id: 'aggressive',
-    name: 'Aggressive Escalation',
-    description: 'Fast to explanation, low hint dependency',
-    thresholds: { escalate: 1, aggregate: 2 },
-    triggers: { timeStuck: 60000, rungExhausted: 1, repeatedError: 1 },
-    hintsEnabled: true,
-    usesBandit: false
-  },
-  conservative: {
-    id: 'conservative',
-    name: 'Conservative Escalation',
-    description: 'Maximize hint exploration before explanation',
-    thresholds: { escalate: 3, aggregate: 4 },
-    triggers: { timeStuck: 300000, rungExhausted: 3, repeatedError: 3 },
-    hintsEnabled: true,
-    usesBandit: false
-  },
-  explanation_first: {
-    id: 'explanation_first',
-    name: 'Explanation-First',
-    description: 'Skip hints, go straight to explanation',
-    thresholds: { escalate: 0, aggregate: 2 },
-    triggers: { timeStuck: 0, rungExhausted: 0, repeatedError: 0 },
-    hintsEnabled: false,
-    usesBandit: false
-  },
-  adaptive: {
-    id: 'adaptive',
-    name: 'Adaptive (Bandit)',
-    description: 'Bandit-optimized per learner',
-    thresholds: { escalate: 2, aggregate: 3 },
-    triggers: { timeStuck: 120000, rungExhausted: 2, repeatedError: 2 },
-    hintsEnabled: true,
-    usesBandit: true
-  },
-  no_hints: {
-    id: 'no_hints',
-    name: 'No Hints (Control)',
-    description: 'No assistance provided',
-    thresholds: { escalate: -1, aggregate: -1 },
-    triggers: { timeStuck: Infinity, rungExhausted: Infinity, repeatedError: Infinity },
-    hintsEnabled: false,
-    usesBandit: false
-  }
-};
+const POLICIES_JSON_PATH = path.join(REPO_ROOT, 'dist/policies.json');
+const REPLAY_VERSION = 'replay-experiment-v2';
 
 // Event types relevant for replay
 const REPLAY_EVENT_TYPES = new Set([
@@ -111,13 +55,83 @@ const REPLAY_EVENT_TYPES = new Set([
 ]);
 
 /**
+ * Load canonical policies from exported JSON
+ */
+async function loadPolicies() {
+  try {
+    const raw = await readFile(POLICIES_JSON_PATH, 'utf8');
+    const exported = JSON.parse(raw);
+    return {
+      policies: exported.policies,
+      policyIds: exported.policyIds,
+      policyVersion: exported.policyVersion
+    };
+  } catch (error) {
+    console.warn(`Warning: Could not load ${POLICIES_JSON_PATH}. Run 'npm run export:policies' first.`);
+    console.warn(`Falling back to embedded policy definitions.`);
+    // Fallback to embedded definitions (for bootstrapping)
+    return {
+      policies: {
+        aggressive: {
+          id: 'aggressive',
+          name: 'Aggressive Escalation',
+          description: 'Fast to explanation, low hint dependency',
+          thresholds: { escalate: 1, aggregate: 2 },
+          triggers: { timeStuck: 60000, rungExhausted: 1, repeatedError: 1 },
+          hintsEnabled: true,
+          usesBandit: false
+        },
+        conservative: {
+          id: 'conservative',
+          name: 'Conservative Escalation',
+          description: 'Maximize hint exploration before explanation',
+          thresholds: { escalate: 3, aggregate: 4 },
+          triggers: { timeStuck: 300000, rungExhausted: 3, repeatedError: 3 },
+          hintsEnabled: true,
+          usesBandit: false
+        },
+        explanation_first: {
+          id: 'explanation_first',
+          name: 'Explanation-First',
+          description: 'Skip hints, go straight to explanation',
+          thresholds: { escalate: 0, aggregate: 2 },
+          triggers: { timeStuck: 0, rungExhausted: 0, repeatedError: 0 },
+          hintsEnabled: false,
+          usesBandit: false
+        },
+        adaptive: {
+          id: 'adaptive',
+          name: 'Adaptive (Bandit)',
+          description: 'Bandit-optimized per learner',
+          thresholds: { escalate: 2, aggregate: 3 },
+          triggers: { timeStuck: 120000, rungExhausted: 2, repeatedError: 2 },
+          hintsEnabled: true,
+          usesBandit: true
+        },
+        no_hints: {
+          id: 'no_hints',
+          name: 'No Hints (Control)',
+          description: 'No assistance provided',
+          thresholds: { escalate: -1, aggregate: -1 },
+          triggers: { timeStuck: Infinity, rungExhausted: Infinity, repeatedError: Infinity },
+          hintsEnabled: false,
+          usesBandit: false
+        }
+      },
+      policyIds: ['aggressive', 'conservative', 'explanation_first', 'adaptive', 'no_hints'],
+      policyVersion: 'policy-definitions-v1'
+    };
+  }
+}
+
+/**
  * Parse command line arguments
  */
 function parseArgs(argv) {
   const args = {
     input: DEFAULT_INPUT,
     output: DEFAULT_OUTPUT,
-    policies: ALL_POLICIES,
+    policies: null, // null = all
     format: 'both',
     help: false
   };
@@ -161,7 +175,7 @@ function parseArgs(argv) {
 /**
  * Print help message
  */
-function printHelp() {
+function printHelp(policyIds) {
   console.log(`
 Replay Experiment Framework
 
@@ -175,7 +189,7 @@ Options:
   --help, -h            Show this help message
 
 Available Policies:
-  ${ALL_POLICIES.join('\n  ')}
+  ${policyIds.join('\n  ')}
 
 Examples:
   # Run all policies
@@ -204,16 +218,10 @@ function stableSerialize(value) {
 }
 
 /**
- * Compute hash for deterministic assignment
+ * Compute SHA256 hash
  */
-function hashString(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash);
+function sha256(data) {
+  return crypto.createHash('sha256').update(data).digest('hex');
 }
 
 /**
@@ -226,6 +234,9 @@ async function loadTraces(inputPath) {
   if (!Array.isArray(payload.interactions)) {
     throw new Error('Invalid input format: expected interactions array');
   }
+  
+  // Compute input checksum
+  const inputChecksum = sha256(stableSerialize(payload.interactions));
   
   // Filter and sort relevant events
   const events = payload.interactions
@@ -248,7 +259,13 @@ async function loadTraces(inputPath) {
     byLearner[learnerId].push(event);
   });
   
-  return Object.values(byLearner);
+  return {
+    traces: Object.values(byLearner),
+    inputChecksum,
+    rawInput: payload,
+    exportPolicyVersion: payload.exportPolicyVersion || 'unknown',
+    sqlEngagePolicyVersion: payload.sqlEngagePolicyVersion || 'unknown'
+  };
 }
 
 /**
@@ -465,8 +482,8 @@ function getEmptyMetrics() {
 /**
  * Simulate a policy against a set of traces
  */
-async function simulatePolicy(traces, policyId) {
-  const policy = POLICY_DEFINITIONS[policyId];
+async function simulatePolicy(traces, policyId, policyDefinitions) {
+  const policy = policyDefinitions[policyId];
   if (!policy) {
     throw new Error(`Unknown policy: ${policyId}`);
   }
@@ -683,12 +700,16 @@ function computeStatistics(values) {
 }
 
 /**
- * Generate comparison report
+ * Generate comparison report with full metadata
  */
-function generateReport(results) {
+function generateReport(results, inputChecksum, policyVersion, exportPolicyVersion, sqlEngagePolicyVersion, inputPath) {
   const report = {
     version: REPLAY_VERSION,
-    policySemanticsVersion: POLICY_SEMANTICS_VERSION,
+    policySemanticsVersion: policyVersion,
+    inputChecksum,
+    inputPath: path.relative(REPO_ROOT, inputPath),
+    exportPolicyVersion,
+    sqlEngagePolicyVersion,
     generatedAt: new Date().toISOString(),
     summary: {
       totalPolicies: results.length,
@@ -697,6 +718,15 @@ function generateReport(results) {
         id: r.policyId,
         name: r.policy.name,
         description: r.policy.description,
+        // Per-policy required fields
+        totalExplanations: r.aggregateMetrics.totalExplanationsViewed,
+        averageEscalationDepth: r.aggregateMetrics.averageEscalationDepth,
+        simulatedHDI: r.aggregateMetrics.hintDependencyIndex,
+        simulatedCoverageScore: r.aggregateMetrics.conceptCoverageRate,
+        simulatedTimeToSuccess: r.aggregateMetrics.averageTimeToSuccess,
+        policyVersion: policyVersion,
+        policySemanticsVersion: policyVersion,
+        harnessVersion: REPLAY_VERSION,
         metrics: r.aggregateMetrics,
         statistics: r.statistics
       }))
@@ -704,6 +734,18 @@ function generateReport(results) {
     comparisons: generateComparisons(results),
     policyResults: results
   };
+  
+  // Compute policy-only checksum
+  const policyOnlyChecksum = sha256(stableSerialize({
+    version: REPLAY_VERSION,
+    policySemanticsVersion: policyVersion,
+    policyResults: results.map(r => ({
+      policyId: r.policyId,
+      aggregateMetrics: r.aggregateMetrics
+    }))
+  }));
+  
+  report.policyOnlyChecksum = policyOnlyChecksum;
   
   return report;
 }
@@ -854,45 +896,62 @@ function statisticsToCsv(policyResults) {
  * Main experiment runner
  */
 async function runExperiment() {
+  // Load canonical policies first
+  const { policies: policyDefinitions, policyIds: allPolicyIds, policyVersion } = await loadPolicies();
+  
   const args = parseArgs(process.argv.slice(2));
   
   if (args.help) {
-    printHelp();
+    printHelp(allPolicyIds);
     return;
   }
   
+  // Use all policies if not specified
+  const selectedPolicies = args.policies || allPolicyIds;
+  
   console.log('Replay Experiment Framework');
   console.log(`Version: ${REPLAY_VERSION}`);
-  console.log(`Policies: ${args.policies.join(', ')}`);
+  console.log(`Policy Semantics: ${policyVersion}`);
+  console.log(`Policies: ${selectedPolicies.join(', ')}`);
   console.log('');
   
   // Validate policies
-  const invalidPolicies = args.policies.filter(p => !ALL_POLICIES.includes(p));
+  const invalidPolicies = selectedPolicies.filter(p => !allPolicyIds.includes(p));
   if (invalidPolicies.length > 0) {
     throw new Error(`Invalid policies: ${invalidPolicies.join(', ')}`);
   }
   
   // Load traces
   console.log(`Loading traces from: ${args.input}`);
-  const traces = await loadTraces(path.resolve(REPO_ROOT, args.input));
+  const { traces, inputChecksum, exportPolicyVersion, sqlEngagePolicyVersion } = await loadTraces(path.resolve(REPO_ROOT, args.input));
   console.log(`Loaded ${traces.length} learner traces`);
+  console.log(`Input checksum: ${inputChecksum}`);
   console.log('');
   
   // Run simulation for each policy
   const results = [];
-  for (const policyId of args.policies) {
+  for (const policyId of selectedPolicies) {
     console.log(`Simulating policy: ${policyId}...`);
-    const result = await simulatePolicy(traces, policyId);
+    const result = await simulatePolicy(traces, policyId, policyDefinitions);
     results.push(result);
     console.log(`  HDI: ${result.aggregateMetrics.hintDependencyIndex.toFixed(4)}`);
+    console.log(`  Explanations: ${result.aggregateMetrics.totalExplanationsViewed}`);
+    console.log(`  Avg Escalation Depth: ${result.aggregateMetrics.averageEscalationDepth.toFixed(4)}`);
     console.log(`  Problems solved: ${result.aggregateMetrics.problemsSolved}/${result.aggregateMetrics.totalProblems}`);
     console.log(`  Avg time to success: ${result.aggregateMetrics.averageTimeToSuccess.toFixed(0)}ms`);
     console.log('');
   }
   
-  // Generate report
+  // Generate report with full metadata
   console.log('Generating comparison report...');
-  const report = generateReport(results);
+  const report = generateReport(
+    results, 
+    inputChecksum, 
+    policyVersion, 
+    exportPolicyVersion,
+    sqlEngagePolicyVersion,
+    args.input
+  );
   
   // Ensure output directory exists
   const outputDir = path.resolve(REPO_ROOT, args.output);
@@ -908,6 +967,7 @@ async function runExperiment() {
     const tracesPath = path.join(outputDir, 'trace-reconstruction.json');
     await writeFile(tracesPath, JSON.stringify({
       version: REPLAY_VERSION,
+      policySemanticsVersion: policyVersion,
       traces: results.map(r => ({
         policyId: r.policyId,
         learnerResults: r.results
@@ -935,20 +995,9 @@ async function runExperiment() {
   await writeFile(summaryPath, summaryText, 'utf8');
   console.log(`Summary: ${path.relative(REPO_ROOT, summaryPath)}`);
   
-  // Compute and log checksum
-  const checksum = crypto
-    .createHash('sha256')
-    .update(stableSerialize({
-      version: REPLAY_VERSION,
-      policyResults: results.map(r => ({
-        policyId: r.policyId,
-        aggregateMetrics: r.aggregateMetrics
-      }))
-    }))
-    .digest('hex');
-  
   console.log('');
-  console.log(`Policy-only checksum: ${checksum}`);
+  console.log(`Input checksum: ${inputChecksum}`);
+  console.log(`Policy-only checksum: ${report.policyOnlyChecksum}`);
   console.log('');
   console.log('Experiment complete!');
 }
@@ -962,6 +1011,9 @@ function generateTextSummary(report) {
     '========================',
     '',
     `Version: ${report.version}`,
+    `Policy Semantics: ${report.policySemanticsVersion}`,
+    `Input Checksum: ${report.inputChecksum}`,
+    `Policy-Only Checksum: ${report.policyOnlyChecksum}`,
     `Generated: ${report.generatedAt}`,
     `Total Policies: ${report.summary.totalPolicies}`,
     `Total Traces: ${report.summary.totalTraces}`,
@@ -1002,8 +1054,7 @@ function generateTextSummary(report) {
   return lines.join('\n');
 }
 
-// Run the experiment
 runExperiment().catch((error) => {
-  console.error('Error:', error.message);
+  console.error(error);
   process.exit(1);
 });
