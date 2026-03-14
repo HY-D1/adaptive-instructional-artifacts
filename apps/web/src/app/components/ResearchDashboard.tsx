@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, type JSX } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -862,10 +862,10 @@ export function ResearchDashboard() {
     const profileAssignments = week5Events.filter(e => e.eventType === 'profile_assigned');
     const profileCounts: Record<string, number> = {};
     profileAssignments.forEach(e => {
-      const profileId = e.payload?.profileId || e.profileId || 'unknown';
+      const profileId = (e.payload as { profileId?: string })?.profileId || e.profileId || 'unknown';
       const normalizedProfile = profileId.toUpperCase().includes('FAST') ? 'FAST' :
                                profileId.toUpperCase().includes('SLOW') ? 'SLOW' :
-                               profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : 'UNKNOWN';
+                               profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : 'ADAPTIVE';
       profileCounts[normalizedProfile] = (profileCounts[normalizedProfile] || 0) + 1;
     });
     
@@ -882,7 +882,7 @@ export function ResearchDashboard() {
     // Calculate arm selection frequency
     const armSelectionCounts: Record<string, number> = {};
     armSelections.forEach(e => {
-      const armId = e.payload?.armId || e.selectedArm || 'unknown';
+      const armId = (e.payload as { armId?: string })?.armId || e.selectedArm || 'unknown';
       armSelectionCounts[armId] = (armSelectionCounts[armId] || 0) + 1;
     });
     
@@ -890,8 +890,8 @@ export function ResearchDashboard() {
     const armRewardSums: Record<string, number> = {};
     const armRewardCounts: Record<string, number> = {};
     armRewards.forEach(e => {
-      const armId = e.payload?.armId || 'unknown';
-      const reward = e.payload?.reward?.total || e.reward?.total || 0;
+      const armId = (e.payload as { armId?: string })?.armId || 'unknown';
+      const reward = (e.payload as { reward?: { total?: number } })?.reward?.total || e.reward?.total || 0;
       armRewardSums[armId] = (armRewardSums[armId] || 0) + reward;
       armRewardCounts[armId] = (armRewardCounts[armId] || 0) + 1;
     });
@@ -908,12 +908,12 @@ export function ResearchDashboard() {
     const banditRewardData: BanditRewardData[] = armRewards
       .sort((a, b) => a.timestamp - b.timestamp)
       .map(e => {
-        const reward = e.payload?.reward?.total || e.reward?.total || 0;
+        const reward = (e.payload as { reward?: { total?: number } })?.reward?.total || e.reward?.total || 0;
         cumulativeReward += reward;
         rewardCount++;
         return {
           timestamp: e.timestamp,
-          armId: e.payload?.armId || 'unknown',
+          armId: (e.payload as { armId?: string })?.armId || 'unknown',
           reward,
           cumulativeMean: rewardCount > 0 ? cumulativeReward / rewardCount : 0
         };
@@ -922,7 +922,7 @@ export function ResearchDashboard() {
     // 3. HDI Analytics
     const hdiEvents = week5Events.filter(e => e.eventType === 'hdi_calculated');
     const hdiDataPoints: HDIDataPoint[] = hdiEvents.map(e => ({
-      hdi: e.payload?.hdi ?? e.hdi ?? 0,
+      hdi: (e.payload as { hdi?: number })?.hdi ?? e.hdi ?? 0,
       learnerId: e.learnerId,
       timestamp: e.timestamp
     }));
@@ -975,11 +975,11 @@ export function ResearchDashboard() {
     // Calculate effectiveness metrics per learner
     const learnersByProfile: Record<string, string[]> = {};
     profileAssignments.forEach(e => {
-      const profileId = e.payload?.profileId || e.profileId || 'unknown';
+      const profileId = (e.payload as { profileId?: string })?.profileId || e.profileId || 'unknown';
       const normalizedProfile = profileId.toUpperCase().includes('FAST') ? 'FAST' :
                                profileId.toUpperCase().includes('SLOW') ? 'SLOW' :
-                               profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : null;
-      if (normalizedProfile && normalizedProfile !== 'UNKNOWN') {
+                               profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : 'ADAPTIVE';
+      if (normalizedProfile) {
         if (!learnersByProfile[normalizedProfile]) learnersByProfile[normalizedProfile] = [];
         if (!learnersByProfile[normalizedProfile].includes(e.learnerId)) {
           learnersByProfile[normalizedProfile].push(e.learnerId);

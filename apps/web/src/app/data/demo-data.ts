@@ -98,7 +98,7 @@ function simulateLearnerSession(
         timestamp: currentTime,
         eventType: 'hint_view',
         problemId: problem.id,
-        hintLevel: Math.min(i + 1, 3),
+        hintLevel: Math.min(i + 1, 3) as 1 | 2 | 3,
         sqlEngageSubtype: subtype,
         sqlEngageRowId: `demo-row-${i}`,
         policyVersion: getSqlEngagePolicyVersion()

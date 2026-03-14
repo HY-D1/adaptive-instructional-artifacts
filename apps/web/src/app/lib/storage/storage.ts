@@ -1266,28 +1266,30 @@ class StorageManager {
 
   /**
    * Log bandit arm selection
-   * @param learnerId - Learner identifier
-   * @param armId - Selected arm ID
-   * @param selectionMethod - How arm was selected
+   * @param params - Bandit arm selection parameters (object payload)
    */
-  logBanditArmSelected(
-    learnerId: string,
-    armId: string,
-    selectionMethod: 'thompson_sampling' | 'epsilon_greedy' | 'forced'
-  ): void {
+  logBanditArmSelected(params: {
+    learnerId: string;
+    problemId: string;
+    armId: string;
+    selectionMethod: 'thompson_sampling' | 'epsilon_greedy' | 'forced';
+    armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
+    sessionId?: string;
+  }): void {
     const event: InteractionEvent = {
       id: createEventId('bandit', 'arm-selected'),
-      sessionId: this.getActiveSessionId(),
-      learnerId,
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
       timestamp: Date.now(),
       eventType: 'bandit_arm_selected',
-      problemId: 'bandit-selection',
-      selectedArm: armId,
-      selectionMethod: selectionMethod === 'forced' ? 'thompson_sampling' : selectionMethod,
+      problemId: params.problemId,
+      selectedArm: params.armId,
+      selectionMethod: params.selectionMethod === 'forced' ? 'thompson_sampling' : params.selectionMethod,
       policyVersion: 'bandit-arm-v1',
       payload: {
-        armId,
-        method: selectionMethod
+        armId: params.armId,
+        method: params.selectionMethod,
+        armStatsAtSelection: params.armStatsAtSelection
       }
     };
     this.saveInteraction(event);

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, type JSX } from 'react';
 import { Card } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
@@ -983,7 +983,8 @@ export function ResearchDashboard() {
     });
 
     // Week 6: Condition Statistics
-    const sessionCreatedEvents = week5Events.filter(e => e.eventType === 'session_created');
+    // Use profile_assigned as a proxy for session initialization
+    const sessionCreatedEvents = week5Events.filter(e => e.eventType === 'profile_assigned');
     const conditionStats: Record<string, { 
       count: number; 
       learnerIds: string[];
@@ -1012,7 +1013,7 @@ export function ResearchDashboard() {
     Object.keys(conditionStats).forEach(condition => {
       const conditionLearners = conditionStats[condition].learnerIds;
       const conditionHdiEvents = hdiEvents.filter(e => conditionLearners.includes(e.learnerId));
-      const hdiValues = conditionHdiEvents.map(e => e.hdi || e.payload?.hdi || 0).filter(h => h > 0);
+      const hdiValues = conditionHdiEvents.map(e => e.hdi || (e.payload as { hdi?: number })?.hdi || 0).filter(h => h > 0);
       
       conditionStats[condition].hdiValues = hdiValues;
       conditionStats[condition].avgHDI = hdiValues.length > 0 
@@ -1033,10 +1034,10 @@ export function ResearchDashboard() {
     const profileAssignments = week5Events.filter(e => e.eventType === 'profile_assigned');
     const profileCounts: Record<string, number> = {};
     profileAssignments.forEach(e => {
-      const profileId = e.payload?.profileId || e.profileId || 'unknown';
+      const profileId = (e.payload as { profileId?: string })?.profileId || e.profileId || 'unknown';
       const normalizedProfile = profileId.toUpperCase().includes('FAST') ? 'FAST' :
                                profileId.toUpperCase().includes('SLOW') ? 'SLOW' :
-                               profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : 'UNKNOWN';
+                               profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : 'ADAPTIVE';
       profileCounts[normalizedProfile] = (profileCounts[normalizedProfile] || 0) + 1;
     });
     
@@ -1053,7 +1054,7 @@ export function ResearchDashboard() {
     // Calculate arm selection frequency
     const armSelectionCounts: Record<string, number> = {};
     armSelections.forEach(e => {
-      const armId = e.payload?.armId || e.selectedArm || 'unknown';
+      const armId = (e.payload as { armId?: string })?.armId || e.selectedArm || 'unknown';
       armSelectionCounts[armId] = (armSelectionCounts[armId] || 0) + 1;
     });
     
@@ -1061,8 +1062,8 @@ export function ResearchDashboard() {
     const armRewardSums: Record<string, number> = {};
     const armRewardCounts: Record<string, number> = {};
     armRewards.forEach(e => {
-      const armId = e.payload?.armId || 'unknown';
-      const reward = e.payload?.reward?.total || e.reward?.total || 0;
+      const armId = (e.payload as { armId?: string })?.armId || 'unknown';
+      const reward = (e.payload as { reward?: { total?: number } })?.reward?.total || e.reward?.total || 0;
       armRewardSums[armId] = (armRewardSums[armId] || 0) + reward;
       armRewardCounts[armId] = (armRewardCounts[armId] || 0) + 1;
     });
@@ -1079,12 +1080,12 @@ export function ResearchDashboard() {
     const banditRewardData: BanditRewardData[] = armRewards
       .sort((a, b) => a.timestamp - b.timestamp)
       .map(e => {
-        const reward = e.payload?.reward?.total || e.reward?.total || 0;
+        const reward = (e.payload as { reward?: { total?: number } })?.reward?.total || e.reward?.total || 0;
         cumulativeReward += reward;
         rewardCount++;
         return {
           timestamp: e.timestamp,
-          armId: e.payload?.armId || 'unknown',
+          armId: (e.payload as { armId?: string })?.armId || 'unknown',
           reward,
           cumulativeMean: rewardCount > 0 ? cumulativeReward / rewardCount : 0
         };
@@ -1093,7 +1094,7 @@ export function ResearchDashboard() {
     // 3. HDI Analytics
     const hdiCalcEvents = week5Events.filter(e => e.eventType === 'hdi_calculated');
     const hdiDataPoints: HDIDataPoint[] = hdiCalcEvents.map(e => ({
-      hdi: e.payload?.hdi ?? e.hdi ?? 0,
+      hdi: (e.payload as { hdi?: number })?.hdi ?? e.hdi ?? 0,
       learnerId: e.learnerId,
       timestamp: e.timestamp
     }));
@@ -1146,11 +1147,11 @@ export function ResearchDashboard() {
     // Calculate effectiveness metrics per learner
     const learnersByProfile: Record<string, string[]> = {};
     profileAssignments.forEach(e => {
-      const profileId = e.payload?.profileId || e.profileId || 'unknown';
+      const profileId = (e.payload as { profileId?: string })?.profileId || e.profileId || 'unknown';
       const normalizedProfile = profileId.toUpperCase().includes('FAST') ? 'FAST' :
                                profileId.toUpperCase().includes('SLOW') ? 'SLOW' :
-                               profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : null;
-      if (normalizedProfile && normalizedProfile !== 'UNKNOWN') {
+                               profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : 'ADAPTIVE';
+      if (normalizedProfile) {
         if (!learnersByProfile[normalizedProfile]) learnersByProfile[normalizedProfile] = [];
         if (!learnersByProfile[normalizedProfile].includes(e.learnerId)) {
           learnersByProfile[normalizedProfile].push(e.learnerId);
@@ -1209,14 +1210,14 @@ export function ResearchDashboard() {
     
     // Reinforcement timeline data
     const reinforcementTimeline: ReinforcementDataPoint[] = week5Events
-      .filter(e => ['reinforcement_scheduled', 'reinforcement_prompt_shown', 'reinforcement_response'].includes(e.eventType))
+      .filter(e => e.eventType === 'reinforcement_scheduled' || e.eventType === 'reinforcement_prompt_shown' || e.eventType === 'reinforcement_response')
       .map(e => ({
         timestamp: e.timestamp,
         learnerId: e.learnerId,
-        eventType: e.eventType === 'reinforcement_scheduled' ? 'scheduled' :
-                    e.eventType === 'reinforcement_prompt_shown' ? 'shown' : 'response',
-        retentionLevel: e.response,
-        isCorrect: e.isCorrect
+        eventType: (e.eventType === 'reinforcement_scheduled' ? 'scheduled' :
+                    e.eventType === 'reinforcement_prompt_shown' ? 'shown' : 'response') as 'scheduled' | 'shown' | 'response',
+        retentionLevel: e.response || undefined,
+        isCorrect: e.isCorrect || undefined
       }))
       .sort((a, b) => a.timestamp - b.timestamp);
 

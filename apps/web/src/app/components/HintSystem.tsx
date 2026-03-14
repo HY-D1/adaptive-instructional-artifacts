@@ -25,7 +25,7 @@ import { getConceptFromRegistry } from '../data';
 // Enhanced Hint System imports
 import { useEnhancedHints } from '../hooks/useEnhancedHints';
 import { HintSourceStatus } from './HintSourceStatus';
-import type { EnhancedHint } from '../lib/enhanced-hint-service';
+import type { EnhancedHint } from '../lib/ml/enhanced-hint-service';
 import { useUserRole } from '../hooks/useUserRole';
 
 /**
@@ -418,15 +418,15 @@ export function HintSystem({
       
       // Reconstruct enhanced hint info from history
       const reconstructedEnhancedInfo = hintEvents.map(event => ({
-        isEnhanced: event.outputs?.is_enhanced || false,
+        isEnhanced: Boolean(event.outputs?.is_enhanced),
         sources: {
           sqlEngage: true,
-          textbook: event.outputs?.is_enhanced || false,
+          textbook: Boolean(event.outputs?.is_enhanced),
           llm: event.ruleFired === 'enhanced-hint',
           pdfPassages: (event.retrievedSourceIds || []).some(id => id.includes('doc-'))
         },
-        llmFailed: event.outputs?.llm_failed || false,
-        llmErrorMessage: event.outputs?.llm_error_message
+        llmFailed: Boolean(event.outputs?.llm_failed),
+        llmErrorMessage: typeof event.outputs?.llm_error_message === 'string' ? event.outputs.llm_error_message : undefined
       }));
       setEnhancedHintInfo(reconstructedEnhancedInfo);
       
@@ -493,7 +493,7 @@ export function HintSystem({
    */
   const generateEnhancedHintForRung = async (rung: 1 | 2 | 3): Promise<{
     hintText: string;
-    hintLevel: number;
+    hintLevel: 1 | 2 | 3;
     sqlEngageSubtype: string;
     sqlEngageRowId: string;
     policyVersion: string;
@@ -524,7 +524,7 @@ export function HintSystem({
               chunkId: `textbook:${unit.id}`,
               docId: 'learner-textbook',
               text: unit.content.substring(0, 200) + '...',
-              page: undefined,
+              page: 0,
               score: 0.9
             });
           }
@@ -747,12 +747,14 @@ export function HintSystem({
     // Try to generate enhanced hint (uses LLM/Textbook if available)
     let hintSelection: {
       hintText: string;
-      hintLevel: number;
+      hintLevel: 1 | 2 | 3;
       sqlEngageSubtype: string;
       sqlEngageRowId: string;
       policyVersion: string;
       pdfPassages: RetrievalPdfPassage[];
       isEnhanced: boolean;
+      llmFailed?: boolean;
+      llmErrorMessage?: string;
     } | null = null;
     
     try {

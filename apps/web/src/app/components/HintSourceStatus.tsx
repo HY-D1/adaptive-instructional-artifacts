@@ -20,7 +20,7 @@ import {
   Info
 } from 'lucide-react';
 import { cn } from './ui/utils';
-import { checkAvailableResources, type AvailableResources } from '../lib/enhanced-hint-service';
+import { checkAvailableResources, type AvailableResources } from '../lib/ml/enhanced-hint-service';
 
 interface HintSourceStatusProps {
   learnerId: string;
@@ -179,7 +179,7 @@ export function HintSourceStatus({
           
           return (
             <div
-              key={source.key}
+              key={String(source.key)}
               className={cn(
                 "flex items-center gap-2 p-2 rounded-md border text-sm",
                 isActive 

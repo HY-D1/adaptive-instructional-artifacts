@@ -35,7 +35,7 @@ import { createEventId } from '../lib/utils/event-id';
 import type { InteractionEvent, InstructionalUnit } from '../types';
 import { buildRetrievalBundle } from '../lib/retrieval-bundle';
 import { getProblemById } from '../data/problems';
-import { checkAvailableResources, type AvailableResources } from '../lib/enhanced-hint-service';
+import { checkAvailableResources, type AvailableResources } from '../lib/ml/enhanced-hint-service';
 import { Sparkles } from 'lucide-react';
 
 export type ChatMessage = {
