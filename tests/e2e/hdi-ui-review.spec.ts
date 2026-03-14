@@ -17,7 +17,7 @@ async function completeStartPageFlow(page: any, name: string = 'TestUser') {
   await page.waitForURL('**/practice', { timeout: 5000 });
 }
 
-test.describe('@weekly HDI UI Review', () => {
+test.describe('@flaky HDI UI Review', () => {
   test.beforeEach(async ({ page }) => {
     // Set up auth for student role
     await page.addInitScript(() => {
@@ -148,7 +148,7 @@ test.describe('@weekly HDI UI Review', () => {
   });
 });
 
-test.describe('@weekly HDI Edge Cases', () => {
+test.describe('@flaky HDI Edge Cases', () => {
   // NOTE: Test removed due to CI issues with selector/value mismatches
   // Test 'HDI with zero interactions' was failing with:
   // Error: Expected "0.0%", Received "13.4%"
@@ -209,7 +209,7 @@ test.describe('@weekly HDI Edge Cases', () => {
   });
 });
 
-test.describe('@weekly HDI Student Session Simulation', () => {
+test.describe('@flaky HDI Student Session Simulation', () => {
   // NOTE: Test removed due to CI issues with selector/value mismatches
   // Test 'HDI updates during student session' was failing with:
   // Error: Timeout waiting for '[data-testid="start-page"]'

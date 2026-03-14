@@ -137,10 +137,10 @@ test.describe('@no-external @weekly Bandit Assignment Strategy', () => {
     expect(banditEvent.problemId).toBeDefined();
 
     // The bandit event should contain arm selection data
-    // Note: The actual arm data may be in learnerId field due to app event structure
-    const hasArmData = banditEvent.learnerId && typeof banditEvent.learnerId === 'object' &&
-                       VALID_ARMS.includes(banditEvent.learnerId.armId);
-    expect(hasArmData, 'Bandit event should contain valid arm selection data').toBe(true);
+    // selectedArm is at top level, payload.armId is also available for backward compatibility
+    const armId = banditEvent.selectedArm || banditEvent.payload?.armId;
+    const hasArmData = VALID_ARMS.includes(armId);
+    expect(hasArmData, `Bandit event should contain valid arm selection data, got: ${armId}`).toBe(true);
   });
 
   /**

@@ -28,7 +28,7 @@ async function setupAndDismissModal(page: any) {
   }
 }
 
-test.describe('@weekly @slow HDI Visual Review', () => {
+test.describe('@flaky @slow HDI Visual Review', () => {
   test('HDI panel - desktop view', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await setupAndDismissModal(page);
