@@ -1,45 +1,56 @@
 import { Button } from '../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { ResearchDashboard } from '../components/features/research/ResearchDashboard';
-import { ArrowLeft, Lock, GraduationCap } from 'lucide-react';
+import { ArrowLeft, Globe } from 'lucide-react';
 import { useNavigate } from 'react-router';
-import { useUserRole } from '../hooks/useUserRole';
+import { useState, useEffect } from 'react';
+import { isHostedMode, getHostedModeMessage } from '../lib/runtime-config';
 
 /**
  * ResearchPage - Research analytics and strategy comparison
  * 
  * **Access Control:**
- * - Instructors: Full access to research dashboard, replay, analytics
- * - Students: Restricted view - shows information about research features
- *   but doesn't provide access to sensitive data or configuration tools
- * 
- * Note: Students can technically navigate to this route, but they'll see
- * an informational page explaining these are instructor research tools.
+ * - Route protected for instructors only via InstructorRoute guard
+ * - Instructors have full access to research dashboard, replay, and analytics
  */
 export function ResearchPage() {
   const navigate = useNavigate();
-  const { isInstructor, isStudent } = useUserRole();
+  const [hostedMode, setHostedMode] = useState(false);
+
+  useEffect(() => {
+    setHostedMode(isHostedMode());
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Hosted Mode Banner */}
+      {hostedMode && (
+        <div className="bg-amber-50 border-b border-amber-200">
+          <div className="container mx-auto px-4 py-3">
+            <div className="flex items-center gap-3 text-amber-800">
+              <Globe className="size-5 shrink-0" />
+              <div className="flex-1">
+                <p className="font-medium text-sm">Hosted Mode Active</p>
+                <p className="text-xs text-amber-700">{getHostedModeMessage()}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="border-b bg-white">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Button 
               variant="ghost" 
               size="sm" 
-              onClick={() => navigate(isInstructor ? '/instructor-dashboard' : '/practice')}
+              onClick={() => navigate('/instructor-dashboard')}
             >
               <ArrowLeft className="size-4 mr-2" />
-              {isInstructor ? 'Back to Dashboard' : 'Back to Practice'}
+              Back to Dashboard
             </Button>
             <div>
               <h1 className="text-2xl font-bold">Research Dashboard</h1>
               <p className="text-gray-600 text-sm">
-                {isInstructor 
-                  ? 'Offline replay and strategy comparison for publishable research'
-                  : 'Research tools and analytics overview'
-                }
+                Offline replay and strategy comparison for publishable research
               </p>
             </div>
           </div>
@@ -47,55 +58,7 @@ export function ResearchPage() {
       </div>
 
       <div className="container mx-auto px-4 py-6">
-        {isInstructor ? (
-          /* Instructors see the full research dashboard */
-          <ResearchDashboard />
-        ) : (
-          /* Students see an informational restricted view */
-          <div className="max-w-2xl mx-auto">
-            <Card className="border-amber-200">
-              <CardHeader className="text-center">
-                <div className="mx-auto w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-4">
-                  <Lock className="size-8 text-amber-600" />
-                </div>
-                <CardTitle className="text-xl">Instructor Research Tools</CardTitle>
-                <CardDescription>
-                  This area contains research and analytics tools designed for instructors
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-                  <h3 className="font-medium text-gray-900 flex items-center gap-2">
-                    <GraduationCap className="size-4" />
-                    What happens here?
-                  </h3>
-                  <ul className="text-sm text-gray-600 space-y-2 ml-6 list-disc">
-                    <li>Researchers analyze learning patterns across all students</li>
-                    <li>Compare effectiveness of different hint strategies</li>
-                    <li>Review aggregated error patterns to improve content</li>
-                    <li>Export anonymized data for research publications</li>
-                  </ul>
-                </div>
-
-                <div className="bg-blue-50 rounded-lg p-4">
-                  <h3 className="font-medium text-blue-900 mb-2">Your Learning Data</h3>
-                  <p className="text-sm text-blue-700">
-                    Your individual practice sessions and progress are private. 
-                    Only anonymized, aggregated statistics are used for research 
-                    to improve the learning experience for future students.
-                  </p>
-                </div>
-
-                <div className="flex justify-center pt-2">
-                  <Button onClick={() => navigate('/practice')}>
-                    <GraduationCap className="size-4 mr-2" />
-                    Return to Practice
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+        <ResearchDashboard />
       </div>
     </div>
   );

@@ -9,7 +9,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { BookOpen, ChevronDown, ChevronUp, FileText, Hash, Bookmark } from 'lucide-react';
 import { cn } from '../ui/utils';
 import type { RetrievalSourcePassage } from '../../lib/content/retrieval-bundle';
-import { storage } from '../../lib/storage/storage';
+import { storage } from '../../lib/storage';
 
 /**
  * Props for SourceViewer component

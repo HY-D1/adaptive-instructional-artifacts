@@ -150,7 +150,7 @@ export function generateDedupeKey(
 ): string {
   const conceptIds = 'conceptIds' in input && Array.isArray(input.conceptIds) 
     ? input.conceptIds 
-    : [input.conceptId];
+    : 'conceptId' in input ? [input.conceptId] : [];
   const type = input.type;
   
   // Sort concept IDs for consistent key generation (normalize case)

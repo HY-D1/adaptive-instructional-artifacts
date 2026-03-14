@@ -8,11 +8,21 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { cn } from '../components/ui/utils';
-import { storage } from '../lib/storage/storage';
+import { storage } from '../lib/storage';
+import { isInstructorModeAvailable, isHostedMode, logRuntimeConfig } from '../lib/runtime-config';
 import type { UserRole, UserProfile } from '../types';
 
-// Instructor passcode from environment variable with fallback
-const INSTRUCTOR_PASSCODE = import.meta.env.VITE_INSTRUCTOR_PASSCODE || 'TeachSQL2024';
+/**
+ * Instructor passcode configuration
+ * - DEV: fallback passcode is allowed for development convenience
+ * - Production: VITE_INSTRUCTOR_PASSCODE must be set
+ * 
+ * NOTE: Use isInstructorModeAvailable() from runtime-config for feature detection.
+ * This local constant is kept for the actual passcode validation.
+ */
+const ENV_PASSCODE = import.meta.env.VITE_INSTRUCTOR_PASSCODE;
+const IS_DEV = import.meta.env.DEV;
+const INSTRUCTOR_PASSCODE = ENV_PASSCODE || (IS_DEV ? 'TeachSQL2024' : '');
 
 /**
  * StartPage - Entry point for the application
@@ -33,6 +43,11 @@ export function StartPage() {
   const [passcodeError, setPasscodeError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Log runtime configuration in development
+  useEffect(() => {
+    logRuntimeConfig();
+  }, []);
 
   // Check for existing profile on mount and redirect if found
   useEffect(() => {
@@ -75,6 +90,9 @@ export function StartPage() {
     
     if (!username.trim() || !selectedRole) return;
 
+    // NOTE: This is client-side-only authentication suitable for demo purposes.
+    // VITE_INSTRUCTOR_PASSCODE is exposed in the frontend bundle.
+    // For production use, implement server-side authentication.
     // Validate passcode for instructor role
     if (selectedRole === 'instructor') {
       if (passcode !== INSTRUCTOR_PASSCODE) {
@@ -124,6 +142,10 @@ export function StartPage() {
     );
   }
 
+  // Check if instructor access is configured using runtime-config
+  const isInstructorConfigured = isInstructorModeAvailable();
+  const hostedMode = isHostedMode();
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       {/* Header */}
@@ -172,7 +194,10 @@ export function StartPage() {
             {/* Role Selection */}
             <div className="space-y-3">
               <Label className="text-base font-medium">I am a...</Label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className={cn(
+                'grid gap-4',
+                isInstructorConfigured ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 max-w-md mx-auto'
+              )}>
                 {/* Student Card */}
                 <Card
                   className={cn(
@@ -210,42 +235,44 @@ export function StartPage() {
                   </CardContent>
                 </Card>
 
-                {/* Instructor Card */}
-                <Card
-                  className={cn(
-                    'cursor-pointer transition-all duration-200 border-2 hover:shadow-md',
-                    selectedRole === 'instructor'
-                      ? 'border-purple-500 bg-purple-50/50'
-                      : 'border-transparent hover:border-purple-200'
-                  )}
-                  onClick={() => setSelectedRole('instructor')}
-                >
-                  <CardHeader className="pb-3">
-                    <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-3">
-                      <BarChart3 className="w-6 h-6 text-purple-600" />
-                    </div>
-                    <CardTitle className="text-lg">Instructor</CardTitle>
-                    <CardDescription className="text-sm">
-                      Track student progress and analyze learning data
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <ul className="text-sm text-gray-600 space-y-1">
-                      <li className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
-                        Student analytics
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
-                        Concept coverage reports
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
-                        Learning traces
-                      </li>
-                    </ul>
-                  </CardContent>
-                </Card>
+                {/* Instructor Card - Only shown if passcode is configured */}
+                {isInstructorConfigured && (
+                  <Card
+                    className={cn(
+                      'cursor-pointer transition-all duration-200 border-2 hover:shadow-md',
+                      selectedRole === 'instructor'
+                        ? 'border-purple-500 bg-purple-50/50'
+                        : 'border-transparent hover:border-purple-200'
+                    )}
+                    onClick={() => setSelectedRole('instructor')}
+                  >
+                    <CardHeader className="pb-3">
+                      <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-3">
+                        <BarChart3 className="w-6 h-6 text-purple-600" />
+                      </div>
+                      <CardTitle className="text-lg">Instructor</CardTitle>
+                      <CardDescription className="text-sm">
+                        Track student progress and analyze learning data
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-0">
+                      <ul className="text-sm text-gray-600 space-y-1">
+                        <li className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
+                          Student analytics
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
+                          Concept coverage reports
+                        </li>
+                        <li className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
+                          Learning traces
+                        </li>
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </div>
 
@@ -308,6 +335,36 @@ export function StartPage() {
               </p>
             )}
           </form>
+
+          {/* Feature Availability Notice */}
+          {!isInstructorConfigured && (
+            <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-sm text-amber-800">
+                <strong>Instructor mode not configured.</strong>{' '}
+                Set <code className="bg-amber-100 px-1 rounded">VITE_INSTRUCTOR_PASSCODE</code>{' '}
+                environment variable and redeploy to enable instructor access.
+              </p>
+            </div>
+          )}
+          
+          {hostedMode && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-xs text-blue-700">
+                <strong>Running in static hosting mode.</strong>{' '}
+                LLM and PDF features require a backend server. 
+                See{' '}
+                <a 
+                  href="https://github.com/your-org/sql-adapt#deployment" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="underline hover:text-blue-900"
+                >
+                  deployment documentation
+                </a>{' '}
+                for full-stack setup.
+              </p>
+            </div>
+          )}
 
           {/* Footer */}
           <div className="mt-8 text-center">

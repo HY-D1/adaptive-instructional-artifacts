@@ -32,7 +32,11 @@ export default defineConfig({
     reuseExistingServer: !IS_CI,
     timeout: 120_000,
     stdout: 'pipe',
-    stderr: 'pipe'
+    stderr: 'pipe',
+    env: {
+      // Enable instructor mode in CI for role-system tests
+      VITE_INSTRUCTOR_PASSCODE: process.env.VITE_INSTRUCTOR_PASSCODE || 'TestPasscode2024'
+    }
   },
   projects: [
     {

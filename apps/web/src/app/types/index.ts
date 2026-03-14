@@ -98,7 +98,16 @@ export type InteractionEvent = {
     // Week 5: HDI - Hint Dependency Index (Component 9)
     | 'hdi_calculated'
     | 'hdi_trajectory_updated'
-    | 'dependency_intervention_triggered';
+    | 'dependency_intervention_triggered'
+    // Component 10: Knowledge Consolidation (Reinforcement)
+    | 'reinforcement_scheduled'
+    | 'reinforcement_prompt_shown'
+    | 'reinforcement_response'
+    // Knowledge-Structure Adaptive Features
+    | 'prerequisite_violation_detected'
+    | 'mastery_updated'
+    | 'reflection_quality_assessed'
+    | 'learning_path_recommended';
   problemId: string;
   code?: string;
   error?: string;
@@ -120,6 +129,9 @@ export type InteractionEvent = {
   noteId?: string;
   noteTitle?: string;
   noteContent?: string;
+  problemSetId?: string;
+  problemNumber?: number;
+  executionTimeMs?: number;
   retrievedSourceIds?: string[];
   retrievedChunks?: RetrievedChunkInfo[];
   triggerInteractionIds?: string[];
@@ -189,6 +201,17 @@ export type InteractionEvent = {
   trend?: 'increasing' | 'stable' | 'decreasing';
   slope?: number;
   interventionType?: 'forced_independent' | 'profile_switch' | 'reflective_prompt';
+  // Component 10: Knowledge Consolidation
+  scheduleId?: string;
+  promptId?: string;
+  promptType?: 'mcq' | 'sql_completion' | 'concept_explanation';
+  response?: string;
+  isCorrect?: boolean;
+  scheduledTime?: number;
+  shownTime?: number;
+  
+  // Week 6: Experimental condition tracking
+  conditionId?: string;
   // Additional metadata for logging/debugging
   payload?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
@@ -222,6 +245,8 @@ export type LearnerProfile = {
     escalationThreshold: number; // Number of failed attempts before escalation
     aggregationDelay: number; // Time before aggregating into textbook
   };
+  createdAt?: number;
+  lastActive?: number;
 };
 
 export type CoverageStats = {
@@ -623,4 +648,44 @@ export interface HDIComponents {
   er: number;   // Explanation Rate
   reae: number; // Repeated Error After Explanation
   iwh: number;  // Improvement Without Hint
+}
+
+// Week 6: Session Configuration for Experimental Control
+export interface SessionConfig {
+  sessionId: string;
+  learnerId: string;
+  
+  // Experimental toggles
+  textbookDisabled: boolean;
+  adaptiveLadderDisabled: boolean;
+  immediateExplanationMode: boolean;
+  staticHintMode: boolean;
+  
+  // Policy assignment
+  escalationPolicy: 'aggressive' | 'conservative' | 'explanation_first' | 'adaptive' | 'no_hints';
+  
+  // Randomization
+  conditionId: string; // For A/B test group assignment
+  
+  createdAt: number;
+}
+
+// Component 10: Knowledge Consolidation Types
+export interface ReinforcementSchedule {
+  id: string;
+  unitId: string;
+  learnerId: string;
+  conceptId: string;
+  createdAt: number;
+  scheduledPrompts: ScheduledPrompt[];
+}
+
+export interface ScheduledPrompt {
+  id: string;
+  delayDays: number;
+  promptType: 'mcq' | 'sql_completion' | 'concept_explanation';
+  status: 'pending' | 'shown' | 'completed' | 'dismissed';
+  scheduledTime: number;
+  shownTime?: number;
+  completedTime?: number;
 }

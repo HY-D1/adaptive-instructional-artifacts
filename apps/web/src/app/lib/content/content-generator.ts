@@ -12,6 +12,14 @@ import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
 import { renderPrompt, TemplateId } from '../../prompts/templates';
 import { storage } from '../storage/storage';
 import { calculateQualityScore } from '../storage/textbook-units';
+import { 
+  generateDeterministicFromBundle,
+  hasRichTemplateForSubtype
+} from './deterministic-generator';
+import { 
+  assembleTextbookUnitDeterministic,
+  shouldAttemptLLM as checkLLMAvailable
+} from './content-assembler';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 
@@ -187,6 +195,61 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
 
   const prompt = renderPrompt(options.templateId, stableStringify(options.bundle));
 
+  // Check if LLM is available - if not, use deterministic generation
+  if (!checkLLMAvailable()) {
+    const deterministicStart = performance.now();
+    const deterministicResult = await generateDeterministicFromBundle(
+      options.bundle,
+      {
+        learnerId: options.learnerId,
+        sessionId: options.sessionId,
+        triggerInteractionIds: options.triggerInteractionIds
+      }
+    );
+    
+    // Save to cache
+    saveCache({
+      cacheKey,
+      learnerId: options.learnerId,
+      templateId: options.templateId,
+      inputHash,
+      unit: deterministicResult.unit,
+      createdAt: Date.now()
+    });
+    
+    const parseTelemetry: TemplateParseTelemetry = {
+      status: 'success',
+      mode: 'strict-json',
+      attempts: 1,
+      rawLength: deterministicResult.unit.content.length,
+      generationTimeMs: Math.round(performance.now() - deterministicStart),
+      cacheHit: false,
+      retrievalMetrics: {
+        pdfChunksRetrieved: options.bundle.pdfPassages.length,
+        sqlEngageRowsUsed: options.bundle.sqlEngageAnchor ? 1 : 0,
+        hintHistoryCount: options.bundle.hintHistory.length
+      }
+    };
+    
+    return {
+      unit: deterministicResult.unit,
+      inputHash,
+      cacheKey,
+      fromCache: false,
+      usedFallback: false,
+      fallbackReason: 'none',
+      model: 'deterministic-generator',
+      params: {
+        temperature: 0,
+        top_p: 1,
+        stream: false,
+        timeoutMs: 0
+      },
+      parseTelemetry,
+      generationTimeMs: Math.round(performance.now() - startTime)
+    };
+  }
+
   try {
     const response = await generateWithOllama(prompt, { model, params });
     const llmTimeMs = Math.round(performance.now() - startTime);
@@ -274,12 +337,24 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
       generationTimeMs: Math.round(performance.now() - startTime)
     };
   } catch (error) {
+    // LLM failed - use deterministic generation as fallback
+    const deterministicStart = performance.now();
+    const deterministicResult = await generateDeterministicFromBundle(
+      options.bundle,
+      {
+        learnerId: options.learnerId,
+        sessionId: options.sessionId,
+        triggerInteractionIds: options.triggerInteractionIds
+      }
+    );
+    
     const parseTelemetry: TemplateParseTelemetry = {
-      status: 'not_attempted',
-      attempts: 0,
-      rawLength: 0,
+      status: 'success',
+      mode: 'strict-json',
+      attempts: 1,
+      rawLength: deterministicResult.unit.content.length,
       failureReason: (error as Error).message || 'llm_request_failed',
-      generationTimeMs: Math.round(performance.now() - startTime),
+      generationTimeMs: Math.round(performance.now() - deterministicStart),
       cacheHit: false,
       retrievalMetrics: {
         pdfChunksRetrieved: options.bundle.pdfPassages.length,
@@ -287,27 +362,38 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
         hintHistoryCount: options.bundle.hintHistory.length
       }
     };
-    const fallbackReason: FallbackReason = 'llm_error';
-    const fallback = buildFallbackUnit(options, model, params, inputHash, fallbackReason, parseTelemetry);
+    
+    // Update provenance to indicate this was an LLM fallback
+    deterministicResult.unit.provenance = {
+      ...deterministicResult.unit.provenance!,
+      fallbackReason: 'llm_error'
+    };
+    
     saveCache({
       cacheKey,
       learnerId: options.learnerId,
       templateId: options.templateId,
       inputHash,
-      unit: fallback,
+      unit: deterministicResult.unit,
       createdAt: Date.now()
     });
 
     return {
-      unit: fallback,
+      unit: deterministicResult.unit,
       inputHash,
       cacheKey,
       fromCache: false,
       usedFallback: true,
-      fallbackReason,
-      model,
-      params,
-      parseTelemetry
+      fallbackReason: 'llm_error',
+      model: 'deterministic-generator',
+      params: {
+        temperature: 0,
+        top_p: 1,
+        stream: false,
+        timeoutMs: 0
+      },
+      parseTelemetry,
+      generationTimeMs: Math.round(performance.now() - startTime)
     };
   }
 }
@@ -865,3 +951,41 @@ function normalizeStringArray(value: unknown): string[] {
     .map((line) => line.replace(/^\s*[-*]\s*/, '').replace(/^\s*\d+\.\s*/, '').trim())
     .filter(Boolean);
 }
+
+
+// ============================================================================
+// Deterministic Generation Exports (No LLM Required)
+// ============================================================================
+
+export {
+  generateDeterministicFromBundle,
+  hasRichTemplateForSubtype
+} from './deterministic-generator';
+
+export {
+  assembleTextbookUnitDeterministic,
+  assembleQuickUnit,
+  generateMinimalFallbackUnit,
+  shouldAttemptLLM as isLLMAvailable
+} from './content-assembler';
+
+export type {
+  AssemblyParams,
+  AssemblyResult
+} from './content-assembler';
+
+export type {
+  DeterministicGenerationParams,
+  DeterministicGenerationResult
+} from './deterministic-generator';
+
+export type {
+  ErrorTemplate
+} from './error-templates';
+
+export {
+  getErrorTemplate,
+  getErrorTemplateIds,
+  hasErrorTemplate,
+  getRelatedConceptIds
+} from './error-templates';

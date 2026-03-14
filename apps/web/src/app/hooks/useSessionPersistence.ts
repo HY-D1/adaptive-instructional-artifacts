@@ -16,7 +16,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import type { UserProfile } from '../types';
-import { storage } from '../lib/storage/storage';
+import { storage } from '../lib/storage';
 import { emitProfileUpdated, emitProfileCleared } from '../lib/storage/session-events';
 
 /**

@@ -17,7 +17,9 @@ import {
   FileText,
   Eye,
   Play,
-  X
+  X,
+  Database,
+  RotateCcw
 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -40,8 +42,11 @@ import {
   DialogTitle,
   DialogDescription
 } from '../components/ui/dialog';
-import { storage, broadcastSync } from '../lib/storage/storage';
+import { storage, broadcastSync, setDebugProfileWithSync, setDebugStrategyWithSync } from '../lib/storage';
+import { seedDemoDataset, resetDemoDataset, hasDemoData } from '../lib/demo/demo-seed';
 import { useUserRole } from '../hooks/useUserRole';
+import { useAllLearnerProfiles } from '../hooks/useLearnerProfile';
+import learnerProfileClient from '../lib/api/learner-profile-client';
 import type { LearnerProfile, InteractionEvent } from '../types';
 
 // Helper function to safely format dates
@@ -141,30 +146,66 @@ interface AdaptiveStats {
  */
 export function InstructorDashboard() {
   const navigate = useNavigate();
-  const { isStudent, isLoading } = useUserRole();
+  const { isStudent, isLoading: isRoleLoading } = useUserRole();
+  
+  // Use backend profiles with automatic synchronization
+  const {
+    profiles: backendProfiles,
+    isLoading: isProfilesLoading,
+    refresh: refreshProfiles,
+    totalInteractionCount: backendTotalInteractions,
+    averageConceptCoverage: backendAvgCoverage,
+  } = useAllLearnerProfiles();
+  
   const [profiles, setProfiles] = useState<LearnerProfile[]>([]);
   const [interactions, setInteractions] = useState<InteractionEvent[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [demoDataExists, setDemoDataExists] = useState(false);
+  const [isBackendAvailable, setIsBackendAvailable] = useState(false);
+
+  // Check backend availability
+  useEffect(() => {
+    const checkBackend = async () => {
+      const available = await learnerProfileClient.checkBackendHealth();
+      setIsBackendAvailable(available);
+    };
+    checkBackend();
+  }, []);
+
+  // Check for demo data on mount
+  useEffect(() => {
+    setDemoDataExists(hasDemoData());
+  }, [profiles, interactions]);
 
   // Redirect students away from instructor pages
   useEffect(() => {
-    if (!isLoading && isStudent) {
+    if (!isRoleLoading && isStudent) {
       navigate('/', { replace: true });
     }
-  }, [isStudent, isLoading, navigate]);
+  }, [isStudent, isRoleLoading, navigate]);
 
-  // Load data from storage
+  // Load data from backend or fallback to local storage
   useEffect(() => {
-    const loadData = () => {
-      const allProfiles = storage.getAllProfiles().map(p => storage.getProfile(p.id)).filter(Boolean) as LearnerProfile[];
-      const allInteractions = storage.getAllInteractions();
-      setProfiles(allProfiles);
-      setInteractions(allInteractions);
+    const loadData = async () => {
+      setIsDataLoading(true);
+      
+      // Try backend first
+      if (isBackendAvailable && backendProfiles.length > 0) {
+        setProfiles(backendProfiles);
+      } else {
+        // Fallback to localStorage
+        const allProfiles = storage.getAllProfiles().map(p => storage.getProfile(p.id)).filter(Boolean) as LearnerProfile[];
+        const allInteractions = storage.getAllInteractions();
+        setProfiles(allProfiles);
+        setInteractions(allInteractions);
+      }
+      
       setIsDataLoading(false);
     };
+    
     loadData();
-  }, []);
+  }, [isBackendAvailable, backendProfiles]);
 
   // Toast auto-hide
   useEffect(() => {
@@ -178,20 +219,45 @@ export function InstructorDashboard() {
   const hasRealData = profiles.length > 0 || interactions.length > 0;
   const showDemoData = DEMO_MODE && !hasRealData;
 
+  // Normalize profiles once at load time - ensures consistent data quality
+  // Backend profiles are already normalized, local profiles need normalization
+  const normalizedProfiles = useMemo(() => {
+    return profiles.map(p => ({
+      ...p,
+      name: p.name || p.id,
+      createdAt: p.createdAt || Date.now(),
+      lastActive: p.lastActive || p.createdAt || Date.now(),
+      // Ensure conceptsCovered is a Set (backend returns array)
+      conceptsCovered: p.conceptsCovered instanceof Set ? p.conceptsCovered : new Set(p.conceptsCovered || []),
+      // Ensure Maps are properly initialized
+      conceptCoverageEvidence: p.conceptCoverageEvidence instanceof Map 
+        ? p.conceptCoverageEvidence 
+        : new Map(Object.entries(p.conceptCoverageEvidence || {})),
+      errorHistory: p.errorHistory instanceof Map 
+        ? p.errorHistory 
+        : new Map(Object.entries(p.errorHistory || {})),
+    }));
+  }, [profiles]);
+
   // Calculate class statistics
   const classStats: ClassStats = useMemo(() => {
-    // Use real profiles if available, otherwise use demo students in dev mode
-    const studentList = hasRealData ? profiles : (showDemoData ? DEMO_STUDENTS : []);
+    // Use normalized profiles if available, otherwise use demo students in dev mode
+    const studentList = hasRealData ? normalizedProfiles : (showDemoData ? DEMO_STUDENTS : []);
     const totalStudents = studentList.length;
-    const activeToday = studentList.filter(s => Date.now() - s.lastActive < 86400000).length;
+    const activeToday = studentList.filter(s => Date.now() - (s.lastActive || 0) < 86400000).length;
     
     // Calculate average progress based on concept coverage
-    const avgProgress = profiles.length > 0
-      ? Math.round(profiles.reduce((sum, p) => sum + p.conceptsCovered.size, 0) / profiles.length / 6 * 100)
-      : (showDemoData ? 45 : 0);
+    // Use backend average if available, otherwise calculate from profiles
+    const avgProgress = isBackendAvailable && backendAvgCoverage > 0
+      ? Math.round((backendAvgCoverage / 6) * 100)
+      : normalizedProfiles.length > 0
+        ? Math.round(normalizedProfiles.reduce((sum, p) => sum + (p.conceptsCovered?.size || 0), 0) / normalizedProfiles.length / 6 * 100)
+        : (showDemoData ? 45 : 0);
 
-    // Use real interactions or add demo interactions in dev mode
-    const totalInteractions = interactions.length + (showDemoData ? DEMO_STATS.interactions : 0);
+    // Use real interactions or backend total, add demo interactions in dev mode
+    const totalInteractions = isBackendAvailable && backendTotalInteractions > 0
+      ? backendTotalInteractions
+      : interactions.length + (showDemoData ? DEMO_STATS.interactions : 0);
 
     // Analyze common errors from real data
     const errorCounts = interactions
@@ -231,7 +297,7 @@ export function InstructorDashboard() {
       commonErrors: commonErrors.length > 0 ? commonErrors : [],
       conceptMastery
     };
-  }, [profiles, interactions, hasRealData, showDemoData]);
+  }, [normalizedProfiles, interactions, hasRealData, showDemoData]);
 
   // Memoized helper to calculate student adaptive profiles
   const studentAdaptiveProfiles = useMemo(() => {
@@ -265,7 +331,7 @@ export function InstructorDashboard() {
     const allLearnerIds = new Set([
       ...Object.keys(latestProfiles),
       ...Object.keys(latestHDI),  // Also include learners with HDI events (critical for adaptive stats)
-      ...profiles.map(p => p.id)
+      ...normalizedProfiles.map(p => p.id)
     ]);
 
     // Use demo data in dev mode if no real data
@@ -287,7 +353,7 @@ export function InstructorDashboard() {
       });
     } else {
       allLearnerIds.forEach(learnerId => {
-        const profile = profiles.find(p => p.id === learnerId);
+        const profile = normalizedProfiles.find(p => p.id === learnerId);
         const profileEvent = latestProfiles[learnerId];
         const hdiEvent = latestHDI[learnerId];
         const history = hdiHistory[learnerId] || [];
@@ -302,7 +368,7 @@ export function InstructorDashboard() {
         if (history.length >= 2) {
           const sorted = history.sort((a, b) => a.timestamp - b.timestamp);
           const recent = sorted.slice(-3);
-          const values = recent.map(e => e.payload?.hdi || 0);
+          const values = recent.map(e => (e.payload?.hdi as number) || 0);
           if (values.length >= 2) {
             const first = values[0];
             const last = values[values.length - 1];
@@ -315,10 +381,10 @@ export function InstructorDashboard() {
 
         studentProfiles.push({
           learnerId,
-          name: profile?.name || learnerId,
-          profile: profileEvent?.payload?.profile || 'adaptive',
-          strategy: profileEvent?.payload?.strategy || 'static',
-          hdi: (hdiEvent?.payload?.hdi ?? hdiEvent?.hdi) || 0.5,
+          name: profile?.name ?? learnerId,  // already normalized
+          profile: (profileEvent?.payload?.profile as 'fast' | 'slow' | 'adaptive') || 'adaptive',
+          strategy: (profileEvent?.payload?.strategy as 'static' | 'diagnostic' | 'bandit') || 'static',
+          hdi: ((hdiEvent?.payload?.hdi as number) ?? (hdiEvent?.hdi as number)) || 0.5,
           hdiTrend,
           lastUpdated: hdiEvent?.timestamp || Date.now()
         });
@@ -326,7 +392,7 @@ export function InstructorDashboard() {
     }
 
     return { studentProfiles, useDemo };
-  }, [interactions, profiles, showDemoData]);
+  }, [interactions, normalizedProfiles, showDemoData]);
 
   // Calculate adaptive learning statistics from profiles
   const adaptiveStats: AdaptiveStats = useMemo(() => {
@@ -343,7 +409,7 @@ export function InstructorDashboard() {
     };
 
     // Get bandit pulls from events
-    const banditEvents = interactions.filter(e => e.eventType === 'bandit_pull');
+    const banditEvents = interactions.filter(e => e.eventType === 'bandit_arm_selected');
     const banditPulls = useDemo 
       ? DEMO_ADAPTIVE_DATA.banditPulls
       : {
@@ -397,8 +463,7 @@ export function InstructorDashboard() {
     };
 
     // Save to storage
-    const existing = storage.getAllInteractions();
-    storage.saveInteractions([...existing, interventionEvent]);
+    storage.saveInteraction(interventionEvent);
     
     // Simulate brief delay for UX
     await new Promise(resolve => setTimeout(resolve, 500));
@@ -466,7 +531,36 @@ export function InstructorDashboard() {
     }
   };
 
-  if (isLoading || isDataLoading) {
+  const handleSeedDemo = () => {
+    const result = seedDemoDataset();
+    if (result.success) {
+      setToastMessage(`Demo data seeded: ${result.learners} learners, ${result.interactions} events, ${result.units} units`);
+      // Reload data
+      const allProfiles = storage.getAllProfiles().map(p => storage.getProfile(p.id)).filter(Boolean) as LearnerProfile[];
+      const allInteractions = storage.getAllInteractions();
+      setProfiles(allProfiles);
+      setInteractions(allInteractions);
+      setDemoDataExists(true);
+    } else {
+      setToastMessage(`Failed to seed demo data: ${result.error}`);
+    }
+  };
+
+  const handleResetDemo = () => {
+    if (confirm('Are you sure you want to reset demo data? This will remove all demo learners and their data.')) {
+      const result = resetDemoDataset();
+      if (result.success) {
+        setToastMessage('Demo data has been reset');
+        setProfiles([]);
+        setInteractions([]);
+        setDemoDataExists(false);
+      } else {
+        setToastMessage(`Failed to reset data: ${result.error}`);
+      }
+    }
+  };
+
+  if (isRoleLoading || isDataLoading || isProfilesLoading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto space-y-6">
@@ -500,11 +594,41 @@ export function InstructorDashboard() {
                   Demo Mode
                 </Badge>
               )}
+              {isBackendAvailable && (
+                <Badge variant="outline" className="text-sm px-3 py-1 bg-green-50 text-green-700 border-green-200">
+                  Backend Connected
+                </Badge>
+              )}
               <Badge variant="outline" className="text-sm px-3 py-1">
                 <Users className="size-3 mr-1" />
                 {classStats.totalStudents} Students
               </Badge>
             </div>
+            {DEMO_MODE && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSeedDemo}
+                  disabled={demoDataExists}
+                  className="gap-2"
+                  data-testid="seed-demo-button"
+                >
+                  <Database className="w-4 h-4" />
+                  Seed Demo Data
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResetDemo}
+                  className="gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  data-testid="reset-demo-button"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  Reset Demo Data
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -611,28 +735,37 @@ export function InstructorDashboard() {
         </Card>
 
         {/* Data Storage Info Card */}
-        <Card className="border-amber-200 bg-amber-50/50">
+        <Card className={isBackendAvailable ? "border-green-200 bg-green-50/50" : "border-amber-200 bg-amber-50/50"}>
           <CardContent className="p-6">
             <div className="flex items-start gap-4">
-              <div className="p-3 rounded-lg bg-amber-100">
-                <AlertCircle className="size-6 text-amber-600" />
+              <div className={`p-3 rounded-lg ${isBackendAvailable ? "bg-green-100" : "bg-amber-100"}`}>
+                <AlertCircle className={`size-6 ${isBackendAvailable ? "text-green-600" : "text-amber-600"}`} />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-lg text-amber-900">About Data Storage</h3>
-                <p className="text-sm text-amber-800 mt-1">
-                  All learning data is stored locally in your browser. Student progress, textbooks, and interactions 
-                  are saved per-browser and cannot be accessed across different devices or browsers. For a full 
-                  classroom management system with cloud storage, a backend integration would be required.
+                <h3 className={`font-semibold text-lg ${isBackendAvailable ? "text-green-900" : "text-amber-900"}`}>
+                  {isBackendAvailable ? "Backend Storage Active" : "About Data Storage"}
+                </h3>
+                <p className={`text-sm mt-1 ${isBackendAvailable ? "text-green-800" : "text-amber-800"}`}>
+                  {isBackendAvailable 
+                    ? "Learner profiles are being persisted to the backend database. This enables class-wide analytics across all devices and sessions. Data is automatically synchronized and can be reconstructed from event history."
+                    : "All learning data is stored locally in your browser. Student progress, textbooks, and interactions are saved per-browser and cannot be accessed across different devices or browsers. For a full classroom management system with cloud storage, a backend integration would be required."
+                  }
                 </p>
-                <div className="mt-3 flex gap-4 text-xs text-amber-700">
+                <div className={`mt-3 flex gap-4 text-xs ${isBackendAvailable ? "text-green-700" : "text-amber-700"}`}>
                   <span className="flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full bg-green-500"></span>
                     Demo Mode Available
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                    Local Storage Only
+                    <span className={`w-2 h-2 rounded-full ${isBackendAvailable ? "bg-green-500" : "bg-amber-500"}`}></span>
+                    {isBackendAvailable ? "Backend Storage" : "Local Storage Only"}
                   </span>
+                  {isBackendAvailable && (
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                      {backendProfiles.length} Profile{backendProfiles.length !== 1 ? 's' : ''} Synced
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -832,11 +965,10 @@ export function InstructorDashboard() {
                                   reason: 'instructor_override'
                                 }
                               };
-                              const existing = storage.getAllInteractions();
-                              storage.saveInteractions([...existing, overrideEvent]);
+                              storage.saveInteraction(overrideEvent);
                               setToastMessage(`Profile updated for ${student.name}`);
                               // Refresh data
-                              setInteractions([...existing, overrideEvent]);
+                              setInteractions([...storage.getAllInteractions()]);
                             }
                           }}
                           defaultValue=""
@@ -851,7 +983,7 @@ export function InstructorDashboard() {
                   ))}
                 </TableBody>
               </Table>
-              {!showDemoData && profiles.length === 0 && (
+              {!showDemoData && normalizedProfiles.length === 0 && (
                 <div className="text-center py-8 text-gray-500">
                   <p>No adaptive data available yet. Students need to interact with the system.</p>
                 </div>
@@ -978,13 +1110,13 @@ export function InstructorDashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(hasRealData ? profiles.map(p => ({ 
+                  {(hasRealData ? normalizedProfiles.map(p => ({ 
                     id: p.id, 
-                    name: p.name || p.id, 
+                    name: p.name,  // already normalized
                     email: `${p.id}@local`, 
-                    lastActive: p.createdAt || Date.now() 
+                    lastActive: p.lastActive  // already normalized
                   })) : showDemoData ? DEMO_STUDENTS : []).map((student) => {
-                    const profile = profiles.find(p => p.id === student.id);
+                    const profile = normalizedProfiles.find(p => p.id === student.id);
                     // Deterministic pseudo-random based on student ID to avoid hydration mismatch
                     const conceptsCount = profile?.conceptsCovered.size || (student.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0) % 4) + 1;
                     const isActive = student.lastActive && Date.now() - student.lastActive < 3600000;
@@ -1134,7 +1266,7 @@ export function InstructorDashboard() {
                   e.stopPropagation();
                   
                   try {
-                    // Save the preview profile override to localStorage
+                    // Save the preview profile override to localStorage with cross-tab sync
                     // Map UI values to actual profile IDs (explanation-first doesn't have -escalator suffix)
                     const profileIdMap: Record<string, string> = {
                       'fast': 'fast-escalator',
@@ -1143,9 +1275,10 @@ export function InstructorDashboard() {
                       'explanation-first': 'explanation-first'
                     };
                     const actualProfileId = profileIdMap[previewProfile] || `${previewProfile}-escalator`;
-                    localStorage.setItem('sql-adapt-debug-profile', actualProfileId);
-                    // Also set assignment strategy to static for consistent experience
-                    localStorage.setItem('sql-adapt-debug-strategy', 'static');
+                    // Set debug profile with cross-tab sync
+                    setDebugProfileWithSync(actualProfileId);
+                    // Also set assignment strategy to static for consistent experience (with sync)
+                    setDebugStrategyWithSync('static');
                     // Set a preview mode flag to indicate we're in preview mode
                     localStorage.setItem('sql-adapt-preview-mode', 'true');
                     // Broadcast to other tabs for cross-tab sync

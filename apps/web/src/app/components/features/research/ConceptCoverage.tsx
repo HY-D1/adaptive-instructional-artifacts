@@ -18,7 +18,7 @@ import {
   Target
 } from 'lucide-react';
 import { conceptNodes } from '../../../data/sql-engage';
-import { storage } from '../../../lib/storage/storage';
+import { storage } from '../../../lib/storage';
 import { ConceptCoverageEvidence, LearnerProfile, CoverageStats } from '../../../types';
 
 interface ConceptCoverageProps {
@@ -258,31 +258,31 @@ export function ConceptCoverage({ learnerId }: ConceptCoverageProps) {
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-xs">
-                  Avg: {coverageStats.averageScore}/100
+                  Avg: {coverageStats?.averageScore ?? 0}/100
                 </Badge>
                 <Badge variant="outline">
-                  {coverageStats.coveredCount} / {coverageStats.totalConcepts}
+                  {coverageStats?.coveredCount ?? 0} / {coverageStats?.totalConcepts ?? 0}
                 </Badge>
               </div>
             </div>
             
             {/* Main progress bar */}
             <div className="space-y-1">
-              <Progress value={coverageStats.coveragePercentage} className="h-2.5" />
+              <Progress value={coverageStats?.coveragePercentage ?? 0} className="h-2.5" />
               <div className="flex justify-between text-xs text-gray-500">
-                <span>{Math.round(coverageStats.coveragePercentage)}% covered</span>
-                <span>{coverageStats.totalConcepts - coverageStats.coveredCount} remaining</span>
+                <span>{Math.round(coverageStats?.coveragePercentage ?? 0)}% covered</span>
+                <span>{(coverageStats?.totalConcepts ?? 0) - (coverageStats?.coveredCount ?? 0)} remaining</span>
               </div>
             </div>
             
             {/* Confidence breakdown */}
             <div className="flex gap-3 mt-3 text-xs">
-              {coverageStats.byConfidence.high > 0 && (
+              {(coverageStats?.byConfidence.high ?? 0) > 0 && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className="flex items-center gap-1 text-green-600 cursor-help">
                       <CheckCircle2 className="size-3" />
-                      <span className="font-medium">{coverageStats.byConfidence.high} mastered</span>
+                      <span className="font-medium">{coverageStats?.byConfidence.high ?? 0} mastered</span>
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -290,12 +290,12 @@ export function ConceptCoverage({ learnerId }: ConceptCoverageProps) {
                   </TooltipContent>
                 </Tooltip>
               )}
-              {coverageStats.byConfidence.medium > 0 && (
+              {(coverageStats?.byConfidence.medium ?? 0) > 0 && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className="flex items-center gap-1 text-yellow-600 cursor-help">
                       <TrendingUp className="size-3" />
-                      <span className="font-medium">{coverageStats.byConfidence.medium} developing</span>
+                      <span className="font-medium">{coverageStats?.byConfidence.medium ?? 0} developing</span>
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -303,12 +303,12 @@ export function ConceptCoverage({ learnerId }: ConceptCoverageProps) {
                   </TooltipContent>
                 </Tooltip>
               )}
-              {coverageStats.byConfidence.low > 0 && (
+              {(coverageStats?.byConfidence.low ?? 0) > 0 && (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className="flex items-center gap-1 text-gray-500 cursor-help">
                       <Circle className="size-3" />
-                      <span className="font-medium">{coverageStats.byConfidence.low} exposed</span>
+                      <span className="font-medium">{coverageStats?.byConfidence.low ?? 0} exposed</span>
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import path from 'path'
 import fs from 'fs'
 import tailwindcss from '@tailwindcss/vite'
@@ -14,6 +14,7 @@ import { loadOrBuildPdfIndexFromDisk, buildPdfIndexFromBuffer } from './src/serv
 const wasmFilePath = path.resolve(__dirname, 'public/sql-wasm.wasm')
 
 const ollamaTarget = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434'
+const backendTarget = process.env.VITE_BACKEND_URL || 'http://127.0.0.1:3001'
 const repoRoot = path.resolve(__dirname, '../..')
 const pdfIndexDir = process.env.PDF_INDEX_DIR || path.resolve(repoRoot, 'dist/pdf-index')
 const pdfSourceDir = process.env.PDF_SOURCE_DIR || path.resolve(repoRoot, 'dist')
@@ -184,10 +185,10 @@ function parseMultipart(buffer: Buffer, boundary: string): Array<{ name?: string
 // WASM serving plugin - ensures correct MIME type for .wasm files
 // Lodash resolution fix for Rollup - handles lodash internal modules that Rollup can't resolve
 // This plugin resolves lodash internal module paths correctly when they use .js extension
-function lodashResolvePlugin() {
+function lodashResolvePlugin(): Plugin {
   return {
     name: 'lodash-resolve',
-    enforce: 'pre',
+    enforce: 'pre' as const,
     resolveId(id: string, importer: string | undefined) {
       // Handle bare relative imports within lodash (ensure .js extension)
       if (id.startsWith('./_') && importer?.includes('/lodash/') && !id.endsWith('.js')) {
@@ -199,7 +200,7 @@ function lodashResolvePlugin() {
   };
 }
 
-function wasmServePlugin() {
+function wasmServePlugin(): Plugin {
   // Shared middleware handler for both dev and preview servers
   const wasmMiddleware = (req: any, res: any, next: () => void) => {
     // Only handle requests to /sql-wasm.wasm
@@ -234,16 +235,9 @@ function wasmServePlugin() {
 
   return {
     name: 'wasm-serve',
-    enforce: 'pre', // Run before other middleware (including Vite's SPA fallback)
+    enforce: 'pre' as const, // Run before other middleware (including Vite's SPA fallback)
     configureServer(server: any) {
       // Add middleware at the beginning to intercept WASM requests before SPA fallback
-      server.middlewares.stack.unshift({
-        route: '',
-        handle: wasmMiddleware
-      })
-    },
-    configurePreview(server: any) {
-      // Also handle WASM requests in preview mode (vite preview)
       server.middlewares.stack.unshift({
         route: '',
         handle: wasmMiddleware
@@ -293,6 +287,11 @@ export default defineConfig({
         target: ollamaTarget,
         changeOrigin: true,
         rewrite: (requestPath) => requestPath.replace(/^\/ollama/, '')
+      },
+      '/api': {
+        // Proxy API requests to backend server in development
+        target: backendTarget,
+        changeOrigin: true,
       }
     }
   },

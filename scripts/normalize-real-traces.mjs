@@ -47,15 +47,46 @@ const SUBTYPE_ALIASES = {
 };
 
 const ALLOWED_EVENT_TYPES = new Set([
+  // Core interaction events
   'code_change',
   'execution',
   'error',
+  // Help-seeking events
   'hint_request',
   'hint_view',
   'explanation_view',
+  'guidance_request',
+  'guidance_view',
+  'guidance_escalate',
+  // Content events
   'llm_generate',
   'textbook_add',
-  'textbook_update'
+  'textbook_update',
+  'textbook_unit_upsert',
+  // Reinforcement events
+  'reinforcement_response',
+  'reinforcement_shown',
+  // Profile/policy events
+  'profile_assigned',
+  'escalation_triggered',
+  // Bandit events
+  'bandit_arm_selected',
+  'bandit_reward_observed',
+  'bandit_updated',
+  // HDI events
+  'hdi_calculated',
+  'hdi_trajectory_updated',
+  'dependency_intervention_triggered',
+  // Source events
+  'source_view',
+  'pdf_index_rebuilt',
+  'pdf_index_uploaded',
+  // Session events
+  'session_started',
+  'session_ended',
+  // Concept events
+  'concept_extraction',
+  'prerequisite_violation_detected'
 ]);
 
 function parseArgs(argv) {
@@ -91,7 +122,8 @@ function usageAndExit(message) {
   if (message) {
     console.error(message);
   }
-  console.error('Usage: node scripts/normalize-real-traces.mjs --adapter <cybernetic-sabotage|sqlbeyond> --input <raw-file-or-dir> [--output dist/replay/real/export.json]');
+  console.error('Usage: node scripts/normalize-real-traces.mjs --adapter <cybernetic-sabotage|sqlbeyond|json> --input <raw-file-or-dir> [--output dist/replay/real/export.json]');
+  console.error('  json/passthrough: For already-normalized JSON with interactions array');
   process.exit(1);
 }
 
@@ -514,6 +546,25 @@ function extractAdapterRecords(adapter, payload, sourceLabel) {
   if (adapter === 'sqlbeyond') {
     return extractSqlbeyondRecords(payload, sourceLabel);
   }
+  if (adapter === 'json' || adapter === 'passthrough') {
+    // Passthrough for already-normalized JSON with interactions array
+    if (Array.isArray(payload.interactions)) {
+      return payload.interactions.map((record, index) => ({
+        ...record,
+        __sourceFile: sourceLabel,
+        __passthroughIndex: index
+      }));
+    }
+    // Or if payload is directly an array
+    if (Array.isArray(payload)) {
+      return payload.map((record, index) => ({
+        ...record,
+        __sourceFile: sourceLabel,
+        __passthroughIndex: index
+      }));
+    }
+    throw new Error(`JSON passthrough adapter expected interactions array or array payload`);
+  }
   throw new Error(`Unsupported adapter: ${adapter}`);
 }
 
@@ -527,7 +578,7 @@ async function main() {
     usageAndExit('Missing required --input argument.');
   }
 
-  if (args.adapter !== 'cybernetic-sabotage' && args.adapter !== 'sqlbeyond') {
+  if (args.adapter !== 'cybernetic-sabotage' && args.adapter !== 'sqlbeyond' && args.adapter !== 'json' && args.adapter !== 'passthrough') {
     usageAndExit(`Unsupported adapter '${args.adapter}'.`);
   }
 

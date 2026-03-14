@@ -32,12 +32,13 @@ import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/features/sql/S
 import { HintSystem } from '../components/features/hints/HintSystem';
 import { ConceptCoverage } from '../components/features/research/ConceptCoverage';
 import { AskMyTextbookChat } from '../components/features/chat/AskMyTextbookChat';
+import { ReinforcementPrompt } from '../components/ReinforcementPrompt';
 import { useLLMSettings } from '../components/shared/LLMSettingsHelper';
 import { useScreenReaderAnnouncer } from '../components/shared/ScreenReaderAnnouncer';
 import { sqlProblems } from '../data/problems';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
-import { storage, subscribeToSync } from '../lib/storage/storage';
+import { storage, subscribeToSync, clearAllDebugSettingsWithSync } from '../lib/storage';
 import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content/content-generator';
@@ -51,8 +52,31 @@ import { calculateHDI, calculateHDIComponents } from '../lib/ml/hdi-calculator';
 import type { HDIComponents, HDILevel } from '../types';
 import { safeGetStrategy, safeGetProfileOverride } from '../lib/storage/storage-validation';
 import { assignProfile, getProfileById, type EscalationProfile } from '../lib/ml/escalation-profiles';
+import { 
+  assignCondition, 
+  loadSessionConfig, 
+  saveSessionConfig,
+  SESSION_CONFIG_STORAGE_KEY,
+  getConditionAssignmentVersion
+} from '../lib/experiments/condition-assignment';
+import type { SessionConfig } from '../types';
 import type { BanditArmId } from '../lib/ml/learner-bandit-manager';
 import type { SQLProblem, InteractionEvent, InstructionalUnit, LearnerProfile, RetrievedChunkInfo, HDITrend } from '../types';
+import { reinforcementManager, type ActivePrompt } from '../lib/content/reinforcement-manager';
+import { detectPrerequisiteViolation, logPrerequisiteViolation, type PrerequisiteViolation } from '../lib/content/prerequisite-detector';
+import { checkPrerequisites } from '../lib/content/prerequisite-checker';
+import { getUnlockedConcepts } from '../data/concept-graph';
+import { 
+  checkProblemReadiness,
+  buildLearningPath,
+  updatePathAfterSuccess,
+  getNextRecommendedConcept,
+  updateMasteryFromInteraction,
+  propagateMastery,
+  assessReflection,
+  type LearningPathRecommendation,
+  type PathProgress
+} from '../lib/knowledge';
 
 const INSTRUCTOR_SUBTYPE_OPTIONS = getKnownSqlEngageSubtypes();
 
@@ -240,6 +264,11 @@ export function LearningInterface() {
     lastResult?: AnalysisResult;
   }>({ isRunning: false });
   
+  // Reinforcement prompt state (Component 10: Knowledge Consolidation)
+  const [activeReinforcement, setActiveReinforcement] = useState<ActivePrompt | null>(null);
+  const [reinforcementPromptNumber, setReinforcementPromptNumber] = useState(1);
+  const [reinforcementTotalPrompts] = useState(3);
+  
   // Auto-creation notification state
   const [autoCreationNotifications, setAutoCreationNotifications] = useState<Array<{
     id: string;
@@ -263,6 +292,21 @@ export function LearningInterface() {
   const dependencyWarningShownRef = useRef(false);
   const lastHintRequestTimeRef = useRef<number>(0);
   
+  // Knowledge-Structure Adaptive Features State
+  const [learningPath, setLearningPath] = useState<LearningPathRecommendation | null>(null);
+  const [prerequisiteWarnings, setPrerequisiteWarnings] = useState<string[]>([]);
+  const [conceptProgress, setConceptProgress] = useState<Map<string, PathProgress>>(new Map());
+  const [masteryStats, setMasteryStats] = useState<{
+    mastered: number;
+    practicing: number;
+    exposed: number;
+    none: number;
+  } | null>(null);
+  const [reflectionScore, setReflectionScore] = useState<{
+    rqs: number;
+    feedback: string[];
+  } | null>(null);
+  
   // Preview Mode: Check if instructor is previewing student view
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   useEffect(() => {
@@ -270,12 +314,18 @@ export function LearningInterface() {
     setIsPreviewMode(previewMode);
   }, []);
   
-  // Subscribe to cross-tab sync for preview mode changes
+  // State refresh trigger for debug profile/strategy cross-tab sync
+  const [debugRefreshKey, setDebugRefreshKey] = useState(0);
+  
+  // Subscribe to cross-tab sync for preview mode and debug state changes
   useEffect(() => {
     const unsubscribe = subscribeToSync((key, value) => {
       if (key === 'sql-adapt-preview-mode') {
         // Update preview mode state when changed in another tab
         setIsPreviewMode(value === 'true');
+      } else if (key === 'sql-adapt-debug-profile' || key === 'sql-adapt-debug-strategy') {
+        // Trigger re-calculation of escalation profile when debug settings change
+        setDebugRefreshKey(prev => prev + 1);
       }
     });
     return unsubscribe;
@@ -284,9 +334,7 @@ export function LearningInterface() {
   // Function to exit preview mode
   const exitPreviewMode = () => {
     try {
-      localStorage.removeItem('sql-adapt-preview-mode');
-      localStorage.removeItem('sql-adapt-debug-profile');
-      localStorage.removeItem('sql-adapt-debug-strategy');
+      clearAllDebugSettingsWithSync();
     } catch (error) {
       console.error('[Preview] Failed to clear preview mode:', error);
     }
@@ -297,6 +345,9 @@ export function LearningInterface() {
   const [progressHint, setProgressHint] = useState<string | null>(null);
   const progressHintShownRef = useRef(false);
   const interactionCountRef = useRef(0);
+  
+  // Week 6: Session configuration for experimental conditions
+  const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
   
   const timerRef = useRef<number | null>(null);
   const stopAnalysisRef = useRef<(() => void) | null>(null);
@@ -311,11 +362,46 @@ export function LearningInterface() {
   const [notificationAnnouncement, setNotificationAnnouncement] = useState('');
 
   // Week 5: Get current escalation profile based on assignment strategy
+  // Week 6: Modified to respect sessionConfig experimental settings
   useEffect(() => {
     if (!learnerId) return;
     
-    const assignmentStrategy = safeGetStrategy();
+    // Week 6: Respect sessionConfig experimental settings
     const debugProfileOverride = safeGetProfileOverride();
+    
+    // If staticHintMode is enabled, bypass bandit/adaptive selection
+    if (sessionConfig?.staticHintMode) {
+      const staticProfile = assignProfile({ learnerId }, 'static');
+      setCurrentProfileId(getArmIdFromProfileId(staticProfile.id));
+      setCurrentEscalationProfile(staticProfile);
+      storage.logProfileAssigned(
+        learnerId,
+        staticProfile.id,
+        'static',
+        currentProblem.id,
+        'experimental_static_hint_mode'
+      );
+      return;
+    }
+    
+    // If adaptiveLadderDisabled is true, use diagnostic (deterministic) assignment
+    if (sessionConfig?.adaptiveLadderDisabled) {
+      const interactions = storage.getInteractionsByLearner(learnerId);
+      const diagnosticResults = analyzeLearnerHistory(interactions);
+      const diagnosticProfile = assignProfile({ learnerId, diagnosticResults }, 'diagnostic');
+      setCurrentProfileId(getArmIdFromProfileId(diagnosticProfile.id));
+      setCurrentEscalationProfile(diagnosticProfile);
+      storage.logProfileAssigned(
+        learnerId,
+        diagnosticProfile.id,
+        'diagnostic',
+        currentProblem.id,
+        'experimental_adaptive_disabled'
+      );
+      return;
+    }
+    
+    const assignmentStrategy = safeGetStrategy();
     
     let effectiveProfile: EscalationProfile;
     let effectiveArmId: BanditArmId;
@@ -388,7 +474,7 @@ export function LearningInterface() {
       currentProblem.id,
       selectionReason
     );
-  }, [learnerId, currentProblem.id, sessionId]);
+  }, [learnerId, currentProblem.id, sessionId, debugRefreshKey, sessionConfig]);
 
   // Week 5: Listen for HDI calculated events
   useEffect(() => {
@@ -645,6 +731,59 @@ export function LearningInterface() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Effect: Session configuration assignment/loading (Week 6)
+  useEffect(() => {
+    if (!learnerId) return;
+    
+    // Try to load existing session config first
+    let config = loadSessionConfig();
+    
+    if (!config || config.learnerId !== learnerId) {
+      // No valid config exists or belongs to different learner - assign new condition
+      config = assignCondition(learnerId);
+      saveSessionConfig(config);
+      
+      // Log session config applied event
+      const configEvent: InteractionEvent = {
+        id: createEventId('event', 'session-config'),
+        sessionId: config.sessionId,
+        learnerId,
+        timestamp: Date.now(),
+        eventType: 'profile_assigned', // Reuse existing event type
+        problemId: currentProblem.id,
+        conditionId: config.conditionId,
+        profileId: config.escalationPolicy,
+        assignmentStrategy: config.staticHintMode ? 'static' : (config.adaptiveLadderDisabled ? 'diagnostic' : 'bandit'),
+        metadata: {
+          sessionConfigVersion: getConditionAssignmentVersion(),
+          textbookDisabled: config.textbookDisabled,
+          adaptiveLadderDisabled: config.adaptiveLadderDisabled,
+          immediateExplanationMode: config.immediateExplanationMode,
+          staticHintMode: config.staticHintMode,
+          eventSubtype: 'session_config_applied'
+        }
+      };
+      storage.saveInteraction(configEvent);
+    }
+    
+    setSessionConfig(config);
+    
+    // Override escalation profile if config specifies a policy
+    if (config.escalationPolicy && config.escalationPolicy !== 'adaptive') {
+      const policyProfile = getProfileById(config.escalationPolicy === 'explanation_first' 
+        ? 'explanation-first' 
+        : config.escalationPolicy === 'aggressive' 
+          ? 'fast-escalator'
+          : config.escalationPolicy === 'conservative'
+            ? 'slow-escalator'
+            : 'adaptive-escalator'
+      );
+      if (policyProfile) {
+        setCurrentEscalationProfile(policyProfile);
+      }
+    }
+  }, [learnerId, currentProblem.id]);
+
   // Effect 1: Session initialization - handles profile, session ID, and state reset
   useEffect(() => {
     // Initialize learner profile if doesn't exist
@@ -654,7 +793,8 @@ export function LearningInterface() {
     }
     setSubtypeOverride('auto');
 
-    const activeSessionId = storage.getActiveSessionId();
+    // Use session ID from sessionConfig if available, otherwise get from storage
+    const activeSessionId = sessionConfig?.sessionId || storage.getActiveSessionId();
     // Validate session belongs to current learner using exact pattern match
     const expectedPrefix = `session-${learnerId}-`;
     const belongsToLearner = activeSessionId?.startsWith(expectedPrefix) === true && 
@@ -686,7 +826,7 @@ export function LearningInterface() {
     setLatestGeneratedUnit(null);
     setStartTime(Date.now());
     setElapsedTime(0);
-  }, [learnerId, currentProblem.id]);
+  }, [learnerId, currentProblem.id, sessionConfig]);
 
   // Effect 2: Background analysis - handles trace analysis lifecycle
   useEffect(() => {
@@ -742,8 +882,96 @@ export function LearningInterface() {
     };
   }, [learnerId, sessionId]);
 
+  // Effect 3: Reinforcement prompt checking - periodic check for due prompts
+  useEffect(() => {
+    if (!learnerId || !sessionId) return;
+
+    // Check immediately on mount/session change
+    const checkForPrompts = () => {
+      if (activeReinforcement) return; // Don't show new prompt if one is active
+      
+      const duePrompts = reinforcementManager.getDuePrompts(learnerId);
+      if (duePrompts.length > 0) {
+        const prompt = duePrompts[0];
+        setActiveReinforcement(prompt);
+        setReinforcementPromptNumber(1); // Could calculate based on schedule
+        
+        // Log that prompt was shown
+        reinforcementManager.markPromptShown(prompt.scheduleId, prompt.promptId, learnerId);
+      }
+    };
+
+    // Initial check after a short delay (let the page load first)
+    const initialTimeout = window.setTimeout(checkForPrompts, 5000);
+
+    // Set up periodic checking every 30 seconds
+    const checkInterval = window.setInterval(checkForPrompts, 30000);
+
+    return () => {
+      window.clearTimeout(initialTimeout);
+      window.clearInterval(checkInterval);
+    };
+  }, [learnerId, sessionId, activeReinforcement]);
+
   // Learner switching is now handled via "Switch User" in the top navigation
   // The learnerId state remains for data tracking purposes
+
+  // Effect 4: Knowledge-Structure Monitoring - initialize and update learning path
+  useEffect(() => {
+    if (!learnerId) return;
+    
+    // Build initial learning path
+    const path = buildLearningPath(learnerId, 'prerequisite_first');
+    setLearningPath(path);
+    
+    // Check prerequisites for current problem
+    const readiness = checkProblemReadiness(currentProblem.concepts, storage.getProfile(learnerId)!);
+    setPrerequisiteWarnings(readiness.warnings);
+    
+    // Log if there are violations
+    if (readiness.violations.length > 0) {
+      console.log('[Knowledge] Prerequisite violations detected:', readiness.violations);
+    }
+  }, [learnerId, currentProblem.id]);
+  
+  // Effect 5: Mastery tracking - update mastery on successful submissions
+  useEffect(() => {
+    if (!learnerId || !sessionId) return;
+    
+    // Subscribe to successful executions
+    const handleExecution = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        problemId: string;
+        successful: boolean;
+        conceptIds: string[];
+      }>;
+      
+      if (customEvent.detail.successful) {
+        // Update mastery
+        const updates = updateMasteryFromInteraction({
+          id: createEventId('mastery', 'update'),
+          learnerId,
+          timestamp: Date.now(),
+          eventType: 'execution',
+          problemId: customEvent.detail.problemId,
+          conceptIds: customEvent.detail.conceptIds,
+          successful: true
+        } as InteractionEvent, learnerId);
+        
+        if (updates.length > 0) {
+          // Propagate mastery to dependent concepts
+          propagateMastery(learnerId);
+          
+          // Update learning path after success
+          const updatedPath = updatePathAfterSuccess(learnerId, customEvent.detail.conceptIds[0]);
+          setLearningPath(updatedPath);
+        }
+      }
+    };
+    
+    window.addEventListener('sql-execution-result', handleExecution);
+    return () => window.removeEventListener('sql-execution-result', handleExecution);
+  }, [learnerId, sessionId]);
 
   const instructorSubtypeOverride = isInstructor && subtypeOverride !== 'auto'
     ? canonicalizeSqlEngageSubtype(subtypeOverride)
@@ -757,7 +985,8 @@ export function LearningInterface() {
       timestamp: Date.now(),
       eventType: 'code_change',
       problemId: currentProblem.id,
-      code
+      code,
+      conditionId: sessionConfig?.conditionId
     };
     storage.saveInteraction(event);
     setInteractions((previousInteractions) => [...previousInteractions, event]);
@@ -785,6 +1014,22 @@ export function LearningInterface() {
       return;
     }
     setCurrentProblem(problem);
+    
+    // Log problem change with condition context
+    if (sessionConfig?.conditionId) {
+      const event: InteractionEvent = {
+        id: createEventId('event', 'problem-change'),
+        sessionId,
+        learnerId,
+        timestamp: Date.now(),
+        eventType: 'code_change',
+        problemId: problem.id,
+        conditionId: sessionConfig.conditionId,
+        metadata: { action: 'problem_change', previousProblemId: currentProblem.id }
+      };
+      storage.saveInteraction(event);
+    }
+    
     const restoredDraft = sessionId
       ? storage.getPracticeDraft(learnerId, sessionId, problem.id)
       : null;
@@ -961,7 +1206,8 @@ export function LearningInterface() {
         fallback_reason: generation.fallbackReason,
         has_real_content: !generation.usedFallback && parseSuccess,
         ...pdfIndexOutputFields
-      }
+      },
+      conditionId: sessionConfig?.conditionId
     };
     storage.saveInteraction(textbookEvent);
     setInteractions((previousInteractions) => [...previousInteractions, textbookEvent]);
@@ -993,7 +1239,8 @@ export function LearningInterface() {
       timeSpent: Date.now() - startTime,
       // Track attempted concepts for all executable submissions so incorrect
       // (result-graded) runs can reduce mastery evidence.
-      conceptIds: result.success ? [...currentProblem.concepts] : undefined
+      conceptIds: result.success ? [...currentProblem.concepts] : undefined,
+      conditionId: sessionConfig?.conditionId
     };
 
     storage.saveInteraction(event);
@@ -1004,6 +1251,19 @@ export function LearningInterface() {
       setLastErrorEventId(event.id);
       setNotesActionMessage(undefined);
       setGenerationError(undefined);
+      
+      // Knowledge-Structure Layer: Check for prerequisite violations on error
+      const learnerProfile = storage.getProfile(learnerId);
+      if (learnerProfile) {
+        const violation = detectPrerequisiteViolation(event, learnerProfile);
+        if (violation) {
+          logPrerequisiteViolation(violation);
+          // Show warning toast for high-severity violations
+          if (violation.severity === 'high') {
+            setProgressHint(`You might be missing prerequisites: ${violation.suggestedRemediation.slice(0, 2).join(', ')}`);
+          }
+        }
+      }
     }
 
     if (result.success) {
@@ -1013,6 +1273,17 @@ export function LearningInterface() {
       setNotesActionMessage(undefined);
       setGenerationError(undefined);
       setLatestGeneratedUnit(null);
+      
+      // Knowledge-Structure: Update mastery on success
+      const masteryUpdates = updateMasteryFromInteraction(event, learnerId);
+      if (masteryUpdates.length > 0) {
+        // Propagate mastery through the graph
+        propagateMastery(learnerId);
+        
+        // Update learning path
+        const updatedPath = updatePathAfterSuccess(learnerId, currentProblem.concepts[0]);
+        setLearningPath(updatedPath);
+      }
       
       // Week 5: Record bandit outcome when problem is solved successfully
       // Only record when using bandit strategy (not static or diagnostic)
@@ -1434,9 +1705,11 @@ export function LearningInterface() {
                     </TooltipTrigger>
                     <TooltipContent side="bottom">
                       <p>{profileDescriptions[currentProfileId]}</p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        HDI: {(currentHDI * 100).toFixed(0)}% • {hdiTrend}
-                      </p>
+                      {isInstructor && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          HDI: {(currentHDI * 100).toFixed(0)}% • {hdiTrend}
+                        </p>
+                      )}
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -1562,6 +1835,30 @@ export function LearningInterface() {
                         );
                       })}
                     </div>
+                    
+                    {/* Week 6: Condition indicator - subtle experimental condition badge */}
+                    {sessionConfig && (
+                      <div className="flex items-center gap-2 mt-3 text-xs">
+                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded">
+                          Condition: {sessionConfig.conditionId}
+                        </span>
+                        {sessionConfig.textbookDisabled && (
+                          <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded">
+                            Textbook Disabled
+                          </span>
+                        )}
+                        {sessionConfig.immediateExplanationMode && (
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                            Explanation-First Mode
+                          </span>
+                        )}
+                        {sessionConfig.adaptiveLadderDisabled && (
+                          <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded">
+                            Static Ladder
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                   
                   {/* Enhanced Problem Selector with difficulty, concepts, and solved status */}
@@ -1708,6 +2005,7 @@ export function LearningInterface() {
 
               <div className="h-[350px] sm:h-[450px] lg:h-[550px]">
                 <SQLEditor
+                  key={currentProblem.id}
                   problem={currentProblem}
                   code={sqlDraft}
                   onExecute={handleExecute}
@@ -1731,6 +2029,7 @@ export function LearningInterface() {
                 onEscalate={handleEscalate}
                 onInteractionLogged={handleHintSystemInteraction}
                 escalationProfile={currentEscalationProfile}
+                sessionConfig={sessionConfig}
               />
 
               {/* Week 5: Progress Hint - subtle, below hint panel */}
@@ -1749,14 +2048,16 @@ export function LearningInterface() {
                 </div>
               )}
 
-              {/* Week 3 Feature: Ask My Textbook Chat */}
-              <AskMyTextbookChat
-                sessionId={sessionId}
-                learnerId={learnerId}
-                problemId={currentProblem.id}
-                recentInteractions={problemInteractions}
-                onInteractionLogged={handleHintSystemInteraction}
-              />
+              {/* Week 3 Feature: Ask My Textbook Chat - conditionally hidden if textbookDisabled */}
+              {(!sessionConfig?.textbookDisabled) && (
+                <AskMyTextbookChat
+                  sessionId={sessionId}
+                  learnerId={learnerId}
+                  problemId={currentProblem.id}
+                  recentInteractions={problemInteractions}
+                  onInteractionLogged={handleHintSystemInteraction}
+                />
+              )}
 
               {showAddToNotes && (
                 <Card className="p-4 space-y-3">
@@ -1800,6 +2101,87 @@ export function LearningInterface() {
 
               <ConceptCoverage learnerId={learnerId} />
 
+              {/* Knowledge-Structure Layer: Prerequisite Warnings */}
+              {currentProblem.concepts.some(conceptId => {
+                const profile = storage.getProfile(learnerId);
+                if (!profile) return false;
+                const status = checkPrerequisites(conceptId, profile.conceptsCovered);
+                return !status.ready;
+              }) && (
+                <Card className="p-4 bg-amber-50 border-amber-200">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="size-4 text-amber-600" />
+                    <h3 className="font-semibold text-amber-900">Prerequisites Needed</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {currentProblem.concepts.map(conceptId => {
+                      const profile = storage.getProfile(learnerId);
+                      if (!profile) return null;
+                      const status = checkPrerequisites(conceptId, profile.conceptsCovered);
+                      if (status.ready) return null;
+                      
+                      return (
+                        <div key={conceptId} className="text-sm">
+                          <p className="text-amber-800 font-medium">
+                            {conceptId.replace(/-/g, ' ')}
+                          </p>
+                          {status.missing.length > 0 && (
+                            <p className="text-amber-700 text-xs mt-0.5">
+                              Missing: {status.missing.slice(0, 2).join(', ')}
+                              {status.missing.length > 2 && ` +${status.missing.length - 2} more`}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              )}
+              
+              {/* Knowledge-Structure Layer: Learning Path Recommendations */}
+              {learningPath && learningPath.recommendedConcepts.length > 0 && (
+                <Card className="p-4 bg-blue-50 border-blue-200">
+                  <div className="flex items-center gap-2 mb-3">
+                    <GraduationCap className="size-4 text-blue-600" />
+                    <h3 className="font-semibold text-blue-900">Learning Path</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {learningPath.recommendedConcepts.slice(0, 3).map((rec, index) => (
+                      <div key={rec.conceptId} className="flex items-start gap-2">
+                        <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-medium">
+                          {index + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-blue-800 truncate">
+                            {rec.name}
+                          </p>
+                          <p className="text-xs text-blue-600">
+                            {rec.reason}
+                          </p>
+                        </div>
+                        {rec.priority === 'high' && (
+                          <span className="flex-shrink-0 px-1.5 py-0.5 bg-red-100 text-red-700 text-[10px] rounded">
+                            High
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-blue-200">
+                    <div className="flex items-center justify-between text-xs text-blue-700">
+                      <span>Progress: {learningPath.progressPercentage}%</span>
+                      <span>{learningPath.completedConcepts}/{learningPath.totalConcepts} concepts</span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 bg-blue-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-500 rounded-full transition-all"
+                        style={{ width: `${learningPath.progressPercentage}%` }}
+                      />
+                    </div>
+                  </div>
+                </Card>
+              )}
+
               <Card className="p-4">
                 <h3 className="font-semibold mb-3">Session Stats</h3>
                 <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 text-sm">
@@ -1820,7 +2202,8 @@ export function LearningInterface() {
                 </div>
               </Card>
 
-              {/* Week 5: Unified HDI Display with 5 Components */}
+              {/* Week 5: Unified HDI Display with 5 Components - INSTRUCTOR ONLY */}
+              {isInstructor && (
               <Card className="p-4 bg-gradient-to-br from-indigo-50 to-purple-50 border-indigo-200">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-indigo-900">Hint Dependency Index</h3>
@@ -1999,6 +2382,7 @@ export function LearningInterface() {
                   </div>
                 </div>
               </Card>
+              )}
 
               {/* Keyboard Shortcuts Help */}
               <Card className="p-4 bg-slate-50 border-slate-200">
@@ -2020,6 +2404,37 @@ export function LearningInterface() {
             </div>
           </div>
         </div>
+
+        {/* Reinforcement Prompt Modal - Component 10: Knowledge Consolidation */}
+        {activeReinforcement && (
+          <ReinforcementPrompt
+            prompt={activeReinforcement}
+            promptNumber={reinforcementPromptNumber}
+            totalPrompts={reinforcementTotalPrompts}
+            onResponse={(response, isCorrect, responseTimeMs) => {
+              reinforcementManager.recordResponse(
+                activeReinforcement.scheduleId,
+                activeReinforcement.promptId,
+                learnerId,
+                response,
+                isCorrect,
+                responseTimeMs
+              );
+              // Keep the prompt visible briefly to show feedback, then dismiss
+              window.setTimeout(() => {
+                setActiveReinforcement(null);
+              }, 2000);
+            }}
+            onDismiss={() => {
+              reinforcementManager.dismissPrompt(
+                activeReinforcement.scheduleId,
+                activeReinforcement.promptId,
+                learnerId
+              );
+              setActiveReinforcement(null);
+            }}
+          />
+        )}
       </div>
   );
 }

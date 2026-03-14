@@ -16,7 +16,9 @@ import {
   GuidanceEscalationTrigger,
   TextbookUnitAction,
   UserProfile,
-  UserRole
+  UserRole,
+  ReinforcementSchedule,
+  ScheduledPrompt
 } from '../../types';
 import { createEventId } from '../utils/event-id';
 import {
@@ -50,6 +52,9 @@ import {
   safeSetStrategy,
   isValidUserProfile
 } from './storage-validation';
+import { reinforcementManager } from '../content/reinforcement-manager';
+import { scoreSelfExplanation, type ReflectionQualityScore } from '../content/self-explanation-scorer';
+import learnerProfileClient from '../api/learner-profile-client';
 
 /**
  * StorageManager - Local storage manager for interaction traces and learner state
@@ -80,6 +85,8 @@ class StorageManager {
   private readonly PDF_UPLOADS_KEY = 'sql-learning-pdf-uploads';
   /** Key for current user identity (single active user profile) - used for role-based auth (Week 4) */
   private readonly USER_PROFILE_KEY = 'sql-adapt-user-profile'; // Week 4: Aligned with existing app key
+  /** Key for reinforcement schedules (Component 10: Knowledge Consolidation) */
+  private readonly REINFORCEMENT_SCHEDULES_KEY = 'sql-learning-reinforcement-schedules';
 
   // Legacy keys for backward compatibility (tests and old data)
   private readonly LEGACY_PROFILES_KEY = 'sql-adapt-profiles';
@@ -567,7 +574,7 @@ class StorageManager {
    * @returns Uploaded PDF list
    */
   getUploadedPdfFiles(): { files: Array<{ docId: string; filename: string; pageCount: number; chunkCount: number; uploadedAt: number }>; lastUpdated: number } {
-    const raw = this.readParsedStorage<{ files: Array<{ docId: string; filename: string; pageCount: number; chunkCount: number; uploadedAt: number }>; lastUpdated: number }>(this.PDF_UPLOADS_KEY, null);
+    const raw = this.readParsedStorage<{ files: Array<{ docId: string; filename: string; pageCount: number; chunkCount: number; uploadedAt: number }>; lastUpdated: number } | null>(this.PDF_UPLOADS_KEY, null);
     if (raw && Array.isArray(raw.files)) {
       return raw;
     }
@@ -907,7 +914,7 @@ class StorageManager {
       }
       
       // Ensure all covered concepts have evidence entries
-      const conceptsCovered = new Set((profile.conceptsCovered || []) as any);
+      const conceptsCovered = new Set((profile.conceptsCovered || []) as string[]);
       for (const conceptId of conceptsCovered) {
         if (!evidenceMap.has(conceptId)) {
           evidenceMap.set(conceptId, this.createDefaultEvidence(conceptId, now));
@@ -1259,28 +1266,30 @@ class StorageManager {
 
   /**
    * Log bandit arm selection
-   * @param learnerId - Learner identifier
-   * @param armId - Selected arm ID
-   * @param selectionMethod - How arm was selected
+   * @param params - Bandit arm selection parameters (object payload)
    */
-  logBanditArmSelected(
-    learnerId: string,
-    armId: string,
-    selectionMethod: 'thompson_sampling' | 'epsilon_greedy' | 'forced'
-  ): void {
+  logBanditArmSelected(params: {
+    learnerId: string;
+    problemId: string;
+    armId: string;
+    selectionMethod: 'thompson_sampling' | 'epsilon_greedy' | 'forced';
+    armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
+    sessionId?: string;
+  }): void {
     const event: InteractionEvent = {
       id: createEventId('bandit', 'arm-selected'),
-      sessionId: this.getActiveSessionId(),
-      learnerId,
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
       timestamp: Date.now(),
       eventType: 'bandit_arm_selected',
-      problemId: 'bandit-selection',
-      selectedArm: armId,
-      selectionMethod: selectionMethod === 'forced' ? 'thompson_sampling' : selectionMethod,
+      problemId: params.problemId,
+      selectedArm: params.armId,
+      selectionMethod: params.selectionMethod === 'forced' ? 'thompson_sampling' : params.selectionMethod,
       policyVersion: 'bandit-arm-v1',
       payload: {
-        armId,
-        method: selectionMethod
+        armId: params.armId,
+        method: params.selectionMethod,
+        armStatsAtSelection: params.armStatsAtSelection
       }
     };
     this.saveInteraction(event);
@@ -1459,6 +1468,227 @@ class StorageManager {
       payload: {
         hdi,
         interventionType
+      }
+    };
+    this.saveInteraction(event);
+  }
+
+  // ============================================================================
+  // Component 10: Knowledge Consolidation (Reinforcement)
+  // ============================================================================
+
+  /**
+   * Save a reinforcement schedule for spaced repetition prompts.
+   * Used by Knowledge Consolidation component to track scheduled review prompts.
+   * @param schedule - Reinforcement schedule to save
+   * @returns Save result with quota info
+   */
+  saveReinforcementSchedule(schedule: ReinforcementSchedule): { success: boolean; quotaExceeded?: boolean } {
+    const schedules = this.getAllReinforcementSchedules();
+    const existingIndex = schedules.findIndex(s => s.id === schedule.id);
+    
+    if (existingIndex >= 0) {
+      schedules[existingIndex] = schedule;
+    } else {
+      schedules.push(schedule);
+    }
+    
+    const result = this.safeSetItem(this.REINFORCEMENT_SCHEDULES_KEY, JSON.stringify(schedules));
+    if (!result.success && result.quotaExceeded) {
+      console.warn('[Storage] Failed to save reinforcement schedule: LocalStorage quota exceeded');
+    }
+    return result;
+  }
+
+  /**
+   * Get all reinforcement schedules for a specific learner.
+   * @param learnerId - Learner identifier
+   * @returns Array of reinforcement schedules
+   */
+  getReinforcementSchedules(learnerId: string): ReinforcementSchedule[] {
+    const schedules = this.getAllReinforcementSchedules();
+    return schedules.filter(s => s.learnerId === learnerId);
+  }
+
+  /**
+   * Update the status of a scheduled prompt.
+   * Used to mark prompts as shown, completed, or dismissed.
+   * @param scheduleId - Schedule identifier
+   * @param promptId - Prompt identifier
+   * @param status - New status for the prompt
+   * @param metadata - Optional metadata (shownTime, completedTime, etc.)
+   * @returns True if update was successful
+   */
+  updatePromptStatus(
+    scheduleId: string,
+    promptId: string,
+    status: ScheduledPrompt['status'],
+    metadata?: { shownTime?: number; completedTime?: number }
+  ): boolean {
+    const schedules = this.getAllReinforcementSchedules();
+    const schedule = schedules.find(s => s.id === scheduleId);
+    
+    if (!schedule) {
+      console.warn(`[Storage] Reinforcement schedule ${scheduleId} not found`);
+      return false;
+    }
+    
+    const prompt = schedule.scheduledPrompts.find(p => p.id === promptId);
+    if (!prompt) {
+      console.warn(`[Storage] Scheduled prompt ${promptId} not found in schedule ${scheduleId}`);
+      return false;
+    }
+    
+    prompt.status = status;
+    if (metadata?.shownTime !== undefined) {
+      prompt.shownTime = metadata.shownTime;
+    }
+    if (metadata?.completedTime !== undefined) {
+      prompt.completedTime = metadata.completedTime;
+    }
+    
+    const result = this.safeSetItem(this.REINFORCEMENT_SCHEDULES_KEY, JSON.stringify(schedules));
+    if (!result.success) {
+      console.warn('[Storage] Failed to update prompt status: LocalStorage quota exceeded or other error');
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Get prompts that are due for display (scheduled time <= current time).
+   * @param learnerId - Learner identifier
+   * @param currentTime - Current timestamp (defaults to Date.now())
+   * @returns Array of due prompts with their parent schedules
+   */
+  getDuePrompts(
+    learnerId: string,
+    currentTime: number = Date.now()
+  ): Array<{ schedule: ReinforcementSchedule; prompt: ScheduledPrompt }> {
+    const schedules = this.getReinforcementSchedules(learnerId);
+    const duePrompts: Array<{ schedule: ReinforcementSchedule; prompt: ScheduledPrompt }> = [];
+    
+    for (const schedule of schedules) {
+      for (const prompt of schedule.scheduledPrompts) {
+        if (prompt.status === 'pending' && prompt.scheduledTime <= currentTime) {
+          duePrompts.push({ schedule, prompt });
+        }
+      }
+    }
+    
+    // Sort by scheduled time (earliest first)
+    return duePrompts.sort((a, b) => a.prompt.scheduledTime - b.prompt.scheduledTime);
+  }
+
+  /**
+   * Get all reinforcement schedules from storage.
+   * @returns Array of all schedules
+   */
+  private getAllReinforcementSchedules(): ReinforcementSchedule[] {
+    return this.readParsedStorage<ReinforcementSchedule[]>(this.REINFORCEMENT_SCHEDULES_KEY, []);
+  }
+
+  /**
+   * Log reinforcement scheduled event.
+   * Called when a new reinforcement schedule is created.
+   * @param learnerId - Learner identifier
+   * @param unitId - Textbook unit ID being reinforced
+   * @param conceptId - Concept being reinforced
+   * @param scheduleId - Schedule identifier
+   */
+  logReinforcementScheduled(
+    learnerId: string,
+    unitId: string,
+    conceptId: string,
+    scheduleId: string
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('reinforcement', 'scheduled'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'reinforcement_scheduled',
+      problemId: 'reinforcement',
+      scheduleId,
+      conceptIds: [conceptId],
+      policyVersion: 'reinforcement-schedule-v1',
+      payload: {
+        unitId,
+        conceptId,
+        scheduleId
+      }
+    };
+    this.saveInteraction(event);
+  }
+
+  /**
+   * Log reinforcement prompt shown event.
+   * Called when a scheduled prompt is displayed to the learner.
+   * @param learnerId - Learner identifier
+   * @param scheduleId - Schedule identifier
+   * @param promptId - Prompt identifier
+   * @param promptType - Type of prompt shown
+   */
+  logReinforcementPromptShown(
+    learnerId: string,
+    scheduleId: string,
+    promptId: string,
+    promptType: string
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('reinforcement', 'prompt-shown'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'reinforcement_prompt_shown',
+      problemId: 'reinforcement',
+      scheduleId,
+      promptId,
+      promptType: promptType as 'mcq' | 'sql_completion' | 'concept_explanation',
+      shownTime: Date.now(),
+      policyVersion: 'reinforcement-prompt-v1',
+      payload: {
+        scheduleId,
+        promptId,
+        promptType
+      }
+    };
+    this.saveInteraction(event);
+  }
+
+  /**
+   * Log reinforcement response event.
+   * Called when a learner responds to a reinforcement prompt.
+   * @param learnerId - Learner identifier
+   * @param scheduleId - Schedule identifier
+   * @param promptId - Prompt identifier
+   * @param response - Learner's response
+   * @param isCorrect - Whether the response was correct
+   */
+  logReinforcementResponse(
+    learnerId: string,
+    scheduleId: string,
+    promptId: string,
+    response: string,
+    isCorrect: boolean
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('reinforcement', 'response'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'reinforcement_response',
+      problemId: 'reinforcement',
+      scheduleId,
+      promptId,
+      response,
+      isCorrect,
+      policyVersion: 'reinforcement-response-v1',
+      payload: {
+        scheduleId,
+        promptId,
+        isCorrect,
+        responseLength: response?.length || 0
       }
     };
     this.saveInteraction(event);
@@ -1738,6 +1968,16 @@ class StorageManager {
         console.warn('Failed to save textbook unit: quota exceeded or other error');
       }
 
+      // Component 10: Schedule reinforcement for newly created units
+      // This is a new unit, so schedule reinforcement prompts
+      try {
+        reinforcementManager.scheduleForUnit(primaryUnit, learnerId, {
+          useTestDelays: false // Use production delays (1-3-7 days) by default
+        });
+      } catch (error) {
+        console.warn('[Reinforcement] Failed to schedule reinforcement:', error);
+      }
+
       return {
         action: 'created',
         unit: primaryUnit,
@@ -1757,6 +1997,15 @@ class StorageManager {
 
     if (result.action === 'created') {
       textbooks[learnerId].push(result.unit);
+      
+      // Component 10: Schedule reinforcement for newly created units
+      try {
+        reinforcementManager.scheduleForUnit(result.unit, learnerId, {
+          useTestDelays: false // Use production delays (1-3-7 days) by default
+        });
+      } catch (error) {
+        console.warn('[Reinforcement] Failed to schedule reinforcement:', error);
+      }
     } else {
       // Replace existing unit with updated version
       const dedupeKey = generateDedupeKey(result.unit);
@@ -1779,6 +2028,100 @@ class StorageManager {
       success: saveResult.success,
       quotaExceeded: saveResult.quotaExceeded
     };
+  }
+
+  /**
+   * Save textbook unit with learner notes and quality scoring
+   * 
+   * This method extends saveTextbookUnitV2 with self-explanation quality scoring.
+   * It scores the learner's notes and logs the quality metrics with the save event.
+   * 
+   * @param learnerId - Learner identifier
+   * @param input - Unit creation input
+   * @param problemId - Problem ID for logging
+   * @param learnerNotes - Optional learner notes to score
+   * @returns Save result with quality score
+   */
+  saveTextbookUnitWithNotes(
+    learnerId: string,
+    input: CreateUnitInput,
+    problemId?: string,
+    learnerNotes?: string
+): SaveTextbookUnitResult & {
+    action: 'created' | 'updated';
+    why: string;
+    qualityScore?: ReflectionQualityScore;
+    competitionResult?: ReturnType<typeof competeAndSelectBestUnit>['result'];
+  } {
+    // Score self-explanation if notes provided
+    let qualityScore: ReflectionQualityScore | undefined;
+    
+    if (learnerNotes && learnerNotes.trim().length >= 10) {
+      qualityScore = scoreSelfExplanation({
+        text: learnerNotes,
+        originalProblem: problemId || '',
+        conceptIds: input.conceptIds || [],
+        learnerId
+      });
+    }
+
+    // Enhance input with quality metadata
+    const inputWithQuality: CreateUnitInput = {
+      ...input,
+      metadata: {
+        ...input.metadata,
+        learnerNotes,
+        selfExplanationQuality: qualityScore?.overall,
+        qualityDimensions: qualityScore?.dimensions,
+        qualityFeedback: qualityScore?.feedback,
+        qualityIssues: qualityScore?.flaggedIssues,
+        qualityScoredAt: qualityScore ? Date.now() : undefined
+      }
+    };
+
+    // Save using the standard V2 method
+    const result = this.saveTextbookUnitV2(learnerId, inputWithQuality, problemId);
+
+    // Log quality score as a separate event if scored
+    if (qualityScore && problemId) {
+      this.logSelfExplanationQuality(learnerId, problemId, qualityScore, result.unit.id);
+    }
+
+    return {
+      ...result,
+      qualityScore
+    };
+  }
+
+  /**
+   * Log self-explanation quality event
+   * @param learnerId - Learner identifier
+   * @param problemId - Problem identifier
+   * @param qualityScore - Quality score result
+   * @param unitId - Unit ID associated with the notes
+   */
+  private logSelfExplanationQuality(
+    learnerId: string,
+    problemId: string,
+    qualityScore: ReflectionQualityScore,
+    unitId: string
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('quality', 'self-explanation'),
+      sessionId: this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'textbook_unit_upsert',
+      problemId,
+      unitId,
+      metadata: {
+        selfExplanationQuality: qualityScore.overall,
+        qualityDimensions: qualityScore.dimensions,
+        qualityFeedback: qualityScore.feedback,
+        qualityIssues: qualityScore.flaggedIssues
+      }
+    };
+    this.saveInteraction(event);
   }
 
   /**
@@ -1840,6 +2183,10 @@ class StorageManager {
     return {
       ...(existing || {}),
       ...(incoming || {}),
+      model: incoming?.model || existing?.model || 'unknown',
+      params: incoming?.params || existing?.params || { temperature: 0.7, top_p: 0.9, stream: false, timeoutMs: 30000 },
+      templateId: incoming?.templateId || existing?.templateId || 'template-unknown',
+      inputHash: incoming?.inputHash || existing?.inputHash || '',
       createdAt,
       retrievedSourceIds: mergedRetrievedSourceIds,
       retrievedPdfCitations: mergedPdfCitations.length > 0 ? mergedPdfCitations : (existing?.retrievedPdfCitations || incoming?.retrievedPdfCitations),
@@ -2185,7 +2532,7 @@ class StorageManager {
           coveredCount++;
         }
         totalScore += evidence.score;
-        byConfidence[evidence.confidence]++;
+        byConfidence[evidence.confidence as 'low' | 'medium' | 'high']++;
         
         // Score distribution
         if (evidence.score <= 25) scoreDistribution['0-25']++;
@@ -2284,6 +2631,12 @@ class StorageManager {
       }
 
       this.saveProfile(profile);
+      
+      // Sync with backend for class-wide analytics
+      // Fire-and-forget: don't block on backend sync
+      this.syncProfileWithBackend(event.learnerId, event).catch((error) => {
+        console.debug('[Storage] Backend sync failed (offline mode):', error);
+      });
     } catch (error) {
       // Log error but don't crash - profile stats are non-critical
       console.error('Failed to update profile stats from event:', error);
@@ -2295,6 +2648,36 @@ class StorageManager {
           error: error.message
         });
       }
+    }
+  }
+  
+  /**
+   * Sync profile with backend for class-wide analytics
+   * Handles offline mode gracefully by queueing updates
+   */
+  private async syncProfileWithBackend(learnerId: string, event: InteractionEvent): Promise<void> {
+    // Key events that trigger profile updates
+    const KEY_EVENTS = new Set([
+      'error',
+      'execution',
+      'hint_view',
+      'explanation_view',
+      'textbook_unit_upsert',
+      'profile_assigned',
+      'hdi_calculated',
+    ]);
+    
+    if (!KEY_EVENTS.has(event.eventType)) {
+      return; // Skip non-essential events
+    }
+    
+    try {
+      // Update backend profile from event
+      await learnerProfileClient.updateProfileFromEvent(learnerId, event);
+      console.debug(`[Storage] Profile synced for ${learnerId} after ${event.eventType}`);
+    } catch (error) {
+      // Update will be queued for retry - don't throw
+      console.debug(`[Storage] Profile sync queued for ${learnerId}`);
     }
   }
 
@@ -2802,7 +3185,7 @@ class StorageManager {
 export const storage = new StorageManager();
 
 // ============================================================================
-// Cross-Tab Synchronization for Preview Mode
+// Cross-Tab Synchronization for Preview Mode and Debug State
 // ============================================================================
 
 /**
@@ -2812,9 +3195,11 @@ export const storage = new StorageManager();
 const SYNC_CHANNEL = 'sql-adapt-sync';
 
 /**
- * Preview mode storage key
+ * Storage keys for synced state
  */
 const PREVIEW_MODE_KEY = 'sql-adapt-preview-mode';
+const DEBUG_PROFILE_KEY = 'sql-adapt-debug-profile';
+const DEBUG_STRATEGY_KEY = 'sql-adapt-debug-strategy';
 
 /**
  * Broadcast a sync event to all tabs
@@ -2908,4 +3293,66 @@ export function getPreviewMode(): boolean {
 export function clearPreviewModeWithSync(): void {
   localStorage.removeItem(PREVIEW_MODE_KEY);
   broadcastSync(PREVIEW_MODE_KEY, null);
+}
+
+/**
+ * Set debug profile override with cross-tab sync
+ * Updates localStorage and broadcasts to other tabs
+ * 
+ * @param profileId - The profile ID to set (or null to clear)
+ */
+export function setDebugProfileWithSync(profileId: string | null): void {
+  if (profileId === null) {
+    localStorage.removeItem(DEBUG_PROFILE_KEY);
+    broadcastSync(DEBUG_PROFILE_KEY, null);
+  } else {
+    localStorage.setItem(DEBUG_PROFILE_KEY, profileId);
+    broadcastSync(DEBUG_PROFILE_KEY, profileId);
+  }
+}
+
+/**
+ * Get debug profile override from localStorage
+ * @returns The profile ID or null if not set
+ */
+export function getDebugProfile(): string | null {
+  return localStorage.getItem(DEBUG_PROFILE_KEY);
+}
+
+/**
+ * Set debug strategy with cross-tab sync
+ * Updates localStorage and broadcasts to other tabs
+ * 
+ * @param strategy - The strategy to set (or null to clear)
+ */
+export function setDebugStrategyWithSync(strategy: string | null): void {
+  if (strategy === null) {
+    localStorage.removeItem(DEBUG_STRATEGY_KEY);
+    broadcastSync(DEBUG_STRATEGY_KEY, null);
+  } else {
+    localStorage.setItem(DEBUG_STRATEGY_KEY, strategy);
+    broadcastSync(DEBUG_STRATEGY_KEY, strategy);
+  }
+}
+
+/**
+ * Get debug strategy from localStorage
+ * @returns The strategy or null if not set
+ */
+export function getDebugStrategy(): string | null {
+  return localStorage.getItem(DEBUG_STRATEGY_KEY);
+}
+
+/**
+ * Clear all debug settings with cross-tab sync
+ * Removes preview mode, profile override, and strategy from localStorage
+ * and broadcasts changes to other tabs
+ */
+export function clearAllDebugSettingsWithSync(): void {
+  localStorage.removeItem(PREVIEW_MODE_KEY);
+  localStorage.removeItem(DEBUG_PROFILE_KEY);
+  localStorage.removeItem(DEBUG_STRATEGY_KEY);
+  broadcastSync(PREVIEW_MODE_KEY, null);
+  broadcastSync(DEBUG_PROFILE_KEY, null);
+  broadcastSync(DEBUG_STRATEGY_KEY, null);
 }

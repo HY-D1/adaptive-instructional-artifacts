@@ -18,7 +18,7 @@ import conceptRegistryJson from './concept-registry.json';
 function validateConceptRegistry(data: unknown): ConceptRegistry {
   if (!data || typeof data !== 'object') {
     console.warn('[Data] Invalid concept registry: expected object');
-    return { concepts: [], version: 'unknown', lastUpdated: Date.now() };
+    return { concepts: [], schemaVersion: 'unknown', lastUpdated: String(Date.now()), totalConcepts: 0, verifiedCount: 0, unverifiedCount: 0 };
   }
   
   const raw = data as Record<string, unknown>;
@@ -26,7 +26,7 @@ function validateConceptRegistry(data: unknown): ConceptRegistry {
   // Validate concepts array
   if (!Array.isArray(raw.concepts)) {
     console.warn('[Data] Invalid concept registry: concepts must be an array');
-    return { concepts: [], version: String(raw.version ?? 'unknown'), lastUpdated: Date.now() };
+    return { concepts: [], schemaVersion: String(raw.schemaVersion ?? 'unknown'), lastUpdated: String(Date.now()), totalConcepts: 0, verifiedCount: 0, unverifiedCount: 0 };
   }
   
   // Validate each concept entry
@@ -46,8 +46,11 @@ function validateConceptRegistry(data: unknown): ConceptRegistry {
   
   return {
     concepts: validConcepts,
-    version: String(raw.version ?? 'unknown'),
-    lastUpdated: typeof raw.lastUpdated === 'number' ? raw.lastUpdated : Date.now()
+    schemaVersion: String(raw.schemaVersion ?? 'unknown'),
+    lastUpdated: typeof raw.lastUpdated === 'string' ? raw.lastUpdated : String(Date.now()),
+    totalConcepts: validConcepts.length,
+    verifiedCount: validConcepts.filter(c => c.status === 'verified').length,
+    unverifiedCount: validConcepts.filter(c => c.status === 'unverified').length
   };
 }
 
@@ -60,7 +63,7 @@ import alignmentMapJson from './alignment-map.json';
 function validateAlignmentMap(data: unknown): AlignmentMap {
   if (!data || typeof data !== 'object') {
     console.warn('[Data] Invalid alignment map: expected object');
-    return { mappings: [], version: 'unknown', lastUpdated: Date.now() };
+    return { mappings: [], schemaVersion: 'unknown', lastUpdated: String(Date.now()), totalMappings: 0, description: '', verifiedMappings: 0, unverifiedMappings: 0, summary: { top15Coverage: '', autoEscalationEligible: 0, autoEscalationExcluded: 0, highConfidence: 0, mediumConfidence: 0, lowConfidence: 0 } };
   }
   
   const raw = data as Record<string, unknown>;
@@ -68,7 +71,7 @@ function validateAlignmentMap(data: unknown): AlignmentMap {
   // Validate mappings array
   if (!Array.isArray(raw.mappings)) {
     console.warn('[Data] Invalid alignment map: mappings must be an array');
-    return { mappings: [], version: String(raw.version ?? 'unknown'), lastUpdated: Date.now() };
+    return { mappings: [], schemaVersion: String(raw.schemaVersion ?? 'unknown'), lastUpdated: String(Date.now()), totalMappings: 0, description: '', verifiedMappings: 0, unverifiedMappings: 0, summary: { top15Coverage: '', autoEscalationEligible: 0, autoEscalationExcluded: 0, highConfidence: 0, mediumConfidence: 0, lowConfidence: 0 } };
   }
   
   // Validate each mapping entry
@@ -86,10 +89,16 @@ function validateAlignmentMap(data: unknown): AlignmentMap {
     console.warn(`[Data] Filtered ${raw.mappings.length - validMappings.length} invalid mapping entries`);
   }
   
+  const verifiedCount = validMappings.filter(m => m.status === 'verified').length;
   return {
     mappings: validMappings,
-    version: String(raw.version ?? 'unknown'),
-    lastUpdated: typeof raw.lastUpdated === 'number' ? raw.lastUpdated : Date.now()
+    schemaVersion: String(raw.schemaVersion ?? 'unknown'),
+    lastUpdated: typeof raw.lastUpdated === 'string' ? raw.lastUpdated : String(Date.now()),
+    totalMappings: validMappings.length,
+    description: String(raw.description ?? ''),
+    verifiedMappings: verifiedCount,
+    unverifiedMappings: validMappings.length - verifiedCount,
+    summary: (raw.summary as AlignmentMap['summary']) ?? { top15Coverage: '', autoEscalationEligible: 0, autoEscalationExcluded: 0, highConfidence: 0, mediumConfidence: 0, lowConfidence: 0 }
   };
 }
 

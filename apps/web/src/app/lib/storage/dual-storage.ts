@@ -1,0 +1,822 @@
+/**
+ * Dual-Mode Storage Adapter
+ * Backend API is the PRIMARY source of truth
+ * localStorage is used as offline cache and fallback only
+ * 
+ * Key behaviors:
+ * - getUserProfile: Try backend first, fall back to localStorage if offline
+ * - saveInteraction: Send to backend first, cache in localStorage, queue if offline
+ * - All writes: Attempt backend first, fallback to localStorage + offline queue
+ */
+
+import { storage as localStorageManager } from './storage';
+import {
+  storageClient,
+  isBackendAvailable,
+  checkBackendHealth,
+} from '../api/storage-client';
+import type {
+  UserProfile,
+  InteractionEvent,
+  InstructionalUnit,
+  LearnerProfile,
+  SaveTextbookUnitResult,
+} from '@/app/types';
+import type { CreateUnitInput } from './textbook-units';
+
+// Configuration
+const USE_BACKEND = import.meta.env.VITE_USE_BACKEND === 'true' || !!import.meta.env.VITE_API_URL;
+
+// Offline queue configuration
+const OFFLINE_QUEUE_KEY = 'sql-adapt-offline-queue';
+const MAX_QUEUE_SIZE = 100;
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 5000;
+
+interface StorageConfig {
+  useBackend: boolean;
+  fallbackToLocal: boolean;
+}
+
+interface QueuedItem {
+  id: string;
+  type: 'interaction' | 'textbookUnit' | 'profile' | 'session';
+  data: unknown;
+  retries: number;
+  timestamp: number;
+}
+
+export type StorageMode = 'local' | 'backend' | 'offline';
+
+// ============================================================================
+// Offline Queue Manager
+// ============================================================================
+
+class OfflineQueueManager {
+  private queue: QueuedItem[] = [];
+  private isProcessing = false;
+
+  constructor() {
+    this.loadQueue();
+    // Start background processing
+    this.startBackgroundProcessing();
+  }
+
+  private loadQueue(): void {
+    try {
+      const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+      if (raw) {
+        this.queue = JSON.parse(raw);
+      }
+    } catch {
+      this.queue = [];
+    }
+  }
+
+  private saveQueue(): void {
+    try {
+      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(this.queue));
+    } catch {
+      // If we can't save queue, trim it aggressively
+      this.queue = this.queue.slice(-20);
+      try {
+        localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(this.queue));
+      } catch {
+        // Last resort: clear queue
+        this.queue = [];
+      }
+    }
+  }
+
+  add(item: Omit<QueuedItem, 'retries' | 'timestamp'>): void {
+    const queueItem: QueuedItem = {
+      ...item,
+      retries: 0,
+      timestamp: Date.now(),
+    };
+    
+    this.queue.push(queueItem);
+    
+    // Trim queue if too large (keep newest)
+    if (this.queue.length > MAX_QUEUE_SIZE) {
+      this.queue = this.queue.slice(-MAX_QUEUE_SIZE);
+    }
+    
+    this.saveQueue();
+  }
+
+  remove(id: string): void {
+    this.queue = this.queue.filter(item => item.id !== id);
+    this.saveQueue();
+  }
+
+  getPending(): QueuedItem[] {
+    return [...this.queue];
+  }
+
+  incrementRetry(id: string): void {
+    const item = this.queue.find(i => i.id === id);
+    if (item) {
+      item.retries++;
+      if (item.retries >= MAX_RETRIES) {
+        // Move to dead letter queue or log
+        console.warn('[OfflineQueue] Item exceeded max retries:', id);
+        this.remove(id);
+      } else {
+        this.saveQueue();
+      }
+    }
+  }
+
+  private startBackgroundProcessing(): void {
+    // Try to process queue every 30 seconds
+    setInterval(() => {
+      this.processQueue();
+    }, 30000);
+    
+    // Also try on online event
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        console.log('[OfflineQueue] Back online, processing queue...');
+        this.processQueue();
+      });
+    }
+  }
+
+  async processQueue(): Promise<void> {
+    if (this.isProcessing || this.queue.length === 0) {
+      return;
+    }
+
+    const backendHealthy = await checkBackendHealth();
+    if (!backendHealthy) {
+      return;
+    }
+
+    this.isProcessing = true;
+    
+    const pending = this.getPending();
+    
+    for (const item of pending) {
+      try {
+        let success = false;
+        
+        switch (item.type) {
+          case 'interaction':
+            success = await storageClient.logInteraction(item.data as InteractionEvent);
+            break;
+          case 'textbookUnit': {
+            const { learnerId, unit } = item.data as { learnerId: string; unit: InstructionalUnit };
+            success = await storageClient.saveTextbookUnit(learnerId, unit);
+            break;
+          }
+          case 'profile':
+            success = await storageClient.saveProfile(item.data as LearnerProfile);
+            break;
+          case 'session': {
+            const { learnerId, data } = item.data as { learnerId: string; data: unknown };
+            success = await storageClient.saveSession(learnerId, data as { startTime: string; lastActivity: string });
+            break;
+          }
+        }
+        
+        if (success) {
+          this.remove(item.id);
+        } else {
+          this.incrementRetry(item.id);
+        }
+      } catch (error) {
+        console.warn('[OfflineQueue] Failed to process item:', error);
+        this.incrementRetry(item.id);
+      }
+      
+      // Small delay between items to avoid overwhelming the backend
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    this.isProcessing = false;
+  }
+}
+
+// ============================================================================
+// Dual Storage Manager
+// ============================================================================
+
+class DualStorageManager {
+  private config: StorageConfig;
+  private backendHealthy: boolean = false;
+  private offlineQueue: OfflineQueueManager;
+
+  constructor() {
+    this.config = {
+      useBackend: USE_BACKEND,
+      fallbackToLocal: true,
+    };
+    
+    this.offlineQueue = new OfflineQueueManager();
+    
+    // Check backend health on init
+    if (this.config.useBackend) {
+      this.checkHealth();
+    }
+  }
+
+  /**
+   * Get current storage mode
+   */
+  getMode(): StorageMode {
+    if (!this.config.useBackend) return 'local';
+    if (this.backendHealthy) return 'backend';
+    return 'offline';
+  }
+
+  /**
+   * Check if backend is available and healthy
+   */
+  async checkHealth(): Promise<boolean> {
+    if (!this.config.useBackend) {
+      this.backendHealthy = false;
+      return false;
+    }
+    this.backendHealthy = await checkBackendHealth();
+    return this.backendHealthy;
+  }
+
+  /**
+   * Set storage mode
+   */
+  setMode(mode: 'local' | 'backend'): void {
+    this.config.useBackend = mode === 'backend';
+    if (mode === 'backend') {
+      this.checkHealth();
+    }
+  }
+
+  // ============================================================================
+  // User Profile Operations
+  // ============================================================================
+
+  saveUserProfile(profile: UserProfile): { success: boolean; quotaExceeded?: boolean } {
+    // Always save to localStorage as cache (synchronous)
+    const localResult = localStorageManager.saveUserProfile(profile);
+    
+    // Backend sync in background
+    if (this.shouldUseBackend()) {
+      storageClient.createLearner(profile).then(success => {
+        if (!success) {
+          // Backend failed, add to offline queue
+          this.offlineQueue.add({
+            id: `profile-${profile.id}-${Date.now()}`,
+            type: 'profile',
+            data: profile,
+          });
+        }
+      }).catch(error => {
+        console.warn('[DualStorage] Backend saveUserProfile failed, queued for retry:', error);
+        this.offlineQueue.add({
+          id: `profile-${profile.id}-${Date.now()}`,
+          type: 'profile',
+          data: profile,
+        });
+      });
+    }
+    
+    return localResult;
+  }
+
+  getUserProfile(): UserProfile | null {
+    // Try backend FIRST (primary source of truth) - async in background
+    if (this.shouldUseBackend()) {
+      const localProfile = localStorageManager.getUserProfile();
+      const learnerId = localProfile?.id;
+      
+      if (learnerId) {
+        storageClient.getLearner(learnerId).then(backendProfile => {
+          if (backendProfile) {
+            // Sync to localStorage for offline access
+            localStorageManager.saveUserProfile(backendProfile);
+          }
+        }).catch(error => {
+          console.warn('[DualStorage] Backend getUserProfile failed, using localStorage:', error);
+        });
+      }
+    }
+    
+    // Always return localStorage data immediately (synchronous)
+    return localStorageManager.getUserProfile();
+  }
+
+  clearUserProfile(): boolean {
+    // Always clear both
+    if (this.config.useBackend) {
+      // Backend doesn't support delete yet, just clear local
+    }
+    return localStorageManager.clearUserProfile();
+  }
+
+  // ============================================================================
+  // Interaction/Event Operations
+  // ============================================================================
+
+  saveInteraction(event: InteractionEvent): { success: boolean; quotaExceeded?: boolean } {
+    // Send to backend FIRST (primary source of truth) - async in background
+    if (this.shouldUseBackend()) {
+      storageClient.logInteraction(event).then(backendSuccess => {
+        if (!backendSuccess) {
+          // Backend failed, queue for retry
+          this.offlineQueue.add({
+            id: event.id,
+            type: 'interaction',
+            data: event,
+          });
+        }
+      }).catch(error => {
+        console.warn('[DualStorage] Backend saveInteraction failed, queuing for retry:', error);
+        this.offlineQueue.add({
+          id: event.id,
+          type: 'interaction',
+          data: event,
+        });
+      });
+    }
+    
+    // Always cache in localStorage (synchronous return)
+    return localStorageManager.saveInteraction(event);
+  }
+
+  getAllInteractions(): InteractionEvent[] {
+    // localStorage is the cache for interactions
+    return localStorageManager.getAllInteractions();
+  }
+
+  getInteractionsByLearner(learnerId: string): InteractionEvent[] {
+    return localStorageManager.getInteractionsByLearner(learnerId);
+  }
+
+  // ============================================================================
+  // Textbook Operations
+  // ============================================================================
+
+  saveTextbookUnit(learnerId: string, unit: InstructionalUnit): SaveTextbookUnitResult {
+    // Send to backend FIRST (primary source of truth) - async in background
+    if (this.shouldUseBackend()) {
+      storageClient.saveTextbookUnit(learnerId, unit).then(backendSuccess => {
+        if (!backendSuccess) {
+          // Backend failed, queue for retry
+          this.offlineQueue.add({
+            id: `textbook-${unit.id}-${Date.now()}`,
+            type: 'textbookUnit',
+            data: { learnerId, unit },
+          });
+        }
+      }).catch(error => {
+        console.warn('[DualStorage] Backend saveTextbookUnit failed, queuing for retry:', error);
+        this.offlineQueue.add({
+          id: `textbook-${unit.id}-${Date.now()}`,
+          type: 'textbookUnit',
+          data: { learnerId, unit },
+        });
+      });
+    }
+    
+    // Always cache in localStorage (synchronous return)
+    return localStorageManager.saveTextbookUnit(learnerId, unit);
+  }
+
+  saveTextbookUnitV2(
+    learnerId: string,
+    input: CreateUnitInput,
+    problemId?: string,
+    useCompetition = true
+  ): SaveTextbookUnitResult & { action: 'created' | 'updated'; why: string; competitionResult?: unknown } {
+    // First, save to localStorage (this handles deduplication/competition) - synchronous
+    const localResult = localStorageManager.saveTextbookUnitV2(learnerId, input, problemId, useCompetition);
+    
+    // Then sync to backend - async in background
+    if (this.shouldUseBackend()) {
+      const unit: InstructionalUnit = {
+        id: localResult.unit.id,
+        type: localResult.unit.type,
+        conceptId: localResult.unit.conceptId,
+        conceptIds: localResult.unit.conceptIds,
+        title: localResult.unit.title,
+        content: localResult.unit.content,
+        contentFormat: localResult.unit.contentFormat,
+        sourceInteractionIds: localResult.unit.sourceInteractionIds,
+        provenance: localResult.unit.provenance,
+        status: localResult.unit.status,
+        prerequisites: localResult.unit.prerequisites,
+        addedTimestamp: localResult.unit.addedTimestamp,
+      };
+      
+      storageClient.saveTextbookUnit(learnerId, unit).then(backendSuccess => {
+        if (!backendSuccess) {
+          this.offlineQueue.add({
+            id: `textbook-v2-${unit.id}-${Date.now()}`,
+            type: 'textbookUnit',
+            data: { learnerId, unit },
+          });
+        }
+      }).catch(error => {
+        console.warn('[DualStorage] Backend saveTextbookUnitV2 failed, queuing for retry:', error);
+        this.offlineQueue.add({
+          id: `textbook-v2-${unit.id}-${Date.now()}`,
+          type: 'textbookUnit',
+          data: { learnerId, unit },
+        });
+      });
+    }
+    
+    return localResult;
+  }
+
+  getTextbook(learnerId: string): InstructionalUnit[] {
+    // Try backend FIRST (primary source of truth) - async in background
+    if (this.shouldUseBackend()) {
+      storageClient.getTextbook(learnerId).then(backendUnits => {
+        if (backendUnits && backendUnits.length > 0) {
+          // Sync to localStorage for offline access
+          for (const unit of backendUnits) {
+            localStorageManager.saveTextbookUnit(learnerId, unit);
+          }
+        }
+      }).catch(error => {
+        console.warn('[DualStorage] Backend getTextbook failed, using localStorage:', error);
+      });
+    }
+    
+    // Always return localStorage data immediately (synchronous)
+    return localStorageManager.getTextbook(learnerId);
+  }
+
+  // ============================================================================
+  // Session Operations
+  // ============================================================================
+
+  startSession(learnerId: string): string {
+    const sessionId = localStorageManager.startSession(learnerId);
+    
+    if (this.shouldUseBackend()) {
+      try {
+        const sessionData = {
+          startTime: new Date().toISOString(),
+          lastActivity: new Date().toISOString(),
+        };
+        
+        storageClient.saveSession(learnerId, sessionData).catch(err => {
+          console.warn('[DualStorage] Failed to sync session to backend, queuing:', err);
+          this.offlineQueue.add({
+            id: `session-${learnerId}-${Date.now()}`,
+            type: 'session',
+            data: { learnerId, data: sessionData },
+          });
+        });
+      } catch (error) {
+        console.warn('[DualStorage] Backend startSession failed:', error);
+      }
+    }
+    
+    return sessionId;
+  }
+
+  getActiveSessionId(): string {
+    return localStorageManager.getActiveSessionId();
+  }
+
+  clearActiveSession(): void {
+    const learnerId = this.getCurrentLearnerId();
+    localStorageManager.clearActiveSession();
+    
+    if (learnerId && this.shouldUseBackend()) {
+      try {
+        storageClient.clearSession(learnerId).catch(err => {
+          console.warn('[DualStorage] Failed to clear session on backend:', err);
+        });
+      } catch (error) {
+        console.warn('[DualStorage] Backend clearActiveSession failed:', error);
+      }
+    }
+  }
+
+  // ============================================================================
+  // Profile Operations (Full Learner Profile)
+  // ============================================================================
+
+  /**
+   * Save a learner's full profile to backend and localStorage
+   */
+  saveProfile(profile: LearnerProfile): void {
+    // Send to backend FIRST (primary source of truth) - async in background
+    if (this.shouldUseBackend()) {
+      storageClient.saveProfile(profile).then(success => {
+        if (!success) {
+          this.offlineQueue.add({
+            id: `full-profile-${profile.id}-${Date.now()}`,
+            type: 'profile',
+            data: profile,
+          });
+        }
+      }).catch(err => {
+        console.warn('[DualStorage] Failed to sync profile to backend, queuing:', err);
+        this.offlineQueue.add({
+          id: `full-profile-${profile.id}-${Date.now()}`,
+          type: 'profile',
+          data: profile,
+        });
+      });
+    }
+    
+    // Always cache in localStorage (synchronous)
+    localStorageManager.saveProfile(profile);
+  }
+
+  /**
+   * Get a learner's full profile
+   * Backend is PRIMARY source of truth (synced in background)
+   */
+  getProfile(learnerId: string): LearnerProfile | null {
+    // Try backend FIRST (primary source of truth) - async in background
+    if (this.shouldUseBackend()) {
+      storageClient.getProfile(learnerId).then(backendProfile => {
+        if (backendProfile) {
+          // Sync to localStorage for offline access
+          localStorageManager.saveProfile(backendProfile);
+        }
+      }).catch(err => {
+        console.warn('[DualStorage] Failed to get profile from backend, using localStorage:', err);
+      });
+    }
+    
+    // Always return localStorage data immediately (synchronous)
+    return localStorageManager.getProfile(learnerId);
+  }
+
+  /**
+   * Get all learner profiles (for instructor dashboard)
+   */
+  getAllProfiles(): LearnerProfile[] {
+    // Try backend FIRST (primary source of truth) - async in background
+    if (this.shouldUseBackend()) {
+      storageClient.getAllProfiles().then(profiles => {
+        if (profiles.length > 0) {
+          // Sync each profile to localStorage
+          for (const profile of profiles) {
+            localStorageManager.saveProfile(profile);
+          }
+        }
+      }).catch(err => {
+        console.warn('[DualStorage] Failed to get profiles from backend:', err);
+      });
+    }
+    
+    // Fall back to localStorage - only has current user's profile
+    return [];
+  }
+
+  /**
+   * Update profile from a single event
+   * Sends event to backend which derives the state changes
+   */
+  updateProfileFromEvent(learnerId: string, event: InteractionEvent): LearnerProfile | null {
+    // Update localStorage cache first (synchronous)
+    const localProfile = localStorageManager.getProfile(learnerId);
+    if (localProfile) {
+      localProfile.interactionCount++;
+      localProfile.lastActive = Date.now();
+      
+      if (event.errorSubtypeId) {
+        const currentCount = localProfile.errorHistory.get(event.errorSubtypeId) || 0;
+        localProfile.errorHistory.set(event.errorSubtypeId, currentCount + 1);
+      }
+      
+      if (event.conceptIds) {
+        for (const conceptId of event.conceptIds) {
+          localProfile.conceptsCovered.add(conceptId);
+        }
+      }
+      
+      localStorageManager.saveProfile(localProfile);
+    }
+    
+    // Send to backend (primary source of truth) - async in background
+    if (this.shouldUseBackend()) {
+      storageClient.updateProfileFromEvent(learnerId, event).catch(err => {
+        console.warn('[DualStorage] Failed to update profile on backend:', err);
+      });
+    }
+    
+    return localProfile;
+  }
+
+  // ============================================================================
+  // Export Operations (Instructor Dashboard)
+  // ============================================================================
+
+  exportData(options?: { allHistory?: boolean }): {
+    interactions: InteractionEvent[];
+    profiles: unknown[];
+    textbooks: Record<string, InstructionalUnit[]>;
+    llmCache: Record<string, unknown>;
+    replayMode: boolean;
+    pdfIndex: unknown;
+    pdfIndexProvenance: unknown;
+    activeSessionId: string;
+    exportScope: string;
+    exportPolicyVersion: string;
+    exportedAt: string;
+  } {
+    // If using backend, try to get all learners' data - async in background
+    if (this.shouldUseBackend()) {
+      Promise.all([
+        storageClient.getClassStats().catch(() => null),
+        storageClient.getAllProfiles().catch(() => []),
+      ]).then(([stats, profiles]) => {
+        if (stats) {
+          console.log('[DualStorage] Backend stats:', stats);
+          console.log('[DualStorage] Backend profiles:', profiles.length);
+        }
+      }).catch(error => {
+        console.warn('[DualStorage] Failed to get backend stats:', error);
+      });
+    }
+    
+    return localStorageManager.exportData(options);
+  }
+
+  exportAllData(): ReturnType<typeof localStorageManager.exportAllData> {
+    return localStorageManager.exportAllData();
+  }
+
+  // ============================================================================
+  // Logging Operations (Week 5 Events)
+  // ============================================================================
+
+  logProfileAssigned(
+    learnerId: string,
+    profileId: string,
+    strategy: 'static' | 'diagnostic' | 'bandit',
+    problemId: string,
+    reason?: string
+  ): void {
+    localStorageManager.logProfileAssigned(learnerId, profileId, strategy, problemId, reason);
+  }
+
+  logEscalationTriggered(learnerId: string, profileId: string, errorCount: number, problemId: string): void {
+    localStorageManager.logEscalationTriggered(learnerId, profileId, errorCount, problemId);
+  }
+
+  logBanditArmSelected(params: {
+    learnerId: string;
+    problemId: string;
+    armId: string;
+    selectionMethod: 'thompson_sampling' | 'epsilon_greedy' | 'forced';
+    armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
+    sessionId?: string;
+  }): void {
+    localStorageManager.logBanditArmSelected(params);
+  }
+
+  logBanditRewardObserved(
+    learnerId: string,
+    armId: string,
+    reward: number,
+    components: {
+      independentSuccess: number;
+      errorReduction: number;
+      delayedRetention: number;
+      dependencyPenalty: number;
+      timeEfficiency: number;
+    }
+  ): void {
+    localStorageManager.logBanditRewardObserved(learnerId, armId, reward, components);
+  }
+
+  logHDICalculated(
+    learnerId: string,
+    hdi: number,
+    components: { hpa: number; aed: number; er: number; reae: number; iwh: number },
+    problemId: string
+  ): void {
+    localStorageManager.logHDICalculated(learnerId, hdi, components, problemId);
+  }
+
+  // ============================================================================
+  // Offline Queue Operations
+  // ============================================================================
+
+  /**
+   * Get the current offline queue status
+   */
+  getOfflineQueueStatus(): { pending: number; isProcessing: boolean } {
+    return {
+      pending: this.offlineQueue.getPending().length,
+      isProcessing: false, // Simplified - actual processing state is internal
+    };
+  }
+
+  /**
+   * Manually trigger offline queue processing
+   */
+  async processOfflineQueue(): Promise<void> {
+    await this.offlineQueue.processQueue();
+  }
+
+  // ============================================================================
+  // Helper Methods
+  // ============================================================================
+
+  private shouldUseBackend(): boolean {
+    return this.config.useBackend && this.backendHealthy;
+  }
+
+  private getCurrentLearnerId(): string | null {
+    const profile = localStorageManager.getUserProfile();
+    return profile?.id || null;
+  }
+
+  // ============================================================================
+  // Pass-through Methods
+  // ============================================================================
+
+  // These methods always use localStorage (no backend equivalent yet)
+  getLLMCacheRecord = localStorageManager.getLLMCacheRecord.bind(localStorageManager);
+  saveLLMCacheRecord = localStorageManager.saveLLMCacheRecord.bind(localStorageManager);
+  getPdfIndex = localStorageManager.getPdfIndex.bind(localStorageManager);
+  savePdfIndex = localStorageManager.savePdfIndex.bind(localStorageManager);
+  getPolicyReplayMode = localStorageManager.getPolicyReplayMode.bind(localStorageManager);
+  setPolicyReplayMode = localStorageManager.setPolicyReplayMode.bind(localStorageManager);
+  getReinforcementSchedules = localStorageManager.getReinforcementSchedules.bind(localStorageManager);
+  saveReinforcementSchedule = localStorageManager.saveReinforcementSchedule.bind(localStorageManager);
+  getCoverageStats = localStorageManager.getCoverageStats.bind(localStorageManager);
+  isStudent = localStorageManager.isStudent.bind(localStorageManager);
+  isInstructor = localStorageManager.isInstructor.bind(localStorageManager);
+  hasRole = localStorageManager.hasRole.bind(localStorageManager);
+  clearAll = localStorageManager.clearAll.bind(localStorageManager);
+  safeLoadProfile = localStorageManager.safeLoadProfile.bind(localStorageManager);
+  
+  // Practice drafts
+  savePracticeDraft = localStorageManager.savePracticeDraft.bind(localStorageManager);
+  getPracticeDraft = localStorageManager.getPracticeDraft.bind(localStorageManager);
+  findAnyPracticeDraft = localStorageManager.findAnyPracticeDraft.bind(localStorageManager);
+  clearPracticeDraft = localStorageManager.clearPracticeDraft.bind(localStorageManager);
+  
+  // Session config
+  setActiveSessionId = localStorageManager.setActiveSessionId.bind(localStorageManager);
+  
+  // PDF uploads
+  addUploadedPdfFile = localStorageManager.addUploadedPdfFile.bind(localStorageManager);
+  getUploadedPdfFiles = localStorageManager.getUploadedPdfFiles.bind(localStorageManager);
+  removeUploadedPdfFile = localStorageManager.removeUploadedPdfFile.bind(localStorageManager);
+  clearUploadedPdfFiles = localStorageManager.clearUploadedPdfFiles.bind(localStorageManager);
+  
+  // Trace slice and interactions
+  getTraceSlice = localStorageManager.getTraceSlice.bind(localStorageManager);
+  getInteractionsByIds = localStorageManager.getInteractionsByIds.bind(localStorageManager);
+  clearInteractions = localStorageManager.clearInteractions.bind(localStorageManager);
+  getInteractionsByProblem = localStorageManager.getInteractionsByProblem.bind(localStorageManager);
+  saveCoverageChangeEvent = localStorageManager.saveCoverageChangeEvent.bind(localStorageManager);
+  
+  // Textbook helpers
+  createDefaultProfile = localStorageManager.createDefaultProfile.bind(localStorageManager);
+  clearTextbook = localStorageManager.clearTextbook.bind(localStorageManager);
+  getLegacyHtmlUnitsInfo = localStorageManager.getLegacyHtmlUnitsInfo.bind(localStorageManager);
+  
+  // Reinforcement
+  updatePromptStatus = localStorageManager.updatePromptStatus.bind(localStorageManager);
+  getDuePrompts = localStorageManager.getDuePrompts.bind(localStorageManager);
+  logReinforcementScheduled = localStorageManager.logReinforcementScheduled.bind(localStorageManager);
+  logReinforcementPromptShown = localStorageManager.logReinforcementPromptShown.bind(localStorageManager);
+  logReinforcementResponse = localStorageManager.logReinforcementResponse.bind(localStorageManager);
+  
+  // Guidance ladder
+  logGuidanceRequest = localStorageManager.logGuidanceRequest.bind(localStorageManager);
+  logGuidanceView = localStorageManager.logGuidanceView.bind(localStorageManager);
+  logGuidanceEscalate = localStorageManager.logGuidanceEscalate.bind(localStorageManager);
+  logTextbookUnitUpsert = localStorageManager.logTextbookUnitUpsert.bind(localStorageManager);
+  logSourceView = localStorageManager.logSourceView.bind(localStorageManager);
+  
+  // Bandit
+  logBanditUpdated = localStorageManager.logBanditUpdated.bind(localStorageManager);
+  
+  // HDI
+  logHDITrajectoryUpdated = localStorageManager.logHDITrajectoryUpdated.bind(localStorageManager);
+  logDependencyInterventionTriggered = localStorageManager.logDependencyInterventionTriggered.bind(localStorageManager);
+  
+  // Profile adjustment
+  logProfileAdjusted = localStorageManager.logProfileAdjusted.bind(localStorageManager);
+  
+  // Import/Export
+  importData = localStorageManager.importData.bind(localStorageManager);
+}
+
+// ============================================================================
+// Export
+// ============================================================================
+
+export const dualStorage = new DualStorageManager();
+
+// Re-export storage client for direct access
+export { storageClient, isBackendAvailable, checkBackendHealth };
+
+// Default export uses dual storage
+export default dualStorage;

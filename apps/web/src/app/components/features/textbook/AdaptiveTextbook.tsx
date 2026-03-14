@@ -9,7 +9,7 @@ import type { TextbookUnitStatus } from '../../../types';
 import { Link } from 'react-router';
 import { renderTextbookContent } from '../../../lib/content/textbook-renderer';
 import { InstructionalUnit, InteractionEvent } from '../../../types';
-import { storage } from '../../../lib/storage/storage';
+import { storage } from '../../../lib/storage';
 import { getConceptById } from '../../../data/sql-engage';
 import { buildTextbookInsights, SortMode } from '../../../lib/content/textbook-insights';
 import { 
@@ -136,11 +136,15 @@ export function AdaptiveTextbook({
     () => buildTextbookInsights({
       units: textbookUnits,
       interactions: learnerInteractions,
-      sortMode
+      sortMode,
+      learnerId, // Enable prerequisite-aware ordering and blocked-node detection
+      prerequisiteThreshold: 40 // Minimum score to consider prerequisite "met"
     }),
-    [textbookUnits, learnerInteractions, sortMode]
+    [textbookUnits, learnerInteractions, sortMode, learnerId]
   );
   const orderedUnits = textbookInsights.orderedUnits;
+  const blockedUnits = textbookInsights.blockedUnits;
+  const prerequisiteStrengths = textbookInsights.prerequisiteStrengths;
 
   useEffect(() => {
     if (orderedUnits.length === 0) {
@@ -508,6 +512,74 @@ export function AdaptiveTextbook({
           })}
         </div>
 
+        {/* Blocked Units - Prerequisites Not Met */}
+        {blockedUnits.length > 0 && (
+          <div className="mt-4 rounded border border-red-200 bg-red-50 p-3" data-testid="blocked-units-section">
+            <p className="text-xs font-semibold uppercase tracking-wide text-red-800">
+              Blocked ({blockedUnits.length})
+            </p>
+            <p className="text-[11px] text-red-700 mt-1">
+              Units requiring prerequisites you haven&apos;t mastered yet
+            </p>
+            <div className="mt-2 space-y-2">
+              {blockedUnits.slice(0, 3).map((blocked) => (
+                <div key={blocked.unit.id} className="rounded border border-red-200 bg-white p-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-red-900 truncate">
+                      {blocked.unit.title}
+                    </p>
+                    <Badge variant="outline" className="text-[10px] ml-2">
+                      {blocked.readinessScore}% ready
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-red-700 mt-1">
+                    Missing: {blocked.missingPrerequisites.slice(0, 2).join(', ')}
+                    {blocked.missingPrerequisites.length > 2 && ` +${blocked.missingPrerequisites.length - 2} more`}
+                  </p>
+                  {blocked.recommendedUnlockOrder.length > 0 && (
+                    <p className="text-[10px] text-red-600 mt-1">
+                      Learn first: {blocked.recommendedUnlockOrder.slice(0, 2).join(' → ')}
+                    </p>
+                  )}
+                </div>
+              ))}
+              {blockedUnits.length > 3 && (
+                <p className="text-xs text-red-600 text-center">
+                  +{blockedUnits.length - 3} more blocked units
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Prerequisite Strength Indicator */}
+        {prerequisiteStrengths.length > 0 && (
+          <div className="mt-4 rounded border border-purple-200 bg-purple-50 p-3" data-testid="prerequisite-strength-section">
+            <p className="text-xs font-semibold uppercase tracking-wide text-purple-800">
+              Prerequisite Strength
+            </p>
+            <div className="mt-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-purple-700">Average Foundation Score</span>
+                <span className="font-medium text-purple-900">
+                  {textbookInsights.summary.averagePrerequisiteStrength}%
+                </span>
+              </div>
+              <div className="mt-1 h-2 bg-purple-200 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-purple-500 transition-all duration-500"
+                  style={{ width: `${textbookInsights.summary.averagePrerequisiteStrength}%` }}
+                />
+              </div>
+              {prerequisiteStrengths.some(s => s.weakestPrerequisite && s.weakestPrerequisite.score < 40) && (
+                <p className="text-[11px] text-purple-700 mt-2">
+                  💡 Strengthen your understanding of prerequisites for better retention
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         {textbookInsights.misconceptionCards.length > 0 && (
           <div className="mt-4 rounded border border-amber-200 bg-amber-50 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">You Keep Hitting</p>
@@ -561,7 +633,10 @@ export function AdaptiveTextbook({
 
         <div className="text-xs text-gray-500">
           <p className="font-medium mb-1">Coverage</p>
-          <p>{orderedUnits.length} instructional units</p>
+          <p>{orderedUnits.length} accessible units</p>
+          {blockedUnits.length > 0 && (
+            <p className="text-red-600">{blockedUnits.length} blocked (prerequisites needed)</p>
+          )}
           <p>{Object.keys(groupedUnits).length} concepts</p>
           <p>
             {Object.values(groupedUnits).reduce((sum, problems) => sum + Object.keys(problems).length, 0)} problems

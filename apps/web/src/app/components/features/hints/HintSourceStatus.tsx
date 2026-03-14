@@ -179,7 +179,7 @@ export function HintSourceStatus({
           
           return (
             <div
-              key={source.key}
+              key={String(source.key)}
               className={cn(
                 "flex items-center gap-2 p-2 rounded-md border text-sm",
                 isActive 

@@ -4,7 +4,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-blue)
 ![React](https://img.shields.io/badge/React-18.3-61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-6.4-646CFF)
-![Tests](https://img.shields.io/badge/Tests-696%20passing-success)
+![Tests](https://img.shields.io/badge/Tests-~696%20expected-informational)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
@@ -196,7 +196,7 @@ Every learner action and every system decision is logged with a stable schema fo
 }
 ```
 
-See [docs/research/LOGGING_SPECIFICATION.md](./docs/research/LOGGING_SPECIFICATION.md) for complete schema.
+See the research documentation for logging schema details.
 
 ---
 
@@ -225,6 +225,65 @@ See [docs/research/LOGGING_SPECIFICATION.md](./docs/research/LOGGING_SPECIFICATI
 
 ---
 
+## Deployment
+
+### Production Deployment
+
+#### Environment Variables
+
+**Required for Production:**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_INSTRUCTOR_PASSCODE` | **Yes** | Passcode for instructor role access. **Must be set** for production deployments. Falls back to `TeachSQL2024` in development only. |
+
+**Optional Environment Variables:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_OLLAMA_URL` | - | Local Ollama instance URL. **Not available on Vercel** (no server-side execution). |
+| `VITE_ENABLE_LLM` | `false` | Enable LLM-powered features. Requires local Ollama. |
+| `VITE_ENABLE_PDF_INDEX` | `false` | Enable PDF indexing features. Requires backend server. |
+| `VITE_API_BASE_URL` | - | Backend API URL for full-stack mode. Leave empty for static hosting. |
+
+> **⚠️ Important**: Variables prefixed with `VITE_` are embedded in the frontend bundle at **build time**. Changing them on Vercel requires a **redeployment** to take effect.
+
+#### Vercel Deployment Checklist
+
+- [ ] **Framework Preset**: Set to "Vite"
+- [ ] **Root Directory**: Set to repository root (`./`), NOT `apps/web`
+- [ ] **Build Command**: `npm run build`
+- [ ] **Output Directory**: `dist/app`
+- [ ] **Environment Variables**: Add `VITE_INSTRUCTOR_PASSCODE` with your secure passcode
+- [ ] **Redeploy**: Trigger a new deployment after adding environment variables
+
+#### Feature Availability by Deployment Mode
+
+| Feature | Local Dev | Vercel Static | Full-Stack |
+|---------|-----------|---------------|------------|
+| SQL Practice | ✅ | ✅ | ✅ |
+| Student Textbook | ✅ | ✅ | ✅ |
+| Instructor Dashboard | ✅ (with passcode) | ✅ (with passcode) | ✅ (with passcode) |
+| LLM Explanations | ✅ (local Ollama) | ❌ | ✅ (with backend proxy) |
+| PDF Index Search | ✅ (backend required) | ❌ | ✅ (with backend) |
+
+### Vercel Configuration
+
+This project is configured for deployment on Vercel with the following settings:
+
+| Setting | Value | Description |
+|---------|-------|-------------|
+| **Root Directory** | Repository root (`./`) | MUST be repo root, NOT `apps/web` |
+| **Output Directory** | `dist/app` | Build output from Vite |
+| **Build Command** | `npm run build` | Defined in root `package.json` |
+| **Framework Preset** | Vite | Auto-detected or explicitly set |
+
+> **⚠️ Important**: The Root Directory MUST be the repository root, not `apps/web`. The build runs from root via `npm run build` → `npx vite build --config apps/web/vite.config.ts`, and the Vite config uses `../..` relative paths that resolve from the repo root.
+
+These settings are pinned in `vercel.json` to prevent deployment drift between the repository and Vercel dashboard.
+
+---
+
 ## Quick Start
 
 ### Prerequisites
@@ -250,6 +309,43 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ---
 
+## PDF/Textbook Processing
+
+> ⚠️ **External Dependency Required**: The PDF processing pipeline requires an external helper tool (`algl-pdf-helper`) that is **not included** in this repository.
+
+### What is `algl-pdf-helper`?
+
+The `algl-pdf-helper` is a separate repository/workspace containing proprietary PDF processing utilities used to:
+- Extract and process textbook PDF content
+- Generate structured concept mappings
+- Export processed content to the application's textbook system
+
+### Script References in package.json
+
+The following npm scripts reference this external tool:
+
+| Script | Command | Purpose |
+|--------|---------|---------|
+| `textbook:process` | `cd ../algl-pdf-helper && ./start.sh` | Process PDF files and generate textbook content |
+| `textbook:export` | `cd ../algl-pdf-helper && algl-pdf export` | Export processed content to the application |
+
+### If the Helper is Not Available
+
+**Cloning this repository alone is not sufficient** to reproduce the full PDF processing pipeline. If you do not have access to `algl-pdf-helper`:
+
+1. **Use the built-in PDF index commands** (sufficient for most development):
+   ```bash
+   npm run pdf:index    # Build search index from PDF files
+   npm run pdf:search   # Search the index
+   npm run pdf:query    # Query with natural language
+   ```
+
+2. **The application includes pre-processed textbook content** in `apps/web/public/textbook-static/` that is sufficient for development and testing.
+
+3. **To obtain the helper tool**: Contact the project maintainers for access to the `algl-pdf-helper` repository.
+
+---
+
 ## Access Guide
 
 ### Student Access
@@ -265,6 +361,8 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 2. Enter the passcode when prompted: `TeachSQL2024`
 3. View student analytics, concept coverage, and learning traces
 4. Export data for further analysis
+
+> **⚠️ Security Note**: Instructor authentication is client-side only and intended for demo purposes. The passcode is exposed in the frontend bundle (`VITE_INSTRUCTOR_PASSCODE`), making it accessible to anyone with browser devtools. For production use with real student data, implement proper server-side authentication.
 
 ### Route Access Matrix
 
@@ -363,42 +461,12 @@ npm run pdf:query
 │   │   └── integration/         # Integration tests
 │   └── helpers/                 # Test helpers
 ├── scripts/                     # Utility scripts (replay, metrics)
-├── docs/                        # Documentation
-│   ├── research/                # Research architecture docs
-│   ├── runbooks/                # Operational runbooks
-│   └── README.md                # Documentation index
 ├── dist/                        # Build outputs
 ├── package.json                 # Dependencies and scripts
 ├── playwright.config.ts         # E2E test configuration
 ├── vitest.config.ts             # Unit test configuration
 └── vercel.json                  # Vercel deployment config
 ```
-
----
-
-## Documentation
-
-All documentation is organized under `docs/`:
-
-| Category | Location | Contents |
-|----------|----------|----------|
-| **Research** | [`docs/research/`](./docs/research/) | Architecture, 17 components, specifications |
-| **Runbooks** | [`docs/runbooks/`](./docs/runbooks/) | Operational guides, progress tracking |
-| **Reports** | [`docs/reports/`](./docs/reports/) | Test reports, validation, benchmarks |
-| **Archive** | [`docs/archive/`](./docs/archive/) | Historical/outdated documentation |
-
-### Key Documents
-
-| Document | Purpose |
-|----------|---------|
-| [docs/research/PROJECT_OVERVIEW.md](./docs/research/PROJECT_OVERVIEW.md) | Executive summary & research vision |
-| [docs/research/RESEARCH_ARCHITECTURE.md](./docs/research/RESEARCH_ARCHITECTURE.md) | System architecture & 17 components |
-| [docs/research/LOGGING_SPECIFICATION.md](./docs/research/LOGGING_SPECIFICATION.md) | Event schema & reproducibility contract |
-| [docs/research/ARTIFACT_PACKAGING.md](./docs/research/ARTIFACT_PACKAGING.md) | Artifact bundle requirements |
-| [docs/runbooks/progress.md](./docs/runbooks/progress.md) | Architecture & milestones |
-| [docs/runbooks/weekly-progress.md](./docs/runbooks/weekly-progress.md) | Active checkpoint log |
-| [docs/README.md](./docs/README.md) | Documentation index |
-| [AGENTS.md](./AGENTS.md) | Agent workflow policy |
 
 ---
 
@@ -418,7 +486,7 @@ The project has **316 unit tests** and **380 E2E tests** covering:
 |----------|-------|-------------|
 | Unit Tests | 316 | Vitest-based unit and integration tests |
 | E2E Tests | 380 | Playwright browser tests |
-| **Total** | **696** | **All tests passing** |
+| **Total** | **~696** | **Test suite: 316 unit + 380 E2E (run `npm run test:e2e:weekly` to verify)** |
 
 ---
 
@@ -561,5 +629,12 @@ MIT License - see [LICENSE](LICENSE)
 
 ---
 
-*Last updated: 2026-03-03*  
-*Project Status: Week 5 Complete — 696 total tests passing (316 unit + 380 E2E), escalation profiles, bandit, HDI calculator active*
+## Changelog
+
+### 2026-03-11
+- **Deployment**: Pinned Vercel build/output config to repo-root Vite build. Added explicit `framework`, `buildCommand`, and `outputDirectory` to `vercel.json` to prevent deployment drift.
+
+---
+
+*Last updated: 2026-03-11*  
+*Project Status: Phase 1 Active — Route contracts fixed, Demo feature added, Vercel config pinned*

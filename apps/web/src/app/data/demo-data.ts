@@ -1,4 +1,4 @@
-import { storage } from '../lib/storage/storage';
+import { storage } from '../lib/storage';
 import { LearnerProfile } from '../types';
 import { sqlProblems } from './problems';
 import { getSqlEngagePolicyVersion } from './sql-engage';
@@ -98,7 +98,7 @@ function simulateLearnerSession(
         timestamp: currentTime,
         eventType: 'hint_view',
         problemId: problem.id,
-        hintLevel: Math.min(i + 1, 3),
+        hintLevel: Math.min(i + 1, 3) as 1 | 2 | 3,
         sqlEngageSubtype: subtype,
         sqlEngageRowId: `demo-row-${i}`,
         policyVersion: getSqlEngagePolicyVersion()

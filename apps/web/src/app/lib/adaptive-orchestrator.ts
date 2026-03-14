@@ -3,7 +3,8 @@ import {
   AdaptiveDecision, 
   InstructionalUnit,
   LearnerProfile,
-  NextHintSelection
+  NextHintSelection,
+  SessionConfig
 } from '../types';
 import {
   getConceptById,
@@ -11,7 +12,8 @@ import {
   canonicalizeSqlEngageSubtype,
   getDeterministicSqlEngageAnchor,
   getProgressiveSqlEngageHintText,
-  getSqlEngagePolicyVersion
+  getSqlEngagePolicyVersion,
+  type SqlEngageRecord
 } from '../data/sql-engage';
 
 const POLICY_REPLAY_EVENT_TYPES: InteractionEvent['eventType'][] = [
@@ -118,11 +120,46 @@ export class AdaptiveOrchestrator {
     currentProblemId: string,
     options?: {
       autoEscalationMode?: AutoEscalationMode;
+      sessionConfig?: SessionConfig | null;
     }
   ): AdaptiveDecision {
+    // Week 6: Respect experimental session configuration
+    const sessionConfig = options?.sessionConfig;
+    
+    // If immediate explanation mode is enabled, escalate immediately on error
+    if (sessionConfig?.immediateExplanationMode) {
+      const errorInteractions = recentInteractions.filter(
+        i => i.problemId === currentProblemId && i.eventType === 'error'
+      );
+      if (errorInteractions.length > 0) {
+        return {
+          timestamp: Date.now(),
+          learnerId: profile.id,
+          context: this.analyzeContext(recentInteractions, currentProblemId, Date.now()),
+          decision: 'show_explanation',
+          ruleFired: 'immediate-explanation-mode',
+          reasoning: 'Immediate explanation mode: skipping hints due to experimental condition'
+        };
+      }
+    }
     const now = Date.now();
     const context = this.analyzeContext(recentInteractions, currentProblemId, now);
-    const thresholds = this.getThresholds(profile.currentStrategy);
+    
+    // Week 6: Use static thresholds if static hint mode is enabled
+    let strategy = profile.currentStrategy;
+    if (sessionConfig?.staticHintMode) {
+      strategy = 'hint-only'; // Static mode uses hint-only strategy
+    }
+    
+    const thresholds = this.getThresholds(strategy);
+    
+    // Week 6: Adjust escalation threshold based on session config
+    if (sessionConfig?.escalationPolicy === 'aggressive') {
+      thresholds.escalate = Math.min(thresholds.escalate, 1);
+    } else if (sessionConfig?.escalationPolicy === 'conservative') {
+      thresholds.escalate = Math.max(thresholds.escalate, 3);
+    }
+    
     const autoEscalation = this.getAutoEscalationState(recentInteractions, currentProblemId);
     const autoEscalationMode = options?.autoEscalationMode || 'always-after-hint-threshold';
     const selection = this.selectDecision(context, thresholds, autoEscalation, autoEscalationMode);
@@ -386,9 +423,9 @@ export class AdaptiveOrchestrator {
     anchor?: { feedback_target: string; intended_learning_outcome: string }
   ): string {
     const concept = getConceptById(conceptId);
-    const level1 = getProgressiveSqlEngageHintText(errorSubtypeId, 1, anchor);
-    const level2 = getProgressiveSqlEngageHintText(errorSubtypeId, 2, anchor);
-    const level3 = getProgressiveSqlEngageHintText(errorSubtypeId, 3, anchor);
+    const level1 = getProgressiveSqlEngageHintText(errorSubtypeId, 1, anchor as SqlEngageRecord);
+    const level2 = getProgressiveSqlEngageHintText(errorSubtypeId, 2, anchor as SqlEngageRecord);
+    const level3 = getProgressiveSqlEngageHintText(errorSubtypeId, 3, anchor as SqlEngageRecord);
 
     return `
 # ${concept?.name || 'SQL Concept'}
@@ -460,7 +497,7 @@ ${units.filter(u => u.conceptId === c?.id).map(u => `- ${u.title}`).join('\n')}
 
 ### Key Takeaways
 
-${c?.examples.map((ex, i) => `${i + 1}. Review this pattern: \`${ex}\``).join('\n')}
+${c?.examples.map((ex: string, i: number) => `${i + 1}. Review this pattern: \`${ex}\``).join('\n')}
 `).join('\n')}
 
 ---

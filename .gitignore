@@ -87,3 +87,10 @@ test-output.log
 # Root-level test screenshots
 /concept-*.png
 /concepts-*.png
+
+# Backend
+apps/server/node_modules/
+apps/server/data/*.db
+apps/server/data/*.db-shm
+apps/server/data/*.db-wal
+apps/server/dist/

@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
 import { useUserRole } from '../hooks/useUserRole';
 import { useSessionPersistence } from '../hooks/useSessionPersistence';
-import { storage } from '../lib/storage/storage';
+import { storage } from '../lib/storage';
 import { isPreviewModeActive } from '../lib/auth-guard';
 
 /**
@@ -89,17 +89,25 @@ function SessionExpired({ onRedirect }: SessionExpiredProps) {
 export function RootLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { role, isStudent, isInstructor, isLoading: isRoleLoading, clearProfile } = useUserRole();
-  const [showWelcome, setShowWelcome] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
-  // Session persistence hook for cross-tab sync
+  // Session persistence hook for cross-tab sync (must come before useUserRole)
   const {
     showSyncToast,
     dismissToast,
     profile: syncedProfile,
+    isLoading: isSessionLoading,
     isSessionExpired
   } = useSessionPersistence();
+  
+  // Pass synced profile from useSessionPersistence to useUserRole
+  // This ensures role is always synchronized with the storage-synced profile
+  const { role, isStudent, isInstructor, isLoading: isRoleLoading, clearProfile } = useUserRole({
+    syncedProfile,
+    syncedLoading: isSessionLoading
+  });
+  
+  const [showWelcome, setShowWelcome] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     try {
@@ -165,10 +173,11 @@ export function RootLayout() {
     navigate('/');
   };
 
-  // Redirect instructor accessing student-only pages to instructor dashboard
+  // Redirect instructor accessing /practice (student-only) to instructor dashboard
   // BUT allow access in preview mode
+  // Instructors ARE allowed to access /textbook for learner inspection
   const isInPreviewMode = isPreviewModeActive();
-  if (!isRoleLoading && isInstructor && !isInPreviewMode && (isPracticePage || isTextbookPage)) {
+  if (!isRoleLoading && isInstructor && !isInPreviewMode && isPracticePage) {
     return <Navigate to="/instructor-dashboard" replace />;
   }
 

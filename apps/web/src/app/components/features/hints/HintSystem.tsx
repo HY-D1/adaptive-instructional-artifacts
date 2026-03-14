@@ -7,7 +7,7 @@ import DOMPurify from 'dompurify';
 import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen, Loader2, HelpCircle, Sparkles, AlertCircle } from 'lucide-react';
 import { HelpEventType, InteractionEvent } from '../../../types';
 import { orchestrator } from '../../../lib/adaptive-orchestrator';
-import { storage } from '../../../lib/storage/storage';
+import { storage } from '../../../lib/storage';
 import { createEventId } from '../../../lib/utils/event-id';
 import {
   canonicalizeSqlEngageSubtype
@@ -28,6 +28,7 @@ import { HintSourceStatus } from './HintSourceStatus';
 import type { EnhancedHint } from '../../../lib/ml/enhanced-hint-service';
 import { useUserRole } from '../../../hooks/useUserRole';
 import type { EscalationProfile } from '../../../lib/ml/escalation-profiles';
+import type { SessionConfig } from '../../../types';
 
 /**
  * Props for the HintSystem component
@@ -53,6 +54,8 @@ interface HintSystemProps {
   onInteractionLogged?: (event: InteractionEvent) => void;
   /** Escalation profile for profile-specific thresholds (Week 5) */
   escalationProfile?: EscalationProfile | null;
+  /** Session configuration for experimental conditions (Week 6) */
+  sessionConfig?: SessionConfig | null;
 }
 
 export function HintSystem({ 
@@ -65,7 +68,8 @@ export function HintSystem({
   recentInteractions,
   onEscalate,
   onInteractionLogged,
-  escalationProfile
+  escalationProfile,
+  sessionConfig
 }: HintSystemProps) {
   const [hints, setHints] = useState<string[]>([]);
   const [hintPdfPassages, setHintPdfPassages] = useState<RetrievalPdfPassage[][]>([]);
@@ -423,15 +427,15 @@ export function HintSystem({
       
       // Reconstruct enhanced hint info from history
       const reconstructedEnhancedInfo = hintEvents.map(event => ({
-        isEnhanced: event.outputs?.is_enhanced || false,
+        isEnhanced: Boolean(event.outputs?.is_enhanced),
         sources: {
           sqlEngage: true,
-          textbook: event.outputs?.is_enhanced || false,
+          textbook: Boolean(event.outputs?.is_enhanced),
           llm: event.ruleFired === 'enhanced-hint',
           pdfPassages: (event.retrievedSourceIds || []).some(id => id.includes('doc-'))
         },
-        llmFailed: event.outputs?.llm_failed || false,
-        llmErrorMessage: event.outputs?.llm_error_message
+        llmFailed: Boolean(event.outputs?.llm_failed),
+        llmErrorMessage: typeof event.outputs?.llm_error_message === 'string' ? event.outputs.llm_error_message : undefined
       }));
       setEnhancedHintInfo(reconstructedEnhancedInfo);
       
@@ -498,7 +502,7 @@ export function HintSystem({
    */
   const generateEnhancedHintForRung = async (rung: 1 | 2 | 3): Promise<{
     hintText: string;
-    hintLevel: number;
+    hintLevel: 1 | 2 | 3;
     sqlEngageSubtype: string;
     sqlEngageRowId: string;
     policyVersion: string;
@@ -529,7 +533,7 @@ export function HintSystem({
               chunkId: `textbook:${unit.id}`,
               docId: 'learner-textbook',
               text: unit.content.substring(0, 200) + '...',
-              page: undefined,
+              page: 0,
               score: 0.9
             });
           }
@@ -717,6 +721,16 @@ export function HintSystem({
     }
     setIsProcessingHint(true);
 
+    // Week 6: Immediate explanation mode - skip hints, go straight to explanation
+    if (sessionConfig?.immediateExplanationMode && !showExplanation) {
+      const problemTrace = getProblemTrace();
+      setShowExplanation(true);
+      setCurrentRung(2);
+      await handleShowExplanation('manual', undefined, problemTrace);
+      setIsProcessingHint(false);
+      return;
+    }
+
     // Week 3 D8: Log guidance request event
     storage.logGuidanceRequest({
       learnerId,
@@ -752,7 +766,7 @@ export function HintSystem({
     // Try to generate enhanced hint (uses LLM/Textbook if available)
     let hintSelection: {
       hintText: string;
-      hintLevel: number;
+      hintLevel: 1 | 2 | 3;
       sqlEngageSubtype: string;
       sqlEngageRowId: string;
       policyVersion: string;
@@ -843,7 +857,8 @@ export function HintSystem({
         is_enhanced: hintSelection!.isEnhanced,
         llm_failed: hintSelection!.llmFailed || false,
         llm_error_message: hintSelection!.llmErrorMessage || null
-      }
+      },
+      conditionId: sessionConfig?.conditionId
     };
     storage.saveInteraction(hintEvent);
     onInteractionLogged?.(hintEvent);
@@ -892,7 +907,7 @@ export function HintSystem({
 
 
   const decision = profile
-    ? orchestrator.makeDecision(profile, scopedInteractions, problemId)
+    ? orchestrator.makeDecision(profile, scopedInteractions, problemId, { sessionConfig })
     : { decision: 'show_hint' as const, reasoning: 'Learner profile unavailable' };
 
   // Empty state when no profile exists
@@ -916,11 +931,10 @@ export function HintSystem({
     : hints.length === 0
       ? 'Request Hint'
       : 'Next Hint';
-  // Count hints that have been actually viewed
-  const viewedHintsCount = hints.length;
+  // Count hints that have been actually viewed - use hints.length directly to ensure sync
   const hintProgress = showExplanation 
-    ? Math.min(viewedHintsCount + 1, 4)  // Hints + explanation
-    : Math.min(viewedHintsCount, 3);      // Just hints
+    ? Math.min(hints.length + 1, 4)  // Hints + explanation mode
+    : Math.min(hints.length, 3);      // Just hints (capped at 3)
   const stepMessage = nextHelpRequestIndex >= autoEscalationThreshold
     ? 'You are in explanation mode. Additional help requests provide deeper explanation support.'
     : `Request ${hintProgress} gives Hint ${hintProgress}.`;
@@ -1221,6 +1235,8 @@ export function HintSystem({
             <p className="text-xs text-gray-400">Progresses through L1 → L2 → L3 hints</p>
           </TooltipContent>
         </Tooltip>
+        {/* Week 6: Conditionally hide Add to Textbook button if textbookDisabled */}
+        {(!sessionConfig?.textbookDisabled) && (
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -1257,6 +1273,7 @@ export function HintSystem({
             )}
           </TooltipContent>
         </Tooltip>
+        )}
       </div>
 
       {showExplanation && (

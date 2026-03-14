@@ -1,8 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { UserRole, UserProfile } from '../types';
-import { storage } from '../lib/storage/storage';
+import { storage } from '../lib/storage';
 
 const DEFAULT_ROLE: UserRole = 'student';
+
+interface UseUserRoleOptions {
+  /** External profile from useSessionPersistence for sync */
+  syncedProfile?: UserProfile | null;
+  /** External loading state from useSessionPersistence */
+  syncedLoading?: boolean;
+}
 
 /**
  * Hook for managing user role and profile state
@@ -11,20 +18,49 @@ const DEFAULT_ROLE: UserRole = 'student';
  * - Load/save profile to localStorage
  * - Role switching with profile persistence
  * - Profile updates (name, role)
+ * - Sync with useSessionPersistence for cross-tab consistency
  * 
+ * @param options - Optional sync options to connect with useSessionPersistence
  * @returns Object with role state, profile, and update functions
  * 
  * @example
  * ```typescript
  * const { role, setRole, profile, isStudent, isInstructor } = useUserRole();
+ * 
+ * // Or with sync from useSessionPersistence:
+ * const { profile: syncedProfile, isLoading: syncedLoading } = useSessionPersistence();
+ * const { role, isStudent, isInstructor } = useUserRole({ syncedProfile, syncedLoading });
  * ```
  */
-export function useUserRole() {
+export function useUserRole(options?: UseUserRoleOptions) {
+  const { syncedProfile, syncedLoading } = options || {};
+  
   const [role, setRoleState] = useState<UserRole>(DEFAULT_ROLE);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [profile, setProfile] = useState<UserProfile | null>(syncedProfile ?? null);
+  const [isLoading, setIsLoading] = useState(syncedLoading ?? true);
 
+  // Sync with external profile from useSessionPersistence
   useEffect(() => {
+    if (syncedProfile !== undefined) {
+      setProfile(syncedProfile);
+      setRoleState(syncedProfile?.role ?? DEFAULT_ROLE);
+    }
+  }, [syncedProfile]);
+
+  // Sync loading state
+  useEffect(() => {
+    if (syncedLoading !== undefined) {
+      setIsLoading(syncedLoading);
+    }
+  }, [syncedLoading]);
+
+  // Initial load from storage (only if no synced profile provided)
+  useEffect(() => {
+    // Skip if we're using synced profile from useSessionPersistence
+    if (syncedProfile !== undefined) {
+      return;
+    }
+    
     // Load from storage module
     try {
       const storedProfile = storage.getUserProfile();
@@ -39,7 +75,7 @@ export function useUserRole() {
       setRoleState(DEFAULT_ROLE);
     }
     setIsLoading(false);
-  }, []);
+  }, [syncedProfile]);
 
   const setRole = useCallback((newRole: UserRole) => {
     const currentProfile = storage.getUserProfile();

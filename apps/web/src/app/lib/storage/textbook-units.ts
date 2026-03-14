@@ -7,8 +7,8 @@
  * - Revision tracking
  */
 
-import type { InstructionalUnit, SaveTextbookUnitResult, TextbookUnitStatus } from '../../types';
-import type { LLMGuidanceOutput } from './llm-contracts';
+import type { InstructionalUnit, SaveTextbookUnitResult, TextbookUnitStatus, UnitProvenance } from '../../types';
+import type { LLMGuidanceOutput } from '../llm-contracts';
 
 // Quality score weights (must sum to 1.0)
 export const QUALITY_SCORE_WEIGHTS = {
@@ -105,8 +105,8 @@ export const TEXTBOOK_UNIT_CONFIG = {
  * Input for creating or updating a textbook unit
  */
 export type CreateUnitInput = {
-  learnerId: string;
-  sessionId: string;
+  learnerId?: string;
+  sessionId?: string;
   conceptIds: string[];
   type: InstructionalUnit['type'];
   title: string;
@@ -130,6 +130,11 @@ export type CreateUnitInput = {
     dedupeKey: string;
     revisionCount: number;
   }) => void;
+  // Metadata for quality tracking
+  metadata?: Record<string, unknown>;
+  // Problem context
+  problemId?: string;
+  provenance?: UnitProvenance;
 };
 
 /**
@@ -150,7 +155,7 @@ export function generateDedupeKey(
 ): string {
   const conceptIds = 'conceptIds' in input && Array.isArray(input.conceptIds) 
     ? input.conceptIds 
-    : [input.conceptId];
+    : 'conceptId' in input ? [input.conceptId] : [];
   const type = input.type;
   
   // Sort concept IDs for consistent key generation (normalize case)
@@ -275,7 +280,7 @@ function buildUpdatedUnit(
     // Session tracking
     updatedSessionIds: Array.from(new Set([
       ...(existing.updatedSessionIds || []),
-      newInput.sessionId
+      ...(newInput.sessionId ? [newInput.sessionId] : [])
     ])),
     
     // Preserve provenance but add to it
@@ -308,7 +313,7 @@ export function buildNewUnit(
   const newUnit: InstructionalUnit = {
     id: unitId,
     sessionId: input.sessionId,
-    updatedSessionIds: [input.sessionId],
+    updatedSessionIds: input.sessionId ? [input.sessionId] : [],
     type: input.type,
     conceptId: input.conceptIds[0] || 'unknown',
     conceptIds: input.conceptIds,

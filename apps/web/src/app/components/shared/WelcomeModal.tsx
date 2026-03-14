@@ -18,7 +18,7 @@ import {
   Keyboard
 } from 'lucide-react';
 import { generateDemoData } from '../../data/demo-data';
-import { storage } from '../../lib/storage/storage';
+import { storage } from '../../lib/storage';
 
 /**
  * Props for WelcomeModal component

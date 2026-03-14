@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, type JSX } from 'react';
 import { Card } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
@@ -79,6 +79,30 @@ interface ProfileEffectivenessData {
   avgEscalations: number;
   totalInteractions: number;
 }
+
+// Component 10: Reinforcement data types
+interface ReinforcementStats {
+  totalScheduled: number;
+  totalShown: number;
+  totalResponded: number;
+  responseRate: number;
+  averageRetentionScore: number;
+}
+
+interface ReinforcementDataPoint {
+  timestamp: number;
+  learnerId: string;
+  eventType: 'scheduled' | 'shown' | 'response';
+  retentionLevel?: string;
+  isCorrect?: boolean;
+}
+
+// Week 6: Rich Research Dashboard Metrics
+interface ResearchMetrics {
+  clusters: LearnerCluster[];
+  errorTransitions: ErrorTransitionStats;
+  selectedMasteryLearner: string;
+}
 import {
   Table,
   TableBody,
@@ -120,15 +144,23 @@ import {
   Lightbulb,
   Sparkles,
   Target,
-  BrainCircuit
+  BrainCircuit,
+  BookOpen
 } from 'lucide-react';
-import { storage } from '../../../lib/storage/storage';
+import { storage } from '../../../lib/storage';
 import { InteractionEvent, LearnerProfile, ExperimentCondition, PdfIndexDocument } from '../../../types';
+import { type ReflectionQualityScore } from '../../../lib/content/self-explanation-scorer';
 import { orchestrator, ReplayDecisionPoint, AutoEscalationMode } from '../../../lib/adaptive-orchestrator';
 import { checkOllamaHealth, OLLAMA_MODEL } from '../../../lib/api/llm-client';
 import { loadOrBuildPdfIndex, uploadPdfAndBuildIndex } from '../../../lib/pdf-index-loader';
 import { isDemoMode, getDemoModeMessage, DEMO_MODE_VERSION } from '../../../lib/utils/demo-mode';
+import { isHostedMode, getHostedModeMessage } from '../../../lib/runtime-config';
 import { createEventId } from '../../../lib/utils/event-id';
+import { clusterLearners, LearnerCluster } from '../../../lib/research/learner-clustering';
+import { buildErrorTransitionMatrix, buildErrorTransitionStats, getErrorRecoveryPatterns, ErrorTransitionStats } from '../../../lib/research/error-transitions';
+import { EscalationHeatmap } from '../../research/EscalationHeatmap';
+import { ErrorTransitionView, ErrorChainView, ErrorRecoveryView } from '../../research/ErrorTransitionView';
+import { MasteryTimeline } from '../../research/MasteryTimeline';
 
 const experimentConditions: ExperimentCondition[] = [
   {
@@ -182,6 +214,32 @@ const CHART_COLORS = {
   orange: '#f97316'
 };
 
+// Helper component for quality dimension bars
+function DimensionBar({ label, value }: { label: string; value: number }) {
+  const colorClass = value >= 70 
+    ? 'bg-green-500' 
+    : value >= 40 
+      ? 'bg-yellow-500' 
+      : 'bg-red-500';
+
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs w-20 text-gray-600">{label}</span>
+      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div 
+          className={`h-full rounded-full ${colorClass}`}
+          style={{ width: `${value}%` }}
+        />
+      </div>
+      <span className={`text-xs w-8 text-right font-medium ${
+        value >= 70 ? 'text-green-600' : value >= 40 ? 'text-yellow-600' : 'text-red-600'
+      }`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
 export function ResearchDashboard() {
   const [interactions, setInteractions] = useState<InteractionEvent[]>([]);
   const [profiles, setProfiles] = useState<LearnerProfile[]>([]);
@@ -202,6 +260,9 @@ export function ResearchDashboard() {
   const [pdfIndexStatus, setPdfIndexStatus] = useState<'idle' | 'loading' | 'ready' | 'error' | 'warning'>('idle');
   const [pdfIndexError, setPdfIndexError] = useState<string | null>(null);
   
+  // Hosted mode detection
+  const [hostedMode, setHostedMode] = useState<boolean>(false);
+  
   // Time range filter
   const [timeRange, setTimeRange] = useState<string>('all');
   
@@ -214,6 +275,7 @@ export function ResearchDashboard() {
   
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedMasteryLearner, setSelectedMasteryLearner] = useState<string>('');
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 500);
@@ -221,6 +283,8 @@ export function ResearchDashboard() {
   }, []);
 
   useEffect(() => {
+    // Detect hosted mode on mount
+    setHostedMode(isHostedMode());
     loadData();
   }, []);
 
@@ -850,22 +914,130 @@ export function ResearchDashboard() {
   const traceStartTime = replayPolicyTrace[0]?.timestamp;
 
   // Week 5: Adaptive Personalization Analytics
+  // Week 6: Rich Research Dashboard Metrics
+  const researchMetrics = useMemo<ResearchMetrics>(() => {
+    const clusters = profiles.length > 0 
+      ? clusterLearners(profiles, filteredInteractions, 3)
+      : [];
+    
+    const errorTransitions = buildErrorTransitionStats(filteredInteractions);
+    
+    return {
+      clusters,
+      errorTransitions,
+      selectedMasteryLearner: selectedMasteryLearner || (profiles[0]?.id ?? '')
+    };
+  }, [profiles, filteredInteractions, selectedMasteryLearner]);
+
+  useEffect(() => {
+    if (!selectedMasteryLearner && profiles.length > 0) {
+      setSelectedMasteryLearner(profiles[0].id);
+    }
+  }, [profiles, selectedMasteryLearner]);
+
   const week5Analytics = useMemo(() => {
-    // Filter Week 5 event types
+    // Filter Week 5 event types (including Component 10: Reinforcement)
     const week5Events = filteredInteractions.filter(i => 
       ['profile_assigned', 'escalation_triggered', 'profile_adjusted',
        'bandit_arm_selected', 'bandit_reward_observed', 'bandit_updated',
-       'hdi_calculated', 'hdi_trajectory_updated', 'dependency_intervention_triggered'].includes(i.eventType)
+       'hdi_calculated', 'hdi_trajectory_updated', 'dependency_intervention_triggered',
+       // Component 10: Knowledge Consolidation events
+       'reinforcement_scheduled', 'reinforcement_prompt_shown', 'reinforcement_response',
+       // Week 6: Session Configuration events
+       'session_created',
+       // Knowledge-Structure Layer: Prerequisite violations
+       'prerequisite_violation_detected'].includes(i.eventType)
     );
+    
+    // Knowledge-Structure Layer: Prerequisite Violation Analytics
+    const violationEvents = filteredInteractions.filter(
+      i => i.eventType === 'prerequisite_violation_detected'
+    );
+    
+    const violationStats = {
+      total: violationEvents.length,
+      byConcept: {} as Record<string, number>,
+      byMissingPrerequisite: {} as Record<string, number>,
+      bySeverity: { low: 0, medium: 0, high: 0 } as Record<'low' | 'medium' | 'high', number>,
+      recent: violationEvents.slice(-10).reverse().map(e => ({
+        conceptAttempted: e.metadata?.conceptAttempted as string || e.conceptIds?.[0] || 'unknown',
+        missingPrerequisites: (e.metadata?.missingPrerequisites as string[]) || [],
+        severity: (e.metadata?.severity as 'low' | 'medium' | 'high') || 'low',
+        timestamp: e.timestamp,
+        learnerId: e.learnerId
+      }))
+    };
+    
+    violationEvents.forEach(e => {
+      const conceptId = e.metadata?.conceptAttempted as string || e.conceptIds?.[0] || 'unknown';
+      const severity = (e.metadata?.severity as 'low' | 'medium' | 'high') || 'low';
+      const missing = (e.metadata?.missingPrerequisites as string[]) || [];
+      
+      violationStats.byConcept[conceptId] = (violationStats.byConcept[conceptId] || 0) + 1;
+      violationStats.bySeverity[severity]++;
+      
+      missing.forEach(prereq => {
+        violationStats.byMissingPrerequisite[prereq] = 
+          (violationStats.byMissingPrerequisite[prereq] || 0) + 1;
+      });
+    });
+
+    // Week 6: Condition Statistics
+    // Use profile_assigned as a proxy for session initialization
+    const sessionCreatedEvents = week5Events.filter(e => e.eventType === 'profile_assigned');
+    const conditionStats: Record<string, { 
+      count: number; 
+      learnerIds: string[];
+      avgHDI: number;
+      hdiValues: number[];
+    }> = {};
+    
+    sessionCreatedEvents.forEach(e => {
+      const condition = e.conditionId || 'unknown';
+      if (!conditionStats[condition]) {
+        conditionStats[condition] = { 
+          count: 0, 
+          learnerIds: [],
+          avgHDI: 0,
+          hdiValues: []
+        };
+      }
+      conditionStats[condition].count++;
+      if (!conditionStats[condition].learnerIds.includes(e.learnerId)) {
+        conditionStats[condition].learnerIds.push(e.learnerId);
+      }
+    });
+    
+    // Calculate HDI per condition from hdi_calculated events
+    const hdiEvents = week5Events.filter(e => e.eventType === 'hdi_calculated');
+    Object.keys(conditionStats).forEach(condition => {
+      const conditionLearners = conditionStats[condition].learnerIds;
+      const conditionHdiEvents = hdiEvents.filter(e => conditionLearners.includes(e.learnerId));
+      const hdiValues = conditionHdiEvents.map(e => e.hdi || (e.payload as { hdi?: number })?.hdi || 0).filter(h => h > 0);
+      
+      conditionStats[condition].hdiValues = hdiValues;
+      conditionStats[condition].avgHDI = hdiValues.length > 0 
+        ? hdiValues.reduce((a, b) => a + b, 0) / hdiValues.length 
+        : 0;
+    });
+    
+    // Convert to array for display
+    const conditionStatsArray = Object.entries(conditionStats).map(([condition, stats]) => ({
+      condition,
+      sessionCount: stats.count,
+      learnerCount: stats.learnerIds.length,
+      avgHDI: stats.avgHDI,
+      avgHdiDisplay: stats.avgHDI.toFixed(2)
+    })).sort((a, b) => b.sessionCount - a.sessionCount);
 
     // 1. Escalation Profile Distribution
     const profileAssignments = week5Events.filter(e => e.eventType === 'profile_assigned');
     const profileCounts: Record<string, number> = {};
     profileAssignments.forEach(e => {
-      const profileId = e.payload?.profileId || e.profileId || 'unknown';
+      const profileId = (e.payload as { profileId?: string })?.profileId || e.profileId || 'unknown';
       const normalizedProfile = profileId.toUpperCase().includes('FAST') ? 'FAST' :
                                profileId.toUpperCase().includes('SLOW') ? 'SLOW' :
-                               profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : 'UNKNOWN';
+                               profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : 'ADAPTIVE';
       profileCounts[normalizedProfile] = (profileCounts[normalizedProfile] || 0) + 1;
     });
     
@@ -882,7 +1054,7 @@ export function ResearchDashboard() {
     // Calculate arm selection frequency
     const armSelectionCounts: Record<string, number> = {};
     armSelections.forEach(e => {
-      const armId = e.payload?.armId || e.selectedArm || 'unknown';
+      const armId = (e.payload as { armId?: string })?.armId || e.selectedArm || 'unknown';
       armSelectionCounts[armId] = (armSelectionCounts[armId] || 0) + 1;
     });
     
@@ -890,8 +1062,8 @@ export function ResearchDashboard() {
     const armRewardSums: Record<string, number> = {};
     const armRewardCounts: Record<string, number> = {};
     armRewards.forEach(e => {
-      const armId = e.payload?.armId || 'unknown';
-      const reward = e.payload?.reward?.total || e.reward?.total || 0;
+      const armId = (e.payload as { armId?: string })?.armId || 'unknown';
+      const reward = (e.payload as { reward?: { total?: number } })?.reward?.total || e.reward?.total || 0;
       armRewardSums[armId] = (armRewardSums[armId] || 0) + reward;
       armRewardCounts[armId] = (armRewardCounts[armId] || 0) + 1;
     });
@@ -908,21 +1080,21 @@ export function ResearchDashboard() {
     const banditRewardData: BanditRewardData[] = armRewards
       .sort((a, b) => a.timestamp - b.timestamp)
       .map(e => {
-        const reward = e.payload?.reward?.total || e.reward?.total || 0;
+        const reward = (e.payload as { reward?: { total?: number } })?.reward?.total || e.reward?.total || 0;
         cumulativeReward += reward;
         rewardCount++;
         return {
           timestamp: e.timestamp,
-          armId: e.payload?.armId || 'unknown',
+          armId: (e.payload as { armId?: string })?.armId || 'unknown',
           reward,
           cumulativeMean: rewardCount > 0 ? cumulativeReward / rewardCount : 0
         };
       });
 
     // 3. HDI Analytics
-    const hdiEvents = week5Events.filter(e => e.eventType === 'hdi_calculated');
-    const hdiDataPoints: HDIDataPoint[] = hdiEvents.map(e => ({
-      hdi: e.payload?.hdi ?? e.hdi ?? 0,
+    const hdiCalcEvents = week5Events.filter(e => e.eventType === 'hdi_calculated');
+    const hdiDataPoints: HDIDataPoint[] = hdiCalcEvents.map(e => ({
+      hdi: (e.payload as { hdi?: number })?.hdi ?? e.hdi ?? 0,
       learnerId: e.learnerId,
       timestamp: e.timestamp
     }));
@@ -975,11 +1147,11 @@ export function ResearchDashboard() {
     // Calculate effectiveness metrics per learner
     const learnersByProfile: Record<string, string[]> = {};
     profileAssignments.forEach(e => {
-      const profileId = e.payload?.profileId || e.profileId || 'unknown';
+      const profileId = (e.payload as { profileId?: string })?.profileId || e.profileId || 'unknown';
       const normalizedProfile = profileId.toUpperCase().includes('FAST') ? 'FAST' :
                                profileId.toUpperCase().includes('SLOW') ? 'SLOW' :
-                               profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : null;
-      if (normalizedProfile && normalizedProfile !== 'UNKNOWN') {
+                               profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : 'ADAPTIVE';
+      if (normalizedProfile) {
         if (!learnersByProfile[normalizedProfile]) learnersByProfile[normalizedProfile] = [];
         if (!learnersByProfile[normalizedProfile].includes(e.learnerId)) {
           learnersByProfile[normalizedProfile].push(e.learnerId);
@@ -1019,6 +1191,78 @@ export function ResearchDashboard() {
     const sortedProfileEffectiveness = Object.values(profileEffectiveness)
       .sort((a, b) => b.avgSuccessRate - a.avgSuccessRate);
 
+    // Component 10: Reinforcement Analytics
+    const reinforcementScheduled = week5Events.filter(e => e.eventType === 'reinforcement_scheduled');
+    const reinforcementShown = week5Events.filter(e => e.eventType === 'reinforcement_prompt_shown');
+    const reinforcementResponses = week5Events.filter(e => e.eventType === 'reinforcement_response');
+    
+    const reinforcementStats: ReinforcementStats = {
+      totalScheduled: reinforcementScheduled.length,
+      totalShown: reinforcementShown.length,
+      totalResponded: reinforcementResponses.length,
+      responseRate: reinforcementShown.length > 0 
+        ? reinforcementResponses.length / reinforcementShown.length 
+        : 0,
+      averageRetentionScore: reinforcementResponses.length > 0
+        ? reinforcementResponses.filter(r => r.isCorrect).length / reinforcementResponses.length
+        : 0
+    };
+    
+    // Reinforcement timeline data
+    const reinforcementTimeline: ReinforcementDataPoint[] = week5Events
+      .filter(e => e.eventType === 'reinforcement_scheduled' || e.eventType === 'reinforcement_prompt_shown' || e.eventType === 'reinforcement_response')
+      .map(e => ({
+        timestamp: e.timestamp,
+        learnerId: e.learnerId,
+        eventType: (e.eventType === 'reinforcement_scheduled' ? 'scheduled' :
+                    e.eventType === 'reinforcement_prompt_shown' ? 'shown' : 'response') as 'scheduled' | 'shown' | 'response',
+        retentionLevel: e.response || undefined,
+        isCorrect: e.isCorrect || undefined
+      }))
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+    // RQS: Self-Explanation Quality Analytics
+    const qualityEvents = filteredInteractions.filter(i => 
+      i.metadata?.selfExplanationQuality !== undefined
+    );
+    
+    let qualityStats: {
+      averageQuality: number;
+      totalScored: number;
+      distribution: { excellent: number; good: number; needsWork: number };
+      dimensionAverages: {
+        paraphrase: number;
+        length: number;
+        conceptKeywords: number;
+        exampleInclusion: number;
+        structuralCompleteness: number;
+      };
+    } | null = null;
+    
+    if (qualityEvents.length > 0) {
+      const scores = qualityEvents.map(e => e.metadata!.selfExplanationQuality as number);
+      const dimensions = qualityEvents
+        .map(e => e.metadata!.qualityDimensions as ReflectionQualityScore['dimensions'])
+        .filter((d): d is ReflectionQualityScore['dimensions'] => !!d);
+      
+      qualityStats = {
+        averageQuality: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+        totalScored: qualityEvents.length,
+        distribution: {
+          excellent: scores.filter(s => s >= 80).length,
+          good: scores.filter(s => s >= 60 && s < 80).length,
+          needsWork: scores.filter(s => s < 60).length
+        },
+        dimensionAverages: dimensions.length > 0 ? {
+          paraphrase: Math.round(dimensions.reduce((a, d) => a + d.paraphrase, 0) / dimensions.length),
+          length: Math.round(dimensions.reduce((a, d) => a + d.length, 0) / dimensions.length),
+          conceptKeywords: Math.round(dimensions.reduce((a, d) => a + d.conceptKeywords, 0) / dimensions.length),
+          exampleInclusion: Math.round(dimensions.reduce((a, d) => a + d.exampleInclusion, 0) / dimensions.length),
+          structuralCompleteness: Math.round(dimensions.reduce((a, d) => a + d.structuralCompleteness, 0) / dimensions.length)
+        } : { paraphrase: 0, length: 0, conceptKeywords: 0, exampleInclusion: 0, structuralCompleteness: 0 }
+      };
+    }
+
     return {
       week5Events,
       profileDistributionData,
@@ -1026,7 +1270,12 @@ export function ResearchDashboard() {
       banditRewardData,
       hdiBins,
       highHDIAlerts,
-      profileEffectivenessData: sortedProfileEffectiveness
+      profileEffectivenessData: sortedProfileEffectiveness,
+      reinforcementStats,
+      reinforcementTimeline,
+      conditionStats: conditionStatsArray,
+      qualityStats,
+      violationStats
     };
   }, [filteredInteractions]);
 
@@ -1224,16 +1473,16 @@ export function ResearchDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium">
-                    {isDemoMode() ? '🎓 Demo Mode' : 'LLM Health Check'}
+                    {hostedMode ? '🌐 Hosted Mode' : isDemoMode() ? '🎓 Demo Mode' : 'LLM Health Check'}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {isDemoMode() ? DEMO_MODE_VERSION : `Target model: ${OLLAMA_MODEL}`}
+                    {hostedMode ? 'Deterministic fallback active' : isDemoMode() ? DEMO_MODE_VERSION : `Target model: ${OLLAMA_MODEL}`}
                   </p>
                   <p className={`text-xs ${llmHealthOk === null ? 'text-gray-600' : llmHealthOk ? 'text-emerald-700' : 'text-red-700'}`}>
-                    {isDemoMode() ? getDemoModeMessage() : llmHealthMessage}
+                    {hostedMode ? getHostedModeMessage() : isDemoMode() ? getDemoModeMessage() : llmHealthMessage}
                   </p>
                 </div>
-                {!isDemoMode() && (
+                {!hostedMode && !isDemoMode() && (
                   <Button size="sm" variant="outline" onClick={handleLLMHealthCheck} disabled={isCheckingLLM}>
                     {isCheckingLLM ? 'Checking...' : 'Test LLM'}
                   </Button>
@@ -1273,40 +1522,47 @@ export function ResearchDashboard() {
                       <PdfIndexErrorDisplay error={pdfIndexError} />
                     </div>
                   )}
+                  {hostedMode && (
+                    <p className="text-[11px] text-amber-600 mt-2">
+                      PDF upload/build unavailable in hosted mode
+                    </p>
+                  )}
                 </div>
-                <div className="flex flex-col gap-2">
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    onChange={handlePdfUpload}
-                    id="pdf-upload-input"
-                    className="hidden"
-                    disabled={pdfIndexStatus === 'loading'}
-                  />
-                  <label htmlFor="pdf-upload-input">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      asChild
+                {!hostedMode && (
+                  <div className="flex flex-col gap-2">
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      onChange={handlePdfUpload}
+                      id="pdf-upload-input"
+                      className="hidden"
                       disabled={pdfIndexStatus === 'loading'}
+                    />
+                    <label htmlFor="pdf-upload-input">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        asChild
+                        disabled={pdfIndexStatus === 'loading'}
+                      >
+                        <span className="cursor-pointer">
+                          <FileUp className="size-3 mr-1" />
+                          {pdfIndexStatus === 'loading' ? 'Processing...' : 'Upload PDF'}
+                        </span>
+                      </Button>
+                    </label>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleLoadPdfIndex}
+                      data-testid="pdf-index-load-button"
+                      disabled={pdfIndexStatus === 'loading'}
+                      className="text-xs"
                     >
-                      <span className="cursor-pointer">
-                        <FileUp className="size-3 mr-1" />
-                        {pdfIndexStatus === 'loading' ? 'Processing...' : 'Upload PDF'}
-                      </span>
+                      Load from Disk
                     </Button>
-                  </label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleLoadPdfIndex}
-                    data-testid="pdf-index-load-button"
-                    disabled={pdfIndexStatus === 'loading'}
-                    className="text-xs"
-                  >
-                    Load from Disk
-                  </Button>
-                </div>
+                  </div>
+                )}
               </div>
             </Card>
           </div>
@@ -1409,6 +1665,26 @@ export function ResearchDashboard() {
             <TabsTrigger value="week5" className="flex items-center gap-1.5">
               <Sparkles className="size-4" />
               Week 5: Adaptive
+            </TabsTrigger>
+            <TabsTrigger value="reinforcement" className="flex items-center gap-1.5">
+              <BookOpen className="size-4" />
+              Knowledge Consolidation
+            </TabsTrigger>
+            <TabsTrigger value="clustering" className="flex items-center gap-1.5">
+              <Users className="size-4" />
+              Clustering
+            </TabsTrigger>
+            <TabsTrigger value="heatmap" className="flex items-center gap-1.5">
+              <BarChart3 className="size-4" />
+              Heatmap
+            </TabsTrigger>
+            <TabsTrigger value="transitions" className="flex items-center gap-1.5">
+              <TrendingUp className="size-4" />
+              Error Transitions
+            </TabsTrigger>
+            <TabsTrigger value="mastery" className="flex items-center gap-1.5">
+              <Target className="size-4" />
+              Mastery Timeline
             </TabsTrigger>
           </TabsList>
 
@@ -2045,6 +2321,592 @@ export function ResearchDashboard() {
                   <TrendingUp className="size-12 mx-auto mb-3 text-gray-300" />
                   <p>No profile effectiveness data available</p>
                   <p className="text-sm text-gray-400 mt-1">Assign profiles to learners to see comparison</p>
+                </div>
+              )}
+            </Card>
+
+            {/* Knowledge-Structure Layer: Prerequisite Violation Statistics */}
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <AlertCircle className="size-5 text-amber-600" />
+                Prerequisite Violations
+              </h3>
+              {week5Analytics.violationStats.total > 0 ? (
+                <div className="space-y-6">
+                  {/* Summary Stats */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="p-3 bg-gray-50 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-amber-600">
+                        {week5Analytics.violationStats.total}
+                      </p>
+                      <p className="text-xs text-gray-600">Total Violations</p>
+                    </div>
+                    <div className="p-3 bg-red-50 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-red-600">
+                        {week5Analytics.violationStats.bySeverity.high}
+                      </p>
+                      <p className="text-xs text-red-600">High Severity</p>
+                    </div>
+                    <div className="p-3 bg-yellow-50 rounded-lg text-center">
+                      <p className="text-2xl font-bold text-yellow-600">
+                        {Object.keys(week5Analytics.violationStats.byConcept).length}
+                      </p>
+                      <p className="text-xs text-yellow-700">Concepts Affected</p>
+                    </div>
+                  </div>
+                  
+                  {/* Most problematic concepts */}
+                  {Object.keys(week5Analytics.violationStats.byConcept).length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-2">
+                        Most Problematic Concepts
+                      </p>
+                      <div className="space-y-2">
+                        {Object.entries(week5Analytics.violationStats.byConcept)
+                          .sort((a, b) => b[1] - a[1])
+                          .slice(0, 5)
+                          .map(([conceptId, count]) => (
+                            <div key={conceptId} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                              <span className="text-sm capitalize">
+                                {conceptId.replace(/-/g, ' ')}
+                              </span>
+                              <Badge variant="outline">{count} violations</Badge>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Most commonly missing prerequisites */}
+                  {Object.keys(week5Analytics.violationStats.byMissingPrerequisite).length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-gray-700 mb-2">
+                        Most Commonly Missing Prerequisites
+                      </p>
+                      <div className="space-y-2">
+                        {Object.entries(week5Analytics.violationStats.byMissingPrerequisite)
+                          .sort((a, b) => b[1] - a[1])
+                          .slice(0, 5)
+                          .map(([prereq, count]) => (
+                            <div key={prereq} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                              <span className="text-sm capitalize">
+                                {prereq.replace(/-/g, ' ')}
+                              </span>
+                              <Badge variant="outline">{count} times</Badge>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Severity breakdown */}
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-2">Severity Breakdown</p>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden flex">
+                        <div 
+                          className="bg-red-500 h-full"
+                          style={{ 
+                            width: `${week5Analytics.violationStats.total > 0 
+                              ? (week5Analytics.violationStats.bySeverity.high / week5Analytics.violationStats.total) * 100 
+                              : 0}%` 
+                          }}
+                        />
+                        <div 
+                          className="bg-yellow-500 h-full"
+                          style={{ 
+                            width: `${week5Analytics.violationStats.total > 0 
+                              ? (week5Analytics.violationStats.bySeverity.medium / week5Analytics.violationStats.total) * 100 
+                              : 0}%` 
+                          }}
+                        />
+                        <div 
+                          className="bg-green-500 h-full"
+                          style={{ 
+                            width: `${week5Analytics.violationStats.total > 0 
+                              ? (week5Analytics.violationStats.bySeverity.low / week5Analytics.violationStats.total) * 100 
+                              : 0}%` 
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-600 mt-1">
+                      <span className="text-red-600">
+                        High: {week5Analytics.violationStats.bySeverity.high}
+                      </span>
+                      <span className="text-yellow-600">
+                        Medium: {week5Analytics.violationStats.bySeverity.medium}
+                      </span>
+                      <span className="text-green-600">
+                        Low: {week5Analytics.violationStats.bySeverity.low}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <AlertCircle className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>No prerequisite violations detected</p>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Violations are logged when learners attempt concepts without prerequisites
+                  </p>
+                </div>
+              )}
+            </Card>
+
+            {/* Week 6: Condition Statistics */}
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Target className="size-5 text-purple-600" />
+                Experimental Condition Statistics
+              </h3>
+              {week5Analytics.conditionStats.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Condition</TableHead>
+                        <TableHead className="text-right">Sessions</TableHead>
+                        <TableHead className="text-right">Learners</TableHead>
+                        <TableHead className="text-right">Avg HDI</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {week5Analytics.conditionStats.map((row) => (
+                        <TableRow key={row.condition}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Badge 
+                                variant="outline"
+                                className={
+                                  row.condition === 'aggressive' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                                  row.condition === 'conservative' ? 'bg-yellow-100 text-yellow-800 border-yellow-200' :
+                                  row.condition === 'adaptive' ? 'bg-green-100 text-green-800 border-green-200' :
+                                  row.condition === 'explanation_first' ? 'bg-purple-100 text-purple-800 border-purple-200' :
+                                  'bg-gray-100 text-gray-800 border-gray-200'
+                                }
+                              >
+                                {row.condition}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-mono">{row.sessionCount}</TableCell>
+                          <TableCell className="text-right font-mono">{row.learnerCount}</TableCell>
+                          <TableCell className="text-right">
+                            <span className={`font-mono ${
+                              row.avgHDI <= 0.33 ? 'text-green-600' : 
+                              row.avgHDI <= 0.66 ? 'text-yellow-600' : 
+                              'text-red-600'
+                            }`}>
+                              {row.avgHdiDisplay}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <Target className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>No condition statistics available</p>
+                  <p className="text-sm text-gray-400 mt-1">Create sessions to see experimental condition comparison</p>
+                </div>
+              )}
+            </Card>
+
+            {/* Self-Explanation Quality Analytics */}
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <BrainCircuit className="size-5 text-purple-600" />
+                Self-Explanation Quality (RQS)
+              </h3>
+              {week5Analytics.qualityStats ? (
+                <div className="space-y-6">
+                  {/* Overall Stats */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="p-4 bg-purple-50 rounded-lg text-center">
+                      <p className="text-sm text-purple-600 mb-1">Average Quality</p>
+                      <p className="text-2xl font-bold text-purple-900">{week5Analytics.qualityStats.averageQuality}/100</p>
+                    </div>
+                    <div className="p-4 bg-blue-50 rounded-lg text-center">
+                      <p className="text-sm text-blue-600 mb-1">Total Scored</p>
+                      <p className="text-2xl font-bold text-blue-900">{week5Analytics.qualityStats.totalScored}</p>
+                    </div>
+                    <div className="p-4 bg-green-50 rounded-lg text-center">
+                      <p className="text-sm text-green-600 mb-1">Excellent Rate</p>
+                      <p className="text-2xl font-bold text-green-900">
+                        {Math.round((week5Analytics.qualityStats.distribution.excellent / week5Analytics.qualityStats.totalScored) * 100)}%
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Distribution */}
+                  <div>
+                    <p className="text-sm text-gray-600 mb-3">Quality Distribution</p>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs w-20">Excellent (80-100)</span>
+                        <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-green-500 rounded-full"
+                            style={{ width: `${(week5Analytics.qualityStats.distribution.excellent / week5Analytics.qualityStats.totalScored) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-xs w-8 text-right">{week5Analytics.qualityStats.distribution.excellent}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs w-20">Good (60-79)</span>
+                        <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-blue-500 rounded-full"
+                            style={{ width: `${(week5Analytics.qualityStats.distribution.good / week5Analytics.qualityStats.totalScored) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-xs w-8 text-right">{week5Analytics.qualityStats.distribution.good}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs w-20">Needs Work (&lt;60)</span>
+                        <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-red-500 rounded-full"
+                            style={{ width: `${(week5Analytics.qualityStats.distribution.needsWork / week5Analytics.qualityStats.totalScored) * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-xs w-8 text-right">{week5Analytics.qualityStats.distribution.needsWork}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dimension Averages */}
+                  <div>
+                    <p className="text-sm text-gray-600 mb-3">Average Dimension Scores</p>
+                    <div className="space-y-2">
+                      <DimensionBar label="Originality" value={week5Analytics.qualityStats.dimensionAverages.paraphrase} />
+                      <DimensionBar label="Length" value={week5Analytics.qualityStats.dimensionAverages.length} />
+                      <DimensionBar label="Keywords" value={week5Analytics.qualityStats.dimensionAverages.conceptKeywords} />
+                      <DimensionBar label="Examples" value={week5Analytics.qualityStats.dimensionAverages.exampleInclusion} />
+                      <DimensionBar label="Structure" value={week5Analytics.qualityStats.dimensionAverages.structuralCompleteness} />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <BrainCircuit className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>No quality data available</p>
+                  <p className="text-sm text-gray-400 mt-1">Learners need to save notes with reflections to see quality scores</p>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="reinforcement" className="space-y-6">
+            {/* Component 10: Knowledge Consolidation Analytics */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Reinforcement Stats Overview */}
+              <Card className="p-6">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <BookOpen className="size-5 text-blue-600" />
+                  Reinforcement Overview
+                </h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-blue-50 rounded-lg">
+                    <p className="text-sm text-blue-600 mb-1">Total Scheduled</p>
+                    <p className="text-2xl font-bold text-blue-900">{week5Analytics.reinforcementStats.totalScheduled}</p>
+                  </div>
+                  <div className="p-4 bg-green-50 rounded-lg">
+                    <p className="text-sm text-green-600 mb-1">Response Rate</p>
+                    <p className="text-2xl font-bold text-green-900">
+                      {(week5Analytics.reinforcementStats.responseRate * 100).toFixed(0)}%
+                    </p>
+                  </div>
+                  <div className="p-4 bg-purple-50 rounded-lg">
+                    <p className="text-sm text-purple-600 mb-1">Prompts Shown</p>
+                    <p className="text-2xl font-bold text-purple-900">{week5Analytics.reinforcementStats.totalShown}</p>
+                  </div>
+                  <div className="p-4 bg-amber-50 rounded-lg">
+                    <p className="text-sm text-amber-600 mb-1">Avg Retention Score</p>
+                    <p className="text-2xl font-bold text-amber-900">
+                      {(week5Analytics.reinforcementStats.averageRetentionScore * 100).toFixed(0)}%
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Retention Level Distribution */}
+              <Card className="p-6">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <TrendingUp className="size-5 text-green-600" />
+                  Retention Levels
+                </h3>
+                {week5Analytics.reinforcementTimeline.filter(t => t.eventType === 'response').length > 0 ? (
+                  <div className="space-y-4">
+                    {(() => {
+                      const responses = week5Analytics.reinforcementTimeline.filter(t => t.eventType === 'response');
+                      const remembered = responses.filter(r => r.retentionLevel === 'remembered').length;
+                      const partial = responses.filter(r => r.retentionLevel === 'partial').length;
+                      const forgotten = responses.filter(r => r.retentionLevel === 'forgotten').length;
+                      const total = responses.length;
+                      
+                      return (
+                        <>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-green-500" />
+                                Remembered
+                              </span>
+                              <span className="font-medium">{total > 0 ? ((remembered / total) * 100).toFixed(0) : 0}%</span>
+                            </div>
+                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-green-500 rounded-full" style={{ width: `${total > 0 ? (remembered / total) * 100 : 0}%` }} />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-yellow-500" />
+                                Partial
+                              </span>
+                              <span className="font-medium">{total > 0 ? ((partial / total) * 100).toFixed(0) : 0}%</span>
+                            </div>
+                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${total > 0 ? (partial / total) * 100 : 0}%` }} />
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-red-500" />
+                                Forgotten
+                              </span>
+                              <span className="font-medium">{total > 0 ? ((forgotten / total) * 100).toFixed(0) : 0}%</span>
+                            </div>
+                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-red-500 rounded-full" style={{ width: `${total > 0 ? (forgotten / total) * 100 : 0}%` }} />
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <BookOpen className="size-12 mx-auto mb-3 text-gray-300" />
+                    <p>No reinforcement data available</p>
+                    <p className="text-sm text-gray-400 mt-1">Reinforcement prompts will appear as learners save notes</p>
+                  </div>
+                )}
+              </Card>
+            </div>
+
+            {/* Reinforcement Timeline */}
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Clock className="size-5 text-purple-600" />
+                Reinforcement Activity Timeline
+              </h3>
+              {week5Analytics.reinforcementTimeline.length > 0 ? (
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  {week5Analytics.reinforcementTimeline.map((event, idx) => (
+                    <div 
+                      key={idx}
+                      className={`flex items-center justify-between p-3 rounded-lg ${
+                        event.eventType === 'scheduled' ? 'bg-blue-50' :
+                        event.eventType === 'shown' ? 'bg-purple-50' :
+                        event.isCorrect ? 'bg-green-50' : 'bg-yellow-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Badge variant="outline" className="text-xs">
+                          {event.eventType === 'scheduled' && <span className="text-blue-600">Scheduled</span>}
+                          {event.eventType === 'shown' && <span className="text-purple-600">Shown</span>}
+                          {event.eventType === 'response' && <span className="text-green-600">Response</span>}
+                        </Badge>
+                        <span className="text-sm text-gray-600">
+                          {new Date(event.timestamp).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {event.retentionLevel && (
+                          <Badge className={
+                            event.retentionLevel === 'remembered' ? 'bg-green-100 text-green-800' :
+                            event.retentionLevel === 'partial' ? 'bg-yellow-100 text-yellow-800' :
+                            'bg-red-100 text-red-800'
+                          }>
+                            {event.retentionLevel}
+                          </Badge>
+                        )}
+                        <span className="text-xs text-gray-500">
+                          {event.learnerId.slice(0, 8)}...
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <Clock className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>No reinforcement activity yet</p>
+                  <p className="text-sm text-gray-400 mt-1">Schedule reinforcement by saving textbook units</p>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="clustering" className="space-y-6">
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <Users className="size-5 text-blue-600" />
+                Learner Behavior Clusters
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Learners are automatically grouped based on HDI, escalation rate, and independence metrics using k-means clustering.
+              </p>
+              
+              {researchMetrics.clusters.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {researchMetrics.clusters.map((cluster) => (
+                    <Card key={cluster.id} className="p-4 border-l-4 border-l-blue-500">
+                      <div className="flex items-center justify-between mb-2">
+                        <h4 className="font-semibold text-gray-800">{cluster.name}</h4>
+                        <Badge variant="secondary">{cluster.members.length} learners</Badge>
+                      </div>
+                      
+                      <div className="space-y-2 mb-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-500">Avg HDI</span>
+                          <span className={`font-mono ${
+                            cluster.centroids.hdi < 0.3 ? 'text-green-600' : 
+                            cluster.centroids.hdi < 0.6 ? 'text-yellow-600' : 'text-red-600'
+                          }`}>
+                            {cluster.centroids.hdi.toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-500">Escalation Rate</span>
+                          <span className="font-mono">{(cluster.centroids.escalationRate * 100).toFixed(0)}%</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-500">Independence</span>
+                          <span className="font-mono">{(cluster.centroids.independence * 100).toFixed(0)}%</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-1">
+                        {cluster.characteristics.map((trait, idx) => (
+                          <Badge key={idx} variant="outline" className="text-xs bg-gray-50">
+                            {trait}
+                          </Badge>
+                        ))}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <Users className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>No clustering data available</p>
+                  <p className="text-sm text-gray-400 mt-1">Add learner profiles to see behavior clusters</p>
+                </div>
+              )}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="heatmap" className="space-y-6">
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4 flex items-center gap-2">
+                <BarChart3 className="size-5 text-purple-600" />
+                Escalation Heatmap
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Visual representation of escalation patterns across learners and problems. 
+                Darker colors indicate higher rung usage.
+              </p>
+              <EscalationHeatmap interactions={filteredInteractions} />
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="transitions" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card className="p-6">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <TrendingUp className="size-5 text-red-600" />
+                  Error Transition Matrix
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Shows which error types most commonly follow others, revealing patterns in learner struggles.
+                </p>
+                <ErrorTransitionView matrix={researchMetrics.errorTransitions.transitions} />
+              </Card>
+
+              <Card className="p-6">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <AlertCircle className="size-5 text-orange-600" />
+                  Error Recovery Patterns
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Percentage of successful recoveries after each error type.
+                </p>
+                <ErrorRecoveryView 
+                  patterns={getErrorRecoveryPatterns(filteredInteractions)} 
+                />
+              </Card>
+            </div>
+
+            {researchMetrics.errorTransitions.errorChains.length > 0 && (
+              <Card className="p-6">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <Activity className="size-5 text-amber-600" />
+                  Common Error Chains
+                </h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Sequences of errors that occur consecutively, appearing at least twice in the data.
+                </p>
+                <ErrorChainView chains={researchMetrics.errorTransitions.errorChains} />
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="mastery" className="space-y-6">
+            <Card className="p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Target className="size-5 text-green-600" />
+                    Concept Mastery Timeline
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Chronological view of concept interactions for a specific learner.
+                  </p>
+                </div>
+                <Select 
+                  value={selectedMasteryLearner} 
+                  onValueChange={setSelectedMasteryLearner}
+                >
+                  <SelectTrigger className="w-[200px]">
+                    <SelectValue placeholder="Select learner" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {profiles.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {selectedMasteryLearner ? (
+                <MasteryTimeline 
+                  interactions={filteredInteractions} 
+                  learnerId={selectedMasteryLearner}
+                  maxEvents={25}
+                />
+              ) : (
+                <div className="text-center py-12 text-gray-500">
+                  <Target className="size-12 mx-auto mb-3 text-gray-300" />
+                  <p>Select a learner to view their mastery timeline</p>
                 </div>
               )}
             </Card>

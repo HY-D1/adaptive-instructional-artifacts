@@ -1,0 +1,355 @@
+{
+  "interactions": [
+    {
+      "id": "evt-001",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p1-select-basics",
+      "timestamp": 1700000000000,
+      "eventType": "session_started"
+    },
+    {
+      "id": "evt-002",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p1-select-basics",
+      "timestamp": 1700000001000,
+      "eventType": "code_change",
+      "code": "SELECT * FROM users"
+    },
+    {
+      "id": "evt-003",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p1-select-basics",
+      "timestamp": 1700000002000,
+      "eventType": "execution",
+      "successful": false
+    },
+    {
+      "id": "evt-004",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p1-select-basics",
+      "timestamp": 1700000003000,
+      "eventType": "error",
+      "errorSubtypeId": "incomplete query",
+      "conceptIds": ["sql-syntax"]
+    },
+    {
+      "id": "evt-005",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p1-select-basics",
+      "timestamp": 1700000004000,
+      "eventType": "hint_request"
+    },
+    {
+      "id": "evt-006",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p1-select-basics",
+      "timestamp": 1700000005000,
+      "eventType": "hint_view",
+      "hintLevel": 1,
+      "hintId": "hint-001",
+      "conceptIds": ["sql-syntax", "select-basics"],
+      "sqlEngageSubtype": "incomplete query",
+      "sqlEngageRowId": "sql-engage:15",
+      "policyVersion": "sql-engage-v3"
+    },
+    {
+      "id": "evt-007",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p1-select-basics",
+      "timestamp": 1700000006000,
+      "eventType": "code_change",
+      "code": "SELECT name, age FROM users"
+    },
+    {
+      "id": "evt-008",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p1-select-basics",
+      "timestamp": 1700000007000,
+      "eventType": "execution",
+      "successful": true
+    },
+    {
+      "id": "evt-009",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000010000,
+      "eventType": "code_change",
+      "code": "SELECT * FROM orders WHERE"
+    },
+    {
+      "id": "evt-010",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000011000,
+      "eventType": "execution",
+      "successful": false
+    },
+    {
+      "id": "evt-011",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000012000,
+      "eventType": "error",
+      "errorSubtypeId": "incomplete query",
+      "conceptIds": ["where-clause", "sql-syntax"]
+    },
+    {
+      "id": "evt-012",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000013000,
+      "eventType": "hint_request"
+    },
+    {
+      "id": "evt-013",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000014000,
+      "eventType": "hint_view",
+      "hintLevel": 1,
+      "conceptIds": ["where-clause"],
+      "sqlEngageSubtype": "incomplete query"
+    },
+    {
+      "id": "evt-014",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000015000,
+      "eventType": "code_change",
+      "code": "SELECT * FROM orders WHERE status = 'active'"
+    },
+    {
+      "id": "evt-015",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000016000,
+      "eventType": "execution",
+      "successful": false
+    },
+    {
+      "id": "evt-016",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000017000,
+      "eventType": "error",
+      "errorSubtypeId": "syntax error",
+      "conceptIds": ["where-clause"]
+    },
+    {
+      "id": "evt-017",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000018000,
+      "eventType": "hint_request"
+    },
+    {
+      "id": "evt-018",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000019000,
+      "eventType": "hint_view",
+      "hintLevel": 2,
+      "conceptIds": ["where-clause"]
+    },
+    {
+      "id": "evt-019",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000020000,
+      "eventType": "guidance_request"
+    },
+    {
+      "id": "evt-020",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000021000,
+      "eventType": "guidance_view",
+      "rung": 3,
+      "conceptIds": ["where-clause"]
+    },
+    {
+      "id": "evt-021",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000022000,
+      "eventType": "guidance_escalate",
+      "fromRung": 2,
+      "toRung": 3
+    },
+    {
+      "id": "evt-022",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000023000,
+      "eventType": "explanation_view",
+      "conceptIds": ["where-clause"]
+    },
+    {
+      "id": "evt-023",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000024000,
+      "eventType": "code_change",
+      "code": "SELECT * FROM orders WHERE status = 'active';"
+    },
+    {
+      "id": "evt-024",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000025000,
+      "eventType": "execution",
+      "successful": true
+    },
+    {
+      "id": "evt-025",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000026000,
+      "eventType": "textbook_add",
+      "noteTitle": "WHERE Clause Notes",
+      "noteContent": "Always use proper syntax",
+      "conceptIds": ["where-clause"],
+      "evidenceInteractionIds": ["evt-011", "evt-016"]
+    },
+    {
+      "id": "evt-026",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p3-joins",
+      "timestamp": 1700000030000,
+      "eventType": "code_change",
+      "code": "SELECT * FROM users u JOIN orders o"
+    },
+    {
+      "id": "evt-027",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p3-joins",
+      "timestamp": 1700000031000,
+      "eventType": "execution",
+      "successful": false
+    },
+    {
+      "id": "evt-028",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p3-joins",
+      "timestamp": 1700000032000,
+      "eventType": "error",
+      "errorSubtypeId": "incomplete query",
+      "conceptIds": ["join-operations"]
+    },
+    {
+      "id": "evt-029",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p3-joins",
+      "timestamp": 1700000033000,
+      "eventType": "hint_view",
+      "hintLevel": 1,
+      "conceptIds": ["join-operations"]
+    },
+    {
+      "id": "evt-030",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p3-joins",
+      "timestamp": 1700000034000,
+      "eventType": "reinforcement_response",
+      "isCorrect": true,
+      "conceptIds": ["join-operations"]
+    },
+    {
+      "id": "evt-031",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p3-joins",
+      "timestamp": 1700000035000,
+      "eventType": "code_change",
+      "code": "SELECT * FROM users u JOIN orders o ON u.id = o.user_id"
+    },
+    {
+      "id": "evt-032",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p3-joins",
+      "timestamp": 1700000036000,
+      "eventType": "execution",
+      "successful": true
+    },
+    {
+      "id": "evt-033",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "timestamp": 1700000040000,
+      "eventType": "session_ended"
+    },
+    {
+      "id": "evt-034",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000041000,
+      "eventType": "textbook_unit_upsert",
+      "unitId": "unit-001",
+      "action": "created"
+    },
+    {
+      "id": "evt-035",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p1-select-basics",
+      "timestamp": 1700000042000,
+      "eventType": "hdi_calculated",
+      "hdi": 0.45,
+      "hdiLevel": "medium"
+    },
+    {
+      "id": "evt-036",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p3-joins",
+      "timestamp": 1700000043000,
+      "eventType": "profile_assigned",
+      "profileId": "adaptive",
+      "strategy": "bandit"
+    }
+  ],
+  "exportPolicyVersion": "week2-real-trace-export-v2",
+  "normalizerPolicyVersion": "week2-real-trace-normalize-v1",
+  "sqlEngagePolicyVersion": "sql-engage-v3",
+  "activeSessionId": "sess-001",
+  "exportScope": "learner-1-session",
+  "_fixtureInfo": {
+    "description": "Synthetic replay fixture for milestone verification",
+    "eventTypes": 16,
+    "totalEvents": 36,
+    "problems": ["p1-select-basics", "p2-where-clause", "p3-joins"],
+    "generatedFor": "replay-experiment-v2"
+  }
+}

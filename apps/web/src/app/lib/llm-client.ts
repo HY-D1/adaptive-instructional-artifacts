@@ -1,5 +1,5 @@
 import { LLMGenerationParams } from '../types';
-import { isDemoMode, shouldAttemptLLM } from './demo-mode';
+import { isDemoMode, shouldAttemptLLM } from './utils/demo-mode';
 
 export const OLLAMA_MODEL = 'qwen2.5:1.5b-instruct';
 const OLLAMA_PROXY_BASE = '/ollama';

@@ -284,11 +284,14 @@ function getGenericFallbackHint(rung: GuidanceRung, errorSubtypeId: string): str
 function buildEnhancedRetrievalBundle(
   options: HintGenerationOptions,
   resources: AvailableResources
-): RetrievalBundle & { textbookUnits?: InstructionalUnit[] } {
+): (RetrievalBundle & { textbookUnits?: InstructionalUnit[] }) | null {
   const { learnerId, problemId, errorSubtypeId, recentInteractions } = options;
   
   // Start with standard retrieval bundle
   const problem = getProblemById(problemId);
+  if (!problem) {
+    return null;
+  }
   const baseBundle = buildRetrievalBundle({
     learnerId,
     problem,
@@ -328,6 +331,20 @@ export async function generateEnhancedHint(
   
   // Build enhanced retrieval bundle
   const retrievalBundle = buildEnhancedRetrievalBundle(options, resources);
+  if (!retrievalBundle) {
+    // Fallback to SQL-Engage hint if bundle creation fails
+    if (errorSubtypeId) {
+      return generateSqlEngageFallbackHint(errorSubtypeId, rung);
+    }
+    return {
+      content: getGenericFallbackHint(rung, 'unknown'),
+      rung,
+      sources: { sqlEngage: true, textbook: false, llm: false, pdfPassages: false },
+      conceptIds: [],
+      llmGenerated: false,
+      confidence: 0.8
+    };
+  }
   
   // Decision: Can we use LLM?
   // For now, allow LLM for all rungs if forceLLM is true or for rung 2+
@@ -412,8 +429,11 @@ export async function saveHintToTextbook(
     problemId, // Store which problem this hint belongs to
     provenance: {
       templateId: `adaptive-hint-rung-${rung}`,
-      modelId: 'llm-local',
-      generationParams: { rung, errorSubtype }
+      model: 'llm-local',
+      params: { temperature: 0.7, top_p: 0.9, stream: false, timeoutMs: 30000 },
+      inputHash: '',
+      retrievedSourceIds: [],
+      createdAt: Date.now()
     }
   };
   
@@ -422,14 +442,12 @@ export async function saveHintToTextbook(
     learnerId,
     {
       type: 'hint',
-      conceptId: unit.conceptId,
-      conceptIds: unit.conceptIds,
+      conceptIds: unit.conceptIds || [unit.conceptId],
       title: unit.title,
       content: unit.content,
-      contentFormat: 'markdown',
       sourceInteractionIds: unit.sourceInteractionIds,
       sourceRefIds: unit.sourceRefIds,
-      lastErrorSubtypeId: errorSubtype,
+      errorSubtypeId: errorSubtype,
       problemId,
       provenance: unit.provenance
     },

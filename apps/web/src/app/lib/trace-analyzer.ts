@@ -19,11 +19,36 @@ import {
   AutoCreationResult,
   AutoCreatedUnitInfo
 } from '../types';
+
+export type { AnalysisResult };
+
+// Local type definitions for concept mastery analysis
+type MasteryLevel = 'none' | 'beginner' | 'developing' | 'proficient' | 'mastered';
+
+interface ConceptMastery {
+  conceptId: string;
+  level: MasteryLevel;
+  score: number; // 0-100
+  confidence: number;
+  lastAssessed: number;
+  evidenceCount: number;
+}
 import { storage } from './storage/storage';
 import { createEventId } from './utils/event-id';
 import { canonicalizeSqlEngageSubtype, getConceptIdsForSqlEngageSubtype } from '../data/sql-engage';
 import { generateUnitFromLLM, buildBundleForCurrentProblem } from './content/content-generator';
 import { sqlProblems } from '../data/problems';
+import { 
+  getMasterySnapshot, 
+  getMasteryStats, 
+  propagateMastery,
+  getMasteryLevel 
+} from './knowledge/mastery-engine';
+import { 
+  getViolationSummary, 
+  checkProblemReadiness,
+  type PrerequisiteViolation
+} from './knowledge/prerequisite-monitor';
 
 // Constants for analysis configuration
 export const ANALYSIS_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -35,6 +60,33 @@ export const FIVE_MINUTES_MS = 5 * 60 * 1000; // Shared constant for 5-minute in
 const AUTO_CREATE_MIN_FREQUENCY = 5; // Minimum pattern frequency to auto-create unit
 const AUTO_CREATE_QUALITY_THRESHOLD = 0.6; // Minimum quality score for auto-created units
 const AUTO_CREATE_MIN_CONFIDENCE: PatternMatch['confidence'] = 'high'; // Minimum pattern confidence
+
+// Knowledge-Structure Analysis Types
+export interface MasteryAnalysis {
+  snapshot: ReturnType<typeof getMasterySnapshot>;
+  stats: ReturnType<typeof getMasteryStats>;
+  recentlyMastered: string[];
+  weakAreas: string[];
+  atRisk: string[];
+}
+
+export interface PrerequisiteAnalysis {
+  violations: ReturnType<typeof getViolationSummary>;
+  recentViolations: PrerequisiteViolation[];
+  blockedConcepts: string[];
+  violationTrend: 'increasing' | 'stable' | 'decreasing';
+}
+
+export interface KnowledgeStructureAnalysis {
+  mastery: MasteryAnalysis;
+  prerequisites: PrerequisiteAnalysis;
+  recommendations: Array<{
+    type: 'mastery' | 'prerequisite' | 'review';
+    conceptId: string;
+    priority: 'high' | 'medium' | 'low';
+    reason: string;
+  }>;
+}
 
 // Background analysis state - using closure to prevent shared state across calls
 function createBackgroundAnalysisState() {
@@ -1011,4 +1063,197 @@ export function publishInteraction(event: InteractionEvent): void {
       // Error subtype: subtype (logged for debugging if needed)
     }
   }
+}
+
+// ============================================================================
+// Knowledge-Structure Analysis Functions
+// ============================================================================
+
+/**
+ * Analyze mastery state for a learner
+ * @param learnerId - Learner identifier
+ * @returns Mastery analysis with snapshot, stats, and recommendations
+ */
+export function analyzeMastery(
+  learnerId: string
+): MasteryAnalysis {
+  const snapshot = getMasterySnapshot(learnerId);
+  const stats = getMasteryStats(learnerId);
+  
+  // Get recently mastered concepts (within last 7 days)
+  const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+  const recentlyMastered = Array.from(snapshot.masteries.entries())
+    .filter(([_, m]) => m.level === 'mastered' && m.lastUpdated > oneWeekAgo)
+    .map(([id, _]) => id);
+  
+  // Identify weak areas (practicing or below with low scores)
+  const weakAreas = Array.from(snapshot.masteries.entries())
+    .filter(([_, m]) => m.level === 'practicing' || (m.level === 'exposed' && m.score < 20))
+    .map(([id, _]) => id);
+  
+  // Identify concepts at risk (mastered but not accessed recently)
+  const twoWeeksAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  const atRisk = Array.from(snapshot.masteries.entries())
+    .filter(([_, m]) => m.level === 'mastered' && m.lastAccessed < twoWeeksAgo)
+    .map(([id, _]) => id);
+  
+  return {
+    snapshot,
+    stats,
+    recentlyMastered,
+    weakAreas,
+    atRisk
+  };
+}
+
+/**
+ * Analyze prerequisite violations for a learner
+ * @param learnerId - Learner identifier
+ * @returns Prerequisite analysis with violations and blocked concepts
+ */
+export function analyzePrerequisites(
+  learnerId: string
+): PrerequisiteAnalysis {
+  const violations = getViolationSummary(learnerId);
+  
+  // Get recent violations (within last 24 hours)
+  const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+  const recentViolations = violations.recentViolations.filter(
+    v => v.timestamp > oneDayAgo
+  );
+  
+  // Identify blocked concepts from violations
+  const blockedConcepts = Array.from(new Set(
+    violations.recentViolations.map(v => v.conceptAttempted)
+  ));
+  
+  return {
+    violations,
+    recentViolations,
+    blockedConcepts,
+    violationTrend: violations.violationTrend
+  };
+}
+
+/**
+ * Perform comprehensive knowledge-structure analysis
+ * @param learnerId - Learner identifier
+ * @returns Complete knowledge structure analysis
+ */
+export function analyzeKnowledgeStructure(
+  learnerId: string
+): KnowledgeStructureAnalysis {
+  const mastery = analyzeMastery(learnerId);
+  const prerequisites = analyzePrerequisites(learnerId);
+  
+  // Generate integrated recommendations
+  const recommendations: KnowledgeStructureAnalysis['recommendations'] = [];
+  
+  // Recommend weak areas for improvement
+  for (const conceptId of mastery.weakAreas.slice(0, 3)) {
+    const masteryData = mastery.snapshot.masteries.get(conceptId);
+    recommendations.push({
+      type: 'mastery',
+      conceptId,
+      priority: 'high',
+      reason: `Weak mastery (score: ${masteryData?.score || 0}) - needs reinforcement`
+    });
+  }
+  
+  // Recommend unblocking prerequisites
+  for (const violation of prerequisites.recentViolations.slice(0, 3)) {
+    for (const prereq of violation.missingPrerequisites.slice(0, 2)) {
+      recommendations.push({
+        type: 'prerequisite',
+        conceptId: prereq,
+        priority: violation.severity === 'high' || violation.severity === 'blocking' ? 'high' : 'medium',
+        reason: `Blocks ${violation.conceptAttempted}`
+      });
+    }
+  }
+  
+  // Recommend review for at-risk concepts
+  for (const conceptId of mastery.atRisk.slice(0, 2)) {
+    recommendations.push({
+      type: 'review',
+      conceptId,
+      priority: 'medium',
+      reason: 'At risk of decay due to inactivity'
+    });
+  }
+  
+  return {
+    mastery,
+    prerequisites,
+    recommendations
+  };
+}
+
+/**
+ * Run complete trace analysis including knowledge-structure
+ * @param learnerId - Learner identifier
+ * @param sessionId - Optional session ID
+ * @returns Combined analysis results
+ */
+export function runCompleteAnalysis(
+  learnerId: string,
+  sessionId?: string
+): {
+  traceAnalysis: AnalysisResult;
+  knowledgeAnalysis: KnowledgeStructureAnalysis;
+} {
+  const interactions = storage.getInteractionsByLearner(learnerId);
+  const textbookUnits = storage.getTextbook(learnerId);
+  
+  // Run standard trace analysis
+  const traceAnalysis = analyzeInteractionTraces(interactions, textbookUnits, {
+    learnerId
+  });
+  
+  // Run knowledge-structure analysis
+  const knowledgeAnalysis = analyzeKnowledgeStructure(learnerId);
+  
+  // Log combined analysis
+  logKnowledgeAnalysis(knowledgeAnalysis, learnerId, sessionId);
+  
+  return {
+    traceAnalysis,
+    knowledgeAnalysis
+  };
+}
+
+/**
+ * Log knowledge analysis results
+ */
+function logKnowledgeAnalysis(
+  analysis: KnowledgeStructureAnalysis,
+  learnerId: string,
+  sessionId?: string
+): void {
+  const event: InteractionEvent = {
+    id: createEventId('knowledge', 'analysis'),
+    sessionId,
+    learnerId,
+    timestamp: Date.now(),
+    eventType: 'concept_extraction',
+    problemId: 'knowledge-structure',
+    inputs: {
+      masteredCount: analysis.mastery.stats.byLevel.mastered,
+      atRiskCount: analysis.mastery.atRisk.length,
+      weakAreasCount: analysis.mastery.weakAreas.length,
+      recentViolations: analysis.prerequisites.recentViolations.length,
+      violationTrend: analysis.prerequisites.violationTrend
+    },
+    outputs: {
+      recommendations: analysis.recommendations.length,
+      recommendationTypes: analysis.recommendations.map(r => r.type),
+      highPriorityRecs: analysis.recommendations.filter(r => r.priority === 'high').length
+    },
+    conceptIds: [
+      ...analysis.mastery.recentlyMastered,
+      ...analysis.mastery.weakAreas
+    ]
+  };
+  
+  storage.saveInteraction(event);
 }

@@ -10,7 +10,7 @@ on:
 
 env:
   NODE_VERSION: 20
-  PLAYWRIGHT_VERSION: 1.42
+  PLAYWRIGHT_VERSION: 1.53.0
   CI: true
 
 jobs:
