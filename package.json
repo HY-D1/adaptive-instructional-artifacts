@@ -27,6 +27,8 @@
     "replay:toy": "node scripts/replay-toy.mjs",
     "replay:real": "node scripts/replay-real.mjs",
     "replay:experiment": "npm run export:policies && node scripts/replay-experiment.mjs",
+    "replay:fixture": "node scripts/normalize-real-traces.mjs --adapter json --input tests/fixtures/replay/real-trace-input.json --output dist/replay/real/export.json",
+    "replay:from-fixture": "npm run replay:fixture && npm run replay:experiment -- --input dist/replay/real/export.json",
     "replay:gate": "npm run export:policies && node scripts/replay-checksum-gate.mjs",
     "replay:gate:update": "npm run export:policies && node scripts/replay-checksum-gate.mjs --update",
     "replay:gate:real": "npm run export:policies && node scripts/replay-checksum-gate.mjs --real",
