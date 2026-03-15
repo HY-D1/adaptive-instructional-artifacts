@@ -32,7 +32,7 @@ import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/features/sql/S
 import { HintSystem } from '../components/features/hints/HintSystem';
 import { ConceptCoverage } from '../components/features/research/ConceptCoverage';
 import { AskMyTextbookChat } from '../components/features/chat/AskMyTextbookChat';
-import { ReinforcementPrompt } from '../components/ReinforcementPrompt';
+import { ReinforcementPrompt } from '../components/features/reinforcement/ReinforcementPrompt';
 import { useLLMSettings } from '../components/shared/LLMSettingsHelper';
 import { useScreenReaderAnnouncer } from '../components/shared/ScreenReaderAnnouncer';
 import { sqlProblems } from '../data/problems';
