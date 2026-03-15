@@ -90,6 +90,58 @@ describe('resolveConceptId', () => {
     const result = resolveConceptId('a/b/c/deep', concepts);
     expect(result).toBe('deep');
   });
+
+  it('resolves plain ID to namespaced ID when unique suffix match exists', () => {
+    // Helper export format: only namespaced keys exist
+    const helperConcepts: Record<string, ConceptInfo> = {
+      'murachs-mysql-3rd-edition/select-statement-murach': {
+        id: 'murachs-mysql-3rd-edition/select-statement-murach',
+        title: 'SELECT Statement',
+        definition: 'Retrieve data',
+        difficulty: 'beginner',
+        estimatedReadTime: 5,
+        pageNumbers: [45],
+        chunkIds: { definition: [], examples: [], commonMistakes: [] },
+        relatedConcepts: [],
+        practiceProblemIds: [],
+        sourceDocId: 'murachs-mysql-3rd-edition'
+      }
+    };
+    
+    const result = resolveConceptId('select-statement-murach', helperConcepts);
+    expect(result).toBe('murachs-mysql-3rd-edition/select-statement-murach');
+  });
+
+  it('returns original plain ID when multiple suffix matches exist (ambiguous)', () => {
+    const concepts: Record<string, ConceptInfo> = {
+      'doc1/select-basic': {
+        id: 'doc1/select-basic',
+        title: 'SELECT (Doc1)',
+        definition: '',
+        difficulty: 'beginner',
+        estimatedReadTime: 1,
+        pageNumbers: [],
+        chunkIds: { definition: [], examples: [], commonMistakes: [] },
+        relatedConcepts: [],
+        practiceProblemIds: []
+      },
+      'doc2/select-basic': {
+        id: 'doc2/select-basic',
+        title: 'SELECT (Doc2)',
+        definition: '',
+        difficulty: 'beginner',
+        estimatedReadTime: 1,
+        pageNumbers: [],
+        chunkIds: { definition: [], examples: [], commonMistakes: [] },
+        relatedConcepts: [],
+        practiceProblemIds: []
+      }
+    };
+    
+    // Should return original and log warning (ambiguous)
+    const result = resolveConceptId('select-basic', concepts);
+    expect(result).toBe('select-basic');
+  });
 });
 
 describe('getConcept', () => {

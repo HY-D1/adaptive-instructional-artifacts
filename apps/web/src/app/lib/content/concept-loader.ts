@@ -71,8 +71,13 @@ export function clearConceptMapCache(): void {
  * 
  * Resolution strategy:
  * 1. Try exact match first (for already-canonical IDs)
- * 2. If not found and ID contains "/", extract the suffix (conceptId)
- * 3. Try suffix match against concept map keys
+ * 2. If input is namespaced (contains "/"):
+ *    - Try suffix match against concept map keys (flat key lookup)
+ *    - Try exact namespaced key match
+ * 3. If input is flat (no "/"):
+ *    - Try to find a unique namespaced key that ends with this suffix
+ *    - If multiple matches, return original (ambiguous)
+ *    - If single match, return the namespaced key
  * 4. Return original ID if no resolution found (caller handles not-found)
  */
 export function resolveConceptId(
@@ -84,20 +89,37 @@ export function resolveConceptId(
     return conceptId;
   }
   
-  // Try namespace resolution (docId/conceptId -> conceptId)
+  // Case 1: Input is namespaced (docId/conceptId)
+  // Try to find a flat key matching the suffix
   if (conceptId.includes('/')) {
-    const parts = conceptId.split('/');
-    const suffix = parts[parts.length - 1];
+    const suffix = conceptId.split('/').pop()!;
     
-    // If suffix exists as a concept key, use it
+    // If suffix exists as a flat concept key, use it (backward compatibility)
     if (availableConcepts[suffix]) {
       return suffix;
     }
     
-    // Also check if the full namespaced ID exists as a key (helper export format)
-    if (availableConcepts[conceptId]) {
-      return conceptId;
-    }
+    // Return original for namespaced lookup
+    return conceptId;
+  }
+  
+  // Case 2: Input is flat (conceptId)
+  // Try to find a unique namespaced key that ends with this suffix
+  const allKeys = Object.keys(availableConcepts);
+  const matchingKeys = allKeys.filter(key => {
+    // Key ends with /conceptId or equals conceptId
+    return key === conceptId || key.endsWith(`/${conceptId}`);
+  });
+  
+  if (matchingKeys.length === 1) {
+    // Unique match found - use the namespaced key
+    return matchingKeys[0];
+  }
+  
+  if (matchingKeys.length > 1) {
+    // Ambiguous - multiple docs have this concept
+    // Return original and let caller handle or use first match
+    console.warn(`[resolveConceptId] Ambiguous concept ID "${conceptId}" matches multiple keys: ${matchingKeys.join(', ')}`);
   }
   
   // No resolution found - return original for error handling
