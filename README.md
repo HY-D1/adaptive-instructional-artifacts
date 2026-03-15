@@ -4,7 +4,8 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-blue)
 ![React](https://img.shields.io/badge/React-18.3-61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-6.4-646CFF)
-![Tests](https://img.shields.io/badge/Tests-~696%20expected-informational)
+![Tests](https://img.shields.io/badge/Tests-829%20passing-success)
+![Week 1](https://img.shields.io/badge/Week%201-Stable-success)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
@@ -157,6 +158,27 @@ The system separates **"learning interaction capture"** from **"instruction orch
 | Experimental Manipulations | 📋 | Session-level toggles for A/B testing |
 | Affective Proxy Layer (APS) | 📋 | Frustration detection from behavior |
 | Research Dashboard 2.0 | 📋 | Learning dynamics visualizations |
+
+---
+
+## Project Status
+
+**Current Phase**: ✅ Week 1 Complete — Stabilization Gate Passed
+
+Week 1 focused on stability and deployment readiness. All core systems verified:
+
+| Gate | Status |
+|------|--------|
+| TypeScript | ✅ Clean compile |
+| Build | ✅ Production ready |
+| Unit Tests | ✅ 829 passing |
+| E2E Tests | ✅ Smoke tests passing |
+| Hosted Demo | ✅ Verified on Vercel |
+
+📄 **Full Status Report**: [docs/week1-status.md](./docs/week1-status.md)  
+🎬 **Demo Script**: [docs/demo-script.md](./docs/demo-script.md)
+
+**Week 2 Focus**: Textbook/product polishing and adaptive evidence baselines.
 
 ---
 
