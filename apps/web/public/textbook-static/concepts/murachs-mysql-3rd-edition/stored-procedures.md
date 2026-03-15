@@ -1,124 +1,173 @@
-# Stored Procedures and Functions
-
-🟡 **Difficulty:** Intermediate
-⏱️ **Estimated Time:** 15 minutes
-
-## Learning Objectives
-
-- Understand the Stored Procedures and Functions concept in SQL
-
-## What is This?
-
-Stored Procedures and Functions is an important SQL concept for working with databases.
-
-## Examples
-
-### Example 1: SQL Example 1
-
-**Difficulty:** Beginner
-
-**Scenario:** Basic data retrieval
-
-```sql
-SELECT statement in transaction B is executed. This returns four rows with rep_id values of 1, 2, 3, and 4. Chapter 14 How to use transactions and locking 441 Four transactions that show how to work with locking reads Transaction A -- Execute each statement one at a time. - - Al tern.ate with Transactions B, C, and D as described. START TRANSACTION;
-```
-
-**Explanation:** Example SQL statement
-
-**Expected Output:**
-
-| id | name | email | age | city |
-| --- | --- | --- | --- | --- |
-| 1 | Alice | alice@email.com | 25 | Seattle |
-| 2 | Bob | bob@email.com | 30 | Portland |
-| 3 | Charlie | charlie@email.com | 22 | Seattle |
-
-### Example 2: SQL Example 2
-
-**Difficulty:** Beginner
-
-**Scenario:** Basic data retrieval
-
-```sql
-insert row with rep_ id of 2 into child table INSERT INTO sales_ totals (rep_ id, sales_year, sales_ total) VALUES (2, 2019, 138193.69);
-```
-
-**Explanation:** Example SQL statement
-
-### Example 3: SQL Example 3
-
-**Difficulty:** Beginner
-
-**Scenario:** Filtering data based on conditions
-
-```sql
-SELECT * FROM sales_reps WHERE rep_id < 5 FOR UPDATE';
-```
-
-**Explanation:** Example SQL statement
-
-**Expected Output:**
-
-| id | name | email | age | city |
-| --- | --- | --- | --- | --- |
-| 1 | Alice | alice@email.com | 25 | Seattle |
-| 2 | Bob | bob@email.com | 30 | Portland |
-| 3 | Charlie | charlie@email.com | 22 | Seattle |
-
-## Common Mistakes
-
-### Mistake 1: Syntax error
-
-**Incorrect SQL:**
-```sql
-SELECT * FORM users;
-```
-
-**Error Message:** `Error: near 'FORM': syntax error`
-
-**Why it happens:** Typo in SQL keyword. The correct keyword is FROM, not FORM.
-
-**Corrected SQL:**
-```sql
-SELECT * FROM users;
-```
-
-💡 **Key Takeaway:** Double-check SQL keyword spelling
-
-### Mistake 2: Missing semicolon
-
-**Incorrect SQL:**
-```sql
-SELECT * FROM users
-```
-
-**Error Message:** `Some databases require semicolons to end statements`
-
-**Why it happens:** While some SQL implementations are lenient, it's best practice to end statements with semicolons.
-
-**Corrected SQL:**
-```sql
-SELECT * FROM users;
-```
-
-💡 **Key Takeaway:** Always end SQL statements with a semicolon
-
-## Practice Challenge
-
-**Practice using stored-procedures with the practice schemas.**
-
-💡 **Hint:** Review the examples above and try writing your own query.
-
-<details>
-<summary>Click to see solution</summary>
-
-```sql
-SELECT * FROM users LIMIT 5;
-```
-
-**Explanation:** This is a basic query to get you started. See the linked practice problems for more challenges.
-</details>
-
+---
+id: stored-procedures
+title: Stored Procedures
+definition: Creating and using stored procedures in MySQL
+difficulty: intermediate
+estimatedReadTime: 5
+pageReferences: [401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415]
+chunkIds:
+  - murachs-mysql-3rd-edition:p401:c1
+  - murachs-mysql-3rd-edition:p402:c1
+  - murachs-mysql-3rd-edition:p402:c2
+  - murachs-mysql-3rd-edition:p402:c3
+  - murachs-mysql-3rd-edition:p403:c1
+  - murachs-mysql-3rd-edition:p403:c2
+  - murachs-mysql-3rd-edition:p404:c1
+  - murachs-mysql-3rd-edition:p404:c2
+  - murachs-mysql-3rd-edition:p405:c1
+  - murachs-mysql-3rd-edition:p405:c2
+  - murachs-mysql-3rd-edition:p406:c1
+  - murachs-mysql-3rd-edition:p406:c2
+  - murachs-mysql-3rd-edition:p406:c3
+  - murachs-mysql-3rd-edition:p407:c1
+  - murachs-mysql-3rd-edition:p407:c2
+  - murachs-mysql-3rd-edition:p408:c1
+  - murachs-mysql-3rd-edition:p409:c1
+  - murachs-mysql-3rd-edition:p410:c1
+  - murachs-mysql-3rd-edition:p410:c2
+  - murachs-mysql-3rd-edition:p410:c3
+  - murachs-mysql-3rd-edition:p411:c1
+  - murachs-mysql-3rd-edition:p411:c2
+  - murachs-mysql-3rd-edition:p412:c1
+  - murachs-mysql-3rd-edition:p413:c1
+  - murachs-mysql-3rd-edition:p413:c2
+  - murachs-mysql-3rd-edition:p414:c1
+  - murachs-mysql-3rd-edition:p414:c2
+  - murachs-mysql-3rd-edition:p414:c3
+  - murachs-mysql-3rd-edition:p415:c1
+  - murachs-mysql-3rd-edition:p415:c2
+relatedConcepts:
+tags:
+  - mysql
+  - procedures
+  - programming
+sourceDocId: murachs-mysql-3rd-edition
 ---
 
-*Content generated for SQL-Adapt Learning Platform*
+# Stored Procedures
+
+## Definition
+Creating and using stored procedures in MySQL
+
+## Explanation
+How to create views As you've seen throughout this book, SELECT queries can be complicated, particularly if they use multiple joins, subqueries, or complex functions. Because of that, you may want to save the queries you use regularly. One way to do that is to store the statement in a script. Another way is to create a view. Unlike scripts, which are stored in files, views are stored as part of the database. As a result, they can be used by SQL programmers and by custom applications that have access to the database. This provides some advantages over using tables directly. An introduction to views.................................................... 382 How views work........................................................................................... 382 Benefits of using views................................................................................. 384 How to work with views..................................................... 386 How to c reate a view.................................................................................... 386 How to create an updatable view................................................................. 390 How to use the WITH CHECK OPTION clause........................................ 392 How to insert or delete rows through a view............................................... 394 How to alter or drop a view......................................................................... 396 Perspective......................................................................... 398
+
+Sectio11 3 DatabaJ e design tt12d i111ple111e11tation An introduction to views Before you learn the details for \a.'orking \\rith vie\\'S. it's helpful to get a general idea of how views \vork. ln addition~ it' helpful to consider ome of the benefits of,,ie,vs o you can deternune wl1ether you want to use them. How views work A i •iel1' i~ a SELECT statement that s stored in the database a!- a database object to create a vie,a.r.)'OU use a CREATE VIEW 
+
+## Examples
+### Example 1: SELECT Example
+```sql
+SELECT queries can be complicated, particularly if they use multiple joins, subqueries, or complex functions. Because of that, you may want to save the queries you use regularly. One way to do that is to store the statement in a script. Another way is to create a view. Unlike scripts, which are stored in files, views are stored as part of the database. As a result, they can be used by SQL programmers and by custom applications that have access to the database. This provides some advantages over using tables directly. An introduction to views.................................................... 382 How views work........................................................................................... 382 Benefits of using views................................................................................. 384 How to work with views..................................................... 386 How to c reate a view.................................................................................... 386 How to create an updatable view................................................................. 390 How to use the WITH CHECK OPTION clause........................................ 392 How to insert or delete rows through a view............................................... 394 How to alter or drop a view......................................................................... 396 Perspective......................................................................... 398
+
+Sectio11 3 DatabaJ e design tt12d i111ple111e11tation An introduction to views Before you learn the details for \a.'orking \\rith vie\\'S. it's helpful to get a general idea of how views \vork. ln addition~ it' helpful to consider ome of the benefits of,,ie,vs o you can deternune wl1ether you want to use them. How views work A i •iel1' i~ a SELECT statement that s stored in the database a!- a database object to create a vie,a.r.)'OU use a CREATE VIEW staten1ent like the one hown in figure 12-l. This statement creates a view named Vendors_Min that retrie, es the vendor_nan1e9 endor_state. and "'endor_phone columns from the Vendors table. You can think of a,,iew as a virtual table that consists on))r of the row. and columns. pecified in its CREATE V]EW statement. The table or tables that are listed in the FROM clau. e are called the /Jase rab/e.s for the,•ie\V. ince the,,ie,1-, refer. back to the bru e tables, it doesn,t store any data itself, and it alway. reflects the n10~ t current data in the bm e tables. to
+
+ince the,,ie,1-, refer. back to the bru e tables, it doesn,t store any data itself, and it alway. reflects the n10~ t current data in the bm e tables. to use a view, you refer to it from another SQL. tatement. ln thi.. figure. for example. the SELECT statement uses the Vendor. _Min ~riew in the FROrvl clau. e instead of a table. As a re. ult, this SELECT statement extracts its result set from the \'irtual table that the vie\\r' repre. ents. ln thi case, all the rows for vendors in California are relrie\•ed from the view. When you create a vie\&.' like the one in this figure, the viev.r i updatable. As a resull it' po. sible to u e the,,ie\\' in an INSERT, PDATE, or DELETE tatement. In this figure. for example, the UPDATE tatement u es the Vendors_Min vie\\' to update the vendor_phone colunm in the Vendors table for the specified, 1endor. to drop a view. you can u.. e the DROP VIEW. tatement as ho\\.rn in this figure. This \.\t'orks imilarly to tl1e DROP tatements
+
+colunm in the Vendors table for the specified, 1endor. to drop a view. you can u.. e the DROP VIEW. tatement as ho\\.rn in this figure. This \.\t'orks imilarly to tl1e DROP tatements for tables and indexes that you learned about in the pre\'ioru chapter. Because a view i. stored a an object in a database. it can be u ed by atl}'One who has appropriate pri\•ilege. That may include user who ba\ e acces to tl1e database through applications thal provide for ad hoc querie. and report generation. In addition. that ma)' include cu tom applications that are,vritten specifically to \Vork,vith the data in the database. In t ac~ vie, are otten de igned to be u ed \ViU1 the e l}rpe. ot application.
+
+Chapter 12 How to create views A CREATE VIEW statement for a view named Vendors Min CREATE VIEW vendors_min AS SELECT vendor_name, vendor_ state, vendor_phone FROM vendors The virtual table that's represented by the view vendor _name vendor _state vendor _phone "' ► US Postal Service WI (800) 555--1205 L National Information Data Ctr DC {301) 555-8950 Register of Copyrights DC G®!I Jobtrak CA (800) 555-8ns Newbrige Book Clubs NJ (800) 555.-9980 (122 rows) A SELECT statement that uses the Vendors Min view SELECT * FROM vendors_min WHERE vendor state= 'CA' ORDER BY vendor_name The result set that's returned by the SELECT statement vendor _name vendor _state vendor_phone ► Abbey Office Furnishings CA (559) 555-8300 American Express CA (800) 555-3344 ASC Signs CA HMII Azteklabel CA (714) 555-9000 Bertelsmann Industry Svcs. Inc CA (805) 555-0584 BA Industries CA (559) 555-1551 ( 75 rows) An UPDATE statement that uses a view to update the base table UPDATE vendors_min SET vendor_phone = '( 800) 555-3941' WHERE vendor_ name = 'Register of Copyrights' A statement that drops a view DROP VIEW vendors_min Description
+
+view to update the base table UPDATE vendors_min SET vendor_phone = '( 800) 555-3941' WHERE vendor_ name = 'Register of Copyrights' A statement that drops a view DROP VIEW vendors_min Description • A view consists of a SELECT statement that's stored as an object in the database. The tables referenced in the SELECT statement are called the base tables for the • view. • When you create a view, you can refer to the view anywhere you wo11ld normally use a table in a SELECT, INSERT, UPDATE, or DELETE statement. • Although a view behaves like a virtual table, it doesn't store any data. Instead, a view always refers back to its base tables. • A view can also be referred to as a viewed table because it provides a view to the underlying base tables. How views work V '
+
+Benefits of using views can use views to limit the exposure of the tables in your database to external users and applications. to illustrate, suppose a view refers to a table that you've decided to divide into two tables. to accommodate this change, you simply modify the view. In other words, you don't have to modify any statements that refer to the view. That means that users who query the database using the view don't have to be aware of the change in the database structure, and application programs that use the view don't have to be modified. You can also use views to restrict access to a database. to do that, you include just the columns and rows you want a user or an application to have access to in the views. Then, you let the user or application access the data only through the views. For example, let's assume you have an Employees table that has a salary column that contains information about each employee's salary. In this case, you can create a view that doesn't include the
+
+For example, let's assume you have an Employees table that has a salary column that contains information about each employee's salary. In this case, you can create a view that doesn't include the salary column for the users who need to view and maintain this table, but who shouldn't be able to view salai-ies. Then, you can create another view that includes the salary column for the users who need to view and maintain salai-y information. In addition, you can use views to hide the complexity of a SELECT statement. For example, if you have a long and unwieldy SELECT statement that joins multiple tables, you can create a view for that statement. This makes it easier for you and other database users to work with this data. Finally, when yo11 create a view, you can allow data in the base table to be updated through the view. to do that, you use INSERT, UPDATE, or DELETE statements to work with the view.
+
+Chapter 12 How to create views Some of the benefits provided by views Benefit Description Design independence Data security Simplified queries Updatability Description Views can limit the exposure of tables to external users and applications. As a result, if the design of the tables changes, yo1.1 can modify the view as necessary so t1sers who query the view don't need to be aware of the change, and applications that use the view don't need to be modified. Views can restrict access to the data in a table by using the SELECT clat1se to include only selected columns of a table or by using the WHERE clause to include 011ly selected rows in a table. Views can be used to hide the complexity of retrieval operations. Then, the data can be retrieved using simple SELECT statements that specify a view in the FROM clause. With certain restrictions, views can be used to update, insert, and delete data fron1 a base table. • You can create a view based on almost any SELECT statement. That means that you can code views that
+
+views can be used to update, insert, and delete data fron1 a base table. • You can create a view based on almost any SELECT statement. That means that you can code views that join tables, summarize data, and use subqueries and functions. Benefits of using views
+
+How to work with views Now that you have a general understanding of how views work and of the benefits that they provide, you 're ready to learn the details for working with them. How to create a view a view. In its simplest form, you code the CREATE VIEW keywords, followed by the name of the view, followed by the AS keyword and the SELECT statement that defines the view. In this figure, for instance, the first statement creates a view named Vendors Phone List. This view includes four columns from the - - Vendors table for all vendors with invoices. If you execute the first CREATE VIEW statement and a view with that name doesn't already exist in the current database, MySQL adds the view and displays a message to indicate that the statement was successful. However, if a view with this name already exists, MySQL doesn't add the view and displays a message that indicates that the name is already in use. In that case, you need to specify a new name for the view, or you
+
+already exists, MySQL doesn't add the view and displays a message that indicates that the name is already in use. In that case, you need to specify a new name for the view, or you need to drop the view that's already using that name. When you code a CREATE VIEW statement, you can specify that you want to automatically drop a view that has the same name as the view that you're creating. to do that, you can specify the OR REPLACE keywords after the CREATE keyword as shown in all of the examples in this figure except for the first. The SELECT statement for a view can use most of the features of a normal SELECT statement. In this figure, for instance, the second example creates a view that joins data from two tables. Similarly, the third statement creates a view that uses a LIMIT clause. By default, the columns in a view are given the same names as the columns in the base tables. If a view contains a calculated column, however, you'll want to name that
+
+LIMIT clause. By default, the columns in a view are given the same names as the columns in the base tables. If a view contains a calculated column, however, you'll want to name that column just as you do in other SELECT statements. In addition, you'll need to rename columns from different tables that have the same name. to do that, you can code the column names in the CREATE VIEW clause as shown in the fourth example. Or, you can use the AS clause in the SELECT statement as shown in the fifth exainple. Note that if you use the technique shown in the fourth example, you have to assign names to all of the columns. By contrast, if you use the technique shown in the fifth example, you only have to assign names to the columns you need to renrune. As a result, you'll typically want to use the technique presented in the fifth example.
+
+The syntax of the CREATE VIEW statement CREATE [OR REPLACE] VIEW view_name [(column_alias_ l[, column_alias_ 2] •••)] AS select_statement [WITH CHECK OPTION] A view of vendors that have invoices CREATE VIEW vendors_phone_ list AS SELECT vendor_name, vendor_contact_ last_ name, vendor_contact_ first_name, vendor_phone FROM vendors Chapter 12 How to create views WHERE vendor_ id IN (SELECT DISTINCT vendor_ id FROM invoices) A view that uses a join CREATE OR REPLACE VIEW vendor_ invoices AS SELECT vendor_name, invoice_number, invoice_date, invoice_ total FROM vendors JOIN invoices ON vendors.vendor_id = invoices.vendor_ id A view that uses a LIMIT clause CREATE OR REPLACE VIEW topS_ invoice_totals AS SELECT vendor_ id, invoice_total FROM invoices ORDER BY invoice_total DESC LIMIT 5 A view that names all of its columns in the CREATE VIEW clause CREATE OR REPLACE VIEW invoices_outstanding (invoice_nwnber, invoice_date, invoice_total, balance_due) AS SELECT invoice n11mher, invoice_date, invoice_total, invoice_total - payment_total - credit_total FROM invoices WHERE invoice_total - payment_ total - credit_total > 0 A view that names just the calculated column in its SELECT clause CREATE OR REPLACE VIEW invoices_outstanding AS SELECT invoice_n11mher, invoice_date, invoice_total,
+
+WHERE invoice_total - payment_ total - credit_total > 0 A view that names just the calculated column in its SELECT clause CREATE OR REPLACE VIEW invoices_outstanding AS SELECT invoice_n11mher, invoice_date, invoice_total, invoice_total - payment_total - credit_total AS balance_due FROM invoices WHERE invoice total - payment_ total - credit_total > 0 How to create a view (part 1 of 2)
+
+The example in part 2 of figu1 e 12-3 creates a view that summarizes the rows in the Invoices table by vendor. This shows that a view can use agg1 egate functions and the GROUP BY clause to summarize data. In this case, the rows are grouped by vendor name, and a count of the invoices and the invoice total are calculated for each vendor. When you create a view, the SELECT statement you code within the definition of the view can refer to another view instead of a base table. In other words, views can be nested. In theory, nested views can make it easier to present data to your users. In practice, using nested views can make the dependencies between tables and views confusing, which can make your code difficult to maintain. As a result, if you use nested views, you should use them careful! y.
+
+A view that summarizes invoices by vendor CREATE OR REPLACE VIEW invoice_ summary AS SELECT vendor_name, COUNT(*) AS invoice_count, SUM(invoice_total) AS invoice_total_ sum FROM vendors Chapter 12 How to create views JOIN invoices ON vendors.vendor_ id = invoices.vendor_ id GROUP BY vendor_name Description • You use the CREATE VIEW statement to create a view. • If you include the OR REPLACE keywords, the CREATE VIEW statement will replace any existing view that has the same name. Otherwise, you must specify a name that doesn't already exist for the view. • If you name the columns of a view in the CREATE VIEW clause, you have to name all of the columns. By contrast, if you name the columns in the SELECT clause, you can name just the columns you need to rename. • You can create a view that's based on another view rather than on a table. This is known as a nested view. How to create a view (part 2 of 2)
+
+How to create an updatable view Once you create a view, you can refer to it in a SELECT statement. In addition, you may be able to refer to it in INSERT, UPDATE, and DELETE statements to modify the data that's stored in an underlying table. to do that, the view must be updatable. able views. The first two requirements have to do with what you can code in the select list of the SELECT statement that defines the view. In particular, the select list can't include the DISTINCT keyword or aggregate functions. In addition, the SELECT statement can't include a GROUP BY or HAVING clause, and two SELECT statements can't be joined by a union operation. The CREATE VIEW statement in this figure creates a view that's updatable. As a result, you can refer to it in an INSERT, UPDATE, or DELETE statement. For example, you can use the first UPDATE statement shown in this figure to update the credit_total column in the Invoices base table. Note that to execute this statement in MySQL Workbench, you will need to
+
+you can use the first UPDATE statement shown in this figure to update the credit_total column in the Invoices base table. Note that to execute this statement in MySQL Workbench, you will need to turn safe update mode off as described in chapter 5, since the WHERE clause doesn't refer to a primary or foreign key. However, you can't update any calculated columns that are used by the view. For example, you can't use the second UPDATE statement shown in this figure to update the balance_due column that's calculated from the other columns in the view. In addition, when you update data through a view, you can only update the data in a single base table at a time, even if the view refers to two or 1nore tables. In this figure, for instance, the view includes data from two base tables: Vendors and Invoices. Because of that, you can code an UPDATE statement that updates the data in the Vendors table or the data in the Invoices table, but not in both tables. For example, the first UPDATE statement
+
+you can code an UPDATE statement that updates the data in the Vendors table or the data in the Invoices table, but not in both tables. For example, the first UPDATE statement only refers to columns in the Invoices table, so it's able to update data in that table.
+
+Chapter 12 How to create views Requirements for creating updatable views • The select list can't include a DISTINCT clause. • The select list can't include aggregate functions. • The SELECT statement can't include a GROUP BY or HAVING clause. • The view can' t include the UNION operator. A CREATE VIEW statement that creates an updatable view CREATE OR REPLACE VIEW balance_due_view AS SELECT vendor_name, invoice_n,,rnber, invoice_ total, payment_ total, credit_ total, invoice_ total - payment_ total - credit_ total AS balance_ due FROM vendors JOIN invoices ON vendors.vendor_ id = invoices.vendor_ id WHERE invoice_ total - payment_ total - credit_ total > 0 An UPDATE statement that uses the view to update data UPDATE balance_ due_view SET credit total= 300 WHERE invoice_ number = '9982771' The response from the system (1 row affected) An UPDATE statement that attempts to use the view to update a calculated column UPDATE balance due view - - SET balance_due = 0 WHERE invoice D1irnb11=tr = '9982771' The response from the system Error Code: 1348. Column 'balance due' is not updatable Description •
+
+column UPDATE balance due view - - SET balance_due = 0 WHERE invoice D1irnb11=tr = '9982771' The response from the system Error Code: 1348. Column 'balance due' is not updatable Description • An updatable view is a view that can be used in an INSERT, UPDATE, or DELETE statement to update the data in the base table. If a view isn't updatable, it's called a read-only view. • Tl1e requirements for coding updatable views are more restrictive than for coding read-only views. That's because MySQL must be able to unambiguously determine which base tables and columns are affected. How to create an updatable view
+
+How to use the WITH CHECK OPTION clause CHECK OPTION clause to prevent an update if it causes the row to be excluded from the view. to start, the CREATE VIEW statement creates an updatable view named Vendor_Payment that joins data from the Vendors and Invoices tables and retrieves all invoices that have a balance due that's greater than or equal to zero. Then, the first UPDATE statement uses this view to modify the payment_date and payment_total columns for a specific invoice. This works because this UPDATE staten1ent doesn't exclude the row from the view. However, the second UPDATE statement causes the balance due to become less than zero. As a result, this statement fails due to the WITH CHECK OPTION clause, and an error is displayed. Since this can prevent users from storing invalid data in a database, this clause can be useful in some situations.
+
+Chapter 12 How to create views An updatable view that has a WITH CHECK OPTION clause CREATE OR REPLACE VIEW vendor_payment AS SELECT vendor_name, invoice_ number, invoice_date, payment_date, invoice_ total, credit_total, payment_total FROM vendors JOIN invoices ON vendors.vendor_ id = invoices.vendor_ id WHERE invoice_total - payment_total - credit_total >= 0 WITH CHECK OPTION A SELECT statement that displays a row from the view SELECT* FROM vendor_payment WHERE invoice_ DtJmh~r = 'P-0608' The result set vendor _name ► MaDoy Lithographing Inc invoice _number P-0608 invoice date - payment_date 2018-0 7 _23;
+```
+Example SELECT statement from textbook.
+
+### Example 2: SELECT Example
+```sql
+SELECT invoice_n11mh11=1r, invoice_date, invoice total FROM invoices WHERE vendor id= 34 The contents of the view invoice _number - ► QP58872 Q545443 invoice date - invoice_ total 2018-05-07 116.54 2018-06-09 1083. 58 An INSERT statement that fails due to columns that don't have values INSERT INTO ihm_invoices (invoice_numher, invoice_date, invoice_total) VALUES ( 'RA23988', '2018-07-31', 417.34) The response from the system Error Code: 1423. Field of view •ap.ibm_invoices' underlying table doesn't have a default value A DELETE statement that fails due to a foreign key constraint DELETE FROM ihm_invoices WHERE invoice_n11mhP.r = 'Q545443' The response from the system Error Code: 1451. Cannot delete or update a parent row: a foreign key constraint fails ('ap'.'invoice_line_items', CONSTRAINT 'line_ items_fk_invoices' FOREIGN KEY ( 'invoice_id') REFERENCES 'invoices' { ' invoice id•)) Two DELETE statements that succeed DELETE FROM invoice_ line_ items WHERE invoice_ id = (SELECT invoice_ id FROM WHERE invoice number= DELETE FROM ihm invoices WHERE invoice_n11mher = • QS45443';
+```
+Example SELECT statement from textbook.
+
+### Example 3: INSERT Example
+```sql
+insert or delete rows through a view............................................... 394 How to alter or drop a view......................................................................... 396 Perspective......................................................................... 398
+
+Sectio11 3 DatabaJ e design tt12d i111ple111e11tation An introduction to views Before you learn the details for \a.'orking \\rith vie\\'S. it's helpful to get a general idea of how views \vork. ln addition~ it' helpful to consider ome of the benefits of,,ie,vs o you can deternune wl1ether you want to use them. How views work A i •iel1' i~ a SELECT statement that s stored in the database a!- a database object to create a vie,a.r.)'OU use a CREATE VIEW staten1ent like the one hown in figure 12-l. This statement creates a view named Vendors_Min that retrie, es the vendor_nan1e9 endor_state. and "'endor_phone columns from the Vendors table. You can think of a,,iew as a virtual table that consists on))r of the row. and columns. pecified in its CREATE V]EW statement. The table or tables that are listed in the FROM clau. e are called the /Jase rab/e.s for the,•ie\V. ince the,,ie,1-, refer. back to the bru e tables, it doesn,t store any data itself, and it alway. reflects the n10~ t current data in the bm e tables. to
+
+ince the,,ie,1-, refer. back to the bru e tables, it doesn,t store any data itself, and it alway. reflects the n10~ t current data in the bm e tables. to use a view, you refer to it from another SQL. tatement. ln thi.. figure. for example. the SELECT statement uses the Vendor. _Min ~riew in the FROrvl clau. e instead of a table. As a re. ult, this SELECT statement extracts its result set from the \'irtual table that the vie\\r' repre. ents. ln thi case, all the rows for vendors in California are relrie\•ed from the view. When you create a vie\&.' like the one in this figure, the viev.r i updatable. As a resull it' po. sible to u e the,,ie\\' in an INSERT, PDATE, or DELETE tatement. In this figure. for example, the UPDATE tatement u es the Vendors_Min vie\\' to update the vendor_phone colunm in the Vendors table for the specified, 1endor. to drop a view. you can u.. e the DROP VIEW. tatement as ho\\.rn in this figure. This \.\t'orks imilarly to tl1e DROP tatements
+
+colunm in the Vendors table for the specified, 1endor. to drop a view. you can u.. e the DROP VIEW. tatement as ho\\.rn in this figure. This \.\t'orks imilarly to tl1e DROP tatements for tables and indexes that you learned about in the pre\'ioru chapter. Because a view i. stored a an object in a database. it can be u ed by atl}'One who has appropriate pri\•ilege. That may include user who ba\ e acces to tl1e database through applications thal provide for ad hoc querie. and report generation. In addition. that ma)' include cu tom applications that are,vritten specifically to \Vork,vith the data in the database. In t ac~ vie, are otten de igned to be u ed \ViU1 the e l}rpe. ot application.
+
+Chapter 12 How to create views A CREATE VIEW statement for a view named Vendors Min CREATE VIEW vendors_min AS SELECT vendor_name, vendor_ state, vendor_phone FROM vendors The virtual table that's represented by the view vendor _name vendor _state vendor _phone "' ► US Postal Service WI (800) 555--1205 L National Information Data Ctr DC {301) 555-8950 Register of Copyrights DC G®!I Jobtrak CA (800) 555-8ns Newbrige Book Clubs NJ (800) 555.-9980 (122 rows) A SELECT statement that uses the Vendors Min view SELECT * FROM vendors_min WHERE vendor state= 'CA' ORDER BY vendor_name The result set that's returned by the SELECT statement vendor _name vendor _state vendor_phone ► Abbey Office Furnishings CA (559) 555-8300 American Express CA (800) 555-3344 ASC Signs CA HMII Azteklabel CA (714) 555-9000 Bertelsmann Industry Svcs. Inc CA (805) 555-0584 BA Industries CA (559) 555-1551 ( 75 rows) An UPDATE statement that uses a view to update the base table UPDATE vendors_min SET vendor_phone = '( 800) 555-3941' WHERE vendor_ name = 'Register of Copyrights' A statement that drops a view DROP VIEW vendors_min Description
+
+view to update the base table UPDATE vendors_min SET vendor_phone = '( 800) 555-3941' WHERE vendor_ name = 'Register of Copyrights' A statement that drops a view DROP VIEW vendors_min Description • A view consists of a SELECT statement that's stored as an object in the database. The tables referenced in the SELECT statement are called the base tables for the • view. • When you create a view, you can refer to the view anywhere you wo11ld normally use a table in a SELECT, INSERT, UPDATE, or DELETE statement. • Although a view behaves like a virtual table, it doesn't store any data. Instead, a view always refers back to its base tables. • A view can also be referred to as a viewed table because it provides a view to the underlying base tables. How views work V '
+
+Benefits of using views can use views to limit the exposure of the tables in your database to external users and applications. to illustrate, suppose a view refers to a table that you've decided to divide into two tables. to accommodate this change, you simply modify the view. In other words, you don't have to modify any statements that refer to the view. That means that users who query the database using the view don't have to be aware of the change in the database structure, and application programs that use the view don't have to be modified. You can also use views to restrict access to a database. to do that, you include just the columns and rows you want a user or an application to have access to in the views. Then, you let the user or application access the data only through the views. For example, let's assume you have an Employees table that has a salary column that contains information about each employee's salary. In this case, you can create a view that doesn't include the
+
+For example, let's assume you have an Employees table that has a salary column that contains information about each employee's salary. In this case, you can create a view that doesn't include the salary column for the users who need to view and maintain this table, but who shouldn't be able to view salai-ies. Then, you can create another view that includes the salary column for the users who need to view and maintain salai-y information. In addition, you can use views to hide the complexity of a SELECT statement. For example, if you have a long and unwieldy SELECT statement that joins multiple tables, you can create a view for that statement. This makes it easier for you and other database users to work with this data. Finally, when yo11 create a view, you can allow data in the base table to be updated through the view. to do that, you use INSERT, UPDATE, or DELETE statements to work with the view.
+
+Chapter 12 How to create views Some of the benefits provided by views Benefit Description Design independence Data security Simplified queries Updatability Description Views can limit the exposure of tables to external users and applications. As a result, if the design of the tables changes, yo1.1 can modify the view as necessary so t1sers who query the view don't need to be aware of the change, and applications that use the view don't need to be modified. Views can restrict access to the data in a table by using the SELECT clat1se to include only selected columns of a table or by using the WHERE clause to include 011ly selected rows in a table. Views can be used to hide the complexity of retrieval operations. Then, the data can be retrieved using simple SELECT statements that specify a view in the FROM clause. With certain restrictions, views can be used to update, insert, and delete data fron1 a base table. • You can create a view based on almost any SELECT statement. That means that you can code views that
+
+views can be used to update, insert, and delete data fron1 a base table. • You can create a view based on almost any SELECT statement. That means that you can code views that join tables, summarize data, and use subqueries and functions. Benefits of using views
+
+How to work with views Now that you have a general understanding of how views work and of the benefits that they provide, you 're ready to learn the details for working with them. How to create a view a view. In its simplest form, you code the CREATE VIEW keywords, followed by the name of the view, followed by the AS keyword and the SELECT statement that defines the view. In this figure, for instance, the first statement creates a view named Vendors Phone List. This view includes four columns from the - - Vendors table for all vendors with invoices. If you execute the first CREATE VIEW statement and a view with that name doesn't already exist in the current database, MySQL adds the view and displays a message to indicate that the statement was successful. However, if a view with this name already exists, MySQL doesn't add the view and displays a message that indicates that the name is already in use. In that case, you need to specify a new name for the view, or you
+
+already exists, MySQL doesn't add the view and displays a message that indicates that the name is already in use. In that case, you need to specify a new name for the view, or you need to drop the view that's already using that name. When you code a CREATE VIEW statement, you can specify that you want to automatically drop a view that has the same name as the view that you're creating. to do that, you can specify the OR REPLACE keywords after the CREATE keyword as shown in all of the examples in this figure except for the first. The SELECT statement for a view can use most of the features of a normal SELECT statement. In this figure, for instance, the second example creates a view that joins data from two tables. Similarly, the third statement creates a view that uses a LIMIT clause. By default, the columns in a view are given the same names as the columns in the base tables. If a view contains a calculated column, however, you'll want to name that
+
+LIMIT clause. By default, the columns in a view are given the same names as the columns in the base tables. If a view contains a calculated column, however, you'll want to name that column just as you do in other SELECT statements. In addition, you'll need to rename columns from different tables that have the same name. to do that, you can code the column names in the CREATE VIEW clause as shown in the fourth example. Or, you can use the AS clause in the SELECT statement as shown in the fifth exainple. Note that if you use the technique shown in the fourth example, you have to assign names to all of the columns. By contrast, if you use the technique shown in the fifth example, you only have to assign names to the columns you need to renrune. As a result, you'll typically want to use the technique presented in the fifth example.
+
+The syntax of the CREATE VIEW statement CREATE [OR REPLACE] VIEW view_name [(column_alias_ l[, column_alias_ 2] •••)] AS select_statement [WITH CHECK OPTION] A view of vendors that have invoices CREATE VIEW vendors_phone_ list AS SELECT vendor_name, vendor_contact_ last_ name, vendor_contact_ first_name, vendor_phone FROM vendors Chapter 12 How to create views WHERE vendor_ id IN (SELECT DISTINCT vendor_ id FROM invoices) A view that uses a join CREATE OR REPLACE VIEW vendor_ invoices AS SELECT vendor_name, invoice_number, invoice_date, invoice_ total FROM vendors JOIN invoices ON vendors.vendor_id = invoices.vendor_ id A view that uses a LIMIT clause CREATE OR REPLACE VIEW topS_ invoice_totals AS SELECT vendor_ id, invoice_total FROM invoices ORDER BY invoice_total DESC LIMIT 5 A view that names all of its columns in the CREATE VIEW clause CREATE OR REPLACE VIEW invoices_outstanding (invoice_nwnber, invoice_date, invoice_total, balance_due) AS SELECT invoice n11mher, invoice_date, invoice_total, invoice_total - payment_total - credit_total FROM invoices WHERE invoice_total - payment_ total - credit_total > 0 A view that names just the calculated column in its SELECT clause CREATE OR REPLACE VIEW invoices_outstanding AS SELECT invoice_n11mher, invoice_date, invoice_total,
+
+WHERE invoice_total - payment_ total - credit_total > 0 A view that names just the calculated column in its SELECT clause CREATE OR REPLACE VIEW invoices_outstanding AS SELECT invoice_n11mher, invoice_date, invoice_total, invoice_total - payment_total - credit_total AS balance_due FROM invoices WHERE invoice total - payment_ total - credit_total > 0 How to create a view (part 1 of 2)
+
+The example in part 2 of figu1 e 12-3 creates a view that summarizes the rows in the Invoices table by vendor. This shows that a view can use agg1 egate functions and the GROUP BY clause to summarize data. In this case, the rows are grouped by vendor name, and a count of the invoices and the invoice total are calculated for each vendor. When you create a view, the SELECT statement you code within the definition of the view can refer to another view instead of a base table. In other words, views can be nested. In theory, nested views can make it easier to present data to your users. In practice, using nested views can make the dependencies between tables and views confusing, which can make your code difficult to maintain. As a result, if you use nested views, you should use them careful! y.
+
+A view that summarizes invoices by vendor CREATE OR REPLACE VIEW invoice_ summary AS SELECT vendor_name, COUNT(*) AS invoice_count, SUM(invoice_total) AS invoice_total_ sum FROM vendors Chapter 12 How to create views JOIN invoices ON vendors.vendor_ id = invoices.vendor_ id GROUP BY vendor_name Description • You use the CREATE VIEW statement to create a view. • If you include the OR REPLACE keywords, the CREATE VIEW statement will replace any existing view that has the same name. Otherwise, you must specify a name that doesn't already exist for the view. • If you name the columns of a view in the CREATE VIEW clause, you have to name all of the columns. By contrast, if you name the columns in the SELECT clause, you can name just the columns you need to rename. • You can create a view that's based on another view rather than on a table. This is known as a nested view. How to create a view (part 2 of 2)
+
+How to create an updatable view Once you create a view, you can refer to it in a SELECT statement. In addition, you may be able to refer to it in INSERT, UPDATE, and DELETE statements to modify the data that's stored in an underlying table. to do that, the view must be updatable. able views. The first two requirements have to do with what you can code in the select list of the SELECT statement that defines the view. In particular, the select list can't include the DISTINCT keyword or aggregate functions. In addition, the SELECT statement can't include a GROUP BY or HAVING clause, and two SELECT statements can't be joined by a union operation. The CREATE VIEW statement in this figure creates a view that's updatable. As a result, you can refer to it in an INSERT, UPDATE, or DELETE statement. For example, you can use the first UPDATE statement shown in this figure to update the credit_total column in the Invoices base table. Note that to execute this statement in MySQL Workbench, you will need to
+
+you can use the first UPDATE statement shown in this figure to update the credit_total column in the Invoices base table. Note that to execute this statement in MySQL Workbench, you will need to turn safe update mode off as described in chapter 5, since the WHERE clause doesn't refer to a primary or foreign key. However, you can't update any calculated columns that are used by the view. For example, you can't use the second UPDATE statement shown in this figure to update the balance_due column that's calculated from the other columns in the view. In addition, when you update data through a view, you can only update the data in a single base table at a time, even if the view refers to two or 1nore tables. In this figure, for instance, the view includes data from two base tables: Vendors and Invoices. Because of that, you can code an UPDATE statement that updates the data in the Vendors table or the data in the Invoices table, but not in both tables. For example, the first UPDATE statement
+
+you can code an UPDATE statement that updates the data in the Vendors table or the data in the Invoices table, but not in both tables. For example, the first UPDATE statement only refers to columns in the Invoices table, so it's able to update data in that table.
+
+Chapter 12 How to create views Requirements for creating updatable views • The select list can't include a DISTINCT clause. • The select list can't include aggregate functions. • The SELECT statement can't include a GROUP BY or HAVING clause. • The view can' t include the UNION operator. A CREATE VIEW statement that creates an updatable view CREATE OR REPLACE VIEW balance_due_view AS SELECT vendor_name, invoice_n,,rnber, invoice_ total, payment_ total, credit_ total, invoice_ total - payment_ total - credit_ total AS balance_ due FROM vendors JOIN invoices ON vendors.vendor_ id = invoices.vendor_ id WHERE invoice_ total - payment_ total - credit_ total > 0 An UPDATE statement that uses the view to update data UPDATE balance_ due_view SET credit total= 300 WHERE invoice_ number = '9982771' The response from the system (1 row affected) An UPDATE statement that attempts to use the view to update a calculated column UPDATE balance due view - - SET balance_due = 0 WHERE invoice D1irnb11=tr = '9982771' The response from the system Error Code: 1348. Column 'balance due' is not updatable Description •
+
+column UPDATE balance due view - - SET balance_due = 0 WHERE invoice D1irnb11=tr = '9982771' The response from the system Error Code: 1348. Column 'balance due' is not updatable Description • An updatable view is a view that can be used in an INSERT, UPDATE, or DELETE statement to update the data in the base table. If a view isn't updatable, it's called a read-only view. • Tl1e requirements for coding updatable views are more restrictive than for coding read-only views. That's because MySQL must be able to unambiguously determine which base tables and columns are affected. How to create an updatable view
+
+How to use the WITH CHECK OPTION clause CHECK OPTION clause to prevent an update if it causes the row to be excluded from the view. to start, the CREATE VIEW statement creates an updatable view named Vendor_Payment that joins data from the Vendors and Invoices tables and retrieves all invoices that have a balance due that's greater than or equal to zero. Then, the first UPDATE statement uses this view to modify the payment_date and payment_total columns for a specific invoice. This works because this UPDATE staten1ent doesn't exclude the row from the view. However, the second UPDATE statement causes the balance due to become less than zero. As a result, this statement fails due to the WITH CHECK OPTION clause, and an error is displayed. Since this can prevent users from storing invalid data in a database, this clause can be useful in some situations.
+
+Chapter 12 How to create views An updatable view that has a WITH CHECK OPTION clause CREATE OR REPLACE VIEW vendor_payment AS SELECT vendor_name, invoice_ number, invoice_date, payment_date, invoice_ total, credit_total, payment_total FROM vendors JOIN invoices ON vendors.vendor_ id = invoices.vendor_ id WHERE invoice_total - payment_total - credit_total >= 0 WITH CHECK OPTION A SELECT statement that displays a row from the view SELECT* FROM vendor_payment WHERE invoice_ DtJmh~r = 'P-0608' The result set vendor _name ► MaDoy Lithographing Inc invoice _number P-0608 invoice date - payment_date 2018-0 7 _23;
+```
+Example INSERT statement from textbook.
+
+## Common Mistakes
+### No common mistakes listed
+No specific mistakes documented in textbook.
+
+---
+*Source: murachs-mysql-3rd-edition, Pages 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415*

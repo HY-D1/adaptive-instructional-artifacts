@@ -1,67 +1,94 @@
+---
+id: joins-murach
+title: Joining Tables
+definition: Inner joins, outer joins, and cross joins in MySQL
+difficulty: intermediate
+estimatedReadTime: 5
+pageReferences: [117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139]
+chunkIds:
+  - murachs-mysql-3rd-edition:p117:c1
+  - murachs-mysql-3rd-edition:p117:c2
+  - murachs-mysql-3rd-edition:p118:c1
+  - murachs-mysql-3rd-edition:p118:c2
+  - murachs-mysql-3rd-edition:p119:c1
+  - murachs-mysql-3rd-edition:p119:c2
+  - murachs-mysql-3rd-edition:p120:c1
+  - murachs-mysql-3rd-edition:p120:c2
+  - murachs-mysql-3rd-edition:p120:c3
+  - murachs-mysql-3rd-edition:p120:c4
+  - murachs-mysql-3rd-edition:p121:c1
+  - murachs-mysql-3rd-edition:p121:c2
+  - murachs-mysql-3rd-edition:p121:c3
+  - murachs-mysql-3rd-edition:p122:c1
+  - murachs-mysql-3rd-edition:p122:c2
+  - murachs-mysql-3rd-edition:p122:c3
+  - murachs-mysql-3rd-edition:p123:c1
+  - murachs-mysql-3rd-edition:p123:c2
+  - murachs-mysql-3rd-edition:p124:c1
+  - murachs-mysql-3rd-edition:p124:c2
+  - murachs-mysql-3rd-edition:p125:c1
+  - murachs-mysql-3rd-edition:p125:c2
+  - murachs-mysql-3rd-edition:p125:c3
+  - murachs-mysql-3rd-edition:p126:c1
+  - murachs-mysql-3rd-edition:p126:c2
+  - murachs-mysql-3rd-edition:p127:c1
+  - murachs-mysql-3rd-edition:p127:c2
+  - murachs-mysql-3rd-edition:p128:c1
+  - murachs-mysql-3rd-edition:p128:c2
+  - murachs-mysql-3rd-edition:p129:c1
+  - murachs-mysql-3rd-edition:p129:c2
+  - murachs-mysql-3rd-edition:p130:c1
+  - murachs-mysql-3rd-edition:p130:c2
+  - murachs-mysql-3rd-edition:p131:c1
+  - murachs-mysql-3rd-edition:p131:c2
+  - murachs-mysql-3rd-edition:p131:c3
+  - murachs-mysql-3rd-edition:p132:c1
+  - murachs-mysql-3rd-edition:p132:c2
+  - murachs-mysql-3rd-edition:p133:c1
+  - murachs-mysql-3rd-edition:p133:c2
+  - murachs-mysql-3rd-edition:p134:c1
+  - murachs-mysql-3rd-edition:p134:c2
+  - murachs-mysql-3rd-edition:p134:c3
+  - murachs-mysql-3rd-edition:p135:c1
+  - murachs-mysql-3rd-edition:p135:c2
+  - murachs-mysql-3rd-edition:p136:c1
+  - murachs-mysql-3rd-edition:p136:c2
+  - murachs-mysql-3rd-edition:p137:c1
+  - murachs-mysql-3rd-edition:p137:c2
+  - murachs-mysql-3rd-edition:p138:c1
+  - murachs-mysql-3rd-edition:p138:c2
+  - murachs-mysql-3rd-edition:p139:c1
+  - murachs-mysql-3rd-edition:p139:c2
+relatedConcepts:
+tags:
+  - mysql
+  - joins
+  - relationships
+sourceDocId: murachs-mysql-3rd-edition
+---
+
 # Joining Tables
 
 ## Definition
-
-Joining tables is a method used in database management to combine rows from two or more tables based on a related column between them. It's essential for retrieving data that spans multiple tables and allows for complex queries.
+Inner joins, outer joins, and cross joins in MySQL
 
 ## Explanation
+Chapter 3 How to retrieve data from a sin.gle table The syntax of the WHERE clause with an IN phrase WHERE test_expression [NOT] IN ({subquerylexpression_ l [, expression_2]... }) Examples of the IN phrase An IN phrase with a list of numeric literals WHERE terms_ id IN (1, 3, 4) An IN phrase preceded by NOT WHERE vendor_ state NOT IN ('CA', 'NV', 'OR') An IN phrase with a subquery WHERE vendor id IN (SELECT vendor id FROM invoices WHERE invoice_date = 1 2018-07-18 1) Description • You can use the IN phrase to test whether an expression is equal to a value in a list of expressions. Each of the expressions in the list is automatically converted to the same type of data as the test expression. • The list of expressions can be coded in any order without affecting the order of the rows in the result set. • You can use the NOT operator to test for an expression that's not in the list of • expressions. • You can also compare the test expression to the
 
-Imagine you have two tables: one with customer information (Customers) and another with their order details (Orders). If you want to find all orders made by a specific customer, you'd need to join these tables based on the customer's ID. This concept is crucial because it enables you to access comprehensive data that might be distributed across different tables in your database.
+the result set. • You can use the NOT operator to test for an expression that's not in the list of • expressions. • You can also compare the test expression to the items in a list returned by a subquery. You'll learn more about coding subqueries in chapter 7. How to use the IN operator
+
+How to use the BETWEEN operator When you use this operator, the value of a test expression is compared to the range of values specified in the BETWEEN phrase. If the value falls within this range, the row is included in the query results. The first example in this figure shows a simple WHERE clause that uses the BETWEEN operator. It retrieves invoices with invoice dates between June 1, 2018 and June 30, 2018. Note that the range is inclusive, so invoices with invoice dates of June 1 and June 30 are included in the results. The second example shows how to use the NOT operator to select rows that aren't within a given range. In this case, vendors with zip codes that aren't between 93600 and 93799 are included in the results. The third example s
 
 ## Examples
-
-### Basic INNER JOIN
-
+### Example 1
 ```sql
--- Selecting customer names and their order IDs
-SELECT Customers.customer_name, Orders.order_id
-FROM Customers
-INNER JOIN Orders ON Customers.customer_id = Orders.customer_id;
+-- No specific example available in textbook
 ```
-
-This example demonstrates how to join two tables using an INNER JOIN. It retrieves the names of customers who have placed orders.
-
-### Practical Example: Finding All Orders by a Specific Customer
-
-```sql
--- Selecting all orders for customer 'John Doe' SELECT * FROM Orders WHERE customer_id = (SELECT customer_id FROM Customers WHERE customer_name = 'John Doe');
-```
-
-This practical example shows how to combine a join with a subquery to find all orders made by a specific customer.
+No example available for this concept.
 
 ## Common Mistakes
-
-### Using the wrong type of join
-
-**Incorrect:**
-
-```sql
--- Incorrectly using LEFT JOIN instead of INNER JOIN
-SELECT * FROM Customers
-LEFT JOIN Orders ON Customers.customer_id = Orders.customer_id;
-```
-
-**Correct:**
-
-```sql
--- Correct usage of INNER JOIN
-SELECT * FROM Customers
-INNER JOIN Orders ON Customers.customer_id = Orders.customer_id;
-```
-
-**Why this happens:** This mistake occurs when the type of join used does not match the desired outcome. Always choose the appropriate join type based on your query requirements.
+### No common mistakes listed
+No specific mistakes documented in textbook.
 
 ---
-
-## Practice
-
-**Question:** Create a query that retrieves all employees who have worked on projects in the 'Technology' department.
-
-**Solution:** SELECT Employees.employee_name FROM Employees
-INNER JOIN Employee_Projects ON Employees.employee_id = Employee_Projects.employee_id
-INNER JOIN Projects ON Employee_Projects.project_id = Projects.project_id
-WHERE Projects.department = 'Technology';
-
----
-
-*Source: Murach's MySQL 3rd Edition*
+*Source: murachs-mysql-3rd-edition, Pages 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139*
