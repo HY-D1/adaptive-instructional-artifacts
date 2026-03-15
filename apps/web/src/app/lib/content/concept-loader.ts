@@ -17,6 +17,8 @@ export interface ConceptInfo {
   };
   relatedConcepts: string[];
   practiceProblemIds: string[];
+  // Helper export may include sourceDocId for namespaced concepts
+  sourceDocId?: string;
 }
 
 export interface LoadedConcept extends ConceptInfo {
@@ -45,12 +47,88 @@ export interface Mistake {
 interface ConceptMapData {
   version: string;
   generatedAt: string;
-  sourceDocId: string;
+  sourceDocId?: string;
+  // Helper export uses sourceDocIds array for multi-doc exports
+  sourceDocIds?: string[];
   concepts: Record<string, ConceptInfo>;
 }
 
 // Cache
 let conceptMapCache: ConceptMapData | null = null;
+
+/**
+ * Resolve a potentially namespaced concept ID to the canonical form.
+ * 
+ * Helper exports use namespaced IDs like "docId/conceptId" (e.g., "murachs-mysql-3rd-edition/select-basic").
+ * This function resolves such IDs to match the keys in concept-map.json.
+ * 
+ * Resolution strategy:
+ * 1. Try exact match first (for already-canonical IDs)
+ * 2. If not found and ID contains "/", extract the suffix (conceptId)
+ * 3. Try suffix match against concept map keys
+ * 4. Return original ID if no resolution found (caller handles not-found)
+ */
+export function resolveConceptId(
+  conceptId: string,
+  availableConcepts: Record<string, ConceptInfo>
+): string {
+  // Already exact match
+  if (availableConcepts[conceptId]) {
+    return conceptId;
+  }
+  
+  // Try namespace resolution (docId/conceptId -> conceptId)
+  if (conceptId.includes('/')) {
+    const parts = conceptId.split('/');
+    const suffix = parts[parts.length - 1];
+    
+    // If suffix exists as a concept key, use it
+    if (availableConcepts[suffix]) {
+      return suffix;
+    }
+    
+    // Also check if the full namespaced ID exists as a key (helper export format)
+    if (availableConcepts[conceptId]) {
+      return conceptId;
+    }
+  }
+  
+  // No resolution found - return original for error handling
+  return conceptId;
+}
+
+/**
+ * Resolve concept ID to file path for markdown fetch.
+ * 
+ * Helper exports store files as concepts/{docId}/{conceptId}.md
+ * Legacy format stores files as concepts/{conceptId}.md
+ * 
+ * This returns the path to attempt fetching, trying legacy first then helper format.
+ */
+function resolveConceptFilePath(conceptId: string, conceptInfo?: ConceptInfo | null): string[] {
+  const paths: string[] = [];
+  
+  // If we have concept info with sourceDocId, try helper format first
+  if (conceptInfo?.sourceDocId) {
+    const plainId = conceptId.includes('/') 
+      ? conceptId.split('/').pop()! 
+      : conceptId;
+    paths.push(`concepts/${conceptInfo.sourceDocId}/${plainId}.md`);
+  }
+  
+  // Try flat path (legacy format)
+  if (!conceptId.includes('/')) {
+    paths.push(`concepts/${conceptId}.md`);
+  } else {
+    // Try full namespaced path as-is
+    paths.push(`concepts/${conceptId}.md`);
+    // Also try suffix-only
+    const suffix = conceptId.split('/').pop()!;
+    paths.push(`concepts/${suffix}.md`);
+  }
+  
+  return paths;
+}
 
 /**
  * Load concept map
@@ -69,23 +147,39 @@ export async function loadConceptMap(): Promise<ConceptMapData | null> {
 }
 
 /**
- * Get single concept info
+ * Get single concept info with alias resolution.
+ * 
+ * Supports both plain concept IDs ("select-basic") and namespaced IDs
+ * ("murachs-mysql-3rd-edition/select-basic").
  */
 export async function getConcept(conceptId: string): Promise<ConceptInfo | null> {
   const map = await loadConceptMap();
-  return map?.concepts[conceptId] || null;
+  if (!map) return null;
+  
+  const resolvedId = resolveConceptId(conceptId, map.concepts);
+  const concept = map.concepts[resolvedId] || null;
+  
+  // Preserve the original ID if we resolved to a different key
+  // This helps downstream code know what was requested vs what was found
+  if (concept && resolvedId !== conceptId) {
+    return {
+      ...concept,
+      id: conceptId // Keep original requested ID for URL consistency
+    };
+  }
+  
+  return concept;
 }
 
 /**
  * Load full concept with parsed content
  */
 export async function loadConceptContent(conceptId: string): Promise<LoadedConcept | null> {
-  const [concept, markdown] = await Promise.all([
-    getConcept(conceptId),
-    fetchConceptMarkdown(conceptId)
-  ]);
+  const concept = await getConcept(conceptId);
+  if (!concept) return null;
   
-  if (!concept || !markdown) return null;
+  const markdown = await fetchConceptMarkdown(conceptId, concept);
+  if (!markdown) return null;
   
   return {
     ...concept,
@@ -94,16 +188,29 @@ export async function loadConceptContent(conceptId: string): Promise<LoadedConce
 }
 
 /**
- * Fetch raw markdown
+ * Fetch raw markdown with multi-path resolution.
+ * 
+ * Tries multiple file paths to support both legacy flat structure
+ * and helper-exported nested structure.
  */
-async function fetchConceptMarkdown(conceptId: string): Promise<string | null> {
-  try {
-    const response = await fetch(`/textbook-static/concepts/${conceptId}.md`);
-    if (!response.ok) return null;
-    return response.text();
-  } catch {
-    return null;
+async function fetchConceptMarkdown(
+  conceptId: string,
+  conceptInfo?: ConceptInfo | null
+): Promise<string | null> {
+  const paths = resolveConceptFilePath(conceptId, conceptInfo);
+  
+  for (const path of paths) {
+    try {
+      const response = await fetch(`/textbook-static/${path}`);
+      if (response.ok) {
+        return response.text();
+      }
+    } catch {
+      // Continue to next path
+    }
   }
+  
+  return null;
 }
 
 /**
@@ -282,9 +389,14 @@ export function getConceptChunks(
   const index = storage.getPdfIndex();
   const map = conceptMapCache;
   
-  if (!index || !map?.concepts[conceptId]) return null;
+  if (!index || !map) return null;
   
-  const concept = map.concepts[conceptId];
+  // Resolve concept ID using same logic as getConcept
+  const resolvedId = resolveConceptId(conceptId, map.concepts);
+  const concept = map.concepts[resolvedId];
+  
+  if (!concept) return null;
+  
   const chunkIds = type 
     ? concept.chunkIds[type]
     : [...concept.chunkIds.definition, ...concept.chunkIds.examples, ...concept.chunkIds.commonMistakes];
@@ -296,7 +408,11 @@ export function getConceptChunks(
  * Get practice problems for a concept
  */
 export function getProblemsForConcept(conceptId: string): SQLProblem[] {
-  return sqlProblems.filter(p => p.concepts.includes(conceptId));
+  // Resolve to plain ID for problem lookup
+  const plainId = conceptId.includes('/') 
+    ? conceptId.split('/').pop()! 
+    : conceptId;
+  return sqlProblems.filter(p => p.concepts.includes(plainId) || p.concepts.includes(conceptId));
 }
 
 /**
