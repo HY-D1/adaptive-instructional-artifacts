@@ -158,9 +158,9 @@ import { isHostedMode, getHostedModeMessage } from '../../../lib/runtime-config'
 import { createEventId } from '../../../lib/utils/event-id';
 import { clusterLearners, LearnerCluster } from '../../../lib/research/learner-clustering';
 import { buildErrorTransitionMatrix, buildErrorTransitionStats, getErrorRecoveryPatterns, ErrorTransitionStats } from '../../../lib/research/error-transitions';
-import { EscalationHeatmap } from '../../research/EscalationHeatmap';
-import { ErrorTransitionView, ErrorChainView, ErrorRecoveryView } from '../../research/ErrorTransitionView';
-import { MasteryTimeline } from '../../research/MasteryTimeline';
+import { EscalationHeatmap } from './EscalationHeatmap';
+import { ErrorTransitionView, ErrorChainView, ErrorRecoveryView } from './ErrorTransitionView';
+import { MasteryTimeline } from './MasteryTimeline';
 
 const experimentConditions: ExperimentCondition[] = [
   {

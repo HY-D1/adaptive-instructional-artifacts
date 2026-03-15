@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { Badge } from '../ui/badge';
-import type { InteractionEvent } from '../../types';
+import { Badge } from '../../ui/badge';
+import type { InteractionEvent } from '../../../types';
 
 interface Props {
   interactions: InteractionEvent[];

@@ -1,5 +1,5 @@
-import { Badge } from '../ui/badge';
-import type { ErrorTransitionMatrix, ErrorChain } from '../../lib/research/error-transitions';
+import { Badge } from '../../ui/badge';
+import type { ErrorTransitionMatrix, ErrorChain } from '../../../lib/research/error-transitions';
 
 interface Props {
   matrix: ErrorTransitionMatrix[];

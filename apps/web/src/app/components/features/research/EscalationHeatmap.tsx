@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { InteractionEvent } from '../../types';
+import type { InteractionEvent } from '../../../types';
 
 interface Props {
   interactions: InteractionEvent[];
