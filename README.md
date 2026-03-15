@@ -227,6 +227,8 @@ See the research documentation for logging schema details.
 
 ## Deployment
 
+> **Detailed Guides**: See [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for full deployment procedures and [docs/DEPLOYMENT_MODES.md](./docs/DEPLOYMENT_MODES.md) for the complete capability matrix (what works in local vs hosted mode).
+
 ### Production Deployment
 
 #### Environment Variables
@@ -266,6 +268,11 @@ See the research documentation for logging schema details.
 | Instructor Dashboard | ✅ (with passcode) | ✅ (with passcode) | ✅ (with passcode) |
 | LLM Explanations | ✅ (local Ollama) | ❌ | ✅ (with backend proxy) |
 | PDF Index Search | ✅ (backend required) | ❌ | ✅ (with backend) |
+
+**See [docs/DEPLOYMENT_MODES.md](./docs/DEPLOYMENT_MODES.md) for the complete capability matrix** including:
+- Which features require build-time environment variables
+- What is intentionally disabled in hosted mode
+- How to reproduce each deployment mode locally
 
 ### Vercel Configuration
 
