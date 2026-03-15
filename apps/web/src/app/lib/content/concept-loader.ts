@@ -57,6 +57,13 @@ interface ConceptMapData {
 let conceptMapCache: ConceptMapData | null = null;
 
 /**
+ * Clear the concept map cache. Used for testing.
+ */
+export function clearConceptMapCache(): void {
+  conceptMapCache = null;
+}
+
+/**
  * Resolve a potentially namespaced concept ID to the canonical form.
  * 
  * Helper exports use namespaced IDs like "docId/conceptId" (e.g., "murachs-mysql-3rd-edition/select-basic").
@@ -134,7 +141,9 @@ function resolveConceptFilePath(conceptId: string, conceptInfo?: ConceptInfo | n
  * Load concept map
  */
 export async function loadConceptMap(): Promise<ConceptMapData | null> {
-  if (conceptMapCache) return conceptMapCache;
+  if (conceptMapCache) {
+    return conceptMapCache;
+  }
   
   try {
     const response = await fetch('/textbook-static/concept-map.json');
