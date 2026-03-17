@@ -4,7 +4,7 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-blue)
 ![React](https://img.shields.io/badge/React-18.3-61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-6.4-646CFF)
-![Tests](https://img.shields.io/badge/Tests-1206%20passing-success)
+![Tests](https://img.shields.io/badge/Tests-1235%20passing-success)
 ![Week 1](https://img.shields.io/badge/Week%201-Stable-success)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
@@ -171,8 +171,8 @@ Week 1 focused on stability and deployment readiness. Core systems baseline veri
 |------|--------|
 | TypeScript | ✅ Clean compile |
 | Build | ✅ Production ready |
-| Unit Tests | ✅ 805 passing (2 skipped) |
-| E2E Tests | ✅ 401 passing |
+| Unit Tests | ✅ 829 passing (2 skipped) |
+| E2E Tests | ✅ 406 passing |
 | Hosted Demo | ✅ Verified on Vercel |
 
 📄 **Full Status Report**: [docs/week1-status.md](./docs/week1-status.md)  

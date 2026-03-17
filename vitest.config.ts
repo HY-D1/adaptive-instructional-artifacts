@@ -12,6 +12,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     include: ['apps/web/src/**/*.test.ts'],
+    setupFiles: ['./test-setup.ts'],
     deps: {
       // Allow importing TypeScript files
       interopDefault: true
