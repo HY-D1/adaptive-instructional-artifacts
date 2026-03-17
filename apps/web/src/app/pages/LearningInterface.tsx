@@ -18,7 +18,9 @@ import {
   TrendingUp,
   X,
   Eye,
-  LogOut
+  LogOut,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 import { Card } from '../components/ui/card';
@@ -289,6 +291,7 @@ export function LearningInterface() {
   const [hdiTrend, setHdiTrend] = useState<HDITrend>('stable');
   const [showDependencyWarning, setShowDependencyWarning] = useState(false);
   const [hdiRefreshKey, setHdiRefreshKey] = useState(0);
+  const [solvedRefreshKey, setSolvedRefreshKey] = useState(0);
   const dependencyWarningShownRef = useRef(false);
   const lastHintRequestTimeRef = useRef<number>(0);
   
@@ -1314,7 +1317,10 @@ export function LearningInterface() {
           console.error('[Bandit] Failed to record outcome:', error);
         }
       }
-      
+
+      // Trigger refresh of solved count from profile
+      setSolvedRefreshKey(prev => prev + 1);
+
       return;
     }
 
@@ -1469,15 +1475,11 @@ export function LearningInterface() {
   );
 
   // Memoized helper to check if a problem has been solved
+  // Reads from learner profile for persistence across sessions
   const solvedProblemIds = useMemo(() => {
-    const solved = new Set<string>();
-    for (const interaction of learnerSessionInteractions) {
-      if (interaction.eventType === 'execution' && interaction.successful && interaction.problemId) {
-        solved.add(interaction.problemId);
-      }
-    }
-    return solved;
-  }, [learnerSessionInteractions]);
+    const profile = storage.getProfile(learnerId);
+    return profile?.solvedProblemIds ?? new Set<string>();
+  }, [learnerId, solvedRefreshKey]);
 
   const isProblemSolved = useCallback((problemId: string): boolean => {
     return solvedProblemIds.has(problemId);
@@ -1487,10 +1489,34 @@ export function LearningInterface() {
   const solvedCount = solvedProblemIds.size;
 
   // Calculate progress percentage
-  const progressPercentage = useMemo(() => 
+  const progressPercentage = useMemo(() =>
     Math.round((solvedCount / sqlProblems.length) * 100),
     [solvedCount]
   );
+
+  // Current problem index (1-based for display)
+  const currentProblemIndex = useMemo(() =>
+    sqlProblems.findIndex(p => p.id === currentProblem.id) + 1,
+    [currentProblem.id]
+  );
+
+  // Navigation handlers
+  const handleNextProblem = useCallback(() => {
+    const nextIndex = currentProblemIndex; // already 1-based, so this is correct position for next
+    if (nextIndex < sqlProblems.length) {
+      handleProblemChange(sqlProblems[nextIndex].id);
+    }
+  }, [currentProblemIndex, handleProblemChange]);
+
+  const handlePreviousProblem = useCallback(() => {
+    const prevIndex = currentProblemIndex - 2; // convert to 0-based, then back one
+    if (prevIndex >= 0) {
+      handleProblemChange(sqlProblems[prevIndex].id);
+    }
+  }, [currentProblemIndex, handleProblemChange]);
+
+  const hasNextProblem = currentProblemIndex < sqlProblems.length;
+  const hasPreviousProblem = currentProblemIndex > 1;
 
   // Memoized error and attempt calculations
   const latestProblemErrorEvent = useMemo(() => 
@@ -1797,6 +1823,9 @@ export function LearningInterface() {
                 <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <span className="text-sm text-gray-500 font-medium">
+                        Problem {currentProblemIndex} of {sqlProblems.length}
+                      </span>
                       <h2 className="text-xl font-bold">{currentProblem.title}</h2>
                       <Badge 
                         variant="outline"
@@ -1862,10 +1891,21 @@ export function LearningInterface() {
                   </div>
                   
                   {/* Enhanced Problem Selector with difficulty, concepts, and solved status */}
-                  <Select 
-                    value={currentProblem.id} 
-                    onValueChange={handleProblemChange}
-                  >
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handlePreviousProblem}
+                      disabled={!hasPreviousProblem}
+                      aria-label="Previous problem"
+                      className="shrink-0"
+                    >
+                      <ChevronLeft className="size-4" />
+                    </Button>
+                    <Select
+                      value={currentProblem.id}
+                      onValueChange={handleProblemChange}
+                    >
                     <SelectTrigger className="w-full lg:w-[300px]" data-testid="problem-select-trigger">
                       <div className="flex items-center gap-2 overflow-hidden">
                         <span className="truncate">{currentProblem.title}</span>
@@ -1915,6 +1955,17 @@ export function LearningInterface() {
                       })}
                     </SelectContent>
                   </Select>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleNextProblem}
+                      disabled={!hasNextProblem}
+                      aria-label="Next problem"
+                      className="shrink-0"
+                    >
+                      <ChevronRight className="size-4" />
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="mb-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
