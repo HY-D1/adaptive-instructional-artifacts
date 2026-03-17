@@ -1242,12 +1242,12 @@ export function HintSystem({
             <button
               type="button"
               onClick={handleAddToTextbook}
-              disabled={!profile || !sessionId || currentRung >= 3 || isAddingToTextbook}
+              disabled={!profile || !sessionId || isAddingToTextbook}
               className={cn(
                 'w-full h-9 text-sm px-2 rounded-md font-medium',
                 'inline-flex items-center justify-center gap-1 transition-colors',
-                (!profile || !sessionId || currentRung >= 3) 
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                (!profile || !sessionId)
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   : 'bg-purple-600 text-white hover:bg-purple-700'
               )}
             >
@@ -1266,11 +1266,7 @@ export function HintSystem({
           </TooltipTrigger>
           <TooltipContent side="bottom">
             <p>Save to My Textbook</p>
-            {currentRung >= 3 ? (
-              <p className="text-xs text-gray-400">Already at max level</p>
-            ) : (
-              <p className="text-xs text-gray-400">Creates a personalized study note</p>
-            )}
+            <p className="text-xs text-gray-400">Creates a personalized study note for review</p>
           </TooltipContent>
         </Tooltip>
         )}

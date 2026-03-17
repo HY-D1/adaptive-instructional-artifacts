@@ -670,9 +670,24 @@ export function AskMyTextbookChat({
     unitId: string,
     conceptIds: string[],
     sourceIds: string[],
-    queryHash: string
+    queryHash: string,
+    quickChip?: string
   ) => {
     if (!sessionId) return;
+
+    // Generate descriptive title based on quick chip type
+    let noteTitle: string;
+    if (quickChip === 'explain_error') {
+      noteTitle = 'Saved: Error Explanation';
+    } else if (quickChip === 'minimal_example') {
+      noteTitle = 'Saved: SQL Example';
+    } else if (quickChip === 'what_concept') {
+      noteTitle = 'Saved: Concept Overview';
+    } else if (quickChip === 'hint_response') {
+      noteTitle = 'Saved: Hint & Guidance';
+    } else {
+      noteTitle = 'Saved: Chat Response';
+    }
 
     const event: InteractionEvent = {
       id: createEventId('textbook-add-auto'),
@@ -687,8 +702,8 @@ export function AskMyTextbookChat({
       triggerInteractionIds: [queryHash],
       evidenceInteractionIds: [queryHash],
       sourceInteractionIds: [queryHash],
-      noteTitle: 'Auto-saved from chat',
-      noteContent: `Auto-saved response for query hash ${queryHash}`
+      noteTitle,
+      noteContent: `Auto-saved response for query: ${quickChip || 'general'}`
     };
 
     storage.saveInteraction(event);
@@ -738,7 +753,8 @@ export function AskMyTextbookChat({
           unit.id,
           unit.conceptIds || [unit.conceptId],
           message.retrievedSourceIds || [],
-          queryHash
+          queryHash,
+          message.quickChip
         );
         
         // Update message state to show auto-saved indicator
