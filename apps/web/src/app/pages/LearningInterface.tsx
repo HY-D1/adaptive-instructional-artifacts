@@ -1045,6 +1045,9 @@ export function LearningInterface() {
     setNotesActionMessage(undefined);
     setGenerationError(undefined);
     setLatestGeneratedUnit(null);
+
+    // Refresh solved count from storage when switching problems
+    setSolvedRefreshKey(prev => prev + 1);
   }, [learnerId, sessionId]);
 
   const collectNoteEvidenceIds = (
@@ -1481,6 +1484,12 @@ export function LearningInterface() {
     return profile?.solvedProblemIds ?? new Set<string>();
   }, [learnerId, solvedRefreshKey]);
 
+  // Current problem solved status - refreshes when problem changes
+  const isCurrentProblemSolved = useMemo(() => {
+    const profile = storage.getProfile(learnerId);
+    return profile?.solvedProblemIds?.has(currentProblem.id) ?? false;
+  }, [learnerId, currentProblem.id, solvedRefreshKey]);
+
   const isProblemSolved = useCallback((problemId: string): boolean => {
     return solvedProblemIds.has(problemId);
   }, [solvedProblemIds]);
@@ -1833,7 +1842,7 @@ export function LearningInterface() {
                       >
                         {currentProblem.difficulty}
                       </Badge>
-                      {isProblemSolved(currentProblem.id) && (
+                      {isCurrentProblemSolved && (
                         <Badge className="bg-green-100 text-green-800 border-green-200">
                           <Check className="size-3 mr-1" />
                           Solved
@@ -2113,23 +2122,23 @@ export function LearningInterface() {
               {showAddToNotes && (
                 <Card className="p-4 space-y-3">
                   <div>
-                    <h3 className="font-semibold">Escalation</h3>
+                    <h3 className="font-semibold">Save This Explanation</h3>
                     <p className="text-sm text-gray-600">
-                      Explanations are generated automatically after Hint 3. Add to My Notes to save a reflective notebook unit.
+                      You have viewed all available hints. Save this explanation to your notes for later review.
                     </p>
                   </div>
                   <Button onClick={handleAddToNotes} size="sm" className="w-full" disabled={isGeneratingUnit}>
                     {isGeneratingUnit ? (
                       <>
                         <Sparkles className="size-4 mr-2 animate-pulse" />
-                        Generating...
+                        Saving...
                       </>
                     ) : (
-                      'Add to My Notes'
+                      'Save to My Notes'
                     )}
                   </Button>
                   {isGeneratingUnit && (
-                    <p className="text-xs text-gray-500">Generating grounded content from retrieved sources...</p>
+                    <p className="text-xs text-gray-500">Creating your note...</p>
                   )}
                   {generationError && (
                     <p className="text-xs text-amber-700">{generationError}</p>
@@ -2140,11 +2149,6 @@ export function LearningInterface() {
                   {latestGeneratedUnit && (
                     <div className="rounded border bg-slate-50 p-2">
                       <p className="text-xs font-medium text-slate-700">{latestGeneratedUnit.title}</p>
-                      {latestGeneratedUnit.provenance && (
-                        <p className="text-[11px] text-slate-600 mt-1">
-                          {latestGeneratedUnit.provenance.templateId} • {latestGeneratedUnit.provenance.model}
-                        </p>
-                      )}
                     </div>
                   )}
                 </Card>
