@@ -856,7 +856,8 @@ class StorageManager {
       currentStrategy: this.normalizeStrategy(profile.currentStrategy),
       conceptsCovered: Array.from(mergedConceptsCovered),
       conceptCoverageEvidence: Array.from(mergedEvidence.entries()),
-      errorHistory: Array.from(mergedErrorHistory.entries())
+      errorHistory: Array.from(mergedErrorHistory.entries()),
+      solvedProblemIds: Array.from(profile.solvedProblemIds || new Set())
     };
     
     // Re-find index in the current profiles array (from initial read)
@@ -926,6 +927,7 @@ class StorageManager {
         conceptsCovered,
         conceptCoverageEvidence: evidenceMap,
         errorHistory: new Map((profile.errorHistory || []) as any),
+        solvedProblemIds: new Set((profile.solvedProblemIds || []) as string[]),
         currentStrategy: this.normalizeStrategy(profile.currentStrategy)
       };
     } catch (error) {
@@ -973,6 +975,7 @@ class StorageManager {
       conceptsCovered: new Set(),
       conceptCoverageEvidence: new Map(),
       errorHistory: new Map(),
+      solvedProblemIds: new Set(),
       interactionCount: 0,
       currentStrategy: this.normalizeStrategy(strategy),
       preferences: {
@@ -2606,6 +2609,11 @@ class StorageManager {
             (profile.errorHistory.get(canonicalSubtype) || 0) + 1
           );
         }
+      }
+
+      // Track solved problems on successful execution
+      if (event.eventType === 'execution' && event.successful && event.problemId) {
+        profile.solvedProblemIds.add(event.problemId);
       }
 
       // Update evidence-based coverage for all valid concept IDs in the event

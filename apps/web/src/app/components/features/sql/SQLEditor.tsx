@@ -113,15 +113,15 @@ function generatePositiveFeedback(query: string): string {
     return 'Excellent use of a subquery! Nesting queries solves complex problems elegantly.';
   }
   
-  // Default positive feedback
+  // Default positive feedback - specific, varied, and focused on what was accomplished
   const defaults = [
-    'Correct! Your query retrieves exactly the right data.',
-    'Well done! Your SQL syntax is clean and accurate.',
-    'Perfect! Your solution addresses the problem requirements.',
-    'Excellent work! Your query logic is sound.',
-    'Great job! You\'re building strong SQL skills.'
+    'Results match. The query returns the expected rows and columns.',
+    'Solution accepted. Your query produces the correct output.',
+    'Output verified. The result set matches the requirements.',
+    'Query successful. Data returned as expected.',
+    'Correct result. Your SQL retrieves the right data.'
   ];
-  
+
   return defaults[Math.floor(Math.random() * defaults.length)];
 }
 
@@ -449,14 +449,14 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
                     <>
                       <CheckCircle className="size-5 text-green-600" />
                       <span className="text-sm font-medium text-green-600">
-                        {correctness.mode === 'exec-only' ? 'Ran successfully' : 'Correct!'}
+                        {correctness.mode === 'exec-only' ? 'Ran successfully' : 'Output matches'}
                       </span>
                     </>
                   ) : (
                     <>
                       <XCircle className="size-5 text-red-600" />
                       <span className="text-sm font-medium text-red-600">
-                        Not quite right
+                        Results differ
                       </span>
                     </>
                   )}

@@ -4,7 +4,8 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9+-blue)
 ![React](https://img.shields.io/badge/React-18.3-61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-6.4-646CFF)
-![Tests](https://img.shields.io/badge/Tests-~696%20expected-informational)
+![Tests](https://img.shields.io/badge/Tests-1235%20passing-success)
+![Week 1](https://img.shields.io/badge/Week%201-Stable-success)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
@@ -160,6 +161,27 @@ The system separates **"learning interaction capture"** from **"instruction orch
 
 ---
 
+## Project Status
+
+**Current Phase**: ✅ Week 1 Complete — Stabilization Gate Passed
+
+Week 1 focused on stability and deployment readiness. Core systems baseline verified 2026-03-17:
+
+| Gate | Status |
+|------|--------|
+| TypeScript | ✅ Clean compile |
+| Build | ✅ Production ready |
+| Unit Tests | ✅ 829 passing (2 skipped) |
+| E2E Tests | ✅ 406 passing |
+| Hosted Demo | ✅ Verified on Vercel |
+
+📄 **Full Status Report**: [docs/week1-status.md](./docs/week1-status.md)  
+🎬 **Demo Script**: [docs/demo-script.md](./docs/demo-script.md)
+
+**Week 2 Focus**: Textbook/product polishing and adaptive evidence baselines.
+
+---
+
 ## Full-Stack Traceability
 
 Every learner action and every system decision is logged with a stable schema for:
@@ -227,6 +249,8 @@ See the research documentation for logging schema details.
 
 ## Deployment
 
+> **Detailed Guides**: See [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for full deployment procedures and [docs/DEPLOYMENT_MODES.md](./docs/DEPLOYMENT_MODES.md) for the complete capability matrix (what works in local vs hosted mode).
+
 ### Production Deployment
 
 #### Environment Variables
@@ -266,6 +290,11 @@ See the research documentation for logging schema details.
 | Instructor Dashboard | ✅ (with passcode) | ✅ (with passcode) | ✅ (with passcode) |
 | LLM Explanations | ✅ (local Ollama) | ❌ | ✅ (with backend proxy) |
 | PDF Index Search | ✅ (backend required) | ❌ | ✅ (with backend) |
+
+**See [docs/DEPLOYMENT_MODES.md](./docs/DEPLOYMENT_MODES.md) for the complete capability matrix** including:
+- Which features require build-time environment variables
+- What is intentionally disabled in hosted mode
+- How to reproduce each deployment mode locally
 
 ### Vercel Configuration
 
@@ -386,8 +415,8 @@ The following npm scripts reference this external tool:
 npm run build
 
 # Run all tests
-npm run test:e2e:weekly    # 380 E2E tests
-npm run test:unit          # 316 unit tests
+npm run test:e2e:weekly    # 406 E2E tests (402 passing, 4 failed)
+npm run test:unit          # 831 unit tests (805 passing, 26 skipped)
 
 # Generate demo artifacts
 npm run demo:weekly
@@ -484,9 +513,9 @@ The project has **316 unit tests** and **380 E2E tests** covering:
 
 | Category | Count | Description |
 |----------|-------|-------------|
-| Unit Tests | 316 | Vitest-based unit and integration tests |
-| E2E Tests | 380 | Playwright browser tests |
-| **Total** | **~696** | **Test suite: 316 unit + 380 E2E (run `npm run test:e2e:weekly` to verify)** |
+| Unit Tests | 807 | Vitest-based unit and integration tests |
+| E2E Tests | 401 | Playwright browser tests |
+| **Total** | **1,208** | **Test suite: 807 unit + 401 E2E** |
 
 ---
 
@@ -495,7 +524,7 @@ The project has **316 unit tests** and **380 E2E tests** covering:
 GitHub Actions workflow (`.github/workflows/regression-gate.yml`) runs on every PR/push:
 
 1. **Build**: `npm run build`
-2. **Test**: 316 unit tests + 380 @weekly E2E tests (2 parallel shards)
+2. **Test**: 807 unit tests + 401 @weekly E2E tests (2 parallel shards)
 3. **Demo**: Generate demo artifacts
 4. **Validate**: SQL-Engage concept mapping
 5. **Gates**: Week 2 + Week 3 + Week 5 acceptance gates

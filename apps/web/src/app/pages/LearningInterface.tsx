@@ -18,7 +18,9 @@ import {
   TrendingUp,
   X,
   Eye,
-  LogOut
+  LogOut,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 import { Card } from '../components/ui/card';
@@ -32,7 +34,7 @@ import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/features/sql/S
 import { HintSystem } from '../components/features/hints/HintSystem';
 import { ConceptCoverage } from '../components/features/research/ConceptCoverage';
 import { AskMyTextbookChat } from '../components/features/chat/AskMyTextbookChat';
-import { ReinforcementPrompt } from '../components/ReinforcementPrompt';
+import { ReinforcementPrompt } from '../components/features/reinforcement/ReinforcementPrompt';
 import { useLLMSettings } from '../components/shared/LLMSettingsHelper';
 import { useScreenReaderAnnouncer } from '../components/shared/ScreenReaderAnnouncer';
 import { sqlProblems } from '../data/problems';
@@ -289,6 +291,7 @@ export function LearningInterface() {
   const [hdiTrend, setHdiTrend] = useState<HDITrend>('stable');
   const [showDependencyWarning, setShowDependencyWarning] = useState(false);
   const [hdiRefreshKey, setHdiRefreshKey] = useState(0);
+  const [solvedRefreshKey, setSolvedRefreshKey] = useState(0);
   const dependencyWarningShownRef = useRef(false);
   const lastHintRequestTimeRef = useRef<number>(0);
   
@@ -1042,6 +1045,9 @@ export function LearningInterface() {
     setNotesActionMessage(undefined);
     setGenerationError(undefined);
     setLatestGeneratedUnit(null);
+
+    // Refresh solved count from storage when switching problems
+    setSolvedRefreshKey(prev => prev + 1);
   }, [learnerId, sessionId]);
 
   const collectNoteEvidenceIds = (
@@ -1314,7 +1320,10 @@ export function LearningInterface() {
           console.error('[Bandit] Failed to record outcome:', error);
         }
       }
-      
+
+      // Trigger refresh of solved count from profile
+      setSolvedRefreshKey(prev => prev + 1);
+
       return;
     }
 
@@ -1462,22 +1471,31 @@ export function LearningInterface() {
     [interactions, learnerId, sessionId]
   );
 
-  // Memoized problem interactions
-  const problemInteractions = useMemo(() => 
+  // Memoized problem interactions (session-scoped for current session display)
+  const problemInteractions = useMemo(() =>
     learnerSessionInteractions.filter(i => i.problemId === currentProblem.id),
     [learnerSessionInteractions, currentProblem.id]
   );
 
+  // Cross-session problem interactions for truthful progress indicators
+  // This ensures "successful runs" agrees with "Solved" badge across sessions
+  const allProblemInteractions = useMemo(() => {
+    const allInteractions = storage.getInteractionsByLearner(learnerId);
+    return allInteractions.filter(i => i.problemId === currentProblem.id);
+  }, [learnerId, currentProblem.id, solvedRefreshKey]);
+
   // Memoized helper to check if a problem has been solved
+  // Reads from learner profile for persistence across sessions
   const solvedProblemIds = useMemo(() => {
-    const solved = new Set<string>();
-    for (const interaction of learnerSessionInteractions) {
-      if (interaction.eventType === 'execution' && interaction.successful && interaction.problemId) {
-        solved.add(interaction.problemId);
-      }
-    }
-    return solved;
-  }, [learnerSessionInteractions]);
+    const profile = storage.getProfile(learnerId);
+    return profile?.solvedProblemIds ?? new Set<string>();
+  }, [learnerId, solvedRefreshKey]);
+
+  // Current problem solved status - refreshes when problem changes
+  const isCurrentProblemSolved = useMemo(() => {
+    const profile = storage.getProfile(learnerId);
+    return profile?.solvedProblemIds?.has(currentProblem.id) ?? false;
+  }, [learnerId, currentProblem.id, solvedRefreshKey]);
 
   const isProblemSolved = useCallback((problemId: string): boolean => {
     return solvedProblemIds.has(problemId);
@@ -1487,10 +1505,34 @@ export function LearningInterface() {
   const solvedCount = solvedProblemIds.size;
 
   // Calculate progress percentage
-  const progressPercentage = useMemo(() => 
+  const progressPercentage = useMemo(() =>
     Math.round((solvedCount / sqlProblems.length) * 100),
     [solvedCount]
   );
+
+  // Current problem index (1-based for display)
+  const currentProblemIndex = useMemo(() =>
+    sqlProblems.findIndex(p => p.id === currentProblem.id) + 1,
+    [currentProblem.id]
+  );
+
+  // Navigation handlers
+  const handleNextProblem = useCallback(() => {
+    const nextIndex = currentProblemIndex; // already 1-based, so this is correct position for next
+    if (nextIndex < sqlProblems.length) {
+      handleProblemChange(sqlProblems[nextIndex].id);
+    }
+  }, [currentProblemIndex, handleProblemChange]);
+
+  const handlePreviousProblem = useCallback(() => {
+    const prevIndex = currentProblemIndex - 2; // convert to 0-based, then back one
+    if (prevIndex >= 0) {
+      handleProblemChange(sqlProblems[prevIndex].id);
+    }
+  }, [currentProblemIndex, handleProblemChange]);
+
+  const hasNextProblem = currentProblemIndex < sqlProblems.length;
+  const hasPreviousProblem = currentProblemIndex > 1;
 
   // Memoized error and attempt calculations
   const latestProblemErrorEvent = useMemo(() => 
@@ -1797,6 +1839,9 @@ export function LearningInterface() {
                 <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <span className="text-sm text-gray-500 font-medium">
+                        Problem {currentProblemIndex} of {sqlProblems.length}
+                      </span>
                       <h2 className="text-xl font-bold">{currentProblem.title}</h2>
                       <Badge 
                         variant="outline"
@@ -1804,7 +1849,7 @@ export function LearningInterface() {
                       >
                         {currentProblem.difficulty}
                       </Badge>
-                      {isProblemSolved(currentProblem.id) && (
+                      {isCurrentProblemSolved && (
                         <Badge className="bg-green-100 text-green-800 border-green-200">
                           <Check className="size-3 mr-1" />
                           Solved
@@ -1862,10 +1907,21 @@ export function LearningInterface() {
                   </div>
                   
                   {/* Enhanced Problem Selector with difficulty, concepts, and solved status */}
-                  <Select 
-                    value={currentProblem.id} 
-                    onValueChange={handleProblemChange}
-                  >
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handlePreviousProblem}
+                      disabled={!hasPreviousProblem}
+                      aria-label="Previous problem"
+                      className="shrink-0"
+                    >
+                      <ChevronLeft className="size-4" />
+                    </Button>
+                    <Select
+                      value={currentProblem.id}
+                      onValueChange={handleProblemChange}
+                    >
                     <SelectTrigger className="w-full lg:w-[300px]" data-testid="problem-select-trigger">
                       <div className="flex items-center gap-2 overflow-hidden">
                         <span className="truncate">{currentProblem.title}</span>
@@ -1915,6 +1971,17 @@ export function LearningInterface() {
                       })}
                     </SelectContent>
                   </Select>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleNextProblem}
+                      disabled={!hasNextProblem}
+                      aria-label="Next problem"
+                      className="shrink-0"
+                    >
+                      <ChevronRight className="size-4" />
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="mb-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
@@ -1934,12 +2001,12 @@ export function LearningInterface() {
                       <div className="flex items-center gap-1 cursor-help">
                         <CheckCircle2 className="size-4" />
                         <span>
-                          {problemInteractions.filter(i => i.successful).length} successful runs
+                          {allProblemInteractions.filter(i => i.successful).length} successful runs
                         </span>
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Number of successful query executions</p>
+                      <p>Total successful query executions for this problem (all sessions)</p>
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -2062,38 +2129,38 @@ export function LearningInterface() {
               {showAddToNotes && (
                 <Card className="p-4 space-y-3">
                   <div>
-                    <h3 className="font-semibold">Escalation</h3>
+                    <h3 className="font-semibold">Save This Explanation</h3>
                     <p className="text-sm text-gray-600">
-                      Explanations are generated automatically after Hint 3. Add to My Notes to save a reflective notebook unit.
+                      You have viewed all available hints. Save this explanation to your notes for later review.
                     </p>
                   </div>
                   <Button onClick={handleAddToNotes} size="sm" className="w-full" disabled={isGeneratingUnit}>
                     {isGeneratingUnit ? (
                       <>
                         <Sparkles className="size-4 mr-2 animate-pulse" />
-                        Generating...
+                        Saving...
                       </>
                     ) : (
-                      'Add to My Notes'
+                      'Save to My Notes'
                     )}
                   </Button>
                   {isGeneratingUnit && (
-                    <p className="text-xs text-gray-500">Generating grounded content from retrieved sources...</p>
+                    <p className="text-xs text-gray-500">Creating your note...</p>
                   )}
                   {generationError && (
                     <p className="text-xs text-amber-700">{generationError}</p>
                   )}
                   {notesActionMessage && (
-                    <p className="text-xs text-gray-600">{notesActionMessage}</p>
+                    <div className="text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
+                      <p className="font-medium">{notesActionMessage}</p>
+                      <Link to="/textbook" className="text-blue-600 hover:underline mt-1 inline-block">
+                        View in My Textbook →
+                      </Link>
+                    </div>
                   )}
                   {latestGeneratedUnit && (
                     <div className="rounded border bg-slate-50 p-2">
                       <p className="text-xs font-medium text-slate-700">{latestGeneratedUnit.title}</p>
-                      {latestGeneratedUnit.provenance && (
-                        <p className="text-[11px] text-slate-600 mt-1">
-                          {latestGeneratedUnit.provenance.templateId} • {latestGeneratedUnit.provenance.model}
-                        </p>
-                      )}
                     </div>
                   )}
                 </Card>

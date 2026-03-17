@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0.0",
+  "schemaId": "textbook-static-v1",
+  "indexId": "idx-murachs-mysql-3rd-edition-20260315-210818",
+  "createdAt": "2026-03-15T21:08:18.127157+00:00",
+  "sourceName": "murachs-mysql-3rd-edition",
+  "chunkerVersion": "word-window-150-overlap-30-v1",
+  "embeddingModelId": "hash-embedding-v1",
+  "sourceDocs": [
+    {
+      "docId": "murachs-mysql-3rd-edition",
+      "filename": "murachs-mysql-3rd-edition.pdf",
+      "sha256": "unknown",
+      "pageCount": 0
+    }
+  ],
+  "docCount": 1,
+  "chunkCount": 1472,
+  "chapters": [],
+  "total_exercises": 0,
+  "total_examples": 0,
+  "l2_stats": {},
+  "audit_log_path": null
+}

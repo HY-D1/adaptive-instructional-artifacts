@@ -239,6 +239,7 @@ export type LearnerProfile = {
   conceptsCovered: Set<string>;
   conceptCoverageEvidence: Map<string, ConceptCoverageEvidence>; // conceptId -> evidence
   errorHistory: Map<string, number>; // errorSubtypeId -> count
+  solvedProblemIds: Set<string>; // Problem IDs that the learner has successfully solved
   interactionCount: number;
   currentStrategy: 'hint-only' | 'adaptive-low' | 'adaptive-medium' | 'adaptive-high';
   preferences: {

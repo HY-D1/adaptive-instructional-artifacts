@@ -1,61 +1,86 @@
+---
+id: isolation-levels-murach
+title: Transaction Isolation Levels
+definition: READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE
+difficulty: advanced
+estimatedReadTime: 5
+pageReferences: [471, 472, 473, 474, 475, 476, 477, 478, 479, 480, 481, 482]
+chunkIds:
+  - murachs-mysql-3rd-edition:p471:c1
+  - murachs-mysql-3rd-edition:p471:c2
+  - murachs-mysql-3rd-edition:p472:c1
+  - murachs-mysql-3rd-edition:p472:c2
+  - murachs-mysql-3rd-edition:p473:c1
+  - murachs-mysql-3rd-edition:p473:c2
+  - murachs-mysql-3rd-edition:p474:c1
+  - murachs-mysql-3rd-edition:p474:c2
+  - murachs-mysql-3rd-edition:p474:c3
+  - murachs-mysql-3rd-edition:p474:c4
+  - murachs-mysql-3rd-edition:p475:c1
+  - murachs-mysql-3rd-edition:p475:c2
+  - murachs-mysql-3rd-edition:p476:c1
+  - murachs-mysql-3rd-edition:p476:c2
+  - murachs-mysql-3rd-edition:p477:c1
+  - murachs-mysql-3rd-edition:p478:c1
+  - murachs-mysql-3rd-edition:p478:c2
+  - murachs-mysql-3rd-edition:p479:c1
+  - murachs-mysql-3rd-edition:p479:c2
+  - murachs-mysql-3rd-edition:p480:c1
+  - murachs-mysql-3rd-edition:p480:c2
+  - murachs-mysql-3rd-edition:p480:c3
+  - murachs-mysql-3rd-edition:p480:c4
+  - murachs-mysql-3rd-edition:p481:c1
+  - murachs-mysql-3rd-edition:p481:c2
+  - murachs-mysql-3rd-edition:p482:c1
+relatedConcepts:
+tags:
+  - mysql
+  - transactions
+  - isolation
+  - advanced
+sourceDocId: murachs-mysql-3rd-edition
+---
+
 # Transaction Isolation Levels
 
 ## Definition
-
-Transaction isolation levels determine how transactions interact with each other and with data changes made by other transactions. They ensure data consistency and prevent anomalies like dirty reads, non-repeatable reads, and phantom reads.
+READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE
 
 ## Explanation
+Chapter 15 How to create stored prvcedures and functions A CREATE PROCEDURE statement that provides a default value DELIMITER// CREATE PROCEDURE update_ invoices_credit_total ( invoice_ id_param INT, credit_ total_param DECIMAL(9,2)) BEGIN DECLARE sql_error TINYINT DEFAULT FALSE; DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET sql_error = TRUE; -- Set default values for NULL values IF credit_ total_param IS NULL THEN SET credit_ total_param = 100; END IF; START TRANSACTION; UPDATE invoices SET credit_total = credit_ total_param WHERE invoice id= invoice_ id_param; IF sql_ error = FALSE THEN COMMIT; ELSE ROLLBACK; END IF; END// A statement that calls the stored procedure CALL update_ invoices_credit_total(56, 200); Another statement that calls the stored procedure CALL update_ invoices_credit_total(56, NULL); Description • You can provide a default value for a parameter so that if the calling program passes a null value for the parameter, the default value is used instead. • to set a default value for a parameter, you can use an IF statement to check if the parameter contains a null value. If it does, you can assign a default value to the parameter. •
 
-In a database system, multiple users can access the same data simultaneously, which can lead to conflicts if not managed properly. Transaction isolation levels help manage these conflicts by controlling how transactions see and modify data. The four main isolation levels are: READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, and SERIALIZABLE. Each level offers a different balance between performance and data consistency.
+a parameter, you can use an IF statement to check if the parameter contains a null value. If it does, you can assign a default value to the parameter. • It's a good programming practice to code your CREATE PROCEDURE statements so they list parameters that require values first, fallowed by parameters that allow null values. How to set a default value for a parameter
+
+How to validate parameters and raise errors Within a stored procedure, it's generally considered a good practice to prevent errors by checking the parameters before they 're used to make sure they're valid. This is often refe1Ted to as data validation. Then, if the data isn't valid, you can execute code that makes it valid, or you can raise an error, which returns the error to the calling program. that are available from MySQL. to do that, you code the SIGNAL
 
 ## Examples
-
-### Basic Usage
-
+### Example 1: SELECT Example
 ```sql
--- Set transaction isolation level to REPEATABLE READ SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+SELECT statement gets the value of the default terms id column for the vendor and stores it in the terms id variable. If - - - this parameter isn't null, the value of the terrr1s_id parameter is assigned to the terms id variable. The next IF statement is similar. It checks the value of the parameter for the invoice_due_date column for a null value. If the parameter is nt1ll, a SELECT statement uses the value of the terms_id variable to get the number of days until the invoice is due
+
+for the invoice_due_date column for a null value. If the parameter is nt1ll, a SELECT statement uses the value of the terms_id variable to get the number of days until the invoice is due from the terms table, and it stores this value in the terms_due_days variable. Then, it calculates a due date for the invoice by using the DATE_ADD function to add the number of days to the invoice date. If the invoice_due_date parameter isn't null, though, this code sets the invoice_due_date variable to the value that's stored in the parameter.
+
+Chapter 15 How to create stored prvcedures and functions A stored procedure that validates the data in a new invoice DELIMITER// CREATE PROCEDURE insert_ invoice ( vendor_id_param invoice_ number_param invoice_date_param invoice_ total_param terms_id_param invoice_due_date_param INT, VARCHAR(SO), DATE, DECIMAL(9,2), INT,) BEGIN DECLARE terms id var DATE DECLARE invoice_due_date_var DECLARE terms_due_days_var -- Validate paramater values INT;
 ```
+Example SELECT statement from textbook.
 
-This example demonstrates how to set the transaction isolation level in SQL. Setting it to REPEATABLE READ ensures that a transaction sees the same data multiple times during its execution.
-
-### Practical Example
-
+### Example 2: SELECT Example
 ```sql
--- Start a transaction START TRANSACTION; -- UPDATE a record UPDATE employees SET salary = 5000 WHERE employee_id = 101; -- Commit the transaction COMMIT;
+SELECT default_ terms_ id INTO terms id var FROM vendors WHERE vendor_ id = vendor_ id_param;
 ```
+Example SELECT statement from textbook.
 
-This practical example shows how to use transaction isolation levels in a real-world scenario. It starts a transaction, updates an employee's salary, and commits the changes.
+### Example 3: INSERT Example
+```sql
+INSERT INTO invoices (vendor_ id, invoice_nwnber, invoice_date, invoice_ total,
+
+INTO terms_due_days_var FROM terms WHERE terms_ id = terms_ id_var;
+```
+Example INSERT statement from textbook.
 
 ## Common Mistakes
-
-### Not setting the isolation level
-
-**Incorrect:**
-
-```sql
--- No isolation level set
-SELECT * FROM employees;
-```
-
-**Correct:**
-
-```sql
--- Set isolation level to READ COMMITTED
-SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
--- Then perform operations
-SELECT * FROM employees;
-```
-
-**Why this happens:** Failing to set an isolation level can lead to inconsistent data readings. Always ensure that the appropriate isolation level is set for your transactions.
+### No common mistakes listed
+No specific mistakes documented in textbook.
 
 ---
-
-## Practice
-
-**Question:** Which isolation level provides the highest level of data consistency and prevents all types of anomalies?
-
-**Solution:** The SERIALIZABLE isolation level provides the highest level of data consistency and prevents all types of anomalies by ensuring that transactions are executed in a serialized manner. However, it can significantly impact performance.
-
----
-
-*Source: Murach's MySQL 3rd Edition*
+*Source: murachs-mysql-3rd-edition, Pages 471, 472, 473, 474, 475, 476, 477, 478, 479, 480, 481, 482*
