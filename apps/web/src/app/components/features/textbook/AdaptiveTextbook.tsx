@@ -120,6 +120,31 @@ export function AdaptiveTextbook({
     loadTextbook();
   }, [learnerId]);
 
+  // Refresh data when component becomes visible (e.g., navigating back from practice page)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadTextbook();
+      }
+    };
+
+    const handleFocus = () => {
+      loadTextbook();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    // Polling fallback for same-tab changes
+    const interval = setInterval(loadTextbook, 3000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
+  }, [learnerId]);
+
   const loadTextbook = () => {
     const units = storage.getTextbook(learnerId);
     setTextbookUnits(units);
@@ -324,9 +349,12 @@ export function AdaptiveTextbook({
       <Card className="p-8 text-center">
         <Book className="size-12 mx-auto text-gray-400 mb-4" />
         <h3 className="font-semibold text-lg mb-2">Your Textbook is Empty</h3>
-        <p className="text-gray-600">
-          As you practice SQL, the system will automatically add personalized
-          instructional content here based on your learning patterns.
+        <p className="text-gray-600 mb-3">
+          Notes will appear here when you save them from the practice page.
+        </p>
+        <p className="text-sm text-gray-500">
+          While solving SQL problems, click <strong>"Save to Notes"</strong> after viewing hints
+          or explanations to build your personalized study guide.
         </p>
       </Card>
     );

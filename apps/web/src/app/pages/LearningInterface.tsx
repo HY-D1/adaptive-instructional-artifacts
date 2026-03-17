@@ -1471,11 +1471,18 @@ export function LearningInterface() {
     [interactions, learnerId, sessionId]
   );
 
-  // Memoized problem interactions
-  const problemInteractions = useMemo(() => 
+  // Memoized problem interactions (session-scoped for current session display)
+  const problemInteractions = useMemo(() =>
     learnerSessionInteractions.filter(i => i.problemId === currentProblem.id),
     [learnerSessionInteractions, currentProblem.id]
   );
+
+  // Cross-session problem interactions for truthful progress indicators
+  // This ensures "successful runs" agrees with "Solved" badge across sessions
+  const allProblemInteractions = useMemo(() => {
+    const allInteractions = storage.getInteractionsByLearner(learnerId);
+    return allInteractions.filter(i => i.problemId === currentProblem.id);
+  }, [learnerId, currentProblem.id, solvedRefreshKey]);
 
   // Memoized helper to check if a problem has been solved
   // Reads from learner profile for persistence across sessions
@@ -1994,12 +2001,12 @@ export function LearningInterface() {
                       <div className="flex items-center gap-1 cursor-help">
                         <CheckCircle2 className="size-4" />
                         <span>
-                          {problemInteractions.filter(i => i.successful).length} successful runs
+                          {allProblemInteractions.filter(i => i.successful).length} successful runs
                         </span>
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Number of successful query executions</p>
+                      <p>Total successful query executions for this problem (all sessions)</p>
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -2144,7 +2151,12 @@ export function LearningInterface() {
                     <p className="text-xs text-amber-700">{generationError}</p>
                   )}
                   {notesActionMessage && (
-                    <p className="text-xs text-gray-600">{notesActionMessage}</p>
+                    <div className="text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
+                      <p className="font-medium">{notesActionMessage}</p>
+                      <Link to="/textbook" className="text-blue-600 hover:underline mt-1 inline-block">
+                        View in My Textbook →
+                      </Link>
+                    </div>
                   )}
                   {latestGeneratedUnit && (
                     <div className="rounded border bg-slate-50 p-2">

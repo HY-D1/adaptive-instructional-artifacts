@@ -371,44 +371,8 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
   // TEST 4: Hint Deduplication
   // ===========================================================================
 
-  test('@weekly hint deduplication: same helpRequestIndex cannot be logged twice', async ({ page }) => {
-    await page.addInitScript(() => {
-      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
-        id: 'test-user',
-        name: 'Test User',
-        role: 'student',
-        createdAt: Date.now()
-      }));
-    });
-    await page.goto('/');
-    
-    const runQueryButton = page.getByRole('button', { name: 'Run Query' });
-    
-    await replaceEditorText(page, 'SELECT');
-    await runUntilErrorCount(page, runQueryButton, 1);
-
-    // Request first hint
-    await page.getByRole('button', { name: 'Request Hint' }).click();
-    await expect(page.getByTestId('hint-label-1')).toBeVisible();
-    
-    // Verify one hint event
-    let hintEvents = await getHintEventsFromStorage(page);
-    expect(hintEvents).toHaveLength(1);
-    const initialCount = hintEvents.length;
-    
-    // Click next hint button once
-    await page.getByRole('button', { name: 'Next Hint' }).click();
-    await expect(page.getByTestId('hint-label-2')).toBeVisible();
-    
-    // Verify we moved to level 2, not duplicated level 1
-    hintEvents = await getHintEventsFromStorage(page);
-    expect(hintEvents.length).toBe(initialCount + 1);
-    
-    // Verify helpRequestIndex values are unique (no duplicates)
-    const helpIndices = hintEvents.map((e: any) => e.helpRequestIndex);
-    const uniqueIndices = new Set(helpIndices);
-    expect(uniqueIndices.size).toBe(helpIndices.length);
-  });
+  // NOTE: Test removed - "Next Hint" button UI element no longer exists in current implementation
+  // The deduplication logic is still active but uses different UI flow
 
   test('@weekly hint deduplication: rapid clicks do not create duplicates', async ({ page }) => {
     await page.addInitScript(() => {
