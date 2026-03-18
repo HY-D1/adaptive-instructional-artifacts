@@ -18,7 +18,14 @@ import { sessionsRouter } from './routes/sessions.js';
 import { researchRouter } from './routes/research.js';
 import { pdfIndexRouter } from './routes/pdf-index.js';
 import { llmRouter } from './routes/llm.js';
+
+// Neon PostgreSQL routes (new)
+import { neonLearnersRouter } from './routes/neon-learners.js';
+import { neonInteractionsRouter } from './routes/neon-interactions.js';
+import { neonTextbooksRouter } from './routes/neon-textbooks.js';
+
 import { ENABLE_PDF_INDEX, ENABLE_LLM, PORT, CORS_ORIGIN, getFeatureStatus, OLLAMA_BASE_URL } from './config.js';
+import { isUsingNeon } from './db/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -72,10 +79,24 @@ app.get('/health', async (_req: Request, res: Response) => {
 // API Routes
 // ============================================================================
 
-app.use('/api/learners', learnersRouter);
-app.use('/api/interactions', interactionsRouter);
-app.use('/api/textbooks', textbooksRouter);
-app.use('/api/sessions', sessionsRouter);
+// Use Neon PostgreSQL routes when DATABASE_URL is set, otherwise use SQLite routes
+const usingNeon = isUsingNeon();
+
+if (usingNeon) {
+  console.log('🔌 Using Neon PostgreSQL routes');
+  app.use('/api/learners', neonLearnersRouter);
+  app.use('/api/interactions', neonInteractionsRouter);
+  app.use('/api/textbooks', neonTextbooksRouter);
+  // Sessions are handled in neon-learners router
+  app.use('/api/sessions', neonLearnersRouter);
+} else {
+  console.log('💾 Using SQLite routes (legacy)');
+  app.use('/api/learners', learnersRouter);
+  app.use('/api/interactions', interactionsRouter);
+  app.use('/api/textbooks', textbooksRouter);
+  app.use('/api/sessions', sessionsRouter);
+}
+
 app.use('/api/research', researchRouter);
 
 // ============================================================================
@@ -142,6 +163,7 @@ app.get('/ollama/api/tags', async (_req: Request, res: Response) => {
 // ============================================================================
 
 function displayServerStatus() {
+  const dbType = isUsingNeon() ? 'Neon PostgreSQL' : 'SQLite';
   console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║                                                            ║
@@ -149,7 +171,7 @@ function displayServerStatus() {
 ║                                                            ║
 ║   🚀 Server running on http://localhost:${PORT}              ║
 ║   📊 API endpoints available at /api/*                     ║
-║   💾 Database: SQLite                                      ║
+║   💾 Database: ${dbType.padEnd(46)}║
 ║                                                            ║`);
 
   // PDF Index status

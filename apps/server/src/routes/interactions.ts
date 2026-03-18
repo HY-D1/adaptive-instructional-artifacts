@@ -248,7 +248,7 @@ router.post('/', async (req, res) => {
 
     const data: CreateInteractionRequest = parseResult.data;
     const id = generateId();
-    const interaction = await createInteraction(id, data);
+    const interaction = await createInteraction({ id, ...data });
 
     const response: ApiResponse<Interaction> = {
       success: true,

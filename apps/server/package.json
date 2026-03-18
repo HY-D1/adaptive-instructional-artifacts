@@ -9,9 +9,11 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "db:init": "tsx src/db/init.ts",
+    "db:init:neon": "tsx src/db/init-neon.ts",
     "db:migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",

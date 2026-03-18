@@ -1,0 +1,237 @@
+/**
+ * Learners API Routes - Neon PostgreSQL Implementation
+ */
+
+import { Router, Request, Response } from 'express';
+import * as db from '../db/neon.js';
+
+const router = Router();
+
+// ============================================================================
+// User Management
+// ============================================================================
+
+// GET /api/learners - List all users
+router.get('/', async (_req: Request, res: Response) => {
+  try {
+    const users = await db.getAllUsers();
+    res.json({ success: true, data: users });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch users' });
+  }
+});
+
+// POST /api/learners - Create new user
+router.post('/', async (req: Request, res: Response) => {
+  try {
+    const { id, name, role } = req.body;
+
+    if (!id || !name || !role) {
+      res.status(400).json({
+        success: false,
+        error: 'Missing required fields: id, name, role',
+      });
+      return;
+    }
+
+    if (!['student', 'instructor'].includes(role)) {
+      res.status(400).json({
+        success: false,
+        error: 'Role must be "student" or "instructor"',
+      });
+      return;
+    }
+
+    const existing = await db.getUserById(id);
+    if (existing) {
+      res.status(409).json({
+        success: false,
+        error: 'User already exists',
+      });
+      return;
+    }
+
+    const user = await db.createUser(id, { name, role });
+    res.status(201).json({ success: true, data: user });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ success: false, error: 'Failed to create user' });
+  }
+});
+
+// GET /api/learners/:id - Get specific user
+router.get('/:id', async (req: Request, res: Response) => {
+  try {
+    const user = await db.getUserById(req.params.id);
+
+    if (!user) {
+      res.status(404).json({ success: false, error: 'User not found' });
+      return;
+    }
+
+    res.json({ success: true, data: user });
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch user' });
+  }
+});
+
+// PUT /api/learners/:id - Update user
+router.put('/:id', async (req: Request, res: Response) => {
+  try {
+    const { name, role } = req.body;
+
+    if (role && !['student', 'instructor'].includes(role)) {
+      res.status(400).json({
+        success: false,
+        error: 'Role must be "student" or "instructor"',
+      });
+      return;
+    }
+
+    const user = await db.updateUser(req.params.id, { name, role });
+
+    if (!user) {
+      res.status(404).json({ success: false, error: 'User not found' });
+      return;
+    }
+
+    res.json({ success: true, data: user });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ success: false, error: 'Failed to update user' });
+  }
+});
+
+// DELETE /api/learners/:id - Delete user
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    const deleted = await db.deleteUser(req.params.id);
+
+    if (!deleted) {
+      res.status(404).json({ success: false, error: 'User not found' });
+      return;
+    }
+
+    res.json({ success: true, message: 'User deleted' });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ success: false, error: 'Failed to delete user' });
+  }
+});
+
+// ============================================================================
+// Session Management
+// ============================================================================
+
+// GET /api/learners/:id/session - Get active session
+router.get('/:id/session', async (req: Request, res: Response) => {
+  try {
+    const session = await db.getActiveSession(req.params.id);
+
+    if (!session) {
+      res.status(404).json({ success: false, error: 'No active session' });
+      return;
+    }
+
+    res.json({ success: true, data: session });
+  } catch (error) {
+    console.error('Error fetching session:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch session' });
+  }
+});
+
+// POST /api/learners/:id/session - Save session
+router.post('/:id/session', async (req: Request, res: Response) => {
+  try {
+    const { sessionId, conditionId, ...config } = req.body;
+
+    if (!sessionId || !conditionId) {
+      res.status(400).json({
+        success: false,
+        error: 'Missing required fields: sessionId, conditionId',
+      });
+      return;
+    }
+
+    await db.saveSession(req.params.id, sessionId, conditionId, config);
+    const session = await db.getSession(req.params.id, sessionId);
+
+    res.json({ success: true, data: session });
+  } catch (error) {
+    console.error('Error saving session:', error);
+    res.status(500).json({ success: false, error: 'Failed to save session' });
+  }
+});
+
+// DELETE /api/learners/:id/session/:sessionId - Clear session
+router.delete('/:id/session/:sessionId', async (req: Request, res: Response) => {
+  try {
+    const cleared = await db.clearSession(req.params.id, req.params.sessionId);
+
+    if (!cleared) {
+      res.status(404).json({ success: false, error: 'Session not found' });
+      return;
+    }
+
+    res.json({ success: true, cleared: true });
+  } catch (error) {
+    console.error('Error clearing session:', error);
+    res.status(500).json({ success: false, error: 'Failed to clear session' });
+  }
+});
+
+// ============================================================================
+// Problem Progress
+// ============================================================================
+
+// GET /api/learners/:id/progress - Get all problem progress
+router.get('/:id/progress', async (req: Request, res: Response) => {
+  try {
+    const progress = await db.getAllProblemProgress(req.params.id);
+    res.json({ success: true, data: progress });
+  } catch (error) {
+    console.error('Error fetching progress:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch progress' });
+  }
+});
+
+// GET /api/learners/:id/progress/:problemId - Get specific problem progress
+router.get('/:id/progress/:problemId', async (req: Request, res: Response) => {
+  try {
+    const progress = await db.getProblemProgress(req.params.id, req.params.problemId);
+
+    if (!progress) {
+      res.status(404).json({ success: false, error: 'Progress not found' });
+      return;
+    }
+
+    res.json({ success: true, data: progress });
+  } catch (error) {
+    console.error('Error fetching progress:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch progress' });
+  }
+});
+
+// POST /api/learners/:id/progress/:problemId - Update problem progress
+router.post('/:id/progress/:problemId', async (req: Request, res: Response) => {
+  try {
+    const { solved, incrementAttempts, incrementHints, lastCode } = req.body;
+
+    await db.updateProblemProgress(req.params.id, req.params.problemId, {
+      solved,
+      incrementAttempts,
+      incrementHints,
+      lastCode,
+    });
+
+    const progress = await db.getProblemProgress(req.params.id, req.params.problemId);
+    res.json({ success: true, data: progress });
+  } catch (error) {
+    console.error('Error updating progress:', error);
+    res.status(500).json({ success: false, error: 'Failed to update progress' });
+  }
+});
+
+export { router as neonLearnersRouter };
