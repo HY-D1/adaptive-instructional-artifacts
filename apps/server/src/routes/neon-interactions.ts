@@ -27,6 +27,7 @@ router.post('/', async (req: Request, res: Response) => {
     const id = event.id || `${event.eventType}-${event.learnerId}-${Date.now()}`;
 
     // Extract payload - frontend sends nested payload, direct API calls send flat structure
+    // RESEARCH-3B: Explicitly extract bandit/escalation fields for proper column mapping
     const payload = event.payload || {
       sessionId: event.sessionId,
       code: event.code,
@@ -34,6 +35,27 @@ router.post('/', async (req: Request, res: Response) => {
       successful: event.successful,
       hintText: event.hintText,
       hintLevel: event.hintLevel,
+      // Escalation Profile fields (RESEARCH-3B)
+      profileId: event.profileId,
+      assignmentStrategy: event.assignmentStrategy,
+      previousThresholds: event.previousThresholds,
+      newThresholds: event.newThresholds,
+      // Bandit fields (RESEARCH-3B)
+      selectedArm: event.selectedArm,
+      selectionMethod: event.selectionMethod,
+      armStatsAtSelection: event.armStatsAtSelection,
+      reward: event.reward,
+      newAlpha: event.newAlpha,
+      newBeta: event.newBeta,
+      // HDI fields (RESEARCH-3B)
+      hdi: event.hdi,
+      hdiLevel: event.hdiLevel,
+      hdiComponents: event.hdiComponents,
+      trend: event.trend,
+      slope: event.slope,
+      interventionType: event.interventionType,
+      // Trigger reason for escalation
+      trigger: event.trigger,
       // Include other common fields
       ...event,
     };
@@ -71,6 +93,7 @@ router.post('/batch', async (req: Request, res: Response) => {
     for (const event of events) {
       const id = event.id || `${event.eventType}-${event.learnerId}-${Date.now()}`;
       // Extract payload - frontend sends nested payload, direct API calls send flat structure
+      // RESEARCH-3B: Explicitly extract bandit/escalation fields for proper column mapping
       const payload = event.payload || {
         sessionId: event.sessionId,
         code: event.code,
@@ -78,6 +101,27 @@ router.post('/batch', async (req: Request, res: Response) => {
         successful: event.successful,
         hintText: event.hintText,
         hintLevel: event.hintLevel,
+        // Escalation Profile fields (RESEARCH-3B)
+        profileId: event.profileId,
+        assignmentStrategy: event.assignmentStrategy,
+        previousThresholds: event.previousThresholds,
+        newThresholds: event.newThresholds,
+        // Bandit fields (RESEARCH-3B)
+        selectedArm: event.selectedArm,
+        selectionMethod: event.selectionMethod,
+        armStatsAtSelection: event.armStatsAtSelection,
+        reward: event.reward,
+        newAlpha: event.newAlpha,
+        newBeta: event.newBeta,
+        // HDI fields (RESEARCH-3B)
+        hdi: event.hdi,
+        hdiLevel: event.hdiLevel,
+        hdiComponents: event.hdiComponents,
+        trend: event.trend,
+        slope: event.slope,
+        interventionType: event.interventionType,
+        // Trigger reason for escalation
+        trigger: event.trigger,
         // Include other common fields
         ...event,
       };
