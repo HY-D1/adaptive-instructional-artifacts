@@ -10,7 +10,9 @@
     "start": "node dist/index.js",
     "db:init": "tsx src/db/init.ts",
     "db:init:neon": "tsx src/db/init-neon.ts",
-    "db:migrate": "tsx src/db/migrate.ts"
+    "db:migrate": "tsx src/db/migrate.ts",
+    "research:export": "tsx src/scripts/export-research-data.ts",
+    "research:export:sample": "tsx src/scripts/generate-sample-export.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
