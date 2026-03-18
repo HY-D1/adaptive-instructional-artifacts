@@ -549,8 +549,27 @@ async function buildUnitFromStructuredOutput(
     ALLOWED_ATTR: ['href', 'title', 'class', 'target']
   });
 
-  const genericTitle = `Help with ${options.bundle.problemTitle}`;
-  const title = output.title?.trim() || genericTitle;
+  // Generate a specific, learner-friendly title
+  // Priority: 1) LLM-provided title, 2) Concept-based title, 3) Error-specific title, 4) Problem-based fallback
+  const conceptName = options.bundle.conceptCandidates[0]?.name;
+  const errorSubtype = options.bundle.lastErrorSubtypeId;
+
+  let fallbackTitle: string;
+  if (conceptName && errorSubtype && errorSubtype !== 'unknown') {
+    // Most specific: Concept + Error context
+    fallbackTitle = `${conceptName}: ${errorSubtype.charAt(0).toUpperCase() + errorSubtype.slice(1)}`;
+  } else if (conceptName) {
+    // Concept-based title for study reference
+    fallbackTitle = `Understanding ${conceptName}`;
+  } else if (errorSubtype && errorSubtype !== 'unknown') {
+    // Error-specific title
+    fallbackTitle = `Fixing ${errorSubtype.charAt(0).toUpperCase() + errorSubtype.slice(1)}`;
+  } else {
+    // Final fallback with problem context
+    fallbackTitle = `Help with ${options.bundle.problemTitle}`;
+  }
+
+  const title = output.title?.trim() || fallbackTitle;
 
   const unit: InstructionalUnit = {
     id: `unit-${options.templateId}-${inputHash}`,
@@ -600,12 +619,24 @@ function buildFallbackUnit(
 ): InstructionalUnit {
   const anchor = options.bundle.sqlEngageAnchor;
   const concept = options.bundle.conceptCandidates[0];
-  const titlePrefix = 'Help with';
+
+  // Generate specific title for fallback units too
+  let title: string;
+  if (concept?.name && options.bundle.lastErrorSubtypeId && options.bundle.lastErrorSubtypeId !== 'unknown') {
+    title = `${concept.name}: ${options.bundle.lastErrorSubtypeId.charAt(0).toUpperCase() + options.bundle.lastErrorSubtypeId.slice(1)}`;
+  } else if (concept?.name) {
+    title = `Understanding ${concept.name}`;
+  } else if (options.bundle.lastErrorSubtypeId && options.bundle.lastErrorSubtypeId !== 'unknown') {
+    title = `Fixing ${options.bundle.lastErrorSubtypeId.charAt(0).toUpperCase() + options.bundle.lastErrorSubtypeId.slice(1)}`;
+  } else {
+    title = `Help with ${options.bundle.problemTitle}`;
+  }
+
   const normalizedSourceIds = normalizeRetrievedSourceIds(options.bundle.retrievedSourceIds);
   const retrievedPdfCitations = selectPdfCitations(options.bundle, normalizedSourceIds);
 
   const content = [
-    `# ${titlePrefix} ${options.bundle.problemTitle}`,
+    `# ${title}`,
     '',
     `Error subtype: ${options.bundle.lastErrorSubtypeId}`,
     `Concept: ${concept?.name || 'Not found in provided sources.'}`,
@@ -637,7 +668,7 @@ function buildFallbackUnit(
     type: options.templateId === 'explanation.v1' ? 'explanation' : 'summary',
     conceptId: concept?.id || 'select-basic',
     conceptIds: options.bundle.conceptCandidates.map(c => c.id),
-    title: `Help with ${options.bundle.problemTitle}`,
+    title,
     content: fallbackContent,
     prerequisites: [],
     addedTimestamp: Date.now(),

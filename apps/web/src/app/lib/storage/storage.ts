@@ -18,6 +18,7 @@ import {
   UserProfile,
   UserRole,
   ReinforcementSchedule,
+  SessionConfig,
   ScheduledPrompt
 } from '../../types';
 import { createEventId } from '../utils/event-id';
@@ -87,6 +88,8 @@ class StorageManager {
   private readonly USER_PROFILE_KEY = 'sql-adapt-user-profile'; // Week 4: Aligned with existing app key
   /** Key for reinforcement schedules (Component 10: Knowledge Consolidation) */
   private readonly REINFORCEMENT_SCHEDULES_KEY = 'sql-learning-reinforcement-schedules';
+  /** Key for session config (Week 6: Experimental condition tracking) */
+  private readonly SESSION_CONFIG_KEY = 'sql-adapt-session-config';
 
   // Legacy keys for backward compatibility (tests and old data)
   private readonly LEGACY_PROFILES_KEY = 'sql-adapt-profiles';
@@ -356,6 +359,25 @@ class StorageManager {
       return;
     }
     localStorage.setItem(this.ACTIVE_SESSION_KEY, normalized);
+  }
+
+  /**
+   * Get session configuration for experimental condition tracking
+   * @returns SessionConfig or null if not found
+   */
+  getSessionConfig(): SessionConfig | null {
+    try {
+      const stored = localStorage.getItem(this.SESSION_CONFIG_KEY);
+      if (!stored) return null;
+      const parsed = JSON.parse(stored);
+      // Basic validation
+      if (!parsed.sessionId || !parsed.learnerId || !parsed.conditionId) {
+        return null;
+      }
+      return parsed as SessionConfig;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -2349,6 +2371,9 @@ class StorageManager {
       };
     });
 
+    // Get session config for experimental condition tracking (Week 6)
+    const sessionConfig = this.getSessionConfig();
+
     return {
       interactions,
       profiles: serializableProfiles,
@@ -2358,6 +2383,7 @@ class StorageManager {
       pdfIndex: this.getPdfIndex(),
       pdfIndexProvenance: this.getPdfIndexProvenance(),
       activeSessionId,
+      sessionConfig,
       exportScope: allHistory ? 'all-history' : 'active-session',
       exportPolicyVersion: this.EXPORT_POLICY_VERSION,
       exportedAt: new Date().toISOString()

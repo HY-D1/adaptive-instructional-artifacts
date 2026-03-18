@@ -1353,8 +1353,8 @@ export function LearningInterface() {
         );
         setNotesActionMessage(
           textbookResult.action === 'created'
-            ? 'Policy added a note to My Textbook.'
-            : 'Policy refreshed an existing note in My Textbook.'
+            ? `Saved "${textbookResult.unit.title}" to My Textbook — review it anytime!`
+            : `Updated "${textbookResult.unit.title}" in My Textbook.`
         );
       } catch (error) {
         setGenerationError((error as Error).message);
@@ -1387,8 +1387,8 @@ export function LearningInterface() {
       .then(({ textbookResult }) => {
         setNotesActionMessage(
           textbookResult.action === 'created'
-            ? 'Explanation generated automatically.'
-            : 'Explanation refreshed automatically.'
+            ? `Saved "${textbookResult.unit.title}" to My Textbook for review`
+            : `Updated "${textbookResult.unit.title}" in My Textbook`
         );
       })
       .catch((error) => {
@@ -1435,8 +1435,8 @@ export function LearningInterface() {
       );
       setNotesActionMessage(
         textbookResult.action === 'created'
-          ? 'Added to My Notes.'
-          : 'Updated existing My Notes entry.'
+          ? `✓ Saved "${textbookResult.unit.title}" — find it in My Textbook`
+          : `✓ Updated "${textbookResult.unit.title}" in My Textbook`
       );
     } catch (error) {
       setGenerationError((error as Error).message);
