@@ -27,10 +27,9 @@ export * from './sqlite.js';
 // Database Backend Selection
 // ============================================================================
 
-const USE_NEON = !!process.env.DATABASE_URL || !!process.env.NEON_DATABASE_URL;
-
+// Runtime check for Neon mode - rechecks each time to ensure fresh env var reads
 export function isUsingNeon(): boolean {
-  return USE_NEON;
+  return !!process.env.DATABASE_URL || !!process.env.NEON_DATABASE_URL;
 }
 
 // ============================================================================
@@ -38,7 +37,7 @@ export function isUsingNeon(): boolean {
 // ============================================================================
 
 export async function initializeSchema(): Promise<void> {
-  if (USE_NEON) {
+  if (isUsingNeon()) {
     console.log('🔌 Using Neon PostgreSQL database');
     await neonDb.initializeSchema();
   } else {
@@ -52,23 +51,23 @@ export async function initializeSchema(): Promise<void> {
 // ============================================================================
 
 export async function createUser(id: string, data: CreateLearnerRequest): Promise<Learner> {
-  return USE_NEON ? neonDb.createUser(id, data) : sqliteDb.createLearner(id, data);
+  return isUsingNeon() ? neonDb.createUser(id, data) : sqliteDb.createLearner(id, data);
 }
 
 export async function getUserById(id: string): Promise<Learner | null> {
-  return USE_NEON ? neonDb.getUserById(id) : sqliteDb.getLearnerById(id);
+  return isUsingNeon() ? neonDb.getUserById(id) : sqliteDb.getLearnerById(id);
 }
 
 export async function getAllUsers(): Promise<Learner[]> {
-  return USE_NEON ? neonDb.getAllUsers() : sqliteDb.getAllLearners();
+  return isUsingNeon() ? neonDb.getAllUsers() : sqliteDb.getAllLearners();
 }
 
 export async function updateUser(id: string, data: UpdateLearnerRequest): Promise<Learner | null> {
-  return USE_NEON ? neonDb.updateUser(id, data) : sqliteDb.updateLearner(id, data);
+  return isUsingNeon() ? neonDb.updateUser(id, data) : sqliteDb.updateLearner(id, data);
 }
 
 export async function deleteUser(id: string): Promise<boolean> {
-  return USE_NEON ? neonDb.deleteUser(id) : sqliteDb.deleteLearner(id);
+  return isUsingNeon() ? neonDb.deleteUser(id) : sqliteDb.deleteLearner(id);
 }
 
 // ============================================================================
@@ -87,7 +86,7 @@ export async function saveSession(
     escalationPolicy?: string;
   }
 ): Promise<void> {
-  if (USE_NEON) {
+  if (isUsingNeon()) {
     await neonDb.saveSession(userId, sessionId, conditionId, config);
   } else {
     // SQLite stores session data differently - pass as extended SessionData
@@ -96,7 +95,7 @@ export async function saveSession(
 }
 
 export async function getSession(userId: string, sessionId: string): Promise<any | null> {
-  if (USE_NEON) {
+  if (isUsingNeon()) {
     return neonDb.getSession(userId, sessionId);
   } else {
     return sqliteDb.getSession(userId);
@@ -104,11 +103,11 @@ export async function getSession(userId: string, sessionId: string): Promise<any
 }
 
 export async function getActiveSession(userId: string): Promise<any | null> {
-  return USE_NEON ? neonDb.getActiveSession(userId) : sqliteDb.getSession(userId);
+  return isUsingNeon() ? neonDb.getActiveSession(userId) : sqliteDb.getSession(userId);
 }
 
 export async function clearSession(userId: string, sessionId: string): Promise<boolean> {
-  if (USE_NEON) {
+  if (isUsingNeon()) {
     return neonDb.clearSession(userId, sessionId);
   } else {
     return sqliteDb.clearSession(userId);
@@ -129,19 +128,19 @@ export async function updateProblemProgress(
     lastCode?: string;
   }
 ): Promise<void> {
-  return USE_NEON
+  return isUsingNeon()
     ? neonDb.updateProblemProgress(userId, problemId, update)
     : Promise.resolve(); // SQLite doesn't have this table yet
 }
 
 export async function getProblemProgress(userId: string, problemId: string): Promise<any | null> {
-  return USE_NEON
+  return isUsingNeon()
     ? neonDb.getProblemProgress(userId, problemId)
     : Promise.resolve(null);
 }
 
 export async function getAllProblemProgress(userId: string): Promise<any[]> {
-  return USE_NEON
+  return isUsingNeon()
     ? neonDb.getAllProblemProgress(userId)
     : Promise.resolve([]);
 }
@@ -151,7 +150,7 @@ export async function getAllProblemProgress(userId: string): Promise<any[]> {
 // ============================================================================
 
 export async function createInteraction(data: CreateInteractionRequest & { id: string }): Promise<Interaction> {
-  return USE_NEON ? neonDb.createInteraction(data) : sqliteDb.createInteraction(data);
+  return isUsingNeon() ? neonDb.createInteraction(data) : sqliteDb.createInteraction(data);
 }
 
 export async function getInteractionsByUser(
@@ -164,7 +163,7 @@ export async function getInteractionsByUser(
     offset?: number;
   }
 ): Promise<{ interactions: Interaction[]; total: number }> {
-  if (USE_NEON) {
+  if (isUsingNeon()) {
     return neonDb.getInteractionsByUser(userId, options);
   } else {
     const interactions = await sqliteDb.getInteractionsByLearner(userId, options as import('../types.js').InteractionQueryParams);
@@ -173,7 +172,7 @@ export async function getInteractionsByUser(
 }
 
 export async function getInteractionById(id: string): Promise<Interaction | null> {
-  return USE_NEON ? neonDb.getInteractionById(id) : sqliteDb.getInteractionById(id);
+  return isUsingNeon() ? neonDb.getInteractionById(id) : sqliteDb.getInteractionById(id);
 }
 
 // ============================================================================
@@ -184,25 +183,25 @@ export async function createTextbookUnit(
   userId: string,
   data: CreateUnitRequest & { unitId: string }
 ): Promise<InstructionalUnit> {
-  return USE_NEON
+  return isUsingNeon()
     ? neonDb.createTextbookUnit(userId, data)
     : sqliteDb.createTextbookUnit(userId, data);
 }
 
 export async function getTextbookUnitsByUser(userId: string): Promise<InstructionalUnit[]> {
-  return USE_NEON
+  return isUsingNeon()
     ? neonDb.getTextbookUnitsByUser(userId)
     : sqliteDb.getTextbookUnitsByLearner(userId);
 }
 
 export async function getTextbookUnitById(userId: string, unitId: string): Promise<InstructionalUnit | null> {
-  return USE_NEON
+  return isUsingNeon()
     ? neonDb.getTextbookUnitById(userId, unitId)
     : sqliteDb.getTextbookUnitById(userId, unitId);
 }
 
 export async function deleteTextbookUnit(userId: string, unitId: string): Promise<boolean> {
-  return USE_NEON
+  return isUsingNeon()
     ? neonDb.deleteTextbookUnit(userId, unitId)
     : sqliteDb.deleteTextbookUnit(userId, unitId);
 }

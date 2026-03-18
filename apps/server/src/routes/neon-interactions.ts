@@ -26,13 +26,25 @@ router.post('/', async (req: Request, res: Response) => {
 
     const id = event.id || `${event.eventType}-${event.learnerId}-${Date.now()}`;
 
+    // Extract payload - frontend sends nested payload, direct API calls send flat structure
+    const payload = event.payload || {
+      sessionId: event.sessionId,
+      code: event.code,
+      error: event.error,
+      successful: event.successful,
+      hintText: event.hintText,
+      hintLevel: event.hintLevel,
+      // Include other common fields
+      ...event,
+    };
+
     const interaction = await db.createInteraction({
       id,
       learnerId: event.learnerId,
       timestamp: event.timestamp || new Date().toISOString(),
       eventType: event.eventType,
       problemId: event.problemId,
-      payload: event,
+      payload,
     });
 
     res.status(201).json({ success: true, data: interaction });
@@ -58,13 +70,24 @@ router.post('/batch', async (req: Request, res: Response) => {
     const results = [];
     for (const event of events) {
       const id = event.id || `${event.eventType}-${event.learnerId}-${Date.now()}`;
+      // Extract payload - frontend sends nested payload, direct API calls send flat structure
+      const payload = event.payload || {
+        sessionId: event.sessionId,
+        code: event.code,
+        error: event.error,
+        successful: event.successful,
+        hintText: event.hintText,
+        hintLevel: event.hintLevel,
+        // Include other common fields
+        ...event,
+      };
       const interaction = await db.createInteraction({
         id,
         learnerId: event.learnerId,
         timestamp: event.timestamp || new Date().toISOString(),
         eventType: event.eventType,
         problemId: event.problemId,
-        payload: event,
+        payload,
       });
       results.push(interaction);
     }

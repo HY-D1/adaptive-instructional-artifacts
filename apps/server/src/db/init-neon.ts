@@ -6,7 +6,13 @@
  * It uses the DATABASE_URL environment variable.
  */
 
-import { initializeSchema, getDb } from './neon.js';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const envPath = path.resolve(__dirname, '../../.env');
+dotenv.config({ path: envPath });
 
 async function main(): Promise<void> {
   console.log('🔄 Initializing Neon PostgreSQL database...\n');
@@ -26,6 +32,9 @@ async function main(): Promise<void> {
     console.error('  DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require');
     process.exit(1);
   }
+
+  // Dynamic import AFTER dotenv is configured
+  const { initializeSchema, getDb } = await import('./neon.js');
 
   try {
     // Test connection

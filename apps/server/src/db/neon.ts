@@ -21,16 +21,6 @@ import type {
   LearnerProfile,
 } from '../types.js';
 
-// ============================================================================
-// Configuration
-// ============================================================================
-
-const DATABASE_URL = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
-
-if (!DATABASE_URL && process.env.NODE_ENV === 'production') {
-  console.error('ERROR: DATABASE_URL environment variable is required in production');
-}
-
 // Configure Neon for serverless environment
 neonConfig.fetchConnectionCache = true;
 
@@ -40,12 +30,17 @@ neonConfig.fetchConnectionCache = true;
 
 let sql: NeonQueryFunction<false, false> | null = null;
 
+function getDatabaseUrl(): string {
+  const url = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
+  if (!url) {
+    throw new Error('DATABASE_URL environment variable is not set');
+  }
+  return url;
+}
+
 export function getDb(): NeonQueryFunction<false, false> {
   if (!sql) {
-    if (!DATABASE_URL) {
-      throw new Error('DATABASE_URL environment variable is not set');
-    }
-    sql = neon(DATABASE_URL);
+    sql = neon(getDatabaseUrl());
   }
   return sql;
 }
