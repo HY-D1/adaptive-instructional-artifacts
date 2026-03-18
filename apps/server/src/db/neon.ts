@@ -18,6 +18,7 @@ import type {
   CreateInteractionRequest,
   InstructionalUnit,
   CreateUnitRequest,
+  LearnerProfile,
 } from '../types.js';
 
 // ============================================================================
@@ -252,6 +253,26 @@ export async function initializeSchema(): Promise<void> {
 
   await db`CREATE INDEX IF NOT EXISTS idx_textbook_unit_event_links_unit_id ON textbook_unit_event_links(unit_id)`;
   await db`CREATE INDEX IF NOT EXISTS idx_textbook_unit_event_links_event_id ON textbook_unit_event_links(event_id)`;
+
+  // Learner profiles (full rich profile with concept coverage)
+  await db`
+    CREATE TABLE IF NOT EXISTS learner_profiles (
+      learner_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL DEFAULT 'Unknown',
+      concept_coverage TEXT NOT NULL DEFAULT '[]',
+      concept_evidence TEXT NOT NULL DEFAULT '{}',
+      error_history TEXT NOT NULL DEFAULT '{}',
+      interaction_count INTEGER NOT NULL DEFAULT 0,
+      strategy TEXT NOT NULL DEFAULT 'default',
+      preferences TEXT NOT NULL DEFAULT '{"escalationThreshold":3,"aggregationDelay":30000}',
+      last_activity_at TIMESTAMPTZ,
+      profile_data TEXT NOT NULL DEFAULT '{}',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  await db`CREATE INDEX IF NOT EXISTS idx_learner_profiles_last_activity ON learner_profiles(last_activity_at)`;
 
   console.log('✅ Neon PostgreSQL schema initialized');
 }
@@ -886,4 +907,199 @@ function parseJson(value: string | null): any {
   } catch {
     return null;
   }
+}
+
+// ============================================================================
+// Learner Profile Operations
+// ============================================================================
+
+export async function getLearnerProfile(learnerId: string): Promise<LearnerProfile | null> {
+  const db = getDb();
+  const [result] = await db`
+    SELECT * FROM learner_profiles WHERE learner_id = ${learnerId}
+  `;
+
+  if (!result) return null;
+
+  return {
+    id: result.learner_id,
+    name: result.name,
+    conceptsCovered: parseJson(result.concept_coverage) || [],
+    conceptCoverageEvidence: parseJson(result.concept_evidence) || {},
+    errorHistory: parseJson(result.error_history) || {},
+    interactionCount: result.interaction_count || 0,
+    currentStrategy: result.strategy || 'default',
+    preferences: parseJson(result.preferences) || {
+      escalationThreshold: 3,
+      aggregationDelay: 30000,
+      autoTextbookEnabled: true,
+      notificationsEnabled: true,
+      theme: 'system',
+    },
+    createdAt: result.created_at ? new Date(result.created_at).getTime() : Date.now(),
+    lastActive: result.last_activity_at ? new Date(result.last_activity_at).getTime() : Date.now(),
+    extendedData: parseJson(result.profile_data) || {},
+  };
+}
+
+export async function saveLearnerProfile(
+  learnerId: string,
+  profile: Partial<LearnerProfile>
+): Promise<LearnerProfile | null> {
+  const db = getDb();
+  const now = new Date().toISOString();
+
+  // Get existing profile or create new
+  const existing = await getLearnerProfile(learnerId);
+
+  const mergedProfile: LearnerProfile = {
+    id: learnerId,
+    name: profile.name || existing?.name || 'Unknown',
+    conceptsCovered: profile.conceptsCovered || existing?.conceptsCovered || [],
+    conceptCoverageEvidence: profile.conceptCoverageEvidence || existing?.conceptCoverageEvidence || {},
+    errorHistory: profile.errorHistory || existing?.errorHistory || {},
+    interactionCount: profile.interactionCount ?? existing?.interactionCount ?? 0,
+    currentStrategy: profile.currentStrategy || existing?.currentStrategy || 'default',
+    preferences: profile.preferences || existing?.preferences || {
+      escalationThreshold: 3,
+      aggregationDelay: 30000,
+    },
+    createdAt: existing?.createdAt || Date.now(),
+    lastActive: Date.now(),
+    extendedData: profile.extendedData || existing?.extendedData || {},
+  };
+
+  await db`
+    INSERT INTO learner_profiles (
+      learner_id, name, concept_coverage, concept_evidence, error_history,
+      interaction_count, strategy, preferences, last_activity_at, profile_data, updated_at
+    ) VALUES (
+      ${learnerId},
+      ${mergedProfile.name},
+      ${JSON.stringify(mergedProfile.conceptsCovered)},
+      ${JSON.stringify(mergedProfile.conceptCoverageEvidence)},
+      ${JSON.stringify(mergedProfile.errorHistory)},
+      ${mergedProfile.interactionCount},
+      ${mergedProfile.currentStrategy},
+      ${JSON.stringify(mergedProfile.preferences)},
+      ${now},
+      ${JSON.stringify(mergedProfile.extendedData)},
+      ${now}
+    )
+    ON CONFLICT (learner_id) DO UPDATE SET
+      name = EXCLUDED.name,
+      concept_coverage = EXCLUDED.concept_coverage,
+      concept_evidence = EXCLUDED.concept_evidence,
+      error_history = EXCLUDED.error_history,
+      interaction_count = EXCLUDED.interaction_count,
+      strategy = EXCLUDED.strategy,
+      preferences = EXCLUDED.preferences,
+      last_activity_at = EXCLUDED.last_activity_at,
+      profile_data = EXCLUDED.profile_data,
+      updated_at = EXCLUDED.updated_at
+  `;
+
+  return mergedProfile;
+}
+
+export async function getAllLearnerProfiles(): Promise<LearnerProfile[]> {
+  const db = getDb();
+  const results = await db`SELECT * FROM learner_profiles ORDER BY updated_at DESC`;
+
+  return results.map(row => ({
+    id: row.learner_id,
+    name: row.name,
+    conceptsCovered: parseJson(row.concept_coverage) || [],
+    conceptCoverageEvidence: parseJson(row.concept_evidence) || {},
+    errorHistory: parseJson(row.error_history) || {},
+    interactionCount: row.interaction_count || 0,
+    currentStrategy: row.strategy || 'default',
+    preferences: parseJson(row.preferences) || {
+      escalationThreshold: 3,
+      aggregationDelay: 30000,
+    },
+    createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+    lastActive: row.last_activity_at ? new Date(row.last_activity_at).getTime() : Date.now(),
+    extendedData: parseJson(row.profile_data) || {},
+  }));
+}
+
+export async function updateLearnerProfileFromEvent(
+  learnerId: string,
+  event: CreateInteractionRequest
+): Promise<LearnerProfile | null> {
+  const profile = await getLearnerProfile(learnerId);
+  if (!profile) {
+    // Create default profile if doesn't exist
+    await saveLearnerProfile(learnerId, {
+      name: learnerId,
+      conceptsCovered: [],
+      conceptCoverageEvidence: {},
+      errorHistory: {},
+      interactionCount: 0,
+      currentStrategy: 'default',
+      preferences: {
+        escalationThreshold: 3,
+        aggregationDelay: 30000,
+      },
+    });
+  }
+
+  // Get fresh profile (either existing or newly created)
+  const currentProfile = (await getLearnerProfile(learnerId))!;
+
+  // Update profile based on event
+  currentProfile.interactionCount++;
+  currentProfile.lastActive = Date.now();
+
+  // Update error history if error event
+  if (event.errorSubtypeId) {
+    const currentCount = currentProfile.errorHistory[event.errorSubtypeId] || 0;
+    currentProfile.errorHistory[event.errorSubtypeId] = currentCount + 1;
+  }
+
+  // Update concept coverage
+  if (event.conceptIds && event.conceptIds.length > 0) {
+    for (const conceptId of event.conceptIds) {
+      if (!currentProfile.conceptsCovered.includes(conceptId)) {
+        currentProfile.conceptsCovered.push(conceptId);
+      }
+
+      // Update evidence
+      if (!currentProfile.conceptCoverageEvidence[conceptId]) {
+        currentProfile.conceptCoverageEvidence[conceptId] = {
+          conceptId,
+          score: 0,
+          confidence: 'low',
+          lastUpdated: Date.now(),
+          evidenceCounts: {
+            successfulExecution: 0,
+            hintViewed: 0,
+            explanationViewed: 0,
+            errorEncountered: 0,
+            notesAdded: 0,
+          },
+          streakCorrect: 0,
+          streakIncorrect: 0,
+        };
+      }
+
+      const evidence = currentProfile.conceptCoverageEvidence[conceptId];
+      evidence.lastUpdated = Date.now();
+
+      // Update evidence counts based on event type
+      if (event.eventType === 'hint_view') {
+        evidence.evidenceCounts.hintViewed++;
+      } else if (event.eventType === 'explanation_view') {
+        evidence.evidenceCounts.explanationViewed++;
+      } else if (event.eventType === 'error') {
+        evidence.evidenceCounts.errorEncountered++;
+      } else if (event.successful) {
+        evidence.evidenceCounts.successfulExecution++;
+      }
+    }
+  }
+
+  // Save updated profile
+  return saveLearnerProfile(learnerId, currentProfile);
 }

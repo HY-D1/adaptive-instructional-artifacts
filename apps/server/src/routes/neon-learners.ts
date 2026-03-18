@@ -234,4 +234,108 @@ router.post('/:id/progress/:problemId', async (req: Request, res: Response) => {
   }
 });
 
+// ============================================================================
+// Learner Profile (Full Rich Profile)
+// ============================================================================
+
+// GET /api/learners/:id/profile - Get learner's full profile
+router.get('/:id/profile', async (req: Request, res: Response) => {
+  try {
+    const profile = await db.getLearnerProfile(req.params.id);
+
+    if (!profile) {
+      // Return 404 but also return a default profile structure
+      // This allows the frontend to handle missing profiles gracefully
+      res.status(404).json({
+        success: false,
+        error: 'Profile not found',
+        data: null,
+      });
+      return;
+    }
+
+    res.json({ success: true, data: profile });
+  } catch (error) {
+    console.error('Error fetching learner profile:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch learner profile' });
+  }
+});
+
+// PUT /api/learners/:id/profile - Save/update learner's full profile
+router.put('/:id/profile', async (req: Request, res: Response) => {
+  try {
+    const {
+      name,
+      conceptsCovered,
+      conceptCoverageEvidence,
+      errorHistory,
+      interactionCount,
+      currentStrategy,
+      preferences,
+      lastActive,
+      extendedData,
+    } = req.body;
+
+    const profile = await db.saveLearnerProfile(req.params.id, {
+      name,
+      conceptsCovered,
+      conceptCoverageEvidence,
+      errorHistory,
+      interactionCount,
+      currentStrategy,
+      preferences,
+      lastActive,
+      extendedData,
+    });
+
+    if (!profile) {
+      res.status(500).json({ success: false, error: 'Failed to save profile' });
+      return;
+    }
+
+    res.json({ success: true, data: profile });
+  } catch (error) {
+    console.error('Error saving learner profile:', error);
+    res.status(500).json({ success: false, error: 'Failed to save learner profile' });
+  }
+});
+
+// POST /api/learners/:id/profile/events - Update profile from event
+router.post('/:id/profile/events', async (req: Request, res: Response) => {
+  try {
+    const { event } = req.body;
+
+    if (!event) {
+      res.status(400).json({
+        success: false,
+        error: 'Missing required field: event',
+      });
+      return;
+    }
+
+    const profile = await db.updateLearnerProfileFromEvent(req.params.id, event);
+
+    if (!profile) {
+      res.status(500).json({ success: false, error: 'Failed to update profile from event' });
+      return;
+    }
+
+    res.json({ success: true, data: profile });
+  } catch (error) {
+    console.error('Error updating profile from event:', error);
+    res.status(500).json({ success: false, error: 'Failed to update profile from event' });
+  }
+});
+
+// GET /api/learners/profiles - Get all learner profiles
+router.get('/profiles', async (_req: Request, res: Response) => {
+  try {
+    const profiles = await db.getAllLearnerProfiles();
+    res.json({ success: true, data: profiles });
+  } catch (error) {
+    console.error('Error fetching all profiles:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch profiles' });
+  }
+});
+
 export { router as neonLearnersRouter };

@@ -23,6 +23,7 @@ import { llmRouter } from './routes/llm.js';
 import { neonLearnersRouter } from './routes/neon-learners.js';
 import { neonInteractionsRouter } from './routes/neon-interactions.js';
 import { neonTextbooksRouter } from './routes/neon-textbooks.js';
+import { neonSessionsRouter } from './routes/neon-sessions.js';
 
 import { ENABLE_PDF_INDEX, ENABLE_LLM, PORT, CORS_ORIGIN, getFeatureStatus, OLLAMA_BASE_URL } from './config.js';
 import { isUsingNeon } from './db/index.js';
@@ -87,8 +88,7 @@ if (usingNeon) {
   app.use('/api/learners', neonLearnersRouter);
   app.use('/api/interactions', neonInteractionsRouter);
   app.use('/api/textbooks', neonTextbooksRouter);
-  // Sessions are handled in neon-learners router
-  app.use('/api/sessions', neonLearnersRouter);
+  app.use('/api/sessions', neonSessionsRouter);
 } else {
   console.log('💾 Using SQLite routes (legacy)');
   app.use('/api/learners', learnersRouter);
