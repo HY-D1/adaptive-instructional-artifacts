@@ -1314,7 +1314,36 @@ export function LearningInterface() {
             medianTimeMs: 300000, // 5 minutes as baseline
             hdiScore: currentHDI,
           });
-          
+
+          // Log reward observed event for research analysis
+          const rewardComponents = {
+            independentSuccess: usedExplanation ? 0 : 1,
+            errorReduction: Math.max(0, 1 - errorCount / 3),
+            delayedRetention: 0,
+            dependencyPenalty: -currentHDI,
+            timeEfficiency: Math.min(1, 300000 / Math.max(timeSpent, 1000)),
+          };
+          const totalReward = Object.values(rewardComponents).reduce((a, b) => a + b, 0) / 5;
+
+          storage.logBanditRewardObserved(
+            learnerId,
+            currentProfileId,
+            Math.max(0, Math.min(1, totalReward)),
+            rewardComponents
+          );
+
+          // Log bandit updated event with new alpha/beta values
+          const armStats = banditManager.getLearnerStats(learnerId).find(s => s.armId === currentProfileId);
+          if (armStats) {
+            storage.logBanditUpdated(
+              learnerId,
+              currentProfileId,
+              armStats.pullCount + 1, // Approximate alpha
+              Math.max(1, armStats.pullCount * 0.5), // Approximate beta
+              armStats.pullCount
+            );
+          }
+
           // Bandit outcome recorded
         } catch (error) {
           console.error('[Bandit] Failed to record outcome:', error);
@@ -1366,6 +1395,22 @@ export function LearningInterface() {
 
   const handleEscalate = (sourceInteractionIds?: string[]) => {
     setEscalationTriggered(true);
+
+    // Log escalation triggered event for research analysis
+    if (learnerId && currentProblem?.id) {
+      const problemInteractions = storage
+        .getInteractionsByLearner(learnerId)
+        .filter((i) => i.sessionId === sessionId && i.problemId === currentProblem.id);
+      const errorCount = problemInteractions.filter((i) => i.eventType === 'error').length;
+
+      storage.logEscalationTriggered(
+        learnerId,
+        currentEscalationProfile?.id || 'adaptive-escalator',
+        errorCount,
+        currentProblem.id
+      );
+    }
+
     const sourceIds = sourceInteractionIds && sourceInteractionIds.length > 0
       ? sourceInteractionIds
       : collectNoteEvidenceIds([], { maxInteractions: 8 });
