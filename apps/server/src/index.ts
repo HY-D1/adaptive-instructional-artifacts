@@ -3,11 +3,19 @@
  * Express server with SQLite database
  */
 
-import express, { Request, Response, NextFunction } from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Load environment variables BEFORE any other imports
+// This ensures DATABASE_URL is available when db/index.ts is evaluated
+const envPath = path.resolve(__dirname, '../.env');
+dotenv.config({ path: envPath });
+
+import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
 import fs from 'fs';
 
 import { initializeSchema, closeDb } from './db/index.js';
@@ -27,12 +35,6 @@ import { neonSessionsRouter } from './routes/neon-sessions.js';
 
 import { ENABLE_PDF_INDEX, ENABLE_LLM, PORT, CORS_ORIGIN, getFeatureStatus, OLLAMA_BASE_URL } from './config.js';
 import { isUsingNeon } from './db/index.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// Load environment variables
-const envPath = path.resolve(__dirname, '../.env');
-dotenv.config({ path: envPath });
 
 // Ensure data directory exists
 const DATA_DIR = path.resolve(__dirname, '../data');
