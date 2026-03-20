@@ -4,7 +4,7 @@
 **Week 1 Focus**: Stability, clarity, deployment readiness  
 **Report Date**: 2026-03-15  
 **Branch**: `weekly_features`  
-**Status**: ✅ **BASELINE REPAIRS COMPLETE** — TypeScript re-verified 2026-03-20; textbook corpus restored 2026-03-20
+**Status**: ✅ **BASELINE REPAIRS COMPLETE** — TypeScript re-verified 2026-03-20; dual-textbook corpus contract enforced 2026-03-20
 
 ---
 

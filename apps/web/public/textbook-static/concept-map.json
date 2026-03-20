@@ -2,7 +2,8 @@
   "version": "1.0.0",
   "generatedAt": "2026-03-15T21:08:18.127157+00:00",
   "sourceDocIds": [
-    "murachs-mysql-3rd-edition"
+    "murachs-mysql-3rd-edition",
+    "dbms-ramakrishnan-3rd-edition"
   ],
   "concepts": {
     "murachs-mysql-3rd-edition/mysql-intro": {
@@ -4123,6 +4124,126 @@
         "extraction_method": "pymupdf",
         "source_doc_id": "murachs-mysql-3rd-edition"
       }
+    },
+    "dbms-ramakrishnan-3rd-edition/relational-model-ramakrishnan": {
+      "title": "Relational Model",
+      "definition": "Data model organizing information into tables of rows and columns with primary and foreign key constraints",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p19:c1",
+          "dbms-ramakrishnan-3rd-edition:p20:c1",
+          "dbms-ramakrishnan-3rd-edition:p21:c1"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p23:c1",
+          "dbms-ramakrishnan-3rd-edition:p24:c1",
+          "dbms-ramakrishnan-3rd-edition:p25:c1"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p27:c1",
+          "dbms-ramakrishnan-3rd-edition:p28:c1"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/er-diagrams-ramakrishnan",
+        "dbms-ramakrishnan-3rd-edition/normalization-ramakrishnan"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/normalization-ramakrishnan": {
+      "title": "Normalization",
+      "definition": "Schema design process that eliminates redundancy and update anomalies by decomposing relations according to normal forms guided by functional dependencies",
+      "difficulty": "intermediate",
+      "pageNumbers": [
+        173,
+        174,
+        175,
+        176,
+        177,
+        178,
+        179,
+        180,
+        181,
+        182
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p173:c1",
+          "dbms-ramakrishnan-3rd-edition:p174:c1",
+          "dbms-ramakrishnan-3rd-edition:p175:c1"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p177:c1",
+          "dbms-ramakrishnan-3rd-edition:p178:c1",
+          "dbms-ramakrishnan-3rd-edition:p179:c1"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p181:c1",
+          "dbms-ramakrishnan-3rd-edition:p182:c1"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/relational-model-ramakrishnan",
+        "dbms-ramakrishnan-3rd-edition/er-diagrams-ramakrishnan"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
+    },
+    "dbms-ramakrishnan-3rd-edition/er-diagrams-ramakrishnan": {
+      "title": "Entity-Relationship Diagrams",
+      "definition": "Conceptual data modeling notation using entities, attributes, and relationships to blueprint a database schema before SQL translation",
+      "difficulty": "beginner",
+      "pageNumbers": [
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45
+      ],
+      "chunkIds": {
+        "definition": [
+          "dbms-ramakrishnan-3rd-edition:p35:c1",
+          "dbms-ramakrishnan-3rd-edition:p36:c1",
+          "dbms-ramakrishnan-3rd-edition:p37:c1"
+        ],
+        "examples": [
+          "dbms-ramakrishnan-3rd-edition:p39:c1",
+          "dbms-ramakrishnan-3rd-edition:p40:c1",
+          "dbms-ramakrishnan-3rd-edition:p41:c1"
+        ],
+        "commonMistakes": [
+          "dbms-ramakrishnan-3rd-edition:p43:c1",
+          "dbms-ramakrishnan-3rd-edition:p44:c1"
+        ]
+      },
+      "relatedConcepts": [
+        "dbms-ramakrishnan-3rd-edition/relational-model-ramakrishnan",
+        "dbms-ramakrishnan-3rd-edition/normalization-ramakrishnan"
+      ],
+      "practiceProblemIds": [],
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition"
     }
   }
 }

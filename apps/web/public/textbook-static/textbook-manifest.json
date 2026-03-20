@@ -1,9 +1,9 @@
 {
   "schemaVersion": "1.0.0",
   "schemaId": "textbook-static-v1",
-  "indexId": "idx-murachs-mysql-3rd-edition-20260315-210818",
+  "indexId": "idx-dual-textbook-20260320",
   "createdAt": "2026-03-15T21:08:18.127157+00:00",
-  "sourceName": "murachs-mysql-3rd-edition",
+  "sourceName": "murachs-mysql-3rd-edition + dbms-ramakrishnan-3rd-edition",
   "chunkerVersion": "word-window-150-overlap-30-v1",
   "embeddingModelId": "hash-embedding-v1",
   "sourceDocs": [
@@ -12,9 +12,15 @@
       "filename": "murachs-mysql-3rd-edition.pdf",
       "sha256": "unknown",
       "pageCount": 0
+    },
+    {
+      "docId": "dbms-ramakrishnan-3rd-edition",
+      "filename": "dbms-ramakrishnan-3rd-edition.pdf",
+      "sha256": "unknown",
+      "pageCount": 0
     }
   ],
-  "docCount": 1,
+  "docCount": 2,
   "chunkCount": 1472,
   "chapters": [],
   "total_exercises": 0,
