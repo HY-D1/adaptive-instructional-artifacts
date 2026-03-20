@@ -4,7 +4,7 @@
 **Week 1 Focus**: Stability, clarity, deployment readiness  
 **Report Date**: 2026-03-15  
 **Branch**: `weekly_features`  
-**Status**: ⚠️ **BASELINE REPAIR IN PROGRESS** — TypeScript gate re-verified 2026-03-20 after schema drift fix
+**Status**: ✅ **BASELINE REPAIRS COMPLETE** — TypeScript re-verified 2026-03-20; textbook corpus restored 2026-03-20
 
 ---
 
@@ -186,6 +186,8 @@ All features available with Ollama + optional backend.
 | Deployment docs complete | ✅ | DEPLOYMENT.md, DEPLOYMENT_MODES.md |
 | Professor demo script | ✅ | docs/demo-script.md |
 | Week 1 status artifact | ✅ | This document |
+| Textbook corpus restored | ✅ | 33/33 Murach concept files present (restored 2026-03-20) |
+| Corpus validation gate | ✅ | `npm run validate:corpus` — passes 33/33 entries |
 
 ---
 
