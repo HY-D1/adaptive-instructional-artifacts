@@ -181,10 +181,19 @@ interface BackendInteraction {
   scheduledTime?: number;
   shownTime?: number;
   
+  // RESEARCH-4: Canonical study-facing fields
+  learnerProfileId?: string;
+  escalationTriggerReason?: string;
+  errorCountAtEscalation?: number;
+  timeToEscalation?: number;
+  strategyAssigned?: string;
+  strategyUpdated?: string;
+  rewardValue?: number;
+
   // Legacy fields
   payload?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
-  
+
   createdAt: string;
 }
 
@@ -579,6 +588,15 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
     scheduledTime: event.scheduledTime,
     shownTime: event.shownTime,
     
+    // RESEARCH-4: Canonical study-facing fields
+    learnerProfileId: event.learnerProfileId,
+    escalationTriggerReason: event.escalationTriggerReason,
+    errorCountAtEscalation: event.errorCountAtEscalation,
+    timeToEscalation: event.timeToEscalation,
+    strategyAssigned: event.strategyAssigned,
+    strategyUpdated: event.strategyUpdated,
+    rewardValue: event.rewardValue,
+
     // Legacy payload for extensibility/backward compatibility
     payload: event.payload,
     metadata: event.metadata,

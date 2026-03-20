@@ -1403,11 +1403,19 @@ export function LearningInterface() {
         .filter((i) => i.sessionId === sessionId && i.problemId === currentProblem.id);
       const errorCount = problemInteractions.filter((i) => i.eventType === 'error').length;
 
+      // RESEARCH-4: compute time_to_escalation = ms from first interaction to now
+      const firstTs = problemInteractions.length > 0
+        ? Math.min(...problemInteractions.map((i) => i.timestamp))
+        : Date.now();
+      const timeToEscalationMs = Date.now() - firstTs;
+
       storage.logEscalationTriggered(
         learnerId,
         currentEscalationProfile?.id || 'adaptive-escalator',
         errorCount,
-        currentProblem.id
+        currentProblem.id,
+        'threshold_met',
+        timeToEscalationMs
       );
     }
 

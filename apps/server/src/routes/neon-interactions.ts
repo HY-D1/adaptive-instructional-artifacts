@@ -28,7 +28,7 @@ router.post('/', async (req: Request, res: Response) => {
 
     // Extract payload - frontend sends nested payload, direct API calls send flat structure
     // RESEARCH-3B: Explicitly extract bandit/escalation fields for proper column mapping
-    const payload = event.payload || {
+    const basePayload = event.payload || {
       sessionId: event.sessionId,
       code: event.code,
       error: event.error,
@@ -58,6 +58,19 @@ router.post('/', async (req: Request, res: Response) => {
       trigger: event.trigger,
       // Include other common fields
       ...event,
+    };
+    // RESEARCH-4: Always merge canonical study fields from event top-level into payload.
+    // This ensures they reach the DB columns regardless of whether event.payload was set.
+    const payload = {
+      ...basePayload,
+      selectedArm: event.selectedArm ?? basePayload.selectedArm,
+      learnerProfileId: event.learnerProfileId ?? basePayload.learnerProfileId,
+      escalationTriggerReason: event.escalationTriggerReason ?? basePayload.escalationTriggerReason,
+      errorCountAtEscalation: event.errorCountAtEscalation ?? basePayload.errorCountAtEscalation,
+      timeToEscalation: event.timeToEscalation ?? basePayload.timeToEscalation,
+      strategyAssigned: event.strategyAssigned ?? basePayload.strategyAssigned,
+      strategyUpdated: event.strategyUpdated ?? basePayload.strategyUpdated,
+      rewardValue: event.rewardValue ?? basePayload.rewardValue,
     };
 
     const interaction = await db.createInteraction({
@@ -94,7 +107,7 @@ router.post('/batch', async (req: Request, res: Response) => {
       const id = event.id || `${event.eventType}-${event.learnerId}-${Date.now()}`;
       // Extract payload - frontend sends nested payload, direct API calls send flat structure
       // RESEARCH-3B: Explicitly extract bandit/escalation fields for proper column mapping
-      const payload = event.payload || {
+      const basePayload = event.payload || {
         sessionId: event.sessionId,
         code: event.code,
         error: event.error,
@@ -124,6 +137,18 @@ router.post('/batch', async (req: Request, res: Response) => {
         trigger: event.trigger,
         // Include other common fields
         ...event,
+      };
+      // RESEARCH-4: Always merge canonical study fields
+      const payload = {
+        ...basePayload,
+        selectedArm: event.selectedArm ?? basePayload.selectedArm,
+        learnerProfileId: event.learnerProfileId ?? basePayload.learnerProfileId,
+        escalationTriggerReason: event.escalationTriggerReason ?? basePayload.escalationTriggerReason,
+        errorCountAtEscalation: event.errorCountAtEscalation ?? basePayload.errorCountAtEscalation,
+        timeToEscalation: event.timeToEscalation ?? basePayload.timeToEscalation,
+        strategyAssigned: event.strategyAssigned ?? basePayload.strategyAssigned,
+        strategyUpdated: event.strategyUpdated ?? basePayload.strategyUpdated,
+        rewardValue: event.rewardValue ?? basePayload.rewardValue,
       };
       const interaction = await db.createInteraction({
         id,

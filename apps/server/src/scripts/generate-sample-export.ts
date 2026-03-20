@@ -120,6 +120,9 @@ function generateSyntheticSamples(): SampleRecord[] {
       assignment_strategy: 'bandit',
       condition_id: 'conservative',
       policy_version: 'bandit-arm-v1',
+      // RESEARCH-4: canonical study fields
+      learner_profile_id: 'slow-escalator',
+      strategy_assigned: 'conservative',
     },
     {
       id: 'evt-profile-001',
@@ -132,6 +135,9 @@ function generateSyntheticSamples(): SampleRecord[] {
       assignment_strategy: 'bandit',
       condition_id: 'adaptive',
       policy_version: 'profile-assign-v1',
+      // RESEARCH-4: canonical study fields
+      learner_profile_id: 'slow-escalator',
+      strategy_assigned: 'slow-escalator',
     },
     {
       id: 'evt-reward-001',
@@ -150,6 +156,9 @@ function generateSyntheticSamples(): SampleRecord[] {
         timeEfficiency: 1,
       }),
       policy_version: 'bandit-reward-v1',
+      // RESEARCH-4: canonical study fields
+      strategy_updated: 'adaptive',
+      reward_value: 0.6,
     },
     {
       id: 'evt-update-001',
@@ -162,6 +171,8 @@ function generateSyntheticSamples(): SampleRecord[] {
       new_alpha: 2,
       new_beta: 1,
       policy_version: 'bandit-update-v1',
+      // RESEARCH-4: canonical study fields
+      strategy_updated: 'adaptive',
     },
     {
       id: 'evt-exec-001',
@@ -176,6 +187,24 @@ function generateSyntheticSamples(): SampleRecord[] {
       concept_ids: JSON.stringify(['select-basic']),
       condition_id: 'aggressive',
       policy_version: 'sql-engage-index-v3-hintid-contract',
+    },
+    {
+      id: 'evt-escalation-001',
+      user_id: 'research-3d-flow-a-1773808257058',
+      session_id: 'session-research-3d-flow-a-1773808257058-1773808258264',
+      timestamp: new Date(now - 3000000).toISOString(),
+      event_type: 'escalation_triggered',
+      problem_id: 'problem-1',
+      profile_id: 'slow-escalator',
+      from_rung: 1,
+      to_rung: 2,
+      trigger_reason: 'threshold_met',
+      policy_version: 'escalation-trigger-v1',
+      // RESEARCH-4: canonical study fields
+      learner_profile_id: 'slow-escalator',
+      escalation_trigger_reason: 'threshold_met',
+      error_count_at_escalation: 3,
+      time_to_escalation: 45000,
     },
   ];
 }

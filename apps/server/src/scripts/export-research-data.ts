@@ -48,7 +48,7 @@ interface ResearchEvent {
   event_type: string;
   problem_id: string;
   condition_id?: string;
-  // Strategy/Reward fields
+  // Strategy/Reward fields (legacy)
   profile_id?: string;
   assignment_strategy?: string;
   selected_arm?: string;
@@ -68,6 +68,14 @@ interface ResearchEvent {
   from_rung?: number;
   to_rung?: number;
   policy_version?: string;
+  // RESEARCH-4: Canonical study-facing fields
+  learner_profile_id?: string;
+  escalation_trigger_reason?: string;
+  error_count_at_escalation?: number;
+  time_to_escalation?: number;
+  strategy_assigned?: string;
+  strategy_updated?: string;
+  reward_value?: number;
 }
 
 // ============================================================================
@@ -173,6 +181,13 @@ async function exportEvents(db: ReturnType<typeof neon>): Promise<void> {
       slope,
       intervention_type,
       is_correct,
+      learner_profile_id,
+      escalation_trigger_reason,
+      error_count_at_escalation,
+      time_to_escalation,
+      strategy_assigned,
+      strategy_updated,
+      reward_value,
       created_at
     FROM interaction_events
     ORDER BY timestamp DESC
@@ -182,8 +197,12 @@ async function exportEvents(db: ReturnType<typeof neon>): Promise<void> {
   const csvPath = path.join(OUTPUT_DIR, 'interaction_events.csv');
   const jsonPath = path.join(OUTPUT_DIR, 'interaction_events.json');
 
-  // CSV Export - research-focused columns
-  const csvHeader = 'id,user_id,session_id,timestamp,event_type,problem_id,successful,time_spent,profile_id,assignment_strategy,selected_arm,selection_method,reward_total,new_alpha,new_beta,from_rung,to_rung,trigger_reason,intervention_type,concept_ids,created_at\n';
+  // CSV Export - research-focused columns (legacy + canonical study fields)
+  const csvHeader = 'id,user_id,session_id,timestamp,event_type,problem_id,successful,time_spent,' +
+    'profile_id,assignment_strategy,selected_arm,selection_method,reward_total,new_alpha,new_beta,' +
+    'from_rung,to_rung,trigger_reason,intervention_type,concept_ids,' +
+    'learner_profile_id,escalation_trigger_reason,error_count_at_escalation,time_to_escalation,' +
+    'strategy_assigned,strategy_updated,reward_value,created_at\n';
   const csvRows = events.map(e => {
     const conceptIds = parseJsonSafe(e.concept_ids)?.join(';') || '';
     return [
@@ -207,6 +226,13 @@ async function exportEvents(db: ReturnType<typeof neon>): Promise<void> {
       escapeCsv(e.trigger_reason || ''),
       e.intervention_type || '',
       conceptIds,
+      e.learner_profile_id || '',
+      escapeCsv(e.escalation_trigger_reason || ''),
+      e.error_count_at_escalation ?? '',
+      e.time_to_escalation ?? '',
+      e.strategy_assigned || '',
+      e.strategy_updated || '',
+      e.reward_value ?? '',
       e.created_at
     ].join(',');
   }).join('\n');
@@ -339,6 +365,10 @@ async function exportStrategyRewardEvents(db: ReturnType<typeof neon>): Promise<
       new_beta,
       profile_id,
       assignment_strategy,
+      learner_profile_id,
+      strategy_assigned,
+      strategy_updated,
+      reward_value,
       created_at
     FROM interaction_events
     WHERE event_type IN ('bandit_arm_selected', 'bandit_reward_observed', 'bandit_updated', 'profile_assigned')
@@ -349,8 +379,10 @@ async function exportStrategyRewardEvents(db: ReturnType<typeof neon>): Promise<
   const csvPath = path.join(OUTPUT_DIR, 'bandit_events.csv');
   const jsonPath = path.join(OUTPUT_DIR, 'bandit_events.json');
 
-  // CSV Export
-  const csvHeader = 'id,user_id,session_id,timestamp,event_type,problem_id,selected_arm,selection_method,reward_total,new_alpha,new_beta,profile_id,assignment_strategy,created_at\n';
+  // CSV Export (legacy + canonical study fields)
+  const csvHeader = 'id,user_id,session_id,timestamp,event_type,problem_id,' +
+    'selected_arm,selection_method,reward_total,new_alpha,new_beta,profile_id,assignment_strategy,' +
+    'learner_profile_id,strategy_assigned,strategy_updated,reward_value,created_at\n';
   const csvRows = banditEvents.map(e => [
     e.id,
     e.user_id,
@@ -365,6 +397,10 @@ async function exportStrategyRewardEvents(db: ReturnType<typeof neon>): Promise<
     e.new_beta ?? '',
     e.profile_id || '',
     e.assignment_strategy || '',
+    e.learner_profile_id || '',
+    e.strategy_assigned || '',
+    e.strategy_updated || '',
+    e.reward_value ?? '',
     e.created_at
   ].join(',')).join('\n');
   fs.writeFileSync(csvPath, csvHeader + csvRows);
@@ -397,6 +433,10 @@ async function exportEscalationEvents(db: ReturnType<typeof neon>): Promise<void
       profile_id,
       hint_level,
       current_rung,
+      learner_profile_id,
+      escalation_trigger_reason,
+      error_count_at_escalation,
+      time_to_escalation,
       created_at
     FROM interaction_events
     WHERE event_type IN ('escalation_triggered', 'guidance_escalate', 'escalation_policy_changed')
@@ -409,8 +449,11 @@ async function exportEscalationEvents(db: ReturnType<typeof neon>): Promise<void
   const csvPath = path.join(OUTPUT_DIR, 'escalation_events.csv');
   const jsonPath = path.join(OUTPUT_DIR, 'escalation_events.json');
 
-  // CSV Export
-  const csvHeader = 'id,user_id,session_id,timestamp,event_type,problem_id,from_rung,to_rung,trigger_reason,profile_id,hint_level,current_rung,created_at\n';
+  // CSV Export (legacy + canonical study fields)
+  const csvHeader = 'id,user_id,session_id,timestamp,event_type,problem_id,' +
+    'from_rung,to_rung,trigger_reason,profile_id,hint_level,current_rung,' +
+    'learner_profile_id,escalation_trigger_reason,error_count_at_escalation,time_to_escalation,' +
+    'created_at\n';
   const csvRows = escalationEvents.map(e => [
     e.id,
     e.user_id,
@@ -424,6 +467,10 @@ async function exportEscalationEvents(db: ReturnType<typeof neon>): Promise<void
     e.profile_id || '',
     e.hint_level ?? '',
     e.current_rung ?? '',
+    e.learner_profile_id || '',
+    escapeCsv(e.escalation_trigger_reason || ''),
+    e.error_count_at_escalation ?? '',
+    e.time_to_escalation ?? '',
     e.created_at
   ].join(',')).join('\n');
   fs.writeFileSync(csvPath, csvHeader + csvRows);

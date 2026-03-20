@@ -661,8 +661,15 @@ class DualStorageManager {
     localStorageManager.logProfileAssigned(learnerId, profileId, strategy, problemId, reason);
   }
 
-  logEscalationTriggered(learnerId: string, profileId: string, errorCount: number, problemId: string): void {
-    localStorageManager.logEscalationTriggered(learnerId, profileId, errorCount, problemId);
+  logEscalationTriggered(
+    learnerId: string,
+    profileId: string,
+    errorCount: number,
+    problemId: string,
+    reason: string = 'threshold_met',
+    timeToEscalationMs?: number
+  ): void {
+    localStorageManager.logEscalationTriggered(learnerId, profileId, errorCount, problemId, reason, timeToEscalationMs);
   }
 
   logBanditArmSelected(params: {

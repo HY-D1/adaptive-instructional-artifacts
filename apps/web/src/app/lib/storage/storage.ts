@@ -1219,6 +1219,9 @@ class StorageManager {
       profileId,
       assignmentStrategy: strategy,
       policyVersion: 'profile-assign-v1',
+      // RESEARCH-4: canonical study fields
+      learnerProfileId: profileId,
+      strategyAssigned: profileId,
       payload: {
         profileId,
         strategy,
@@ -1239,7 +1242,9 @@ class StorageManager {
     learnerId: string,
     profileId: string,
     errorCount: number,
-    problemId: string
+    problemId: string,
+    reason: string = 'threshold_met',
+    timeToEscalationMs?: number
   ): void {
     const event: InteractionEvent = {
       id: createEventId('escalation', 'triggered'),
@@ -1250,8 +1255,13 @@ class StorageManager {
       problemId,
       profileId,
       policyVersion: 'escalation-trigger-v1',
+      // RESEARCH-4: canonical study fields
+      learnerProfileId: profileId,
+      escalationTriggerReason: reason,
+      errorCountAtEscalation: errorCount,
+      ...(timeToEscalationMs !== undefined && { timeToEscalation: timeToEscalationMs }),
       payload: {
-        trigger: 'threshold_met',
+        trigger: reason,
         errorCount,
         profileId
       }
@@ -1351,6 +1361,9 @@ class StorageManager {
         components
       },
       policyVersion: 'bandit-reward-v1',
+      // RESEARCH-4: canonical study fields
+      selectedArm: armId,
+      rewardValue: reward,
       payload: {
         armId,
         reward: {
@@ -1387,6 +1400,9 @@ class StorageManager {
       newAlpha: alpha,
       newBeta: beta,
       policyVersion: 'bandit-update-v1',
+      // RESEARCH-4: canonical study fields
+      selectedArm: armId,
+      strategyUpdated: armId,
       payload: {
         armId,
         newAlpha: alpha,

@@ -12,7 +12,8 @@
     "db:init:neon": "tsx src/db/init-neon.ts",
     "db:migrate": "tsx src/db/migrate.ts",
     "research:export": "tsx src/scripts/export-research-data.ts",
-    "research:export:sample": "tsx src/scripts/generate-sample-export.ts"
+    "research:export:sample": "tsx src/scripts/generate-sample-export.ts",
+    "research:validate": "tsx src/scripts/validate-research-fields.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",

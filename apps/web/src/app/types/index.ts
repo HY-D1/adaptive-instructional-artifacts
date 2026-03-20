@@ -212,6 +212,15 @@ export type InteractionEvent = {
   
   // Week 6: Experimental condition tracking
   conditionId?: string;
+  // RESEARCH-4: Canonical study-facing fields (explicit names for analysis)
+  // These mirror existing internal fields but use the names required by the study plan.
+  learnerProfileId?: string;        // canonical: assigned escalation profile (mirrors profileId)
+  escalationTriggerReason?: string; // canonical: why escalation fired (e.g. 'threshold_met')
+  errorCountAtEscalation?: number;  // canonical: error count at moment of escalation
+  timeToEscalation?: number;        // canonical: ms from first problem interaction to escalation event
+  strategyAssigned?: string;        // canonical: instructional policy/arm assigned (e.g. 'conservative')
+  strategyUpdated?: string;         // canonical: arm/strategy updated after reward observation
+  rewardValue?: number;             // canonical: total reward signal 0–1 (mirrors reward.total)
   // Additional metadata for logging/debugging
   payload?: Record<string, unknown>;
   metadata?: Record<string, unknown>;

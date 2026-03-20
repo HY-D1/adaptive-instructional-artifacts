@@ -203,6 +203,15 @@ export async function initializeSchema(): Promise<void> {
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_timestamp ON interaction_events(timestamp)`;
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_problem_id ON interaction_events(problem_id)`;
 
+  // RESEARCH-4: Add canonical study columns (idempotent — safe to re-run on existing schema)
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS learner_profile_id TEXT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS escalation_trigger_reason TEXT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS error_count_at_escalation INTEGER`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS time_to_escalation BIGINT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_assigned TEXT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_updated TEXT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS reward_value NUMERIC`;
+
   // Textbook units (My Textbook)
   await db`
     CREATE TABLE IF NOT EXISTS textbook_units (
@@ -545,7 +554,10 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
       selected_arm, selection_method, arm_stats_at_selection, reward_total,
       reward_components, new_alpha, new_beta, hdi, hdi_level, hdi_components,
       trend, slope, intervention_type, schedule_id, prompt_id, prompt_type,
-      response, is_correct, scheduled_time, shown_time, created_at
+      response, is_correct, scheduled_time, shown_time,
+      learner_profile_id, escalation_trigger_reason, error_count_at_escalation,
+      time_to_escalation, strategy_assigned, strategy_updated, reward_value,
+      created_at
     ) VALUES (
       ${data.id},
       ${data.learnerId},
@@ -626,6 +638,13 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
       ${payload.isCorrect ?? null},
       ${payload.scheduledTime || null},
       ${payload.shownTime || null},
+      ${payload.learnerProfileId || null},
+      ${payload.escalationTriggerReason || null},
+      ${payload.errorCountAtEscalation ?? null},
+      ${payload.timeToEscalation ?? null},
+      ${payload.strategyAssigned || null},
+      ${payload.strategyUpdated || null},
+      ${payload.rewardValue ?? null},
       ${now}
     )
   `;
@@ -873,7 +892,23 @@ function rowToInteraction(row: any): Interaction {
       isCorrect: row.is_correct,
       scheduledTime: row.scheduled_time,
       shownTime: row.shown_time,
+      // RESEARCH-4: canonical study fields in payload for backward compatibility
+      learnerProfileId: row.learner_profile_id,
+      escalationTriggerReason: row.escalation_trigger_reason,
+      errorCountAtEscalation: row.error_count_at_escalation,
+      timeToEscalation: row.time_to_escalation,
+      strategyAssigned: row.strategy_assigned,
+      strategyUpdated: row.strategy_updated,
+      rewardValue: row.reward_value,
     },
+    // RESEARCH-4: canonical study fields also at top-level for typed access
+    learnerProfileId: row.learner_profile_id,
+    escalationTriggerReason: row.escalation_trigger_reason,
+    errorCountAtEscalation: row.error_count_at_escalation,
+    timeToEscalation: row.time_to_escalation,
+    strategyAssigned: row.strategy_assigned,
+    strategyUpdated: row.strategy_updated,
+    rewardValue: row.reward_value,
     createdAt: row.created_at,
   };
 }
