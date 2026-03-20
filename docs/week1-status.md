@@ -4,7 +4,7 @@
 **Week 1 Focus**: Stability, clarity, deployment readiness  
 **Report Date**: 2026-03-15  
 **Branch**: `weekly_features`  
-**Status**: ✅ **PASSED** — Ready for Week 2
+**Status**: ⚠️ **BASELINE REPAIR IN PROGRESS** — TypeScript gate re-verified 2026-03-20 after schema drift fix
 
 ---
 
@@ -31,12 +31,12 @@ Week 1 stabilization completed successfully. All core systems are green:
 npx tsc --noEmit
 ```
 
-**Result**: ✅ **PASS**
+**Result**: ✅ **PASS** *(re-verified 2026-03-20 after `solvedProblemIds` schema drift fix)*
 ```
 Exit code: 0
 ```
 
-**Assessment**: Zero type errors across the entire codebase.
+**Assessment**: Zero type errors. Note: a `LearnerProfile.solvedProblemIds` schema drift was found and fixed on 2026-03-20 before this re-verification. The Week 1 gate claim predated that drift.
 
 ---
 
@@ -178,7 +178,7 @@ All features available with Ollama + optional backend.
 
 | Task | Status | Evidence |
 |------|--------|----------|
-| TypeScript clean | ✅ | `tsc --noEmit` exit 0 |
+| TypeScript clean | ✅ | `tsc --noEmit` exit 0 (re-verified 2026-03-20 after schema drift fix) |
 | Build passing | ✅ | `npm run build` success |
 | Unit tests green | ✅ | 829 passed |
 | E2E smoke passing | ✅ | 2/2 passed |

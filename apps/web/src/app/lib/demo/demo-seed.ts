@@ -407,6 +407,7 @@ function createLearnerProfiles(): Record<string, LearnerProfile> {
         ['missing-where-predicate', 2],
         ['syntax-error', 1],
       ]),
+      solvedProblemIds: new Set(['p1-select-basics']),
       interactionCount: 8,
       currentStrategy: 'adaptive-medium',
       preferences: {
@@ -427,6 +428,7 @@ function createLearnerProfiles(): Record<string, LearnerProfile> {
       errorHistory: new Map([
         ['missing-join-condition', 3],
       ]),
+      solvedProblemIds: new Set(),
       interactionCount: 6,
       currentStrategy: 'adaptive-low',
       preferences: {

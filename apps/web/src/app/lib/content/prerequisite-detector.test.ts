@@ -15,6 +15,7 @@ function createMockProfile(coveredConcepts: string[]): LearnerProfile {
     conceptsCovered: new Set(coveredConcepts),
     conceptCoverageEvidence: new Map(),
     errorHistory: new Map(),
+    solvedProblemIds: new Set(),
     interactionCount: 0,
     currentStrategy: 'adaptive-medium',
     preferences: {
@@ -39,6 +40,13 @@ function createMockErrorEvent(
     errorSubtypeId: 'syntax-error'
   };
 }
+
+describe('LearnerProfile schema baseline', () => {
+  it('createMockProfile includes solvedProblemIds as a Set', () => {
+    const profile = createMockProfile([]);
+    expect(profile.solvedProblemIds).toBeInstanceOf(Set);
+  });
+});
 
 describe('Prerequisite Violation Detector', () => {
   describe('detectPrerequisiteViolation', () => {
