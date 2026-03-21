@@ -392,6 +392,143 @@ SELECT id, name
   });
 });
 
+// ─── Dual-textbook loader regression ─────────────────────────────────────────
+// Verifies adaptive can load concepts from both textbooks using the namespaced
+// format produced by the real PDF helper export.
+
+describe('Dual-textbook loader: namespaced helper format', () => {
+  // Mirrors the real helper concept-map.json structure after sync.
+  const mockDualMap = {
+    version: '1.0.0',
+    generatedAt: '2026-03-21T00:00:00Z',
+    sourceDocIds: ['murachs-mysql-3rd-edition', 'dbms-ramakrishnan-3rd-edition'],
+    concepts: {
+      // Representative Murach concept
+      'murachs-mysql-3rd-edition/select-statement-murach': {
+        id: 'murachs-mysql-3rd-edition/select-statement-murach',
+        title: 'SELECT Statement (Murach)',
+        definition: 'Retrieve rows from one or more tables',
+        difficulty: 'beginner' as const,
+        estimatedReadTime: 5,
+        pageNumbers: [45],
+        chunkIds: { definition: ['murach:p45:c1'], examples: [], commonMistakes: [] },
+        relatedConcepts: [],
+        practiceProblemIds: [],
+        sourceDocId: 'murachs-mysql-3rd-edition',
+      },
+      // Real Ramakrishnan key from helper export (relational-model-intro)
+      'dbms-ramakrishnan-3rd-edition/relational-model-intro': {
+        id: 'dbms-ramakrishnan-3rd-edition/relational-model-intro',
+        title: 'Introduction to Relational Databases',
+        definition: 'Overview of database systems, relational model basics, and data independence',
+        difficulty: 'beginner' as const,
+        estimatedReadTime: 10,
+        pageNumbers: [1, 2, 3],
+        chunkIds: {
+          definition: ['dbms-ramakrishnan-3rd-edition:p2:c1'],
+          examples: ['dbms-ramakrishnan-3rd-edition:p6:c1'],
+          commonMistakes: ['dbms-ramakrishnan-3rd-edition:p11:c1'],
+        },
+        relatedConcepts: [],
+        practiceProblemIds: [],
+        sourceDocId: 'dbms-ramakrishnan-3rd-edition',
+      },
+      // Another Ramakrishnan concept to confirm multiple resolve cleanly
+      'dbms-ramakrishnan-3rd-edition/normalization': {
+        id: 'dbms-ramakrishnan-3rd-edition/normalization',
+        title: 'Normalization',
+        definition: 'Organizing database structure to reduce redundancy',
+        difficulty: 'intermediate' as const,
+        estimatedReadTime: 12,
+        pageNumbers: [300, 301],
+        chunkIds: { definition: [], examples: [], commonMistakes: [] },
+        relatedConcepts: [],
+        practiceProblemIds: [],
+        sourceDocId: 'dbms-ramakrishnan-3rd-edition',
+      },
+    },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearConceptMapCache();
+  });
+
+  afterEach(() => {
+    clearConceptMapCache();
+  });
+
+  it('loads a Murach concept via full namespaced key', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockDualMap),
+    } as Response);
+
+    const concept = await getConcept('murachs-mysql-3rd-edition/select-statement-murach');
+    expect(concept).not.toBeNull();
+    expect(concept?.title).toBe('SELECT Statement (Murach)');
+    expect(concept?.sourceDocId).toBe('murachs-mysql-3rd-edition');
+  });
+
+  it('loads a Ramakrishnan concept via full namespaced key', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(mockDualMap),
+    } as Response);
+
+    const concept = await getConcept('dbms-ramakrishnan-3rd-edition/relational-model-intro');
+    expect(concept).not.toBeNull();
+    expect(concept?.title).toBe('Introduction to Relational Databases');
+    expect(concept?.sourceDocId).toBe('dbms-ramakrishnan-3rd-edition');
+  });
+
+  it('loads Ramakrishnan concept markdown via namespaced file path', async () => {
+    const mockMarkdown = `---
+id: relational-model-intro
+sourceDocId: dbms-ramakrishnan-3rd-edition
+---
+
+## Definition
+Overview of database systems, relational model basics, and data independence
+
+## Explanation
+The relational model organizes data into tables (relations) with rows and columns.
+`;
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockDualMap),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve(mockMarkdown),
+      } as Response);
+
+    const loaded = await loadConceptContent(
+      'dbms-ramakrishnan-3rd-edition/relational-model-intro'
+    );
+    expect(loaded).not.toBeNull();
+    expect(loaded?.title).toBe('Introduction to Relational Databases');
+    expect(loaded?.content.definition).toBe(
+      'Overview of database systems, relational model basics, and data independence'
+    );
+  });
+
+  it('resolveConceptId handles both textbooks without ambiguity in dual map', () => {
+    const concepts = mockDualMap.concepts as Parameters<typeof resolveConceptId>[1];
+    // Namespaced Murach key → exact match
+    expect(resolveConceptId('murachs-mysql-3rd-edition/select-statement-murach', concepts))
+      .toBe('murachs-mysql-3rd-edition/select-statement-murach');
+    // Namespaced Ramakrishnan key → exact match
+    expect(resolveConceptId('dbms-ramakrishnan-3rd-edition/relational-model-intro', concepts))
+      .toBe('dbms-ramakrishnan-3rd-edition/relational-model-intro');
+    // Plain suffix → unique resolution
+    expect(resolveConceptId('normalization', concepts))
+      .toBe('dbms-ramakrishnan-3rd-edition/normalization');
+  });
+});
+
 describe('Murach corpus consistency', () => {
   beforeEach(() => {
     vi.clearAllMocks();

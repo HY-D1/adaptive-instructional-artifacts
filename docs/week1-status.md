@@ -4,7 +4,7 @@
 **Week 1 Focus**: Stability, clarity, deployment readiness  
 **Report Date**: 2026-03-15  
 **Branch**: `weekly_features`  
-**Status**: ✅ **BASELINE REPAIRS COMPLETE** — TypeScript re-verified 2026-03-20; dual-textbook corpus contract enforced 2026-03-20; Ramakrishnan concept files tracked in git 2026-03-20
+**Status**: ✅ **BASELINE REPAIRS COMPLETE** — TypeScript re-verified 2026-03-20; full dual-textbook corpus synced from real helper export 2026-03-21 (33 Murach + 37 Ramakrishnan = 70 concepts)
 
 ---
 
@@ -186,8 +186,8 @@ All features available with Ollama + optional backend.
 | Deployment docs complete | ✅ | DEPLOYMENT.md, DEPLOYMENT_MODES.md |
 | Professor demo script | ✅ | docs/demo-script.md |
 | Week 1 status artifact | ✅ | This document |
-| Textbook corpus restored | ✅ | 33/33 Murach concept files present (restored 2026-03-20) |
-| Corpus validation gate | ✅ | `npm run validate:corpus` — passes 33/33 entries |
+| Textbook corpus synced | ✅ | 33 Murach + 37 Ramakrishnan = 70 concepts from real helper export (synced 2026-03-21) |
+| Corpus validation gate | ✅ | `node scripts/validate-corpus.mjs` — passes 70/70 entries, both textbooks required |
 
 ---
 

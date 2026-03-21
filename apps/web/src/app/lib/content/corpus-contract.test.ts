@@ -131,17 +131,27 @@ describe('Corpus contract: dual-textbook requirement', () => {
     ).toHaveLength(0);
   });
 
-  it('concept-map.json contains more than one concept per textbook', () => {
+  it('concept-map.json contains a full helper-level concept count per textbook', () => {
     const map = loadConceptMap();
     const keys = Object.keys(map.concepts);
 
+    // Thresholds set above the old 3-concept placeholder level to prevent
+    // a stub second-textbook slice from silently passing the gate.
+    // Murach: 33 real concepts; Ramakrishnan: 37 real concepts.
+    // Both thresholds must stay above the placeholder level (3).
+    const MIN_CONCEPTS_PER_TEXTBOOK: Record<string, number> = {
+      'murachs-mysql-3rd-edition': 30,
+      'dbms-ramakrishnan-3rd-edition': 20,
+    };
+
     for (const docId of REQUIRED_SOURCE_DOC_IDS) {
       const count = keys.filter(k => k.startsWith(`${docId}/`)).length;
-      // We require at least 3 so a trivial single-stub commit won't slip through.
+      const required = MIN_CONCEPTS_PER_TEXTBOOK[docId] ?? 10;
       expect(
         count,
-        `Too few concepts for "${docId}" (found ${count}, need ≥ 3)`
-      ).toBeGreaterThanOrEqual(3);
+        `Too few concepts for "${docId}" (found ${count}, need ≥ ${required}). ` +
+          `A 3-concept placeholder cannot pass this check.`
+      ).toBeGreaterThanOrEqual(required);
     }
   });
 });
