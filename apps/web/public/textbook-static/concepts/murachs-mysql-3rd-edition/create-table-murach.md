@@ -1,69 +1,110 @@
+---
+id: create-table-murach
+title: Creating Tables
+definition: CREATE TABLE with columns, data types, and constraints
+difficulty: beginner
+estimatedReadTime: 5
+pageReferences: [317, 318, 319, 320, 321, 322, 323, 324, 325, 326, 327, 328, 329, 330, 331]
+chunkIds:
+  - murachs-mysql-3rd-edition:p317:c1
+  - murachs-mysql-3rd-edition:p317:c2
+  - murachs-mysql-3rd-edition:p317:c3
+  - murachs-mysql-3rd-edition:p318:c1
+  - murachs-mysql-3rd-edition:p318:c2
+  - murachs-mysql-3rd-edition:p318:c3
+  - murachs-mysql-3rd-edition:p319:c1
+  - murachs-mysql-3rd-edition:p319:c2
+  - murachs-mysql-3rd-edition:p320:c1
+  - murachs-mysql-3rd-edition:p320:c2
+  - murachs-mysql-3rd-edition:p321:c1
+  - murachs-mysql-3rd-edition:p321:c2
+  - murachs-mysql-3rd-edition:p321:c3
+  - murachs-mysql-3rd-edition:p323:c1
+  - murachs-mysql-3rd-edition:p323:c2
+  - murachs-mysql-3rd-edition:p325:c1
+  - murachs-mysql-3rd-edition:p325:c2
+  - murachs-mysql-3rd-edition:p326:c1
+  - murachs-mysql-3rd-edition:p326:c2
+  - murachs-mysql-3rd-edition:p326:c3
+  - murachs-mysql-3rd-edition:p327:c1
+  - murachs-mysql-3rd-edition:p327:c2
+  - murachs-mysql-3rd-edition:p328:c1
+  - murachs-mysql-3rd-edition:p328:c2
+  - murachs-mysql-3rd-edition:p328:c3
+  - murachs-mysql-3rd-edition:p329:c1
+  - murachs-mysql-3rd-edition:p329:c2
+  - murachs-mysql-3rd-edition:p330:c1
+  - murachs-mysql-3rd-edition:p330:c2
+  - murachs-mysql-3rd-edition:p330:c3
+  - murachs-mysql-3rd-edition:p331:c1
+relatedConcepts:
+tags:
+  - mysql
+  - ddl
+  - create-table
+sourceDocId: murachs-mysql-3rd-edition
+---
+
 # Creating Tables
 
 ## Definition
-
-Analytic functions are special SQL functions that perform calculations across a set of rows related to the current row. They help in ranking, filtering, and summarizing data within partitions.
+CREATE TABLE with columns, data types, and constraints
 
 ## Explanation
+Chapter 9 How to use functions The syntax of the analytic functions {FIRST_VALUEILAST_ VALUEINTH_VALUE}(scalar_expression[, numeric_ literal]) OVER ([partition_clause) order_clause [frame_ clause)) {LEADILAG}{scalar_expression [, offset [, default]]) OVER ([partition_clause) order_clause) {PERCENT_RANK() ICUME_DIST()} OVER ([partition_clause] order_ clause) The columns in the Sales_Reps and Sales_Totals tables Column name Data type Column name Data type rep_id rep_first_name rep_last_name INT VARCHAR(50) VARCHAR(50) rep_1d sales_year sales_total INT YEAR DECIMAL(9,2) A query that uses the FIRST_VALUE, NTH_VALUE, and LAST VALUE functions SELECT sales__year, CONCAT(rep_ first_name, ' ', rep_ last_ name) AS rep_name, sales_total, FIRST_VALUE(CONCAT(rep_ first_ name, I ', rep_ last_ name)) OVER (PARTITION BY sales__year ORDER BY sales_total DESC) AS highest_ sales, NTH_VALUE(CONCAT(rep_ first_namA, ' ', rep_ last_~arne), 2) OVER (PARTITION BY sales__year ORDER BY sales_total DESC RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS second_highest_ sales, LAST_VALUE(CONCAT(rep_ first_ name, ' ', rep_ last_name)) OVER (PARTITION BY sales__year ORDER BY sales_total DESC RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS lowest sales FROM sales totals JOIN sales_ reps ON sales_totals.rep_ id = sales_ reps.rep_ id sales_year rep_name sales_total highest_sales second _highes t_sales lowest_sales ► 2016 Jonathon lhomas
 
-Analytic functions are essential for complex data analysis tasks where you need to compare values across multiple rows. These functions operate on a window of rows defined by the PARTITION BY clause and sort them using the ORDER BY clause. Key analytic functions include FIRST_VALUE, LAST_VALUE, NTH_VALUE, LEAD, LAG, PERCENT_RANK, and CUME_DIST. They are particularly useful in financial analysis, sales reporting, and any scenario where you need to analyze trends or compare data points over time.
+UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS lowest sales FROM sales totals JOIN sales_ reps ON sales_totals.rep_ id = sales_ reps.rep_ id sales_year rep_name sales_total highest_sales second _highes t_sales lowest_sales ► 2016 Jonathon lhomas 1274856.38 Jonathon Thomas Andrew Markasian Sonja Martinez 2016 Andrew Markasian 1032875.48 Jonathon lhomas Andrew Markasian Sonja Martinez 2016 Sonja Martinez 978'165.99 Jonathon lhomas Andrew Markasian Sonja Martinez 2017 AndrewMarkasian 1132744.56 Andrew Markasian Sonja Martinez Lydia Kramer 2017
 
 ## Examples
-
-### Basic Usage
-
+### Example 1: SELECT Example
 ```sql
--- Get the highest sales for each year
-SELECT sales_year, rep_first_name, rep_last_name, sales_total,
-FIRST_VALUE(sales_total) OVER (PARTITION BY sales_year ORDER BY sales_total DESC) AS highest_sales
-FROM sales_totals JOIN sales_reps ON sales_totals.rep_id = sales_reps.rep_id;
+SELECT sales__year, CONCAT(rep_ first_name, ' ', rep_ last_ name) AS rep_name, sales_total, FIRST_VALUE(CONCAT(rep_ first_ name, I ', rep_ last_ name)) OVER (PARTITION BY sales__year ORDER BY sales_total DESC) AS highest_ sales, NTH_VALUE(CONCAT(rep_ first_namA, ' ', rep_ last_~arne), 2) OVER (PARTITION BY sales__year ORDER BY sales_total DESC RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS second_highest_ sales, LAST_VALUE(CONCAT(rep_ first_ name, ' ', rep_ last_name)) OVER (PARTITION BY sales__year ORDER BY sales_total DESC RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS lowest sales FROM sales totals JOIN sales_ reps ON sales_totals.rep_ id = sales_ reps.rep_ id sales_year rep_name sales_total highest_sales second _highes t_sales lowest_sales ► 2016 Jonathon lhomas
+
+UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS lowest sales FROM sales totals JOIN sales_ reps ON sales_totals.rep_ id = sales_ reps.rep_ id sales_year rep_name sales_total highest_sales second _highes t_sales lowest_sales ► 2016 Jonathon lhomas 1274856.38 Jonathon Thomas Andrew Markasian Sonja Martinez 2016 Andrew Markasian 1032875.48 Jonathon lhomas Andrew Markasian Sonja Martinez 2016 Sonja Martinez 978'165.99 Jonathon lhomas Andrew Markasian Sonja Martinez 2017 AndrewMarkasian 1132744.56 Andrew Markasian Sonja Martinez Lydia Kramer 2017 Sonja Martinez 974853.81 Andrew Markaslan Sonja Martinez Lydia Kramer 2017 Jonathon Thomas 9237'16.85 Andrew Markasian Sonja Martinez L ydla Kramer 2017 Phillip Winters 655786.92 Andrew Markasian Sonja Martinez Lydia Kramer 2017 Lydia Kramer 422847,86 Andrew Markasian Sonja Martinez Lydia Kramer 2018 Jonathon Thomas 998337.46 Jonathon Thomas Sonja Martinez Lydia Kramer 2018 Sonja Martinez 887695.75 Jonathon Thomas Sonja Martinez Lydia Kr-amer 2018 Phiffip Winters n443.37 Jonathon lhomas Sonja Martinez Lydia Kramer 2018 Lydia Kramer 45182.44 Jonathon lhomas Sonja Martinez Lydia Kramer Description • The FIRST_ VALUE, LAST_ VALUE, NTH VALUE, LEAD, LAG, PERCENT_RANK, and CUME_DIST functions are sometimes referred to as analytic functions. They were introduced with MySQL 8.0. • The
+
+Description • The FIRST_ VALUE, LAST_ VALUE, NTH VALUE, LEAD, LAG, PERCENT_RANK, and CUME_DIST functions are sometimes referred to as analytic functions. They were introduced with MySQL 8.0. • The FIRST_ VALUE, LAST_VALUE, and NTH_ VALUE functions return the first, last, and nth value in a sorted set of values. When you use the PARTITION BY clause with LAST_ VALUE or NTH_VALUE, you typically include the ROWS or RANGE clause as well to defme a subset of the current partition. How to use the analytic functions (part 1 of 2)
+
+The LEAD and LAG functions let you refer to values in other rows of the result set. The LAG function is illustrated by the first exa1nple in part 2 of figure 9-18. Here, the OVER clause is used to group the result set by the rep_id column and sort it by the sales_year column. Then, the LAG function in the fourth column gets the sales total from one row prior to the current row (the offset). Since the rows are sorted by year for each sales rep, that means that the function retrieves the sales rep's sales for the previous year. The ftfth column uses the same function, but it subtracts the result of this function from the current sales to show the change in sales from the previous year. The LEAD function is similar, but it lets you refer to values in fo]Jowing rows rather than previous rows. Notice that the value of the LAG function for the first row for each sales rep is 0.00. That's because there isn't a row for the prior year. By default, this
+
+previous rows. Notice that the value of the LAG function for the first row for each sales rep is 0.00. That's because there isn't a row for the prior year. By default, this value is null. Because I wanted to calculate the change for each row in the result set, though, I used the third argument of the LAG function to set the default to 0. The second example shows how to use the PERCENT _RANK and CUME_DIST functions. Both of these functions groups the rows by year and sorts them by sales total in ascending sequence. The PERCENT _RANK function calculates a percent that indicates the rank of each row within a partition. The result of this function is always a value between O and 1. If you study the results in this example, you shouldn' t have any trouble understanding bow this function works. The CUME_DIST function is similar, but it calculates the percent of values that are less than or equal to the current value. This function represents the cumulative distribution of the values. The cumulative distribution
+
+is similar, but it calculates the percent of values that are less than or equal to the current value. This function represents the cumulative distribution of the values. The cumulative distribution is calculated by dividing the number of rows with the current value or a lower value by the total number of rows in the partition.
+
+Chapter 9 How to use functions A query that uses the LAG function SELECT rep_id, sales_year, sales_total AS current_ sales, LAG(sales_total, 1, 0) OVER (PARTITION BY rep_ id ORDER BY sales_year) AS last_ sales, sales_total - LAG(sales_total, 1, 0) OVER (PARTITION BY rep_id ORDER BY sales_year) AS 'change' FROM sales totals repjd sales_year current_sales last_sales change ► 2016 127-18 56. 38 0.00 127-1856. 38 2017 9237'16.85 1274856.38 -351109.53 2018 998337.'16 923746.85 74590.61 2016 978465.99 0.00 978'165.99 2. 2017 97-1853.81 978465.99 -3612. 18 2018 887695.75 97'1853.81 -87158.06 '"'=,,., -..., A query that uses the PERCENT_RANK and CUME_DIST functions SELECT sales_year, rep_ id, sales_total, PERCENT_RANK() OVER (PARTITION BY sales_year ORDER BY sales_total) AS pct_ rank, CUME_DIST () OVE. R ( PARTITION BY sales_year ORDER BY sales total) AS 'cume_dist' FROM sales_totals sales_year rep_ld sales_total pct_rank a.une_dist ► 2016 978465.99 0.3333333333333333 2016 1032875.'iS 0.5 o. --- -- -- --- 2016 127'18 56. 38 2017 422847.86 0.2 2017 655786.92 0.25 0.4 2017 l 923746.85 0.5 0.6 2017 974853.81 0.75 0.8 2017 1132.744.56 2018 s 45182.44 0.25 2018 72443.37 0.3333333333333333 0.5 2018 887695.75 0.6666666666666666 0.75
+
+38 2017 422847.86 0.2 2017 655786.92 0.25 0.4 2017 l 923746.85 0.5 0.6 2017 974853.81 0.75 0.8 2017 1132.744.56 2018 s 45182.44 0.25 2018 72443.37 0.3333333333333333 0.5 2018 887695.75 0.6666666666666666 0.75 2018 998337.46 Description • The LEAD function retrieves data from a following row in a result set, and the LAG function retrieves data from a previous row in a result set. • The PERCENT _RANK function calculates the rank of the values in a sorted set of values as a percent. The CUME_DIST ft1nction calculates the percent of the values in a sorted set of values that are less than or equal to the current value. How to use the analytic functions (part 2 of 2): ' l l l '
+
+Perspective In this chapter, you learned about the different functions that you can use to operate on M ySQL data. At this point, you have all of the skills you need to develop SQL code at a professional level. However, there's a lot more to learn about MySQL. In the next section of this book, then, you'll learn the basic skills for designing a database. Even if you never need to design your own database, understanding this material will help you work more efficiently with databases that have been designed by others. Terms string pattern regular expression regular expression functions specialized window functions ranking functions partition analytic functions cumulative distribution Exercises 1. Write a SELECT staten1ent that returns these columns from the Invoices table: The invoice total column A column that uses the ROUND function to return the invoice total column with 1 decimal digit A column that uses the ROUND function to return the invoice_total column with no decimal digits A column that uses the TRUNCATE function to return the invoice_total column with no decimal digits 2. Write a
+
+column that uses the ROUND function to return the invoice_total column with no decimal digits A column that uses the TRUNCATE function to return the invoice_total column with no decimal digits 2. Write a SELECT statement that returns these columns from the Date_Sample table in the EX database: The start_date column A column that uses the DATE_FORMAT function to return the start_date column with its month name abbreviated and its month, day, and two-digit year separated by slashes A column that uses the DATE FORMAT function to return the start date - - column with its month and day returned as integers with no leading zeros, a two-digit year, and all date parts separated by slashes A column that uses the DATE_FORMAT function to return the start_date column with only the hours and minutes on a 12-hour clock with an am/pm indicator
+
+Chapter 9 How to use functions 3. Write a SELECT statement that returns these columns from the Vendors table: The vendor name column The vendor_name column in all capital letters The vendor_phone column A column that displays the last four digits of each phone number When you get that working right, add the columns that follow to the result set. This is more difficult because these columns require the use of functions within functions. The vendor_phone column with the parts of the number separated by dots, as in 555.555.5555 A column that displays the second word in each vendor name if there is one and blanks if there isn't 4. Write a SELECT statement that retUI ns these columns from the Invoices table: The invoice number column - The invoice date column The invoice_date column plus 30 days The payment_date column A colt1mn named days_to_pay that shows the number of days between the invoice date and the payment date The number of the invoice date's month The four-digit year of the invoice date When you have this working, add a
+
+shows the number of days between the invoice date and the payment date The number of the invoice date's month The four-digit year of the invoice date When you have this working, add a WHERE clause that retrieves just the invoices for the month of May based on the invoice date, not the number of the invoice month. 5. Write a SELECT statement that returns these columns from the String_Sample table of the EX database: The emp_name column A column that displays each employee's first name A column that displays each employee's last name Use regular expression functions to get the first and last name. If a name contains three parts, everything after the first part should be considered part of the last name. Be sure to provide for last names with hypens and apostrophes. Hint: to include an apostrophe in a pattern, you can code a\ in front of it or you can enclose the pattern in double quotes. 6. Write a SELECT statement that returns these columns from the Invoice table of the AP database: The invoice number
+
+in front of it or you can enclose the pattern in double quotes. 6. Write a SELECT statement that returns these columns from the Invoice table of the AP database: The invoice number column - The balance due for each invoice with a balance due greater than zero A column that uses the RANK() function to rank the balance due in descending sequence
+
+Database design and implementation For large applications, a developer who specializes in database design may be responsible for designing and creating the databases that are used by production applications. This developer may also be responsible for designing and creating the databases that are used for testing those applications. Then, a database administrator (DBA) may be responsible for maintaining these databases. For smaller applications, programmers are often asked to fill one or both of these roles. In other words, programmers often need to design, create, and maintain the databases that are used for testing and production. So, whether you 're a database designer, a database administrator, or a SQL programmer, you need the skills and knowledge presented in this section. That's true even if you aren't ever called upon to design, create, or maintain a database. By understanding what's going on behind the scenes, you'll be able to use SQL more effectively. In chapter 10, you'll learn how to design a database. In chapter 11, you'll learn how to use the Data Definition Language (DDL) statements to create and maintain databases,
+
+SQL more effectively. In chapter 10, you'll learn how to design a database. In chapter 11, you'll learn how to use the Data Definition Language (DDL) statements to create and maintain databases, tables, and indexes. Finally, in chapter 12, you '11 leam how to create and maintain views, which are database objects that provide another way to look at tables.
+
+How to design a database In this chapter, you'll learn how to design a new database. This is useful information whether or not you ever design a database on your own. to illustrate this process, I'll use the accounts payable (AP) database that you've seen throughout this book. How to design a data structure......................................... 306 The basic steps for designing a data structure............................................ 306 How to identify the data elements.............................................................. 308 How to subdivide the data elements............................................................ 310 How to identify the tables and assign columns........................................... 312 How to identify the primary and foreign keys............................................ 314 How to enforce the relationships between tables........................................ 316 How nor1nal ization works........................................................................... 318 How to identify the columns to be indexed................................................. 320 How to normalize a data structure.................................... 322 The seven normal forms.............................................................................. 322 How to apply the first normal form............................................................. 324 How to apply the second normal form........................................................ 326 How to apply the third normal form............................................................ 328 When and how to denormalize a data structure.......................................... 330 How to use MySQL Workbench for database design..... 332 How to open an existing EER model........................................................... 332
+
+the third normal form............................................................ 328 When and how to denormalize a data structure.......................................... 330 How to use MySQL Workbench for database design..... 332 How to open an existing EER model........................................................... 332 How to create a new EER model................................................................. 332 How to work with an EER model................................................................ 334 How to work with an EER diagram............................................................ 336 Perspective......................................................................... 338
+
+How to design a data structure Databases are often designed by database administrators (DBAs) or design specialists. This is especially true for large, multiuser databases. How well this is done can directly affect your job as a MySQL programmer. In general, a well-designed database is easy to understand and query, while a poorly designed database is difficult to work with. In fact, when you work with a poorly designed database, you will often need to figure out how it is designed before you can code your queries appropriately. The topics that follow present a basic approach for designing a data struc - ture. We use that term to refer to a model of the database rather than the database itself. Once you design the data structure, you can use the techniques presented in the next two chapters to create a database with that design. By unde1 standing the right way to design a database, you'll work more effectively as a MySQL programmer. The basic steps for designing a data structure In many cases, you can design a data structure based
+
+the right way to design a database, you'll work more effectively as a MySQL programmer. The basic steps for designing a data structure In many cases, you can design a data structure based on an existing real-world system. The illustration at the top of view of how this works. Here, you can see that all of the information about the people, documents, and facilities within a real-world system is mapped to the tables, columns, and rows of a database system. As you design a data structure, each table represents one object, or entity, in the real-world system. Then, within each table, each column stores one item of information, or attribute, for the entity, and each row stores one occurrence, or instance, of the entity. This figure also presents the six steps you can follow to design a data structure. You'll learn more about each of these steps in the topics that follow. In general, though, step 1 is to identify all the data elements that need to be stored in the database. Step 2 is to break complex elements down
+
+the topics that follow. In general, though, step 1 is to identify all the data elements that need to be stored in the database. Step 2 is to break complex elements down into smaller components whenever that makes sense. Step 3 is to identify the tables that will make up the system and to determine which data elements are assigned as columns in each table. Step 4 is to define the relationships between the tables by identifying the primary and foreign keys. Step 5 is to normalize the database to reduce data redt1ndancy. And step 6 is to identify the indexes that are needed for each table. to model a database system after a real-world system, you can use a technique called entity-relationship (ER) modeling. Because this is a complex subject of its own, I won't present it in this book. However, I have applied some of the basic elements of this technique to the design diagrams presented in this chapter. In effect, then, you' 11 be learning so1ne of the basics of this modeling technique.
+
+Chapter 10 Hovv to design a database A database system is modeled after a real-world system Real-world system Database system People Facilities Documents Other systems Columns --=.,......■;
 ```
-
-This example uses FIRST_VALUE to find the highest sales for each year by comparing sales totals within each partition defined by sales_year.
-
-### Practical Example
-
-```sql
--- Calculate sales change FROM previous year SELECT rep_id, sales_year, sales_total, LAG(sales_total) OVER (PARTITION BY rep_id ORDER BY sales_year) AS last_sales, sales_total - LAG(sales_total) OVER (PARTITION BY rep_id ORDER BY sales_year) AS change FROM sales_totals;
-```
-
-This practical example calculates the change in sales from the previous year for each sales representative.
+Example SELECT statement from textbook.
 
 ## Common Mistakes
-
-### Forgetting to use PARTITION BY
-
-**Incorrect:**
-
-```sql
--- Incorrect query without partitioning
-SELECT rep_id, sales_year, sales_total,
-LAG(sales_total) OVER (ORDER BY sales_year) AS last_sales
-FROM sales_totals;
-```
-
-**Correct:**
-
-```sql
--- Correct query with partitioning
-SELECT rep_id, sales_year, sales_total,
-LAG(sales_total) OVER (PARTITION BY rep_id ORDER BY sales_year) AS last_sales
-FROM sales_totals;
-```
-
-**Why this happens:** This mistake occurs when students try to use LAG or other analytic functions without specifying how the data should be partitioned. Always include PARTITION BY to ensure correct results.
+### No common mistakes listed
+No specific mistakes documented in textbook.
 
 ---
-
-## Practice
-
-**Question:** Write a query that uses the CUME_DIST function to find the cumulative distribution of sales totals for each year in the Sales_Totals table.
-
-**Solution:** -- Solution using CUME_DIST
-SELECT sales_year, rep_id, sales_total,
-CUME_DIST() OVER (PARTITION BY sales_year ORDER BY sales_total) AS cume_dist
-FROM sales_totals;
-
----
-
-*Source: Murach's MySQL 3rd Edition*
+*Source: murachs-mysql-3rd-edition, Pages 317, 318, 319, 320, 321, 322, 323, 324, 325, 326, 327, 328, 329, 330, 331*

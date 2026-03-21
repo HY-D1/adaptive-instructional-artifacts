@@ -1,77 +1,67 @@
+---
+id: unions
+title: UNION and UNION ALL
+definition: Combining results from multiple SELECT statements
+difficulty: intermediate
+estimatedReadTime: 5
+pageReferences: [301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 311]
+chunkIds:
+  - murachs-mysql-3rd-edition:p301:c1
+  - murachs-mysql-3rd-edition:p301:c2
+  - murachs-mysql-3rd-edition:p302:c1
+  - murachs-mysql-3rd-edition:p302:c2
+  - murachs-mysql-3rd-edition:p302:c3
+  - murachs-mysql-3rd-edition:p303:c1
+  - murachs-mysql-3rd-edition:p303:c2
+  - murachs-mysql-3rd-edition:p304:c1
+  - murachs-mysql-3rd-edition:p304:c2
+  - murachs-mysql-3rd-edition:p304:c3
+  - murachs-mysql-3rd-edition:p304:c4
+  - murachs-mysql-3rd-edition:p305:c1
+  - murachs-mysql-3rd-edition:p305:c2
+  - murachs-mysql-3rd-edition:p306:c1
+  - murachs-mysql-3rd-edition:p306:c2
+  - murachs-mysql-3rd-edition:p307:c1
+  - murachs-mysql-3rd-edition:p307:c2
+  - murachs-mysql-3rd-edition:p308:c1
+  - murachs-mysql-3rd-edition:p308:c2
+  - murachs-mysql-3rd-edition:p308:c3
+  - murachs-mysql-3rd-edition:p309:c1
+  - murachs-mysql-3rd-edition:p309:c2
+  - murachs-mysql-3rd-edition:p310:c1
+  - murachs-mysql-3rd-edition:p310:c2
+  - murachs-mysql-3rd-edition:p311:c1
+  - murachs-mysql-3rd-edition:p311:c2
+relatedConcepts:
+tags:
+  - mysql
+  - union
+  - set-operations
+sourceDocId: murachs-mysql-3rd-edition
+---
+
 # UNION and UNION ALL
 
 ## Definition
-
-UNION and UNION ALL are SQL operators used to combine the results of two or more SELECT statements into a single result set.
+Combining results from multiple SELECT statements
 
 ## Explanation
+Chapter 9 How to use functions The contents of the Date_Sample table date_id start date ► 1986-03-0100:00:00 2006-02-28 00:00:00 2010-10-3100:00:00 2018-02-28 10:00:00 2019-02-28 13:58:32 2019-03-0109:02:25 -... A SELECT statement that fails to return a row SELECT* FROM date_ sample WHERE start_date = '2018-02-28' L date_id start_date Three techniques for ignoring time values Search for a range of dates SELECT* FROM date_ sample WHERE start date >= '2018-02 -28' AND start date < '2018-03- 01' date_id start_date ► 2018-02-28 10:00:00 Search for month, day, and year integers SELECT* FROM date_ sample WHERE MONTH(start_date } = 2 AND DAYOFMONTH(start_ date) = 2 8 AND YEAR {start_date} = 2018 date id - start_date ► 2018-02-28 10:00:00 Search for a formatted date SELECT* FROM date_ sample WHERE DATE_ FORMAT (start_date, •~a111-%d -%Y') = '02 - 28- 2018' f date,d start date ► - 2018~2-28 10:00:00 Description • You can search for a date in a DATETIME column by searching for a range of dates, by using functions to specify the month, day, and year of the date, or by searching for a formatted date.
 
-UNION combines the results of multiple SELECT queries, removing duplicate rows from the final output. UNION ALL includes all rows from each query, including duplicates. This is useful when you need to aggregate data from different tables or conditions without manually merging them in your application code.
+a date in a DATETIME column by searching for a range of dates, by using functions to specify the month, day, and year of the date, or by searching for a formatted date. of these techniques, searching for a range of dates is the most efficient. How to search for a date I.I
+
+How to search for a time When you search for a time value in a DATETIME column without specifying a date component, MySQL automatically uses the default date of January 1, 1900. That's why the first SELECT statement in row even though one row matches the specified time. The second SELECT statement shows one way to solve this problem. Here, the WHERE clause uses the DATE_FORMAT function to return a string for the start_date column in the hh:mm:ss format. Then, the WHERE clause compares this string to a literal string of 10:00:00. The third SELECT statement in this figure shows another way to solve this problem. T
 
 ## Examples
-
-### Basic Usage
-
+### Example 1
 ```sql
--- Combining results FROM two tables SELECT name FROM employees UNION SELECT name FROM contractors;
+-- No specific example available in textbook
 ```
-
-This example combines the names of all employees and contractors into one list, removing any duplicate names.
-
-### Practical Example
-
-```sql
--- Finding customers who have made both online AND in-store purchases SELECT customer_id FROM online_orders UNION SELECT customer_id FROM store_sales;
-```
-
-This practical example identifies customers who have purchased items both online and in-store, using UNION to combine the results from two different tables.
+No example available for this concept.
 
 ## Common Mistakes
-
-### Forgetting to use ORDER BY at the end of all UNION statements
-
-**Incorrect:**
-
-```sql
--- Incorrect usage SELECT name FROM employees UNION SELECT name FROM contractors;
-```
-
-**Correct:**
-
-```sql
--- Correct usage SELECT name FROM employees UNION SELECT name FROM contractors ORDER BY name;
-```
-
-**Why this happens:** Students often forget to include ORDER BY at the end, which can lead to errors or unexpected results. Always ensure it's placed correctly if sorting is needed.
-
-### Using UNION when UNION ALL would suffice
-
-**Incorrect:**
-
-```sql
--- Incorrect usage SELECT name FROM employees UNION SELECT name FROM contractors;
-```
-
-**Correct:**
-
-```sql
--- Correct usage SELECT name FROM employees UNION ALL SELECT name FROM contractors;
-```
-
-**Why this happens:** Using UNION when duplicates are not a concern can lead to unnecessary performance overhead. Always choose the most efficient option based on your needs.
+### No common mistakes listed
+No specific mistakes documented in textbook.
 
 ---
-
-## Practice
-
-**Question:** Write a SQL query using UNION to combine results from two tables, one containing customer names and email addresses, and another containing customer names and phone numbers.
-
-**Solution:** -- Solution
-SELECT name, email FROM customers_email
-UNION
-SELECT name, phone_number FROM customers_phone;
--- This query combines the names and contact information (email or phone) of all customers into a single result set.
-
----
-
-*Source: Murach's MySQL 3rd Edition*
+*Source: murachs-mysql-3rd-edition, Pages 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 311*

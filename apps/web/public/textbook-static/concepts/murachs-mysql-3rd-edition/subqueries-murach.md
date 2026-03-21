@@ -1,73 +1,78 @@
+---
+id: subqueries-murach
+title: Subqueries
+definition: Single-row, multi-row, and correlated subqueries in MySQL
+difficulty: intermediate
+estimatedReadTime: 5
+pageReferences: [277, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293, 294]
+chunkIds:
+  - murachs-mysql-3rd-edition:p277:c1
+  - murachs-mysql-3rd-edition:p277:c2
+  - murachs-mysql-3rd-edition:p278:c1
+  - murachs-mysql-3rd-edition:p278:c2
+  - murachs-mysql-3rd-edition:p278:c3
+  - murachs-mysql-3rd-edition:p278:c4
+  - murachs-mysql-3rd-edition:p279:c1
+  - murachs-mysql-3rd-edition:p279:c2
+  - murachs-mysql-3rd-edition:p279:c3
+  - murachs-mysql-3rd-edition:p280:c1
+  - murachs-mysql-3rd-edition:p280:c2
+  - murachs-mysql-3rd-edition:p281:c1
+  - murachs-mysql-3rd-edition:p281:c2
+  - murachs-mysql-3rd-edition:p282:c1
+  - murachs-mysql-3rd-edition:p282:c2
+  - murachs-mysql-3rd-edition:p283:c1
+  - murachs-mysql-3rd-edition:p283:c2
+  - murachs-mysql-3rd-edition:p284:c1
+  - murachs-mysql-3rd-edition:p284:c2
+  - murachs-mysql-3rd-edition:p284:c3
+  - murachs-mysql-3rd-edition:p285:c1
+  - murachs-mysql-3rd-edition:p285:c2
+  - murachs-mysql-3rd-edition:p286:c1
+  - murachs-mysql-3rd-edition:p286:c2
+  - murachs-mysql-3rd-edition:p286:c3
+  - murachs-mysql-3rd-edition:p287:c1
+  - murachs-mysql-3rd-edition:p287:c2
+  - murachs-mysql-3rd-edition:p288:c1
+  - murachs-mysql-3rd-edition:p288:c2
+  - murachs-mysql-3rd-edition:p289:c1
+  - murachs-mysql-3rd-edition:p290:c1
+  - murachs-mysql-3rd-edition:p290:c2
+  - murachs-mysql-3rd-edition:p290:c3
+  - murachs-mysql-3rd-edition:p291:c1
+  - murachs-mysql-3rd-edition:p292:c1
+  - murachs-mysql-3rd-edition:p293:c1
+  - murachs-mysql-3rd-edition:p293:c2
+  - murachs-mysql-3rd-edition:p294:c1
+  - murachs-mysql-3rd-edition:p294:c2
+relatedConcepts:
+tags:
+  - mysql
+  - subqueries
+  - advanced
+sourceDocId: murachs-mysql-3rd-edition
+---
+
 # Subqueries
 
 ## Definition
-
-A subquery is a query nested within another query. It allows you to perform complex data retrieval operations by breaking down the task into smaller parts.
+Single-row, multi-row, and correlated subqueries in MySQL
 
 ## Explanation
+How to use functions In chapter 3, you we1 e introduced to some of the scalar functions that you can use in a SELECT statement. Now, this chapter expands on that coverage by presenting many more of the scalru: functions, as well as some specialized window functions. When you complete this chapter, you'll have a thorough understanding of the functions that you can use with MySQL. How to work with string data............................................. 258 A sut11mary of the string functions.............................................................. 258 Examples that use string functions............................................................. 260 How to sort by a string column that contains numbers............................... 262 How to parse a string.................................................................................. 264 How to work with numeric data......................................... 266 How to use the numeric fu nctions.............................................................. 266 How to searcl1 for floating-point nu111bers................................................... 268 How to work with date/time data...................................... 270 How to get the current date and time.......................................................... 270 How to parse dates and times witl1 date/ti1ne functions............................. 272 How to parse dates and ti111es witl1 tbe EXTRACT function...................... 274 How to format dates and times.................................................................... 276 How to perform calculations on dates and times........................................ 278 How to
 
-Subqueries are incredibly useful for performing more advanced data analysis and manipulation. They allow you to filter, sort, or aggregate data based on results from other queries. For example, if you want to find all employees who earn more than the average salary, you can use a subquery to calculate the average salary first and then compare it with individual employee salaries.
+witl1 date/ti1ne functions............................. 272 How to parse dates and ti111es witl1 tbe EXTRACT function...................... 274 How to format dates and times.................................................................... 276 How to perform calculations on dates and times.............................
 
 ## Examples
-
-### Basic Usage
-
+### Example 1
 ```sql
--- Find employees earning more than the average salary SELECT name, salary FROM employees WHERE salary > (SELECT AVG(salary) FROM employees);
+-- No specific example available in textbook
 ```
-
-This example demonstrates how a subquery can be used in the WHERE clause to filter data based on results from another query.
-
-### Practical Example
-
-```sql
--- Find products with stock less than 10 units SELECT product_name, stock FROM products WHERE stock < (SELECT MIN(stock) FROM products GROUP BY category HAVING COUNT(*) > 5);
-```
-
-This practical example shows how subqueries can be used to filter data based on aggregated results from another query.
+No example available for this concept.
 
 ## Common Mistakes
-
-### Forgetting to use parentheses around the subquery.
-
-**Incorrect:**
-
-```sql
--- Incorrect: SELECT name, salary FROM employees WHERE salary > AVG(salary);
-```
-
-**Correct:**
-
-```sql
--- Correct: SELECT name, salary FROM employees WHERE salary > (SELECT AVG(salary) FROM employees);
-```
-
-**Why this happens:** Subqueries must be enclosed in parentheses to ensure they are evaluated correctly.
-
-### Using the wrong comparison operator.
-
-**Incorrect:**
-
-```sql
--- Incorrect: SELECT name, salary FROM employees WHERE salary < (SELECT MAX(salary) FROM employees);
-```
-
-**Correct:**
-
-```sql
--- Correct: SELECT name, salary FROM employees WHERE salary > (SELECT AVG(salary) FROM employees);
-```
-
-**Why this happens:** It's crucial to use the correct comparison operator based on the desired outcome.
+### No common mistakes listed
+No specific mistakes documented in textbook.
 
 ---
-
-## Practice
-
-**Question:** Write a query that finds all customers who have made more than one purchase.
-
-**Solution:** -- Solution: SELECT customer_id FROM purchases GROUP BY customer_id HAVING COUNT(*) > 1;
-
----
-
-*Source: Murach's MySQL 3rd Edition*
+*Source: murachs-mysql-3rd-edition, Pages 277, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293, 294*

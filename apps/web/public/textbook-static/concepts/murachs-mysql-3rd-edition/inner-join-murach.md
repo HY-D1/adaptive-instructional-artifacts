@@ -1,70 +1,70 @@
+---
+id: inner-join-murach
+title: Inner Join
+definition: Matching rows from two or more tables
+difficulty: beginner
+estimatedReadTime: 5
+pageReferences: [117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128]
+chunkIds:
+  - murachs-mysql-3rd-edition:p117:c1
+  - murachs-mysql-3rd-edition:p117:c2
+  - murachs-mysql-3rd-edition:p118:c1
+  - murachs-mysql-3rd-edition:p118:c2
+  - murachs-mysql-3rd-edition:p119:c1
+  - murachs-mysql-3rd-edition:p119:c2
+  - murachs-mysql-3rd-edition:p120:c1
+  - murachs-mysql-3rd-edition:p120:c2
+  - murachs-mysql-3rd-edition:p120:c3
+  - murachs-mysql-3rd-edition:p120:c4
+  - murachs-mysql-3rd-edition:p121:c1
+  - murachs-mysql-3rd-edition:p121:c2
+  - murachs-mysql-3rd-edition:p121:c3
+  - murachs-mysql-3rd-edition:p122:c1
+  - murachs-mysql-3rd-edition:p122:c2
+  - murachs-mysql-3rd-edition:p122:c3
+  - murachs-mysql-3rd-edition:p123:c1
+  - murachs-mysql-3rd-edition:p123:c2
+  - murachs-mysql-3rd-edition:p124:c1
+  - murachs-mysql-3rd-edition:p124:c2
+  - murachs-mysql-3rd-edition:p125:c1
+  - murachs-mysql-3rd-edition:p125:c2
+  - murachs-mysql-3rd-edition:p125:c3
+  - murachs-mysql-3rd-edition:p126:c1
+  - murachs-mysql-3rd-edition:p126:c2
+  - murachs-mysql-3rd-edition:p127:c1
+  - murachs-mysql-3rd-edition:p127:c2
+  - murachs-mysql-3rd-edition:p128:c1
+  - murachs-mysql-3rd-edition:p128:c2
+relatedConcepts:
+tags:
+  - mysql
+  - joins
+  - inner
+sourceDocId: murachs-mysql-3rd-edition
+---
+
 # Inner Join
 
 ## Definition
-
-An Inner Join is a type of join operation that returns rows from two tables where there is a match between their common columns. It's essential for combining data from multiple tables based on related information.
+Matching rows from two or more tables
 
 ## Explanation
+Chapter 3 How to retrieve data from a sin.gle table The syntax of the WHERE clause with an IN phrase WHERE test_expression [NOT] IN ({subquerylexpression_ l [, expression_2]... }) Examples of the IN phrase An IN phrase with a list of numeric literals WHERE terms_ id IN (1, 3, 4) An IN phrase preceded by NOT WHERE vendor_ state NOT IN ('CA', 'NV', 'OR') An IN phrase with a subquery WHERE vendor id IN (SELECT vendor id FROM invoices WHERE invoice_date = 1 2018-07-18 1) Description • You can use the IN phrase to test whether an expression is equal to a value in a list of expressions. Each of the expressions in the list is automatically converted to the same type of data as the test expression. • The list of expressions can be coded in any order without affecting the order of the rows in the result set. • You can use the NOT operator to test for an expression that's not in the list of • expressions. • You can also compare the test expression to the
 
-Imagine you have two tables: one with vendor details (VendorID, VendorName) and another with invoice details (InvoiceID, VendorID, InvoiceDate). An Inner Join allows you to combine these tables so that you can see the vendor name along with their invoices. This is particularly useful when you need to analyze data from multiple sources that are related through a common attribute.
+the result set. • You can use the NOT operator to test for an expression that's not in the list of • expressions. • You can also compare the test expression to the items in a list returned by a subquery. You'll learn more about coding subqueries in chapter 7. How to use the IN operator
+
+How to use the BETWEEN operator When you use this operator, the value of a test expression is compared to the range of values specified in the BETWEEN phrase. If the value falls within this range, the row is included in the query results. The first example in this figure shows a simple WHERE clause that uses the BETWEEN operator. It retrieves invoices with invoice dates between June 1, 2018 and June 30, 2018. Note that the range is inclusive, so invoices with invoice dates of June 1 and June 30 are included in the results. The second example shows how to use the NOT operator to select rows that aren't within a given range. In this case, vendors with zip codes that aren't between 93600 and 93799 are included in the results. The third example s
 
 ## Examples
-
-### Basic Usage
-
+### Example 1
 ```sql
--- Joining two tables on a common column
-SELECT V.VendorName, I.InvoiceDate
-FROM Vendors AS V
-INNER JOIN Invoices AS I ON V.VendorID = I.VendorID;
+-- No specific example available in textbook
 ```
-
-This example joins the Vendors and Invoices tables based on the VendorID column. It returns the vendor name and invoice date for each matching record.
-
-### Practical Example
-
-```sql
--- Finding all invoices FROM a specific vendor SELECT I.InvoiceID, I.InvoiceDate FROM Invoices AS I INNER JOIN Vendors AS V ON I.VendorID = V.VendorID WHERE V.VendorName = 'ABC Corp';
-```
-
-This practical example demonstrates how to find all invoices for a specific vendor by joining the Invoices and Vendors tables and filtering by the vendor name.
+No example available for this concept.
 
 ## Common Mistakes
-
-### Using the wrong column names in the join condition
-
-**Incorrect:**
-
-```sql
--- Incorrect join condition
-SELECT V.VendorName, I.InvoiceDate
-FROM Vendors AS V
-INNER JOIN Invoices AS I ON V.VendorID = I.CustomerID;
-```
-
-**Correct:**
-
-```sql
--- Correct join condition
-SELECT V.VendorName, I.InvoiceDate
-FROM Vendors AS V
-INNER JOIN Invoices AS I ON V.VendorID = I.VendorID;
-```
-
-**Why this happens:** This mistake occurs when the column names used in the join condition do not match between tables. Always double-check that you're using the correct column names.
+### No common mistakes listed
+No specific mistakes documented in textbook.
 
 ---
-
-## Practice
-
-**Question:** Write an SQL query to find all customers who have made at least one order from a specific vendor, given the VendorID of the vendor.
-
-**Solution:** -- Solution
-SELECT C.CustomerName
-FROM Customers AS C
-INNER JOIN Orders AS O ON C.CustomerID = O.CustomerID
-WHERE O.VendorID = 123;
-
----
-
-*Source: Murach's MySQL 3rd Edition*
+*Source: murachs-mysql-3rd-edition, Pages 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128*

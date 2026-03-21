@@ -2,12 +2,11 @@
   "murachs-mysql-3rd-edition": {
     "totalChunks": 1472,
     "sourceFile": "murachs-mysql-3rd-edition",
-    "exportedAt": "2026-03-15T21:08:18.254178+00:00"
+    "exportedAt": "2026-03-21T16:22:32.431553+00:00"
   },
   "dbms-ramakrishnan-3rd-edition": {
-    "totalChunks": 0,
+    "totalChunks": 2986,
     "sourceFile": "dbms-ramakrishnan-3rd-edition",
-    "exportedAt": "2026-03-20T00:00:00.000000+00:00",
-    "note": "stub \u2014 pending full PDF helper export"
+    "exportedAt": "2026-03-21T16:22:37.381035+00:00"
   }
 }

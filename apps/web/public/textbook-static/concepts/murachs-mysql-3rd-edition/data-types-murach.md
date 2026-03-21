@@ -1,65 +1,138 @@
+---
+id: data-types-murach
+title: MySQL Data Types
+definition: Numeric, string, date/time, and large object data types
+difficulty: beginner
+estimatedReadTime: 5
+pageReferences: [193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209]
+chunkIds:
+  - murachs-mysql-3rd-edition:p193:c1
+  - murachs-mysql-3rd-edition:p193:c2
+  - murachs-mysql-3rd-edition:p194:c1
+  - murachs-mysql-3rd-edition:p194:c2
+  - murachs-mysql-3rd-edition:p194:c3
+  - murachs-mysql-3rd-edition:p194:c4
+  - murachs-mysql-3rd-edition:p195:c1
+  - murachs-mysql-3rd-edition:p195:c2
+  - murachs-mysql-3rd-edition:p195:c3
+  - murachs-mysql-3rd-edition:p196:c1
+  - murachs-mysql-3rd-edition:p196:c2
+  - murachs-mysql-3rd-edition:p197:c1
+  - murachs-mysql-3rd-edition:p197:c2
+  - murachs-mysql-3rd-edition:p198:c1
+  - murachs-mysql-3rd-edition:p198:c2
+  - murachs-mysql-3rd-edition:p199:c1
+  - murachs-mysql-3rd-edition:p199:c2
+  - murachs-mysql-3rd-edition:p200:c1
+  - murachs-mysql-3rd-edition:p200:c2
+  - murachs-mysql-3rd-edition:p201:c1
+  - murachs-mysql-3rd-edition:p201:c2
+  - murachs-mysql-3rd-edition:p202:c1
+  - murachs-mysql-3rd-edition:p202:c2
+  - murachs-mysql-3rd-edition:p202:c3
+  - murachs-mysql-3rd-edition:p203:c1
+  - murachs-mysql-3rd-edition:p203:c2
+  - murachs-mysql-3rd-edition:p204:c1
+  - murachs-mysql-3rd-edition:p204:c2
+  - murachs-mysql-3rd-edition:p204:c3
+  - murachs-mysql-3rd-edition:p205:c1
+  - murachs-mysql-3rd-edition:p205:c2
+  - murachs-mysql-3rd-edition:p206:c1
+  - murachs-mysql-3rd-edition:p207:c1
+  - murachs-mysql-3rd-edition:p207:c2
+  - murachs-mysql-3rd-edition:p208:c1
+  - murachs-mysql-3rd-edition:p208:c2
+  - murachs-mysql-3rd-edition:p208:c3
+  - murachs-mysql-3rd-edition:p208:c4
+  - murachs-mysql-3rd-edition:p209:c1
+  - murachs-mysql-3rd-edition:p209:c2
+  - murachs-mysql-3rd-edition:p209:c3
+relatedConcepts:
+tags:
+  - mysql
+  - data-types
+  - ddl
+sourceDocId: murachs-mysql-3rd-edition
+---
+
 # MySQL Data Types
 
 ## Definition
-
-MySQL data types are specific formats used to store different kinds of data in a database table. Understanding and using the correct data type is crucial for efficient data storage and retrieval.
+Numeric, string, date/time, and large object data types
 
 ## Explanation
+Chapter 6 How to code sum1n.ary queries A summary query that uses the COUNT(*), AVG, and SUM functions SELECT 'After 1/1/2018' AS selection_date, COUNT(*) AS number_of_ invoices, ROUND{AVG{invoice_total), 2) AS avg_ invoice_amt, SUM{invoice_total) AS total_ invoice_amt FROM invoices WHERE invoice_date > '2018-01-01' selection_date number _of _lnvOJces avg_ilvoice_amt total_invoice_amt ► After 1/1/2018 1879.74 214290.51 A summary query that uses the MIN and MAX functions SELECT 'After 1/1/2018' AS selection_date, COUNT { *) AS n11mh~r_of_ invoices, MAX{invoice_total) AS highest_ invoice_ total, MIN(invoice_total) AS lowest_ invoice_total FROM invoices WHERE invoice date> '2018-01-01' seJection_date ► After 1/1/2018 number _of Jnvoices highest_invoice_total lowest_invoice_total 37966.19 6.00 A summary query that works on non-numeric columns SELECT MIN{vendor_name) AS first_vendor, MAX{vendor_name) AS last_vendor, COUNT(vendor_name) AS number_of_vendors FROM vendors I flrst_vendor ► I Abbey Office Furnishings last_vendor Zylka Design number _of _vendors A summary query that uses the DISTINCT keyword SELECT COUNT(DISTINCT vendor_ id) AS number_of_vendors, COUNT{vendor_ id) AS number_of_ invoices, ROUND(AVG(invoice_ total), 2) AS avg_ invoice_amt, SUM(invoice_total) AS total_ invoice_ amt FROM invoices WHERE invoice_date > '2018-01-01' number _of_vendors number _of_involces avg_invoic:e_amt total_invoice_amt - - ► 1879.74 214290.51
 
-Data types in MySQL determine how data is stored and manipulated within a database. Common data types include INT for integers, VARCHAR for variable-length strings, DATE for dates, and FLOAT for floating-point numbers. Choosing the right data type ensures that data is stored efficiently and accurately. For example, using an INT instead of a VARCHAR for numerical data can save space and improve query performance.
+COUNT{vendor_ id) AS number_of_ invoices, ROUND(AVG(invoice_ total), 2) AS avg_ invoice_amt, SUM(invoice_total) AS total_ invoice_ amt FROM invoices WHERE invoice_date > '2018-01-01' number _of_vendors number _of_involces avg_invoic:e_amt total_invoice_amt - - ► 1879.74 214290.51 Description • to cot1nt all of the selected 1 ows, you typically use the COUNT(*) function. Alternately, you can use the COUNT function with the name of any column that can't contain null values. • to cot1nt only the rows with unique values in a specified column, you
 
 ## Examples
-
-### Basic Usage
-
+### Example 1: SELECT Example
 ```sql
--- Define a TABLE with appropriate data types CREATE TABLE products ( product_id INT PRIMARY KEY, product_name VARCHAR(100), price FLOAT );
+SELECT 'After 1/1/2018' AS selection_date, COUNT(*) AS number_of_ invoices, ROUND{AVG{invoice_total), 2) AS avg_ invoice_amt, SUM{invoice_total) AS total_ invoice_amt FROM invoices WHERE invoice_date > '2018-01-01' selection_date number _of _lnvOJces avg_ilvoice_amt total_invoice_amt ► After 1/1/2018 1879.74 214290.51 A summary query that uses the MIN and MAX functions SELECT 'After 1/1/2018' AS selection_date, COUNT { *) AS n11mh~r_of_ invoices, MAX{invoice_total) AS highest_ invoice_ total, MIN(invoice_total) AS lowest_ invoice_total FROM invoices WHERE invoice date> '2018-01-01' seJection_date ► After 1/1/2018 number _of Jnvoices highest_invoice_total lowest_invoice_total 37966.19 6.00 A summary query that works on non-numeric columns SELECT MIN{vendor_name) AS first_vendor, MAX{vendor_name) AS last_vendor, COUNT(vendor_name) AS number_of_vendors FROM vendors I flrst_vendor ► I Abbey Office Furnishings last_vendor Zylka Design number _of _vendors A summary query that uses the DISTINCT keyword SELECT COUNT(DISTINCT vendor_ id) AS number_of_vendors, COUNT{vendor_ id) AS number_of_ invoices, ROUND(AVG(invoice_ total), 2) AS avg_ invoice_amt, SUM(invoice_total) AS total_ invoice_ amt FROM invoices WHERE invoice_date > '2018-01-01' number _of_vendors number _of_involces avg_invoic:e_amt total_invoice_amt - - ► 1879.74 214290.51
+
+COUNT{vendor_ id) AS number_of_ invoices, ROUND(AVG(invoice_ total), 2) AS avg_ invoice_amt, SUM(invoice_total) AS total_ invoice_ amt FROM invoices WHERE invoice_date > '2018-01-01' number _of_vendors number _of_involces avg_invoic:e_amt total_invoice_amt - - ► 1879.74 214290.51 Description • to cot1nt all of the selected 1 ows, you typically use the COUNT(*) function. Alternately, you can use the COUNT function with the name of any column that can't contain null values. • to cot1nt only the rows with unique values in a specified column, you can code the COUNT function with the DISTINCT keyword followed by the name of the column. Queries that use aggregate functions
+
+17 4 How to group and summarize data Now that you understand how aggregate functions work, you're ready to learn how to group data and use aggregate functions to summarize the data in each group. to do that, you can use two new clauses of the SELECT statement: GROUP BY and HAVING. How to code the GROUP BY and HAVING clauses and HAVING clauses. The GROUP BY clause determines how the selected rows are grouped, and the HAVING clause determines which groups are included in the final results. These clauses are coded after the WHERE clause but before the ORDER BY clause. That makes sense because the WHERE clause is applied before the rows are grouped, and the ORDER BY clause is applied after the rows are grouped. In the GROUP BY clause, you list one or more columns or expressions separated by commas. Then, the rows in the result set are grouped by those columns or expressions in ascending sequence. That means that a single row is returned for each unique set of values in the GROUP BY columns.
+
+in the result set are grouped by those columns or expressions in ascending sequence. That means that a single row is returned for each unique set of values in the GROUP BY columns. In this figure, for instance, the first example groups the results by a single column. In the next figure, you can see examples that group by multiple columns. This example calculates the average invoice amount for each vendor who has invoices in the Invoices table. to do that, it uses a GROUP BY clause to group the invoices by vendor_id. As a result, the AVG function calculates the average of the invoice_total column for each group rather than for the entire result set. The example in this figure also includes a HAVING clause. The search condition in this clause specifies that only those vendors with invoices that average over $2,000 should be included. Note that this condition must be applied after the rows are grouped and the average for each group has been calculated. In addition to the AVG function, the SELECT clause includes the vendor_id column.
+
+this condition must be applied after the rows are grouped and the average for each group has been calculated. In addition to the AVG function, the SELECT clause includes the vendor_id column. That's usually what you want since the rows are grouped by this column. However, if you don't want to include the coluID11s used in the GROUP BY clause in the SELECT clause, you don't have to. In most cases, the SELECT clause for a statement that includes a GROUP BY clause will only include the columns that are used for grouping, along with the aggi egate functions. However, you can also include expressions that result in a constant value as well as columns that are functionally dependent on a column that's used for grouping. For a column to be functionally dependent on a grouping column, the grouping column must be a primary key for the column in the SELECT clause or it must be unique and not allow null values. The second example illusu ates how this works. This example gets the vendor name, vendor state, and the
+
+column in the SELECT clause or it must be unique and not allow null values. The second example illusu ates how this works. This example gets the vendor name, vendor state, and the average invoice total for each vendor. to do that, it joins the Vendors and Invoices table and groups the rows by vendor_name. Although the vendor_state column isn't included in the GROUP BY clause, it can be included in the SELECT clause because the vendor_name column is a unique colt1mn that can't contain null values. Because of that, the vendor_state colu1nn is functionally dependent on it.
+
+Chapter 6 How to code sum1ncary queries The syntax of a SELECT statement with GROUP BY and HAVING clauses SELECT select_list FROM table_ source [WHERE search_ condition] [GROUP BY group_by_ list] [HAVING search_condition] [ORDER BY order_by_ list] A summary query that calculates the average invoice amount by vendor SELECT vendor_ id, ROUND(AVG(invoice_total), 2) AS average_ invoice_amount FROM invoices GROUP BY vendor_ id HAVING AVG(invoice_total) > 2000 ORDER BY average_ invoice_amount DESC vendor id average_lnvoice_amount ► 23978.48 10963.66 7125.34 6940.25 4901.26 2575.33 2433.00 2184.50 (8 rows) A summary query that includes a functionally dependent column SELECT vendor_ name, ~endor_ state, ROUND(AVG(invoice_total), 2) AS average_ invoice_amount FROM vendors JOIN invoices ON vendors.vendor_ id = invoices.vendor_ id GROUP BY vendor_narn~ HAVING AVG(invoice total) > 2000 ORDER BY average_ invoice_amount DESC Description • The GROUP BY clause groups the rows of a result set based on one or more columns or expressions. to include two or more columns or expressions, separate them by commas. • If you include aggregate functions in the SELECT clause, the aggregate is calculated for each group specified by the
+
+expressions. to include two or more columns or expressions, separate them by commas. • If you include aggregate functions in the SELECT clause, the aggregate is calculated for each group specified by the GROUP BY clause. • If you include two or more colu1nns or expressions in the GROUP BY clause, they form a hierarchy where each column or expression is subordinate to the previous one. • The HAVING clause specifies a search condition for a group or an aggregate. MySQL applies this condition after it groups the rows that satisfy the search condition in the WHERE clause. • When a SELECT statement includes a GROUP BY clause, the SELECT clause can include the columns used for grouping, aggregate functions, and expressions that result in a constant value. • The SELECT clause can also include columns that are functionally dependent on a column used fo1 grouping. to be functionally dependent, the grouping column must be a primary key of the table that contains the column in the SELECT clause or it must be unique and not allow null values. How
+
+be functionally dependent, the grouping column must be a primary key of the table that contains the column in the SELECT clause or it must be unique and not allow null values. How to code the GROUP BY and HAVING clauses
+
+Queries that use the GROUP BY and HAVING clauses figure groups the rows in the Invoices table by vendor_id and returns a count of the number of invoices for each vendor. The second query shows how you can group by mo1 e than one column. Here, a join is used to combine the vendor_state and vendor_city columns from the Vendors table with a count and average of the invoices in the Invoices table. Because the rows are grouped by both state and city, a row is returned for each state and city combination. The third query is identical to the second query except that it includes a HAVING clause. This clause uses the COUNT function to limit the state and city groups that are included in the result set to those that have two or more invoices. In other words, it excludes groups that have only one invoice. With MySQL 8.0.12 and earlier, the GROUP BY clause sorted the columns in ascending sequence by default. Then, to change that sequence, you could code the DESC keyword after the column name
+
+invoice. With MySQL 8.0.12 and earlier, the GROUP BY clause sorted the columns in ascending sequence by default. Then, to change that sequence, you could code the DESC keyword after the column name in the GROUP BY clause. You could also code the ASC keyword to make it clear that the rows were sorted in ascending sequence. And, yot1 could improve the performance of a query by coding an ORDER BY NULL clause so the result set wasn't sorted at all. With MySQL 8.0.13 and later, the columns in a GROUP BY clause are no longer sorted by default. In addition, you can no longer specify the ASC or DESC keywords on this clause. Instead, you must code an ORDER BY clause to sort the rows in a result set. Otherwise, MySQL doesn't guarantee the sort sequence.
+
+Chapter 6 How to code sum1ncary queries A summary query that counts the number of invoices by vendor SELECT vendor_ id, COUNT(*) AS invoice_qty FROM invoices GROUP BY vendor_ id I vendor Jd lnvoice_Qty ► (34 rows) A summary query that calculates the number of invoices ""' Ice. - and the average invoice amount for the vendors in each state and city SELECT vendor_state, vendor_city, COUNT(*) AS invoice_qty, ROUND(AVG(invoice_total), 2) AS invoice_avg FROM invoices JOIN vendors ON invoices.vendor id= vendors.vendor id GROUP BY vendor_state, vendor_city ORDER BY vendor_state, vendor_city vendor _state vendor _city nvolce_qty inv01ce_avg - ► AZ. Phoenix 662.00 CA Fresno 1208.75 CA Los Angeles 503.20 CA Oxnard 188.00 (20 rows) A summary query that limits the groups to those with two or more invoices SELECT vendor_ state, vendor_city, COUNT(*) AS invoice_qty, ROUND(AVG(invoice_total), 2) AS invoice_avg FROM invoices JOIN vendors ON invoices.vendor_ id = vendors.vendor_id GROUP BY vendor_state, vendor_city HAVING COUNT(*) >= 2 ORDER BY vendor_state, vendor_city vendor state - - ► CA CA CA (12 rows) Description vendor_dty Fresno Oxnard Pasadena Sacramento invoice_Qty 111voice_avg 1208.75 188,00 196. 12
+
+BY vendor_state, vendor_city HAVING COUNT(*) >= 2 ORDER BY vendor_state, vendor_city vendor state - - ► CA CA CA (12 rows) Description vendor_dty Fresno Oxnard Pasadena Sacramento invoice_Qty 111voice_avg 1208.75 188,00 196. 12 253.00 I\ 1-- \I • With MySQL 8.0.12 and earlier, the GROUP BY clause sorted the columns in ascending sequence by default. Then, to change the sort sequence, you could code the DESC keyword after the column name in the GROUP BY clause. In addition, to get your results faster, you cot1ld code an ORDER BY NULL clause to prevent MySQL from sorting the rows in the GROUP BY clause. • With MySQL 8.0.13 and later, the columns in a GROUP BY clause are no longer sorted by default, and you can't code the ASC or DESC keyword on this clause. Instead, you must use the ORDER BY clause to specify the sort sequence. Queries that use the GROUP BY and HAVING clauses
+
+How the HAVING clause compares to the WHERE clause As you've seen, you can limit the groups included in a result set by coding a search condition in the HAVING clause. In addition, you can apply a search condition to each row before it's included in a group. to do that, you code the search condition in the WHERE clause just as you would for any SELECT statement. to make sure you understand the differences between search conditions coded in the HAVING and WHERE clauses, The first example groups the invoices in the Invoices table by vendor name and calculates a count and average invoice amount for each group. Then, the HA VINO clause limits the groups in the result set to those that have an average invoice total greater than $500. In contrast, the second example includes a WHERE clause that limits the invoices included in the groups to those that have an invoice total greater than $500. In other words, the search condition in this example is applied to every row. In the previous example, it was applied
+
+the groups to those that have an invoice total greater than $500. In other words, the search condition in this example is applied to every row. In the previous example, it was applied to each group of rows. As a result, these examples show that there are eight invoices for Zylka Design in the Invoices table, but only seven of them are over $500. Beyond this, there are two differences in the expressions that you can include in the WHERE and HAVING clauses. First, the HAVING clause can include aggregate functions as shown in the first example, but the WHERE clause can't. That's because the search condition in a WHERE clause is applied before the rows are grouped. Second, although the WHERE clause can refer to any column in the base tables, the HAVING clause can only refer to columns included in the SELECT clause. That's because it filters the summarized result set that's defmed by the SELECT, FROM, WHERE, and GROUP BY clauses. In other words, it doesn't filter the base tables.
+
+Chapter 6 How to code sum1ncary queries A summary query with a search condition in the HAVING clause SELECT vendor_name, COUNT(*) AS invoice_qty, ROUND{AVG{invoice_total), 2) AS invoice_ avg FROM vendors JOIN invoices ON vendors.vendor_ id = invoices.vendor_ id GROUP BY vendor_ name HAVING AVG{invoice_total) > 500 ORDER BY invoice_qty DESC vendor_name invoice_qty lnvoice_avg ► United Parcel Service 2575.33 Zylka Design 867.53 Maftoy lithographing Inc 23978.48 IBM 600.06 (19 rows) A summary query with a search condition in the WHERE clause SELECT vendor_name, COUNT{*) AS invoice_qty, ROUND(AVG(invoice_total), 2) AS invoice_avg FROM vendors JOIN invoices ON vendors.vendor_ id = invoices.vendor_id WHERE invoice_total > 500 GROUP BY vendor_ name ORDER BY invoice_qty DESC vendor _name invoice_qty • • nvotCe_avg ► Unrted Parcel Service 2575.33 Zylka Design 9~.67 MaDoy lithographing Inc 23978.48 Ingram 1on.21 {20 rows) Description I\ -.,__ • When you include a WHERE clat1se in a SELECT statement that uses grouping and aggregates, MySQL applies the search condition before it groups the rows and calculates the aggregates. • When you include a HAVING clause in a SELECT statement that uses grouping and
+
+uses grouping and aggregates, MySQL applies the search condition before it groups the rows and calculates the aggregates. • When you include a HAVING clause in a SELECT statement that uses grouping and aggregates, MySQL applies the search condition after it groups the rows and calculates the aggregates. • A WHERE clause can refer to any colwnn in the base tables. • A HAVING clause can only refer to a column included in the SELECT clause. • A WHERE clause can't contain aggregate ft1nctions. • A HAVING clause can contain aggregate functions. How the HAVING clause compares to the WHERE clause I
+
+How to code compound search conditions You can code compound search conditions in a HAVING clause just as you can in a WHERE clause. The first example in This query groups invoices by invoice date and calculates a count of the invoices and the sum of the invoice totals for each date. In addition, the HA YING clause specifies three conditions. First, the invoice date must be between 5/1/2018 and 5/31/2018. Second, the invoice count must be greater than 1. And third, the sum of the invoice totals must be greater than $100. In the HAVING clause of this query, the second and third conditions include aggregate functions. As a result, they must be coded in the HAVING clause. The first condition, however, doesn't include an aggregate function, so it could be coded in either the HAVING or WHERE clause. The second example shows this condition coded in the WHERE clause. Either way, both queries return the same result set. So, where should you code your search conditions? In general, I think queries are easier to 1 ead when they
+
+condition coded in the WHERE clause. Either way, both queries return the same result set. So, where should you code your search conditions? In general, I think queries are easier to 1 ead when they include al] the search conditions in the HAVING clause. However, if you prefer to code non-aggregate search conditions in the WHERE clause, that's OK too.
+
+Chapter 6 How to code sum1ncary queries A summary query with a compound condition in the HAVING clause SELECT invoice_date, COUNT(*) AS invoice_qty, SUM(invoice total) AS invoice_ sum FROM invoices GROUP BY invoice_date HAVING invoice_date BETWEEN '2018-05-01' AND '2018-05-31' AND COUNT(*) > 1 AND SUM(invoice_total) > 100 ORDER BY invoice_date DESC The same query coded with a WHERE clause SELECT invoice_date, COUNT(*) AS invoice_qty, SUM(invoice_total) AS invoice_ sum FROM invoices WHERE invoice_ date BETWEEN '2018-05-01' AND '2018-05-31' GROUP BY invoice_date HAVING COUNT(*) > 1 AND SUM(invoice_total) > 100 ORDER BY invoice_ date DESC The result set returned by both queries invoice_date invoice_qty • • mvo,ce_sum ► 2018-05-31 453.75 2018-05-25 220L15 2018-05-23 347. 75 2018-05-21 8078.44 2018-05-13 1888.95 2018-05-11 5009.51 2018-05-03 866.87 (7 rows) Description • You can use the AND and OR operators to code compound search conditions in a HAVING clause just as you can in a WHERE clause. • If a search condition includes an aggregate function, it must be coded in the HAVING clause. Otherwise, it can be coded in either the HAVING or the WHERE clause.
+
+in a WHERE clause. • If a search condition includes an aggregate function, it must be coded in the HAVING clause. Otherwise, it can be coded in either the HAVING or the WHERE clause. How to code compound search conditions
+
+How to use the WITH ROLLUP operator So far, this chapter has discussed standard SQL keywords and functions. However, MySQL provides an extension to standard SQL that's useful for summarizing data: the WITH ROLLUP operator. You can use the WITH ROLLUP operator to add one or more summary rows to a result set that uses gi ouping and aggregates. The two examples in show how this works. The first example shows how the WITH ROLLUP operator works when you group by a single column. This statement groups the invoices by vendor_id and calculates an invoice count and invoice total for each vendor group. In addition, since the GROUP BY clause includes the WITH ROLLUP operator, this query adds a summary row to the end of the result set. This row summaiizes all of the aggregate columns in the result set. In this case, it summarizes the invoice_count and invoice_total columns. Since the vendor_id column can't be summarized, it's assigned a null value. The second query in this figure shows how the WITH ROLLUP operator works when you group by two
+
+invoice_count and invoice_total columns. Since the vendor_id column can't be summarized, it's assigned a null value. The second query in this figure shows how the WITH ROLLUP operator works when you group by two columns. This query groups vendors by state and city and counts the number of vendors in each group. Then, this query adds summary rows for each state, and it adds a final summary row at the end of the result set. Before MySQL 8.0.13, you couldn't use the use an ORDER BY clause to sort a result set if the GROUP BY clause included the WITH ROLLUP operator. Instead, you had to sort the individual columns by coding the ASC or DESC keyword after the column name in the GROUP BY clause. With MySQL 8.0.13 and later, however, you can't code the ASC or DESC keyword on the GROUP BY clause. Instead, if you want to sort the result set, you can now use an ORDER BY clause. Keep in mind, though, that when you use WITH ROLLUP, the result set is sorted by the columns
+
+you want to sort the result set, you can now use an ORDER BY clause. Keep in mind, though, that when you use WITH ROLLUP, the result set is sorted by the columns in the GROUP BY clause in ascending sequence by default. So you'll only code an ORDER BY clause if you want to change this sequence.
+
+Chapter 6 How to code sum1ncary queries A summary query that includes a final summary row SELECT vendor_ id, COUNT(*) AS invoice_count, SUM(invoice_ total) AS invoice_total FROM invoices GROUP BY vendor_ id WITH ROLLUP vendorj d 111voice_cou,t involce_total ~01.26 6940.25 2Jln.96 4378.02 lml!!I 214290.51 (35 rows) - ~.., A summary query that includes a summary row for each grouping level SELECT vendor_ state, vendor_city, COUNT(*) AS qty_vendors FROM vendors WHERE vendor_ state IN ( • IA•, •NJ•) GROUP BY vendor_state, vendor_city WITH ROLLUP vendor _state vendor_dty qty_ vendors ► IA Fairfield IA Washington IA om,, NJ East Brunswick NJ Fairfield NJ Washington NJ HW!I ml 11111!1 Description • You can use the WITH ROLLUP operator in the GROUP BY clause to add summary rows to the final result set. • The WITH ROLLUP operator adds a summary row for each group specified in the GROUP BY clause. It also adds a summary row to the end of the result set that summarizes the entire result set. • If the GROUP BY clause specifies a single group, the WITH ROLLUP operator
+
+It also adds a summary row to the end of the result set that summarizes the entire result set. • If the GROUP BY clause specifies a single group, the WITH ROLLUP operator only adds the fmal summary row. • With MySQL 8.0.12 and earlier, you couldn't use the ORDER BY clause with the WITH ROLLUP operator. Instead, to sort individual columns, you coded the ASC or DESC keyword after the column in the GROUP BY clause. • With MySQL 8.0.13 and later, you can't code the ASC or DESC keyword on the GROUP BY clause. However, you can now include an ORDER BY clause to sort the result set when the GROUP BY clause includes WITH ROLLUP. • With MySQL 8.0.12 and earlier, you couldn't use the DISTINCT keyword in any of the aggregate functions when you used the WITH ROLLUP operator. With MySQL 8.0.13 and later, you can use the DISTINCT keyword. How to use the WITH ROLLUP operator
+
+How to use the GROUPING function When you group by a column that can contain null values, the result of the grouping can be a null value. In addition, when you use the WITH ROLLUP operator to summarize a column that can contain null values, the summary row will contain a null value in that column. Because of that, it can be difficult to distinguish between the null values due to grouping and the null values due to • • summanz1ng. The first query in includes the invoice date and payment date from the Invoices table, as well as the sum of the invoice totals and the sum of the invoice balances. The first five rows in the result set are for the same invoice date. Both the first and the last of those five rows contains a null value in the Payment Date column. The first row contains a null value because one or more of the invoices for that invoice date contain a null value. The last row contains a null value because it is a summary row
+
+The first row contains a null value because one or more of the invoices for that invoice date contain a null value. The last row contains a null value because it is a summary row for all of the invoices for that invoice date. Without studying this result set carefully, though, it's difficult to tell which null values are for summary rows and which aren't. to help distinguish between these null values, you can use the GROUPING function that was introduced with MySQL 8.0. This function evaluates the expression you specify to determine if the expression results in a null value because it's in a sum1nary row. If it does, the GROUPING function returns a value of 1. Otherwise, it returns a value of 0. This is illustrated by the second query in this figure. This query is the same as the first query except that it uses IF and GROUPING functions for the invoice_date and pay1nent_date columns in the SELECT clause. You'll learn about the IF function in chapter 9. For now, just realize that it evaluates the expression
+
+IF and GROUPING functions for the invoice_date and pay1nent_date columns in the SELECT clause. You'll learn about the IF function in chapter 9. For now, just realize that it evaluates the expression in the first argument and returns the second argument if the expression is true or the third argument if it's not. In this case, the first argument of each IF function is a GROUPING function. These GROUPING functions test if the invoice_date or payment_date column contains a null value because it's in a summary row. If so, the IF function returns the literal value that's specified by the second argument. Otherwise, it returns the value of the column grouping that's specified by the third argument. If you compare the results of this query with the results of the first query, you'll see that it's now obvious which rows are summary rows because they contain literal values instead of null values. This is a common use for the GROUPING function.
+
+Chapter 6 How to code sum1ncary queries The basic syntax of the GROUPING function GROUPING (expression) A summary query that uses WITH ROLLUP on a table with null values SELECT invoice_date, payment_date, SUM(invoice_total) AS invoice_total, SUM(invoice_total - credit_total - payment_total) AS balance_due FROM invoices WHERE invoice_date BETWEEN '2018-07-24' AND 1 2018-07-31 1 GROUP BY invoice_date, payment_date WITH ROLLUP invoice_date payment_date Invoice_ total balance_ due ► 2018-07-24 0®91 503.20 503.20 2018-07-24 2018-08-19 3689.99 0.00 2018-07-24 2018-08-23 67.00 0.00 2018-07-24 2018-08-27 23517.58 0.00 2018-07-24 HPJII 27777.n 503.20 2018-07-25 2018-08-22 1000.'16 0,00 2018-07-25 l®!I 1000.-46 0.00 2018-07-28 UQl!I 90.36 90.36 2018-07-28 HW!I 90.36 90.36 2018-07-30 2018-09-03 22.57 0.00 2018--0 7-30 ®J!I 22.57 o.oo 2018-07-31 lllij!i 10976.06 10976.06 ~&,;
 ```
-
-This example demonstrates how to create a table with columns of different data types. The product_id is an integer, product_name is a variable-length string, and price is a floating-point number.
-
-### Practical Example
-
-```sql
--- INSERT data into the products TABLE INSERT INTO products (product_id, product_name, price) VALUES (1, 'Laptop', 999.99);
-```
-
-This practical example shows how to insert data into a table using the correct data types for each column.
+Example SELECT statement from textbook.
 
 ## Common Mistakes
-
-### Using VARCHAR for numeric data
-
-**Incorrect:**
-
-```sql
--- Incorrect usage CREATE TABLE products ( product_id INT PRIMARY KEY, product_name VARCHAR(100), price VARCHAR(10) );
-```
-
-**Correct:**
-
-```sql
--- Correct usage CREATE TABLE products ( product_id INT PRIMARY KEY, product_name VARCHAR(100), price FLOAT );
-```
-
-**Why this happens:** Using VARCHAR for numeric data can lead to issues with sorting and calculations. Always use the appropriate numeric data type like INT or FLOAT.
+### No common mistakes listed
+No specific mistakes documented in textbook.
 
 ---
-
-## Practice
-
-**Question:** Create a table called 'employees' with columns: employee_id (INT), first_name (VARCHAR), last_name (VARCHAR), hire_date (DATE), salary (FLOAT). Insert one row of data into the table.
-
-**Solution:** -- Create and insert data into employees table
-CREATE TABLE employees (
-  employee_id INT PRIMARY KEY,
-  first_name VARCHAR(50),
-  last_name VARCHAR(50),
-  hire_date DATE,
-  salary FLOAT
-);
-INSERT INTO employees (employee_id, first_name, last_name, hire_date, salary) VALUES (1, 'John', 'Doe', '2020-06-15', 75000.00);
-
----
-
-*Source: Murach's MySQL 3rd Edition*
+*Source: murachs-mysql-3rd-edition, Pages 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209*
