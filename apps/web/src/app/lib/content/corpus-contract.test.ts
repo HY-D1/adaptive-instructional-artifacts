@@ -11,6 +11,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
+import { spawnSync } from 'child_process';
 
 const CORPUS_ROOT = resolve(
   __dirname,
@@ -142,5 +143,35 @@ describe('Corpus contract: dual-textbook requirement', () => {
         `Too few concepts for "${docId}" (found ${count}, need ≥ 3)`
       ).toBeGreaterThanOrEqual(3);
     }
+  });
+});
+
+// ─── Git-ignore contract ──────────────────────────────────────────────────────
+
+describe('Corpus contract: concept markdown files are not gitignored', () => {
+  // git check-ignore --quiet exits 1 when the path is NOT ignored, 0 when it IS ignored.
+  function isGitIgnored(repoRelPath: string): boolean {
+    const result = spawnSync('git', ['check-ignore', '--quiet', repoRelPath], {
+      cwd: resolve(CORPUS_ROOT, '../../../../..'), // repo root
+    });
+    return result.status === 0;
+  }
+
+  it('a Murach concept markdown file is not gitignored', () => {
+    const repoRelPath =
+      'apps/web/public/textbook-static/concepts/murachs-mysql-3rd-edition/mysql-intro.md';
+    expect(
+      isGitIgnored(repoRelPath),
+      `${repoRelPath} is gitignored — fix .gitignore`
+    ).toBe(false);
+  });
+
+  it('a Ramakrishnan concept markdown file is not gitignored', () => {
+    const repoRelPath =
+      'apps/web/public/textbook-static/concepts/dbms-ramakrishnan-3rd-edition/relational-model-ramakrishnan.md';
+    expect(
+      isGitIgnored(repoRelPath),
+      `${repoRelPath} is gitignored — fix .gitignore`
+    ).toBe(false);
   });
 });
