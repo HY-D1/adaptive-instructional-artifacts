@@ -1,6 +1,9 @@
 import { storage } from '../storage/storage';
 import type { PdfIndexChunk, SQLProblem } from '../../types';
 import { sqlProblems } from '../../data/problems';
+import { CONCEPT_COMPATIBILITY_MAP, getCompatibleCorpusIds } from './concept-compatibility-map';
+
+export { getCompatibleCorpusIds };
 
 // Types
 export interface ConceptInfo {
@@ -70,59 +73,60 @@ export function clearConceptMapCache(): void {
  * This function resolves such IDs to match the keys in concept-map.json.
  * 
  * Resolution strategy:
- * 1. Try exact match first (for already-canonical IDs)
- * 2. If input is namespaced (contains "/"):
- *    - Try suffix match against concept map keys (flat key lookup)
- *    - Try exact namespaced key match
- * 3. If input is flat (no "/"):
- *    - Try to find a unique namespaced key that ends with this suffix
- *    - If multiple matches, return original (ambiguous)
- *    - If single match, return the namespaced key
- * 4. Return original ID if no resolution found (caller handles not-found)
+ * 1. Exact match (for already-canonical corpus keys or legacy flat IDs)
+ * 2. Compatibility map (concept-compatibility-map.ts) — deterministic internal→corpus mapping;
+ *    returns the first entry that actually exists in the loaded corpus
+ * 3. Namespaced-input suffix strip (docId/conceptId → try flat legacy key)
+ * 4. Flat-input suffix scan — find a unique corpus key ending with /${conceptId}
+ * 5. Return original ID if nothing resolves (caller handles not-found)
  */
 export function resolveConceptId(
   conceptId: string,
   availableConcepts: Record<string, ConceptInfo>
 ): string {
-  // Already exact match
+  // 1. Exact match
   if (availableConcepts[conceptId]) {
     return conceptId;
   }
-  
-  // Case 1: Input is namespaced (docId/conceptId)
-  // Try to find a flat key matching the suffix
+
+  // 2. Compatibility map: deterministic internal-ID → corpus-key resolution
+  //    Skipped for namespaced inputs (those go through step 3/4).
+  if (!conceptId.includes('/')) {
+    const candidates = CONCEPT_COMPATIBILITY_MAP[conceptId];
+    if (candidates) {
+      for (const candidate of candidates) {
+        if (availableConcepts[candidate]) {
+          return candidate;
+        }
+      }
+    }
+  }
+
+  // 3. Input is namespaced (docId/conceptId) — try suffix as flat legacy key
   if (conceptId.includes('/')) {
     const suffix = conceptId.split('/').pop()!;
-    
-    // If suffix exists as a flat concept key, use it (backward compatibility)
     if (availableConcepts[suffix]) {
       return suffix;
     }
-    
-    // Return original for namespaced lookup
+    // Return original for direct namespaced lookup
     return conceptId;
   }
-  
-  // Case 2: Input is flat (conceptId)
-  // Try to find a unique namespaced key that ends with this suffix
+
+  // 4. Flat input: find a unique corpus key whose suffix equals this ID
   const allKeys = Object.keys(availableConcepts);
-  const matchingKeys = allKeys.filter(key => {
-    // Key ends with /conceptId or equals conceptId
-    return key === conceptId || key.endsWith(`/${conceptId}`);
-  });
-  
+  const matchingKeys = allKeys.filter(key => key === conceptId || key.endsWith(`/${conceptId}`));
+
   if (matchingKeys.length === 1) {
-    // Unique match found - use the namespaced key
     return matchingKeys[0];
   }
-  
+
   if (matchingKeys.length > 1) {
-    // Ambiguous - multiple docs have this concept
-    // Return original and let caller handle or use first match
-    console.warn(`[resolveConceptId] Ambiguous concept ID "${conceptId}" matches multiple keys: ${matchingKeys.join(', ')}`);
+    console.warn(
+      `[resolveConceptId] Ambiguous concept ID "${conceptId}" matches multiple keys: ${matchingKeys.join(', ')}`
+    );
   }
-  
-  // No resolution found - return original for error handling
+
+  // 5. No resolution found — return original for error handling
   return conceptId;
 }
 

@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { 
-  resolveConceptId, 
-  getConcept, 
+import {
+  resolveConceptId,
+  getConcept,
   loadConceptContent,
   clearConceptMapCache,
-  ConceptInfo 
+  getCompatibleCorpusIds,
+  ConceptInfo
 } from './concept-loader';
 
 // Mock fetch globally
@@ -665,5 +666,160 @@ describe('Murach corpus consistency', () => {
     }
 
     expect(murachKeys).toHaveLength(33);
+  });
+});
+
+// ─── Compatibility-map regression: previously unresolved internal IDs ─────────
+// These tests cover the 23 adaptive internal concept IDs that returned
+// unresolved against the real 70-concept corpus before the compatibility layer
+// was introduced.  The mock corpus uses actual corpus keys from concept-map.json.
+
+describe('Compatibility-map resolution: previously unresolved internal IDs', () => {
+  /**
+   * Mock corpus that mirrors the real helper corpus keys relevant to the
+   * adaptive concept IDs under test.  sourceDocId is set so markdown paths
+   * are resolved correctly.
+   */
+  function makeEntry(key: string, title: string, difficulty: 'beginner' | 'intermediate' | 'advanced' = 'beginner'): ConceptInfo {
+    const [sourceDocId, id] = key.includes('/') ? key.split('/') : ['', key];
+    return {
+      id: key,
+      title,
+      definition: `Definition of ${title}`,
+      difficulty,
+      estimatedReadTime: 5,
+      pageNumbers: [1],
+      chunkIds: { definition: [], examples: [], commonMistakes: [] },
+      relatedConcepts: [],
+      practiceProblemIds: [],
+      sourceDocId: sourceDocId || undefined,
+    };
+  }
+
+  // Subset of the real 70-concept corpus sufficient to cover every compatibility-map entry.
+  const realCorpusConcepts: Record<string, ConceptInfo> = {
+    'dbms-ramakrishnan-3rd-edition/select-basic': makeEntry('dbms-ramakrishnan-3rd-edition/select-basic', 'SELECT (Ramakrishnan)'),
+    'murachs-mysql-3rd-edition/select-statement-murach': makeEntry('murachs-mysql-3rd-edition/select-statement-murach', 'SELECT Statement (Murach)'),
+    'dbms-ramakrishnan-3rd-edition/selection-projection': makeEntry('dbms-ramakrishnan-3rd-edition/selection-projection', 'Selection and Projection'),
+    'dbms-ramakrishnan-3rd-edition/where-clause': makeEntry('dbms-ramakrishnan-3rd-edition/where-clause', 'WHERE Clause (Ramakrishnan)'),
+    'murachs-mysql-3rd-edition/where-clause-murach': makeEntry('murachs-mysql-3rd-edition/where-clause-murach', 'WHERE Clause (Murach)'),
+    'dbms-ramakrishnan-3rd-edition/joins': makeEntry('dbms-ramakrishnan-3rd-edition/joins', 'Joins (Ramakrishnan)', 'intermediate'),
+    'murachs-mysql-3rd-edition/joins-murach': makeEntry('murachs-mysql-3rd-edition/joins-murach', 'Joins (Murach)', 'intermediate'),
+    'dbms-ramakrishnan-3rd-edition/inner-join': makeEntry('dbms-ramakrishnan-3rd-edition/inner-join', 'Inner Join', 'intermediate'),
+    'dbms-ramakrishnan-3rd-edition/aggregate-functions': makeEntry('dbms-ramakrishnan-3rd-edition/aggregate-functions', 'Aggregate Functions', 'intermediate'),
+    'murachs-mysql-3rd-edition/aggregate-functions-murach': makeEntry('murachs-mysql-3rd-edition/aggregate-functions-murach', 'Aggregate Functions (Murach)', 'intermediate'),
+    'dbms-ramakrishnan-3rd-edition/group-by': makeEntry('dbms-ramakrishnan-3rd-edition/group-by', 'GROUP BY (Ramakrishnan)', 'intermediate'),
+    'murachs-mysql-3rd-edition/group-by-murach': makeEntry('murachs-mysql-3rd-edition/group-by-murach', 'GROUP BY (Murach)', 'intermediate'),
+    'dbms-ramakrishnan-3rd-edition/having': makeEntry('dbms-ramakrishnan-3rd-edition/having', 'HAVING (Ramakrishnan)', 'intermediate'),
+    'murachs-mysql-3rd-edition/having-murach': makeEntry('murachs-mysql-3rd-edition/having-murach', 'HAVING (Murach)', 'intermediate'),
+    'murachs-mysql-3rd-edition/string-functions': makeEntry('murachs-mysql-3rd-edition/string-functions', 'String Functions'),
+    'murachs-mysql-3rd-edition/date-functions': makeEntry('murachs-mysql-3rd-edition/date-functions', 'Date Functions'),
+    'murachs-mysql-3rd-edition/mysql-functions': makeEntry('murachs-mysql-3rd-edition/mysql-functions', 'MySQL Functions'),
+    'murachs-mysql-3rd-edition/functions-murach': makeEntry('murachs-mysql-3rd-edition/functions-murach', 'Functions (Murach)'),
+    'murachs-mysql-3rd-edition/order-by-murach': makeEntry('murachs-mysql-3rd-edition/order-by-murach', 'ORDER BY (Murach)'),
+    'dbms-ramakrishnan-3rd-edition/subqueries': makeEntry('dbms-ramakrishnan-3rd-edition/subqueries', 'Subqueries (Ramakrishnan)', 'advanced'),
+    'murachs-mysql-3rd-edition/subqueries-murach': makeEntry('murachs-mysql-3rd-edition/subqueries-murach', 'Subqueries (Murach)', 'advanced'),
+    'dbms-ramakrishnan-3rd-edition/correlated-subquery': makeEntry('dbms-ramakrishnan-3rd-edition/correlated-subquery', 'Correlated Subquery', 'advanced'),
+    'dbms-ramakrishnan-3rd-edition/set-operations': makeEntry('dbms-ramakrishnan-3rd-edition/set-operations', 'Set Operations', 'advanced'),
+    'murachs-mysql-3rd-edition/unions': makeEntry('murachs-mysql-3rd-edition/unions', 'UNION (Murach)', 'advanced'),
+    'dbms-ramakrishnan-3rd-edition/sql-intro': makeEntry('dbms-ramakrishnan-3rd-edition/sql-intro', 'Introduction to SQL'),
+    'murachs-mysql-3rd-edition/mysql-intro': makeEntry('murachs-mysql-3rd-edition/mysql-intro', 'Introduction to MySQL'),
+  };
+
+  it('resolves "joins" to dbms-ramakrishnan-3rd-edition/joins (previously unresolved)', () => {
+    const result = resolveConceptId('joins', realCorpusConcepts);
+    expect(result).toBe('dbms-ramakrishnan-3rd-edition/joins');
+  });
+
+  it('resolves "logical-operators" to dbms-ramakrishnan-3rd-edition/where-clause via compatibility map', () => {
+    const result = resolveConceptId('logical-operators', realCorpusConcepts);
+    expect(result).toBe('dbms-ramakrishnan-3rd-edition/where-clause');
+  });
+
+  it('resolves "order-by" to murachs-mysql-3rd-edition/order-by-murach via compatibility map', () => {
+    const result = resolveConceptId('order-by', realCorpusConcepts);
+    expect(result).toBe('murachs-mysql-3rd-edition/order-by-murach');
+  });
+
+  it('resolves "having-clause" to dbms-ramakrishnan-3rd-edition/having via compatibility map', () => {
+    const result = resolveConceptId('having-clause', realCorpusConcepts);
+    expect(result).toBe('dbms-ramakrishnan-3rd-edition/having');
+  });
+
+  it('resolves "aggregation" to dbms-ramakrishnan-3rd-edition/aggregate-functions via compatibility map', () => {
+    const result = resolveConceptId('aggregation', realCorpusConcepts);
+    expect(result).toBe('dbms-ramakrishnan-3rd-edition/aggregate-functions');
+  });
+
+  it('resolves "null-handling" to dbms-ramakrishnan-3rd-edition/where-clause via compatibility map', () => {
+    const result = resolveConceptId('null-handling', realCorpusConcepts);
+    expect(result).toBe('dbms-ramakrishnan-3rd-edition/where-clause');
+  });
+
+  it('resolves "group-by-error" to dbms-ramakrishnan-3rd-edition/group-by via compatibility map', () => {
+    const result = resolveConceptId('group-by-error', realCorpusConcepts);
+    expect(result).toBe('dbms-ramakrishnan-3rd-edition/group-by');
+  });
+
+  it('resolves "union" to dbms-ramakrishnan-3rd-edition/set-operations via compatibility map', () => {
+    const result = resolveConceptId('union', realCorpusConcepts);
+    expect(result).toBe('dbms-ramakrishnan-3rd-edition/set-operations');
+  });
+
+  it('resolves "syntax-error" to dbms-ramakrishnan-3rd-edition/sql-intro via compatibility map', () => {
+    const result = resolveConceptId('syntax-error', realCorpusConcepts);
+    expect(result).toBe('dbms-ramakrishnan-3rd-edition/sql-intro');
+  });
+
+  it('resolves "exist-clause" to dbms-ramakrishnan-3rd-edition/subqueries via compatibility map', () => {
+    const result = resolveConceptId('exist-clause', realCorpusConcepts);
+    expect(result).toBe('dbms-ramakrishnan-3rd-edition/subqueries');
+  });
+
+  it('resolves "join-condition-missing" to dbms-ramakrishnan-3rd-edition/joins via compatibility map', () => {
+    const result = resolveConceptId('join-condition-missing', realCorpusConcepts);
+    expect(result).toBe('dbms-ramakrishnan-3rd-edition/joins');
+  });
+
+  it('getCompatibleCorpusIds returns all available candidates for "joins"', () => {
+    const ids = getCompatibleCorpusIds('joins', realCorpusConcepts);
+    expect(ids).toContain('dbms-ramakrishnan-3rd-edition/joins');
+    expect(ids).toContain('murachs-mysql-3rd-edition/joins-murach');
+    expect(ids[0]).toBe('dbms-ramakrishnan-3rd-edition/joins'); // Preferred first
+  });
+
+  it('getCompatibleCorpusIds returns only existing candidates (filters missing)', () => {
+    // A corpus with only Murach joins
+    const murachOnly: Record<string, ConceptInfo> = {
+      'murachs-mysql-3rd-edition/joins-murach': makeEntry('murachs-mysql-3rd-edition/joins-murach', 'Joins (Murach)', 'intermediate'),
+    };
+    const ids = getCompatibleCorpusIds('joins', murachOnly);
+    expect(ids).toEqual(['murachs-mysql-3rd-edition/joins-murach']);
+  });
+
+  it('all 30 internal concept-graph IDs resolve to a corpus entry in the mock real corpus', () => {
+    const internalIds = [
+      'select-basic', 'distinct', 'alias',
+      'where-clause', 'logical-operators', 'null-handling', 'in-operator', 'between-operator', 'like-pattern',
+      'joins', 'join-condition-missing', 'ambiguous-column', 'self-join', 'cross-join',
+      'aggregation', 'group-by', 'group-by-error', 'having-clause',
+      'string-functions', 'date-functions', 'case-expression',
+      'order-by', 'limit-offset',
+      'subqueries', 'exist-clause', 'union', 'cte', 'window-functions',
+      'syntax-error', 'missing-from',
+    ];
+
+    const unresolved: string[] = [];
+    for (const id of internalIds) {
+      const resolved = resolveConceptId(id, realCorpusConcepts);
+      if (!realCorpusConcepts[resolved]) {
+        unresolved.push(id);
+      }
+    }
+
+    expect(
+      unresolved,
+      `These internal IDs did not resolve to a corpus entry:\n  ${unresolved.join('\n  ')}`
+    ).toHaveLength(0);
   });
 });
