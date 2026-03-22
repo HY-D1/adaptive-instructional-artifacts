@@ -82,6 +82,7 @@ export type InteractionEvent = {
     | 'guidance_view'
     | 'guidance_escalate'
     | 'textbook_unit_upsert'
+    | 'textbook_unit_shown'
     | 'source_view'
     // Week 3 Feature: Ask My Textbook chat
     | 'chat_interaction'
@@ -91,6 +92,8 @@ export type InteractionEvent = {
     | 'profile_assigned'
     | 'escalation_triggered'
     | 'profile_adjusted'
+    // Week 6: Experimental condition tracking
+    | 'condition_assigned'
     // Week 5: Multi-Armed Bandit (Component 8)
     | 'bandit_arm_selected'
     | 'bandit_reward_observed'
@@ -212,6 +215,8 @@ export type InteractionEvent = {
   
   // Week 6: Experimental condition tracking
   conditionId?: string;
+  // Stable corpus concept key from helper-export (e.g. "dbms-ramakrishnan-3rd-edition/joins")
+  corpusConceptId?: string;
   // RESEARCH-4: Canonical study-facing fields (explicit names for analysis)
   // These mirror existing internal fields but use the names required by the study plan.
   learnerProfileId?: string;        // canonical: assigned escalation profile (mirrors profileId)
