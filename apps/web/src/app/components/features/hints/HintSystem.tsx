@@ -655,7 +655,10 @@ export function HintSystem({
       latestProblemError
         ? [latestProblemError.id]
         : [];
-    onEscalate?.(sourceInteractionIds);
+    // Pass the active hint subtype explicitly so the parent does not need to
+    // infer it from interaction history (fixes Save-to-Notes silent failure
+    // when no SQL error has been submitted yet).
+    onEscalate?.(sourceInteractionIds, activeHintSubtype || errorSubtypeId || undefined);
 
     // Calculate evidence for escalation logging
     const errorCount = problemTrace.filter((interaction) => interaction.eventType === 'error').length;

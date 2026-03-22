@@ -69,7 +69,7 @@ test.describe('@regression @ux-bugs @no-external Save-to-Notes learner journey',
    *  5. Click "Save to Notes" (purple button in HintSystem panel)
    *  6. Assert: green success toast "Saved … to My Textbook" visible
    *  7. Assert: no "no concept context" error shown
-   *  8. Click "My Textbook" nav link
+   *  8. Click "My Textbook" nav link (SPA navigation, localStorage preserved)
    *  9. Assert: URL is /textbook
    * 10. Assert: at least one unit in localStorage AND its title visible on page
    */
@@ -99,8 +99,10 @@ test.describe('@regression @ux-bugs @no-external Save-to-Notes learner journey',
     const helpVisible = await helpButton.isVisible({ timeout: 5_000 }).catch(() => false);
     if (helpVisible) {
       await helpButton.click();
-      // Wait a moment for the hint to render and activeHintSubtype to be set
-      await page.waitForTimeout(1_000);
+      // Wait for hint panel to render — Save to Notes button becomes enabled
+      await expect(
+        page.getByRole('button', { name: /Save to Notes/i }).first()
+      ).toBeEnabled({ timeout: 8_000 }).catch(() => {});
     }
 
     // Step 5: Click "Save to Notes" (purple button)
@@ -119,10 +121,11 @@ test.describe('@regression @ux-bugs @no-external Save-to-Notes learner journey',
       .filter({ hasText: /no concept context|Could not save/i });
     await expect(noContextAlert).not.toBeVisible();
 
-    // Step 8: Navigate to My Textbook
+    // Step 8: Navigate to My Textbook via SPA link (preserves localStorage)
     await page.getByRole('link', { name: 'My Textbook' }).first().click();
     await expect(page).toHaveURL(/\/textbook/, { timeout: 10_000 });
-    await page.waitForTimeout(1_500);
+    // Wait for page content to render
+    await expect(page.locator('h1, h2').first()).toBeVisible({ timeout: 8_000 });
 
     // Step 9: Verify unit in localStorage
     const units = await getTextbookUnits(page, LEARNER_ID);
@@ -177,20 +180,27 @@ test.describe('@regression @ux-bugs @no-external Save-to-Notes learner journey',
       "SELECT first_name, last_name, salary FROM employees WHERE department = 'Engineering' AND salary > 80000"
     );
     await page.getByRole('button', { name: 'Run Query' }).click();
-    await page.waitForTimeout(1_000);
+    // Wait for query execution to settle before checking hints
+    await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
 
     // Get Help to set activeHintSubtype (the current problem's subtype, not 'group-by')
     const helpButton = page.getByRole('button', { name: /Get Help/i }).first();
     if (await helpButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await helpButton.click();
-      await page.waitForTimeout(1_000);
+      // Wait for hint panel to render
+      await expect(
+        page.getByRole('button', { name: /Save to Notes/i }).first()
+      ).toBeEnabled({ timeout: 8_000 }).catch(() => {});
     }
 
     // Save to Notes — must NOT show "no concept context"
     const saveBtn = page.getByRole('button', { name: /Save to Notes/i }).first();
     if (await saveBtn.isEnabled({ timeout: 5_000 }).catch(() => false)) {
       await saveBtn.click();
-      await page.waitForTimeout(2_000);
+      // Wait for any feedback (success or error) before asserting
+      await expect(
+        page.locator('text=/Saved|Updated|no concept/i').first()
+      ).toBeVisible({ timeout: 8_000 }).catch(() => {});
     }
 
     // Assert: no "no concept context" error
@@ -227,9 +237,14 @@ test.describe('@regression @ux-bugs @no-external Save-to-Notes learner journey',
 
     if (isEnabled) {
       await saveBtn.click();
-      await page.waitForTimeout(2_000);
+      // Wait for a visible error to appear — silent no-op is not acceptable
+      await expect(
+        page.locator('[role="alert"], .text-amber-700, .text-red-700')
+          .filter({ hasText: /no concept context|Could not save|try submitting/i })
+          .first()
+      ).toBeVisible({ timeout: 8_000 });
 
-      // A visible error must appear — NOT silence
+      // Re-verify: error must still be visible
       const hasVisibleError = await page
         .locator('[role="alert"], .text-amber-700, .text-red-700')
         .filter({ hasText: /no concept context|Could not save|try submitting/i })
@@ -238,8 +253,10 @@ test.describe('@regression @ux-bugs @no-external Save-to-Notes learner journey',
         .catch(() => false);
 
       expect(hasVisibleError).toBe(true);
+    } else {
+      // Button disabled is an explicit guard against silent failure — verify it
+      await expect(saveBtn).toBeDisabled();
     }
-    // If the button is disabled: that is also a valid guard against silent failure.
 
     await page.screenshot({ path: 'test-results/ux-bug-save-no-context.png', fullPage: true });
   });
@@ -248,6 +265,9 @@ test.describe('@regression @ux-bugs @no-external Save-to-Notes learner journey',
    * After a successful save, navigating to /textbook immediately (without
    * manual refresh) must show the new unit — the broadcastSync post-save
    * refresh path must be working.
+   *
+   * Uses SPA link navigation (not page.goto) so the addInitScript
+   * localStorage.clear() is not re-triggered.
    */
   test('Post-save broadcastSync: /textbook shows new unit without manual refresh', async ({ page }) => {
     await page.goto('/');
@@ -262,12 +282,16 @@ test.describe('@regression @ux-bugs @no-external Save-to-Notes learner journey',
       "SELECT name FROM employees WHERE dept = Engineering"
     );
     await page.getByRole('button', { name: 'Run Query' }).click();
-    await page.waitForTimeout(1_000);
+    // Wait for query execution to settle before checking hints
+    await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
 
     const helpButton = page.getByRole('button', { name: /Get Help/i }).first();
     if (await helpButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await helpButton.click();
-      await page.waitForTimeout(1_000);
+      // Wait for hint panel to render
+      await expect(
+        page.getByRole('button', { name: /Save to Notes/i }).first()
+      ).toBeEnabled({ timeout: 8_000 }).catch(() => {});
     }
 
     const saveBtn = page.getByRole('button', { name: /Save to Notes/i }).first();
@@ -279,11 +303,11 @@ test.describe('@regression @ux-bugs @no-external Save-to-Notes learner journey',
       ).toBeVisible({ timeout: 20_000 });
     }
 
-    // Navigate immediately to /textbook WITHOUT a page reload
-    await page.goto('/textbook');
-    await page.waitForTimeout(1_500);
+    // Navigate to /textbook via SPA link — preserves localStorage (no init script re-run)
+    await page.getByRole('link', { name: 'My Textbook' }).first().click();
+    await expect(page).toHaveURL(/\/textbook/, { timeout: 10_000 });
 
-    // Unit must be there already — the broadcast refresh should have loaded it
+    // Unit must be there already — the broadcastSync refresh should have loaded it
     const units = await getTextbookUnits(page, LEARNER_ID);
     expect(units.length).toBeGreaterThan(0);
 
