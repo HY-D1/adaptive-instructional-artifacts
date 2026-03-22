@@ -16,6 +16,7 @@ dotenv.config({ path: envPath });
 
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import fs from 'fs';
 
 import { initializeSchema, closeDb } from './db/index.js';
@@ -32,10 +33,12 @@ import { neonLearnersRouter } from './routes/neon-learners.js';
 import { neonInteractionsRouter } from './routes/neon-interactions.js';
 import { neonTextbooksRouter } from './routes/neon-textbooks.js';
 import { neonSessionsRouter } from './routes/neon-sessions.js';
+import { authRouter } from './routes/auth.js';
 
 import { ENABLE_PDF_INDEX, ENABLE_LLM, PORT, CORS_ORIGIN, getFeatureStatus, OLLAMA_BASE_URL } from './config.js';
 import { isUsingNeon } from './db/index.js';
 import { resolveDbEnv } from './db/env-resolver.js';
+import { optionalAuth, requireAuth } from './middleware/auth.js';
 
 // Ensure data directory exists
 const DATA_DIR = path.resolve(__dirname, '../data');
@@ -54,6 +57,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
+app.use(cookieParser());
+app.use(optionalAuth);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -108,11 +113,13 @@ app.get('/api/system/persistence-status', (_req: Request, res: Response) => {
 const usingNeon = isUsingNeon();
 
 if (usingNeon) {
-  console.log('🔌 Using Neon PostgreSQL routes');
-  app.use('/api/learners', neonLearnersRouter);
-  app.use('/api/interactions', neonInteractionsRouter);
-  app.use('/api/textbooks', neonTextbooksRouter);
-  app.use('/api/sessions', neonSessionsRouter);
+  console.log('🔌 Using Neon PostgreSQL routes (auth required)');
+  // requireAuth enforces JWT cookie on all Neon data routes
+  // Per-resource ownership is enforced by router.param() in each Neon router
+  app.use('/api/learners', requireAuth, neonLearnersRouter);
+  app.use('/api/interactions', requireAuth, neonInteractionsRouter);
+  app.use('/api/textbooks', requireAuth, neonTextbooksRouter);
+  app.use('/api/sessions', requireAuth, neonSessionsRouter);
 } else {
   console.log('💾 Using SQLite routes (legacy)');
   app.use('/api/learners', learnersRouter);
@@ -120,6 +127,9 @@ if (usingNeon) {
   app.use('/api/textbooks', textbooksRouter);
   app.use('/api/sessions', sessionsRouter);
 }
+
+// Auth routes (always mounted, route returns 503 in SQLite mode)
+app.use('/api/auth', authRouter);
 
 app.use('/api/research', researchRouter);
 

@@ -30,7 +30,11 @@
 | `NEON_DATABASE_URL` | Alternative | Secondary name accepted if `DATABASE_URL` is absent |
 | `adaptive_data_DATABASE_URL` | Vercel Neon integration | Auto-injected by Vercel when you attach the Neon integration to a project named `adaptive_data` |
 | `adaptive_data_POSTGRES_URL` | Vercel Neon integration | Postgres-alias variant injected by the same Vercel Neon integration |
+| `JWT_SECRET` | Yes (production) | Secret for signing auth JWT cookies — must be at least 32 random characters |
+| `INSTRUCTOR_SIGNUP_CODE` | Instructor accounts | Code required when creating an instructor account. Falls back to `TeachSQL2024` in dev. |
 | `PORT` | No | HTTP port (default 3001) |
+
+> **Auth setup**: Set `JWT_SECRET` to a strong random value (e.g. `openssl rand -base64 32`). Set `INSTRUCTOR_SIGNUP_CODE` to protect instructor registration. After adding these vars, redeploy the backend and run `npm run db:init:neon` to create the `auth_accounts` table.
 
 > **Env var resolution order**: The backend checks these four names in priority order (`DATABASE_URL` → `NEON_DATABASE_URL` → `adaptive_data_DATABASE_URL` → `adaptive_data_POSTGRES_URL`) and uses the first non-empty value. You only need to set one.
 > **After changing env vars you must redeploy** — Vercel bakes env vars into the build/runtime at deploy time. Adding or changing a variable without redeploying has no effect.

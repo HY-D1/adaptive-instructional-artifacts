@@ -11,6 +11,7 @@
 
 import { neon, neonConfig, NeonQueryFunction } from '@neondatabase/serverless';
 import { resolveDbEnv } from './env-resolver.js';
+import { initAuthSchema } from './auth.js';
 import type {
   Learner,
   CreateLearnerRequest,
@@ -73,6 +74,9 @@ export async function initializeSchema(): Promise<void> {
   `;
 
   await db`CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)`;
+
+  // Auth accounts (real email/password authentication)
+  await initAuthSchema(db);
 
   // Learner sessions (experimental condition tracking)
   await db`

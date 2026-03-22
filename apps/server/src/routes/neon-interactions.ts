@@ -8,6 +8,19 @@ import * as db from '../db/neon.js';
 const router = Router();
 
 // ============================================================================
+// Auth helpers
+// ============================================================================
+
+/**
+ * Returns the canonical learnerId to use for this request.
+ * When authenticated: always uses the JWT-authenticated learnerId (prevents spoofing).
+ * When not authenticated (legacy/local mode): uses the body-supplied learnerId.
+ */
+function resolveLearnerId(req: Request, bodyLearnerId: string): string {
+  return req.auth?.learnerId ?? bodyLearnerId;
+}
+
+// ============================================================================
 // Event Logging
 // ============================================================================
 
@@ -24,7 +37,11 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const id = event.id || `${event.eventType}-${event.learnerId}-${Date.now()}`;
+    // When authenticated, always use the server-verified learnerId (ignores spoofed body value)
+    const canonicalLearnerId = resolveLearnerId(req, event.learnerId);
+    event.learnerId = canonicalLearnerId;
+
+    const id = event.id || `${event.eventType}-${canonicalLearnerId}-${Date.now()}`;
 
     // Extract payload - frontend sends nested payload, direct API calls send flat structure
     // RESEARCH-3B: Explicitly extract bandit/escalation fields for proper column mapping

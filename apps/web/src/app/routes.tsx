@@ -4,6 +4,7 @@ import type { LoaderFunction } from 'react-router';
 import { RouteError } from './components/layout/RouteError';
 import { RootLayout } from './pages/RootLayout';
 import { TextbookPage } from './pages/TextbookPage';
+import { AuthPage } from './pages/AuthPage';
 import { ResearchPage } from './pages/ResearchPage';
 import { InstructorDashboard } from './pages/InstructorDashboard';
 import { StartPage } from './pages/StartPage';
@@ -195,6 +196,15 @@ export const router = createBrowserRouter([
           </AuthenticatedRoute>
         ),
         loader: createProtectedLoader({ allowAuthenticated: true }),
+      },
+      // Auth routes (login / signup) — outside the protected area
+      {
+        path: 'login',
+        Component: AuthPage,
+      },
+      {
+        path: 'signup',
+        element: <AuthPage />,
       },
       // Catch-all redirect
       {

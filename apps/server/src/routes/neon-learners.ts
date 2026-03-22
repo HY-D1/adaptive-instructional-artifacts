@@ -4,8 +4,12 @@
 
 import { Router, Request, Response } from 'express';
 import * as db from '../db/neon.js';
+import { requireOwnership } from '../middleware/auth.js';
 
 const router = Router();
+
+// Verify ownership for all :id routes (students can only access their own data)
+router.param('id', requireOwnership);
 
 // ============================================================================
 // User Management

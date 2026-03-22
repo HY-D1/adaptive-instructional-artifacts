@@ -215,3 +215,16 @@ export {
   getDb as getNeonDb,
   resetDb as resetNeonDb,
 } from './neon.js';
+
+// ============================================================================
+// Auth exports (Neon-only — no SQLite equivalent)
+// ============================================================================
+
+export {
+  createAuthAccount,
+  getAuthAccountByEmail,
+  getAuthAccountById,
+  toPublicAccount,
+} from './auth.js';
+
+export type { AuthAccount, AuthAccountPublic } from './auth.js';

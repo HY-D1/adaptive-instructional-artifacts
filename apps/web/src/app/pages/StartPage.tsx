@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 
-import { BookOpen, BarChart3, Database, GraduationCap, Lock } from 'lucide-react';
+import { BookOpen, BarChart3, Database, GraduationCap, Lock, LogIn } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -10,6 +10,8 @@ import { Label } from '../components/ui/label';
 import { cn } from '../components/ui/utils';
 import { storage } from '../lib/storage';
 import { isInstructorModeAvailable, isHostedMode, logRuntimeConfig } from '../lib/runtime-config';
+import { AUTH_ENABLED } from '../lib/api/auth-client';
+import { useAuth } from '../lib/auth-context';
 import type { UserRole, UserProfile } from '../types';
 
 /**
@@ -37,6 +39,7 @@ const INSTRUCTOR_PASSCODE = ENV_PASSCODE || (IS_DEV ? 'TeachSQL2024' : '');
  */
 export function StartPage() {
   const navigate = useNavigate();
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
   const [username, setUsername] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [passcode, setPasscode] = useState('');
@@ -49,16 +52,24 @@ export function StartPage() {
     logRuntimeConfig();
   }, []);
 
-  // Check for existing profile on mount and redirect if found
+  // Redirect already-authenticated users (JWT or localStorage)
   useEffect(() => {
+    // Wait for auth context to resolve before checking local storage
+    if (authLoading) return;
+
     // Slight delay to ensure React Router is fully initialized
     const checkProfile = () => {
+      // If authenticated via JWT, redirect based on JWT user role
+      if (isAuthenticated && user) {
+        navigate(user.role === 'instructor' ? '/instructor-dashboard' : '/practice', { replace: true });
+        return;
+      }
       try {
         const profile = storage.getUserProfile();
         if (profile) {
           // Redirect based on role
-          const targetPath = profile.role === 'instructor' 
-            ? '/instructor-dashboard' 
+          const targetPath = profile.role === 'instructor'
+            ? '/instructor-dashboard'
             : '/practice';
           navigate(targetPath, { replace: true });
           return;
@@ -75,7 +86,7 @@ export function StartPage() {
     } else {
       setIsLoading(false);
     }
-  }, [navigate]);
+  }, [navigate, authLoading, isAuthenticated, user]);
 
   // Clear passcode error when role changes
   useEffect(() => {
@@ -173,6 +184,24 @@ export function StartPage() {
               Personalized SQL learning with adaptive hints and AI-powered explanations
             </p>
           </div>
+
+          {/* Account sign-in CTA (when backend is configured) */}
+          {AUTH_ENABLED && (
+            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800 mb-3">
+                <strong>Have an account?</strong> Sign in to sync your progress across devices.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full border-blue-300 text-blue-700 hover:bg-blue-100"
+                onClick={() => navigate('/login')}
+              >
+                <LogIn className="w-4 h-4 mr-2" />
+                Sign In / Create Account
+              </Button>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Username Input */}

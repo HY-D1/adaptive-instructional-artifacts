@@ -254,6 +254,7 @@ async function fetchApi<T>(
   try {
     const response = await fetch(url, {
       ...options,
+      credentials: 'include',   // send JWT cookie for auth-protected API routes
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
