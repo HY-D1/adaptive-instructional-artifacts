@@ -18,6 +18,7 @@ import type {
 // Import both database implementations
 import * as neonDb from './neon.js';
 import * as sqliteDb from './sqlite.js';
+import { hasDbEnv } from './env-resolver.js';
 
 // Re-export legacy SQLite functions for existing routes
 // These are used by the legacy routes that haven't been migrated to the unified interface
@@ -29,7 +30,7 @@ export * from './sqlite.js';
 
 // Runtime check for Neon mode - rechecks each time to ensure fresh env var reads
 export function isUsingNeon(): boolean {
-  return !!process.env.DATABASE_URL || !!process.env.NEON_DATABASE_URL;
+  return hasDbEnv();
 }
 
 // ============================================================================

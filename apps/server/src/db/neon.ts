@@ -10,6 +10,7 @@
  */
 
 import { neon, neonConfig, NeonQueryFunction } from '@neondatabase/serverless';
+import { resolveDbEnv } from './env-resolver.js';
 import type {
   Learner,
   CreateLearnerRequest,
@@ -31,10 +32,14 @@ neonConfig.fetchConnectionCache = true;
 let sql: NeonQueryFunction<false, false> | null = null;
 
 function getDatabaseUrl(): string {
-  const url = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
+  const { url, source } = resolveDbEnv();
   if (!url) {
-    throw new Error('DATABASE_URL environment variable is not set');
+    throw new Error(
+      `No database URL found. Set one of: DATABASE_URL, NEON_DATABASE_URL, ` +
+      `adaptive_data_DATABASE_URL, or adaptive_data_POSTGRES_URL`
+    );
   }
+  console.log(`🔌 Database URL resolved from env var: ${source}`);
   return url;
 }
 

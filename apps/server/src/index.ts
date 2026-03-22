@@ -35,6 +35,7 @@ import { neonSessionsRouter } from './routes/neon-sessions.js';
 
 import { ENABLE_PDF_INDEX, ENABLE_LLM, PORT, CORS_ORIGIN, getFeatureStatus, OLLAMA_BASE_URL } from './config.js';
 import { isUsingNeon } from './db/index.js';
+import { resolveDbEnv } from './db/env-resolver.js';
 
 // Ensure data directory exists
 const DATA_DIR = path.resolve(__dirname, '../data');
@@ -69,12 +70,33 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 
 app.get('/health', async (_req: Request, res: Response) => {
   const featureStatus = await getFeatureStatus();
-  
+  const { source } = resolveDbEnv();
+
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
+    db: {
+      mode: isUsingNeon() ? 'neon' : 'sqlite',
+      envSource: source,
+    },
     features: featureStatus,
+  });
+});
+
+// ============================================================================
+// Persistence Status
+// ============================================================================
+
+app.get('/api/system/persistence-status', (_req: Request, res: Response) => {
+  const neon = isUsingNeon();
+  const { source } = resolveDbEnv();
+
+  res.json({
+    backendReachable: true,
+    dbMode: neon ? 'neon' : 'sqlite',
+    resolvedEnvSource: source,
+    persistenceRoutesEnabled: true,
   });
 });
 

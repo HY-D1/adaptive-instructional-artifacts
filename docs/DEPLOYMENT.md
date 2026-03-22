@@ -26,8 +26,14 @@
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DATABASE_URL` | Yes | Neon PostgreSQL connection string (pooled endpoint recommended) |
+| `DATABASE_URL` | Yes (preferred) | Neon PostgreSQL connection string (pooled endpoint recommended) |
+| `NEON_DATABASE_URL` | Alternative | Secondary name accepted if `DATABASE_URL` is absent |
+| `adaptive_data_DATABASE_URL` | Vercel Neon integration | Auto-injected by Vercel when you attach the Neon integration to a project named `adaptive_data` |
+| `adaptive_data_POSTGRES_URL` | Vercel Neon integration | Postgres-alias variant injected by the same Vercel Neon integration |
 | `PORT` | No | HTTP port (default 3001) |
+
+> **Env var resolution order**: The backend checks these four names in priority order (`DATABASE_URL` → `NEON_DATABASE_URL` → `adaptive_data_DATABASE_URL` → `adaptive_data_POSTGRES_URL`) and uses the first non-empty value. You only need to set one.
+> **After changing env vars you must redeploy** — Vercel bakes env vars into the build/runtime at deploy time. Adding or changing a variable without redeploying has no effect.
 
 ---
 
@@ -81,11 +87,41 @@ Expected output: all 5 checks pass with a learner, session, interaction, and tex
 
 ### Deployment Topology
 
-| Scenario | Frontend env vars | Persistence |
-|----------|-------------------|-------------|
-| Static demo (no DB) | `VITE_INSTRUCTOR_PASSCODE` only | localStorage (per-browser, ephemeral) |
-| Full-stack with Neon | `VITE_INSTRUCTOR_PASSCODE` + `VITE_API_BASE_URL` | Neon PostgreSQL (durable, multi-user) |
-| Local dev with backend | `VITE_API_BASE_URL=http://localhost:3001` | Local Neon or SQLite |
+| Scenario | Frontend env vars | Backend env vars | Persistence |
+|----------|-------------------|------------------|-------------|
+| Frontend-only / static demo | `VITE_INSTRUCTOR_PASSCODE` only | n/a | localStorage (per-browser, ephemeral) |
+| Separate frontend + backend | `VITE_INSTRUCTOR_PASSCODE` + `VITE_API_BASE_URL` | `DATABASE_URL` | Neon PostgreSQL (durable, multi-user) |
+| Vercel Neon integration | `VITE_INSTRUCTOR_PASSCODE` + `VITE_API_BASE_URL` | `adaptive_data_DATABASE_URL` (auto-injected) | Neon PostgreSQL (durable, multi-user) |
+| Local dev with backend | `VITE_API_BASE_URL=http://localhost:3001` | `DATABASE_URL` or none (SQLite) | Local Neon or SQLite |
+
+#### Vercel Neon integration — prefixed variables
+
+When you attach the Neon integration to a Vercel project named **`adaptive_data`**, Vercel injects
+these variables automatically instead of plain `DATABASE_URL`:
+
+- `adaptive_data_DATABASE_URL` — primary pooled connection string
+- `adaptive_data_POSTGRES_URL` — postgres-alias variant
+
+The backend resolves all four known names in priority order, so no manual renaming is needed.
+To confirm which variable is active, call the diagnostic endpoint after deploying:
+
+```bash
+curl https://your-api.vercel.app/api/system/persistence-status
+```
+
+Expected response in Neon mode:
+
+```json
+{
+  "backendReachable": true,
+  "dbMode": "neon",
+  "resolvedEnvSource": "adaptive_data_DATABASE_URL",
+  "persistenceRoutesEnabled": true
+}
+```
+
+If `dbMode` is `"sqlite"` and `resolvedEnvSource` is `null`, no database URL was found —
+check that the Neon integration is attached to the correct Vercel project and that you have redeployed since attaching it.
 
 ### Local Build Test
 

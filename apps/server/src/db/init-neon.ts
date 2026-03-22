@@ -17,21 +17,24 @@ dotenv.config({ path: envPath });
 async function main(): Promise<void> {
   console.log('🔄 Initializing Neon PostgreSQL database...\n');
 
-  const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
+  // Dynamic import after dotenv so env-resolver sees the loaded vars
+  const { resolveDbEnv, DB_ENV_PRIORITY } = await import('./env-resolver.js');
+  const { url: databaseUrl, source } = resolveDbEnv();
 
   if (!databaseUrl) {
-    console.error('❌ ERROR: DATABASE_URL or NEON_DATABASE_URL environment variable is required');
+    console.error('❌ ERROR: No database URL found in environment');
     console.error('');
-    console.error('To set up Neon:');
-    console.error('1. Create a free account at https://neon.tech');
-    console.error('2. Create a new project and database');
-    console.error('3. Copy the connection string from the Neon dashboard');
-    console.error('4. Set it as DATABASE_URL in your .env file');
+    console.error('Checked (in priority order):');
+    for (const key of DB_ENV_PRIORITY) {
+      console.error(`  - ${key}`);
+    }
     console.error('');
-    console.error('Example:');
+    console.error('To set up Neon, set one of the above variables, e.g.:');
     console.error('  DATABASE_URL=postgresql://user:password@host.neon.tech/dbname?sslmode=require');
     process.exit(1);
   }
+
+  console.log(`📌 Using database URL from env var: ${source}`);
 
   // Dynamic import AFTER dotenv is configured
   const { initializeSchema, getDb } = await import('./neon.js');

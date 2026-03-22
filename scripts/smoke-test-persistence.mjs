@@ -82,14 +82,48 @@ function fail(name, detail = '') {
 }
 
 // ---------------------------------------------------------------------------
+// Step 0: persistence-status diagnostic (printed before any writes)
+// ---------------------------------------------------------------------------
+
+async function checkPersistenceStatus() {
+  console.log('\n[0/6] Persistence diagnostic');
+  let ok = false, data = {};
+  try {
+    const result = await req('GET', '/system/persistence-status');
+    ok = result.ok;
+    data = result.data;
+  } catch {
+    console.warn('  ⚠️  /api/system/persistence-status not reachable — backend may be offline');
+    return;
+  }
+
+  if (ok) {
+    const { dbMode, resolvedEnvSource, persistenceRoutesEnabled } = data;
+    console.log(`  🔍 backend reachable:          true`);
+    console.log(`  🔍 db mode:                    ${dbMode}`);
+    console.log(`  🔍 resolved env source:        ${resolvedEnvSource ?? '(none — falling back to sqlite)'}`);
+    console.log(`  🔍 persistence routes enabled: ${persistenceRoutesEnabled}`);
+
+    if (dbMode !== 'neon') {
+      console.warn('  ⚠️  WARNING: backend is NOT using Neon. Writes will go to SQLite (ephemeral on serverless).');
+    } else {
+      pass('persistence mode', `db=neon, env=${resolvedEnvSource}`);
+    }
+  } else {
+    console.warn(`  ⚠️  /api/system/persistence-status returned non-OK: ${JSON.stringify(data)}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Step 1: backend health
 // ---------------------------------------------------------------------------
 
 async function checkHealth() {
   console.log('\n[1/6] Backend health check');
-  const { ok, status } = await req('GET', '/../health');
+  const { ok, status, data } = await req('GET', '/../health');
   if (ok) {
-    pass('health endpoint', `HTTP ${status}`);
+    const dbInfo = data?.db ? ` db=${data.db.mode} src=${data.db.envSource}` : '';
+    pass('health endpoint', `HTTP ${status}${dbInfo}`);
   } else {
     // Some deployments don't expose /health — treat as warning not fatal
     console.warn(`  ⚠️  /health returned ${status} — continuing`);
@@ -211,6 +245,7 @@ console.log(`API: ${API}`);
 console.log(`Learner: ${SMOKE_LEARNER_ID}`);
 
 try {
+  await checkPersistenceStatus();
   await checkHealth();
   await createLearner();
   await getLearner();
