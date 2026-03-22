@@ -1,12 +1,13 @@
 import { useParams, Link } from 'react-router';
 import { useEffect, useState } from 'react';
-import { loadConceptContent, getProblemsForConcept, assessConceptQuality, filterSaneExamples, type LoadedConcept, type CodeExample, type Mistake } from '../lib/content/concept-loader';
+import { loadConceptContent, getProblemsForConcept, assessConceptQuality, filterSaneExamples, type LoadedConcept, type CodeExample, type Mistake, type QualityMetadata } from '../lib/content/concept-loader';
 import { ChevronLeft, BookOpen, Clock, Dumbbell, AlertCircle, CheckCircle, XCircle, Lightbulb, Play, Info } from 'lucide-react';
 
 export function ConceptDetailPage() {
   const { '*': conceptId } = useParams<{ '*': string }>();
   const [concept, setConcept] = useState<LoadedConcept | null>(null);
   const [contentQuality, setContentQuality] = useState<'good' | 'fallback'>('good');
+  const [qualityMetadata, setQualityMetadata] = useState<QualityMetadata | undefined>();
   const [problems, setProblems] = useState<ReturnType<typeof getProblemsForConcept>>([]);
   const [activeTab, setActiveTab] = useState<'learn' | 'examples' | 'mistakes'>('learn');
   const [loading, setLoading] = useState(true);
@@ -22,6 +23,7 @@ export function ConceptDetailPage() {
       setConcept(conceptData);
       if (conceptData) {
         setContentQuality(assessConceptQuality(conceptData));
+        setQualityMetadata(conceptData.qualityMetadata);
       }
       setLoading(false);
     };
@@ -119,7 +121,7 @@ export function ConceptDetailPage() {
 
             {/* Tab Content */}
             <div className="bg-white rounded-xl border shadow-sm">
-              {activeTab === 'learn' && <LearnTab content={concept.content} quality={contentQuality} />}
+              {activeTab === 'learn' && <LearnTab content={concept.content} quality={contentQuality} qualityMetadata={qualityMetadata} />}
               {activeTab === 'examples' && <ExamplesTab examples={concept.content.examples} quality={contentQuality} />}
               {activeTab === 'mistakes' && <MistakesTab mistakes={concept.content.commonMistakes} />}
             </div>
@@ -210,7 +212,11 @@ export function ConceptDetailPage() {
   );
 }
 
-function LearnTab({ content, quality = 'good' }: { content: LoadedConcept['content']; quality?: 'good' | 'fallback' }) {
+function LearnTab({ content, quality = 'good', qualityMetadata }: {
+  content: LoadedConcept['content'];
+  quality?: 'good' | 'fallback';
+  qualityMetadata?: QualityMetadata;
+}) {
   return (
     <div className="p-6">
       {/* Definition Box — always shown, always safe */}
@@ -230,9 +236,24 @@ function LearnTab({ content, quality = 'good' }: { content: LoadedConcept['conte
       )}
 
       {quality === 'fallback' && (
-        <p className="text-sm text-gray-500 italic">
-          Full explanation is not available for this concept. Use the textbook pages listed in the sidebar for the complete coverage.
-        </p>
+        <div className="space-y-3">
+          {/* Show helper-produced summary when available */}
+          {qualityMetadata?.learnerSafeSummary ? (
+            <div
+              data-testid="learner-safe-summary"
+              className="rounded-lg border border-blue-100 bg-blue-50 p-4"
+            >
+              <p className="text-sm font-medium text-blue-900 mb-1">Overview</p>
+              <p className="text-sm text-blue-800 leading-relaxed">
+                {qualityMetadata.learnerSafeSummary}
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 italic">
+              Full explanation is not available for this concept. Use the textbook pages listed in the sidebar for the complete coverage.
+            </p>
+          )}
+        </div>
       )}
     </div>
   );

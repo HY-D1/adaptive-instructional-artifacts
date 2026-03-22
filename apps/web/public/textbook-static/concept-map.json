@@ -175,6 +175,11 @@
         "blocks": [],
         "extraction_method": "pymupdf",
         "source_doc_id": "murachs-mysql-3rd-edition"
+      },
+      "qualityMetadata": {
+        "readabilityStatus": "garbled",
+        "learnerSafeSummary": "MySQL is the world's most popular open-source relational database. This course covers writing SQL queries to retrieve and update data, designing databases, and using MySQL Workbench. See the textbook pages listed for full coverage.",
+        "exampleQuality": "contaminated"
       }
     },
     "murachs-mysql-3rd-edition/relational-databases-murach": {
@@ -5309,6 +5314,11 @@
         "blocks": [],
         "extraction_method": "pymupdf",
         "source_doc_id": "dbms-ramakrishnan-3rd-edition"
+      },
+      "qualityMetadata": {
+        "readabilityStatus": "garbled",
+        "learnerSafeSummary": "The SELECT statement retrieves rows from one or more tables. Basic syntax: SELECT column1, column2 FROM table WHERE condition. Use aliases, ORDER BY to sort results, and LIMIT to restrict the number of rows returned.",
+        "exampleQuality": "contaminated"
       }
     },
     "dbms-ramakrishnan-3rd-edition/where-clause": {

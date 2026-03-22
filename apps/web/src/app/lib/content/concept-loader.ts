@@ -6,6 +6,21 @@ import { CONCEPT_COMPATIBILITY_MAP, getCompatibleCorpusIds } from './concept-com
 export { getCompatibleCorpusIds };
 
 // Types
+
+/**
+ * Helper-produced quality metadata. When present this takes precedence over
+ * the local heuristics in assessConceptQuality so adaptive does not duplicate
+ * work that the upstream helper already computed.
+ */
+export interface QualityMetadata {
+  /** Overall readability of the explanation text. */
+  readabilityStatus: 'clean' | 'garbled' | 'partial';
+  /** Short learner-safe summary to show instead of the garbled explanation. */
+  learnerSafeSummary?: string;
+  /** Whether code examples passed a basic sanity check. */
+  exampleQuality?: 'clean' | 'contaminated' | 'partial';
+}
+
 export interface ConceptInfo {
   id: string;
   title: string;
@@ -22,6 +37,8 @@ export interface ConceptInfo {
   practiceProblemIds: string[];
   // Helper export may include sourceDocId for namespaced concepts
   sourceDocId?: string;
+  /** Optional quality metadata produced by the upstream helper pipeline. */
+  qualityMetadata?: QualityMetadata;
 }
 
 export interface LoadedConcept extends ConceptInfo {
@@ -488,12 +505,31 @@ export function filterSaneExamples(examples: CodeExample[]): CodeExample[] {
 /**
  * Assess overall content quality for a loaded concept.
  *
+ * Decision order:
+ * 1. Helper-produced `qualityMetadata` (upstream pipeline) — consumed first so
+ *    adaptive does not duplicate quality logic already run at export time.
+ * 2. Local heuristics (isExplanationGarbled / filterSaneExamples) — used as a
+ *    fallback when no metadata is present.
+ *
  * Returns:
  * - `'good'`     — content is safe to render as primary learning material.
  * - `'fallback'` — explanation is garbled or all examples failed the SQL check;
  *                  render only safe fields (definition, frontmatter, sane examples).
  */
 export function assessConceptQuality(concept: LoadedConcept): 'good' | 'fallback' {
+  // 1. Prefer helper-produced metadata when available.
+  if (concept.qualityMetadata) {
+    const { readabilityStatus, exampleQuality } = concept.qualityMetadata;
+    if (readabilityStatus === 'garbled' || exampleQuality === 'contaminated') {
+      return 'fallback';
+    }
+    if (readabilityStatus === 'clean') {
+      return 'good';
+    }
+    // 'partial' falls through to local heuristics for a second opinion.
+  }
+
+  // 2. Local heuristics.
   const explanationGarbled = isExplanationGarbled(concept.content.explanation);
   const saneExamples = filterSaneExamples(concept.content.examples);
   const allExamplesContaminated =
