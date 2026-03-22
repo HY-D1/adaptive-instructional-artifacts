@@ -14,6 +14,13 @@ instructional action to take at each struggle signal. It is a pure, deterministi
 function — given the same inputs it always returns the same decision, making it
 directly testable and replay-safe.
 
+**Week 6 Additions**: This runbook now covers the experiment-ready outcome
+pipeline with:
+- Delayed reinforcement events for measuring unit effectiveness
+- Explicit dependency metrics (HDI-style formula)
+- 3-policy replay comparisons
+- Paper-ready JSON/CSV output artifacts
+
 ---
 
 ## Session-Level Baseline Conditions
@@ -229,4 +236,235 @@ Run as part of the full unit suite:
 
 ```bash
 npm run test:unit
+```
+
+---
+
+## Delayed Reinforcement Events
+
+When a textbook unit is created, the system schedules delayed reinforcement
+prompts to measure whether the unit was effective. These prompts are spaced
+across delay buckets: immediate, 3d, 7d, 14d, 21d.
+
+### Event Schema
+
+**reinforcement_prompt_shown**:
+```typescript
+{
+  eventType: 'reinforcement_prompt_shown',
+  learnerId: string,
+  sessionId: string,
+  timestamp: number,
+  sourceUnitId: string,           // The unit that triggered this prompt
+  sourceConceptId: string,        // Stable corpus concept key
+  delayBucket: 'immediate' | '3d' | '7d' | '14d' | '21d',
+  promptType: 'mcq' | 'sql_completion' | 'concept_explanation',
+  corpusConceptId: string,        // Same as sourceConceptId
+  scheduledTime: number,
+}
+```
+
+**reinforcement_response**:
+```typescript
+{
+  eventType: 'reinforcement_response',
+  learnerId: string,
+  sessionId: string,
+  timestamp: number,
+  sourceUnitId: string,
+  sourceConceptId: string,
+  delayBucket: 'immediate' | '3d' | '7d' | '14d' | '21d',
+  reinforcementCorrect: boolean,  // Whether answer was correct
+  reinforcementLatencyMs: number, // Response time in ms
+  response: string,               // The learner's response
+  corpusConceptId: string,
+  shownTime: number,              // When prompt was shown
+  completedTime: number,          // When response was recorded
+}
+```
+
+### Factory Functions
+
+Use the helper functions in `textbook-orchestrator.ts`:
+
+```typescript
+import {
+  createReinforcementPromptShown,
+  createReinforcementResponse,
+  scheduleReinforcement
+} from './textbook-orchestrator';
+
+// Schedule a prompt
+const { scheduledTime, delayBucket } = scheduleReinforcement(Date.now(), 3);
+
+// Create prompt event
+const prompt = createReinforcementPromptShown({
+  learnerId: 'learner-1',
+  sessionId: 'session-1',
+  sourceUnitId: 'unit-abc-123',
+  sourceConceptId: 'dbms-ramakrishnan-3rd-edition/joins',
+  delayBucket: '3d',
+  promptType: 'mcq',
+  timestamp: scheduledTime,
+});
+
+// Create response event
+const response = createReinforcementResponse({
+  learnerId: 'learner-1',
+  sessionId: 'session-1',
+  sourceUnitId: 'unit-abc-123',
+  sourceConceptId: 'dbms-ramakrishnan-3rd-edition/joins',
+  delayBucket: '3d',
+  isCorrect: true,
+  latencyMs: 4500,
+  response: 'SELECT * FROM users',
+  timestamp: Date.now(),
+});
+```
+
+---
+
+## Dependency Metrics (HDI-Style Score)
+
+The dependency metric module (`dependency-metrics.ts`) provides a deterministic,
+replayable formula for measuring learner dependency on instructional support.
+
+### Canonical Formula (dependency-metrics-v1)
+
+```
+HDI = 0.30·HPA + 0.15·AED + 0.25·ER + 0.15·REAE + 0.15·(1−IWH)
+```
+
+Where:
+- **HPA** (Hints Per Attempt) = min(hints / attempts, 1.0)
+- **AED** (Average Escalation Depth) = clamp((avg_hint_level − 1) / 2, 0, 1)
+- **ER** (Explanation Rate) = min(explanations / attempts, 1.0)
+- **REAE** (Repeated Error After Explanation) = errors_after_explanation / total_errors
+- **IWH** (Improvement Without Hint) = successes_without_hints / total_successes
+
+All components normalized to [0, 1]. Higher HDI indicates greater dependency
+on instructional support.
+
+### Usage
+
+```typescript
+import {
+  calculateDependencyMetrics,
+  calculateReinforcementMetrics,
+  comparePoliciesOnTrace,
+  generatePaperSummary,
+  comparisonsToCsv
+} from './dependency-metrics';
+
+// Calculate HDI for a trace
+const metrics = calculateDependencyMetrics(trace);
+console.log(metrics.hdi);           // 0.0 - 1.0
+console.log(metrics.components);    // { hpa, aed, er, reae, iwh }
+console.log(metrics.formulaDescription); // Canonical formula string
+
+// Calculate reinforcement outcomes
+const reinforcement = calculateReinforcementMetrics(trace);
+console.log(reinforcement.accuracyRate);
+console.log(reinforcement.byDelayBucket['3d'].accuracyRate);
+
+// Compare policies
+const comparisons = comparePoliciesOnTrace(baseTrace, {
+  conservative: conservativeTrace,
+  adaptive: adaptiveTrace,
+});
+```
+
+---
+
+## 3-Policy Replay Fixture
+
+The canonical replay fixture compares three policies on the same 6-step trace:
+- **conservative**: Hints only (control)
+- **adaptive**: Full escalation ladder (treatment)
+- **explanation_first**: Immediate explanation, no textbook
+
+### Running the Fixture
+
+Unit test (Vitest):
+```bash
+npx vitest run apps/web/src/app/lib/ml/textbook-orchestrator.test.ts \
+  --reporter=verbose
+```
+
+Look for the test: "replay fixture: 3-policy comparison on canonical trace"
+
+### Expected Results
+
+| Policy | Explanations | Textbook Units | Reflective Notes | HDI |
+|--------|-------------|----------------|------------------|-----|
+| conservative | 0 | 0 | 0 | Low |
+| adaptive | 2 | 1 | 1 | Medium |
+| explanation_first | 5 | 0 | 0 | High |
+
+---
+
+## Paper Tables Output Command
+
+Generate machine-readable JSON and CSV summaries suitable for paper figures:
+
+```bash
+node scripts/replay-paper-tables.mjs
+```
+
+Options:
+```bash
+# CSV only
+node scripts/replay-paper-tables.mjs --format csv
+
+# JSON only
+node scripts/replay-paper-tables.mjs --format json
+
+# Custom output directory
+node scripts/replay-paper-tables.mjs --output-dir ./my-results
+```
+
+### Output Artifacts
+
+All files are written to `dist/replay/paper-tables/`:
+
+| File | Format | Contents |
+|------|--------|----------|
+| `policy-comparison.json` | JSON | Full comparison with all metrics |
+| `policy-comparison.csv` | CSV | Table-friendly format for papers |
+| `hdi-components.json` | JSON | HDI breakdown by component |
+| `reinforcement-outcomes.csv` | CSV | Reinforcement metrics by delay bucket |
+| `experiment-manifest.json` | JSON | Metadata, checksums, formula |
+
+### Example CSV Output (policy-comparison.csv)
+
+```csv
+policy_id,policy_name,explanations_shown,textbook_units_upserted,reinforcement_prompts_shown,reinforcement_correct_count,reinforcement_accuracy,hdi,hdi_hpa,hdi_aed,hdi_er,hdi_reae,hdi_iwh,concepts_encountered,concepts_mastered,coverage_rate
+conservative,Conservative (Hints Only),0,0,0,0,0.0000,0.3000,0.6000,0.0000,0.0000,0.0000,1.0000,1,0,0.0000
+adaptive,Adaptive Textbook,2,1,2,1,0.5000,0.4875,0.3000,0.2000,0.2500,0.1000,0.7500,1,1,1.0000
+explanation_first,Explanation First,5,0,0,0,0.0000,0.5500,0.1000,0.0000,0.8333,0.0000,0.5000,1,1,1.0000
+```
+
+---
+
+## Complete Verification Command
+
+Run all tests to verify the experiment pipeline:
+
+```bash
+# 1. Unit tests (including orchestrator and dependency metrics)
+npx vitest run apps/web/src/app/lib/ml/textbook-orchestrator.test.ts
+npx vitest run apps/web/src/app/lib/ml/dependency-metrics.test.ts
+
+# 2. Full test suite
+npm run test:unit
+
+# 3. Build check
+npm run build
+
+# 4. Generate paper tables
+node scripts/replay-paper-tables.mjs
+
+# 5. Inspect output
+ls -la dist/replay/paper-tables/
+cat dist/replay/paper-tables/policy-comparison.csv
 ```

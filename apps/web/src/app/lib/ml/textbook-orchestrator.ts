@@ -30,6 +30,7 @@
  */
 
 import { CONCEPT_COMPATIBILITY_MAP } from '../content/concept-compatibility-map';
+import type { InteractionEvent } from '../../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -313,5 +314,182 @@ export function adaptiveTextbookCondition(): SessionConditionFlags {
     adaptiveLadderDisabled: false,
     immediateExplanationMode: false,
     staticHintMode: false,
+  };
+}
+
+/**
+ * Build SessionConditionFlags for the explanation-first condition.
+ * Skips hints, goes straight to explanation on first retry.
+ */
+export function explanationFirstCondition(): SessionConditionFlags {
+  return {
+    textbookDisabled: true, // ceiling at explanation
+    adaptiveLadderDisabled: false,
+    immediateExplanationMode: true,
+    staticHintMode: false,
+  };
+}
+
+/**
+ * Build SessionConditionFlags for the conservative condition.
+ * Hints only, no escalation to explanation or textbook.
+ */
+export function conservativeCondition(): SessionConditionFlags {
+  return {
+    textbookDisabled: false,
+    adaptiveLadderDisabled: true,
+    immediateExplanationMode: false,
+    staticHintMode: true,
+  };
+}
+
+// ── Reinforcement Event Factories ─────────────────────────────────────────────
+
+/**
+ * Create a reinforcement_prompt_shown event with stable identifiers.
+ *
+ * This factory ensures all reinforcement events carry the source unit/concept IDs
+ * needed for outcome attribution and paper analysis.
+ *
+ * @example
+ * const promptEvent = createReinforcementPromptShown({
+ *   learnerId: 'learner-1',
+ *   sessionId: 'session-1',
+ *   sourceUnitId: 'unit-abc-123',
+ *   sourceConceptId: 'dbms-ramakrishnan-3rd-edition/joins',
+ *   delayBucket: '3d',
+ *   promptType: 'mcq',
+ *   timestamp: Date.now(),
+ * });
+ */
+export function createReinforcementPromptShown(params: {
+  learnerId: string;
+  sessionId: string;
+  sourceUnitId: string;
+  sourceConceptId: string;
+  delayBucket: 'immediate' | '3d' | '7d' | '14d' | '21d';
+  promptType: 'mcq' | 'sql_completion' | 'concept_explanation';
+  timestamp: number;
+  problemId?: string;
+}): InteractionEvent {
+  const {
+    learnerId,
+    sessionId,
+    sourceUnitId,
+    sourceConceptId,
+    delayBucket,
+    promptType,
+    timestamp,
+    problemId = 'reinforcement',
+  } = params;
+
+  // Deterministic ID based on source unit and delay bucket
+  const promptId = `reinforcement-${sourceUnitId}-${delayBucket}-${Math.floor(timestamp / 1000)}`;
+
+  return {
+    id: promptId,
+    learnerId,
+    sessionId,
+    timestamp,
+    eventType: 'reinforcement_prompt_shown',
+    problemId,
+    promptId,
+    promptType,
+    sourceUnitId,
+    sourceConceptId,
+    delayBucket,
+    corpusConceptId: sourceConceptId,
+    scheduledTime: timestamp,
+  };
+}
+
+/**
+ * Create a reinforcement_response event with outcome tracking.
+ *
+ * Links back to the original prompt via sourceUnitId and captures
+ * correctness, latency, and concept attribution.
+ *
+ * @example
+ * const responseEvent = createReinforcementResponse({
+ *   learnerId: 'learner-1',
+ *   sessionId: 'session-1',
+ *   sourceUnitId: 'unit-abc-123',
+ *   sourceConceptId: 'dbms-ramakrishnan-3rd-edition/joins',
+ *   delayBucket: '3d',
+ *   isCorrect: true,
+ *   latencyMs: 4500,
+ *   response: 'SELECT * FROM users',
+ *   timestamp: Date.now(),
+ * });
+ */
+export function createReinforcementResponse(params: {
+  learnerId: string;
+  sessionId: string;
+  sourceUnitId: string;
+  sourceConceptId: string;
+  delayBucket: 'immediate' | '3d' | '7d' | '14d' | '21d';
+  isCorrect: boolean;
+  latencyMs: number;
+  response: string;
+  timestamp: number;
+  problemId?: string;
+}): InteractionEvent {
+  const {
+    learnerId,
+    sessionId,
+    sourceUnitId,
+    sourceConceptId,
+    delayBucket,
+    isCorrect,
+    latencyMs,
+    response,
+    timestamp,
+    problemId = 'reinforcement',
+  } = params;
+
+  // Deterministic ID based on prompt ID
+  const responseId = `response-${sourceUnitId}-${delayBucket}-${Math.floor(timestamp / 1000)}`;
+
+  return {
+    id: responseId,
+    learnerId,
+    sessionId,
+    timestamp,
+    eventType: 'reinforcement_response',
+    problemId,
+    sourceUnitId,
+    sourceConceptId,
+    delayBucket,
+    corpusConceptId: sourceConceptId,
+    isCorrect,
+    reinforcementCorrect: isCorrect,
+    reinforcementLatencyMs: latencyMs,
+    response,
+    shownTime: timestamp - latencyMs,
+    completedTime: timestamp,
+  };
+}
+
+/**
+ * Schedule a reinforcement prompt for a future delay bucket.
+ *
+ * Returns the scheduled time and bucket for the reinforcement prompt
+ * based on the unit creation time. This is a deterministic scheduling
+ * function that rounds to the nearest bucket boundary.
+ *
+ * @param unitCreatedAt - Timestamp when the textbook unit was created
+ * @param targetDelayDays - Target delay: 3, 7, 14, or 21 days
+ * @returns Scheduled time and delay bucket
+ */
+export function scheduleReinforcement(
+  unitCreatedAt: number,
+  targetDelayDays: 3 | 7 | 14 | 21 = 3
+): { scheduledTime: number; delayBucket: '3d' | '7d' | '14d' | '21d' } {
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const scheduledTime = unitCreatedAt + targetDelayDays * msPerDay;
+
+  return {
+    scheduledTime,
+    delayBucket: `${targetDelayDays}d` as '3d' | '7d' | '14d' | '21d',
   };
 }

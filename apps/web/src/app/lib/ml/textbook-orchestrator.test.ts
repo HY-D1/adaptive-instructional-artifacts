@@ -19,6 +19,9 @@ import {
   resolveCorpusConceptId,
   staticHintModeCondition,
   adaptiveTextbookCondition,
+  createReinforcementPromptShown,
+  createReinforcementResponse,
+  scheduleReinforcement,
   type OrchestrationAction,
   type OrchestrationContext,
   type SessionConditionFlags,
@@ -280,6 +283,133 @@ describe('orchestrate — other session conditions', () => {
     const atTextbookThreshold = orchestrate({ conceptId: CONCEPT_ID, sessionConfig: condition, retryCount: 4, hintCount: 4, elapsedMs: 0 });
     expect(atTextbookThreshold.action).toBe('upsert_textbook_unit');
     expect(atTextbookThreshold.escalationTriggerReason).toBe('static_textbook_threshold');
+  });
+});
+
+// ── 3-Policy Replay Fixture (conservative / adaptive / explanation_first) ─────
+
+describe('replay fixture: 3-policy comparison on canonical trace', () => {
+  const TRACE = [
+    { retryCount: 1, hintCount: 0, elapsedMs: 0 },
+    { retryCount: 2, hintCount: 0, elapsedMs: 15_000 },
+    { retryCount: 2, hintCount: 1, elapsedMs: 20_000 },
+    { retryCount: 3, hintCount: 1, elapsedMs: 30_000 },
+    { retryCount: 4, hintCount: 3, elapsedMs: 90_000 },
+    { retryCount: 7, hintCount: 6, elapsedMs: 310_000 },
+  ];
+
+  const CONCEPT_ID = 'joins';
+
+  function runTraceUnderCondition(condition: SessionConditionFlags): OrchestrationAction[] {
+    return TRACE.map(step =>
+      orchestrate({
+        conceptId: CONCEPT_ID,
+        sessionConfig: condition,
+        ...step,
+      }).action
+    );
+  }
+
+  it('compares conservative vs adaptive vs explanation_first on same trace', () => {
+    const conservative = runTraceUnderCondition(staticHintModeCondition());
+    const adaptive = runTraceUnderCondition(adaptiveTextbookCondition());
+    const explanationFirst = runTraceUnderCondition({
+      textbookDisabled: true,
+      adaptiveLadderDisabled: false,
+      immediateExplanationMode: true,
+      staticHintMode: false,
+    });
+
+    // Conservative: only hints
+    expect(conservative.filter(a => a === 'stay_hint').length).toBe(6);
+    expect(conservative.filter(a => a === 'show_explanation').length).toBe(0);
+    expect(conservative.filter(a => a === 'upsert_textbook_unit').length).toBe(0);
+
+    // Adaptive: escalates through all levels
+    expect(adaptive.filter(a => a === 'show_explanation').length).toBe(2);
+    expect(adaptive.filter(a => a === 'upsert_textbook_unit').length).toBe(1);
+    expect(adaptive.filter(a => a === 'prompt_reflective_note').length).toBe(1);
+
+    // Explanation first: explanations on first retry, no textbook
+    // TRACE: [r1, r2, r2, r3, r4, r7] - all 6 steps have retryCount >= 1
+    expect(explanationFirst.filter(a => a === 'show_explanation').length).toBe(6);
+    expect(explanationFirst.filter(a => a === 'upsert_textbook_unit').length).toBe(0);
+  });
+
+  it('produces reproducible outputs for each policy', () => {
+    const run1 = runTraceUnderCondition(adaptiveTextbookCondition());
+    const run2 = runTraceUnderCondition(adaptiveTextbookCondition());
+    expect(run1).toEqual(run2);
+  });
+
+  it('escalation depth differs: 0 (conservative) vs 3 (adaptive) vs 1 (explanation_first)', () => {
+    const conservative = runTraceUnderCondition(staticHintModeCondition());
+    const adaptive = runTraceUnderCondition(adaptiveTextbookCondition());
+    const explanationFirst = runTraceUnderCondition({
+      textbookDisabled: true,
+      adaptiveLadderDisabled: false,
+      immediateExplanationMode: true,
+      staticHintMode: false,
+    });
+
+    const escalationDepth = (actions: OrchestrationAction[]) =>
+      new Set(actions.filter(a => a !== 'stay_hint')).size;
+
+    expect(escalationDepth(conservative)).toBe(0);
+    expect(escalationDepth(adaptive)).toBe(3);
+    expect(escalationDepth(explanationFirst)).toBe(1);
+  });
+});
+
+// ── Reinforcement Event Factory Tests ─────────────────────────────────────────
+
+describe('reinforcement event factories', () => {
+  it('createReinforcementPromptShown creates event with stable IDs', () => {
+    // Import dynamically to avoid ESM issues
+    const event = createReinforcementPromptShown({
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      sourceUnitId: 'unit-abc',
+      sourceConceptId: 'dbms-ramakrishnan-3rd-edition/joins',
+      delayBucket: '3d',
+      promptType: 'mcq',
+      timestamp: 1_000_000,
+    });
+
+    expect(event.eventType).toBe('reinforcement_prompt_shown');
+    expect(event.sourceUnitId).toBe('unit-abc');
+    expect(event.sourceConceptId).toBe('dbms-ramakrishnan-3rd-edition/joins');
+    expect(event.delayBucket).toBe('3d');
+    expect(event.corpusConceptId).toBe('dbms-ramakrishnan-3rd-edition/joins');
+    expect(event.promptId).toContain('unit-abc');
+  });
+
+  it('createReinforcementResponse creates event with outcome fields', () => {
+    const event = createReinforcementResponse({
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      sourceUnitId: 'unit-abc',
+      sourceConceptId: 'dbms-ramakrishnan-3rd-edition/joins',
+      delayBucket: '3d',
+      isCorrect: true,
+      latencyMs: 4500,
+      response: 'SELECT * FROM users',
+      timestamp: 1_005_000,
+    });
+
+    expect(event.eventType).toBe('reinforcement_response');
+    expect(event.reinforcementCorrect).toBe(true);
+    expect(event.reinforcementLatencyMs).toBe(4500);
+    expect(event.isCorrect).toBe(true);
+    expect(event.corpusConceptId).toBe('dbms-ramakrishnan-3rd-edition/joins');
+  });
+
+  it('scheduleReinforcement calculates correct delay bucket', () => {
+    const unitCreated = 1_000_000;
+    const scheduled = scheduleReinforcement(unitCreated, 3);
+
+    expect(scheduled.delayBucket).toBe('3d');
+    expect(scheduled.scheduledTime).toBe(unitCreated + 3 * 24 * 60 * 60 * 1000);
   });
 });
 

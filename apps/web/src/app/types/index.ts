@@ -212,6 +212,17 @@ export type InteractionEvent = {
   isCorrect?: boolean;
   scheduledTime?: number;
   shownTime?: number;
+  // Delayed reinforcement outcome fields (Week 6 experiment pipeline)
+  /** Whether the learner answered the reinforcement prompt correctly */
+  reinforcementCorrect?: boolean;
+  /** Response latency in milliseconds */
+  reinforcementLatencyMs?: number;
+  /** Source unit ID that triggered this reinforcement prompt */
+  sourceUnitId?: string;
+  /** Source concept ID (corpus-stable) for the reinforced unit */
+  sourceConceptId?: string;
+  /** Delay bucket: immediate (same session), 3d, 7d, or 14d */
+  delayBucket?: 'immediate' | '3d' | '7d' | '14d' | '21d';
   
   // Week 6: Experimental condition tracking
   conditionId?: string;
