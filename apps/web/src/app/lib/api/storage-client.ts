@@ -13,8 +13,10 @@ import type {
 } from '@/app/types';
 
 // API Configuration
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-const USE_BACKEND = import.meta.env.VITE_USE_BACKEND === 'true' || !!import.meta.env.VITE_API_URL;
+// VITE_API_BASE_URL is the canonical env var (e.g. https://my-api.vercel.app — no trailing /api)
+const _API_BASE = import.meta.env.VITE_API_BASE_URL;
+const API_URL = _API_BASE ? `${_API_BASE}/api` : 'http://localhost:3001/api';
+const USE_BACKEND = !!_API_BASE;
 
 // ============================================================================
 // Types
@@ -182,6 +184,7 @@ interface BackendInteraction {
   shownTime?: number;
   
   // RESEARCH-4: Canonical study-facing fields
+  conditionId?: string;            // canonical session-init field (condition_assigned events)
   learnerProfileId?: string;
   escalationTriggerReason?: string;
   errorCountAtEscalation?: number;
@@ -589,6 +592,7 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
     shownTime: event.shownTime,
     
     // RESEARCH-4: Canonical study-facing fields
+    conditionId: event.conditionId,
     learnerProfileId: event.learnerProfileId,
     escalationTriggerReason: event.escalationTriggerReason,
     errorCountAtEscalation: event.errorCountAtEscalation,

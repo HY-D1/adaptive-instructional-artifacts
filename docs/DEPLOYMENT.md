@@ -11,12 +11,81 @@
 
 ### Environment Variables
 
-Required:
-- `VITE_INSTRUCTOR_PASSCODE`
+**Frontend project (Vercel):**
 
-Optional (local only):
-- `VITE_OLLAMA_URL`
-- `VITE_PDF_INDEX_ENABLED`
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_INSTRUCTOR_PASSCODE` | Yes | Passcode for instructor access |
+| `VITE_API_BASE_URL` | For persistence | Base URL of the backend API, no trailing `/api` (e.g. `https://my-api.vercel.app`). Leave empty for localStorage-only (static) mode. |
+| `VITE_OLLAMA_URL` | Local only | Local Ollama URL — not available on Vercel |
+| `VITE_ENABLE_PDF_INDEX` | Local only | PDF indexing — requires local backend |
+
+> **Note on `VITE_API_BASE_URL`**: this is the single canonical variable used by all three frontend API clients (`storage-client.ts`, `dual-storage.ts`, `learner-profile-client.ts`). Setting it enables backend/Neon persistence mode. When not set, the app runs in localStorage-only mode.
+
+**Backend project (Vercel Serverless / any Node host):**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes | Neon PostgreSQL connection string (pooled endpoint recommended) |
+| `PORT` | No | HTTP port (default 3001) |
+
+---
+
+## Vercel + Neon Persistence Mode
+
+Use this topology when you need real multi-user persistence (research data that survives browser clears):
+
+```text
+┌──────────────────────────┐      HTTPS /api/*      ┌────────────────────────────┐
+│  Frontend (Vercel)        │ ─────────────────────► │  Backend (Vercel/Render)   │
+│  React + Vite             │                        │  Express + @neondatabase   │
+│  VITE_API_BASE_URL set    │ ◄───────────────────── │  DATABASE_URL → Neon PG    │
+└──────────────────────────┘      JSON responses     └────────────────────────────┘
+```
+
+### Setup Checklist
+
+#### 1. Provision Neon database
+
+- Create a project at [neon.tech](https://neon.tech)
+- Copy the **pooled connection string** (e.g. `postgres://...@ep-xxx.pooler.neon.tech/neondb?sslmode=require`)
+- Set `DATABASE_URL` on your backend Vercel project
+
+#### 2. Deploy the backend
+
+```bash
+# From apps/server — deploy as a separate Vercel project
+cd apps/server
+vercel deploy --prod
+# Note the deployment URL, e.g. https://sql-adapt-api.vercel.app
+```
+
+#### 3. Configure the frontend
+
+In your frontend Vercel project settings, add:
+
+```text
+VITE_API_BASE_URL = https://sql-adapt-api.vercel.app
+VITE_INSTRUCTOR_PASSCODE = <your-passcode>
+```
+
+Then redeploy (VITE_ vars are baked at build time).
+
+#### 4. Verify persistence
+
+```bash
+node scripts/smoke-test-persistence.mjs https://sql-adapt-api.vercel.app
+```
+
+Expected output: all 5 checks pass with a learner, session, interaction, and textbook unit created server-side.
+
+### Deployment Topology
+
+| Scenario | Frontend env vars | Persistence |
+|----------|-------------------|-------------|
+| Static demo (no DB) | `VITE_INSTRUCTOR_PASSCODE` only | localStorage (per-browser, ephemeral) |
+| Full-stack with Neon | `VITE_INSTRUCTOR_PASSCODE` + `VITE_API_BASE_URL` | Neon PostgreSQL (durable, multi-user) |
+| Local dev with backend | `VITE_API_BASE_URL=http://localhost:3001` | Local Neon or SQLite |
 
 ### Local Build Test
 

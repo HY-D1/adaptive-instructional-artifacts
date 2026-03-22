@@ -25,7 +25,8 @@ import type {
 import type { CreateUnitInput } from './textbook-units';
 
 // Configuration
-const USE_BACKEND = import.meta.env.VITE_USE_BACKEND === 'true' || !!import.meta.env.VITE_API_URL;
+// VITE_API_BASE_URL is the canonical env var — presence alone enables backend mode
+const USE_BACKEND = !!import.meta.env.VITE_API_BASE_URL;
 
 // Offline queue configuration
 const OFFLINE_QUEUE_KEY = 'sql-adapt-offline-queue';
