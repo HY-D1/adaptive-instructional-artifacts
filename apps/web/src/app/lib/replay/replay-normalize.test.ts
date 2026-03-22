@@ -30,7 +30,9 @@ const ALLOWED_EVENT_TYPES = new Set([
   // Reinforcement events
   'reinforcement_response',
   'reinforcement_shown',
-  // Profile/policy events
+  // Session-init / condition events
+  'condition_assigned',
+  // Profile/policy events (legacy — kept for backward compat)
   'profile_assigned',
   'escalation_triggered',
   // Bandit events
@@ -81,7 +83,11 @@ describe('Replay Event Type Coverage', () => {
     expect(ALLOWED_EVENT_TYPES.has('reinforcement_shown')).toBe(true);
   });
 
-  it('should include all profile/policy events', () => {
+  it('should include condition_assigned as the canonical session-init event', () => {
+    expect(ALLOWED_EVENT_TYPES.has('condition_assigned')).toBe(true);
+  });
+
+  it('should include profile_assigned for legacy trace backward compat', () => {
     expect(ALLOWED_EVENT_TYPES.has('profile_assigned')).toBe(true);
     expect(ALLOWED_EVENT_TYPES.has('escalation_triggered')).toBe(true);
   });
@@ -108,10 +114,10 @@ describe('Replay Event Type Coverage', () => {
     expect(ALLOWED_EVENT_TYPES.has('prerequisite_violation_detected')).toBe(true);
   });
 
-  it('should have at least 27 replay-relevant event types', () => {
-    // Core (3) + Help-seeking (6) + Content (4) + Reinforcement (2) + 
-    // Profile (2) + Bandit (3) + HDI (3) + Source (3) + Session (2) + Concept (2) = 30
-    expect(ALLOWED_EVENT_TYPES.size).toBeGreaterThanOrEqual(27);
+  it('should have at least 28 replay-relevant event types', () => {
+    // Core (3) + Help-seeking (6) + Content (4) + Reinforcement (2) +
+    // Condition (1) + Profile/legacy (2) + Bandit (3) + HDI (3) + Source (3) + Session (2) + Concept (2) = 31
+    expect(ALLOWED_EVENT_TYPES.size).toBeGreaterThanOrEqual(28);
   });
 });
 
@@ -165,18 +171,26 @@ describe('Replay Metrics with Broadened Events', () => {
     expect(correctResponses).toBe(1);
   });
 
-  it('should count HDI and profile events correctly', () => {
+  it('should count HDI and condition events correctly', () => {
     const mockTrace = [
       { eventType: 'hdi_calculated', hdi: 0.5 },
       { eventType: 'hdi_trajectory_updated' },
+      { eventType: 'condition_assigned', conditionId: 'adaptive' }
+    ];
+
+    const hdiEvents = mockTrace.filter(e => e.eventType.startsWith('hdi_')).length;
+    const conditionEvents = mockTrace.filter(e => e.eventType === 'condition_assigned').length;
+
+    expect(hdiEvents).toBe(2);
+    expect(conditionEvents).toBe(1);
+  });
+
+  it('should count legacy profile_assigned events for backward compat', () => {
+    const mockTrace = [
       { eventType: 'profile_assigned', profileId: 'adaptive' }
     ];
-    
-    const hdiEvents = mockTrace.filter(e => e.eventType.startsWith('hdi_')).length;
-    const profileEvents = mockTrace.filter(e => e.eventType === 'profile_assigned').length;
-    
-    expect(hdiEvents).toBe(2);
-    expect(profileEvents).toBe(1);
+    const legacyEvents = mockTrace.filter(e => e.eventType === 'profile_assigned').length;
+    expect(legacyEvents).toBe(1);
   });
 
   it('should handle empty/minimal trace without crashing', () => {

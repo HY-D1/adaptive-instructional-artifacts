@@ -6,7 +6,8 @@
  * post-hoc computation.
  *
  * Covered events:
- *   - profile_assigned       → learnerProfileId, strategyAssigned
+ *   - condition_assigned     → conditionId, strategyAssigned  (canonical RESEARCH-4 session-init event)
+ *   - profile_assigned       → learnerProfileId, strategyAssigned  (legacy — kept for backward compat)
  *   - escalation_triggered   → learnerProfileId, escalationTriggerReason, errorCountAtEscalation, timeToEscalation
  *   - bandit_reward_observed → selectedArm, rewardValue
  *   - bandit_updated         → selectedArm, strategyUpdated
@@ -52,7 +53,40 @@ function getLastInteraction() {
 // Tests
 // ============================================================================
 
-describe('RESEARCH-4 canonical fields — profile_assigned', () => {
+describe('RESEARCH-4 canonical fields — condition_assigned (canonical session-init)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('emits condition_assigned event with conditionId', () => {
+    storage.logConditionAssigned('learner-1', 'adaptive', 'sess-1', 'problem-1');
+    const event = getLastInteraction();
+    expect(event).not.toBeNull();
+    expect(event.eventType).toBe('condition_assigned');
+    expect(event.conditionId).toBe('adaptive');
+  });
+
+  it('sets strategyAssigned to conditionId by default', () => {
+    storage.logConditionAssigned('learner-1', 'conservative', 'sess-1', 'problem-1');
+    const event = getLastInteraction();
+    expect(event.strategyAssigned).toBe('conservative');
+  });
+
+  it('accepts an explicit strategyAssigned override', () => {
+    storage.logConditionAssigned('learner-1', 'adaptive', 'sess-1', 'problem-1', 'bandit_selected');
+    const event = getLastInteraction();
+    expect(event.strategyAssigned).toBe('bandit_selected');
+  });
+
+  it('both canonical fields are present', () => {
+    storage.logConditionAssigned('learner-1', 'explanation_first', 'sess-1', 'problem-2');
+    const event = getLastInteraction();
+    expect(event.conditionId).toBeDefined();
+    expect(event.strategyAssigned).toBeDefined();
+  });
+});
+
+describe('RESEARCH-4 canonical fields — profile_assigned (legacy backward compat)', () => {
   beforeEach(() => {
     localStorage.clear();
   });

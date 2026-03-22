@@ -1232,6 +1232,31 @@ class StorageManager {
   }
 
   /**
+   * Log condition assigned event — canonical RESEARCH-4 session-init event.
+   * Replaces profile_assigned as the primary session-init signal.
+   */
+  logConditionAssigned(
+    learnerId: string,
+    conditionId: string,
+    sessionId: string,
+    problemId: string,
+    strategyAssigned?: string
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('condition', 'assigned'),
+      sessionId: sessionId || this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'condition_assigned',
+      problemId,
+      conditionId,
+      strategyAssigned: strategyAssigned ?? conditionId,
+      policyVersion: 'condition-assign-v1',
+    };
+    this.saveInteraction(event);
+  }
+
+  /**
    * Log escalation triggered event
    * @param learnerId - Learner identifier
    * @param profileId - Current profile ID
@@ -2661,6 +2686,7 @@ class StorageManager {
       // Update evidence-based coverage for all valid concept IDs in the event
       // Skip system-level events that don't have associated SQL concepts
       const SYSTEM_EVENT_TYPES = new Set([
+        'condition_assigned',
         'profile_assigned',
         'bandit_arm_selected',
         'bandit_reward_observed',
@@ -2713,6 +2739,7 @@ class StorageManager {
       'hint_view',
       'explanation_view',
       'textbook_unit_upsert',
+      'condition_assigned',
       'profile_assigned',
       'hdi_calculated',
     ]);

@@ -937,8 +937,8 @@ export function ResearchDashboard() {
 
   const week5Analytics = useMemo(() => {
     // Filter Week 5 event types (including Component 10: Reinforcement)
-    const week5Events = filteredInteractions.filter(i => 
-      ['profile_assigned', 'escalation_triggered', 'profile_adjusted',
+    const week5Events = filteredInteractions.filter(i =>
+      ['condition_assigned', 'profile_assigned', 'escalation_triggered', 'profile_adjusted',
        'bandit_arm_selected', 'bandit_reward_observed', 'bandit_updated',
        'hdi_calculated', 'hdi_trajectory_updated', 'dependency_intervention_triggered',
        // Component 10: Knowledge Consolidation events
@@ -983,8 +983,10 @@ export function ResearchDashboard() {
     });
 
     // Week 6: Condition Statistics
-    // Use profile_assigned as a proxy for session initialization
-    const sessionCreatedEvents = week5Events.filter(e => e.eventType === 'profile_assigned');
+    // condition_assigned is the canonical session-init event; fall back to profile_assigned for legacy traces
+    const sessionCreatedEvents = week5Events.filter(
+      e => e.eventType === 'condition_assigned' || e.eventType === 'profile_assigned'
+    );
     const conditionStats: Record<string, { 
       count: number; 
       learnerIds: string[];
@@ -1031,10 +1033,13 @@ export function ResearchDashboard() {
     })).sort((a, b) => b.sessionCount - a.sessionCount);
 
     // 1. Escalation Profile Distribution
-    const profileAssignments = week5Events.filter(e => e.eventType === 'profile_assigned');
+    // condition_assigned is canonical; profile_assigned is legacy compat
+    const profileAssignments = week5Events.filter(
+      e => e.eventType === 'condition_assigned' || e.eventType === 'profile_assigned'
+    );
     const profileCounts: Record<string, number> = {};
     profileAssignments.forEach(e => {
-      const profileId = (e.payload as { profileId?: string })?.profileId || e.profileId || 'unknown';
+      const profileId = e.conditionId || (e.payload as { profileId?: string })?.profileId || e.profileId || 'unknown';
       const normalizedProfile = profileId.toUpperCase().includes('FAST') ? 'FAST' :
                                profileId.toUpperCase().includes('SLOW') ? 'SLOW' :
                                profileId.toUpperCase().includes('ADAPTIVE') ? 'ADAPTIVE' : 'ADAPTIVE';

@@ -99,7 +99,8 @@ jq '[.interactions[] | select(.eventType=="hint_view") | .hintLevel] | max' expo
 jq '[.interactions[] | select(.eventType=="hint_view") | has("hintId") | not] | all' export.json
 jq '[.interactions[] | has("sessionId") and (.sessionId!="")] | all' export.json
 
-# Week 5 checks
+# Week 7+ checks (condition_assigned is canonical; profile_assigned = legacy compat)
+jq '[.interactions[] | select(.eventType=="condition_assigned")] | length' export.json
 jq '[.interactions[] | select(.eventType=="profile_assigned")] | length' export.json
 jq '[.interactions[] | select(.eventType=="hdi_calculated")] | length' export.json
 jq '[.interactions[] | select(.eventType=="bandit_arm_selected")] | length' export.json
@@ -116,7 +117,8 @@ jq '[.interactions[] | select(.eventType=="textbook_add")] | length' export.json
 | max hint level | `3` |
 | no `hintId` in `hint_view` | `true` |
 | all `sessionId` non-empty | `true` |
-| **profile_assigned count** | `>= 1` |
+| **condition_assigned count** | `>= 1` |
+| profile_assigned count (legacy) | `>= 0` |
 | **hdi_calculated count** | `>= 1` |
 | **bandit_arm_selected count** | `>= 1` |
 | explanation count | `>= 1` |

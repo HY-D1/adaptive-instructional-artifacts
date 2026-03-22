@@ -192,14 +192,16 @@ function createDemoInteractions(): InteractionEvent[] {
     },
   });
   
-  // 13. Profile assigned (for HDI/adaptive features)
+  // 13. Condition assigned (canonical session-init event, replaces profile_assigned)
   interactions.push({
-    id: 'demo-1-profile',
+    id: 'demo-1-condition',
     learnerId: DEMO_LEARNER_1.id,
     timestamp: baseTime1 - 3600000,
-    eventType: 'profile_assigned',
+    eventType: 'condition_assigned',
     problemId: 'system',
     sessionId: 'demo-sess-setup',
+    conditionId: 'adaptive',
+    strategyAssigned: 'adaptive',
     metadata: { profile: 'adaptive', strategy: 'bandit' },
   });
   
