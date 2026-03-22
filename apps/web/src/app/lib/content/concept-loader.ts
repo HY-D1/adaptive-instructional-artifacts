@@ -414,6 +414,95 @@ function parseMistakes(section: string): Mistake[] {
   return mistakes;
 }
 
+// ---------------------------------------------------------------------------
+// Learner-safe quality checks
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when an explanation string is likely garbled / not learner-safe.
+ *
+ * Heuristics (all tuned to catch raw textbook export noise):
+ * 1. Very long block (>3 000 chars) with a low ratio of sentence-ending punctuation
+ *    → raw paragraph dumps from pdftotext.
+ * 2. High density of Markdown structural markers that were never rendered
+ *    (##, ----, ===, **, __, ```).
+ * 3. Contains known extraction artefacts: page-number-only lines, CHAPTER / FIGURE
+ *    labels, repeated whitespace / control characters.
+ */
+export function isExplanationGarbled(text: string): boolean {
+  if (!text || text.length === 0) return false;
+
+  // Heuristic 3: known textbook extraction artefacts — checked first, before
+  // any length gate, because artefacts can appear in short text too.
+  const artefactPatterns: RegExp[] = [
+    /\x0c/,                                    // form-feed (pdftotext page break)
+    /^(?:CHAPTER|FIGURE|TABLE|SECTION)\s+\d+/im, // structural labels
+    /^\d+\s*$/m,                               // page-number-only lines
+  ];
+  for (const pattern of artefactPatterns) {
+    if (pattern.test(text)) return true;
+  }
+
+  // Short text without artefacts is considered safe
+  if (text.length < 120) return false;
+
+  // Heuristic 1: very long with almost no sentence-ending punctuation
+  if (text.length > 3000) {
+    const sentenceEnders = (text.match(/[.!?]/g) || []).length;
+    const ratio = sentenceEnders / (text.length / 100); // per 100 chars
+    if (ratio < 0.3) return true;
+  }
+
+  // Heuristic 2: high density of unrendered Markdown structural markers
+  const markdownMarkers = (text.match(/^#{1,6}\s|^[-=]{3,}$|^```|\*\*[^*]{1,80}\*\*/gm) || []).length;
+  const lines = text.split('\n').length;
+  if (lines > 5 && markdownMarkers / lines > 0.3) return true;
+
+  return false;
+}
+
+/**
+ * Returns true when a SQL code example string looks like real SQL.
+ *
+ * A "contaminated" example fails this check. Criteria:
+ * - Must contain at least one SQL keyword (SELECT, INSERT, UPDATE, DELETE,
+ *   CREATE, DROP, FROM, WHERE, JOIN).
+ * - Must not be pure prose (no semicolons or parentheses and no SQL keyword).
+ */
+export function isExampleSqlSane(code: string): boolean {
+  if (!code || code.trim().length === 0) return false;
+  // Require at least one primary DML/DDL statement keyword (not just FROM/WHERE
+  // which appear in prose).  Word-boundary matching prevents 'JOINS' from
+  // matching 'JOIN'.
+  const primarySqlPattern = /\b(SELECT|INSERT\s+INTO|UPDATE\s+\w|DELETE\s+FROM|CREATE\s+(TABLE|INDEX|VIEW)|DROP\s+(TABLE|INDEX|VIEW)|ALTER\s+TABLE)\b/i;
+  return primarySqlPattern.test(code);
+}
+
+/**
+ * Filter code examples to only those that pass the SQL sanity check.
+ */
+export function filterSaneExamples(examples: CodeExample[]): CodeExample[] {
+  return examples.filter(ex => isExampleSqlSane(ex.code));
+}
+
+/**
+ * Assess overall content quality for a loaded concept.
+ *
+ * Returns:
+ * - `'good'`     — content is safe to render as primary learning material.
+ * - `'fallback'` — explanation is garbled or all examples failed the SQL check;
+ *                  render only safe fields (definition, frontmatter, sane examples).
+ */
+export function assessConceptQuality(concept: LoadedConcept): 'good' | 'fallback' {
+  const explanationGarbled = isExplanationGarbled(concept.content.explanation);
+  const saneExamples = filterSaneExamples(concept.content.examples);
+  const allExamplesContaminated =
+    concept.content.examples.length > 0 && saneExamples.length === 0;
+
+  if (explanationGarbled || allExamplesContaminated) return 'fallback';
+  return 'good';
+}
+
 /**
  * Get PDF chunks for a concept (for hint grounding)
  */

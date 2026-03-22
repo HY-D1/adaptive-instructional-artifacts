@@ -1,27 +1,31 @@
 import { useParams, Link } from 'react-router';
 import { useEffect, useState } from 'react';
-import { loadConceptContent, getProblemsForConcept, type LoadedConcept, type CodeExample, type Mistake } from '../lib/content/concept-loader';
-import { ChevronLeft, BookOpen, Clock, Dumbbell, AlertCircle, CheckCircle, XCircle, Lightbulb, Play } from 'lucide-react';
+import { loadConceptContent, getProblemsForConcept, assessConceptQuality, filterSaneExamples, type LoadedConcept, type CodeExample, type Mistake } from '../lib/content/concept-loader';
+import { ChevronLeft, BookOpen, Clock, Dumbbell, AlertCircle, CheckCircle, XCircle, Lightbulb, Play, Info } from 'lucide-react';
 
 export function ConceptDetailPage() {
   const { '*': conceptId } = useParams<{ '*': string }>();
   const [concept, setConcept] = useState<LoadedConcept | null>(null);
+  const [contentQuality, setContentQuality] = useState<'good' | 'fallback'>('good');
   const [problems, setProblems] = useState<ReturnType<typeof getProblemsForConcept>>([]);
   const [activeTab, setActiveTab] = useState<'learn' | 'examples' | 'mistakes'>('learn');
   const [loading, setLoading] = useState(true);
-  
+
   useEffect(() => {
     if (!conceptId) return;
-    
+
     const loadData = async () => {
       const [conceptData] = await Promise.all([
         loadConceptContent(conceptId),
         Promise.resolve(setProblems(getProblemsForConcept(conceptId)))
       ]);
       setConcept(conceptData);
+      if (conceptData) {
+        setContentQuality(assessConceptQuality(conceptData));
+      }
       setLoading(false);
     };
-    
+
     loadData();
   }, [conceptId]);
   
@@ -99,10 +103,24 @@ export function ConceptDetailPage() {
               ))}
             </div>
             
+            {/* Source quality banner — shown in fallback mode */}
+            {contentQuality === 'fallback' && (
+              <div
+                role="note"
+                aria-label="Source quality notice"
+                className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+              >
+                <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-sm text-amber-800">
+                  <strong>Source quality limited.</strong> Some content from this textbook export could not be verified as learner-safe. We're showing the definition and confirmed examples only.
+                </p>
+              </div>
+            )}
+
             {/* Tab Content */}
             <div className="bg-white rounded-xl border shadow-sm">
-              {activeTab === 'learn' && <LearnTab content={concept.content} />}
-              {activeTab === 'examples' && <ExamplesTab examples={concept.content.examples} />}
+              {activeTab === 'learn' && <LearnTab content={concept.content} quality={contentQuality} />}
+              {activeTab === 'examples' && <ExamplesTab examples={concept.content.examples} quality={contentQuality} />}
               {activeTab === 'mistakes' && <MistakesTab mistakes={concept.content.commonMistakes} />}
             </div>
           </div>
@@ -192,38 +210,51 @@ export function ConceptDetailPage() {
   );
 }
 
-function LearnTab({ content }: { content: LoadedConcept['content'] }) {
+function LearnTab({ content, quality = 'good' }: { content: LoadedConcept['content']; quality?: 'good' | 'fallback' }) {
   return (
     <div className="p-6">
-      {/* Definition Box */}
+      {/* Definition Box — always shown, always safe */}
       <div className="bg-blue-50 border-l-4 border-blue-500 p-5 mb-6 rounded-r-lg">
         <h3 className="text-sm font-semibold text-blue-900 mb-1 uppercase tracking-wide">Definition</h3>
         <p className="text-blue-900 text-lg leading-relaxed">{content.definition}</p>
       </div>
-      
-      {/* Explanation */}
-      <div className="prose max-w-none">
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">Explanation</h3>
-        <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-          {content.explanation}
+
+      {/* Explanation — hidden in fallback mode if garbled */}
+      {quality === 'good' && content.explanation && (
+        <div className="prose max-w-none">
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">Explanation</h3>
+          <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+            {content.explanation}
+          </div>
         </div>
-      </div>
+      )}
+
+      {quality === 'fallback' && (
+        <p className="text-sm text-gray-500 italic">
+          Full explanation is not available for this concept. Use the textbook pages listed in the sidebar for the complete coverage.
+        </p>
+      )}
     </div>
   );
 }
 
-function ExamplesTab({ examples }: { examples: CodeExample[] }) {
-  if (examples.length === 0) {
+function ExamplesTab({ examples, quality = 'good' }: { examples: CodeExample[]; quality?: 'good' | 'fallback' }) {
+  // In fallback mode, only show examples that pass the SQL sanity check.
+  const visibleExamples = quality === 'fallback' ? filterSaneExamples(examples) : examples;
+
+  if (visibleExamples.length === 0) {
     return (
       <div className="p-12 text-center text-gray-500">
-        No examples available for this concept.
+        {quality === 'fallback'
+          ? 'No verified SQL examples are available for this concept.'
+          : 'No examples available for this concept.'}
       </div>
     );
   }
-  
+
   return (
     <div className="divide-y">
-      {examples.map((ex, i) => (
+      {visibleExamples.map((ex, i) => (
         <div key={i} className="p-6">
           <div className="flex items-center gap-2 mb-4">
             <CheckCircle className="w-5 h-5 text-green-600" />

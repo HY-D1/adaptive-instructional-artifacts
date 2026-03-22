@@ -40,7 +40,7 @@ import { useScreenReaderAnnouncer } from '../components/shared/ScreenReaderAnnou
 import { sqlProblems } from '../data/problems';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
-import { storage, subscribeToSync, clearAllDebugSettingsWithSync } from '../lib/storage';
+import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync } from '../lib/storage';
 import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content/content-generator';
@@ -1393,7 +1393,7 @@ export function LearningInterface() {
     }
   };
 
-  const handleEscalate = (sourceInteractionIds?: string[]) => {
+  const handleEscalate = (sourceInteractionIds?: string[], providedSubtype?: string) => {
     setEscalationTriggered(true);
 
     // Log escalation triggered event for research analysis
@@ -1426,8 +1426,14 @@ export function LearningInterface() {
       setLastErrorEventId(sourceInteractionIds[sourceInteractionIds.length - 1]);
     }
 
-    const escalationSubtype = lastError || resolveLatestProblemErrorSubtype();
+    // Use the subtype passed explicitly by HintSystem first, then fall back to
+    // inferring from interaction history. This ensures Save to Notes always works
+    // even when no SQL error has been submitted yet (e.g. learner clicked Save
+    // after only viewing hints).
+    const escalationSubtype = providedSubtype || lastError || resolveLatestProblemErrorSubtype();
     if (!escalationSubtype) {
+      // Cannot save — surface a visible error instead of silently doing nothing.
+      setGenerationError('Could not save note: no concept context identified. Try submitting a query or requesting a hint first.');
       return;
     }
     if (!lastError) {
@@ -1443,6 +1449,8 @@ export function LearningInterface() {
             ? `Saved "${textbookResult.unit.title}" to My Textbook for review`
             : `Updated "${textbookResult.unit.title}" in My Textbook`
         );
+        // Signal other tabs (e.g. TextbookPage open alongside) to reload units.
+        broadcastSync('sql-adapt-textbook', learnerId);
       })
       .catch((error) => {
         setGenerationError((error as Error).message);

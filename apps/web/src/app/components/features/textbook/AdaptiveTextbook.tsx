@@ -9,7 +9,7 @@ import type { TextbookUnitStatus } from '../../../types';
 import { Link } from 'react-router';
 import { renderTextbookContent } from '../../../lib/content/textbook-renderer';
 import { InstructionalUnit, InteractionEvent } from '../../../types';
-import { storage } from '../../../lib/storage';
+import { storage, subscribeToSync } from '../../../lib/storage';
 import { getConceptById } from '../../../data/sql-engage';
 import { buildTextbookInsights, SortMode } from '../../../lib/content/textbook-insights';
 import { 
@@ -138,10 +138,18 @@ export function AdaptiveTextbook({
     // Polling fallback for same-tab changes
     const interval = setInterval(loadTextbook, 3000);
 
+    // Immediate refresh when practice page broadcasts a textbook save.
+    const unsubscribeSync = subscribeToSync((key) => {
+      if (key === 'sql-adapt-textbook') {
+        loadTextbook();
+      }
+    });
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
       clearInterval(interval);
+      unsubscribeSync();
     };
   }, [learnerId]);
 
