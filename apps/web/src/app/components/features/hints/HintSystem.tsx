@@ -29,6 +29,7 @@ import type { EnhancedHint } from '../../../lib/ml/enhanced-hint-service';
 import { useUserRole } from '../../../hooks/useUserRole';
 import type { EscalationProfile } from '../../../lib/ml/escalation-profiles';
 import type { SessionConfig } from '../../../types';
+import { orchestrate, type OrchestrationDecision } from '../../../lib/ml/textbook-orchestrator';
 
 /**
  * Props for the HintSystem component
@@ -601,7 +602,8 @@ export function HintSystem({
   const handleShowExplanation = async (
     source: 'auto' | 'manual' = 'auto',
     forcedHelpRequestIndex?: number,
-    traceOverride?: InteractionEvent[]
+    traceOverride?: InteractionEvent[],
+    orchestrationDecision?: OrchestrationDecision
   ) => {
     if (!profile || !sessionId) {
       return;
@@ -679,7 +681,14 @@ export function HintSystem({
         sqlEngageSubtype: helpSelection.sqlEngageSubtype,
         sqlEngageRowId: helpSelection.sqlEngageRowId,
         policyVersion: helpSelection.policyVersion,
-        ruleFired: 'escalation',
+        ruleFired: orchestrationDecision?.escalationTriggerReason ?? 'escalation',
+        // RESEARCH-4 canonical fields from the orchestration decision
+        escalationTriggerReason: orchestrationDecision?.escalationTriggerReason,
+        errorCountAtEscalation: orchestrationDecision?.errorCountAtDecision,
+        timeToEscalation: orchestrationDecision?.timeToDecision,
+        corpusConceptId: orchestrationDecision?.corpusConceptId ?? undefined,
+        conditionId: sessionConfig?.conditionId,
+        strategyAssigned: sessionConfig?.conditionId ?? sessionConfig?.escalationPolicy,
         inputs: {
           retry_count: Math.max(0, errorCount - 1),
           hint_count: hintCount,
@@ -721,16 +730,6 @@ export function HintSystem({
     }
     setIsProcessingHint(true);
 
-    // Week 6: Immediate explanation mode - skip hints, go straight to explanation
-    if (sessionConfig?.immediateExplanationMode && !showExplanation) {
-      const problemTrace = getProblemTrace();
-      setShowExplanation(true);
-      setCurrentRung(2);
-      await handleShowExplanation('manual', undefined, problemTrace);
-      setIsProcessingHint(false);
-      return;
-    }
-
     // Week 3 D8: Log guidance request event
     storage.logGuidanceRequest({
       learnerId,
@@ -748,13 +747,43 @@ export function HintSystem({
       setIsProcessingHint(false);
       return;
     }
-    
+
     const problemTrace = getProblemTrace();
     const nextHelpRequestIndex = allocateNextHelpRequestIndex(problemTrace);
-    
-    if (nextHelpRequestIndex >= autoEscalationThreshold) {
+
+    // --- Canonical orchestration decision (Week 6) ---
+    // When a session condition is assigned, use textbook-orchestrator as the single
+    // decision source for escalation (replaces immediateExplanationMode check and
+    // autoEscalationThreshold check).
+    if (sessionConfig) {
+      const retryCount = problemTrace.filter(i => i.eventType === 'error').length;
+      const hintCountForOrchestration = problemTrace.filter(i => i.eventType === 'hint_view').length;
+      const elapsedMs = problemTrace.length > 0 ? Date.now() - problemTrace[0].timestamp : 0;
+      // Use first available concept ID for corpus resolution; fall back to error subtype
+      const conceptId = conceptIds[0] || activeHintSubtype || errorSubtypeId || 'unknown';
+
+      const decision = orchestrate({
+        conceptId,
+        retryCount,
+        hintCount: hintCountForOrchestration,
+        elapsedMs,
+        sessionConfig: {
+          textbookDisabled: sessionConfig.textbookDisabled ?? false,
+          adaptiveLadderDisabled: sessionConfig.adaptiveLadderDisabled ?? false,
+          immediateExplanationMode: sessionConfig.immediateExplanationMode ?? false,
+          staticHintMode: sessionConfig.staticHintMode ?? false,
+        },
+      });
+
+      if (decision.action !== 'stay_hint') {
+        setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
+        await handleShowExplanation('auto', nextHelpRequestIndex, problemTrace, decision);
+        setIsProcessingHint(false);
+        return;
+      }
+    } else if (nextHelpRequestIndex >= autoEscalationThreshold) {
+      // Fallback when no session config: use legacy hint-count threshold
       setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
-      // Wait for explanation to be generated
       await handleShowExplanation('auto', nextHelpRequestIndex, problemTrace);
       setIsProcessingHint(false);
       return;
@@ -900,7 +929,23 @@ export function HintSystem({
       setTimeout(() => {
         setShowExplanation(true);
         setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
-        handleShowExplanation('auto', nextHelpRequestIndex + 1, [...problemTrace, hintEvent]);
+        // Re-run canonical orchestrator with updated hint count for canonical RESEARCH-4 fields
+        const traceForDecision = [...problemTrace, hintEvent];
+        const rungExhaustedDecision = sessionConfig
+          ? orchestrate({
+              conceptId: conceptIds[0] || activeHintSubtype || errorSubtypeId || 'unknown',
+              retryCount: errorCount,
+              hintCount: hintCount + 1, // include the hint we just showed
+              elapsedMs: timeSpent,
+              sessionConfig: {
+                textbookDisabled: sessionConfig.textbookDisabled ?? false,
+                adaptiveLadderDisabled: sessionConfig.adaptiveLadderDisabled ?? false,
+                immediateExplanationMode: sessionConfig.immediateExplanationMode ?? false,
+                staticHintMode: sessionConfig.staticHintMode ?? false,
+              },
+            })
+          : undefined;
+        handleShowExplanation('auto', nextHelpRequestIndex + 1, traceForDecision, rungExhaustedDecision);
       }, 500); // 500ms delay to show L3 hint before switching to explanation
     }
   };

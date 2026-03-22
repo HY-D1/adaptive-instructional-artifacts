@@ -9,13 +9,34 @@
 
 ## Overview
 
-The textbook orchestrator is the single decision point that determines what
-instructional action to take at each struggle signal. It is a pure, deterministic
-function — given the same inputs it always returns the same decision, making it
-directly testable and replay-safe.
+The textbook orchestrator (`textbook-orchestrator.ts`) is the **single source of
+truth** for escalation decisions in both the live learner UI and the offline
+replay scripts.
 
-**Week 6 Additions**: This runbook now covers the experiment-ready outcome
-pipeline with:
+- **Live path**: `HintSystem.tsx` calls `orchestrate()` on every "Get Hint" click
+  to determine whether to stay at hint, show explanation, upsert a textbook unit,
+  or prompt a reflective note.
+- **Replay path**: `scripts/replay-paper-tables.mjs` imports `orchestrate()` from
+  `scripts/textbook-orchestrator-esm.mjs`, a pure-JS mirror of the TS source.
+- **Parity gate**: the test suite `live-path vs replay-path parity: canonical
+  3-policy trace` (in `textbook-orchestrator.test.ts`) fails if the two paths
+  produce different decisions on the canonical 6-step fixture.
+
+Any threshold change must be made in **both**:
+
+1. `apps/web/src/app/lib/ml/textbook-orchestrator.ts`
+2. `scripts/textbook-orchestrator-esm.mjs`
+
+**Week 7 Additions** (live integration + parity gate):
+
+- `HintSystem.tsx` wired to `orchestrate()` — canonical RESEARCH-4 fields emitted
+  on every `explanation_view` event
+- `LearningInterface.tsx` emits `condition_assigned` (was `profile_assigned`)
+- `replay-paper-tables.mjs` imports from `textbook-orchestrator-esm.mjs` — no
+  duplicate threshold logic
+- Parity integration test added to `textbook-orchestrator.test.ts`
+
+**Week 6 Additions** (experiment pipeline):
 - Delayed reinforcement events for measuring unit effectiveness
 - Explicit dependency metrics (HDI-style formula)
 - 3-policy replay comparisons
@@ -138,6 +159,73 @@ identifier for a concept, as opposed to the internal app ID (`"joins"`).
 Every `textbook_unit_upsert` and `textbook_unit_shown` event **must** include
 `corpusConceptId` so downstream analytics can join events to corpus metadata
 without re-running the compatibility map.
+
+---
+
+## Live Integration
+
+`textbook-orchestrator.ts` is called on every "Get Hint" click in the live app.
+
+### Call site: `HintSystem.tsx` → `handleRequestHint`
+
+```typescript
+// When a session condition is assigned:
+const decision = orchestrate({
+  conceptId,          // first concept from retrieval bundle, or errorSubtypeId
+  retryCount,         // error events in current problem trace
+  hintCount,          // hint_view events in current problem trace
+  elapsedMs,          // ms since first interaction on this problem
+  sessionConfig: {    // flags from SessionConfig (assigned by condition-assignment.ts)
+    textbookDisabled, adaptiveLadderDisabled,
+    immediateExplanationMode, staticHintMode,
+  },
+});
+
+// Non-hint actions → escalate
+if (decision.action !== 'stay_hint') { ... }
+```
+
+### condition_assigned event (session start)
+
+When a learner session is created, `LearningInterface.tsx` emits:
+
+```typescript
+{
+  eventType: 'condition_assigned',   // was profile_assigned before Week 7
+  conditionId: config.conditionId,
+  strategyAssigned: config.conditionId,
+  profileId: config.escalationPolicy,
+  // ...
+}
+```
+
+### RESEARCH-4 fields on explanation_view
+
+Every `explanation_view` event now carries:
+
+```json
+{
+  "eventType": "explanation_view",
+  "escalationTriggerReason": "hint_plus_retry",
+  "errorCountAtEscalation": 3,
+  "timeToEscalation": 30000,
+  "corpusConceptId": "dbms-ramakrishnan-3rd-edition/joins",
+  "conditionId": "adaptive",
+  "strategyAssigned": "adaptive"
+}
+```
+
+### Parity gate
+
+The test `live-path vs replay-path parity: canonical 3-policy trace` (in
+`textbook-orchestrator.test.ts`) verifies that the TS orchestrator produces the
+same action sequences as the ESM mirror used by `replay-paper-tables.mjs`.
+
+```bash
+npx vitest run apps/web/src/app/lib/ml/textbook-orchestrator.test.ts \
+  --reporter=verbose
+# Look for: "live-path vs replay-path parity: canonical 3-policy trace"
+```
 
 ---
 

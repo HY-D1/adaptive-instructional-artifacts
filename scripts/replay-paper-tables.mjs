@@ -31,6 +31,12 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import {
+  orchestrate,
+  staticHintModeCondition,
+  adaptiveTextbookCondition,
+  explanationFirstCondition,
+} from './textbook-orchestrator-esm.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -38,10 +44,6 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 
 const DEFAULT_OUTPUT_DIR = path.join(REPO_ROOT, 'dist/replay/paper-tables');
 const REPLAY_VERSION = 'replay-paper-tables-v1';
-
-// Import the orchestrator and metrics modules (using dynamic import for ESM)
-const MODULE_PATH = path.join(REPO_ROOT, 'apps/web/src/app/lib/ml/textbook-orchestrator.ts');
-const METRICS_MODULE_PATH = path.join(REPO_ROOT, 'apps/web/src/app/lib/ml/dependency-metrics.ts');
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CANONICAL 6-STEP TRACE (matches textbook-orchestrator.test.ts)
@@ -72,34 +74,19 @@ const POLICIES = {
     id: 'conservative',
     name: 'Conservative (Hints Only)',
     description: 'Static hint mode — no escalation to explanation or textbook',
-    condition: {
-      textbookDisabled: false,
-      adaptiveLadderDisabled: true,
-      immediateExplanationMode: false,
-      staticHintMode: true,
-    },
+    condition: staticHintModeCondition(),
   },
   adaptive: {
     id: 'adaptive',
     name: 'Adaptive Textbook',
     description: 'Fully adaptive with time/count-based escalation to textbook and reflection',
-    condition: {
-      textbookDisabled: false,
-      adaptiveLadderDisabled: false,
-      immediateExplanationMode: false,
-      staticHintMode: false,
-    },
+    condition: adaptiveTextbookCondition(),
   },
   explanation_first: {
     id: 'explanation_first',
     name: 'Explanation First',
     description: 'Immediate explanation on first retry — skips hint phase',
-    condition: {
-      textbookDisabled: true,
-      adaptiveLadderDisabled: false,
-      immediateExplanationMode: true,
-      staticHintMode: false,
-    },
+    condition: explanationFirstCondition(),
   },
 };
 
@@ -108,75 +95,9 @@ const POLICIES = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /**
- * Simulate policy decisions using canonical thresholds.
- * This mirrors the logic in textbook-orchestrator.ts without requiring
- * the TypeScript module to be compiled.
- */
-function simulatePolicyDecision(step, policy) {
-  const { retryCount, hintCount, elapsedMs } = step;
-
-  // Conservative: always stay at hint
-  if (policy.id === 'conservative') {
-    return {
-      action: 'stay_hint',
-      escalationTriggerReason: 'static_hint_mode',
-    };
-  }
-
-  // Explanation first: show_explanation on first retry
-  if (policy.id === 'explanation_first') {
-    if (retryCount >= 1) {
-      return {
-        action: 'show_explanation',
-        escalationTriggerReason: 'immediate_explanation_mode',
-      };
-    }
-    return {
-      action: 'stay_hint',
-      escalationTriggerReason: 'pre_first_retry',
-    };
-  }
-
-  // Adaptive: use escalation thresholds
-  // reflective_note: hintCount >= 6 OR elapsedMs >= 300_000
-  if (hintCount >= 6 || elapsedMs >= 300_000) {
-    return {
-      action: 'prompt_reflective_note',
-      escalationTriggerReason:
-        hintCount >= 6 ? 'high_hint_count' : 'time_stuck',
-    };
-  }
-
-  // textbook_unit: hintCount >= 3 OR retryCount >= 4 OR elapsedMs >= 120_000
-  if (hintCount >= 3 || retryCount >= 4 || elapsedMs >= 120_000) {
-    return {
-      action: 'upsert_textbook_unit',
-      escalationTriggerReason:
-        hintCount >= 3
-          ? 'hint_count_threshold'
-          : retryCount >= 4
-          ? 'retry_count_threshold'
-          : 'elapsed_time_threshold',
-    };
-  }
-
-  // explanation: hintCount >= 1 AND retryCount >= 2
-  if (hintCount >= 1 && retryCount >= 2) {
-    return {
-      action: 'show_explanation',
-      escalationTriggerReason: 'hint_plus_retry',
-    };
-  }
-
-  // Default: stay at hint
-  return {
-    action: 'stay_hint',
-    escalationTriggerReason: 'early_phase',
-  };
-}
-
-/**
  * Build a synthetic event trace for a given policy.
+ * Uses the canonical orchestrate() function from textbook-orchestrator-esm.mjs —
+ * no independent threshold logic here.
  */
 function buildPolicyTrace(policy) {
   const events = [];
@@ -200,8 +121,14 @@ function buildPolicyTrace(policy) {
       corpusConceptId: CORPUS_CONCEPT_ID,
     });
 
-    // Get policy decision
-    const decision = simulatePolicyDecision(step, policy);
+    // Get policy decision from the canonical orchestrator (single source of truth)
+    const decision = orchestrate({
+      conceptId: CONCEPT_ID,
+      retryCount: step.retryCount,
+      hintCount: step.hintCount,
+      elapsedMs: step.elapsedMs,
+      sessionConfig: policy.condition,
+    });
 
     // Emit intervention events based on decision
     if (decision.action === 'stay_hint' && step.hintCount > 0) {

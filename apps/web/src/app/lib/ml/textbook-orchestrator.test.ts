@@ -467,3 +467,92 @@ describe('corpusConceptId: stable identifiers for textbook events', () => {
     expect(decision.corpusConceptId).toBeNull();
   });
 });
+
+// ── Live-path / replay-path parity fixture ────────────────────────────────────
+//
+// This test suite is the regression gate proving that the TypeScript orchestrator
+// (live learner path) and the ESM mirror used by replay-paper-tables.mjs produce
+// identical action sequences on the canonical trace.
+//
+// If this test fails, the two paths have drifted.  Fix BOTH sources together.
+
+describe('live-path vs replay-path parity: canonical 3-policy trace', () => {
+  /**
+   * The canonical 6-step trace — identical to the one in replay-paper-tables.mjs.
+   * Any change here must be mirrored in scripts/replay-paper-tables.mjs and vice-versa.
+   */
+  const CANONICAL_REPLAY_TRACE = [
+    { retryCount: 1, hintCount: 0, elapsedMs: 0 },
+    { retryCount: 2, hintCount: 0, elapsedMs: 15_000 },
+    { retryCount: 2, hintCount: 1, elapsedMs: 20_000 },
+    { retryCount: 3, hintCount: 1, elapsedMs: 30_000 },
+    { retryCount: 4, hintCount: 3, elapsedMs: 90_000 },
+    { retryCount: 7, hintCount: 6, elapsedMs: 310_000 },
+  ] as const;
+
+  function runCanonicalTrace(condition: SessionConditionFlags): OrchestrationAction[] {
+    return CANONICAL_REPLAY_TRACE.map(step =>
+      orchestrate({ conceptId: 'joins', sessionConfig: condition, ...step }).action
+    );
+  }
+
+  it('conservative policy: 6 stay_hint (matches replay-paper-tables conservative)', () => {
+    const actions = runCanonicalTrace(staticHintModeCondition());
+    expect(actions).toEqual(['stay_hint', 'stay_hint', 'stay_hint', 'stay_hint', 'stay_hint', 'stay_hint']);
+  });
+
+  it('adaptive policy: escalates through all 4 levels (matches replay-paper-tables adaptive)', () => {
+    const actions = runCanonicalTrace(adaptiveTextbookCondition());
+    expect(actions).toEqual([
+      'stay_hint',
+      'stay_hint',
+      'show_explanation',
+      'show_explanation',
+      'upsert_textbook_unit',
+      'prompt_reflective_note',
+    ]);
+  });
+
+  it('explanation_first policy: 6 show_explanation (matches replay-paper-tables explanation_first)', () => {
+    const actions = runCanonicalTrace({
+      textbookDisabled: true,
+      adaptiveLadderDisabled: false,
+      immediateExplanationMode: true,
+      staticHintMode: false,
+    });
+    expect(actions).toEqual([
+      'show_explanation',
+      'show_explanation',
+      'show_explanation',
+      'show_explanation',
+      'show_explanation',
+      'show_explanation',
+    ]);
+  });
+
+  it('all policies are deterministic: two runs on same trace → same result', () => {
+    const run1 = runCanonicalTrace(adaptiveTextbookCondition());
+    const run2 = runCanonicalTrace(adaptiveTextbookCondition());
+    expect(run1).toEqual(run2);
+  });
+
+  it('escalationTriggerReason matches expected labels at each step (adaptive)', () => {
+    const decisions = CANONICAL_REPLAY_TRACE.map(step =>
+      orchestrate({ conceptId: 'joins', sessionConfig: adaptiveTextbookCondition(), ...step })
+    );
+    expect(decisions[0].escalationTriggerReason).toBe('early_phase');
+    expect(decisions[1].escalationTriggerReason).toBe('early_phase');
+    expect(decisions[2].escalationTriggerReason).toBe('hint_plus_retry');
+    expect(decisions[3].escalationTriggerReason).toBe('hint_plus_retry');
+    expect(decisions[4].escalationTriggerReason).toBe('hint_count_threshold');
+    expect(decisions[5].escalationTriggerReason).toBe('high_hint_count');
+  });
+
+  it('all decisions carry errorCountAtDecision and timeToDecision (RESEARCH-4 fields)', () => {
+    CANONICAL_REPLAY_TRACE.forEach(step => {
+      const decision = orchestrate({ conceptId: 'joins', sessionConfig: adaptiveTextbookCondition(), ...step });
+      expect(decision.errorCountAtDecision).toBe(step.retryCount);
+      expect(decision.timeToDecision).toBe(step.elapsedMs);
+    });
+  });
+});

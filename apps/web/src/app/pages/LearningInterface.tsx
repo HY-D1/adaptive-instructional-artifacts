@@ -746,16 +746,17 @@ export function LearningInterface() {
       config = assignCondition(learnerId);
       saveSessionConfig(config);
       
-      // Log session config applied event
+      // Log condition assignment event (canonical RESEARCH-4 event type)
       const configEvent: InteractionEvent = {
         id: createEventId('event', 'session-config'),
         sessionId: config.sessionId,
         learnerId,
         timestamp: Date.now(),
-        eventType: 'profile_assigned', // Reuse existing event type
+        eventType: 'condition_assigned',
         problemId: currentProblem.id,
         conditionId: config.conditionId,
         profileId: config.escalationPolicy,
+        strategyAssigned: config.conditionId,
         assignmentStrategy: config.staticHintMode ? 'static' : (config.adaptiveLadderDisabled ? 'diagnostic' : 'bandit'),
         metadata: {
           sessionConfigVersion: getConditionAssignmentVersion(),
@@ -763,7 +764,6 @@ export function LearningInterface() {
           adaptiveLadderDisabled: config.adaptiveLadderDisabled,
           immediateExplanationMode: config.immediateExplanationMode,
           staticHintMode: config.staticHintMode,
-          eventSubtype: 'session_config_applied'
         }
       };
       storage.saveInteraction(configEvent);
