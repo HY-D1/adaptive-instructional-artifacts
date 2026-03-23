@@ -73,14 +73,50 @@ interface ConceptMapData {
   concepts: Record<string, ConceptInfo>;
 }
 
+/**
+ * Shape of apps/web/public/textbook-static/concept-quality.json.
+ * Produced by the upstream PDF helper pipeline.  When present, entries here
+ * take precedence over per-concept qualityMetadata embedded in concept-map.json.
+ */
+export interface ConceptQualityFile {
+  version: string;
+  generatedAt: string;
+  /** Keys are the full namespaced concept IDs used in concept-map.json. */
+  quality: Record<string, QualityMetadata>;
+}
+
+/**
+ * Shape of apps/web/public/textbook-static/textbook-units.json.
+ * Provides stable unit identity and chapter/section rendering metadata
+ * produced by the upstream PDF helper pipeline.
+ */
+export interface TextbookUnitMeta {
+  /** Full namespaced concept ID, e.g. "murachs-mysql-3rd-edition/select-basic". */
+  id: string;
+  sourceDocId?: string;
+  chapterNumber?: number;
+  sectionTitle?: string;
+  displayOrder?: number;
+}
+
+export interface TextbookUnitsFile {
+  version: string;
+  generatedAt: string;
+  units: TextbookUnitMeta[];
+}
+
 // Cache
 let conceptMapCache: ConceptMapData | null = null;
+let conceptQualityCache: ConceptQualityFile | null | false = false; // false = not yet fetched
+let textbookUnitsCache: TextbookUnitsFile | null | false = false;   // false = not yet fetched
 
 /**
  * Clear the concept map cache. Used for testing.
  */
 export function clearConceptMapCache(): void {
   conceptMapCache = null;
+  conceptQualityCache = false;
+  textbookUnitsCache = false;
 }
 
 /**
@@ -187,7 +223,7 @@ export async function loadConceptMap(): Promise<ConceptMapData | null> {
   if (conceptMapCache) {
     return conceptMapCache;
   }
-  
+
   try {
     const response = await fetch('/textbook-static/concept-map.json');
     if (!response.ok) return null;
@@ -199,28 +235,75 @@ export async function loadConceptMap(): Promise<ConceptMapData | null> {
 }
 
 /**
+ * Load the helper-produced concept-quality.json.
+ *
+ * Returns null when the file is absent (corpus predates the quality pipeline).
+ * Entries here take precedence over qualityMetadata embedded in concept-map.json.
+ * Results are cached for the page lifetime.
+ */
+export async function loadConceptQuality(): Promise<ConceptQualityFile | null> {
+  if (conceptQualityCache !== false) return conceptQualityCache;
+  try {
+    const res = await fetch('/textbook-static/concept-quality.json');
+    conceptQualityCache = res.ok ? (await res.json() as ConceptQualityFile) : null;
+  } catch {
+    conceptQualityCache = null;
+  }
+  return conceptQualityCache;
+}
+
+/**
+ * Load the helper-produced textbook-units.json.
+ *
+ * Returns null when the file is absent.
+ * Results are cached for the page lifetime.
+ */
+export async function loadTextbookUnitsMeta(): Promise<TextbookUnitsFile | null> {
+  if (textbookUnitsCache !== false) return textbookUnitsCache;
+  try {
+    const res = await fetch('/textbook-static/textbook-units.json');
+    textbookUnitsCache = res.ok ? (await res.json() as TextbookUnitsFile) : null;
+  } catch {
+    textbookUnitsCache = null;
+  }
+  return textbookUnitsCache;
+}
+
+/**
  * Get single concept info with alias resolution.
- * 
+ *
  * Supports both plain concept IDs ("select-basic") and namespaced IDs
  * ("murachs-mysql-3rd-edition/select-basic").
+ *
+ * Quality metadata priority (highest → lowest):
+ *   1. concept-quality.json entry (helper pipeline, fetched once and cached)
+ *   2. qualityMetadata embedded in concept-map.json
+ *   3. Absent (assessConceptQuality falls back to local heuristics)
  */
 export async function getConcept(conceptId: string): Promise<ConceptInfo | null> {
-  const map = await loadConceptMap();
+  const [map, qualityFile] = await Promise.all([
+    loadConceptMap(),
+    loadConceptQuality(),
+  ]);
   if (!map) return null;
-  
+
   const resolvedId = resolveConceptId(conceptId, map.concepts);
   const concept = map.concepts[resolvedId] || null;
-  
-  // Preserve the original ID if we resolved to a different key
-  // This helps downstream code know what was requested vs what was found
-  if (concept && resolvedId !== conceptId) {
-    return {
-      ...concept,
-      id: conceptId // Keep original requested ID for URL consistency
-    };
-  }
-  
-  return concept;
+  if (!concept) return null;
+
+  // Merge quality metadata: concept-quality.json wins over embedded per-concept metadata.
+  const producerQuality = qualityFile?.quality?.[resolvedId];
+  const mergedQuality: QualityMetadata | undefined =
+    producerQuality ?? concept.qualityMetadata;
+
+  const result: ConceptInfo = {
+    ...concept,
+    ...(mergedQuality !== undefined ? { qualityMetadata: mergedQuality } : {}),
+    // Preserve the original requested ID for URL consistency
+    ...(resolvedId !== conceptId ? { id: conceptId } : {}),
+  };
+
+  return result;
 }
 
 /**

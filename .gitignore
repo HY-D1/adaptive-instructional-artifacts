@@ -113,3 +113,4 @@ apps/server/data/*.db-shm
 apps/server/data/*.db-wal
 apps/server/dist/
 .vercel
+.gstack/

@@ -1,0 +1,412 @@
+{
+  "version": "1.0",
+  "generatedAt": "2026-03-22T22:28:13.116Z",
+  "units": [
+    {
+      "id": "murachs-mysql-3rd-edition/mysql-intro",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 0,
+      "chapterNumber": 1,
+      "sectionTitle": "Chapter 1: Introduction to MySQL"
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/relational-databases-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 1,
+      "chapterNumber": 1,
+      "sectionTitle": "Chapter 1: Relational Databases"
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/select-statement-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 2,
+      "chapterNumber": 3,
+      "sectionTitle": "Chapter 3: Writing SELECT Queries"
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/where-clause-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 3,
+      "chapterNumber": 3,
+      "sectionTitle": "Chapter 3: Filtering Results"
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/order-by-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 4,
+      "chapterNumber": 3,
+      "sectionTitle": "Chapter 3: Sorting Results"
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/joins-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 5,
+      "chapterNumber": 4,
+      "sectionTitle": "Chapter 4: Combining Tables"
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/inner-join-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 6
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/outer-join-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 7
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/insert-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 8,
+      "chapterNumber": 7,
+      "sectionTitle": "Chapter 7: Modifying Data"
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/update-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 9,
+      "chapterNumber": 7,
+      "sectionTitle": "Chapter 7: Modifying Data"
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/delete-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 10,
+      "chapterNumber": 7,
+      "sectionTitle": "Chapter 7: Modifying Data"
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/data-types-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 11
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/mysql-functions",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 12
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/string-functions",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 13
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/date-functions",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 14
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/aggregate-functions-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 15,
+      "chapterNumber": 5,
+      "sectionTitle": "Chapter 5: Summarising Data"
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/group-by-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 16,
+      "chapterNumber": 5,
+      "sectionTitle": "Chapter 5: Grouping and Aggregates"
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/having-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 17
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/subqueries-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 18
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/correlated-subquery-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 19
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/unions",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 20
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/create-table-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 21
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/alter-table-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 22
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/constraints-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 23,
+      "chapterNumber": 2,
+      "sectionTitle": "Chapter 2: Database Design"
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/views-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 24,
+      "chapterNumber": 8,
+      "sectionTitle": "Chapter 8: Views"
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/stored-procedures",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 25,
+      "chapterNumber": 11,
+      "sectionTitle": "Chapter 11: Stored Procedures"
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/functions-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 26
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/triggers",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 27,
+      "chapterNumber": 12,
+      "sectionTitle": "Chapter 12: Triggers"
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/events",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 28
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/transactions-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 29,
+      "chapterNumber": 10,
+      "sectionTitle": "Chapter 10: Transactions"
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/isolation-levels-murach",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 30
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/user-management",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 31
+    },
+    {
+      "id": "murachs-mysql-3rd-edition/backup-restore",
+      "sourceDocId": "murachs-mysql-3rd-edition",
+      "displayOrder": 32
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/relational-model-intro",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 33,
+      "chapterNumber": 2,
+      "sectionTitle": "Chapter 2: Relational Model"
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/data-independence",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 34
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/er-model",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 35,
+      "chapterNumber": 3,
+      "sectionTitle": "Chapter 3: ER Model"
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/er-diagrams",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 36,
+      "chapterNumber": 3,
+      "sectionTitle": "Chapter 3: ER Model"
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/cardinality",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 37
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/relational-algebra",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 38,
+      "chapterNumber": 2,
+      "sectionTitle": "Chapter 2: Relational Model"
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/selection-projection",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 39,
+      "chapterNumber": 5,
+      "sectionTitle": "Chapter 5: SQL Queries"
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/set-operations",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 40
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/sql-intro",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 41
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/select-basic",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 42,
+      "chapterNumber": 5,
+      "sectionTitle": "Chapter 5: SQL Queries"
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/where-clause",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 43,
+      "chapterNumber": 5,
+      "sectionTitle": "Chapter 5: SQL Queries"
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/joins",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 44,
+      "chapterNumber": 5,
+      "sectionTitle": "Chapter 5: Joining Relations"
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/inner-join",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 45
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/outer-join",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 46
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/aggregate-functions",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 47,
+      "chapterNumber": 5,
+      "sectionTitle": "Chapter 5: Aggregate Operators"
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/group-by",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 48
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/having",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 49
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/subqueries",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 50
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/correlated-subquery",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 51
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/create-table",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 52
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/data-types",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 53
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/constraints",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 54
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/primary-key",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 55
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/foreign-key",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 56
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/insert",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 57
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/update",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 58
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/delete",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 59
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/views",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 60
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/normalization",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 61,
+      "chapterNumber": 19,
+      "sectionTitle": "Chapter 19: Schema Refinement"
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/1nf",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 62
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/2nf",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 63
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/3nf",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 64
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/transactions",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 65,
+      "chapterNumber": 16,
+      "sectionTitle": "Chapter 16: Concurrency Control"
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/acid",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 66
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/isolation-levels",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 67
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/indexes",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 68,
+      "chapterNumber": 8,
+      "sectionTitle": "Chapter 8: External Sorting and Indexing"
+    },
+    {
+      "id": "dbms-ramakrishnan-3rd-edition/authorization",
+      "sourceDocId": "dbms-ramakrishnan-3rd-edition",
+      "displayOrder": 69
+    }
+  ]
+}

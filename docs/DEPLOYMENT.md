@@ -545,4 +545,74 @@ curl http://localhost:3001/api/llm/status
 
 ---
 
-*Last updated: 2026-03-11*
+---
+
+## Real-Browser Regression Runbook
+
+### Sync the helper corpus
+
+```bash
+node scripts/sync-helper-export.mjs "/path/to/algl-pdf-helper/output/textbook-static"
+```
+
+This copies `concept-map.json`, `textbook-manifest.json`, `chunks-metadata.json`,
+`concept-quality.json`, and `textbook-units.json` from the helper export into
+`apps/web/public/textbook-static/`. A `validate-corpus.mjs` run is triggered
+automatically; it checks all 8 corpus integrity rules including the two new files.
+
+### Validate the corpus (standalone)
+
+```bash
+node scripts/validate-corpus.mjs
+```
+
+Expected output: `PASS: all N entries resolve; both required textbooks present.`
+Checks 7 and 8 confirm `concept-quality.json` and `textbook-units.json` are present.
+
+### Install Playwright browsers (first time)
+
+```bash
+npm run test:install-browsers
+# or directly:
+npx playwright install --with-deps chromium
+```
+
+### Run the local regression suite
+
+```bash
+# UX regression (save-to-notes + concept readability) — no backend needed
+npx playwright test -c playwright.config.ts --grep "@ux-bugs|@no-external"
+
+# Full local suite
+npx playwright test -c playwright.config.ts
+```
+
+### Run against a deployed Vercel URL
+
+```bash
+# Public deployment (no protection bypass needed)
+PLAYWRIGHT_BASE_URL="https://<deployment-url>.vercel.app" \
+  npx playwright test -c playwright.config.ts --grep "@ux-bugs|@deployed-smoke"
+
+# Protected Vercel preview (deployment protection enabled)
+PLAYWRIGHT_BASE_URL="https://<preview-url>.vercel.app" \
+VERCEL_AUTOMATION_BYPASS_SECRET="<secret-from-vercel-dashboard>" \
+  npx playwright test -c playwright.config.ts --grep "@ux-bugs|@deployed-smoke"
+```
+
+The `VERCEL_AUTOMATION_BYPASS_SECRET` is set via the Vercel dashboard under
+**Project → Settings → Deployment Protection → Automation bypass secret**.
+When set, the `x-vercel-protection-bypass` and `x-vercel-set-bypass-cookie`
+headers are injected automatically on every Playwright request.
+
+### Build check
+
+```bash
+npm run build
+```
+
+Expected: zero TypeScript errors, `dist/app/` contains the production bundle
+including the new `textbook-static/concept-quality.json` and
+`textbook-static/textbook-units.json` assets.
+
+*Last updated: 2026-03-22*

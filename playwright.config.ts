@@ -2,8 +2,28 @@ import { defineConfig, devices } from '@playwright/test';
 
 const PORT = 4173;
 const HOST = '127.0.0.1';
-const BASE_URL = `http://${HOST}:${PORT}`;
+const LOCAL_BASE_URL = `http://${HOST}:${PORT}`;
 const IS_CI = !!process.env.CI;
+
+/**
+ * PLAYWRIGHT_BASE_URL — override to run tests against a deployed URL.
+ *
+ * Examples:
+ *   PLAYWRIGHT_BASE_URL="https://my-preview.vercel.app" npx playwright test --grep "@deployed-smoke"
+ *
+ * When set, webServer is skipped (no local server needed for remote targets).
+ */
+const DEPLOYED_BASE_URL = process.env.PLAYWRIGHT_BASE_URL;
+const BASE_URL = DEPLOYED_BASE_URL || LOCAL_BASE_URL;
+
+/**
+ * VERCEL_AUTOMATION_BYPASS_SECRET — required to access Vercel Preview
+ * deployments that have deployment protection enabled.
+ *
+ * Passed as the x-vercel-protection-bypass HTTP header on every request.
+ * See: https://vercel.com/docs/security/deployment-protection/methods-to-bypass-deployment-protection
+ */
+const VERCEL_BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -20,24 +40,38 @@ export default defineConfig({
     baseURL: BASE_URL,
     headless: true,
     trace: 'retain-on-failure',
-    screenshot: 'only-on-failure'
+    screenshot: 'only-on-failure',
+    // Inject Vercel bypass header when running against protected preview deployments
+    ...(VERCEL_BYPASS_SECRET
+      ? {
+          extraHTTPHeaders: {
+            'x-vercel-protection-bypass': VERCEL_BYPASS_SECRET,
+            'x-vercel-set-bypass-cookie': 'true',
+          },
+        }
+      : {}),
   },
-  webServer: {
-    // In CI: use preview server with existing build (build done in workflow)
-    // Local: use dev server
-    command: IS_CI 
-      ? `npx vite preview --config apps/web/vite.config.ts --host ${HOST} --port ${PORT} --outDir ../../dist/app`
-      : `npm run dev -- --host ${HOST} --port ${PORT}`,
-    url: BASE_URL,
-    reuseExistingServer: !IS_CI,
-    timeout: 120_000,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env: {
-      // Enable instructor mode in CI for role-system tests
-      VITE_INSTRUCTOR_PASSCODE: process.env.VITE_INSTRUCTOR_PASSCODE || 'TestPasscode2024'
-    }
-  },
+  // Skip webServer when running against a remote deployed URL
+  ...(DEPLOYED_BASE_URL
+    ? {}
+    : {
+        webServer: {
+          // In CI: use preview server with existing build (build done in workflow)
+          // Local: use dev server
+          command: IS_CI
+            ? `npx vite preview --config apps/web/vite.config.ts --host ${HOST} --port ${PORT} --outDir ../../dist/app`
+            : `npm run dev -- --host ${HOST} --port ${PORT}`,
+          url: LOCAL_BASE_URL,
+          reuseExistingServer: !IS_CI,
+          timeout: 120_000,
+          stdout: 'pipe',
+          stderr: 'pipe',
+          env: {
+            // Enable instructor mode in CI for role-system tests
+            VITE_INSTRUCTOR_PASSCODE: process.env.VITE_INSTRUCTOR_PASSCODE || 'TestPasscode2024',
+          },
+        },
+      }),
   projects: [
     {
       name: 'chromium',

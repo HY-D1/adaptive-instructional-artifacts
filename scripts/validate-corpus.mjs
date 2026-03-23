@@ -11,6 +11,8 @@
  *   4. Per-doc concept directories exist for every sourceDocId.
  *   5. Every concept-map.json entry resolves to an existing markdown file.
  *   6. No duplicate concept keys.
+ *   7. concept-quality.json exists and is valid JSON (required for full helper corpus).
+ *   8. textbook-units.json exists and is valid JSON (required for full helper corpus).
  *
  * Exit 0 = corpus is consistent and dual-source.
  * Exit 1 = any check failed.
@@ -23,9 +25,11 @@ import { fileURLToPath } from 'url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, '..');
 
-const CONCEPT_MAP_PATH   = resolve(ROOT, 'apps/web/public/textbook-static/concept-map.json');
-const CONCEPTS_BASE      = resolve(ROOT, 'apps/web/public/textbook-static/concepts');
-const MANIFEST_PATH      = resolve(ROOT, 'apps/web/public/textbook-static/textbook-manifest.json');
+const CONCEPT_MAP_PATH     = resolve(ROOT, 'apps/web/public/textbook-static/concept-map.json');
+const CONCEPTS_BASE        = resolve(ROOT, 'apps/web/public/textbook-static/concepts');
+const MANIFEST_PATH        = resolve(ROOT, 'apps/web/public/textbook-static/textbook-manifest.json');
+const QUALITY_PATH         = resolve(ROOT, 'apps/web/public/textbook-static/concept-quality.json');
+const TEXTBOOK_UNITS_PATH  = resolve(ROOT, 'apps/web/public/textbook-static/textbook-units.json');
 
 /** Textbooks that MUST be present for the corpus contract to hold. */
 const REQUIRED_SOURCE_DOC_IDS = [
@@ -76,6 +80,40 @@ function run() {
       errors++;
     } else {
       console.log(`PASS [check-4]: concept directory present for "${docId}"`);
+    }
+  }
+
+  // ── Check 7: concept-quality.json exists and is valid JSON ───────────────
+  if (!existsSync(QUALITY_PATH)) {
+    console.error(`FAIL [check-7]: concept-quality.json not found at ${QUALITY_PATH.replace(ROOT + '/', '')}`);
+    console.error(`  This file is required for the full helper-generated corpus.`);
+    console.error(`  Run: node scripts/sync-helper-export.mjs <export-dir> (with a helper that emits concept-quality.json)`);
+    errors++;
+  } else {
+    try {
+      const qData = JSON.parse(readFileSync(QUALITY_PATH, 'utf-8'));
+      const qCount = Object.keys(qData.quality ?? {}).length;
+      console.log(`PASS [check-7]: concept-quality.json present (${qCount} concept quality entries)`);
+    } catch (err) {
+      console.error(`FAIL [check-7]: concept-quality.json is not valid JSON: ${err.message}`);
+      errors++;
+    }
+  }
+
+  // ── Check 8: textbook-units.json exists and is valid JSON ─────────────────
+  if (!existsSync(TEXTBOOK_UNITS_PATH)) {
+    console.error(`FAIL [check-8]: textbook-units.json not found at ${TEXTBOOK_UNITS_PATH.replace(ROOT + '/', '')}`);
+    console.error(`  This file is required for the full helper-generated corpus.`);
+    console.error(`  Run: node scripts/sync-helper-export.mjs <export-dir> (with a helper that emits textbook-units.json)`);
+    errors++;
+  } else {
+    try {
+      const uData = JSON.parse(readFileSync(TEXTBOOK_UNITS_PATH, 'utf-8'));
+      const uCount = (uData.units ?? []).length;
+      console.log(`PASS [check-8]: textbook-units.json present (${uCount} unit entries)`);
+    } catch (err) {
+      console.error(`FAIL [check-8]: textbook-units.json is not valid JSON: ${err.message}`);
+      errors++;
     }
   }
 

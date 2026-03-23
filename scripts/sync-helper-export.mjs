@@ -12,6 +12,8 @@
  *   concept-map.json
  *   textbook-manifest.json          (optional but strongly recommended)
  *   chunks-metadata.json            (optional)
+ *   concept-quality.json            (required for full helper corpus — per-concept quality metadata)
+ *   textbook-units.json             (required for full helper corpus — static unit identity metadata)
  *   concepts/<docId>/<conceptId>.md (one or more)
  *
  * After sync:
@@ -114,6 +116,26 @@ const srcChunks = join(srcDir, 'chunks-metadata.json');
 if (existsSync(srcChunks)) {
   copyFileSync(srcChunks, join(TARGET_DIR, 'chunks-metadata.json'));
   console.log('  ✓ chunks-metadata.json');
+}
+
+// 4. Copy concept-quality.json (required for full helper-generated corpus)
+const srcQuality = join(srcDir, 'concept-quality.json');
+if (existsSync(srcQuality)) {
+  copyFileSync(srcQuality, join(TARGET_DIR, 'concept-quality.json'));
+  console.log('  ✓ concept-quality.json');
+} else {
+  console.warn('  WARN: concept-quality.json missing from export — concept quality metadata will fall back to concept-map.json entries and local heuristics.');
+  console.warn('        For a full helper-generated corpus this file is required.');
+}
+
+// 5. Copy textbook-units.json (required for full helper-generated corpus)
+const srcTextbookUnits = join(srcDir, 'textbook-units.json');
+if (existsSync(srcTextbookUnits)) {
+  copyFileSync(srcTextbookUnits, join(TARGET_DIR, 'textbook-units.json'));
+  console.log('  ✓ textbook-units.json');
+} else {
+  console.warn('  WARN: textbook-units.json missing from export — textbook unit metadata will not be available for stable unit identity/rendering.');
+  console.warn('        For a full helper-generated corpus this file is required.');
 }
 
 // 4. Sync concepts/ subtree (merge: new files overwrite, existing files not in export are kept)
