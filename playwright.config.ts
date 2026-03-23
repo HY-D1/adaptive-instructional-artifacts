@@ -25,6 +25,11 @@ const BASE_URL = DEPLOYED_BASE_URL || LOCAL_BASE_URL;
  */
 const VERCEL_BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
+// ─── Auth state file paths ────────────────────────────────────────────────────
+// Created by the 'setup:auth' project via tests/e2e/setup/auth.setup.ts.
+// Consumed by the 'chromium:auth' project.
+export const STUDENT_AUTH_FILE = 'playwright/.auth/student.json';
+
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 60_000,
@@ -73,9 +78,40 @@ export default defineConfig({
         },
       }),
   projects: [
+    // ── Auth setup ─────────────────────────────────────────────────────────────
+    // Runs once before any auth-dependent project.
+    // Creates playwright/.auth/student.json and playwright/.auth/instructor.json.
+    // Writes empty storageState files and logs a warning when the backend is
+    // unreachable (no-op graceful degradation).
+    {
+      name: 'setup:auth',
+      testMatch: '**/setup/auth.setup.ts',
+    },
+
+    // ── Main test suite (no auth dependency) ────────────────────────────────────
+    // Runs all specs EXCEPT the auth setup and the auth-dependent smoke.
+    // These tests seed auth via addInitScript / StartPage flow.
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] }
-    }
+      use: { ...devices['Desktop Chrome'] },
+      testIgnore: [
+        '**/setup/**',
+        '**/deployed-auth-smoke.spec.ts',
+      ],
+    },
+
+    // ── Auth-backed deployed smoke ─────────────────────────────────────────────
+    // Runs AFTER setup:auth. Each test context starts with the student JWT
+    // cookie + localStorage profile pre-loaded — no UI login needed per test.
+    // Tests self-skip when the auth file contains no cookies (backend absent).
+    {
+      name: 'chromium:auth',
+      testMatch: ['**/deployed-auth-smoke.spec.ts'],
+      dependencies: ['setup:auth'],
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: STUDENT_AUTH_FILE,
+      },
+    },
   ]
 });

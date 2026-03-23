@@ -577,33 +577,142 @@ npm run test:install-browsers
 npx playwright install --with-deps chromium
 ```
 
-### Run the local regression suite
+---
+
+### Playwright test suites
+
+The config defines three Playwright **projects**:
+
+| Project | What it runs | Auth |
+|---------|-------------|------|
+| `setup:auth` | `tests/e2e/setup/auth.setup.ts` | Captures JWT cookie → `playwright/.auth/*.json` |
+| `chromium` | All `*.spec.ts` except auth smoke | localStorage / StartPage (no backend required) |
+| `chromium:auth` | `deployed-auth-smoke.spec.ts` only | Pre-loaded JWT cookie via `storageState` |
+
+#### Local regression suite (no backend required)
 
 ```bash
-# UX regression (save-to-notes + concept readability) — no backend needed
+# UX regression — save-to-notes + concept readability
 npx playwright test -c playwright.config.ts --grep "@ux-bugs|@no-external"
 
-# Full local suite
-npx playwright test -c playwright.config.ts
+# Full suite (chromium project only — no auth dependency)
+npx playwright test -c playwright.config.ts --project=chromium
 ```
 
-### Run against a deployed Vercel URL
+---
+
+### Authenticated smoke (real auth backend required)
+
+The `@deployed-auth-smoke` suite signs in via the real `/auth` page (JWT cookie),
+saves a note, then opens a **fresh browser context** from the saved auth state to
+prove the note persists across sessions.
+
+#### Step 1 — Capture auth state (run once per environment)
+
+The `setup:auth` project runs automatically as a dependency of `chromium:auth`.
+You can also trigger it explicitly:
 
 ```bash
-# Public deployment (no protection bypass needed)
-PLAYWRIGHT_BASE_URL="https://<deployment-url>.vercel.app" \
-  npx playwright test -c playwright.config.ts --grep "@ux-bugs|@deployed-smoke"
+# Local dev server + backend on :3001
+npx playwright test -c playwright.config.ts --project=setup:auth
 
-# Protected Vercel preview (deployment protection enabled)
-PLAYWRIGHT_BASE_URL="https://<preview-url>.vercel.app" \
+# Against a deployed preview
+PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
+E2E_STUDENT_EMAIL="student@yourdomain.com" \
+E2E_STUDENT_PASSWORD="YourPassword123!" \
+E2E_INSTRUCTOR_CODE="<instructor-code>" \
+  npx playwright test -c playwright.config.ts --project=setup:auth
+```
+
+Auth state is saved to `playwright/.auth/student.json` and
+`playwright/.auth/instructor.json` (gitignored — never commit these).
+
+#### Step 2 — Run the auth smoke
+
+```bash
+# Local (dev server + backend must be running)
+npx playwright test -c playwright.config.ts --project=chromium:auth \
+  --grep "@deployed-auth-smoke"
+
+# Shorthand — runs setup:auth first automatically, then chromium:auth
+npx playwright test -c playwright.config.ts \
+  --project=setup:auth --project=chromium:auth
+```
+
+#### Deployed authenticated smoke (Vercel preview, no protection bypass)
+
+```bash
+PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
+E2E_STUDENT_EMAIL="student@yourdomain.com" \
+E2E_STUDENT_PASSWORD="YourPassword123!" \
+E2E_INSTRUCTOR_CODE="<instructor-code>" \
+  npx playwright test -c playwright.config.ts \
+    --project=setup:auth --project=chromium:auth \
+    --grep "@deployed-auth-smoke"
+```
+
+#### Deployed authenticated smoke (Vercel protected preview)
+
+```bash
+PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
 VERCEL_AUTOMATION_BYPASS_SECRET="<secret-from-vercel-dashboard>" \
-  npx playwright test -c playwright.config.ts --grep "@ux-bugs|@deployed-smoke"
+E2E_STUDENT_EMAIL="student@yourdomain.com" \
+E2E_STUDENT_PASSWORD="YourPassword123!" \
+E2E_INSTRUCTOR_CODE="<instructor-code>" \
+  npx playwright test -c playwright.config.ts \
+    --project=setup:auth --project=chromium:auth \
+    --grep "@deployed-auth-smoke"
 ```
 
 The `VERCEL_AUTOMATION_BYPASS_SECRET` is set via the Vercel dashboard under
 **Project → Settings → Deployment Protection → Automation bypass secret**.
 When set, the `x-vercel-protection-bypass` and `x-vercel-set-bypass-cookie`
 headers are injected automatically on every Playwright request.
+
+#### Environment variables reference
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PLAYWRIGHT_BASE_URL` | `http://127.0.0.1:4173` | Target URL (set for deployed runs) |
+| `VERCEL_AUTOMATION_BYPASS_SECRET` | — | Vercel protection bypass header |
+| `E2E_STUDENT_EMAIL` | `e2e-student-<ts>@sql-adapt.test` | Student account email |
+| `E2E_STUDENT_PASSWORD` | `E2eTestPass!123` | Student account password |
+| `E2E_INSTRUCTOR_EMAIL` | `e2e-instructor-<ts>@sql-adapt.test` | Instructor account email |
+| `E2E_INSTRUCTOR_PASSWORD` | `E2eInstrPass!123` | Instructor account password |
+| `E2E_INSTRUCTOR_CODE` | `TeachSQL2024` | Instructor signup code (dev default) |
+
+> **Note:** Set `E2E_STUDENT_EMAIL` / `E2E_STUDENT_PASSWORD` to stable values in CI
+> so the setup project can log in to an existing account (idempotent). When not set,
+> a fresh unique email is generated each run and signup is attempted first with login
+> as a fallback.
+
+#### What the auth smoke proves
+
+1. **Real JWT auth** — signs in via `/auth`, no `addInitScript` seeding.
+2. **Note saved** — Save to Notes succeeds and the success banner appears.
+3. **SPA navigation** — note visible in `/textbook` without a page reload.
+4. **Cross-session persistence** — a **fresh `browser.newContext()`** loaded with
+   the post-note `storageState` (JWT cookie + localStorage) shows the note.
+   This is the strongest persistence claim: equivalent to closing the browser
+   and reopening it on a different device sharing the same credentials.
+5. **Instructor gate** — wrong code → error; right code → redirect.
+
+---
+
+### Run against a deployed Vercel URL (non-auth smoke only)
+
+```bash
+# Public deployment (no protection bypass needed)
+PLAYWRIGHT_BASE_URL="https://<deployment-url>.vercel.app" \
+  npx playwright test -c playwright.config.ts --project=chromium \
+    --grep "@ux-bugs|@deployed-smoke"
+
+# Protected Vercel preview (deployment protection enabled)
+PLAYWRIGHT_BASE_URL="https://<preview-url>.vercel.app" \
+VERCEL_AUTOMATION_BYPASS_SECRET="<secret-from-vercel-dashboard>" \
+  npx playwright test -c playwright.config.ts --project=chromium \
+    --grep "@ux-bugs|@deployed-smoke"
+```
 
 ### Build check
 

@@ -10,6 +10,8 @@ playwright-report/
 playwright-report-*/
 playwright-report */
 test-results/
+# Playwright auth state — captured cookies/localStorage, never commit
+playwright/.auth/*.json
 coverage/
 *.tsbuildinfo
 
