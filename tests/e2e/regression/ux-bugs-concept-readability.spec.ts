@@ -470,4 +470,254 @@ test.describe('@regression @ux-bugs @no-external Concept readability — helper 
 
     await page.screenshot({ path: 'test-results/ux-bug-concept-readability-clean.png', fullPage: true });
   });
+
+  /**
+   * Browser sanity gate: corrupted learnerSafeExamples (OCR/prose contamination)
+   * must be rejected and shown as "no verified examples available".
+   *
+   * This tests the final defense-in-depth filter that catches examples with:
+   * - No SQL structure (just prose)
+   * - OCR artefacts (form-feeds, excessive punctuation)
+   * - Long narrative fragments without SQL syntax
+   */
+  test('corrupted learnerSafeExamples are filtered by browser sanity gate', async ({ page }) => {
+    await page.route('**/textbook-static/concept-map.json', async route => {
+      const resp = await route.fetch();
+      const json = await resp.json() as { concepts: Record<string, unknown> };
+      json.concepts['test-corrupted-examples'] = {
+        id: 'test-corrupted-examples',
+        title: 'Corrupted Examples Test',
+        definition: 'A concept with corrupted examples that should be filtered.',
+        difficulty: 'beginner',
+        estimatedReadTime: 5,
+        pageNumbers: [8],
+        chunkIds: { definition: [], examples: [], commonMistakes: [] },
+        relatedConcepts: [],
+        practiceProblemIds: [],
+        qualityMetadata: {
+          readabilityStatus: 'fallback_only',
+          learnerSafeSummary: 'This concept has corrupted examples that should be hidden.',
+          learnerSafeKeyPoints: ['Key point one', 'Key point two'],
+          // These examples have various corruption patterns
+          learnerSafeExamples: [
+            {
+              title: 'This is actually a sentence not a title because it is way too long and describes something in prose format',
+              sql: 'This is just prose text without any SQL. It explains what a query does but contains no actual code.',
+              explanation: 'This example has no SQL structure.'
+            },
+            {
+              title: 'OCR Artefact Example',
+              sql: 'The query selects data from the table....... but the SQL is missing',
+              explanation: 'This has excessive punctuation indicating OCR corruption.'
+            },
+            {
+              title: 'Long Prose Fragment',
+              sql: 'This is a very long narrative that describes the concept in detail without any SQL syntax markers like semicolons or parentheses',
+              explanation: 'Long line without SQL structure.'
+            }
+          ]
+        }
+      };
+      await route.fulfill({ json });
+    });
+
+    await page.route('**/textbook-static/concepts/test-corrupted-examples.md', async route => {
+      const markdown = [
+        '## Definition',
+        'A concept with corrupted examples that should be filtered.',
+        '## Explanation',
+        '## Examples',
+        '## Common Mistakes',
+      ].join('\n');
+      await route.fulfill({ contentType: 'text/markdown', body: markdown });
+    });
+
+    await page.goto('/concepts/test-corrupted-examples');
+
+    await expect(
+      page.locator('h1').filter({ hasText: /Corrupted Examples Test/i })
+    ).toBeVisible({ timeout: 30_000 });
+
+    // Quality banner must be visible (fallback mode)
+    const banner = page.locator('[role="note"][aria-label*="quality"]');
+    await expect(banner).toBeVisible({ timeout: 10_000 });
+
+    // Navigate to Examples tab
+    await page.getByRole('button', { name: 'Examples' }).click();
+
+    // Should show "no verified examples" message because all examples were filtered
+    await expect(
+      page.getByTestId('no-verified-examples')
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByText(/No verified SQL examples are available/i)
+    ).toBeVisible();
+
+    // learnerSafeSummary and key points should still be visible in Learn tab
+    await page.getByRole('button', { name: 'Learn' }).click();
+    const overviewBox = page.getByTestId('learner-safe-summary');
+    await expect(overviewBox).toBeVisible({ timeout: 10_000 });
+    await expect(overviewBox).toContainText(/corrupted examples that should be hidden/i);
+
+    await page.screenshot({ path: 'test-results/ux-bug-concept-readability-corrupted-filtered.png', fullPage: true });
+  });
+
+  /**
+   * Browser sanity gate: acceptable learnerSafeExamples must pass the filter
+   * and be shown as verified examples.
+   */
+  test('acceptable learnerSafeExamples pass browser sanity gate and render', async ({ page }) => {
+    await page.route('**/textbook-static/concept-map.json', async route => {
+      const resp = await route.fetch();
+      const json = await resp.json() as { concepts: Record<string, unknown> };
+      json.concepts['test-acceptable-examples'] = {
+        id: 'test-acceptable-examples',
+        title: 'Acceptable Examples Test',
+        definition: 'A concept with acceptable SQL examples.',
+        difficulty: 'beginner',
+        estimatedReadTime: 5,
+        pageNumbers: [9],
+        chunkIds: { definition: [], examples: [], commonMistakes: [] },
+        relatedConcepts: [],
+        practiceProblemIds: [],
+        qualityMetadata: {
+          readabilityStatus: 'fallback_only',
+          learnerSafeSummary: 'This concept has verified SQL examples.',
+          learnerSafeExamples: [
+            {
+              title: 'Simple SELECT',
+              sql: 'SELECT * FROM employees;',
+              explanation: 'Selects all columns from the employees table.'
+            },
+            {
+              title: 'INSERT Statement',
+              sql: "INSERT INTO users (name, email) VALUES ('John', 'john@example.com');",
+              explanation: 'Inserts a new user into the database.'
+            },
+            {
+              title: 'UPDATE Statement',
+              sql: "UPDATE products SET price = 19.99 WHERE id = 1;",
+              explanation: 'Updates a product price.'
+            }
+          ]
+        }
+      };
+      await route.fulfill({ json });
+    });
+
+    await page.route('**/textbook-static/concepts/test-acceptable-examples.md', async route => {
+      const markdown = [
+        '## Definition',
+        'A concept with acceptable SQL examples.',
+        '## Explanation',
+        '## Examples',
+        '## Common Mistakes',
+      ].join('\n');
+      await route.fulfill({ contentType: 'text/markdown', body: markdown });
+    });
+
+    await page.goto('/concepts/test-acceptable-examples');
+
+    await expect(
+      page.locator('h1').filter({ hasText: /Acceptable Examples Test/i })
+    ).toBeVisible({ timeout: 30_000 });
+
+    // Navigate to Examples tab
+    await page.getByRole('button', { name: 'Examples' }).click();
+
+    // All acceptable examples should be visible (use heading role to match titles specifically)
+    await expect(page.getByRole('heading', { name: 'Simple SELECT' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: 'INSERT Statement' })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: 'UPDATE Statement' })).toBeVisible({ timeout: 10_000 });
+
+    // SQL code blocks should be shown
+    await expect(page.locator('pre code').filter({ hasText: /SELECT \* FROM employees/i })).toBeVisible();
+    await expect(page.locator('pre code').filter({ hasText: /INSERT INTO users/i })).toBeVisible();
+    await expect(page.locator('pre code').filter({ hasText: /UPDATE products SET price/i })).toBeVisible();
+
+    // Should NOT show "no verified examples" message
+    await expect(page.getByTestId('no-verified-examples')).not.toBeVisible();
+
+    await page.screenshot({ path: 'test-results/ux-bug-concept-readability-acceptable-shown.png', fullPage: true });
+  });
+
+  /**
+   * Mixed quality: some acceptable and some corrupted examples.
+   * Only the acceptable ones should be shown.
+   */
+  test('mixed quality examples show only acceptable ones', async ({ page }) => {
+    await page.route('**/textbook-static/concept-map.json', async route => {
+      const resp = await route.fetch();
+      const json = await resp.json() as { concepts: Record<string, unknown> };
+      json.concepts['test-mixed-examples'] = {
+        id: 'test-mixed-examples',
+        title: 'Mixed Quality Examples Test',
+        definition: 'A concept with mixed quality examples.',
+        difficulty: 'beginner',
+        estimatedReadTime: 5,
+        pageNumbers: [10],
+        chunkIds: { definition: [], examples: [], commonMistakes: [] },
+        relatedConcepts: [],
+        practiceProblemIds: [],
+        qualityMetadata: {
+          readabilityStatus: 'fallback_only',
+          learnerSafeSummary: 'This concept has some good and some bad examples.',
+          learnerSafeExamples: [
+            {
+              title: 'Good Example',
+              sql: 'SELECT id, name FROM customers WHERE active = 1;',
+              explanation: 'Selects active customers.'
+            },
+            {
+              title: 'Corrupted Example With Prose',
+              sql: 'This example explains the concept but has no actual SQL code to execute.',
+              explanation: 'Should be filtered out.'
+            },
+            {
+              title: 'Another Good Example',
+              sql: 'DELETE FROM logs WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY);',
+              explanation: 'Deletes old log entries.'
+            }
+          ]
+        }
+      };
+      await route.fulfill({ json });
+    });
+
+    await page.route('**/textbook-static/concepts/test-mixed-examples.md', async route => {
+      const markdown = [
+        '## Definition',
+        'A concept with mixed quality examples.',
+        '## Explanation',
+        '## Examples',
+        '## Common Mistakes',
+      ].join('\n');
+      await route.fulfill({ contentType: 'text/markdown', body: markdown });
+    });
+
+    await page.goto('/concepts/test-mixed-examples');
+
+    await expect(
+      page.locator('h1').filter({ hasText: /Mixed Quality Examples Test/i })
+    ).toBeVisible({ timeout: 30_000 });
+
+    // Navigate to Examples tab
+    await page.getByRole('button', { name: 'Examples' }).click();
+
+    // Good examples should be visible (use heading role to match titles specifically)
+    await expect(page.getByRole('heading', { name: 'Good Example', exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: 'Another Good Example' })).toBeVisible({ timeout: 10_000 });
+
+    // Corrupted example should NOT be visible
+    await expect(page.getByText('Corrupted Example With Prose')).not.toBeVisible();
+
+    // SQL code for good examples should be shown
+    await expect(page.locator('pre code').filter({ hasText: /SELECT id, name FROM customers/i })).toBeVisible();
+    await expect(page.locator('pre code').filter({ hasText: /DELETE FROM logs/i })).toBeVisible();
+
+    // Should NOT show "no verified examples" message (because some passed)
+    await expect(page.getByTestId('no-verified-examples')).not.toBeVisible();
+
+    await page.screenshot({ path: 'test-results/ux-bug-concept-readability-mixed-filtered.png', fullPage: true });
+  });
 });

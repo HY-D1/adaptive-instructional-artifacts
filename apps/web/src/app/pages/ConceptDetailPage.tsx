@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router';
 import { useEffect, useState } from 'react';
-import { loadConceptContent, getProblemsForConcept, assessConceptQuality, filterSaneExamples, type LoadedConcept, type CodeExample, type Mistake, type QualityMetadata } from '../lib/content/concept-loader';
+import { loadConceptContent, getProblemsForConcept, assessConceptQuality, filterSaneExamples, filterLearnerSafeExamples, type LoadedConcept, type CodeExample, type Mistake, type QualityMetadata } from '../lib/content/concept-loader';
 import { ChevronLeft, BookOpen, Clock, Dumbbell, AlertCircle, CheckCircle, XCircle, Lightbulb, Play, Info } from 'lucide-react';
 
 export function ConceptDetailPage() {
@@ -275,10 +275,13 @@ function LearnTab({ content, quality = 'good', qualityMetadata }: {
 
 function ExamplesTab({ examples, quality = 'good', qualityMetadata }: { examples: CodeExample[]; quality?: 'good' | 'fallback'; qualityMetadata?: QualityMetadata }) {
   // In fallback mode, prefer helper-produced learnerSafeExamples if available.
-  const hasHelperExamples = qualityMetadata?.learnerSafeExamples && qualityMetadata.learnerSafeExamples.length > 0;
+  // Apply the final browser sanity gate to filter out any contaminated examples
+  // that slipped through the helper pipeline (OCR/prose artefacts, malformed SQL).
+  const helperExamples = filterLearnerSafeExamples(qualityMetadata?.learnerSafeExamples);
+  const hasHelperExamples = helperExamples.length > 0;
   const visibleExamples = quality === 'fallback'
     ? (hasHelperExamples
-        ? qualityMetadata!.learnerSafeExamples!.map(ex => ({
+        ? helperExamples.map(ex => ({
             title: ex.title,
             code: ex.sql ?? '',
             explanation: ex.explanation ?? '',

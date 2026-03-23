@@ -646,7 +646,76 @@ export function isExplanationGarbled(text: string): boolean {
 }
 
 /**
- * Returns true when a SQL code example string looks like real SQL.
+ * Returns true when a learnerSafeExample from the helper pipeline is safe to show
+ * as a "verified example" in the browser.
+ *
+ * This is the FINAL sanity gate before rendering helper-produced examples.
+ * The helper already filters, but some contaminated examples slip through
+ * (e.g., malformed mixed prose/OCR text).
+ *
+ * Rejection criteria:
+ * 1. No SQL structure — must contain a primary SQL keyword.
+ * 2. Obvious OCR/prose contamination — long narrative fragments without SQL syntax.
+ * 3. SQL with embedded prose — sentences mixed into the SQL (indicates pdftotext artefact).
+ */
+export function isLearnerSafeExample(example: { title?: string; sql?: string; explanation?: string }): boolean {
+  const sql = example.sql?.trim() ?? '';
+  const title = example.title?.trim() ?? '';
+
+  // Must have non-empty SQL
+  if (sql.length === 0) return false;
+
+  // Must have a primary SQL statement keyword (not just fragments like "FROM")
+  const primarySqlPattern = /\b(SELECT|INSERT\s+INTO|UPDATE\s+\w+|DELETE\s+FROM|CREATE\s+(TABLE|INDEX|VIEW)|DROP\s+(TABLE|INDEX|VIEW)|ALTER\s+TABLE)\b/i;
+  if (!primarySqlPattern.test(sql)) return false;
+
+  // Reject if SQL looks like prose (long sentences without SQL structure)
+  // Heuristic: if there are sentence-ending punctuation marks and few SQL markers, it's likely prose
+  const sentenceEnders = (sql.match(/[.!?]/g) || []).length;
+  const sqlMarkers = (sql.match(/[;(),=<>]/g) || []).length;
+  if (sentenceEnders > 2 && sqlMarkers < 5) return false;
+
+  // Reject if SQL contains long narrative fragments (>100 chars without SQL syntax)
+  // This catches OCR artefacts where prose is embedded in the SQL field
+  const lines = sql.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.length > 100) {
+      // Long line — check if it has SQL structure or is just prose
+      const hasSqlStructure = /[;(),=<>]/.test(trimmed);
+      const looksLikeProse = /\b(the|and|or|but|however|therefore|because|this|that|these|those)\b/i.test(trimmed);
+      if (!hasSqlStructure && looksLikeProse) return false;
+    }
+  }
+
+  // Reject obvious OCR artefacts: mixed case anomalies or excessive punctuation
+  if (/\.{3,}/.test(sql) && !sql.includes(';')) return false;
+
+  // Title must not be empty and should look like a title (not a sentence)
+  if (title.length === 0) return false;
+  if (title.length > 150) return false; // Too long for a title
+
+  return true;
+}
+
+/**
+ * Filter learnerSafeExamples to only those passing the final browser sanity check.
+ */
+export function filterLearnerSafeExamples(
+  examples: Array<{ title?: string; sql?: string; explanation?: string }> | undefined
+): Array<{ title: string; sql: string; explanation: string }> {
+  if (!examples || examples.length === 0) return [];
+  return examples
+    .filter(isLearnerSafeExample)
+    .map(ex => ({
+      title: ex.title ?? '',
+      sql: ex.sql ?? '',
+      explanation: ex.explanation ?? '',
+    }));
+}
+
+/**
+ * Returns true when a code example contains at least basic SQL structure.
  *
  * A "contaminated" example fails this check. Criteria:
  * - Must contain at least one SQL keyword (SELECT, INSERT, UPDATE, DELETE,
@@ -658,7 +727,7 @@ export function isExampleSqlSane(code: string): boolean {
   // Require at least one primary DML/DDL statement keyword (not just FROM/WHERE
   // which appear in prose).  Word-boundary matching prevents 'JOINS' from
   // matching 'JOIN'.
-  const primarySqlPattern = /\b(SELECT|INSERT\s+INTO|UPDATE\s+\w|DELETE\s+FROM|CREATE\s+(TABLE|INDEX|VIEW)|DROP\s+(TABLE|INDEX|VIEW)|ALTER\s+TABLE)\b/i;
+  const primarySqlPattern = /\b(SELECT|INSERT\s+INTO|UPDATE\s+\w+|DELETE\s+FROM|CREATE\s+(TABLE|INDEX|VIEW)|DROP\s+(TABLE|INDEX|VIEW)|ALTER\s+TABLE)\b/i;
   return primarySqlPattern.test(code);
 }
 
