@@ -14,9 +14,17 @@ export { getCompatibleCorpusIds };
  */
 export interface QualityMetadata {
   /** Overall readability of the explanation text. */
-  readabilityStatus: 'clean' | 'garbled' | 'partial';
+  readabilityStatus: 'clean' | 'garbled' | 'partial' | 'fallback_only';
   /** Short learner-safe summary to show instead of the garbled explanation. */
   learnerSafeSummary?: string;
+  /** Key points for learner-safe fallback mode (bulleted list). */
+  learnerSafeKeyPoints?: string[];
+  /** Verified examples for learner-safe fallback mode. */
+  learnerSafeExamples?: Array<{
+    title: string;
+    sql?: string;
+    explanation?: string;
+  }>;
   /** Whether code examples passed a basic sanity check. */
   exampleQuality?: 'clean' | 'contaminated' | 'partial';
 }
@@ -116,12 +124,19 @@ function normalizeConceptQualityFile(raw: Record<string, unknown>): ConceptQuali
       readabilityStatus: 'ok' | 'fallback_only';
       exampleQuality?: 'valid' | 'filtered';
       learnerSafeSummary?: string;
+      learnerSafeKeyPoints?: string[];
+      learnerSafeExamples?: Array<{ title: string; sql?: string; explanation?: string }>;
     }> }).qualityByConcept;
     const quality: Record<string, QualityMetadata> = {};
     for (const [id, entry] of Object.entries(qualityByConcept)) {
+      // Map helper v1 readabilityStatus to internal shape
+      // 'ok' -> 'clean', 'fallback_only' -> 'fallback_only' (preserved)
+      const readabilityStatus = entry.readabilityStatus === 'ok' ? 'clean' : 'fallback_only';
       quality[id] = {
-        readabilityStatus: entry.readabilityStatus === 'ok' ? 'clean' : 'garbled',
+        readabilityStatus,
         learnerSafeSummary: entry.learnerSafeSummary,
+        learnerSafeKeyPoints: entry.learnerSafeKeyPoints,
+        learnerSafeExamples: entry.learnerSafeExamples,
         exampleQuality:
           entry.exampleQuality === 'valid'
             ? 'clean'
@@ -672,7 +687,7 @@ export function assessConceptQuality(concept: LoadedConcept): 'good' | 'fallback
   // 1. Prefer helper-produced metadata when available.
   if (concept.qualityMetadata) {
     const { readabilityStatus, exampleQuality } = concept.qualityMetadata;
-    if (readabilityStatus === 'garbled' || exampleQuality === 'contaminated') {
+    if (readabilityStatus === 'garbled' || readabilityStatus === 'fallback_only' || exampleQuality === 'contaminated') {
       return 'fallback';
     }
     if (readabilityStatus === 'clean') {

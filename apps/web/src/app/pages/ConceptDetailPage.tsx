@@ -122,7 +122,7 @@ export function ConceptDetailPage() {
             {/* Tab Content */}
             <div className="bg-white rounded-xl border shadow-sm">
               {activeTab === 'learn' && <LearnTab content={concept.content} quality={contentQuality} qualityMetadata={qualityMetadata} />}
-              {activeTab === 'examples' && <ExamplesTab examples={concept.content.examples} quality={contentQuality} />}
+              {activeTab === 'examples' && <ExamplesTab examples={concept.content.examples} quality={contentQuality} qualityMetadata={qualityMetadata} />}
               {activeTab === 'mistakes' && <MistakesTab mistakes={concept.content.commonMistakes} />}
             </div>
           </div>
@@ -236,7 +236,7 @@ function LearnTab({ content, quality = 'good', qualityMetadata }: {
       )}
 
       {quality === 'fallback' && (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {/* Show helper-produced summary when available */}
           {qualityMetadata?.learnerSafeSummary ? (
             <div
@@ -253,19 +253,42 @@ function LearnTab({ content, quality = 'good', qualityMetadata }: {
               Full explanation is not available for this concept. Use the textbook pages listed in the sidebar for the complete coverage.
             </p>
           )}
+
+          {/* Show helper-produced key points when available */}
+          {qualityMetadata?.learnerSafeKeyPoints && qualityMetadata.learnerSafeKeyPoints.length > 0 && (
+            <div data-testid="learner-safe-keypoints" className="rounded-lg border border-amber-100 bg-amber-50/50 p-4">
+              <p className="text-sm font-medium text-amber-900 mb-2">Key Points</p>
+              <ul className="list-disc list-inside space-y-1">
+                {qualityMetadata.learnerSafeKeyPoints.map((point, idx) => (
+                  <li key={idx} className="text-sm text-amber-800 leading-relaxed">
+                    {point}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function ExamplesTab({ examples, quality = 'good' }: { examples: CodeExample[]; quality?: 'good' | 'fallback' }) {
-  // In fallback mode, only show examples that pass the SQL sanity check.
-  const visibleExamples = quality === 'fallback' ? filterSaneExamples(examples) : examples;
+function ExamplesTab({ examples, quality = 'good', qualityMetadata }: { examples: CodeExample[]; quality?: 'good' | 'fallback'; qualityMetadata?: QualityMetadata }) {
+  // In fallback mode, prefer helper-produced learnerSafeExamples if available.
+  const hasHelperExamples = qualityMetadata?.learnerSafeExamples && qualityMetadata.learnerSafeExamples.length > 0;
+  const visibleExamples = quality === 'fallback'
+    ? (hasHelperExamples
+        ? qualityMetadata!.learnerSafeExamples!.map(ex => ({
+            title: ex.title,
+            code: ex.sql ?? '',
+            explanation: ex.explanation ?? '',
+          }))
+        : filterSaneExamples(examples))
+    : examples;
 
   if (visibleExamples.length === 0) {
     return (
-      <div className="p-12 text-center text-gray-500">
+      <div data-testid="no-verified-examples" className="p-12 text-center text-gray-500">
         {quality === 'fallback'
           ? 'No verified SQL examples are available for this concept.'
           : 'No examples available for this concept.'}
@@ -281,19 +304,23 @@ function ExamplesTab({ examples, quality = 'good' }: { examples: CodeExample[]; 
             <CheckCircle className="w-5 h-5 text-green-600" />
             <h4 className="font-semibold text-gray-900">{ex.title}</h4>
           </div>
-          
-          <div className="bg-gray-900 rounded-lg p-4 mb-3 overflow-x-auto">
-            <pre className="text-green-400 font-mono text-sm">
-              <code>{ex.code}</code>
-            </pre>
-          </div>
-          
-          <p className="text-gray-600 text-sm leading-relaxed">{ex.explanation}</p>
-          
-          {ex.output && (
+
+          {ex.code && (
+            <div className="bg-gray-900 rounded-lg p-4 mb-3 overflow-x-auto">
+              <pre className="text-green-400 font-mono text-sm">
+                <code>{ex.code}</code>
+              </pre>
+            </div>
+          )}
+
+          {ex.explanation && (
+            <p className="text-gray-600 text-sm leading-relaxed">{ex.explanation}</p>
+          )}
+
+          {(ex as CodeExample).output && (
             <div className="mt-3 p-3 bg-gray-100 rounded-lg">
               <p className="text-xs text-gray-500 mb-1">Output:</p>
-              <p className="text-sm text-gray-700 font-mono">{ex.output}</p>
+              <p className="text-sm text-gray-700 font-mono">{(ex as CodeExample).output}</p>
             </div>
           )}
         </div>

@@ -599,6 +599,24 @@ npx playwright test -c playwright.config.ts --grep "@ux-bugs|@no-external"
 npx playwright test -c playwright.config.ts --project=chromium
 ```
 
+#### Richer fallback rendering regression (concept quality metadata)
+
+Tests the enhanced fallback mode that displays `learnerSafeKeyPoints` and
+`learnerSafeExamples` from the helper-produced quality metadata:
+
+```bash
+# Run concept readability regression including key points and examples
+npx playwright test -c playwright.config.ts \
+  tests/e2e/regression/ux-bugs-concept-readability.spec.ts
+```
+
+This suite verifies:
+- **fallback_only concepts** show `learnerSafeKeyPoints` as bullet list
+- **fallback_only concepts** with `learnerSafeExamples` render verified SQL examples
+- **fallback_only concepts** without examples show "no verified examples" message
+- **clean concepts** show full explanation without quality banner
+- **Local heuristics** still trigger quality banner when helper metadata absent
+
 ---
 
 ### Authenticated smoke (real auth backend required)
