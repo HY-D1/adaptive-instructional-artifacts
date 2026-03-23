@@ -84,6 +84,9 @@ function run() {
   }
 
   // ── Check 7: concept-quality.json exists and is valid JSON ───────────────
+  // Accepts two schemas:
+  //   Legacy placeholder  — { version, quality: Record<id, ...> }
+  //   Helper v1           — { schemaVersion: "concept-quality-v1", qualityByConcept: Record<id, ...> }
   if (!existsSync(QUALITY_PATH)) {
     console.error(`FAIL [check-7]: concept-quality.json not found at ${QUALITY_PATH.replace(ROOT + '/', '')}`);
     console.error(`  This file is required for the full helper-generated corpus.`);
@@ -92,8 +95,12 @@ function run() {
   } else {
     try {
       const qData = JSON.parse(readFileSync(QUALITY_PATH, 'utf-8'));
-      const qCount = Object.keys(qData.quality ?? {}).length;
-      console.log(`PASS [check-7]: concept-quality.json present (${qCount} concept quality entries)`);
+      const isV1 = qData.schemaVersion === 'concept-quality-v1';
+      const qCount = isV1
+        ? Object.keys(qData.qualityByConcept ?? {}).length
+        : Object.keys(qData.quality ?? {}).length;
+      const schemaLabel = isV1 ? 'concept-quality-v1' : `legacy v${qData.version ?? '?'}`;
+      console.log(`PASS [check-7]: concept-quality.json present (${qCount} entries, schema: ${schemaLabel})`);
     } catch (err) {
       console.error(`FAIL [check-7]: concept-quality.json is not valid JSON: ${err.message}`);
       errors++;

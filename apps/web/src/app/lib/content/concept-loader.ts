@@ -74,9 +74,9 @@ interface ConceptMapData {
 }
 
 /**
- * Shape of apps/web/public/textbook-static/concept-quality.json.
- * Produced by the upstream PDF helper pipeline.  When present, entries here
- * take precedence over per-concept qualityMetadata embedded in concept-map.json.
+ * Normalized internal shape of concept quality metadata, used throughout the app.
+ * Both the legacy placeholder schema and the real helper v1 schema are normalized
+ * into this shape at load time.
  */
 export interface ConceptQualityFile {
   version: string;
@@ -86,9 +86,8 @@ export interface ConceptQualityFile {
 }
 
 /**
- * Shape of apps/web/public/textbook-static/textbook-units.json.
- * Provides stable unit identity and chapter/section rendering metadata
- * produced by the upstream PDF helper pipeline.
+ * Shape of apps/web/public/textbook-static/textbook-units.json (normalized).
+ * Both legacy placeholder and real helper v1 schema are normalized into this shape.
  */
 export interface TextbookUnitMeta {
   /** Full namespaced concept ID, e.g. "murachs-mysql-3rd-edition/select-basic". */
@@ -103,6 +102,66 @@ export interface TextbookUnitsFile {
   version: string;
   generatedAt: string;
   units: TextbookUnitMeta[];
+}
+
+// ─── Schema normalization (private) ─────────────────────────────────────────
+// Supports two on-disk formats:
+//   Legacy placeholder  — { version, quality: Record<id, QualityMetadata> }
+//   Helper v1           — { schemaVersion: "concept-quality-v1", qualityByConcept: Record<id, {...}> }
+// Both are normalized into ConceptQualityFile / TextbookUnitsFile at load time.
+
+function normalizeConceptQualityFile(raw: Record<string, unknown>): ConceptQualityFile {
+  if ((raw as { schemaVersion?: string }).schemaVersion === 'concept-quality-v1') {
+    const qualityByConcept = (raw as { qualityByConcept: Record<string, {
+      readabilityStatus: 'ok' | 'fallback_only';
+      exampleQuality?: 'valid' | 'filtered';
+      learnerSafeSummary?: string;
+    }> }).qualityByConcept;
+    const quality: Record<string, QualityMetadata> = {};
+    for (const [id, entry] of Object.entries(qualityByConcept)) {
+      quality[id] = {
+        readabilityStatus: entry.readabilityStatus === 'ok' ? 'clean' : 'garbled',
+        learnerSafeSummary: entry.learnerSafeSummary,
+        exampleQuality:
+          entry.exampleQuality === 'valid'
+            ? 'clean'
+            : entry.exampleQuality === 'filtered'
+            ? 'contaminated'
+            : undefined,
+      };
+    }
+    return {
+      version: 'concept-quality-v1',
+      generatedAt: (raw as { generatedAt?: string }).generatedAt ?? '',
+      quality,
+    };
+  }
+  // Legacy schema — passes through as-is
+  return raw as unknown as ConceptQualityFile;
+}
+
+function normalizeTextbookUnitsFile(raw: Record<string, unknown>): TextbookUnitsFile {
+  if ((raw as { schemaVersion?: string }).schemaVersion === 'textbook-units-v1') {
+    const rawUnits = (raw as { units: Array<{
+      namespacedId: string;
+      sourceDocId?: string;
+      shortExcerpt?: string;
+      sourceOrder?: number;
+    }> }).units;
+    const units: TextbookUnitMeta[] = rawUnits.map(u => ({
+      id: u.namespacedId,
+      sourceDocId: u.sourceDocId,
+      sectionTitle: u.shortExcerpt,
+      displayOrder: typeof u.sourceOrder === 'number' ? u.sourceOrder : undefined,
+    }));
+    return {
+      version: 'textbook-units-v1',
+      generatedAt: (raw as { generatedAt?: string }).generatedAt ?? '',
+      units,
+    };
+  }
+  // Legacy schema — passes through as-is
+  return raw as unknown as TextbookUnitsFile;
 }
 
 // Cache
@@ -245,7 +304,12 @@ export async function loadConceptQuality(): Promise<ConceptQualityFile | null> {
   if (conceptQualityCache !== false) return conceptQualityCache;
   try {
     const res = await fetch('/textbook-static/concept-quality.json');
-    conceptQualityCache = res.ok ? (await res.json() as ConceptQualityFile) : null;
+    if (!res.ok) {
+      conceptQualityCache = null;
+    } else {
+      const raw = await res.json() as Record<string, unknown>;
+      conceptQualityCache = normalizeConceptQualityFile(raw);
+    }
   } catch {
     conceptQualityCache = null;
   }
@@ -262,7 +326,12 @@ export async function loadTextbookUnitsMeta(): Promise<TextbookUnitsFile | null>
   if (textbookUnitsCache !== false) return textbookUnitsCache;
   try {
     const res = await fetch('/textbook-static/textbook-units.json');
-    textbookUnitsCache = res.ok ? (await res.json() as TextbookUnitsFile) : null;
+    if (!res.ok) {
+      textbookUnitsCache = null;
+    } else {
+      const raw = await res.json() as Record<string, unknown>;
+      textbookUnitsCache = normalizeTextbookUnitsFile(raw);
+    }
   } catch {
     textbookUnitsCache = null;
   }

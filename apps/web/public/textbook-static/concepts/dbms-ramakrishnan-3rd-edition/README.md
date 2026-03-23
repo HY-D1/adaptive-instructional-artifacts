@@ -43,5 +43,5 @@ This directory contains concept documentation for **dbms-ramakrishnan-3rd-editio
 - [SQL Authorization](./authorization.md)
 
 ---
-*Generated: 2026-03-21T16:22:37.380866+00:00*
+*Generated: 2026-03-22T20:52:10.376551+00:00*
 *Schema: textbook-static-v1 v1.0.0*

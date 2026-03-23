@@ -1,16 +1,572 @@
 {
-  "version": "1.0",
-  "generatedAt": "2026-03-22T22:27:49.216Z",
-  "quality": {
-    "murachs-mysql-3rd-edition/mysql-intro": {
-      "readabilityStatus": "garbled",
-      "learnerSafeSummary": "MySQL is the world's most popular open-source relational database. This course covers writing SQL queries to retrieve and update data, designing databases, and using MySQL Workbench. See the textbook pages listed for full coverage.",
-      "exampleQuality": "contaminated"
+  "schemaVersion": "concept-quality-v1",
+  "generatedAt": "2026-03-22T20:52:10.462306+00:00",
+  "sourceDocIds": [
+    "dbms-ramakrishnan-3rd-edition",
+    "murachs-mysql-3rd-edition"
+  ],
+  "totalConcepts": 70,
+  "qualityByConcept": {
+    "dbms-ramakrishnan-3rd-edition/1nf": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 11% of title keywords (['atomic', 'eliminating', 'ensuring', 'first', 'form', 'groups', 'normal', 'repeating', 'values']) appear in explanation \u2014 content may be about a different topic",
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "First Normal Form (1NF): Eliminating repeating groups and ensuring atomic values"
+    },
+    "dbms-ramakrishnan-3rd-edition/2nf": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "toc_pollution: 10 TOC-like patterns in explanation (threshold 3) \u2014 content is an index page",
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Second Normal Form (2NF): Eliminating partial dependencies on composite keys"
+    },
+    "dbms-ramakrishnan-3rd-edition/3nf": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['dependencies', 'eliminating', 'form', 'normal', 'third', 'transitive']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Third Normal Form (3NF): Eliminating transitive dependencies"
+    },
+    "dbms-ramakrishnan-3rd-edition/acid": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "toc_pollution: 3 TOC-like patterns in explanation (threshold 3) \u2014 content is an index page",
+        "semantic_drift: only 11% of title keywords (['acid', 'atomicity', 'consistency', 'durability', 'guarantees', 'isolation', 'processing', 'properties', 'transaction']) appear in explanation \u2014 content may be about a different topic",
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "ACID Properties: Atomicity, Consistency, Isolation, Durability - guarantees for transaction processing"
+    },
+    "dbms-ramakrishnan-3rd-edition/aggregate-functions": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Aggregate Functions: Computing summary values with COUNT, SUM, AVG, MAX, MIN"
+    },
+    "dbms-ramakrishnan-3rd-edition/authorization": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['access', 'authorization', 'controlling', 'database', 'grant', 'objects', 'revoke', 'statements']) appear in explanation \u2014 content may be about a different topic",
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "SQL Authorization: GRANT and REVOKE statements for controlling access to database objects"
+    },
+    "dbms-ramakrishnan-3rd-edition/cardinality": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 12% of title keywords (['another', 'cardinality', 'constraints', 'entity', 'instances', 'many', 'relate', 'specifying']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Cardinality Constraints: Specifying how many instances of one entity relate to instances of another"
+    },
+    "dbms-ramakrishnan-3rd-edition/constraints": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "toc_pollution: 3 TOC-like patterns in explanation (threshold 3) \u2014 content is an index page",
+        "semantic_drift: only 14% of title keywords (['check', 'constraints', 'foreign', 'integrity', 'null', 'primary', 'unique']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Integrity Constraints: PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK, and NOT NULL constraints"
+    },
+    "dbms-ramakrishnan-3rd-edition/correlated-subquery": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 67% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Correlated Subqueries: Subqueries that reference columns from the outer query"
+    },
+    "dbms-ramakrishnan-3rd-edition/create-table": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 12% of title keywords (['column', 'constraints', 'create', 'creating', 'database', 'definitions', 'table', 'tables']) appear in explanation \u2014 content may be about a different topic",
+        "sql_contamination: 67% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "CREATE TABLE: Creating database tables with column definitions and constraints"
+    },
+    "dbms-ramakrishnan-3rd-edition/data-independence": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "valid",
+      "learnerSafeSummary": "Data Independence: Logical and physical data independence - how DBMS separates data from applications"
+    },
+    "dbms-ramakrishnan-3rd-edition/data-types": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "valid",
+      "learnerSafeSummary": "SQL Data Types: Integer, decimal, character, date/time, and blob data types in SQL"
+    },
+    "dbms-ramakrishnan-3rd-edition/delete": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "valid",
+      "learnerSafeSummary": "DELETE Statement: Removing rows from database tables"
+    },
+    "dbms-ramakrishnan-3rd-edition/er-diagrams": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['diagrams', 'entity', 'models', 'relationship', 'representation', 'visual']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "ER Diagrams: Visual representation of entity-relationship models"
+    },
+    "dbms-ramakrishnan-3rd-edition/er-model": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Entity-Relationship Model: Modeling database structure using entities, relationships, and attributes"
+    },
+    "dbms-ramakrishnan-3rd-edition/foreign-key": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 12% of title keywords (['between', 'constraint', 'foreign', 'integrity', 'maintaining', 'referential', 'related', 'tables']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Foreign Key Constraint: Maintaining referential integrity between related tables"
+    },
+    "dbms-ramakrishnan-3rd-edition/group-by": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "GROUP BY Clause: Grouping rows with common values for aggregate calculations"
+    },
+    "dbms-ramakrishnan-3rd-edition/having": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "valid",
+      "learnerSafeSummary": "HAVING Clause: Filtering groups based on aggregate conditions"
+    },
+    "dbms-ramakrishnan-3rd-edition/indexes": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Database Indexes: Data structures that improve the speed of data retrieval operations"
+    },
+    "dbms-ramakrishnan-3rd-edition/inner-join": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['inner', 'join', 'matching', 'retrieving', 'rows', 'tables']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "INNER JOIN: Retrieving matching rows from two or more tables"
+    },
+    "dbms-ramakrishnan-3rd-edition/insert": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "INSERT Statement: Adding new rows to database tables"
+    },
+    "dbms-ramakrishnan-3rd-edition/isolation-levels": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['committed', 'isolation', 'levels', 'read', 'repeatable', 'serializable', 'transaction', 'uncommitted']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Transaction Isolation Levels: READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE"
+    },
+    "dbms-ramakrishnan-3rd-edition/joins": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['combining', 'data', 'full', 'inner', 'join', 'joins', 'left', 'multiple', 'right', 'tables']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "SQL Joins: Combining data from multiple tables using INNER JOIN, LEFT JOIN, RIGHT JOIN, and FULL JOIN"
+    },
+    "dbms-ramakrishnan-3rd-edition/normalization": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 11% of title keywords (['bcnf', 'data', 'database', 'improve', 'integrity', 'normalization', 'organizing', 'reduce', 'redundancy']) appear in explanation \u2014 content may be about a different topic",
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Database Normalization: Organizing data to reduce redundancy and improve integrity (1NF, 2NF, 3NF, BCNF)"
+    },
+    "dbms-ramakrishnan-3rd-edition/outer-join": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 10% of title keywords (['another', 'full', 'join', 'left', 'matching', 'outer', 'retrieving', 'right', 'rows', 'table']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "OUTER JOIN: Retrieving all rows from one table and matching rows from another (LEFT, RIGHT, FULL)"
+    },
+    "dbms-ramakrishnan-3rd-edition/primary-key": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "toc_pollution: 3 TOC-like patterns in explanation (threshold 3) \u2014 content is an index page",
+        "semantic_drift: only 0% of title keywords (['constraint', 'identifying', 'primary', 'table', 'uniquely']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Primary Key Constraint: Uniquely identifying each row in a table"
+    },
+    "dbms-ramakrishnan-3rd-edition/relational-algebra": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 9% of title keywords (['algebra', 'formal', 'join', 'language', 'like', 'manipulating', 'operations', 'projection', 'relational', 'relations', 'selection']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Relational Algebra: Formal language for manipulating relations using operations like selection, projection, and join"
+    },
+    "dbms-ramakrishnan-3rd-edition/relational-model-intro": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "valid",
+      "learnerSafeSummary": "Introduction to Relational Databases: Overview of database systems, relational model basics, and data independence"
     },
     "dbms-ramakrishnan-3rd-edition/select-basic": {
-      "readabilityStatus": "garbled",
-      "learnerSafeSummary": "The SELECT statement retrieves rows from one or more tables. Basic syntax: SELECT column1, column2 FROM table WHERE condition. Use aliases, ORDER BY to sort results, and LIMIT to restrict the number of rows returned.",
-      "exampleQuality": "contaminated"
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['basics', 'data', 'retrieving', 'statement', 'tables']) appear in explanation \u2014 content may be about a different topic",
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "SELECT Statement Basics: Retrieving data from one or more tables using the SELECT statement"
+    },
+    "dbms-ramakrishnan-3rd-edition/selection-projection": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['algebra', 'basic', 'columns', 'filtering', 'operations', 'projection', 'relational', 'rows', 'selecting', 'selection']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Selection and Projection: Basic relational algebra operations for filtering rows and selecting columns"
+    },
+    "dbms-ramakrishnan-3rd-edition/set-operations": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Set Operations in SQL: UNION, INTERSECT, and EXCEPT operations in relational algebra and SQL"
+    },
+    "dbms-ramakrishnan-3rd-edition/sql-intro": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Introduction to SQL: Structured Query Language for managing relational databases"
+    },
+    "dbms-ramakrishnan-3rd-edition/subqueries": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['nested', 'other', 'queries', 'statements', 'subqueries', 'within']) appear in explanation \u2014 content may be about a different topic",
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Subqueries: Nested queries - using SELECT statements within other SQL statements"
+    },
+    "dbms-ramakrishnan-3rd-edition/transactions": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "toc_pollution: 3 TOC-like patterns in explanation (threshold 3) \u2014 content is an index page",
+        "semantic_drift: only 0% of title keywords (['acid', 'atomic', 'consistency', 'database', 'maintain', 'properties', 'transactions', 'units', 'work']) appear in explanation \u2014 content may be about a different topic",
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Database Transactions: Atomic units of work that maintain database consistency (ACID properties)"
+    },
+    "dbms-ramakrishnan-3rd-edition/update": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "valid",
+      "learnerSafeSummary": "UPDATE Statement: Modifying existing data in tables"
+    },
+    "dbms-ramakrishnan-3rd-edition/views": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 12% of title keywords (['based', 'query', 'result', 'statements', 'stored', 'tables', 'views', 'virtual']) appear in explanation \u2014 content may be about a different topic",
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "SQL Views: Virtual tables based on the result of a query - stored SELECT statements"
+    },
+    "dbms-ramakrishnan-3rd-edition/where-clause": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['clause', 'comparison', 'conditions', 'filtering', 'logical', 'operators', 'rows']) appear in explanation \u2014 content may be about a different topic",
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "WHERE Clause and Filtering: Filtering rows using conditions with WHERE, comparison operators, and logical operators"
+    },
+    "murachs-mysql-3rd-edition/aggregate-functions-murach": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['aggregate', 'aggregates', 'count', 'distinct', 'functions']) appear in explanation \u2014 content may be about a different topic",
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Aggregate Functions: COUNT, SUM, AVG, MAX, MIN, and DISTINCT aggregates"
+    },
+    "murachs-mysql-3rd-edition/alter-table-murach": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "valid",
+      "learnerSafeSummary": "Altering Tables: ALTER TABLE to add, modify, and drop columns"
+    },
+    "murachs-mysql-3rd-edition/backup-restore": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Backup and Restore: Database backup strategies and restoration procedures"
+    },
+    "murachs-mysql-3rd-edition/constraints-murach": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Constraints: PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK, and NOT NULL"
+    },
+    "murachs-mysql-3rd-edition/correlated-subquery-murach": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['columns', 'correlated', 'outer', 'query', 'reference', 'subqueries']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Correlated Subqueries: Subqueries that reference outer query columns"
+    },
+    "murachs-mysql-3rd-edition/create-table-murach": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Creating Tables: CREATE TABLE with columns, data types, and constraints"
+    },
+    "murachs-mysql-3rd-edition/data-types-murach": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "MySQL Data Types: Numeric, string, date/time, and large object data types"
+    },
+    "murachs-mysql-3rd-edition/date-functions": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['curdate', 'date', 'datediff', 'format', 'functions', 'time']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Date and Time Functions: NOW, CURDATE, DATE_FORMAT, DATE_ADD, DATEDIFF, and more"
+    },
+    "murachs-mysql-3rd-edition/delete-murach": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "valid",
+      "learnerSafeSummary": "DELETE Statement: Removing rows with DELETE and DELETE JOIN"
+    },
+    "murachs-mysql-3rd-edition/events": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "valid",
+      "learnerSafeSummary": "Events: Scheduled tasks in MySQL"
+    },
+    "murachs-mysql-3rd-edition/functions-murach": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['creating', 'defined', 'functions', 'mysql', 'stored', 'user']) appear in explanation \u2014 content may be about a different topic",
+        "sql_contamination: 67% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Stored Functions: Creating user-defined functions in MySQL"
+    },
+    "murachs-mysql-3rd-edition/group-by-murach": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "GROUP BY Clause: Grouping data for aggregate calculations"
+    },
+    "murachs-mysql-3rd-edition/having-murach": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 14% of title keywords (['aggregate', 'based', 'clause', 'filtering', 'groups', 'having', 'values']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "HAVING Clause: Filtering groups based on aggregate values"
+    },
+    "murachs-mysql-3rd-edition/inner-join-murach": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "valid",
+      "learnerSafeSummary": "Inner Join: Matching rows from two or more tables"
+    },
+    "murachs-mysql-3rd-edition/insert-murach": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "valid",
+      "learnerSafeSummary": "INSERT Statement: Adding rows to tables with INSERT INTO and INSERT SELECT"
+    },
+    "murachs-mysql-3rd-edition/isolation-levels-murach": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 12% of title keywords (['committed', 'isolation', 'levels', 'read', 'repeatable', 'serializable', 'transaction', 'uncommitted']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Transaction Isolation Levels: READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE"
+    },
+    "murachs-mysql-3rd-edition/joins-murach": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['cross', 'inner', 'joining', 'joins', 'mysql', 'outer', 'tables']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Joining Tables: Inner joins, outer joins, and cross joins in MySQL"
+    },
+    "murachs-mysql-3rd-edition/mysql-functions": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 14% of title keywords (['conversion', 'date', 'functions', 'mysql', 'numeric', 'string', 'time']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "MySQL Functions: String, numeric, date/time, and conversion functions"
+    },
+    "murachs-mysql-3rd-edition/mysql-intro": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "marketing_boilerplate: 3 publisher phrases detected",
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Introduction to MySQL: Overview of MySQL database management system and relational databases"
+    },
+    "murachs-mysql-3rd-edition/order-by-murach": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 12% of title keywords (['ascending', 'clause', 'columns', 'descending', 'order', 'query', 'results', 'sorting']) appear in explanation \u2014 content may be about a different topic",
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "ORDER BY Clause: Sorting query results by one or more columns, ascending and descending"
+    },
+    "murachs-mysql-3rd-edition/outer-join-murach": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['full', 'join', 'joins', 'left', 'mysql', 'outer', 'right']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Outer Join: Left, right, and full outer joins in MySQL"
+    },
+    "murachs-mysql-3rd-edition/relational-databases-murach": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "toc_pollution: 11 TOC-like patterns in explanation (threshold 3) \u2014 content is an index page",
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Relational Databases: Tables, rows, columns, keys, and relationships in relational databases"
+    },
+    "murachs-mysql-3rd-edition/select-statement-murach": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "SELECT Statement: Retrieving data from a single table with column selection and aliases"
+    },
+    "murachs-mysql-3rd-edition/stored-procedures": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "toc_pollution: 10 TOC-like patterns in explanation (threshold 3) \u2014 content is an index page",
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Stored Procedures: Creating and using stored procedures in MySQL"
+    },
+    "murachs-mysql-3rd-edition/string-functions": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 12% of title keywords (['concat', 'functions', 'length', 'lower', 'string', 'substring', 'trim', 'upper']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "String Functions: CONCAT, SUBSTRING, LENGTH, TRIM, UPPER, LOWER, and more"
+    },
+    "murachs-mysql-3rd-edition/subqueries-murach": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "toc_pollution: 18 TOC-like patterns in explanation (threshold 3) \u2014 content is an index page"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Subqueries: Single-row, multi-row, and correlated subqueries in MySQL"
+    },
+    "murachs-mysql-3rd-edition/transactions-murach": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 67% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Transactions: ACID properties, COMMIT, ROLLBACK, and savepoints"
+    },
+    "murachs-mysql-3rd-edition/triggers": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['actions', 'automatic', 'delete', 'insert', 'triggers', 'update']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Triggers: Automatic actions on INSERT, UPDATE, DELETE"
+    },
+    "murachs-mysql-3rd-edition/unions": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['combining', 'multiple', 'results', 'statements', 'union']) appear in explanation \u2014 content may be about a different topic"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "UNION and UNION ALL: Combining results from multiple SELECT statements"
+    },
+    "murachs-mysql-3rd-edition/update-murach": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "UPDATE Statement: Modifying existing data with UPDATE and UPDATE JOIN"
+    },
+    "murachs-mysql-3rd-edition/user-management": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 0% of title keywords (['creating', 'granting', 'management', 'privileges', 'roles', 'user', 'users']) appear in explanation \u2014 content may be about a different topic",
+        "sql_contamination: 67% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "User Management: Creating users, granting privileges, and roles"
+    },
+    "murachs-mysql-3rd-edition/views-murach": {
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "Views: Creating and using views in MySQL"
+    },
+    "murachs-mysql-3rd-edition/where-clause-murach": {
+      "readabilityStatus": "fallback_only",
+      "readabilityWarnings": [
+        "semantic_drift: only 14% of title keywords (['between', 'clause', 'comparison', 'filtering', 'like', 'operators', 'rows']) appear in explanation \u2014 content may be about a different topic",
+        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
+      ],
+      "exampleQuality": "filtered",
+      "learnerSafeSummary": "WHERE Clause: Filtering rows with comparison operators, AND, OR, NOT, IN, BETWEEN, LIKE"
     }
   }
 }

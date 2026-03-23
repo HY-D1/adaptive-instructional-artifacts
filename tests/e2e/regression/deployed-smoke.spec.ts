@@ -226,6 +226,10 @@ test.describe('@deployed-smoke @ux-bugs Real-user deployment smoke', () => {
   /**
    * Verify concept-quality.json is served from the deployed static corpus.
    *
+   * Accepts both on-disk schemas:
+   *   Legacy placeholder  — { version, quality: Record<id, ...> }
+   *   Helper v1           — { schemaVersion: "concept-quality-v1", qualityByConcept: Record<id, ...> }
+   *
    * This is a lightweight network check that confirms the file exists and
    * returns valid JSON with the expected structure — independent of the
    * full learner journey.
@@ -235,15 +239,23 @@ test.describe('@deployed-smoke @ux-bugs Real-user deployment smoke', () => {
     expect(res?.status()).toBe(200);
 
     const body = await page.evaluate(() => fetch('/textbook-static/concept-quality.json').then(r => r.json()));
-    expect(body).toHaveProperty('quality');
-    expect(body).toHaveProperty('version');
 
-    // Known-bad concept must have garbled status
-    const mysqlIntro = body.quality?.['murachs-mysql-3rd-edition/mysql-intro'];
+    // Accept either schema — at least one quality store must be present
+    const isV1 = body.schemaVersion === 'concept-quality-v1';
+    const qualityStore = isV1 ? body.qualityByConcept : body.quality;
+    expect(qualityStore).toBeDefined();
+    expect(typeof qualityStore).toBe('object');
+
+    // Known-bad concept must be present with a learner-safe summary
+    const mysqlIntro = qualityStore?.['murachs-mysql-3rd-edition/mysql-intro'];
     expect(mysqlIntro).toBeDefined();
-    expect(mysqlIntro?.readabilityStatus).toBe('garbled');
+
+    // readabilityStatus: legacy uses "garbled", v1 uses "fallback_only" — both indicate bad content
+    const status = mysqlIntro?.readabilityStatus as string;
+    expect(['garbled', 'fallback_only']).toContain(status);
+
     expect(typeof mysqlIntro?.learnerSafeSummary).toBe('string');
-    expect(mysqlIntro?.learnerSafeSummary?.length).toBeGreaterThan(20);
+    expect((mysqlIntro?.learnerSafeSummary as string).length).toBeGreaterThan(20);
   });
 
   /**

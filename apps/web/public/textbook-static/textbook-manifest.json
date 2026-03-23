@@ -1,8 +1,8 @@
 {
   "schemaVersion": "1.0.0",
   "schemaId": "textbook-static-v1",
-  "indexId": "idx-murachs-mysql-3rd-edition-20260321-162232",
-  "createdAt": "2026-03-21T16:22:32.294510+00:00",
+  "indexId": "idx-murachs-mysql-3rd-edition-20260322-044258",
+  "createdAt": "2026-03-22T04:42:58.965254+00:00",
   "sourceName": "murachs-mysql-3rd-edition.pdf",
   "chunkerVersion": "word-window-150-overlap-30-v1",
   "embeddingModelId": "hash-embedding-v1",
@@ -27,5 +27,5 @@
   "total_examples": 0,
   "l2_stats": {},
   "audit_log_path": null,
-  "generatedAt": "2026-03-21T16:22:37.288283+00:00"
+  "generatedAt": "2026-03-22T20:52:10.279298+00:00"
 }
