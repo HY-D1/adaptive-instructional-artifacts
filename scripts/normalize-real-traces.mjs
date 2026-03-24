@@ -11,8 +11,8 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 const SQL_ENGAGE_TS_PATH = path.join(REPO_ROOT, 'apps/web/src/app/data/sql-engage.ts');
 const SQL_ENGAGE_CSV_PATH = path.join(REPO_ROOT, 'apps/web/src/app/data/sql_engage_dataset.csv');
 
-const NORMALIZER_POLICY_VERSION = 'week2-real-trace-normalize-v1';
-const EXPORT_POLICY_VERSION = 'week2-real-trace-export-v1';
+const NORMALIZER_POLICY_VERSION = '2026-03-24-real-trace-normalize-v1';
+const EXPORT_POLICY_VERSION = '2026-03-24-real-trace-export-v1';
 const DEFAULT_OUTPUT_PATH = path.join(REPO_ROOT, 'dist/replay/real/export.json');
 
 const EVENT_TYPE_ALIASES = {
