@@ -792,4 +792,60 @@ npx playwright test -c playwright.config.ts --project=chromium:auth --grep "mult
 StorageState cloning is not accepted as the primary persistence proof.
 Second-context tests must perform credential login in a clean browser context.
 
+### Integrity gate added
+
+Run this before any proof commands:
+
+```bash
+npm run integrity:scan
+rg -n --fixed-strings -- '-03-24' package.json apps/web/src/app/lib apps/server/src
+```
+
+What this proves:
+- tokenized corruption markers are absent from critical source/config files before build/tests.
+
+### Proof of multi-device UI restore
+
+```bash
+npx playwright test -c playwright.config.ts tests/e2e/regression/student-multi-device-persistence.spec.ts
+# run a second time to detect timing flake
+npx playwright test -c playwright.config.ts tests/e2e/regression/student-multi-device-persistence.spec.ts
+```
+
+What this proves:
+- device A saves a note and seeds active session state.
+- device B is a fresh browser context and logs in with credentials.
+- textbook UI visibly shows the same saved note (title + content snippet), not just a count.
+- practice/editor UI visibly resumes the saved `currentCode`.
+- direct API checks (`/api/sessions/:learnerId/active`, `/api/interactions`) are retained as secondary evidence.
+
+### Proof of instructor section isolation
+
+```bash
+npx playwright test -c playwright.config.ts tests/e2e/regression/instructor-section-scope.spec.ts
+npx playwright test -c playwright.config.ts tests/e2e/regression/api-authz.spec.ts
+```
+
+What this proves:
+- instructor A/B isolation on list/detail endpoints.
+- scoped behavior on high-risk aggregate/export endpoints:
+  - `/api/instructor/overview`
+  - `/api/instructor/export`
+  - `/api/research/aggregates`
+  - `/api/research/export`
+- anonymous 401 coverage and cross-section/session ownership denial paths.
+
+Neon prerequisite for auth-backed proof:
+
+```bash
+curl https://<backend>/api/system/persistence-status
+```
+
+Expected before claiming proof:
+- `dbMode: "neon"`
+- `persistenceRoutesEnabled: true`
+- `resolvedEnvSource` is non-null
+
+If `dbMode` is `"sqlite"`, account signup/login proofs are not valid launch evidence.
+
 *Last updated: 2026-03-24*
