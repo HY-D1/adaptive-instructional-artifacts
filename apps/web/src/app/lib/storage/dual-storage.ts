@@ -15,6 +15,7 @@ import {
   isBackendAvailable,
   checkBackendHealth,
 } from '../api/storage-client';
+import { clearAllUiState, clearUiStateForActor } from '../ui-state';
 import type {
   UserProfile,
   InteractionEvent,
@@ -312,6 +313,12 @@ class DualStorageManager {
     // Always clear both
     if (this.config.useBackend) {
       // Backend doesn't support delete yet, just clear local
+    }
+    const profile = localStorageManager.getUserProfile();
+    if (profile?.id) {
+      clearUiStateForActor(profile.id);
+    } else {
+      clearAllUiState();
     }
     return localStorageManager.clearUserProfile();
   }

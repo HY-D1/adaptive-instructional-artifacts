@@ -15,6 +15,7 @@ import type { ReactNode } from 'react';
 import { getMe, login as apiLogin, logout as apiLogout, signup as apiSignup, AUTH_ENABLED } from './api/auth-client';
 import type { AuthUser, AuthResult } from './api/auth-client';
 import { storage } from './storage/index';
+import { clearUiStateForActor } from './ui-state';
 
 // ============================================================================
 // Context types
@@ -103,18 +104,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string): Promise<AuthResult> => {
     const result = await apiLogin(email, password);
     if (result.success && result.user) {
+      if (user?.learnerId && user.learnerId !== result.user.learnerId) {
+        clearUiStateForActor(user.learnerId);
+      }
       syncToLocalStorage(result.user);
       await hydrateFromBackend(result.user);
       setUser(result.user);
     }
     return result;
-  }, []);
+  }, [user]);
 
   const logout = useCallback(async () => {
     await apiLogout();
+    if (user?.learnerId) {
+      clearUiStateForActor(user.learnerId);
+    }
     setUser(null);
     storage.clearUserProfile();
-  }, []);
+  }, [user]);
 
   const signup = useCallback(async (params: {
     name: string;
@@ -126,12 +133,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }): Promise<AuthResult> => {
     const result = await apiSignup(params);
     if (result.success && result.user) {
+      if (user?.learnerId && user.learnerId !== result.user.learnerId) {
+        clearUiStateForActor(user.learnerId);
+      }
       syncToLocalStorage(result.user);
       await hydrateFromBackend(result.user);
       setUser(result.user);
     }
     return result;
-  }, []);
+  }, [user]);
 
   return (
     <AuthContext.Provider

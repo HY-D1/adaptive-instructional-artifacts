@@ -103,6 +103,12 @@ interface ResearchMetrics {
   errorTransitions: ErrorTransitionStats;
   selectedMasteryLearner: string;
 }
+
+interface ResearchDashboardUiState {
+  selectedLearner: string;
+  timeRange: string;
+  activeTab: string;
+}
 import {
   Table,
   TableBody,
@@ -156,6 +162,8 @@ import { loadOrBuildPdfIndex, uploadPdfAndBuildIndex } from '../../../lib/pdf-in
 import { isDemoMode, getDemoModeMessage, DEMO_MODE_VERSION } from '../../../lib/utils/demo-mode';
 import { isHostedMode, getHostedModeMessage } from '../../../lib/runtime-config';
 import { createEventId } from '../../../lib/utils/event-id';
+import { countInteractionsByType, filterInteractionsByLearners } from '../../../lib/counts/selectors';
+import { getUiState, setUiState } from '../../../lib/ui-state';
 import { clusterLearners, LearnerCluster } from '../../../lib/research/learner-clustering';
 import { buildErrorTransitionMatrix, buildErrorTransitionStats, getErrorRecoveryPatterns, ErrorTransitionStats } from '../../../lib/research/error-transitions';
 import { EscalationHeatmap } from './EscalationHeatmap';
@@ -265,6 +273,7 @@ export function ResearchDashboard() {
   
   // Time range filter
   const [timeRange, setTimeRange] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<string>('interactions');
   
   // Export/Import states
   const [isExporting, setIsExporting] = useState(false);
@@ -276,6 +285,7 @@ export function ResearchDashboard() {
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMasteryLearner, setSelectedMasteryLearner] = useState<string>('');
+  const uiActorId = storage.getUserProfile()?.id || 'unknown';
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 500);
@@ -291,6 +301,31 @@ export function ResearchDashboard() {
   useEffect(() => {
     storage.setPolicyReplayMode(policyReplayMode);
   }, [policyReplayMode]);
+
+  useEffect(() => {
+    const persisted = getUiState<ResearchDashboardUiState>('research-dashboard', {
+      role: 'instructor',
+      actorId: uiActorId,
+    });
+    if (!persisted) return;
+    if (persisted.selectedLearner) {
+      setSelectedLearner(persisted.selectedLearner);
+    }
+    if (persisted.timeRange && TIME_RANGES.some((range) => range.value === persisted.timeRange)) {
+      setTimeRange(persisted.timeRange);
+    }
+    if (persisted.activeTab) {
+      setActiveTab(persisted.activeTab);
+    }
+  }, [uiActorId]);
+
+  useEffect(() => {
+    setUiState<ResearchDashboardUiState>(
+      'research-dashboard',
+      { role: 'instructor', actorId: uiActorId },
+      { selectedLearner, timeRange, activeTab }
+    );
+  }, [uiActorId, selectedLearner, timeRange, activeTab]);
 
   const loadData = async () => {
     await storage.hydrateInstructorDashboard();
@@ -694,12 +729,23 @@ export function ResearchDashboard() {
   };
 
   // Analytics
+  const scopedInteractions = useMemo(() => {
+    const learnerIds = new Set(profiles.map((profile) => profile.id));
+    return filterInteractionsByLearners(interactions, learnerIds);
+  }, [interactions, profiles]);
+
   const filteredInteractions = useMemo(() => {
     const baseFiltered = selectedLearner === 'all'
-      ? interactions
-      : interactions.filter(i => i.learnerId === selectedLearner);
+      ? scopedInteractions
+      : scopedInteractions.filter(i => i.learnerId === selectedLearner);
     return getFilteredByTimeRange(baseFiltered);
-  }, [interactions, selectedLearner, getFilteredByTimeRange]);
+  }, [scopedInteractions, selectedLearner, getFilteredByTimeRange]);
+
+  const selectedProfiles = useMemo(() => (
+    selectedLearner === 'all'
+      ? profiles
+      : profiles.filter((profile) => profile.id === selectedLearner)
+  ), [profiles, selectedLearner]);
 
   // Memoized error analysis calculations
   const errorsByType = useMemo(() => 
@@ -727,6 +773,15 @@ export function ResearchDashboard() {
       acc[i.eventType] = (acc[i.eventType] || 0) + 1;
       return acc;
     }, {} as Record<string, number>),
+    [filteredInteractions]
+  );
+
+  const errorCount = useMemo(
+    () => countInteractionsByType(filteredInteractions, 'error'),
+    [filteredInteractions]
+  );
+  const hintCount = useMemo(
+    () => countInteractionsByType(filteredInteractions, 'hint_view'),
     [filteredInteractions]
   );
 
@@ -763,9 +818,9 @@ export function ResearchDashboard() {
   }, [interactionsByType]);
 
   // Strategy comparison
-  const { strategyComparison, comparisonData } = useMemo(() => {
-    const strategyComparison = profiles.reduce((acc, profile) => {
-      const learnerInteractions = interactions.filter(i => i.learnerId === profile.id);
+  const comparisonData = useMemo(() => {
+    const strategyComparison = selectedProfiles.reduce((acc, profile) => {
+      const learnerInteractions = filteredInteractions.filter(i => i.learnerId === profile.id);
       const errorCount = learnerInteractions.filter(i => i.eventType === 'error').length;
       const hintCount = learnerInteractions.filter(i => i.eventType === 'hint_view').length;
       const successCount = learnerInteractions.filter(i => i.eventType === 'execution' && i.successful).length;
@@ -811,9 +866,7 @@ export function ResearchDashboard() {
         ? (s.totalUnitUpdates / (s.totalUnitsAdded + s.totalUnitUpdates)).toFixed(2)
         : '0.00'
     }));
-
-    return { strategyComparison, comparisonData };
-  }, [profiles, interactions]);
+  }, [selectedProfiles, filteredInteractions]);
 
   // Memoized timeline data calculation
   const timelineChartData = useMemo(() => {
@@ -837,12 +890,12 @@ export function ResearchDashboard() {
   const traceProblemOptions = useMemo(() => {
     if (!selectedTraceLearner) return [];
     return Array.from(new Set(
-      interactions
+      scopedInteractions
         .filter((interaction) => interaction.learnerId === selectedTraceLearner)
         .map((interaction) => interaction.problemId)
         .filter(Boolean)
     ));
-  }, [interactions, selectedTraceLearner]);
+  }, [scopedInteractions, selectedTraceLearner]);
 
   useEffect(() => {
     if (
@@ -1405,6 +1458,7 @@ export function ResearchDashboard() {
                     variant="outline" 
                     size="sm"
                     disabled={isImporting || isExporting}
+                    aria-label="Refresh research data"
                   >
                     <RefreshCw className="size-4" />
                   </Button>
@@ -1597,7 +1651,7 @@ export function ResearchDashboard() {
                 <span className="text-sm font-medium text-gray-600">Errors</span>
               </div>
               <p className="text-3xl font-bold">
-                {filteredInteractions.filter(i => i.eventType === 'error').length}
+                {errorCount}
               </p>
             </Card>
             <Card className="p-4">
@@ -1606,7 +1660,7 @@ export function ResearchDashboard() {
                 <span className="text-sm font-medium text-gray-600">Hints</span>
               </div>
               <p className="text-3xl font-bold">
-                {filteredInteractions.filter(i => i.eventType === 'hint_view').length}
+                {hintCount}
               </p>
             </Card>
           </div>
@@ -1642,7 +1696,17 @@ export function ResearchDashboard() {
           </div>
         </Card>
 
-        <Tabs defaultValue="interactions">
+        {profiles.length === 0 && (
+          <Card className="p-4 border-amber-200 bg-amber-50/60">
+            <p className="text-sm text-amber-900 font-medium">No scoped research data yet</p>
+            <p className="text-xs text-amber-800 mt-1">
+              Ask learners to complete at least one practice attempt, then click Refresh Data.
+              Analytics are limited to learner records currently scoped to this instructor.
+            </p>
+          </Card>
+        )}
+
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="flex flex-wrap h-auto">
             <TabsTrigger value="interactions" className="flex items-center gap-1.5">
               <Activity className="size-4" />

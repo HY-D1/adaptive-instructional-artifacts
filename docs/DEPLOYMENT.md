@@ -821,10 +821,20 @@ Run this before any proof commands:
 
 ```bash
 npm run integrity:scan
-rg -n --fixed-strings -- '-03-24' package.json apps/web/src/app/lib apps/server/src
+rg -n --fixed-strings -- '-03-24' \
+  apps/web/src/app \
+  apps/server/src \
+  package.json \
+  apps/server/package.json \
+  apps/web/vite.config.ts \
+  apps/server/tsconfig.json \
+  playwright.config.ts \
+  tsconfig.json \
+  vercel.json
 ```
 
 What this proves:
+- integrity scan now covers the full app source + build/test config surface before builds.
 - tokenized corruption markers are absent from critical source/config files before build/tests.
 
 ### Proof of multi-device UI restore
@@ -871,5 +881,20 @@ Expected before claiming proof:
 - `resolvedEnvSource` is non-null
 
 If `dbMode` is `"sqlite"`, account signup/login proofs are not valid launch evidence.
+
+### Launch UX/Product Guard Regressions
+
+Use this compact guard pack for launch-visible behavior checks (not broad auth/replay coverage):
+
+```bash
+npx playwright test -c playwright.config.ts tests/e2e/regression/launch-readiness-guards.spec.ts
+```
+
+This suite is intentionally narrow and maps to real product risks:
+- textbook visible note count matches rendered note rows
+- textbook view/filter state survives refresh
+- instructor dashboard learner count matches visible learner table rows
+- logout/login role switches clear prior role-scoped UI state
+- primary CTA stability and labeled icon-only controls after hydration
 
 *Last updated: 2026-03-24*

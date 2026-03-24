@@ -42,6 +42,7 @@ import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePo
 import { useUserRole } from '../hooks/useUserRole';
 import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync } from '../lib/storage';
 import { useAuth } from '../lib/auth-context';
+import { clearUiStateForActor, getUiState, setUiState } from '../lib/ui-state';
 import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content/content-generator';
@@ -140,6 +141,13 @@ function formatTime(ms: number): string {
  */
 interface DependencyWarningToastProps {
   onClose: () => void;
+}
+
+interface PracticePageUiState {
+  currentProblemId?: string;
+  activeConceptId?: string | null;
+  activeConceptTitle?: string | null;
+  subtypeOverride?: string;
 }
 
 function DependencyWarningToast({ onClose }: DependencyWarningToastProps) {
@@ -644,6 +652,53 @@ export function LearningInterface() {
     }
   }, [location.search]);
 
+  useEffect(() => {
+    if (!learnerId) return;
+    const params = new URLSearchParams(location.search);
+    const queryHasExplicitContext = params.has('problemId') || params.has('conceptId');
+    if (queryHasExplicitContext) return;
+
+    const persisted = getUiState<PracticePageUiState>('practice', {
+      role: isInstructor ? 'instructor' : 'student',
+      actorId: learnerId,
+    });
+    if (!persisted) return;
+
+    if (persisted.currentProblemId) {
+      const persistedProblem = sqlProblems.find((problem) => problem.id === persisted.currentProblemId);
+      if (persistedProblem) {
+        setCurrentProblem(persistedProblem);
+      }
+    }
+
+    if (persisted.activeConceptId) {
+      setActiveConceptId(persisted.activeConceptId);
+      void getConcept(persisted.activeConceptId).then((concept) => {
+        if (concept) setActiveConceptTitle(concept.title);
+      });
+    } else if (persisted.activeConceptTitle === null) {
+      setActiveConceptTitle(null);
+    }
+
+    if (persisted.subtypeOverride) {
+      setSubtypeOverride(persisted.subtypeOverride);
+    }
+  }, [learnerId, isInstructor, location.search]);
+
+  useEffect(() => {
+    if (!learnerId) return;
+    setUiState<PracticePageUiState>(
+      'practice',
+      { role: isInstructor ? 'instructor' : 'student', actorId: learnerId },
+      {
+        currentProblemId: currentProblem.id,
+        activeConceptId,
+        activeConceptTitle,
+        subtypeOverride,
+      }
+    );
+  }, [learnerId, isInstructor, currentProblem.id, activeConceptId, activeConceptTitle, subtypeOverride]);
+
   // Calculate total time across sessions
   useEffect(() => {
     const learnerInteractions = storage.getInteractionsByLearner(learnerId);
@@ -799,7 +854,6 @@ export function LearningInterface() {
     if (!profile) {
       profile = storage.createDefaultProfile(learnerId, 'adaptive-medium');
     }
-    setSubtypeOverride('auto');
 
     // Use session ID from sessionConfig if available, otherwise get from storage
     const activeSessionId = sessionConfig?.sessionId || storage.getActiveSessionId();
@@ -1825,23 +1879,10 @@ export function LearningInterface() {
                   </Tooltip>
                 )}
 
-                {/* Exit Preview button - Only shown in preview mode */}
-                {isPreviewMode && (
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={exitPreviewMode}
-                    className="border-purple-300 text-purple-700 hover:bg-purple-50"
-                    aria-label="Exit Student Preview mode and return to instructor dashboard"
-                  >
-                    <LogOut className="size-4 mr-2" aria-hidden="true" />
-                    Exit Preview
-                  </Button>
-                )}
-
                 {/* Role selector - Instructors only (allows testing student view) */}
                 {isInstructor && (
                   <Select value={role} onValueChange={(value) => {
+                    clearUiStateForActor(learnerId);
                     localStorage.setItem('sql-adapt-user-role', value);
                     window.location.reload();
                   }}>

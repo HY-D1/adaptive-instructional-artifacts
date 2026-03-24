@@ -4,10 +4,12 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
+    "prebuild": "npm run integrity:scan",
     "build": "npx vite build --config apps/web/vite.config.ts",
     "dev": "npx vite --config apps/web/vite.config.ts",
     "dev:full": "concurrently \"npm run server:dev\" \"npm run dev\" --names \"SERVER,WEB\" --prefix-colors \"blue,green\" --kill-others",
     "server:dev": "cd apps/server && npm run dev",
+    "preserver:build": "npm run integrity:scan",
     "server:build": "cd apps/server && npm run build",
     "server:start": "cd apps/server && npm run start",
     "server:db:init": "cd apps/server && npm run db:init",

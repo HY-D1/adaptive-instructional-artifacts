@@ -30,17 +30,6 @@ interface ApiResponse<T> {
   message?: string;
 }
 
-interface PaginatedResponse<T> {
-  success: boolean;
-  data: T[];
-  pagination: {
-    total: number;
-    limit: number;
-    offset: number;
-    hasMore: boolean;
-  };
-}
-
 interface BackendLearner {
   id: string;
   name: string;
@@ -803,17 +792,29 @@ export async function getInteractions(
   if (options?.limit) params.set('limit', options.limit.toString());
   if (options?.offset) params.set('offset', options.offset.toString());
 
-  const response = await fetchApi<PaginatedResponse<BackendInteraction>>(
+  const response = await fetchApi<BackendInteraction[]>(
     `/interactions?${params.toString()}`
   );
   
   if (!response.success || !response.data) {
     return { events: [], total: 0 };
   }
+  const eventsPayload = Array.isArray(response.data)
+    ? response.data
+    : Array.isArray((response.data as unknown as { data?: BackendInteraction[] }).data)
+      ? (response.data as unknown as { data: BackendInteraction[] }).data
+      : [];
 
-  const events: InteractionEvent[] = response.data.data.map(convertToFrontendEvent);
+  const pagination = (response as ApiResponse<BackendInteraction[]> & {
+    pagination?: { total?: number };
+  }).pagination;
+  const total =
+    typeof pagination?.total === 'number'
+      ? pagination.total
+      : eventsPayload.length;
 
-  return { events, total: response.data.pagination.total };
+  const events: InteractionEvent[] = eventsPayload.map(convertToFrontendEvent);
+  return { events, total };
 }
 
 // ============================================================================
@@ -876,16 +877,16 @@ export async function deleteTextbookUnit(
 // ============================================================================
 
 export async function getSession(learnerId: string): Promise<SessionData | null> {
-  const response = await fetchApi<{ data: SessionData }>(`/sessions/${learnerId}/active`);
-  if (!response.success) return null;
-  return response.data?.data || null;
+  const response = await fetchApi<SessionData>(`/sessions/${learnerId}/active`);
+  if (!response.success || !response.data) return null;
+  return response.data;
 }
 
 export async function saveSession(
   learnerId: string,
   data: SessionData
 ): Promise<boolean> {
-  const response = await fetchApi<{ data: SessionData }>(`/sessions/${learnerId}/active`, {
+  const response = await fetchApi<SessionData>(`/sessions/${learnerId}/active`, {
     method: 'POST',
     body: JSON.stringify(data),
   });

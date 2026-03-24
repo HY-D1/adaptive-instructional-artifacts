@@ -25,8 +25,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/toolti
 import { Skeleton } from '../components/ui/skeleton';
 import { conceptNodes } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
+import { getTextbookSummaryCounts } from '../lib/counts/selectors';
 import { storage } from '../lib/storage';
 import { useAuth } from '../lib/auth-context';
+import { getUiState, setUiState } from '../lib/ui-state';
 import type { InteractionEvent } from '../types';
 
 const getSubtypeLabel = (interaction: InteractionEvent) =>
@@ -43,6 +45,12 @@ const TRACE_ATTEMPT_EVENT_TYPES: InteractionEvent['eventType'][] = [
 const CHAT_EVENT_TYPES: InteractionEvent['eventType'][] = [
   'chat_interaction'
 ];
+
+interface TextbookUiState {
+  viewMode: 'concepts' | 'problems';
+  showFilters: boolean;
+  searchQuery: string;
+}
 
 export function TextbookPage() {
   const navigate = useNavigate();
@@ -66,7 +74,6 @@ export function TextbookPage() {
 
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedConcept, setSelectedConcept] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'concepts' | 'problems'>('concepts');
@@ -85,6 +92,27 @@ export function TextbookPage() {
   useEffect(() => {
     void storage.hydrateLearner(learnerId);
   }, [learnerId]);
+
+  useEffect(() => {
+    const persisted = getUiState<TextbookUiState>('textbook', {
+      role: isInstructor ? 'instructor' : 'student',
+      actorId: learnerId,
+    });
+    if (!persisted) return;
+    if (persisted.viewMode === 'concepts' || persisted.viewMode === 'problems') {
+      setViewMode(persisted.viewMode);
+    }
+    setShowFilters(Boolean(persisted.showFilters));
+    setSearchQuery(persisted.searchQuery || '');
+  }, [isInstructor, learnerId]);
+
+  useEffect(() => {
+    setUiState<TextbookUiState>(
+      'textbook',
+      { role: isInstructor ? 'instructor' : 'student', actorId: learnerId },
+      { viewMode, showFilters, searchQuery }
+    );
+  }, [isInstructor, learnerId, viewMode, showFilters, searchQuery]);
   
   useEffect(() => {
     // Ref to track mounted state for cleanup
@@ -149,7 +177,6 @@ export function TextbookPage() {
 
   const clearFilters = () => {
     setSearchQuery('');
-    setSelectedConcept('all');
     updateParams({
       attemptId: undefined,
       subtype: undefined
@@ -212,10 +239,14 @@ const chatInteractions = useMemo(
 
   // Calculate learning stats for student view
   const learningStats = useMemo(() => {
-    const totalUnits = textbookUnits.length;
-    const conceptsCovered = new Set(textbookUnits.map(u => u.conceptId)).size;
+    const summary = getTextbookSummaryCounts(textbookUnits);
     const autoCreatedUnits = textbookUnits.filter(u => u.autoCreated).length;
-    return { totalUnits, conceptsCovered, autoCreatedUnits };
+    return {
+      totalUnits: summary.totalNotes,
+      conceptsCovered: summary.conceptCount,
+      problemLinkedNotes: summary.problemLinkedNotes,
+      autoCreatedUnits,
+    };
   }, [textbookUnits]);
 
   // Group units by problem for folder view
@@ -340,12 +371,14 @@ const chatInteractions = useMemo(
                   <div className="flex rounded-lg border bg-white overflow-hidden">
                     <button
                       onClick={() => setViewMode('concepts')}
+                      data-testid="textbook-view-concepts"
                       className={`px-3 py-1.5 text-sm ${viewMode === 'concepts' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
                       Concepts
                     </button>
                     <button
                       onClick={() => setViewMode('problems')}
+                      data-testid="textbook-view-problems"
                       className={`px-3 py-1.5 text-sm ${viewMode === 'problems' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
                     >
                       Problems
@@ -359,7 +392,7 @@ const chatInteractions = useMemo(
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 rounded-lg border border-blue-200">
                           <BookOpen className="size-4 text-blue-600" />
-                          <span className="text-sm font-medium text-blue-700">
+                          <span className="text-sm font-medium text-blue-700" data-testid="textbook-total-notes-count">
                             {learningStats.totalUnits} notes
                           </span>
                         </div>
@@ -379,6 +412,19 @@ const chatInteractions = useMemo(
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>Concepts you&apos;ve covered</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 rounded-lg border border-purple-200">
+                          <Filter className="size-4 text-purple-600" />
+                          <span className="text-sm font-medium text-purple-700">
+                            {learningStats.problemLinkedNotes} problem-linked
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Notes tied to specific problems</p>
                       </TooltipContent>
                     </Tooltip>
                   </div>
@@ -460,7 +506,7 @@ const chatInteractions = useMemo(
                       </div>
                       <div className="p-4 space-y-3">
                         {units.slice(0, 3).map(unit => (
-                          <div key={unit.id} className="text-sm">
+                          <div key={unit.id} className="text-sm" data-testid="textbook-problem-note-item">
                             <div className="flex items-center gap-2 mb-1">
                               <span className={`text-[10px] px-1.5 py-0.5 rounded ${
                                 unit.type === 'hint' ? 'bg-amber-100 text-amber-700' :
@@ -562,6 +608,7 @@ const chatInteractions = useMemo(
                       size="sm"
                       onClick={() => setShowFilters(!showFilters)}
                       className={showFilters ? 'bg-gray-100' : ''}
+                      data-testid="textbook-toggle-filters"
                     >
                       <Filter className="size-4 mr-1.5" />
                       Filters
@@ -579,9 +626,12 @@ const chatInteractions = useMemo(
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="pl-9"
+                        data-testid="textbook-search-input"
                       />
                       {searchQuery && (
                         <button
+                          type="button"
+                          aria-label="Clear textbook search"
                           onClick={() => setSearchQuery('')}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                         >
@@ -621,7 +671,7 @@ const chatInteractions = useMemo(
                     {searchQuery && (
                       <Badge variant="secondary" className="text-xs">
                         Search: &ldquo;{searchQuery}&rdquo;
-                        <button onClick={() => setSearchQuery('')} className="ml-1 hover:text-red-500">
+                        <button type="button" aria-label="Remove search filter" onClick={() => setSearchQuery('')} className="ml-1 hover:text-red-500">
                           <X className="size-3" />
                         </button>
                       </Badge>
@@ -629,7 +679,7 @@ const chatInteractions = useMemo(
                     {selectedSubtype !== 'all' && (
                       <Badge variant="secondary" className="text-xs">
                         Subtype: {selectedSubtype}
-                        <button onClick={() => handleSubtypeChange('all')} className="ml-1 hover:text-red-500">
+                        <button type="button" aria-label="Remove subtype filter" onClick={() => handleSubtypeChange('all')} className="ml-1 hover:text-red-500">
                           <X className="size-3" />
                         </button>
                       </Badge>
@@ -637,7 +687,7 @@ const chatInteractions = useMemo(
                     {selectedAttemptId && (
                       <Badge variant="secondary" className="text-xs">
                         Attempt: {selectedAttemptId.slice(0, 8)}...
-                        <button onClick={() => updateParams({ attemptId: undefined })} className="ml-1 hover:text-red-500">
+                        <button type="button" aria-label="Remove attempt filter" onClick={() => updateParams({ attemptId: undefined })} className="ml-1 hover:text-red-500">
                           <X className="size-3" />
                         </button>
                       </Badge>

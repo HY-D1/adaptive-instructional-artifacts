@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation, Navigate, useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
-import { Book, BarChart3, Code, HelpCircle, Menu, X, Keyboard, GraduationCap, LogOut, RefreshCw, AlertCircle, Users, Settings } from 'lucide-react';
+import { Compass, BookOpen, BarChart3, FlaskConical, Code, HelpCircle, Menu, X, Keyboard, GraduationCap, LogOut, RefreshCw, AlertCircle, Users, Settings } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { WelcomeModal } from '../components/shared/WelcomeModal';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
@@ -9,6 +9,7 @@ import { useUserRole } from '../hooks/useUserRole';
 import { useSessionPersistence } from '../hooks/useSessionPersistence';
 import { storage } from '../lib/storage';
 import { isPreviewModeActive } from '../lib/auth-guard';
+import { clearAllUiState, clearUiStateForActor } from '../lib/ui-state';
 
 /**
  * Sync toast notification component
@@ -160,15 +161,26 @@ export function RootLayout() {
   const isResearchPage = location.pathname === '/research';
   const isInstructorPage = location.pathname === '/instructor-dashboard';
   const isSettingsPage = location.pathname === '/settings';
+  
+  const clearScopedUiState = useCallback(() => {
+    const actorId = syncedProfile?.id || storage.getUserProfile()?.id;
+    if (actorId) {
+      clearUiStateForActor(actorId);
+      return;
+    }
+    clearAllUiState();
+  }, [syncedProfile?.id]);
 
   // Handle session expired redirect
   const handleSessionExpiredRedirect = () => {
+    clearScopedUiState();
     clearProfile();
     navigate('/');
   };
 
   // Handle switch user - clear profile and go to start page
   const handleSwitchUser = () => {
+    clearScopedUiState();
     clearProfile();
     navigate('/');
   };
@@ -186,14 +198,14 @@ export function RootLayout() {
   const showStudentNav = !isInstructor || isInPreviewMode;
   const navItems = showStudentNav
     ? [
-        { to: '/concepts', label: 'Learn', icon: Book, isActive: isConceptsPage },
+        { to: '/concepts', label: 'Learn', icon: Compass, isActive: isConceptsPage },
         { to: '/practice', label: 'Practice', icon: Code, isActive: isPracticePage },
-        { to: '/textbook', label: 'My Textbook', icon: Book, isActive: isTextbookPage },
+        { to: '/textbook', label: 'My Textbook', icon: BookOpen, isActive: isTextbookPage },
         { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },
       ]
     : [
         { to: '/instructor-dashboard', label: 'Dashboard', icon: BarChart3, isActive: isInstructorPage },
-        { to: '/research', label: 'Research', icon: Book, isActive: isResearchPage },
+        { to: '/research', label: 'Research', icon: FlaskConical, isActive: isResearchPage },
         { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },
       ];
 
@@ -322,6 +334,7 @@ export function RootLayout() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
+                        clearScopedUiState();
                         storage.clearUserProfile();
                         window.location.href = '/';
                       }}
@@ -340,7 +353,7 @@ export function RootLayout() {
                 {/* Mobile menu */}
                 <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                   <SheetTrigger asChild className="md:hidden">
-                    <Button variant="ghost" size="sm" className="touch-manipulation">
+                    <Button variant="ghost" size="sm" className="touch-manipulation" aria-label="Open navigation menu">
                       <Menu className="size-5" />
                     </Button>
                   </SheetTrigger>
@@ -387,6 +400,7 @@ export function RootLayout() {
                           className="w-full justify-start touch-manipulation text-red-600 hover:text-red-700 hover:bg-red-50"
                           onClick={() => {
                             setMobileMenuOpen(false);
+                            clearScopedUiState();
                             storage.clearUserProfile();
                             window.location.href = '/';
                           }}
