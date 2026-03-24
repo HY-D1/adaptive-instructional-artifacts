@@ -187,11 +187,13 @@ export function AdaptiveTextbook({
     () => buildTextbookInsights({
       units: textbookUnits,
       interactions: learnerInteractions,
-      sortMode,
-      learnerId, // Enable prerequisite-aware ordering and blocked-node detection
-      prerequisiteThreshold: 40 // Minimum score to consider prerequisite "met"
+      sortMode
+      // Note: We intentionally don't pass learnerId here because saved textbook
+      // units should NEVER be blocked based on prerequisite status. The learner
+      // explicitly saved these notes - they should always be visible.
+      // The prerequisiteThreshold parameter is only used when learnerId is provided.
     }),
-    [textbookUnits, learnerInteractions, sortMode, learnerId]
+    [textbookUnits, learnerInteractions, sortMode]
   );
   const orderedUnits = textbookInsights.orderedUnits;
   const blockedUnits = textbookInsights.blockedUnits;

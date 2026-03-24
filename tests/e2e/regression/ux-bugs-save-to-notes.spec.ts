@@ -53,6 +53,10 @@ test.beforeEach(async ({ page }) => {
       currentStrategy: 'adaptive-medium',
       preferences: { escalationThreshold: 3, aggregationDelay: 300000 }
     }]));
+
+    // Active session — required for "Save to Notes" button to be enabled
+    // (HintSystem checks for sessionId from storage.getActiveSessionId())
+    window.localStorage.setItem('sql-learning-active-session', `session-${id}-${Date.now()}`);
   }, LEARNER_ID);
 });
 
