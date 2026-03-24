@@ -4,7 +4,10 @@
 
 import { Router, Request, Response } from 'express';
 import * as db from '../db/neon.js';
-import { getSectionForLearnerInInstructorScope } from '../db/sections.js';
+import {
+  getSectionForLearnerInInstructorScope,
+  getSectionForStudent,
+} from '../db/sections.js';
 
 const router = Router();
 
@@ -19,61 +22,97 @@ const router = Router();
  */
 class AccessError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  targetLearnerId?: string;
+  targetSectionId?: string | null;
+  constructor(
+    status: number,
+    message: string,
+    context?: { targetLearnerId?: string; targetSectionId?: string | null }
+  ) {
     super(message);
     this.status = status;
+    this.targetLearnerId = context?.targetLearnerId;
+    this.targetSectionId = context?.targetSectionId;
   }
 }
 
-async function resolveWritableLearnerId(req: Request, bodyLearnerId?: string): Promise<string> {
+type AccessMode = 'read' | 'write';
+
+interface ScopedTarget {
+  learnerId: string;
+  sectionId: string | null;
+}
+
+function routeLabel(req: Request): string {
+  return `${req.method} ${req.baseUrl}${req.path}`;
+}
+
+function logAuthzFailure(req: Request, error: AccessError): void {
+  console.warn('[authz/interactions]', {
+    route: routeLabel(req),
+    actorRole: req.auth?.role ?? 'anonymous',
+    actorId: req.auth?.learnerId ?? null,
+    targetLearnerId: error.targetLearnerId ?? null,
+    targetSectionId: error.targetSectionId ?? null,
+    status: error.status,
+    reason: error.message,
+  });
+}
+
+function logInteractionWrite(req: Request, target: ScopedTarget): void {
+  console.info('[interaction/write]', {
+    route: routeLabel(req),
+    actorRole: req.auth?.role ?? 'anonymous',
+    actorId: req.auth?.learnerId ?? null,
+    targetLearnerId: target.learnerId,
+    targetSectionId: target.sectionId,
+  });
+}
+
+async function resolveScopedTarget(
+  req: Request,
+  requestedLearnerId: string | undefined,
+  mode: AccessMode
+): Promise<ScopedTarget> {
   const auth = req.auth;
   if (!auth) {
-    if (!bodyLearnerId) throw new AccessError(400, 'Missing learnerId');
-    return bodyLearnerId;
+    if (!requestedLearnerId) {
+      throw new AccessError(400, 'Missing learnerId');
+    }
+    return { learnerId: requestedLearnerId, sectionId: null };
   }
 
   if (auth.role === 'student') {
-    return auth.learnerId;
+    if (requestedLearnerId && requestedLearnerId !== auth.learnerId) {
+      throw new AccessError(403, 'Access denied: not your data', {
+        targetLearnerId: requestedLearnerId,
+      });
+    }
+    const section = await getSectionForStudent(auth.learnerId);
+    return { learnerId: auth.learnerId, sectionId: section?.id ?? null };
   }
 
-  if (!bodyLearnerId) {
-    throw new AccessError(400, 'learnerId is required for instructor writes');
+  if (!requestedLearnerId) {
+    if (mode === 'write') {
+      throw new AccessError(400, 'learnerId is required for instructor writes');
+    }
+    return { learnerId: auth.learnerId, sectionId: null };
   }
-  if (bodyLearnerId === auth.learnerId) {
-    return bodyLearnerId;
+
+  if (requestedLearnerId === auth.learnerId) {
+    return { learnerId: requestedLearnerId, sectionId: null };
   }
 
   const scopedSection = await getSectionForLearnerInInstructorScope({
     instructorUserId: auth.learnerId,
-    learnerId: bodyLearnerId,
+    learnerId: requestedLearnerId,
   });
   if (!scopedSection) {
-    throw new AccessError(403, 'Access denied: learner not in your section');
+    throw new AccessError(403, 'Access denied: learner not in your section', {
+      targetLearnerId: requestedLearnerId,
+    });
   }
-  return bodyLearnerId;
-}
-
-async function assertReadableLearnerId(req: Request, learnerId: string): Promise<string> {
-  const auth = req.auth;
-  if (!auth) {
-    return learnerId;
-  }
-
-  if (auth.role === 'student') {
-    return auth.learnerId;
-  }
-  if (learnerId === auth.learnerId) {
-    return learnerId;
-  }
-
-  const scopedSection = await getSectionForLearnerInInstructorScope({
-    instructorUserId: auth.learnerId,
-    learnerId,
-  });
-  if (!scopedSection) {
-    throw new AccessError(403, 'Access denied: learner not in your section');
-  }
-  return learnerId;
+  return { learnerId: requestedLearnerId, sectionId: scopedSection.id };
 }
 
 // ============================================================================
@@ -93,10 +132,11 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const canonicalLearnerId = await resolveWritableLearnerId(req, event.learnerId);
-    event.learnerId = canonicalLearnerId;
+    const scopedTarget = await resolveScopedTarget(req, event.learnerId, 'write');
+    event.learnerId = scopedTarget.learnerId;
+    event.sectionId = scopedTarget.sectionId;
 
-    const id = event.id || `${event.eventType}-${canonicalLearnerId}-${Date.now()}`;
+    const id = event.id || `${event.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
 
     // Extract payload - frontend sends nested payload, direct API calls send flat structure
     // RESEARCH-3B: Explicitly extract bandit/escalation fields for proper column mapping
@@ -148,15 +188,18 @@ router.post('/', async (req: Request, res: Response) => {
     const interaction = await db.createInteraction({
       id,
       learnerId: event.learnerId,
+      sectionId: scopedTarget.sectionId,
       timestamp: event.timestamp || new Date().toISOString(),
       eventType: event.eventType,
       problemId: event.problemId,
       payload,
     });
+    logInteractionWrite(req, scopedTarget);
 
     res.status(201).json({ success: true, data: interaction });
   } catch (error) {
     if (error instanceof AccessError) {
+      logAuthzFailure(req, error);
       res.status(error.status).json({ success: false, error: error.message });
       return;
     }
@@ -180,9 +223,10 @@ router.post('/batch', async (req: Request, res: Response) => {
 
     const results = [];
     for (const event of events) {
-      const canonicalLearnerId = await resolveWritableLearnerId(req, event.learnerId);
-      event.learnerId = canonicalLearnerId;
-      const id = event.id || `${event.eventType}-${canonicalLearnerId}-${Date.now()}`;
+      const scopedTarget = await resolveScopedTarget(req, event.learnerId, 'write');
+      event.learnerId = scopedTarget.learnerId;
+      event.sectionId = scopedTarget.sectionId;
+      const id = event.id || `${event.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
       // Extract payload - frontend sends nested payload, direct API calls send flat structure
       // RESEARCH-3B: Explicitly extract bandit/escalation fields for proper column mapping
       const basePayload = event.payload || {
@@ -230,18 +274,21 @@ router.post('/batch', async (req: Request, res: Response) => {
       };
       const interaction = await db.createInteraction({
         id,
-        learnerId: canonicalLearnerId,
+        learnerId: scopedTarget.learnerId,
+        sectionId: scopedTarget.sectionId,
         timestamp: event.timestamp || new Date().toISOString(),
         eventType: event.eventType,
         problemId: event.problemId,
         payload,
       });
+      logInteractionWrite(req, scopedTarget);
       results.push(interaction);
     }
 
     res.status(201).json({ success: true, data: { count: results.length } });
   } catch (error) {
     if (error instanceof AccessError) {
+      logAuthzFailure(req, error);
       res.status(error.status).json({ success: false, error: error.message });
       return;
     }
@@ -254,39 +301,11 @@ router.post('/batch', async (req: Request, res: Response) => {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { learnerId, sessionId, eventType, problemId, limit, offset } = req.query;
-    const auth = req.auth;
-
-    if (!auth && !learnerId) {
-      res.status(400).json({
-        success: false,
-        error: 'learnerId query parameter is required',
-      });
-      return;
-    }
 
     const requestedLearnerId = typeof learnerId === 'string' ? learnerId : undefined;
-    if (auth?.role === 'student' && requestedLearnerId && requestedLearnerId !== auth.learnerId) {
-      res.status(403).json({
-        success: false,
-        error: 'Access denied: not your data',
-      });
-      return;
-    }
-    const effectiveLearnerId = auth?.role === 'student'
-      ? auth.learnerId
-      : (requestedLearnerId || auth?.learnerId);
+    const scopedTarget = await resolveScopedTarget(req, requestedLearnerId, 'read');
 
-    if (!effectiveLearnerId) {
-      res.status(400).json({
-        success: false,
-        error: 'learnerId query parameter is required',
-      });
-      return;
-    }
-
-    const scopedLearnerId = await assertReadableLearnerId(req, effectiveLearnerId);
-
-    const result = await db.getInteractionsByUser(scopedLearnerId, {
+    const result = await db.getInteractionsByUser(scopedTarget.learnerId, {
       sessionId: sessionId as string | undefined,
       eventType: eventType as string | undefined,
       problemId: problemId as string | undefined,
@@ -306,6 +325,7 @@ router.get('/', async (req: Request, res: Response) => {
     });
   } catch (error) {
     if (error instanceof AccessError) {
+      logAuthzFailure(req, error);
       res.status(error.status).json({ success: false, error: error.message });
       return;
     }
@@ -324,11 +344,12 @@ router.get('/:id', async (req: Request, res: Response) => {
       return;
     }
 
-    await assertReadableLearnerId(req, interaction.learnerId);
+    await resolveScopedTarget(req, interaction.learnerId, 'read');
 
     res.json({ success: true, data: interaction });
   } catch (error) {
     if (error instanceof AccessError) {
+      logAuthzFailure(req, error);
       res.status(error.status).json({ success: false, error: error.message });
       return;
     }

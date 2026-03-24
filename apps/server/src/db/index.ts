@@ -80,6 +80,7 @@ export async function saveSession(
   sessionId: string,
   conditionId: string,
   config: {
+    sectionId?: string | null;
     textbookDisabled?: boolean;
     adaptiveLadderDisabled?: boolean;
     immediateExplanationMode?: boolean;

@@ -9,6 +9,20 @@ import { requireOwnership } from '../middleware/auth.js';
 
 const router = Router();
 
+function routeLabel(req: Request): string {
+  return `${req.method} ${req.baseUrl}${req.path}`;
+}
+
+function logSessionWrite(req: Request, learnerId: string, sectionId: string | null): void {
+  console.info('[session/write]', {
+    route: routeLabel(req),
+    actorRole: req.auth?.role ?? 'anonymous',
+    actorId: req.auth?.learnerId ?? null,
+    targetLearnerId: learnerId,
+    targetSectionId: sectionId,
+  });
+}
+
 // Verify ownership for all :learnerId routes
 router.param('learnerId', requireOwnership);
 
@@ -31,6 +45,7 @@ router.get('/:learnerId/active', async (req: Request, res: Response) => {
       success: true,
       data: {
         currentProblemId: session.sessionId,
+        sectionId: session.sectionId ?? null,
         currentCode: session.lastCode,
         guidanceState: session.guidanceState,
         hdiState: session.hdiState,
@@ -97,6 +112,7 @@ router.post('/:learnerId/active', async (req: Request, res: Response) => {
       success: true,
       data: {
         currentProblemId: session?.sessionId,
+        sectionId: session?.sectionId ?? null,
         currentCode: session?.lastCode ?? currentCode,
         guidanceState: session?.guidanceState ?? guidanceState,
         hdiState: session?.hdiState ?? hdiState,
@@ -111,6 +127,7 @@ router.post('/:learnerId/active', async (req: Request, res: Response) => {
               : undefined),
       }
     });
+    logSessionWrite(req, req.params.learnerId, session?.sectionId ?? null);
   } catch (error) {
     console.error('Error saving session:', error);
     res.status(500).json({ success: false, error: 'Failed to save session' });
@@ -160,6 +177,7 @@ router.put('/:learnerId/active', async (req: Request, res: Response) => {
       success: true,
       data: {
         currentProblemId: session?.sessionId,
+        sectionId: session?.sectionId ?? null,
         currentCode: session?.lastCode ?? currentCode,
         guidanceState: session?.guidanceState ?? guidanceState,
         hdiState: session?.hdiState ?? hdiState,
@@ -174,6 +192,7 @@ router.put('/:learnerId/active', async (req: Request, res: Response) => {
               : undefined),
       }
     });
+    logSessionWrite(req, req.params.learnerId, session?.sectionId ?? null);
   } catch (error) {
     console.error('Error updating session:', error);
     res.status(500).json({ success: false, error: 'Failed to update session' });

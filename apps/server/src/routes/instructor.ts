@@ -162,6 +162,7 @@ router.get('/export', async (req: Request, res: Response) => {
           learnerCount: learnerIds.length,
           interactionCount: interactions.length,
           textbookUnitCount: textbookByLearner.reduce((acc, item) => acc + item.units.length, 0),
+          fieldsPreserved: ['id', 'learnerId', 'sectionId', 'sessionId', 'timestamp', 'eventType', 'problemId'],
         },
         learners: learners.filter(Boolean),
         interactions,
@@ -175,4 +176,3 @@ router.get('/export', async (req: Request, res: Response) => {
 });
 
 export { router as instructorRouter };
-

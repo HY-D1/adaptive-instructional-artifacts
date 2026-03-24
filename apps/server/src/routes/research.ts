@@ -97,6 +97,14 @@ router.get('/learner/:id/trajectory', async (req, res) => {
     const scopedLearnerIds = await getScopedLearnerIdsForInstructor(instructorUserId);
     const { id } = req.params;
     if (!scopedLearnerIds.has(id)) {
+      console.warn('[authz/research]', {
+        route: `${req.method} ${req.baseUrl}${req.path}`,
+        actorRole: req.auth?.role ?? 'unknown',
+        actorId: instructorUserId,
+        targetLearnerId: id,
+        targetSectionId: null,
+        reason: 'learner not in instructor scope',
+      });
       res.status(403).json({ success: false, error: 'Access denied: learner not in your section' });
       return;
     }
@@ -250,7 +258,7 @@ router.get('/export', async (req, res) => {
         hdiReadingCount: hdiEvents.length,
         banditEventCount: banditEvents.length,
         fieldsPreserved: [
-          'id', 'learnerId', 'sessionId', 'timestamp', 'eventType', 'problemId',
+          'id', 'learnerId', 'sectionId', 'sessionId', 'timestamp', 'eventType', 'problemId',
           'problemSetId', 'problemNumber', 'code', 'error', 'errorSubtypeId',
           'executionTimeMs', 'rung', 'fromRung', 'toRung', 'trigger', 'conceptIds',
           'hdi', 'hdiLevel', 'hdiComponents', 'scheduleId', 'promptId', 'response',

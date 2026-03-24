@@ -138,6 +138,13 @@ export function requireOwnership(req: Request, res: Response, next: NextFunction
 
   if (auth.role === 'student') {
     if (paramLearnerId !== auth.learnerId) {
+      console.warn('[authz/ownership_denied]', {
+        route: `${req.method} ${req.baseUrl}${req.path}`,
+        actorRole: auth.role,
+        actorId: auth.learnerId,
+        targetLearnerId: paramLearnerId,
+        targetSectionId: null,
+      });
       res.status(403).json({ success: false, error: 'Access denied: not your data' });
       return;
     }
@@ -155,6 +162,13 @@ export function requireOwnership(req: Request, res: Response, next: NextFunction
     learnerId: paramLearnerId,
   }).then((section) => {
     if (!section) {
+      console.warn('[authz/ownership_denied]', {
+        route: `${req.method} ${req.baseUrl}${req.path}`,
+        actorRole: auth.role,
+        actorId: auth.learnerId,
+        targetLearnerId: paramLearnerId,
+        targetSectionId: null,
+      });
       res.status(403).json({ success: false, error: 'Access denied: learner not in your section' });
       return;
     }
@@ -189,6 +203,13 @@ export function requireSectionAccess(req: Request, res: Response, next: NextFunc
 
   if (auth.role === 'student') {
     if (targetLearnerId !== auth.learnerId) {
+      console.warn('[authz/section_access_denied]', {
+        route: `${req.method} ${req.baseUrl}${req.path}`,
+        actorRole: auth.role,
+        actorId: auth.learnerId,
+        targetLearnerId,
+        targetSectionId: null,
+      });
       res.status(403).json({ success: false, error: 'Access denied: not your data' });
       return;
     }
@@ -207,10 +228,11 @@ export function requireSectionAccess(req: Request, res: Response, next: NextFunc
   }).then((section) => {
     if (!section) {
       console.warn('[authz/section_access_denied]', {
-        route: req.path,
+        route: `${req.method} ${req.baseUrl}${req.path}`,
         actorRole: auth.role,
         actorId: auth.learnerId,
         targetLearnerId,
+        targetSectionId: null,
       });
       res.status(403).json({ success: false, error: 'Access denied: learner not in your section' });
       return;

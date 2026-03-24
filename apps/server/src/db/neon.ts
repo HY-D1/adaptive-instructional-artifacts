@@ -110,6 +110,7 @@ export async function initializeSchema(): Promise<void> {
     CREATE TABLE IF NOT EXISTS learner_sessions (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL,
       session_id TEXT NOT NULL,
       condition_id TEXT NOT NULL,
       textbook_disabled BOOLEAN NOT NULL DEFAULT FALSE,
@@ -132,6 +133,8 @@ export async function initializeSchema(): Promise<void> {
   await db`ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS hdi_state TEXT`;
   await db`ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS bandit_state TEXT`;
   await db`ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS last_activity TIMESTAMPTZ`;
+  await db`ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL`;
+  await db`CREATE INDEX IF NOT EXISTS idx_learner_sessions_section_id ON learner_sessions(section_id)`;
 
   // Problem progress
   await db`
@@ -159,6 +162,7 @@ export async function initializeSchema(): Promise<void> {
     CREATE TABLE IF NOT EXISTS interaction_events (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL,
       session_id TEXT,
       timestamp TIMESTAMPTZ NOT NULL,
       event_type TEXT NOT NULL,
@@ -254,6 +258,8 @@ export async function initializeSchema(): Promise<void> {
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_assigned TEXT`;
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_updated TEXT`;
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS reward_value NUMERIC`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL`;
+  await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_section_id ON interaction_events(section_id)`;
 
   // Textbook units (My Textbook)
   await db`
@@ -388,6 +394,18 @@ export async function deleteUser(id: string): Promise<boolean> {
   return Array.isArray(result) && result.length === 0;
 }
 
+async function resolveSectionIdForLearner(userId: string): Promise<string | null> {
+  const db = getDb();
+  const [row] = await db`
+    SELECT e.section_id
+    FROM section_enrollments e
+    WHERE e.student_user_id = ${userId}
+    ORDER BY e.joined_at DESC
+    LIMIT 1
+  `;
+  return row ? String(row.section_id) : null;
+}
+
 // ============================================================================
 // Session Operations
 // ============================================================================
@@ -397,6 +415,7 @@ export async function saveSession(
   sessionId: string,
   conditionId: string,
   config: {
+    sectionId?: string | null;
     textbookDisabled?: boolean;
     adaptiveLadderDisabled?: boolean;
     immediateExplanationMode?: boolean;
@@ -412,15 +431,16 @@ export async function saveSession(
   const db = getDb();
   const id = `${userId}-${sessionId}`;
   const now = new Date().toISOString();
+  const resolvedSectionId = config.sectionId ?? await resolveSectionIdForLearner(userId);
 
   await db`
     INSERT INTO learner_sessions (
-      id, user_id, session_id, condition_id,
+      id, user_id, section_id, session_id, condition_id,
       textbook_disabled, adaptive_ladder_disabled, immediate_explanation_mode,
       static_hint_mode, escalation_policy, current_code, guidance_state,
       hdi_state, bandit_state, last_activity, created_at, updated_at
     ) VALUES (
-      ${id}, ${userId}, ${sessionId}, ${conditionId},
+      ${id}, ${userId}, ${resolvedSectionId}, ${sessionId}, ${conditionId},
       ${config.textbookDisabled ?? false}, ${config.adaptiveLadderDisabled ?? false},
       ${config.immediateExplanationMode ?? false}, ${config.staticHintMode ?? false},
       ${config.escalationPolicy ?? 'adaptive'}, ${config.currentCode ?? null},
@@ -431,6 +451,7 @@ export async function saveSession(
     )
     ON CONFLICT (user_id, session_id) DO UPDATE SET
       condition_id = EXCLUDED.condition_id,
+      section_id = EXCLUDED.section_id,
       textbook_disabled = EXCLUDED.textbook_disabled,
       adaptive_ladder_disabled = EXCLUDED.adaptive_ladder_disabled,
       immediate_explanation_mode = EXCLUDED.immediate_explanation_mode,
@@ -456,6 +477,7 @@ export async function getSession(userId: string, sessionId: string): Promise<any
 
   return {
     sessionId: result.session_id,
+    sectionId: result.section_id ?? null,
     conditionId: result.condition_id,
     textbookDisabled: result.textbook_disabled,
     adaptiveLadderDisabled: result.adaptive_ladder_disabled,
@@ -485,6 +507,7 @@ export async function getActiveSession(userId: string): Promise<any | null> {
 
   return {
     sessionId: result.session_id,
+    sectionId: result.section_id ?? null,
     conditionId: result.condition_id,
     textbookDisabled: result.textbook_disabled,
     adaptiveLadderDisabled: result.adaptive_ladder_disabled,
@@ -603,10 +626,11 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
   const now = new Date().toISOString();
 
   const payload = data.payload || {};
+  const resolvedSectionId = data.sectionId ?? await resolveSectionIdForLearner(data.learnerId);
 
   await db`
     INSERT INTO interaction_events (
-      id, user_id, session_id, timestamp, event_type, problem_id,
+      id, user_id, section_id, session_id, timestamp, event_type, problem_id,
       problem_set_id, problem_number, code, error, error_subtype_id,
       hint_id, explanation_id, hint_text, hint_level, help_request_index,
       sql_engage_subtype, sql_engage_row_id, policy_version, time_spent,
@@ -629,6 +653,7 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
     ) VALUES (
       ${data.id},
       ${data.learnerId},
+      ${resolvedSectionId},
       ${payload.sessionId || null},
       ${new Date(data.timestamp).toISOString()},
       ${data.eventType},
@@ -720,6 +745,7 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
   return {
     id: data.id,
     learnerId: data.learnerId,
+    sectionId: resolvedSectionId,
     sessionId: (payload as { sessionId?: string }).sessionId || null,
     timestamp: data.timestamp,
     eventType: data.eventType,
@@ -880,11 +906,13 @@ function rowToInteraction(row: any): Interaction {
   return {
     id: row.id,
     learnerId: row.user_id,
+    sectionId: row.section_id ?? null,
     sessionId: row.session_id,
     timestamp: new Date(row.timestamp).toISOString(),
     eventType: row.event_type,
     problemId: row.problem_id,
     payload: {
+      sectionId: row.section_id ?? null,
       problemSetId: row.problem_set_id,
       problemNumber: row.problem_number,
       code: row.code,
