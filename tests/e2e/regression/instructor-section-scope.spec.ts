@@ -107,10 +107,28 @@ test.describe('@authz @section-scope instructor sees only own section', () => {
       expect(crossReadA.status()).toBe(403);
       const crossReadB = await instructorB.context.get(`/api/instructor/learner/${studentAId}`);
       expect(crossReadB.status()).toBe(403);
+
+      const researchLearnersA = await instructorA.context.get('/api/research/learners');
+      expect(researchLearnersA.ok()).toBeTruthy();
+      const researchLearnersABody = await researchLearnersA.json();
+      const researchLearnerIdsA = (researchLearnersABody.data || []).map((item: any) => item.id);
+      expect(researchLearnerIdsA).toContain(studentAId);
+      expect(researchLearnerIdsA).not.toContain(studentBId);
+
+      const researchLearnersB = await instructorB.context.get('/api/research/learners');
+      expect(researchLearnersB.ok()).toBeTruthy();
+      const researchLearnersBBody = await researchLearnersB.json();
+      const researchLearnerIdsB = (researchLearnersBBody.data || []).map((item: any) => item.id);
+      expect(researchLearnerIdsB).toContain(studentBId);
+      expect(researchLearnerIdsB).not.toContain(studentAId);
+
+      const researchCrossA = await instructorA.context.get(`/api/research/learner/${studentBId}/trajectory`);
+      expect(researchCrossA.status()).toBe(403);
+      const researchCrossB = await instructorB.context.get(`/api/research/learner/${studentAId}/trajectory`);
+      expect(researchCrossB.status()).toBe(403);
     } finally {
       await instructorA.context.dispose();
       await instructorB.context.dispose();
     }
   });
 });
-

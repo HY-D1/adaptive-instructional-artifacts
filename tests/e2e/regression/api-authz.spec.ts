@@ -81,6 +81,9 @@ test.describe('@authz API authorization and learner spoof protections', () => {
       const profilesBlocked = await student.context.get('/api/learners/profiles');
       expect(profilesBlocked.status()).toBe(403);
 
+      const instructorBlocked = await student.context.get('/api/instructor/learners');
+      expect(instructorBlocked.status()).toBe(403);
+
       const crossLearnerBlocked = await student.context.get(`/api/interactions?learnerId=${otherStudentId}`);
       expect(crossLearnerBlocked.status()).toBe(403);
 
@@ -104,13 +107,17 @@ test.describe('@authz API authorization and learner spoof protections', () => {
       const spoofed = (ownReadBody.data || []).find((item: any) => item.id === spoofEvent.id);
       expect(spoofed).toBeTruthy();
       expect(spoofed.learnerId).toBe(studentId);
+      expect(spoofed.learnerId).not.toBe(otherStudentId);
 
-      const instructorCannotCross = await instructor.context.get(`/api/instructor/learner/${otherStudentId}`);
-      expect(instructorCannotCross.ok()).toBeTruthy();
+      const otherLearnerDetail = await instructor.context.get(`/api/instructor/learner/${otherStudentId}`);
+      expect(otherLearnerDetail.ok()).toBeTruthy();
+      const otherLearnerDetailBody = await otherLearnerDetail.json();
+      const spoofOnOtherLearner = (otherLearnerDetailBody.data?.interactions || [])
+        .find((item: any) => item.id === spoofEvent.id);
+      expect(spoofOnOtherLearner).toBeFalsy();
     } finally {
       await student.context.dispose();
       await instructor.context.dispose();
     }
   });
 });
-

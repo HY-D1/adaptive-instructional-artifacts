@@ -759,11 +759,37 @@ VERCEL_AUTOMATION_BYPASS_SECRET="<secret-from-vercel-dashboard>" \
 ### Build check
 
 ```bash
+npm run server:build
 npm run build
+npx vitest run apps/web/src/app/lib/auth.test.ts
 ```
 
 Expected: zero TypeScript errors, `dist/app/` contains the production bundle
 including the new `textbook-static/concept-quality.json` and
 `textbook-static/textbook-units.json` assets.
 
-*Last updated: 2026-03-22*
+### Section-linkage schema version
+
+- Current Neon schema baseline for launch: `2026-03-24-section-linkage-v1`.
+- Required linkage columns:
+  - `learner_sessions.section_id` (nullable FK to `course_sections.id`)
+  - `interaction_events.section_id` (nullable FK to `course_sections.id`)
+- These columns are persisted on writes and included in scoped export records.
+
+### Launch-ready verification command set
+
+```bash
+# Build + unit
+npm run server:build
+npm run build
+npx vitest run apps/web/src/app/lib/auth.test.ts
+
+# Auth bootstrap and scoped persistence/authz proofs
+npx playwright test -c playwright.config.ts --project=setup:auth
+npx playwright test -c playwright.config.ts --project=chromium:auth --grep "multi-device|section-scope|authz"
+```
+
+StorageState cloning is not accepted as the primary persistence proof.
+Second-context tests must perform credential login in a clean browser context.
+
+*Last updated: 2026-03-24*

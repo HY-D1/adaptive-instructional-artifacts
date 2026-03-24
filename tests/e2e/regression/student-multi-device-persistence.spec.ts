@@ -91,6 +91,37 @@ test.describe('@authz @multi-device student persistence without storageState clo
     const beforeUnits = await getTextbookUnits(page, learnerId!);
     expect(beforeUnits.length).toBeGreaterThan(0);
 
+    const sessionSeed = {
+      currentProblemId: 'problem-2',
+      currentCode: 'SELECT * FROM employees WHERE salary > 70000',
+      guidanceState: { rung: 2, source: 'e2e-session-seed' },
+      hdiState: { hdi: 0.42, level: 'medium' },
+      banditState: { selectedArm: 'adaptive-low' },
+      lastActivity: new Date().toISOString(),
+    };
+
+    const sessionWrite = await page.evaluate(
+      async ({ seededLearnerId, payload }) => {
+        const csrfToken = document.cookie
+          .split('; ')
+          .find((entry) => entry.startsWith('sql_adapt_csrf='))
+          ?.split('=')[1];
+        const response = await fetch(`/api/sessions/${seededLearnerId}/active`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-csrf-token': csrfToken || '',
+          },
+          body: JSON.stringify(payload),
+        });
+        const body = await response.json().catch(() => null);
+        return { ok: response.ok, status: response.status, body };
+      },
+      { seededLearnerId: learnerId!, payload: sessionSeed }
+    );
+    expect(sessionWrite.ok).toBeTruthy();
+
     const clean = await browser.newContext();
     const second = await clean.newPage();
     try {
@@ -105,6 +136,27 @@ test.describe('@authz @multi-device student persistence without storageState clo
       expect(secondLearnerId).toBe(learnerId);
       const afterUnits = await getTextbookUnits(second, secondLearnerId!);
       expect(afterUnits.length).toBeGreaterThan(0);
+
+      const resumedSession = await second.evaluate(async (hydratedLearnerId) => {
+        const response = await fetch(`/api/sessions/${hydratedLearnerId}/active`, {
+          credentials: 'include',
+        });
+        const body = await response.json().catch(() => null);
+        return { ok: response.ok, body };
+      }, secondLearnerId!);
+      expect(resumedSession.ok).toBeTruthy();
+      expect(resumedSession.body?.data?.currentCode).toBe(sessionSeed.currentCode);
+      expect(resumedSession.body?.data?.guidanceState?.source).toBe('e2e-session-seed');
+
+      const interactionRead = await second.evaluate(async (hydratedLearnerId) => {
+        const response = await fetch(`/api/interactions?learnerId=${hydratedLearnerId}`, {
+          credentials: 'include',
+        });
+        const body = await response.json().catch(() => null);
+        return { ok: response.ok, count: Array.isArray(body?.data) ? body.data.length : 0 };
+      }, secondLearnerId!);
+      expect(interactionRead.ok).toBeTruthy();
+      expect(interactionRead.count).toBeGreaterThan(0);
 
       await second.goto('/practice');
       await expect(second.getByRole('button', { name: 'Run Query' })).toBeVisible({ timeout: 15000 });
