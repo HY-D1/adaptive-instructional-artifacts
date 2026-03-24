@@ -169,25 +169,35 @@ test.describe('@deployed-auth-smoke Student journey with real auth', () => {
       }
     }
 
-    // ── Step 6: Save context state AFTER the note was written ─────────────────
-    // This captures both the JWT cookie AND the localStorage textbook entry —
-    // exactly what a returning user's browser would hold.
-    const postNotePath = 'playwright/.auth/student-with-note.json';
-    await page.context().storageState({ path: postNotePath });
+    const authEmail = await page.evaluate(async () => {
+      try {
+        const response = await fetch('/api/auth/me', { credentials: 'include' });
+        const body = await response.json();
+        return body?.user?.email ?? null;
+      } catch {
+        return null;
+      }
+    });
+    const authPassword = process.env.E2E_STUDENT_PASSWORD ?? 'E2eTestPass!123';
+    expect(authEmail).toBeTruthy();
 
     await page.screenshot({
       path: 'test-results/deployed-auth-smoke-textbook-pre-fresh.png',
       fullPage: true,
     });
 
-    // ── Step 7: Open FRESH browser context using the post-note state ──────────
-    // A new context = a new browser profile: no shared memory with the test
-    // above. Loading the saved state is equivalent to a user returning after
-    // closing and reopening the browser (cookies + localStorage restored).
-    const freshCtx = await browser.newContext({ storageState: postNotePath });
+    // ── Step 7: Open FRESH browser context and login with credentials ──────────
+    // This is a true second-device simulation (no copied localStorage/cookies).
+    const freshCtx = await browser.newContext();
     const freshPage = await freshCtx.newPage();
 
     try {
+      await freshPage.goto('/auth', { waitUntil: 'domcontentloaded' });
+      await expect(freshPage.locator('#login-email')).toBeVisible({ timeout: 10_000 });
+      await freshPage.fill('#login-email', authEmail!);
+      await freshPage.fill('#login-password', authPassword);
+      await freshPage.getByRole('button', { name: /^Sign In$/i }).click();
+      await freshPage.waitForURL(/\/(practice|instructor-dashboard)/, { timeout: 15_000 });
       await freshPage.goto('/textbook');
       await expect(freshPage).toHaveURL(/\/textbook/, { timeout: 10_000 });
 

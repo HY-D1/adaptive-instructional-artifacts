@@ -242,6 +242,26 @@ interface SessionData {
   lastActivity?: string;
 }
 
+interface InstructorSection {
+  id: string;
+  name: string;
+  studentSignupCode: string;
+}
+
+interface InstructorOverview {
+  sections: InstructorSection[];
+  learnerCount: number;
+  totalInteractions: number;
+  totalTextbookUnits: number;
+}
+
+interface InstructorLearnerItem {
+  learner: BackendLearner;
+  section: InstructorSection | null;
+  interactionCount: number;
+  lastInteractionAt: string | null;
+}
+
 // ============================================================================
 // HTTP Client
 // ============================================================================
@@ -899,6 +919,58 @@ export async function getClassStats(): Promise<{
   return response.data;
 }
 
+export async function getInstructorOverview(): Promise<InstructorOverview | null> {
+  const response = await fetchApi<InstructorOverview>('/instructor/overview');
+  if (!response.success || !response.data) return null;
+  return response.data;
+}
+
+export async function getInstructorLearners(): Promise<InstructorLearnerItem[]> {
+  const response = await fetchApi<InstructorLearnerItem[]>('/instructor/learners');
+  if (!response.success || !response.data) return [];
+  return response.data;
+}
+
+export async function getInstructorLearnerDetail(learnerId: string): Promise<{
+  learner: BackendLearner;
+  section: InstructorSection;
+  interactions: InteractionEvent[];
+  textbookUnits: InstructionalUnit[];
+} | null> {
+  const response = await fetchApi<{
+    learner: BackendLearner;
+    section: InstructorSection;
+    interactions: BackendInteraction[];
+    textbookUnits: BackendUnit[];
+  }>(`/instructor/learner/${learnerId}`);
+  if (!response.success || !response.data) return null;
+
+  return {
+    learner: response.data.learner,
+    section: response.data.section,
+    interactions: response.data.interactions.map(convertToFrontendEvent),
+    textbookUnits: response.data.textbookUnits.map(u => ({
+      id: u.unitId,
+      type: u.type,
+      conceptId: u.conceptIds[0] || '',
+      conceptIds: u.conceptIds,
+      title: u.title,
+      content: u.content,
+      contentFormat: u.contentFormat,
+      sourceInteractionIds: u.sourceInteractionIds,
+      status: u.status,
+      prerequisites: [],
+      addedTimestamp: Date.now(),
+    })),
+  };
+}
+
+export async function getInstructorExport(): Promise<unknown | null> {
+  const response = await fetchApi<unknown>('/instructor/export');
+  if (!response.success || !response.data) return null;
+  return response.data;
+}
+
 export async function getLearnerTrajectory(learnerId: string): Promise<{
   interactions: InteractionEvent[];
   textbookUnits: InstructionalUnit[];
@@ -959,6 +1031,10 @@ export const storageClient = {
   // Research
   getClassStats,
   getLearnerTrajectory,
+  getInstructorOverview,
+  getInstructorLearners,
+  getInstructorLearnerDetail,
+  getInstructorExport,
 };
 
 export default storageClient;

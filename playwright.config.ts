@@ -97,6 +97,9 @@ export default defineConfig({
       testIgnore: [
         '**/setup/**',
         '**/deployed-auth-smoke.spec.ts',
+        '**/student-multi-device-persistence.spec.ts',
+        '**/instructor-section-scope.spec.ts',
+        '**/api-authz.spec.ts',
       ],
     },
 
@@ -106,7 +109,12 @@ export default defineConfig({
     // Tests self-skip when the auth file contains no cookies (backend absent).
     {
       name: 'chromium:auth',
-      testMatch: ['**/deployed-auth-smoke.spec.ts'],
+      testMatch: [
+        '**/deployed-auth-smoke.spec.ts',
+        '**/student-multi-device-persistence.spec.ts',
+        '**/instructor-section-scope.spec.ts',
+        '**/api-authz.spec.ts',
+      ],
       dependencies: ['setup:auth'],
       use: {
         ...devices['Desktop Chrome'],

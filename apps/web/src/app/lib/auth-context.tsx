@@ -24,6 +24,7 @@ interface AuthContextValue {
   /** Null if not authenticated via account system */
   user: AuthUser | null;
   isLoading: boolean;
+  isHydrating: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
@@ -44,6 +45,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   isLoading: false,
+  isHydrating: false,
   isAuthenticated: false,
   login: async () => ({ success: false, error: 'AuthProvider not mounted' }),
   logout: async () => {},
@@ -57,6 +59,7 @@ const AuthContext = createContext<AuthContextValue>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(AUTH_ENABLED);
+  const [isHydrating, setIsHydrating] = useState(false);
 
   /** Sync authenticated user into localStorage so existing guards work */
   function syncToLocalStorage(authUser: AuthUser) {
@@ -68,16 +71,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  async function hydrateFromBackend(authUser: AuthUser): Promise<void> {
+    if (!AUTH_ENABLED) return;
+    setIsHydrating(true);
+    try {
+      await storage.hydrateLearner(authUser.learnerId);
+      if (authUser.role === 'instructor') {
+        await storage.hydrateInstructorDashboard();
+      }
+    } finally {
+      setIsHydrating(false);
+    }
+  }
+
   // On mount: check JWT cookie
   useEffect(() => {
     if (!AUTH_ENABLED) {
       setIsLoading(false);
       return;
     }
-    getMe().then((authUser) => {
+    getMe().then(async (authUser) => {
       if (authUser) {
-        setUser(authUser);
         syncToLocalStorage(authUser);
+        await hydrateFromBackend(authUser);
+        setUser(authUser);
       }
       setIsLoading(false);
     });
@@ -86,8 +103,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string): Promise<AuthResult> => {
     const result = await apiLogin(email, password);
     if (result.success && result.user) {
-      setUser(result.user);
       syncToLocalStorage(result.user);
+      await hydrateFromBackend(result.user);
+      setUser(result.user);
     }
     return result;
   }, []);
@@ -108,8 +126,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }): Promise<AuthResult> => {
     const result = await apiSignup(params);
     if (result.success && result.user) {
-      setUser(result.user);
       syncToLocalStorage(result.user);
+      await hydrateFromBackend(result.user);
+      setUser(result.user);
     }
     return result;
   }, []);
@@ -119,6 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         isLoading,
+        isHydrating,
         isAuthenticated: user !== null,
         login,
         logout,

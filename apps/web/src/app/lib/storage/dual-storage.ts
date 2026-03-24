@@ -207,6 +207,7 @@ class DualStorageManager {
   private config: StorageConfig;
   private backendHealthy: boolean = false;
   private offlineQueue: OfflineQueueManager;
+  private lastHydratedAt: Record<string, number> = {};
 
   constructor() {
     this.config = {
@@ -346,11 +347,17 @@ class DualStorageManager {
   }
 
   getAllInteractions(): InteractionEvent[] {
-    // localStorage is the cache for interactions
+    const learnerId = this.getCurrentLearnerId();
+    if (learnerId && this.shouldUseBackend()) {
+      void this.hydrateLearner(learnerId);
+    }
     return localStorageManager.getAllInteractions();
   }
 
   getInteractionsByLearner(learnerId: string): InteractionEvent[] {
+    if (this.shouldUseBackend()) {
+      void this.hydrateLearner(learnerId);
+    }
     return localStorageManager.getInteractionsByLearner(learnerId);
   }
 
@@ -570,8 +577,99 @@ class DualStorageManager {
       });
     }
     
-    // Fall back to localStorage - only has current user's profile
-    return [];
+    return localStorageManager
+      .getAllProfiles()
+      .map((profile: { id: string }) => localStorageManager.getProfile(profile.id))
+      .filter((profile): profile is LearnerProfile => Boolean(profile));
+  }
+
+  async hydrateLearner(learnerId: string): Promise<boolean> {
+    if (!this.config.useBackend) {
+      return false;
+    }
+    const now = Date.now();
+    if (this.lastHydratedAt[learnerId] && now - this.lastHydratedAt[learnerId] < 3000) {
+      return true;
+    }
+
+    const healthy = await this.checkHealth();
+    if (!healthy) {
+      return false;
+    }
+
+    try {
+      const [profile, interactionsResult, textbookUnits, session] = await Promise.all([
+        storageClient.getProfile(learnerId),
+        storageClient.getInteractions(learnerId, { limit: 5000 }),
+        storageClient.getTextbook(learnerId),
+        storageClient.getSession(learnerId),
+      ]);
+
+      if (profile) {
+        localStorageManager.saveProfile(profile);
+      }
+
+      const existing = localStorageManager.getAllInteractions();
+      const byId = new Map(existing.map((item) => [item.id, item]));
+      for (const interaction of interactionsResult.events) {
+        byId.set(interaction.id, interaction);
+      }
+      localStorageManager.importData({
+        interactions: Array.from(byId.values()).sort((a, b) => a.timestamp - b.timestamp),
+        activeSessionId: session?.currentProblemId ?? localStorageManager.getActiveSessionId(),
+      });
+
+      for (const unit of textbookUnits) {
+        localStorageManager.saveTextbookUnit(learnerId, unit);
+      }
+
+      if (session?.currentProblemId) {
+        localStorageManager.setActiveSessionId(session.currentProblemId);
+      }
+
+      this.lastHydratedAt[learnerId] = now;
+      return true;
+    } catch (error) {
+      console.warn('[DualStorage] hydrateLearner failed:', error);
+      return false;
+    }
+  }
+
+  async hydrateInstructorDashboard(): Promise<boolean> {
+    if (!this.config.useBackend) {
+      return false;
+    }
+    const healthy = await this.checkHealth();
+    if (!healthy) {
+      return false;
+    }
+
+    try {
+      const [overview, learners, profiles] = await Promise.all([
+        storageClient.getInstructorOverview(),
+        storageClient.getInstructorLearners(),
+        storageClient.getAllProfiles(),
+      ]);
+
+      for (const profile of profiles) {
+        localStorageManager.saveProfile(profile);
+      }
+
+      for (const learner of learners) {
+        if (learner?.learner?.id) {
+          await this.hydrateLearner(learner.learner.id);
+        }
+      }
+
+      console.log('[DualStorage] Instructor dashboard hydrated', {
+        sectionCount: overview?.sections?.length ?? 0,
+        learnerCount: learners.length,
+      });
+      return true;
+    } catch (error) {
+      console.warn('[DualStorage] hydrateInstructorDashboard failed:', error);
+      return false;
+    }
   }
 
   /**

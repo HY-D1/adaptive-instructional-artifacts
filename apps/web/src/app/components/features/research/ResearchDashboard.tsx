@@ -285,14 +285,15 @@ export function ResearchDashboard() {
   useEffect(() => {
     // Detect hosted mode on mount
     setHostedMode(isHostedMode());
-    loadData();
+    void loadData();
   }, []);
 
   useEffect(() => {
     storage.setPolicyReplayMode(policyReplayMode);
   }, [policyReplayMode]);
 
-  const loadData = () => {
+  const loadData = async () => {
+    await storage.hydrateInstructorDashboard();
     setInteractions(storage.getAllInteractions());
     const loadedProfiles = storage
       .getAllProfiles()
@@ -515,7 +516,7 @@ export function ResearchDashboard() {
         storage.importData(data);
         if (isMountedRef.current) {
           setExportAllHistory(false);
-          loadData();
+          void loadData();
           setImportSuccess(true);
           setTimeout(() => {
             if (isMountedRef.current) {

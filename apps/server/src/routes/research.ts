@@ -6,13 +6,11 @@
 
 import { Router } from 'express';
 import {
-  getClassStats,
-  getLearnerById,
-  getInteractionsByLearner,
-  getTextbookByLearner,
-  getAllLearners,
-  queryInteractions,
-} from '../db/index.js';
+  getUserById,
+  getInteractionsByUser,
+  getTextbookUnitsByUser,
+  getAllUsers,
+} from '../db/neon.js';
 import type {
   ApiResponse,
   ClassStats,
@@ -20,26 +18,62 @@ import type {
   EventType,
   Interaction,
 } from '../types.js';
+import { getInstructorScopedLearnerIds, getOwnedSectionsByInstructor } from '../db/sections.js';
 
 const router = Router();
+
+async function getScopedLearnerIdsForInstructor(instructorUserId: string): Promise<Set<string>> {
+  const ids = await getInstructorScopedLearnerIds(instructorUserId);
+  return new Set(ids);
+}
 
 // ============================================================================
 // GET /api/research/aggregates - Class-level statistics
 // ============================================================================
 
-router.get('/aggregates', async (_req, res) => {
+router.get('/aggregates', async (req, res) => {
   try {
-    const stats = await getClassStats();
+    const instructorUserId = req.auth!.learnerId;
+    const scopedLearnerIds = await getScopedLearnerIdsForInstructor(instructorUserId);
+    const learners = (await getAllUsers()).filter((learner) => scopedLearnerIds.has(learner.id));
+    let totalInteractions = 0;
+    let totalTextbookUnits = 0;
+    const interactionsByType: Record<string, number> = {};
+    const now = Date.now();
+    let last24Hours = 0;
+    let last7Days = 0;
+    let last30Days = 0;
+
+    for (const learner of learners) {
+      const interactionsResult = await getInteractionsByUser(learner.id, { limit: 5000 });
+      const interactions = interactionsResult.interactions;
+      const units = await getTextbookUnitsByUser(learner.id);
+      totalInteractions += interactionsResult.total;
+      totalTextbookUnits += units.length;
+      for (const interaction of interactions) {
+        interactionsByType[interaction.eventType] = (interactionsByType[interaction.eventType] || 0) + 1;
+      }
+      for (const interaction of interactions) {
+        const ts = new Date(interaction.timestamp).getTime();
+        if (now - ts <= 24 * 60 * 60 * 1000) last24Hours++;
+        if (now - ts <= 7 * 24 * 60 * 60 * 1000) last7Days++;
+        if (now - ts <= 30 * 24 * 60 * 60 * 1000) last30Days++;
+      }
+    }
 
     const response: ApiResponse<ClassStats> = {
       success: true,
       data: {
-        totalLearners: stats.totalLearners,
-        totalInteractions: stats.totalInteractions,
-        interactionsByType: stats.interactionsByType,
-        totalTextbookUnits: stats.totalTextbookUnits,
-        averageUnitsPerLearner: stats.averageUnitsPerLearner,
-        recentActivity: stats.recentActivity,
+        totalLearners: learners.length,
+        totalInteractions,
+        interactionsByType: interactionsByType as ClassStats['interactionsByType'],
+        totalTextbookUnits,
+        averageUnitsPerLearner: learners.length > 0 ? totalTextbookUnits / learners.length : 0,
+        recentActivity: {
+          last24Hours,
+          last7Days,
+          last30Days,
+        },
       },
     };
     res.json(response);
@@ -59,8 +93,14 @@ router.get('/aggregates', async (_req, res) => {
 
 router.get('/learner/:id/trajectory', async (req, res) => {
   try {
+    const instructorUserId = req.auth!.learnerId;
+    const scopedLearnerIds = await getScopedLearnerIdsForInstructor(instructorUserId);
     const { id } = req.params;
-    const learner = await getLearnerById(id);
+    if (!scopedLearnerIds.has(id)) {
+      res.status(403).json({ success: false, error: 'Access denied: learner not in your section' });
+      return;
+    }
+    const learner = await getUserById(id);
 
     if (!learner) {
       const response: ApiResponse<never> = {
@@ -71,8 +111,8 @@ router.get('/learner/:id/trajectory', async (req, res) => {
       return;
     }
 
-    const interactions = await getInteractionsByLearner(id);
-    const textbookUnits = await getTextbookByLearner(id);
+    const interactions = (await getInteractionsByUser(id, { limit: 10000 })).interactions;
+    const textbookUnits = await getTextbookUnitsByUser(id);
 
     // Calculate summary stats
     const uniqueProblems = new Set(interactions.map(i => i.problemId));
@@ -138,6 +178,9 @@ router.get('/learner/:id/trajectory', async (req, res) => {
 
 router.get('/export', async (req, res) => {
   try {
+    const instructorUserId = req.auth!.learnerId;
+    const scopedLearnerIds = await getScopedLearnerIdsForInstructor(instructorUserId);
+    const ownedSections = await getOwnedSectionsByInstructor(instructorUserId);
     const format = (req.query.format as string) || 'json';
     const startDate = req.query.startDate as string | undefined;
     const endDate = req.query.endDate as string | undefined;
@@ -145,31 +188,36 @@ router.get('/export', async (req, res) => {
     const eventTypes = req.query.eventTypes ? (req.query.eventTypes as string).split(',') as EventType[] : undefined;
 
     // Get all learners (filtered if learnerIds provided)
-    let learners = await getAllLearners();
+    let learners = await getAllUsers();
+    learners = learners.filter((l) => scopedLearnerIds.has(l.id));
     if (learnerIds && learnerIds.length > 0) {
       learners = learners.filter(l => learnerIds.includes(l.id));
     }
 
-    // Get interactions with filters
-    const { interactions } = await queryInteractions({
-      start: startDate,
-      end: endDate,
-      limit: '100000', // High limit for exports
-    });
-
-    // Filter by learner and event type in memory if needed
-    let filteredInteractions = interactions;
+    let filteredInteractions = [] as Interaction[];
+    for (const learner of learners) {
+      const learnerInteractions = (await getInteractionsByUser(learner.id, { limit: 100000 })).interactions;
+      filteredInteractions.push(...learnerInteractions);
+    }
     if (learnerIds && learnerIds.length > 0) {
-      filteredInteractions = filteredInteractions.filter(i => learnerIds.includes(i.learnerId));
+      filteredInteractions = filteredInteractions.filter((i) => learnerIds.includes(i.learnerId));
     }
     if (eventTypes && eventTypes.length > 0) {
       filteredInteractions = filteredInteractions.filter(i => eventTypes.includes(i.eventType));
     }
+    if (startDate) {
+      const startTs = new Date(startDate).getTime();
+      filteredInteractions = filteredInteractions.filter((i) => new Date(i.timestamp).getTime() >= startTs);
+    }
+    if (endDate) {
+      const endTs = new Date(endDate).getTime();
+      filteredInteractions = filteredInteractions.filter((i) => new Date(i.timestamp).getTime() <= endTs);
+    }
 
     // Get all textbook units for these learners
-    const allTextbookUnits: { learnerId: string; units: Awaited<ReturnType<typeof getTextbookByLearner>> }[] = [];
+    const allTextbookUnits: { learnerId: string; units: Awaited<ReturnType<typeof getTextbookUnitsByUser>> }[] = [];
     for (const learner of learners) {
-      const units = await getTextbookByLearner(learner.id);
+      const units = await getTextbookUnitsByUser(learner.id);
       allTextbookUnits.push({ learnerId: learner.id, units });
     }
 
@@ -187,6 +235,12 @@ router.get('/export', async (req, res) => {
         endDate,
         learnerIds,
         eventTypes,
+      },
+      exportMetadata: {
+        actorRole: req.auth!.role,
+        actorId: instructorUserId,
+        sectionIds: ownedSections.map((section) => section.id),
+        sectionNames: ownedSections.map((section) => section.name),
       },
       summary: {
         learnerCount: learners.length,
@@ -238,14 +292,16 @@ router.get('/export', async (req, res) => {
 // GET /api/research/learners - List all learners with summary stats
 // ============================================================================
 
-router.get('/learners', async (_req, res) => {
+router.get('/learners', async (req, res) => {
   try {
-    const learners = await getAllLearners();
+    const instructorUserId = req.auth!.learnerId;
+    const scopedLearnerIds = await getScopedLearnerIdsForInstructor(instructorUserId);
+    const learners = (await getAllUsers()).filter((learner) => scopedLearnerIds.has(learner.id));
     
     const learnersWithStats = await Promise.all(
       learners.map(async (learner) => {
-        const interactions = await getInteractionsByLearner(learner.id);
-        const textbookUnits = await getTextbookByLearner(learner.id);
+        const interactions = (await getInteractionsByUser(learner.id, { limit: 10000 })).interactions;
+        const textbookUnits = await getTextbookUnitsByUser(learner.id);
         const uniqueProblems = new Set(interactions.map(i => i.problemId));
         
         // Get escalation and HDI stats

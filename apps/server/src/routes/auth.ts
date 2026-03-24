@@ -18,6 +18,7 @@ import {
   createAuthAccount,
   getAuthAccountByEmail,
   getAuthAccountById,
+  type AuthAccountPublic,
   toPublicAccount,
 } from '../db/auth.js';
 import {
@@ -33,7 +34,14 @@ import {
   clearCsrfCookie,
   requireCsrf,
 } from '../middleware/csrf.js';
-import { INSTRUCTOR_SIGNUP_CODE, STUDENT_SIGNUP_CODE } from '../config.js';
+import { INSTRUCTOR_SIGNUP_CODE } from '../config.js';
+import {
+  createSectionForInstructor,
+  enrollStudentInSection,
+  getOwnedSectionsByInstructor,
+  getSectionBySignupCode,
+  getSectionForStudent,
+} from '../db/sections.js';
 
 const router = Router();
 
@@ -56,6 +64,27 @@ const LoginSchema = z.object({
   email: z.string().email().toLowerCase().trim(),
   password: z.string().min(1),
 });
+
+async function withSectionContext(account: AuthAccountPublic) {
+  if (account.role === 'student') {
+    const section = await getSectionForStudent(account.learnerId);
+    return {
+      ...account,
+      sectionId: section?.id ?? null,
+      sectionName: section?.name ?? null,
+    };
+  }
+
+  const ownedSections = await getOwnedSectionsByInstructor(account.learnerId);
+  return {
+    ...account,
+    ownedSections: ownedSections.map((section) => ({
+      id: section.id,
+      name: section.name,
+      studentSignupCode: section.studentSignupCode,
+    })),
+  };
+}
 
 // ============================================================================
 // POST /api/auth/signup
@@ -83,24 +112,6 @@ router.post('/signup', async (req: Request, res: Response) => {
 
   const { name, email, password, role, classCode, instructorCode } = parsed.data;
 
-  // Validate student class code
-  if (role === 'student') {
-    if (!STUDENT_SIGNUP_CODE) {
-      res.status(503).json({
-        success: false,
-        error: 'Student signup is not configured on this server',
-      });
-      return;
-    }
-    if (!classCode || classCode !== STUDENT_SIGNUP_CODE) {
-      res.status(403).json({
-        success: false,
-        error: 'Invalid class code',
-      });
-      return;
-    }
-  }
-
   // Validate instructor code
   if (role === 'instructor') {
     if (!INSTRUCTOR_SIGNUP_CODE) {
@@ -121,6 +132,26 @@ router.post('/signup', async (req: Request, res: Response) => {
 
   try {
     const db = getDb();
+    let studentSection = null as Awaited<ReturnType<typeof getSectionBySignupCode>>;
+
+    // Validate student class code (section signup code)
+    if (role === 'student') {
+      if (!classCode?.trim()) {
+        res.status(400).json({
+          success: false,
+          error: 'Class code is required for student signup',
+        });
+        return;
+      }
+      studentSection = await getSectionBySignupCode(classCode);
+      if (!studentSection) {
+        res.status(403).json({
+          success: false,
+          error: 'Invalid class code',
+        });
+        return;
+      }
+    }
 
     // Check for duplicate email
     const existing = await getAuthAccountByEmail(db, email);
@@ -148,6 +179,20 @@ router.post('/signup', async (req: Request, res: Response) => {
       name,
     });
 
+    if (role === 'student' && studentSection) {
+      await enrollStudentInSection({
+        sectionId: studentSection.id,
+        studentUserId: learnerId,
+      });
+    }
+
+    if (role === 'instructor') {
+      await createSectionForInstructor({
+        instructorUserId: learnerId,
+        name: `${name}'s Section`,
+      });
+    }
+
     // Issue JWT cookie
     const token = signToken({
       accountId: account.id,
@@ -162,7 +207,7 @@ router.post('/signup', async (req: Request, res: Response) => {
 
     res.status(201).json({
       success: true,
-      user: toPublicAccount(account),
+      user: await withSectionContext(toPublicAccount(account)),
       csrfToken,
     });
   } catch (err) {
@@ -225,7 +270,7 @@ router.post('/login', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      user: toPublicAccount(account),
+      user: await withSectionContext(toPublicAccount(account)),
       csrfToken,
     });
   } catch (err) {
@@ -273,7 +318,14 @@ router.get('/me', (req: Request, res: Response) => {
         }
         const csrfToken = createCsrfToken();
         setCsrfCookie(res, csrfToken);
-        res.json({ success: true, user: toPublicAccount(account), csrfToken });
+        withSectionContext(toPublicAccount(account))
+          .then((userWithContext) => {
+            res.json({ success: true, user: userWithContext, csrfToken });
+          })
+          .catch((contextError) => {
+            console.error('[auth/me/context]', contextError);
+            res.json({ success: true, user: toPublicAccount(account), csrfToken });
+          });
       })
       .catch((err) => {
         console.error('[auth/me]', err);

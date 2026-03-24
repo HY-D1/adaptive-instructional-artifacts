@@ -12,6 +12,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../config.js';
+import { getSectionForLearnerInInstructorScope } from '../db/sections.js';
 
 // ============================================================================
 // Types
@@ -102,6 +103,22 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
 }
 
 /**
+ * Requires an authenticated instructor account.
+ */
+export function requireInstructor(req: Request, res: Response, next: NextFunction): void {
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ success: false, error: 'Authentication required' });
+    return;
+  }
+  if (auth.role !== 'instructor') {
+    res.status(403).json({ success: false, error: 'Instructor role required' });
+    return;
+  }
+  next();
+}
+
+/**
  * After requireAuth: verifies that the route :learnerId or :id param belongs
  * to the authenticated user. Instructors may access any learner's data.
  *
@@ -113,19 +130,94 @@ export function requireOwnership(req: Request, res: Response, next: NextFunction
     res.status(401).json({ success: false, error: 'Authentication required' });
     return;
   }
-  // Instructors can access any learner's data
-  if (auth.role === 'instructor') {
-    next();
-    return;
-  }
   const paramLearnerId = req.params.learnerId ?? req.params.id ?? req.params.userId;
   if (!paramLearnerId) {
     next(); // no :learnerId param — let route handle it
     return;
   }
-  if (paramLearnerId !== auth.learnerId) {
-    res.status(403).json({ success: false, error: 'Access denied: not your data' });
+
+  if (auth.role === 'student') {
+    if (paramLearnerId !== auth.learnerId) {
+      res.status(403).json({ success: false, error: 'Access denied: not your data' });
+      return;
+    }
+    next();
     return;
   }
-  next();
+
+  if (paramLearnerId === auth.learnerId) {
+    next();
+    return;
+  }
+
+  getSectionForLearnerInInstructorScope({
+    instructorUserId: auth.learnerId,
+    learnerId: paramLearnerId,
+  }).then((section) => {
+    if (!section) {
+      res.status(403).json({ success: false, error: 'Access denied: learner not in your section' });
+      return;
+    }
+    next();
+  }).catch((error) => {
+    console.error('[authz/requireOwnership]', error);
+    res.status(500).json({ success: false, error: 'Authorization check failed' });
+  });
+}
+
+/**
+ * Section-aware access check for routes that accept learner IDs via either
+ * params or query values.
+ */
+export function requireSectionAccess(req: Request, res: Response, next: NextFunction): void {
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ success: false, error: 'Authentication required' });
+    return;
+  }
+
+  const targetLearnerId =
+    req.params.learnerId ??
+    req.params.id ??
+    req.params.userId ??
+    (typeof req.query.learnerId === 'string' ? req.query.learnerId : undefined);
+
+  if (!targetLearnerId) {
+    next();
+    return;
+  }
+
+  if (auth.role === 'student') {
+    if (targetLearnerId !== auth.learnerId) {
+      res.status(403).json({ success: false, error: 'Access denied: not your data' });
+      return;
+    }
+    next();
+    return;
+  }
+
+  if (targetLearnerId === auth.learnerId) {
+    next();
+    return;
+  }
+
+  getSectionForLearnerInInstructorScope({
+    instructorUserId: auth.learnerId,
+    learnerId: targetLearnerId,
+  }).then((section) => {
+    if (!section) {
+      console.warn('[authz/section_access_denied]', {
+        route: req.path,
+        actorRole: auth.role,
+        actorId: auth.learnerId,
+        targetLearnerId,
+      });
+      res.status(403).json({ success: false, error: 'Access denied: learner not in your section' });
+      return;
+    }
+    next();
+  }).catch((error) => {
+    console.error('[authz/requireSectionAccess]', error);
+    res.status(500).json({ success: false, error: 'Authorization check failed' });
+  });
 }

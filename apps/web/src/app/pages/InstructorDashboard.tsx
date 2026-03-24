@@ -189,22 +189,20 @@ export function InstructorDashboard() {
   useEffect(() => {
     const loadData = async () => {
       setIsDataLoading(true);
-      
-      // Try backend first
-      if (isBackendAvailable && backendProfiles.length > 0) {
-        setProfiles(backendProfiles);
-      } else {
-        // Fallback to localStorage
-        const allProfiles = storage.getAllProfiles().map(p => storage.getProfile(p.id)).filter(Boolean) as LearnerProfile[];
-        const allInteractions = storage.getAllInteractions();
-        setProfiles(allProfiles);
-        setInteractions(allInteractions);
+
+      if (isBackendAvailable) {
+        await storage.hydrateInstructorDashboard();
       }
-      
+
+      const allProfiles = storage.getAllProfiles().map(p => storage.getProfile(p.id)).filter(Boolean) as LearnerProfile[];
+      const allInteractions = storage.getAllInteractions();
+      setProfiles(backendProfiles.length > 0 ? backendProfiles : allProfiles);
+      setInteractions(allInteractions);
+
       setIsDataLoading(false);
     };
     
-    loadData();
+    void loadData();
   }, [isBackendAvailable, backendProfiles]);
 
   // Toast auto-hide

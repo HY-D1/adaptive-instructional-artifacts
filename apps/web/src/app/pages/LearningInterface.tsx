@@ -41,6 +41,7 @@ import { sqlProblems } from '../data/problems';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
 import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync } from '../lib/storage';
+import { useAuth } from '../lib/auth-context';
 import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content/content-generator';
@@ -240,6 +241,7 @@ function analyzeLearnerHistory(interactions: InteractionEvent[]) {
 export function LearningInterface() {
   const location = useLocation();
   const { role, isStudent, isInstructor, profile } = useUserRole();
+  const { isHydrating } = useAuth();
   // Use actual user profile ID for data isolation (aligned with TextbookPage)
   const learnerId = profile?.id || 'learner-1';
   const [sessionId, setSessionId] = useState('');
@@ -598,6 +600,9 @@ export function LearningInterface() {
 
   // Load initial data
   useEffect(() => {
+    if (isHydrating) {
+      return undefined;
+    }
     const timer = window.setTimeout(() => setIsLoading(false), 500);
     return () => {
       window.clearTimeout(timer);
@@ -605,7 +610,7 @@ export function LearningInterface() {
       notificationTimeoutsRef.current.forEach(id => window.clearTimeout(id));
       notificationTimeoutsRef.current.clear();
     };
-  }, []);
+  }, [isHydrating]);
 
   // Parse query params on mount to set problem/concept context
   useEffect(() => {
@@ -2569,4 +2574,3 @@ export function LearningInterface() {
       </div>
   );
 }
-

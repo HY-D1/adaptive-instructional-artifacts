@@ -19,7 +19,7 @@
  * Env vars (all optional — sensible defaults for local dev):
  *   E2E_STUDENT_EMAIL      default: e2e-student-<ts>@sql-adapt.test
  *   E2E_STUDENT_PASSWORD   default: E2eTestPass!123
- *   E2E_STUDENT_CLASS_CODE default: ClassSQL2024
+ *   E2E_STUDENT_CLASS_CODE optional: section signup code
  *   E2E_INSTRUCTOR_EMAIL   default: e2e-instructor-<ts>@sql-adapt.test
  *   E2E_INSTRUCTOR_PASSWORD default: E2eInstrPass!123
  *   E2E_INSTRUCTOR_CODE    default: TeachSQL2024 (matches dev server default)
@@ -46,7 +46,7 @@ const TS = Date.now();
 const STUDENT_NAME      = 'E2E Student';
 const STUDENT_EMAIL     = process.env.E2E_STUDENT_EMAIL     ?? `e2e-student-${TS}@sql-adapt.test`;
 const STUDENT_PASSWORD  = process.env.E2E_STUDENT_PASSWORD  ?? 'E2eTestPass!123';
-const STUDENT_CLASS_CODE = process.env.E2E_STUDENT_CLASS_CODE ?? 'ClassSQL2024';
+const STUDENT_CLASS_CODE = process.env.E2E_STUDENT_CLASS_CODE;
 
 const INSTRUCTOR_NAME     = 'E2E Instructor';
 const INSTRUCTOR_EMAIL    = process.env.E2E_INSTRUCTOR_EMAIL    ?? `e2e-instructor-${TS}@sql-adapt.test`;
@@ -152,7 +152,7 @@ async function signupOrLogin(
 
 setup.describe('@auth-setup', () => {
 
-  setup('capture student auth state', async ({ page }) => {
+  setup('capture student auth state', async ({ page, request }) => {
     // Ensure output directory exists
     fs.mkdirSync(path.dirname(STUDENT_AUTH_FILE), { recursive: true });
 
@@ -163,13 +163,38 @@ setup.describe('@auth-setup', () => {
       return;
     }
 
+    let studentClassCode = STUDENT_CLASS_CODE;
+    if (!studentClassCode) {
+      const provisionEmail = `e2e-classcode-${Date.now()}@sql-adapt.test`;
+      const provisionPassword = 'E2eCodeProvision!123';
+      const provisionResponse = await request.post('/api/auth/signup', {
+        data: {
+          name: 'E2E ClassCode Provisioner',
+          email: provisionEmail,
+          password: provisionPassword,
+          role: 'instructor',
+          instructorCode: INSTRUCTOR_CODE,
+        },
+      });
+      const provisionBody = await provisionResponse.json().catch(() => null);
+      if (provisionResponse.ok() && provisionBody?.user?.ownedSections?.[0]?.studentSignupCode) {
+        studentClassCode = provisionBody.user.ownedSections[0].studentSignupCode;
+      }
+    }
+
+    if (!studentClassCode) {
+      console.warn('[auth-setup] Missing student class code and failed to auto-provision one; writing empty student state');
+      writeEmptyAuthState(STUDENT_AUTH_FILE);
+      return;
+    }
+
     await signupOrLogin(
       page,
       STUDENT_NAME,
       STUDENT_EMAIL,
       STUDENT_PASSWORD,
       'student',
-      STUDENT_CLASS_CODE,
+      studentClassCode,
     );
 
     // Must land on /practice

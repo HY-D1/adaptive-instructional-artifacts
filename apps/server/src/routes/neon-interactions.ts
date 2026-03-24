@@ -4,6 +4,7 @@
 
 import { Router, Request, Response } from 'express';
 import * as db from '../db/neon.js';
+import { getSectionForLearnerInInstructorScope } from '../db/sections.js';
 
 const router = Router();
 
@@ -16,8 +17,63 @@ const router = Router();
  * When authenticated: always uses the JWT-authenticated learnerId (prevents spoofing).
  * When not authenticated (legacy/local mode): uses the body-supplied learnerId.
  */
-function resolveLearnerId(req: Request, bodyLearnerId: string): string {
-  return req.auth?.learnerId ?? bodyLearnerId;
+class AccessError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function resolveWritableLearnerId(req: Request, bodyLearnerId?: string): Promise<string> {
+  const auth = req.auth;
+  if (!auth) {
+    if (!bodyLearnerId) throw new AccessError(400, 'Missing learnerId');
+    return bodyLearnerId;
+  }
+
+  if (auth.role === 'student') {
+    return auth.learnerId;
+  }
+
+  if (!bodyLearnerId) {
+    throw new AccessError(400, 'learnerId is required for instructor writes');
+  }
+  if (bodyLearnerId === auth.learnerId) {
+    return bodyLearnerId;
+  }
+
+  const scopedSection = await getSectionForLearnerInInstructorScope({
+    instructorUserId: auth.learnerId,
+    learnerId: bodyLearnerId,
+  });
+  if (!scopedSection) {
+    throw new AccessError(403, 'Access denied: learner not in your section');
+  }
+  return bodyLearnerId;
+}
+
+async function assertReadableLearnerId(req: Request, learnerId: string): Promise<string> {
+  const auth = req.auth;
+  if (!auth) {
+    return learnerId;
+  }
+
+  if (auth.role === 'student') {
+    return auth.learnerId;
+  }
+  if (learnerId === auth.learnerId) {
+    return learnerId;
+  }
+
+  const scopedSection = await getSectionForLearnerInInstructorScope({
+    instructorUserId: auth.learnerId,
+    learnerId,
+  });
+  if (!scopedSection) {
+    throw new AccessError(403, 'Access denied: learner not in your section');
+  }
+  return learnerId;
 }
 
 // ============================================================================
@@ -37,8 +93,7 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    // When authenticated, always use the server-verified learnerId (ignores spoofed body value)
-    const canonicalLearnerId = resolveLearnerId(req, event.learnerId);
+    const canonicalLearnerId = await resolveWritableLearnerId(req, event.learnerId);
     event.learnerId = canonicalLearnerId;
 
     const id = event.id || `${event.eventType}-${canonicalLearnerId}-${Date.now()}`;
@@ -101,6 +156,10 @@ router.post('/', async (req: Request, res: Response) => {
 
     res.status(201).json({ success: true, data: interaction });
   } catch (error) {
+    if (error instanceof AccessError) {
+      res.status(error.status).json({ success: false, error: error.message });
+      return;
+    }
     console.error('Error logging interaction:', error);
     res.status(500).json({ success: false, error: 'Failed to log interaction' });
   }
@@ -121,7 +180,9 @@ router.post('/batch', async (req: Request, res: Response) => {
 
     const results = [];
     for (const event of events) {
-      const id = event.id || `${event.eventType}-${event.learnerId}-${Date.now()}`;
+      const canonicalLearnerId = await resolveWritableLearnerId(req, event.learnerId);
+      event.learnerId = canonicalLearnerId;
+      const id = event.id || `${event.eventType}-${canonicalLearnerId}-${Date.now()}`;
       // Extract payload - frontend sends nested payload, direct API calls send flat structure
       // RESEARCH-3B: Explicitly extract bandit/escalation fields for proper column mapping
       const basePayload = event.payload || {
@@ -169,7 +230,7 @@ router.post('/batch', async (req: Request, res: Response) => {
       };
       const interaction = await db.createInteraction({
         id,
-        learnerId: event.learnerId,
+        learnerId: canonicalLearnerId,
         timestamp: event.timestamp || new Date().toISOString(),
         eventType: event.eventType,
         problemId: event.problemId,
@@ -180,6 +241,10 @@ router.post('/batch', async (req: Request, res: Response) => {
 
     res.status(201).json({ success: true, data: { count: results.length } });
   } catch (error) {
+    if (error instanceof AccessError) {
+      res.status(error.status).json({ success: false, error: error.message });
+      return;
+    }
     console.error('Error logging interactions batch:', error);
     res.status(500).json({ success: false, error: 'Failed to log interactions' });
   }
@@ -189,8 +254,9 @@ router.post('/batch', async (req: Request, res: Response) => {
 router.get('/', async (req: Request, res: Response) => {
   try {
     const { learnerId, sessionId, eventType, problemId, limit, offset } = req.query;
+    const auth = req.auth;
 
-    if (!learnerId) {
+    if (!auth && !learnerId) {
       res.status(400).json({
         success: false,
         error: 'learnerId query parameter is required',
@@ -198,7 +264,29 @@ router.get('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const result = await db.getInteractionsByUser(learnerId as string, {
+    const requestedLearnerId = typeof learnerId === 'string' ? learnerId : undefined;
+    if (auth?.role === 'student' && requestedLearnerId && requestedLearnerId !== auth.learnerId) {
+      res.status(403).json({
+        success: false,
+        error: 'Access denied: not your data',
+      });
+      return;
+    }
+    const effectiveLearnerId = auth?.role === 'student'
+      ? auth.learnerId
+      : (requestedLearnerId || auth?.learnerId);
+
+    if (!effectiveLearnerId) {
+      res.status(400).json({
+        success: false,
+        error: 'learnerId query parameter is required',
+      });
+      return;
+    }
+
+    const scopedLearnerId = await assertReadableLearnerId(req, effectiveLearnerId);
+
+    const result = await db.getInteractionsByUser(scopedLearnerId, {
       sessionId: sessionId as string | undefined,
       eventType: eventType as string | undefined,
       problemId: problemId as string | undefined,
@@ -217,6 +305,10 @@ router.get('/', async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
+    if (error instanceof AccessError) {
+      res.status(error.status).json({ success: false, error: error.message });
+      return;
+    }
     console.error('Error fetching interactions:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch interactions' });
   }
@@ -232,8 +324,14 @@ router.get('/:id', async (req: Request, res: Response) => {
       return;
     }
 
+    await assertReadableLearnerId(req, interaction.learnerId);
+
     res.json({ success: true, data: interaction });
   } catch (error) {
+    if (error instanceof AccessError) {
+      res.status(error.status).json({ success: false, error: error.message });
+      return;
+    }
     console.error('Error fetching interaction:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch interaction' });
   }

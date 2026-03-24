@@ -26,6 +26,7 @@ import { Skeleton } from '../components/ui/skeleton';
 import { conceptNodes } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
 import { storage } from '../lib/storage';
+import { useAuth } from '../lib/auth-context';
 import type { InteractionEvent } from '../types';
 
 const getSubtypeLabel = (interaction: InteractionEvent) =>
@@ -46,6 +47,7 @@ const CHAT_EVENT_TYPES: InteractionEvent['eventType'][] = [
 export function TextbookPage() {
   const navigate = useNavigate();
   const { isStudent, isInstructor, profile } = useUserRole();
+  const { isHydrating } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Use the actual user's ID as the learner ID (aligned with LearningInterface)
@@ -73,9 +75,16 @@ export function TextbookPage() {
   const [storageVersion, setStorageVersion] = useState(0);
   
   useEffect(() => {
+    if (isHydrating) {
+      return undefined;
+    }
     const timer = setTimeout(() => setIsLoading(false), 500);
     return () => clearTimeout(timer);
-  }, []);
+  }, [isHydrating]);
+
+  useEffect(() => {
+    void storage.hydrateLearner(learnerId);
+  }, [learnerId]);
   
   useEffect(() => {
     // Ref to track mounted state for cleanup

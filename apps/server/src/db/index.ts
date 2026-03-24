@@ -85,6 +85,11 @@ export async function saveSession(
     immediateExplanationMode?: boolean;
     staticHintMode?: boolean;
     escalationPolicy?: string;
+    currentCode?: string;
+    guidanceState?: Record<string, unknown>;
+    hdiState?: Record<string, unknown>;
+    banditState?: Record<string, unknown>;
+    lastActivity?: string;
   }
 ): Promise<void> {
   if (isUsingNeon()) {

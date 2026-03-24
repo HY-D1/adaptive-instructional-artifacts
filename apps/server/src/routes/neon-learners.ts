@@ -4,9 +4,25 @@
 
 import { Router, Request, Response } from 'express';
 import * as db from '../db/neon.js';
-import { requireOwnership } from '../middleware/auth.js';
+import { requireInstructor, requireOwnership } from '../middleware/auth.js';
+import { getInstructorScopedLearnerIds } from '../db/sections.js';
 
 const router = Router();
+
+// GET /api/learners/profiles - Get all learner profiles scoped to instructor sections
+router.get('/profiles', requireInstructor, async (req: Request, res: Response) => {
+  try {
+    const instructorUserId = req.auth!.learnerId;
+    const scopedLearnerIds = await getInstructorScopedLearnerIds(instructorUserId);
+    const profiles = await Promise.all(
+      scopedLearnerIds.map((learnerId) => db.getLearnerProfile(learnerId))
+    );
+    res.json({ success: true, data: profiles.filter(Boolean) });
+  } catch (error) {
+    console.error('Error fetching scoped profiles:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch profiles' });
+  }
+});
 
 // Verify ownership for all :id routes (students can only access their own data)
 router.param('id', requireOwnership);
@@ -16,8 +32,13 @@ router.param('id', requireOwnership);
 // ============================================================================
 
 // GET /api/learners - List all users
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
+    if (req.auth?.role === 'student') {
+      const self = await db.getUserById(req.auth.learnerId);
+      res.json({ success: true, data: self ? [self] : [] });
+      return;
+    }
     const users = await db.getAllUsers();
     res.json({ success: true, data: users });
   } catch (error) {
@@ -328,17 +349,6 @@ router.post('/:id/profile/events', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error updating profile from event:', error);
     res.status(500).json({ success: false, error: 'Failed to update profile from event' });
-  }
-});
-
-// GET /api/learners/profiles - Get all learner profiles
-router.get('/profiles', async (_req: Request, res: Response) => {
-  try {
-    const profiles = await db.getAllLearnerProfiles();
-    res.json({ success: true, data: profiles });
-  } catch (error) {
-    console.error('Error fetching all profiles:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch profiles' });
   }
 });
 

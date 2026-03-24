@@ -27,6 +27,13 @@ export interface AuthUser {
   learnerId: string;    // users.id — used for all data operations
   name: string;
   createdAt: string;
+  sectionId?: string | null;
+  sectionName?: string | null;
+  ownedSections?: Array<{
+    id: string;
+    name: string;
+    studentSignupCode: string;
+  }>;
 }
 
 export interface AuthResult {

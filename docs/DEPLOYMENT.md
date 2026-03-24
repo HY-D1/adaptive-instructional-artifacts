@@ -599,7 +599,7 @@ The config defines three Playwright **projects**:
 |---------|-------------|------|
 | `setup:auth` | `tests/e2e/setup/auth.setup.ts` | Captures JWT cookie → `playwright/.auth/*.json` |
 | `chromium` | All `*.spec.ts` except auth smoke | localStorage / StartPage (no backend required) |
-| `chromium:auth` | `deployed-auth-smoke.spec.ts` only | Pre-loaded JWT cookie via `storageState` |
+| `chromium:auth` | Authenticated deployment/spec checks | Real login + JWT cookie |
 
 #### Local regression suite (no backend required)
 
@@ -633,9 +633,9 @@ This suite verifies:
 
 ### Authenticated smoke (real auth backend required)
 
-The `@deployed-auth-smoke` suite signs in via the real `/auth` page (JWT cookie),
-saves a note, then opens a **fresh browser context** from the saved auth state to
-prove the note persists across sessions.
+The auth regression suite signs in via the real `/auth` page (JWT cookie),
+saves a note, then opens a **fresh browser context** and logs in with credentials
+to prove backend hydration across true second-context login.
 
 #### Step 1 — Capture auth state (run once per environment)
 
@@ -668,6 +668,15 @@ npx playwright test -c playwright.config.ts --project=chromium:auth \
 # Shorthand — runs setup:auth first automatically, then chromium:auth
 npx playwright test -c playwright.config.ts \
   --project=setup:auth --project=chromium:auth
+```
+
+#### Step 3 — Run multi-device + section-scope + authz proofs
+
+```bash
+npx playwright test -c playwright.config.ts --project=chromium:auth \
+  tests/e2e/regression/student-multi-device-persistence.spec.ts \
+  tests/e2e/regression/instructor-section-scope.spec.ts \
+  tests/e2e/regression/api-authz.spec.ts
 ```
 
 #### Deployed authenticated smoke (Vercel preview, no protection bypass)
@@ -710,7 +719,7 @@ headers are injected automatically on every Playwright request.
 | `VERCEL_AUTOMATION_BYPASS_SECRET` | — | Vercel protection bypass header |
 | `E2E_STUDENT_EMAIL` | `e2e-student-<ts>@sql-adapt.test` | Student account email |
 | `E2E_STUDENT_PASSWORD` | `E2eTestPass!123` | Student account password |
-| `E2E_STUDENT_CLASS_CODE` | `ClassSQL2024` | Student class code used during signup |
+| `E2E_STUDENT_CLASS_CODE` | — | Section signup code for student signup (required for new student creation) |
 | `E2E_INSTRUCTOR_EMAIL` | `e2e-instructor-<ts>@sql-adapt.test` | Instructor account email |
 | `E2E_INSTRUCTOR_PASSWORD` | `E2eInstrPass!123` | Instructor account password |
 | `E2E_INSTRUCTOR_CODE` | `TeachSQL2024` | Instructor signup code (dev default) |
@@ -725,10 +734,9 @@ headers are injected automatically on every Playwright request.
 1. **Real JWT auth** — signs in via `/auth`, no `addInitScript` seeding.
 2. **Note saved** — Save to Notes succeeds and the success banner appears.
 3. **SPA navigation** — note visible in `/textbook` without a page reload.
-4. **Cross-session persistence** — a **fresh `browser.newContext()`** loaded with
-   the post-note `storageState` (JWT cookie + localStorage) shows the note.
-   This is the strongest persistence claim: equivalent to closing the browser
-   and reopening it on a different device sharing the same credentials.
+4. **Cross-device hydration** — a **fresh `browser.newContext()`** logs in again
+   using credentials (no copied storage state) and still shows persisted note/data.
+   StorageState cloning is not accepted as the primary persistence proof.
 5. **Instructor gate** — wrong code → error; right code → redirect.
 
 ---

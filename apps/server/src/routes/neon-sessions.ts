@@ -84,6 +84,11 @@ router.post('/:learnerId/active', async (req: Request, res: Response) => {
       immediateExplanationMode: immediateExplanationMode ?? false,
       staticHintMode: staticHintMode ?? false,
       escalationPolicy: escalationPolicy ?? 'adaptive',
+      currentCode,
+      guidanceState,
+      hdiState,
+      banditState,
+      lastActivity,
     });
 
     const session = await db.getSession(req.params.learnerId, actualSessionId);
@@ -92,12 +97,18 @@ router.post('/:learnerId/active', async (req: Request, res: Response) => {
       success: true,
       data: {
         currentProblemId: session?.sessionId,
-        currentCode,
-        guidanceState,
-        hdiState,
-        banditState,
+        currentCode: session?.lastCode ?? currentCode,
+        guidanceState: session?.guidanceState ?? guidanceState,
+        hdiState: session?.hdiState ?? hdiState,
+        banditState: session?.banditState ?? banditState,
         startTime: startTime || (session?.createdAt ? new Date(session.createdAt).toISOString() : undefined),
-        lastActivity: lastActivity || (session?.updatedAt ? new Date(session.updatedAt).toISOString() : undefined),
+        lastActivity:
+          lastActivity ||
+          (session?.lastActivity
+            ? new Date(session.lastActivity).toISOString()
+            : session?.updatedAt
+              ? new Date(session.updatedAt).toISOString()
+              : undefined),
       }
     });
   } catch (error) {
@@ -136,6 +147,11 @@ router.put('/:learnerId/active', async (req: Request, res: Response) => {
       immediateExplanationMode: immediateExplanationMode ?? false,
       staticHintMode: staticHintMode ?? false,
       escalationPolicy: escalationPolicy ?? 'adaptive',
+      currentCode,
+      guidanceState,
+      hdiState,
+      banditState,
+      lastActivity,
     });
 
     const session = await db.getSession(req.params.learnerId, actualSessionId);
@@ -144,12 +160,18 @@ router.put('/:learnerId/active', async (req: Request, res: Response) => {
       success: true,
       data: {
         currentProblemId: session?.sessionId,
-        currentCode,
-        guidanceState,
-        hdiState,
-        banditState,
+        currentCode: session?.lastCode ?? currentCode,
+        guidanceState: session?.guidanceState ?? guidanceState,
+        hdiState: session?.hdiState ?? hdiState,
+        banditState: session?.banditState ?? banditState,
         startTime: startTime || (session?.createdAt ? new Date(session.createdAt).toISOString() : undefined),
-        lastActivity: lastActivity || (session?.updatedAt ? new Date(session.updatedAt).toISOString() : undefined),
+        lastActivity:
+          lastActivity ||
+          (session?.lastActivity
+            ? new Date(session.lastActivity).toISOString()
+            : session?.updatedAt
+              ? new Date(session.updatedAt).toISOString()
+              : undefined),
       }
     });
   } catch (error) {

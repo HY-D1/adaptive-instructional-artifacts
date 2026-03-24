@@ -78,6 +78,33 @@ export async function initializeSchema(): Promise<void> {
   // Auth accounts (real email/password authentication)
   await initAuthSchema(db);
 
+  // Course sections (durable instructor ownership model)
+  await db`
+    CREATE TABLE IF NOT EXISTS course_sections (
+      id TEXT PRIMARY KEY,
+      instructor_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      student_signup_code TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  await db`
+    CREATE TABLE IF NOT EXISTS section_enrollments (
+      id SERIAL PRIMARY KEY,
+      section_id TEXT NOT NULL REFERENCES course_sections(id) ON DELETE CASCADE,
+      student_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(section_id, student_user_id)
+    )
+  `;
+
+  await db`CREATE INDEX IF NOT EXISTS idx_course_sections_instructor ON course_sections(instructor_user_id)`;
+  await db`CREATE INDEX IF NOT EXISTS idx_course_sections_signup_code ON course_sections(student_signup_code)`;
+  await db`CREATE INDEX IF NOT EXISTS idx_section_enrollments_section ON section_enrollments(section_id)`;
+  await db`CREATE INDEX IF NOT EXISTS idx_section_enrollments_student ON section_enrollments(student_user_id)`;
+
   // Learner sessions (experimental condition tracking)
   await db`
     CREATE TABLE IF NOT EXISTS learner_sessions (
@@ -98,6 +125,13 @@ export async function initializeSchema(): Promise<void> {
 
   await db`CREATE INDEX IF NOT EXISTS idx_learner_sessions_user_id ON learner_sessions(user_id)`;
   await db`CREATE INDEX IF NOT EXISTS idx_learner_sessions_session_id ON learner_sessions(session_id)`;
+
+  // Session state fields for multi-device resume (idempotent on existing schema)
+  await db`ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS current_code TEXT`;
+  await db`ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS guidance_state TEXT`;
+  await db`ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS hdi_state TEXT`;
+  await db`ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS bandit_state TEXT`;
+  await db`ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS last_activity TIMESTAMPTZ`;
 
   // Problem progress
   await db`
@@ -368,6 +402,11 @@ export async function saveSession(
     immediateExplanationMode?: boolean;
     staticHintMode?: boolean;
     escalationPolicy?: string;
+    currentCode?: string;
+    guidanceState?: Record<string, unknown>;
+    hdiState?: Record<string, unknown>;
+    banditState?: Record<string, unknown>;
+    lastActivity?: string;
   }
 ): Promise<void> {
   const db = getDb();
@@ -378,12 +417,17 @@ export async function saveSession(
     INSERT INTO learner_sessions (
       id, user_id, session_id, condition_id,
       textbook_disabled, adaptive_ladder_disabled, immediate_explanation_mode,
-      static_hint_mode, escalation_policy, created_at, updated_at
+      static_hint_mode, escalation_policy, current_code, guidance_state,
+      hdi_state, bandit_state, last_activity, created_at, updated_at
     ) VALUES (
       ${id}, ${userId}, ${sessionId}, ${conditionId},
       ${config.textbookDisabled ?? false}, ${config.adaptiveLadderDisabled ?? false},
       ${config.immediateExplanationMode ?? false}, ${config.staticHintMode ?? false},
-      ${config.escalationPolicy ?? 'adaptive'}, ${now}, ${now}
+      ${config.escalationPolicy ?? 'adaptive'}, ${config.currentCode ?? null},
+      ${JSON.stringify(config.guidanceState ?? null)},
+      ${JSON.stringify(config.hdiState ?? null)},
+      ${JSON.stringify(config.banditState ?? null)},
+      ${config.lastActivity ?? now}, ${now}, ${now}
     )
     ON CONFLICT (user_id, session_id) DO UPDATE SET
       condition_id = EXCLUDED.condition_id,
@@ -392,6 +436,11 @@ export async function saveSession(
       immediate_explanation_mode = EXCLUDED.immediate_explanation_mode,
       static_hint_mode = EXCLUDED.static_hint_mode,
       escalation_policy = EXCLUDED.escalation_policy,
+      current_code = EXCLUDED.current_code,
+      guidance_state = EXCLUDED.guidance_state,
+      hdi_state = EXCLUDED.hdi_state,
+      bandit_state = EXCLUDED.bandit_state,
+      last_activity = EXCLUDED.last_activity,
       updated_at = EXCLUDED.updated_at
   `;
 }
@@ -413,6 +462,11 @@ export async function getSession(userId: string, sessionId: string): Promise<any
     immediateExplanationMode: result.immediate_explanation_mode,
     staticHintMode: result.static_hint_mode,
     escalationPolicy: result.escalation_policy,
+    lastCode: result.current_code ?? null,
+    guidanceState: parseJson(result.guidance_state),
+    hdiState: parseJson(result.hdi_state),
+    banditState: parseJson(result.bandit_state),
+    lastActivity: result.last_activity ? new Date(result.last_activity).getTime() : null,
     createdAt: new Date(result.created_at).getTime(),
     updatedAt: new Date(result.updated_at).getTime(),
   };
@@ -437,6 +491,11 @@ export async function getActiveSession(userId: string): Promise<any | null> {
     immediateExplanationMode: result.immediate_explanation_mode,
     staticHintMode: result.static_hint_mode,
     escalationPolicy: result.escalation_policy,
+    lastCode: result.current_code ?? null,
+    guidanceState: parseJson(result.guidance_state),
+    hdiState: parseJson(result.hdi_state),
+    banditState: parseJson(result.bandit_state),
+    lastActivity: result.last_activity ? new Date(result.last_activity).getTime() : null,
     createdAt: new Date(result.created_at).getTime(),
     updatedAt: new Date(result.updated_at).getTime(),
   };
