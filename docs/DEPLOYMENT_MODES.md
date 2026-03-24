@@ -1,15 +1,17 @@
 # Deployment Modes Capability Matrix
 
 **Version**: 1.0.0  
-**Last Updated**: 2026-03-15
+**Last Updated**: 2026-03-24
 
-This document provides a clear reference for which features work in **local development** vs **hosted/Vercel demo** mode.
+This document provides a clear reference for which features work in **local development** and **hosted frontend-only demo mode**.
+
+> For **hosted full-stack mode** (frontend + backend API + Neon), use [DEPLOYMENT.md](./DEPLOYMENT.md). This matrix intentionally describes the frontend-only hosted demo path.
 
 ---
 
 ## Quick Reference
 
-| Capability | Local Dev (`npm run dev`) | Hosted Demo (Vercel) |
+| Capability | Local Dev (`npm run dev`) | Hosted Frontend-Only Demo (Vercel) |
 |------------|---------------------------|----------------------|
 | **SQL Practice (32 problems)** | ✅ Full | ✅ Full |
 | **Progressive Hints (3-rung ladder)** | ✅ Full | ✅ Full |
@@ -89,7 +91,7 @@ These are **embedded at build time** and cannot be changed without redeploy:
 | Variable | Hosted Required | Local Required | Purpose |
 |----------|-----------------|----------------|---------|
 | `VITE_INSTRUCTOR_PASSCODE` | ✅ Yes | ⚠️ Dev fallback | Enables instructor role selection |
-| `VITE_API_BASE_URL` | ❌ No | ❌ No | Backend API URL (hosted usually has no backend) |
+| `VITE_API_BASE_URL` | ⚠️ Optional | ❌ No (frontend-only mode) | Backend API URL (set this in full-stack hosted deployments) |
 | `VITE_ENABLE_LLM` | ❌ No | ❌ No | UI toggle (always false on hosted) |
 | `VITE_ENABLE_PDF_INDEX` | ❌ No | ❌ No | UI toggle (always false on hosted) |
 
@@ -111,7 +113,7 @@ isPDFIndexAvailable() // local backend only
 
 ---
 
-## Hosted Mode Limitations
+## Hosted Frontend-Only Mode Limitations
 
 ### What Changes in Hosted Mode
 
@@ -219,4 +221,4 @@ Expected output on **local**:
 
 ---
 
-*Last updated: 2026-03-15*
+*Last updated: 2026-03-24*

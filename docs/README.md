@@ -39,8 +39,7 @@ docs/
 │   ├── ENHANCED_HINTS_FEATURE.md
 │   └── assignment-strategy-simulations-report.md
 ├── runbooks/                      # Operational guides
-│   ├── progress.md                # Architecture & milestones
-│   ├── weekly-progress.md         # Active checkpoint log
+│   ├── status.md                  # Consolidated implementation/deployment status
 │   ├── weekly-demo.md             # Demo clickpath & validation
 │   ├── concept-comparison.md      # Content quality analysis
 │   └── pdf-helper-integration-guide.md
@@ -76,8 +75,7 @@ docs/
 | **Local vs hosted capabilities** | [DEPLOYMENT_MODES.md](./DEPLOYMENT_MODES.md) |
 | **Event logging schema** | [research/LOGGING_SPECIFICATION.md](./research/LOGGING_SPECIFICATION.md) |
 | **Artifact packaging standards** | [research/ARTIFACT_PACKAGING.md](./research/ARTIFACT_PACKAGING.md) |
-| **Current milestone status** | [runbooks/progress.md](./runbooks/progress.md) |
-| **Active task log** | [runbooks/weekly-progress.md](./runbooks/weekly-progress.md) |
+| **Current implementation/deployment status** | [runbooks/status.md](./runbooks/status.md) |
 | **Test reports & validation** | [reports/](./reports/) |
 | **Old/historical docs** | [archive/](./archive/) |
 
@@ -98,8 +96,7 @@ docs/
 |----------|---------|--------------|
 | [research/PROJECT_OVERVIEW.md](./research/PROJECT_OVERVIEW.md) | Executive summary, research vision, foundation infrastructure | 2026-03-03 |
 | [research/RESEARCH_ARCHITECTURE.md](./research/RESEARCH_ARCHITECTURE.md) | Logical components, 17 research components, implementation roadmap | 2026-03-03 |
-| [runbooks/progress.md](./runbooks/progress.md) | Durable architecture record and milestone tracking | 2026-03-02 |
-| [runbooks/weekly-progress.md](./runbooks/weekly-progress.md) | Active checkpoint log — all tasks documented here | 2026-02-28 |
+| [runbooks/status.md](./runbooks/status.md) | Consolidated status for implementation and deployment readiness | 2026-03-24 |
 | [AGENTS.md](../AGENTS.md) | Agent workflow policy and response contract | 2026-03-03 |
 
 ### Reproducibility & Standards
@@ -270,7 +267,7 @@ See [research/PROJECT_OVERVIEW.md](./research/PROJECT_OVERVIEW.md) for the full 
 
 ## 📖 Documentation Coordination
 
-**Rule**: Task-by-task progress entries belong only in `docs/runbooks/weekly-progress.md`.
+**Rule**: Active implementation/deployment status belongs only in `docs/runbooks/status.md`.
 
 **Agent Workflow**: See [AGENTS.md](../AGENTS.md) for detailed agent operating procedures, commit guidelines, and critical rules.
 
@@ -279,8 +276,7 @@ See [research/PROJECT_OVERVIEW.md](./research/PROJECT_OVERVIEW.md) for the full 
 | Document | Update When... |
 |----------|----------------|
 | `docs/README.md` | Structure changes |
-| `docs/runbooks/progress.md` | Architecture changes |
-| `docs/runbooks/weekly-progress.md` | Every engineering task |
+| `docs/runbooks/status.md` | Implementation/deployment status changes |
 | `docs/research/*.md` | Research design changes |
 | `docs/reports/*.md` | Test completion or new analysis |
 | `AGENTS.md` | Workflow changes |
@@ -296,5 +292,5 @@ See [research/PROJECT_OVERVIEW.md](./research/PROJECT_OVERVIEW.md) for the full 
 
 ---
 
-*Last updated: 2026-03-03*  
-*Status: Week 5 Complete — 696 total tests passing (316 unit + 380 E2E)*
+*Last updated: 2026-03-24*  
+*Status: Launch login system hardening in progress (Vercel + Neon)*

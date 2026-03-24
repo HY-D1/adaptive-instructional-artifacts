@@ -6,7 +6,7 @@
 
 **Note**: For professor-facing demo script, see [../demo-script.md](../demo-script.md).
 
-Progress logging for this demo belongs only in `docs/weekly-progress.md`.
+Progress logging for this demo belongs only in `docs/runbooks/status.md`.
 
 ---
 
