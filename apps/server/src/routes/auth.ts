@@ -24,11 +24,16 @@ import {
   signToken,
   setAuthCookie,
   clearAuthCookie,
-  requireAuth,
   COOKIE_NAME,
   verifyToken,
 } from '../middleware/auth.js';
-import { INSTRUCTOR_SIGNUP_CODE } from '../config.js';
+import {
+  createCsrfToken,
+  setCsrfCookie,
+  clearCsrfCookie,
+  requireCsrf,
+} from '../middleware/csrf.js';
+import { INSTRUCTOR_SIGNUP_CODE, STUDENT_SIGNUP_CODE } from '../config.js';
 
 const router = Router();
 
@@ -43,6 +48,7 @@ const SignupSchema = z.object({
   email: z.string().email().toLowerCase().trim(),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   role: z.enum(['student', 'instructor']),
+  classCode: z.string().optional(),
   instructorCode: z.string().optional(),
 });
 
@@ -75,7 +81,25 @@ router.post('/signup', async (req: Request, res: Response) => {
     return;
   }
 
-  const { name, email, password, role, instructorCode } = parsed.data;
+  const { name, email, password, role, classCode, instructorCode } = parsed.data;
+
+  // Validate student class code
+  if (role === 'student') {
+    if (!STUDENT_SIGNUP_CODE) {
+      res.status(503).json({
+        success: false,
+        error: 'Student signup is not configured on this server',
+      });
+      return;
+    }
+    if (!classCode || classCode !== STUDENT_SIGNUP_CODE) {
+      res.status(403).json({
+        success: false,
+        error: 'Invalid class code',
+      });
+      return;
+    }
+  }
 
   // Validate instructor code
   if (role === 'instructor') {
@@ -133,10 +157,13 @@ router.post('/signup', async (req: Request, res: Response) => {
       name: account.name,
     });
     setAuthCookie(res, token);
+    const csrfToken = createCsrfToken();
+    setCsrfCookie(res, csrfToken);
 
     res.status(201).json({
       success: true,
       user: toPublicAccount(account),
+      csrfToken,
     });
   } catch (err) {
     console.error('[auth/signup]', err);
@@ -193,10 +220,13 @@ router.post('/login', async (req: Request, res: Response) => {
       name: account.name,
     });
     setAuthCookie(res, token);
+    const csrfToken = createCsrfToken();
+    setCsrfCookie(res, csrfToken);
 
     res.json({
       success: true,
       user: toPublicAccount(account),
+      csrfToken,
     });
   } catch (err) {
     console.error('[auth/login]', err);
@@ -208,8 +238,9 @@ router.post('/login', async (req: Request, res: Response) => {
 // POST /api/auth/logout
 // ============================================================================
 
-router.post('/logout', (_req: Request, res: Response) => {
+router.post('/logout', requireCsrf, (_req: Request, res: Response) => {
   clearAuthCookie(res);
+  clearCsrfCookie(res);
   res.json({ success: true });
 });
 
@@ -240,7 +271,9 @@ router.get('/me', (req: Request, res: Response) => {
           res.status(401).json({ success: false, error: 'Account not found' });
           return;
         }
-        res.json({ success: true, user: toPublicAccount(account) });
+        const csrfToken = createCsrfToken();
+        setCsrfCookie(res, csrfToken);
+        res.json({ success: true, user: toPublicAccount(account), csrfToken });
       })
       .catch((err) => {
         console.error('[auth/me]', err);
@@ -250,6 +283,8 @@ router.get('/me', (req: Request, res: Response) => {
   }
 
   // SQLite mode: return payload claims directly (no real accounts)
+  const csrfToken = createCsrfToken();
+  setCsrfCookie(res, csrfToken);
   res.json({
     success: true,
     user: {
@@ -260,6 +295,7 @@ router.get('/me', (req: Request, res: Response) => {
       name: payload.name,
       createdAt: new Date().toISOString(),
     },
+    csrfToken,
   });
 });
 

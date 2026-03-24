@@ -2,7 +2,9 @@
  * AuthPage — Login / Signup
  *
  * Two tabs: Sign In and Create Account.
- * Instructor signup requires an extra code field.
+ * Signup requires a role-specific access code:
+ * - Student: class code
+ * - Instructor: instructor code
  *
  * On success the AuthContext syncs the user into localStorage so the existing
  * role-based routing (which reads storage.getUserProfile()) keeps working.
@@ -40,7 +42,8 @@ export function AuthPage() {
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupRole, setSignupRole] = useState<UserRole | null>(null);
-  const [signupCode, setSignupCode] = useState('');
+  const [signupClassCode, setSignupClassCode] = useState('');
+  const [signupInstructorCode, setSignupInstructorCode] = useState('');
   const [signupError, setSignupError] = useState<string | null>(null);
   const [signupLoading, setSignupLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -99,7 +102,8 @@ export function AuthPage() {
       email: signupEmail,
       password: signupPassword,
       role: signupRole,
-      instructorCode: signupRole === 'instructor' ? signupCode : undefined,
+      classCode: signupRole === 'student' ? signupClassCode : undefined,
+      instructorCode: signupRole === 'instructor' ? signupInstructorCode : undefined,
     });
     setSignupLoading(false);
     if (!result.success) {
@@ -119,7 +123,11 @@ export function AuthPage() {
     signupEmail.includes('@') &&
     signupPassword.length >= 8 &&
     signupRole !== null &&
-    (signupRole !== 'instructor' || signupCode.length > 0);
+    (signupRole === 'student'
+      ? signupClassCode.length > 0
+      : signupRole === 'instructor'
+        ? signupInstructorCode.length > 0
+        : false);
 
   // ---- Render ---------------------------------------------------------------
 
@@ -336,18 +344,25 @@ export function AuthPage() {
                 </div>
               </div>
 
-              {/* Instructor code */}
-              {signupRole === 'instructor' && (
+              {/* Role-specific access code */}
+              {(signupRole === 'student' || signupRole === 'instructor') && (
                 <div className="space-y-1">
                   <Label htmlFor="signup-code" className="flex items-center gap-1">
-                    <Lock className="w-4 h-4" /> Instructor code
+                    <Lock className="w-4 h-4" />
+                    {signupRole === 'student' ? 'Class code' : 'Instructor code'}
                   </Label>
                   <Input
                     id="signup-code"
                     type="password"
-                    placeholder="Enter the instructor code"
-                    value={signupCode}
-                    onChange={(e) => setSignupCode(e.target.value)}
+                    placeholder={signupRole === 'student' ? 'Enter the class code' : 'Enter the instructor code'}
+                    value={signupRole === 'student' ? signupClassCode : signupInstructorCode}
+                    onChange={(e) => {
+                      if (signupRole === 'student') {
+                        setSignupClassCode(e.target.value);
+                        return;
+                      }
+                      setSignupInstructorCode(e.target.value);
+                    }}
                     required
                   />
                 </div>

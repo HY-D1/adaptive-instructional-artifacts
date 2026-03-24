@@ -19,6 +19,7 @@
  * Env vars (all optional — sensible defaults for local dev):
  *   E2E_STUDENT_EMAIL      default: e2e-student-<ts>@sql-adapt.test
  *   E2E_STUDENT_PASSWORD   default: E2eTestPass!123
+ *   E2E_STUDENT_CLASS_CODE default: ClassSQL2024
  *   E2E_INSTRUCTOR_EMAIL   default: e2e-instructor-<ts>@sql-adapt.test
  *   E2E_INSTRUCTOR_PASSWORD default: E2eInstrPass!123
  *   E2E_INSTRUCTOR_CODE    default: TeachSQL2024 (matches dev server default)
@@ -45,6 +46,7 @@ const TS = Date.now();
 const STUDENT_NAME      = 'E2E Student';
 const STUDENT_EMAIL     = process.env.E2E_STUDENT_EMAIL     ?? `e2e-student-${TS}@sql-adapt.test`;
 const STUDENT_PASSWORD  = process.env.E2E_STUDENT_PASSWORD  ?? 'E2eTestPass!123';
+const STUDENT_CLASS_CODE = process.env.E2E_STUDENT_CLASS_CODE ?? 'ClassSQL2024';
 
 const INSTRUCTOR_NAME     = 'E2E Instructor';
 const INSTRUCTOR_EMAIL    = process.env.E2E_INSTRUCTOR_EMAIL    ?? `e2e-instructor-${TS}@sql-adapt.test`;
@@ -84,6 +86,7 @@ async function signupOrLogin(
   email: string,
   password: string,
   role: 'student' | 'instructor',
+  classCode?: string,
   instructorCode?: string,
 ): Promise<void> {
   // ── Signup path ─────────────────────────────────────────────────────────────
@@ -103,6 +106,11 @@ async function signupOrLogin(
     .locator('button[type="button"]')
     .filter({ hasText: new RegExp(`^${roleLabel}$`, 'i') })
     .click();
+
+  if (role === 'student' && classCode) {
+    await expect(page.locator('#signup-code')).toBeVisible({ timeout: 3_000 });
+    await page.fill('#signup-code', classCode);
+  }
 
   if (role === 'instructor' && instructorCode) {
     await expect(page.locator('#signup-code')).toBeVisible({ timeout: 3_000 });
@@ -155,7 +163,14 @@ setup.describe('@auth-setup', () => {
       return;
     }
 
-    await signupOrLogin(page, STUDENT_NAME, STUDENT_EMAIL, STUDENT_PASSWORD, 'student');
+    await signupOrLogin(
+      page,
+      STUDENT_NAME,
+      STUDENT_EMAIL,
+      STUDENT_PASSWORD,
+      'student',
+      STUDENT_CLASS_CODE,
+    );
 
     // Must land on /practice
     await expect(page).toHaveURL(/\/practice/, { timeout: 15_000 });
@@ -182,6 +197,7 @@ setup.describe('@auth-setup', () => {
       INSTRUCTOR_EMAIL,
       INSTRUCTOR_PASSWORD,
       'instructor',
+      undefined,
       INSTRUCTOR_CODE,
     );
 

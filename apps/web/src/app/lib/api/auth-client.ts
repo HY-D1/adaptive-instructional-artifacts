@@ -8,6 +8,8 @@
  * these functions return no-op results and the app falls back to passcode auth.
  */
 
+import { withCsrfHeader } from './csrf-client';
+
 const _API_BASE = import.meta.env.VITE_API_BASE_URL;
 const AUTH_BASE = _API_BASE ? `${_API_BASE}/api/auth` : 'http://localhost:3001/api/auth';
 
@@ -39,12 +41,13 @@ export interface AuthResult {
 // ============================================================================
 
 async function authFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const requestInit = withCsrfHeader(init);
   return fetch(`${AUTH_BASE}${path}`, {
-    ...init,
+    ...requestInit,
     credentials: 'include',         // send/receive httpOnly cookies
     headers: {
       'Content-Type': 'application/json',
-      ...init.headers,
+      ...requestInit.headers,
     },
   });
 }
@@ -58,6 +61,7 @@ export async function signup(params: {
   email: string;
   password: string;
   role: 'student' | 'instructor';
+  classCode?: string;
   instructorCode?: string;
 }): Promise<AuthResult> {
   try {

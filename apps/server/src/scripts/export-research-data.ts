@@ -7,6 +7,7 @@
  */
 
 import { neon } from '@neondatabase/serverless';
+import type { NeonQueryFunction } from '@neondatabase/serverless';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -40,59 +41,23 @@ interface ExportManifest {
   };
 }
 
-interface ResearchEvent {
-  id: string;
-  user_id: string;
-  session_id: string | null;
-  timestamp: string;
-  event_type: string;
-  problem_id: string;
-  condition_id?: string;
-  // Strategy/Reward fields (legacy)
-  profile_id?: string;
-  assignment_strategy?: string;
-  selected_arm?: string;
-  selection_method?: string;
-  trigger_reason?: string;
-  reward_total?: number;
-  reward_components?: object;
-  new_alpha?: number;
-  new_beta?: number;
-  // Core fields
-  code?: string;
-  error?: string;
-  successful?: boolean;
-  time_spent?: number;
-  concept_ids?: string[];
-  hint_level?: number;
-  from_rung?: number;
-  to_rung?: number;
-  policy_version?: string;
-  // RESEARCH-4: Canonical study-facing fields
-  learner_profile_id?: string;
-  escalation_trigger_reason?: string;
-  error_count_at_escalation?: number;
-  time_to_escalation?: number;
-  strategy_assigned?: string;
-  strategy_updated?: string;
-  reward_value?: number;
-}
-
 // ============================================================================
 // Database Operations
 // ============================================================================
 
-function getDb() {
+type DbClient = NeonQueryFunction<false, false>;
+
+function getDb(): DbClient {
   if (!DATABASE_URL) {
     throw new Error('DATABASE_URL environment variable is not set');
   }
-  return neon(DATABASE_URL);
+  return neon(DATABASE_URL) as DbClient;
 }
 
 // Helper to handle Neon query results
 type QueryResult = Record<string, any>;
 
-async function exportUsers(db: ReturnType<typeof neon>): Promise<void> {
+async function exportUsers(db: DbClient): Promise<void> {
   console.log('📊 Exporting users...');
   const result = await db`SELECT * FROM users ORDER BY created_at DESC`;
   const users = Array.isArray(result) ? result as QueryResult[] : [];
@@ -113,7 +78,7 @@ async function exportUsers(db: ReturnType<typeof neon>): Promise<void> {
   console.log(`   ✓ ${users.length} users exported`);
 }
 
-async function exportSessions(db: ReturnType<typeof neon>): Promise<void> {
+async function exportSessions(db: DbClient): Promise<void> {
   console.log('📊 Exporting learner sessions...');
   const result = await db`
     SELECT
@@ -141,7 +106,7 @@ async function exportSessions(db: ReturnType<typeof neon>): Promise<void> {
   console.log(`   ✓ ${sessions.length} sessions exported`);
 }
 
-async function exportEvents(db: ReturnType<typeof neon>): Promise<void> {
+async function exportEvents(db: DbClient): Promise<void> {
   console.log('📊 Exporting interaction events...');
 
   // Export with essential research fields
@@ -268,7 +233,7 @@ async function exportEvents(db: ReturnType<typeof neon>): Promise<void> {
   console.log(`   ✓ Event type summary exported (${eventSummary.length} types)`);
 }
 
-async function exportTextbookUnits(db: ReturnType<typeof neon>): Promise<void> {
+async function exportTextbookUnits(db: DbClient): Promise<void> {
   console.log('📊 Exporting textbook units...');
   const result = await db`
     SELECT
@@ -316,7 +281,7 @@ async function exportTextbookUnits(db: ReturnType<typeof neon>): Promise<void> {
   console.log(`   ✓ ${units.length} textbook units exported`);
 }
 
-async function exportProblemProgress(db: ReturnType<typeof neon>): Promise<void> {
+async function exportProblemProgress(db: DbClient): Promise<void> {
   console.log('📊 Exporting problem progress...');
   const result = await db`
     SELECT
@@ -344,7 +309,7 @@ async function exportProblemProgress(db: ReturnType<typeof neon>): Promise<void>
   console.log(`   ✓ ${progress.length} problem progress records exported`);
 }
 
-async function exportStrategyRewardEvents(db: ReturnType<typeof neon>): Promise<void> {
+async function exportStrategyRewardEvents(db: DbClient): Promise<void> {
   console.log('📊 Exporting strategy/reward events (specialized export)...');
 
   // Bandit-related events
@@ -416,7 +381,7 @@ async function exportStrategyRewardEvents(db: ReturnType<typeof neon>): Promise<
   console.log(`   ✓ ${banditEvents.length} bandit events exported`);
 }
 
-async function exportEscalationEvents(db: ReturnType<typeof neon>): Promise<void> {
+async function exportEscalationEvents(db: DbClient): Promise<void> {
   console.log('📊 Exporting escalation events...');
 
   const result = await db`
@@ -481,7 +446,7 @@ async function exportEscalationEvents(db: ReturnType<typeof neon>): Promise<void
   console.log(`   ✓ ${escalationEvents.length} escalation events exported`);
 }
 
-async function exportSessionEventJoin(db: ReturnType<typeof neon>): Promise<void> {
+async function exportSessionEventJoin(db: DbClient): Promise<void> {
   console.log('📊 Exporting session-event joined view...');
 
   // Join sessions with their events for analysis
@@ -541,7 +506,7 @@ async function exportSessionEventJoin(db: ReturnType<typeof neon>): Promise<void
   console.log(`   ✓ ${joinedData.length} joined records exported`);
 }
 
-async function createManifest(db: ReturnType<typeof neon>): Promise<ExportManifest> {
+async function createManifest(db: DbClient): Promise<ExportManifest> {
   console.log('📋 Creating export manifest...');
 
   // Get counts

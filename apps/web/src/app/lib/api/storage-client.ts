@@ -11,6 +11,7 @@ import type {
   LearnerProfile,
   ConceptCoverageEvidence,
 } from '@/app/types';
+import { withCsrfHeader } from './csrf-client';
 
 // API Configuration
 // VITE_API_BASE_URL is the canonical env var (e.g. https://my-api.vercel.app — no trailing /api)
@@ -250,14 +251,15 @@ async function fetchApi<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   const url = `${API_URL}${endpoint}`;
+  const requestInit = withCsrfHeader(options);
   
   try {
     const response = await fetch(url, {
-      ...options,
+      ...requestInit,
       credentials: 'include',   // send JWT cookie for auth-protected API routes
       headers: {
         'Content-Type': 'application/json',
-        ...options.headers,
+        ...requestInit.headers,
       },
     });
 

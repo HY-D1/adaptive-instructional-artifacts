@@ -32,6 +32,7 @@ interface AuthContextValue {
     email: string;
     password: string;
     role: 'student' | 'instructor';
+    classCode?: string;
     instructorCode?: string;
   }) => Promise<AuthResult>;
 }
@@ -102,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string;
     password: string;
     role: 'student' | 'instructor';
+    classCode?: string;
     instructorCode?: string;
   }): Promise<AuthResult> => {
     const result = await apiSignup(params);

@@ -100,6 +100,7 @@ async function mockSignup(
     email: string;
     password: string;
     role: 'student' | 'instructor';
+    classCode?: string;
     instructorCode?: string;
   }
 ) {
@@ -127,13 +128,20 @@ async function mockLogin(fetchFn: ReturnType<typeof vi.fn>, email: string, passw
 }
 
 describe('auth-client: signup', () => {
-  it('succeeds for student signup', async () => {
+  it('succeeds for student signup with valid class code', async () => {
     const mockUser = { id: 'acc-1', email: 'a@test.com', role: 'student', learnerId: 'l-1', name: 'Alice', createdAt: '2024-01-01' };
     const fetchFn = makeFetch({ ok: true, status: 201, json: async () => ({ success: true, user: mockUser }) });
-    const result = await mockSignup(fetchFn, { name: 'Alice', email: 'a@test.com', password: 'password123', role: 'student' });
+    const result = await mockSignup(fetchFn, { name: 'Alice', email: 'a@test.com', password: 'password123', role: 'student', classCode: 'ClassSQL2024' });
     expect(result.success).toBe(true);
     expect(result.user?.role).toBe('student');
     expect(result.user?.learnerId).toBe('l-1');
+  });
+
+  it('rejects student signup with invalid class code', async () => {
+    const fetchFn = makeFetch({ ok: false, status: 403, json: async () => ({ success: false, error: 'Invalid class code' }) });
+    const result = await mockSignup(fetchFn, { name: 'Alice', email: 'a@test.com', password: 'password123', role: 'student', classCode: 'wrong-class-code' });
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/invalid class code/i);
   });
 
   it('succeeds for instructor signup with valid code', async () => {
@@ -153,7 +161,7 @@ describe('auth-client: signup', () => {
 
   it('returns error for duplicate email', async () => {
     const fetchFn = makeFetch({ ok: false, status: 409, json: async () => ({ success: false, error: 'An account with this email already exists' }) });
-    const result = await mockSignup(fetchFn, { name: 'Alice2', email: 'a@test.com', password: 'password123', role: 'student' });
+    const result = await mockSignup(fetchFn, { name: 'Alice2', email: 'a@test.com', password: 'password123', role: 'student', classCode: 'ClassSQL2024' });
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/already exists/i);
   });

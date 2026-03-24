@@ -31,10 +31,12 @@
 | `adaptive_data_DATABASE_URL` | Vercel Neon integration | Auto-injected by Vercel when you attach the Neon integration to a project named `adaptive_data` |
 | `adaptive_data_POSTGRES_URL` | Vercel Neon integration | Postgres-alias variant injected by the same Vercel Neon integration |
 | `JWT_SECRET` | Yes (production) | Secret for signing auth JWT cookies — must be at least 32 random characters |
+| `STUDENT_SIGNUP_CODE` | Student accounts | Class code required when creating a student account. Falls back to `ClassSQL2024` in dev. |
 | `INSTRUCTOR_SIGNUP_CODE` | Instructor accounts | Code required when creating an instructor account. Falls back to `TeachSQL2024` in dev. |
+| `CORS_ORIGINS` | Recommended | Comma-separated frontend origins allowed to use credentialed requests (for example `https://app.example.com,https://www.example.com`) |
 | `PORT` | No | HTTP port (default 3001) |
 
-> **Auth setup**: Set `JWT_SECRET` to a strong random value (e.g. `openssl rand -base64 32`). Set `INSTRUCTOR_SIGNUP_CODE` to protect instructor registration. After adding these vars, redeploy the backend and run `npm run db:init:neon` to create the `auth_accounts` table.
+> **Auth setup**: Set `JWT_SECRET` to a strong random value (e.g. `openssl rand -base64 32`). Set both `STUDENT_SIGNUP_CODE` and `INSTRUCTOR_SIGNUP_CODE` to protect account creation. After adding these vars, redeploy the backend and run `npm run db:init:neon` to create the `auth_accounts` table.
 
 > **Env var resolution order**: The backend checks these four names in priority order (`DATABASE_URL` → `NEON_DATABASE_URL` → `adaptive_data_DATABASE_URL` → `adaptive_data_POSTGRES_URL`) and uses the first non-empty value. You only need to set one.
 > **After changing env vars you must redeploy** — Vercel bakes env vars into the build/runtime at deploy time. Adding or changing a variable without redeploying has no effect.
@@ -70,6 +72,12 @@ vercel deploy --prod
 # Note the deployment URL, e.g. https://sql-adapt-api.vercel.app
 ```
 
+Backend project settings:
+- Framework preset: **Other**
+- Root directory: `apps/server`
+- Build command: `npm run build`
+- Output directory: leave empty (serverless functions)
+
 #### 3. Configure the frontend
 
 In your frontend Vercel project settings, add:
@@ -88,6 +96,10 @@ node scripts/smoke-test-persistence.mjs https://sql-adapt-api.vercel.app
 ```
 
 Expected output: all 5 checks pass with a learner, session, interaction, and textbook unit created server-side.
+
+Security notes for deployed auth:
+- JWT auth cookie uses `Secure` + `SameSite=None` in production for cross-origin frontend/backend deployments.
+- CSRF uses double-submit cookie protection; mutating API requests must send `x-csrf-token` matching the `sql_adapt_csrf` cookie (frontend API clients handle this automatically).
 
 ### Deployment Topology
 
@@ -638,6 +650,7 @@ npx playwright test -c playwright.config.ts --project=setup:auth
 PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
 E2E_STUDENT_EMAIL="student@yourdomain.com" \
 E2E_STUDENT_PASSWORD="YourPassword123!" \
+E2E_STUDENT_CLASS_CODE="<class-code>" \
 E2E_INSTRUCTOR_CODE="<instructor-code>" \
   npx playwright test -c playwright.config.ts --project=setup:auth
 ```
@@ -663,6 +676,7 @@ npx playwright test -c playwright.config.ts \
 PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
 E2E_STUDENT_EMAIL="student@yourdomain.com" \
 E2E_STUDENT_PASSWORD="YourPassword123!" \
+E2E_STUDENT_CLASS_CODE="<class-code>" \
 E2E_INSTRUCTOR_CODE="<instructor-code>" \
   npx playwright test -c playwright.config.ts \
     --project=setup:auth --project=chromium:auth \
@@ -676,6 +690,7 @@ PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
 VERCEL_AUTOMATION_BYPASS_SECRET="<secret-from-vercel-dashboard>" \
 E2E_STUDENT_EMAIL="student@yourdomain.com" \
 E2E_STUDENT_PASSWORD="YourPassword123!" \
+E2E_STUDENT_CLASS_CODE="<class-code>" \
 E2E_INSTRUCTOR_CODE="<instructor-code>" \
   npx playwright test -c playwright.config.ts \
     --project=setup:auth --project=chromium:auth \
@@ -695,6 +710,7 @@ headers are injected automatically on every Playwright request.
 | `VERCEL_AUTOMATION_BYPASS_SECRET` | — | Vercel protection bypass header |
 | `E2E_STUDENT_EMAIL` | `e2e-student-<ts>@sql-adapt.test` | Student account email |
 | `E2E_STUDENT_PASSWORD` | `E2eTestPass!123` | Student account password |
+| `E2E_STUDENT_CLASS_CODE` | `ClassSQL2024` | Student class code used during signup |
 | `E2E_INSTRUCTOR_EMAIL` | `e2e-instructor-<ts>@sql-adapt.test` | Instructor account email |
 | `E2E_INSTRUCTOR_PASSWORD` | `E2eInstrPass!123` | Instructor account password |
 | `E2E_INSTRUCTOR_CODE` | `TeachSQL2024` | Instructor signup code (dev default) |

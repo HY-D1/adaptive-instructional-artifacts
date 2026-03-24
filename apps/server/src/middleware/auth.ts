@@ -53,10 +53,11 @@ export function verifyToken(token: string): AuthPayload | null {
 }
 
 export function setAuthCookie(res: Response, token: string): void {
+  const isProd = process.env.NODE_ENV === 'production';
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
     maxAge: COOKIE_MAX_AGE_MS,
     path: '/',
   });
