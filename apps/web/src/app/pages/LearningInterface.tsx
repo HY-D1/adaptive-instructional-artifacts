@@ -1479,7 +1479,10 @@ export function LearningInterface() {
 
   const handleAddToNotes = async () => {
     const noteSubtype = lastError || resolveLatestProblemErrorSubtype();
-    if (!noteSubtype) return;
+    if (!noteSubtype) {
+      setGenerationError('Could not save note: no concept context identified. Try submitting a query or requesting a hint first.');
+      return;
+    }
     if (!lastError) {
       setLastError(noteSubtype);
     }

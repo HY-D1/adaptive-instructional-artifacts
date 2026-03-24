@@ -217,6 +217,12 @@ export function HintSystem({
       // Build retrieval bundle for context
       const problem = getProblemById(problemId);
       if (problem) {
+        if (!subtypeForSave) {
+          setSaveToNotesError('No concept context found. Try submitting a query first so the system can identify what to save.');
+          setIsAddingToTextbook(false);
+          return;
+        }
+
         const bundle = buildRetrievalBundle({
           learnerId,
           problem,
