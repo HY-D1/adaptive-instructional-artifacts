@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { replaceEditorText, getTextbookUnits } from '../../helpers/test-helpers';
+import { replaceEditorText, getEditorText, getTextbookUnits } from '../../helpers/test-helpers';
 
 async function login(page: import('@playwright/test').Page, email: string, password: string): Promise<void> {
   await page.goto('/auth', { waitUntil: 'domcontentloaded' });
@@ -70,6 +70,14 @@ test.describe('@authz @multi-device student persistence without storageState clo
       email = activeEmail;
     }
 
+    const learnerId = await page.evaluate(() => {
+      const raw = window.localStorage.getItem('sql-adapt-user-profile');
+      return raw ? JSON.parse(raw).id : null;
+    });
+    expect(learnerId).toBeTruthy();
+    const unitsBeforeSave = await getTextbookUnits(page, learnerId!);
+    const priorUnitIds = new Set(unitsBeforeSave.map((unit: any) => unit.id));
+
     await replaceEditorText(page, 'SELECT name FROM employees WHERE department = Engineering');
     await page.getByRole('button', { name: 'Run Query' }).click();
     const helpBtn = page.getByRole('button', { name: /Get Help|Request Hint/i }).first();
@@ -83,13 +91,14 @@ test.describe('@authz @multi-device student persistence without storageState clo
 
     await page.goto('/textbook');
     await expect(page).toHaveURL(/\/textbook/);
-    const learnerId = await page.evaluate(() => {
-      const raw = window.localStorage.getItem('sql-adapt-user-profile');
-      return raw ? JSON.parse(raw).id : null;
-    });
-    expect(learnerId).toBeTruthy();
-    const beforeUnits = await getTextbookUnits(page, learnerId!);
-    expect(beforeUnits.length).toBeGreaterThan(0);
+    const unitsAfterSave = await getTextbookUnits(page, learnerId!);
+    expect(unitsAfterSave.length).toBeGreaterThan(0);
+    const createdUnit = unitsAfterSave.find((unit: any) => !priorUnitIds.has(unit.id)) ?? unitsAfterSave[0];
+    expect(createdUnit).toBeTruthy();
+    const createdUnitTitle = createdUnit.title as string;
+    const createdUnitContent = (createdUnit.content as string | undefined) ?? '';
+    const createdUnitSnippet = createdUnitContent.replace(/\s+/g, ' ').trim().slice(0, 48);
+    expect(createdUnitTitle).toBeTruthy();
 
     const sessionSeed = {
       currentProblemId: 'problem-2',
@@ -136,6 +145,17 @@ test.describe('@authz @multi-device student persistence without storageState clo
       expect(secondLearnerId).toBe(learnerId);
       const afterUnits = await getTextbookUnits(second, secondLearnerId!);
       expect(afterUnits.length).toBeGreaterThan(0);
+      const restoredUnit = afterUnits.find((unit: any) => unit.id === createdUnit.id);
+      expect(restoredUnit).toBeTruthy();
+
+      const unitButton = second.getByRole('button', { name: createdUnitTitle }).first();
+      if (await unitButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await unitButton.click();
+      }
+      await expect(second.getByRole('heading', { name: createdUnitTitle })).toBeVisible({ timeout: 15000 });
+      if (createdUnitSnippet.length >= 12) {
+        await expect(second.getByText(createdUnitSnippet, { exact: false }).first()).toBeVisible({ timeout: 15000 });
+      }
 
       const resumedSession = await second.evaluate(async (hydratedLearnerId) => {
         const response = await fetch(`/api/sessions/${hydratedLearnerId}/active`, {
@@ -160,6 +180,7 @@ test.describe('@authz @multi-device student persistence without storageState clo
 
       await second.goto('/practice');
       await expect(second.getByRole('button', { name: 'Run Query' })).toBeVisible({ timeout: 15000 });
+      await expect.poll(async () => getEditorText(second), { timeout: 15000 }).toContain(sessionSeed.currentCode);
     } finally {
       await clean.close();
     }

@@ -67,6 +67,10 @@ function writeEmptyAuthState(filePath: string) {
  * message (which the frontend shows when VITE_API_BASE_URL is not set).
  */
 async function isAuthEnabled(page: Page): Promise<boolean> {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    window.localStorage.setItem('sql-adapt-welcome-disabled', 'true');
+  });
   await page.goto('/auth', { waitUntil: 'domcontentloaded' });
   const disabled = await page
     .getByText(/Account system not available/i)
@@ -90,6 +94,10 @@ async function signupOrLogin(
   instructorCode?: string,
 ): Promise<void> {
   // ── Signup path ─────────────────────────────────────────────────────────────
+  await page.addInitScript(() => {
+    window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    window.localStorage.setItem('sql-adapt-welcome-disabled', 'true');
+  });
   await page.goto('/auth', { waitUntil: 'domcontentloaded' });
 
   // Switch to "Create Account" tab
