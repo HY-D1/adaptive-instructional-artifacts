@@ -1,0 +1,1 @@
+dbMode=neon resolvedEnvSource=DATABASE_URL backendReachable=true persistenceRoutesEnabled=true

@@ -670,6 +670,10 @@ E2E_INSTRUCTOR_CODE="<instructor-code>" \
 
 `setup:auth` now fails fast when the backend is unreachable or not Neon-backed.
 It will not silently write empty auth state files for launch-proof runs.
+If logs show `Invalid instructor code`, set `E2E_INSTRUCTOR_CODE` to the backend's
+actual `INSTRUCTOR_SIGNUP_CODE` value and provide `E2E_STUDENT_CLASS_CODE` from an
+existing section (or use stable existing `E2E_*` account credentials that can log in
+without creating new accounts).
 
 Auth state is saved to `playwright/.auth/student.json` and
 `playwright/.auth/instructor.json` (gitignored — never commit these).

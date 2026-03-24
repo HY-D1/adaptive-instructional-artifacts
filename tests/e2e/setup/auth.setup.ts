@@ -105,10 +105,12 @@ async function signupOrLogin(
   await page.fill('#signup-password', password);
 
   const roleLabel = role === 'student' ? 'Student' : 'Instructor';
-  await page
+  const roleButton = page
     .locator('button[type="button"]')
-    .filter({ hasText: new RegExp(`^${roleLabel}$`, 'i') })
-    .click();
+    .filter({ hasText: new RegExp(roleLabel, 'i') })
+    .first();
+  await expect(roleButton).toBeVisible({ timeout: 10_000 });
+  await roleButton.click();
 
   if (role === 'student' && classCode) {
     await expect(page.locator('#signup-code')).toBeVisible({ timeout: 3_000 });
@@ -136,14 +138,22 @@ async function signupOrLogin(
 
   if (outcome === 'redirected') return;
 
-  console.log(`[auth-setup] signup returned ${outcome} — falling back to login for ${email}`);
+  const alertText = outcome === 'error'
+    ? await page.locator('[role="alert"]').first().textContent().catch(() => null)
+    : null;
+
+  console.log(
+    `[auth-setup] signup returned ${outcome} for ${email}` +
+    (alertText ? ` (alert="${alertText.trim()}")` : '') +
+    ' — falling back to login',
+  );
 
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#login-email')).toBeVisible({ timeout: 10_000 });
 
   await page.fill('#login-email', email);
   await page.fill('#login-password', password);
-  await page.getByRole('button', { name: /^Sign In$/i }).click();
+  await page.locator('form').getByRole('button', { name: /^Sign In$/i }).click();
 
   await page.waitForURL(/\/(practice|instructor-dashboard)/, { timeout: 15_000 });
 }
@@ -181,6 +191,11 @@ setup.describe('@auth-setup', () => {
         const provisionBody = await provisionResponse.json().catch(() => null);
         if (provisionResponse.ok() && provisionBody?.user?.ownedSections?.[0]?.studentSignupCode) {
           studentClassCode = provisionBody.user.ownedSections[0].studentSignupCode;
+        } else {
+          console.log(
+            `[auth-setup] class-code auto-provision failed: status=${provisionResponse.status()} ` +
+            `error=${String(provisionBody?.error ?? 'unknown')}`,
+          );
         }
       }
     } finally {
@@ -189,7 +204,8 @@ setup.describe('@auth-setup', () => {
 
     if (!studentClassCode) {
       throw new Error(
-        '[auth-setup] Missing student class code and failed to auto-provision one from backend signup.',
+        '[auth-setup] Missing student class code and failed to auto-provision one from backend signup. ' +
+        'Set E2E_STUDENT_CLASS_CODE (recommended) or set a valid E2E_INSTRUCTOR_CODE for this backend.',
       );
     }
 

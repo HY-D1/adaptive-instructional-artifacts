@@ -1,0 +1,16 @@
+HTTP/2 200 
+access-control-allow-credentials: true
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json; charset=utf-8
+date: Tue, 24 Mar 2026 23:05:48 GMT
+etag: W/"6c-efTHfSmWs61oOVlKXYzzCdGkpCQ"
+server: Vercel
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+vary: Origin
+x-powered-by: Express
+x-vercel-cache: MISS
+x-vercel-id: pdx1::iad1::c8rx9-1774393548740-89cf6677636d
+content-length: 108
+
+{"backendReachable":true,"dbMode":"neon","resolvedEnvSource":"DATABASE_URL","persistenceRoutesEnabled":true}
