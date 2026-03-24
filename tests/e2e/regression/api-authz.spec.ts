@@ -37,8 +37,10 @@ test.describe('@authz API authorization and learner spoof protections', () => {
     const instructorCode = process.env.E2E_INSTRUCTOR_CODE ?? process.env.VITE_INSTRUCTOR_PASSCODE ?? 'TeachSQL2024';
     const ts = Date.now();
     const instructorEmail = `authz-instructor-${ts}@sql-adapt.test`;
+    const instructorOtherEmail = `authz-instructor-other-${ts}@sql-adapt.test`;
     const studentEmail = `authz-student-${ts}@sql-adapt.test`;
     const otherStudentEmail = `authz-other-${ts}@sql-adapt.test`;
+    const externalStudentEmail = `authz-external-${ts}@sql-adapt.test`;
     const password = 'AuthzCase!123';
 
     const instructorSignup = await signup(request, {
@@ -51,6 +53,17 @@ test.describe('@authz API authorization and learner spoof protections', () => {
     expect(instructorSignup.response.ok()).toBeTruthy();
     const classCode = instructorSignup.body.user?.ownedSections?.[0]?.studentSignupCode as string;
     expect(classCode).toBeTruthy();
+
+    const instructorOtherSignup = await signup(request, {
+      name: 'Other Instructor',
+      email: instructorOtherEmail,
+      password,
+      role: 'instructor',
+      instructorCode,
+    });
+    expect(instructorOtherSignup.response.ok()).toBeTruthy();
+    const otherClassCode = instructorOtherSignup.body.user?.ownedSections?.[0]?.studentSignupCode as string;
+    expect(otherClassCode).toBeTruthy();
 
     const studentSignup = await signup(request, {
       name: 'Authz Student',
@@ -72,9 +85,28 @@ test.describe('@authz API authorization and learner spoof protections', () => {
     expect(otherStudentSignup.response.ok()).toBeTruthy();
     const otherStudentId = otherStudentSignup.body.user.learnerId as string;
 
+    const externalStudentSignup = await signup(request, {
+      name: 'External Student',
+      email: externalStudentEmail,
+      password,
+      role: 'student',
+      classCode: otherClassCode,
+    });
+    expect(externalStudentSignup.response.ok()).toBeTruthy();
+    const externalStudentId = externalStudentSignup.body.user.learnerId as string;
+
+    const anonymous = await playwright.request.newContext({ baseURL });
     const student = await loginContext(playwright, baseURL, studentEmail, password);
     const instructor = await loginContext(playwright, baseURL, instructorEmail, password);
+    const externalStudent = await loginContext(playwright, baseURL, externalStudentEmail, password);
     try {
+      const anonInstructor = await anonymous.get('/api/instructor/learners');
+      expect(anonInstructor.status()).toBe(401);
+      const anonResearch = await anonymous.get('/api/research/export');
+      expect(anonResearch.status()).toBe(401);
+      const anonInteractions = await anonymous.get(`/api/interactions?learnerId=${studentId}`);
+      expect(anonInteractions.status()).toBe(401);
+
       const researchBlocked = await student.context.get('/api/research/export');
       expect(researchBlocked.status()).toBe(403);
 
@@ -101,6 +133,16 @@ test.describe('@authz API authorization and learner spoof protections', () => {
       });
       expect(spoofWrite.ok()).toBeTruthy();
 
+      const studentSessionSpoof = await student.context.post(`/api/sessions/${otherStudentId}/active`, {
+        data: {
+          currentProblemId: 'problem-2',
+          currentCode: 'SELECT 1',
+          guidanceState: { rung: 2, source: 'student-spoof' },
+        },
+        headers: { 'x-csrf-token': student.csrfToken },
+      });
+      expect(studentSessionSpoof.status()).toBe(403);
+
       const ownRead = await student.context.get(`/api/interactions?learnerId=${studentId}`);
       expect(ownRead.ok()).toBeTruthy();
       const ownReadBody = await ownRead.json();
@@ -115,9 +157,57 @@ test.describe('@authz API authorization and learner spoof protections', () => {
       const spoofOnOtherLearner = (otherLearnerDetailBody.data?.interactions || [])
         .find((item: any) => item.id === spoofEvent.id);
       expect(spoofOnOtherLearner).toBeFalsy();
+
+      const crossSectionInteractionRead = await instructor.context.get(`/api/interactions?learnerId=${externalStudentId}`);
+      expect(crossSectionInteractionRead.status()).toBe(403);
+
+      const crossSectionSessionRead = await instructor.context.get(`/api/sessions/${externalStudentId}/active`);
+      expect(crossSectionSessionRead.status()).toBe(403);
+      const crossSectionSessionWrite = await instructor.context.post(`/api/sessions/${externalStudentId}/active`, {
+        data: {
+          currentProblemId: 'problem-3',
+          currentCode: 'SELECT 2',
+          guidanceState: { rung: 1, source: 'instructor-cross-scope' },
+        },
+        headers: { 'x-csrf-token': instructor.csrfToken },
+      });
+      expect(crossSectionSessionWrite.status()).toBe(403);
+
+      const ownSessionWrite = await student.context.post(`/api/sessions/${studentId}/active`, {
+        data: {
+          currentProblemId: 'problem-1',
+          currentCode: 'SELECT * FROM employees',
+          guidanceState: { rung: 1, source: 'own-session-write' },
+        },
+        headers: { 'x-csrf-token': student.csrfToken },
+      });
+      expect(ownSessionWrite.ok()).toBeTruthy();
+      const ownSessionRead = await student.context.get(`/api/sessions/${studentId}/active`);
+      expect(ownSessionRead.ok()).toBeTruthy();
+      const ownSessionBody = await ownSessionRead.json();
+      expect(ownSessionBody.data?.sectionId).toBeTruthy();
+
+      const ownEventWithSection = (ownReadBody.data || []).find((item: any) => item.id === spoofEvent.id);
+      expect(ownEventWithSection?.sectionId).toBeTruthy();
+
+      const externalEvent = {
+        id: `evt-external-${ts}`,
+        learnerId: externalStudentId,
+        eventType: 'execution',
+        problemId: 'problem-1',
+        timestamp: Date.now(),
+        successful: true,
+      };
+      const externalEventWrite = await externalStudent.context.post('/api/interactions/batch', {
+        data: { events: [externalEvent] },
+        headers: { 'x-csrf-token': externalStudent.csrfToken },
+      });
+      expect(externalEventWrite.ok()).toBeTruthy();
     } finally {
+      await anonymous.dispose();
       await student.context.dispose();
       await instructor.context.dispose();
+      await externalStudent.context.dispose();
     }
   });
 });

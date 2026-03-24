@@ -223,6 +223,7 @@ export interface BanditReward {
 export interface Interaction {
   id: string;
   learnerId: string;
+  sectionId?: string | null;
   sessionId: string | null;
   timestamp: string;
   eventType: EventType;
@@ -354,6 +355,7 @@ export interface Interaction {
  */
 export interface CreateInteractionRequest {
   learnerId: string;
+  sectionId?: string | null;
   sessionId?: string;
   timestamp: string;
   eventType: EventType;
