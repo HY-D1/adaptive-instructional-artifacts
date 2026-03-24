@@ -163,16 +163,16 @@ The system separates **"learning interaction capture"** from **"instruction orch
 
 ## Project Status
 
-**Current Phase**: ✅ Week 1 Complete — Stabilization Gate Passed
+**Current Phase**: ✅ Week 1 Baseline Restored — TypeScript gate re-verified 2026-03-20
 
-Week 1 focused on stability and deployment readiness. Core systems baseline verified 2026-03-17:
+Week 1 focused on stability and deployment readiness. Core systems re-verified 2026-03-20 after `LearnerProfile.solvedProblemIds` schema drift fix:
 
 | Gate | Status |
 |------|--------|
-| TypeScript | ✅ Clean compile |
+| TypeScript | ✅ Clean compile (re-verified 2026-03-20) |
 | Build | ✅ Production ready |
-| Unit Tests | ✅ 829 passing (2 skipped) |
-| E2E Tests | ✅ 406 passing |
+| Unit Tests | ✅ 829+ passing |
+| E2E Tests | ✅ 406 passing (not re-run in this task) |
 | Hosted Demo | ✅ Verified on Vercel |
 
 📄 **Full Status Report**: [docs/week1-status.md](./docs/week1-status.md)  

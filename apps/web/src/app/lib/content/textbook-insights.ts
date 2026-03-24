@@ -540,31 +540,50 @@ export function buildTextbookInsights(options: {
   const nowTimestamp = options.nowTimestamp ?? Date.now();
   const learnerId = options.learnerId;
   const prerequisiteThreshold = options.prerequisiteThreshold ?? 40;
-  
+
+  // DEBUG: Log inputs
+  console.log('[buildTextbookInsights] DEBUG:', {
+    learnerId,
+    unitCount: options.units.length,
+    interactionCount: options.interactions.length,
+    sortMode: options.sortMode
+  });
+
   // Get learner coverage if learnerId provided
   const learnerCoverage = learnerId ? getLearnerConceptCoverage(learnerId) : new Map();
-  
+
+  // DEBUG: Log coverage
+  console.log('[buildTextbookInsights] learnerCoverage.size:', learnerCoverage.size);
+
   // Partition units into accessible and blocked
   let accessibleUnits: InstructionalUnit[];
   let blockedUnits: BlockedUnitInfo[];
   let prerequisiteStrengths: PrerequisiteStrengthInfo[];
-  
+
+  // When learner has no concept coverage (new learner), treat all units as accessible
+  // Don't block units just because prerequisites haven't been recorded yet
   if (learnerId && learnerCoverage.size > 0) {
+    console.log('[buildTextbookInsights] Using partitionUnitsByAccessibility');
     [accessibleUnits, blockedUnits] = partitionUnitsByAccessibility(
-      options.units, 
-      learnerId, 
+      options.units,
+      learnerId,
       prerequisiteThreshold
     );
-    
+
     // Calculate prerequisite strengths for accessible units
-    prerequisiteStrengths = accessibleUnits.map(unit => 
+    prerequisiteStrengths = accessibleUnits.map(unit =>
       calculatePrerequisiteStrength(unit, learnerCoverage)
     );
   } else {
+    // New learner or no coverage data: all units are accessible
+    console.log('[buildTextbookInsights] New learner - all units accessible');
     accessibleUnits = options.units;
     blockedUnits = [];
     prerequisiteStrengths = [];
   }
+
+  // DEBUG: Log accessible units
+  console.log('[buildTextbookInsights] accessibleUnits:', accessibleUnits.length);
   
   // Sort based on selected mode (default to quality-based sorting)
   let orderedUnits: InstructionalUnit[];
@@ -599,6 +618,9 @@ export function buildTextbookInsights(options: {
   const averageStrength = prerequisiteStrengths.length > 0
     ? prerequisiteStrengths.reduce((sum, s) => sum + s.averagePrerequisiteScore, 0) / prerequisiteStrengths.length
     : 100;
+
+  // DEBUG: Log ordered units
+  console.log('[buildTextbookInsights] orderedUnits:', orderedUnits.length);
 
   return {
     orderedUnits,

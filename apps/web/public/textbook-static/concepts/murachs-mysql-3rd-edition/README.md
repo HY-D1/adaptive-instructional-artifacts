@@ -39,5 +39,5 @@ This directory contains concept documentation for **murachs-mysql-3rd-edition**.
 - [Backup and Restore](./backup-restore.md)
 
 ---
-*Generated: 2026-03-15T21:08:18.254178+00:00*
+*Generated: 2026-03-22T20:52:04.429767+00:00*
 *Schema: textbook-static-v1 v1.0.0*

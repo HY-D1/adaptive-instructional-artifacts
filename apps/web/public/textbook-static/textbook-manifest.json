@@ -1,24 +1,31 @@
 {
   "schemaVersion": "1.0.0",
   "schemaId": "textbook-static-v1",
-  "indexId": "idx-murachs-mysql-3rd-edition-20260315-210818",
-  "createdAt": "2026-03-15T21:08:18.127157+00:00",
-  "sourceName": "murachs-mysql-3rd-edition",
+  "indexId": "idx-murachs-mysql-3rd-edition-20260322-044258",
+  "createdAt": "2026-03-22T04:42:58.965254+00:00",
+  "sourceName": "murachs-mysql-3rd-edition.pdf",
   "chunkerVersion": "word-window-150-overlap-30-v1",
   "embeddingModelId": "hash-embedding-v1",
   "sourceDocs": [
     {
       "docId": "murachs-mysql-3rd-edition",
       "filename": "murachs-mysql-3rd-edition.pdf",
-      "sha256": "unknown",
-      "pageCount": 0
+      "sha256": "b411e7468d9ba622ba11c7b69dda88d23bd9208310851197e293762ebe6c759b",
+      "pageCount": 646
+    },
+    {
+      "docId": "dbms-ramakrishnan-3rd-edition",
+      "filename": "dbms-ramakrishnan-3rd-edition.pdf",
+      "sha256": "66486201f59a9ca76c82dc5bc05beed1d29e0770bb1b2e7613f2f30f5bd6a11c",
+      "pageCount": 1098
     }
   ],
-  "docCount": 1,
-  "chunkCount": 1472,
+  "docCount": 2,
+  "chunkCount": 4458,
   "chapters": [],
   "total_exercises": 0,
   "total_examples": 0,
   "l2_stats": {},
-  "audit_log_path": null
+  "audit_log_path": null,
+  "generatedAt": "2026-03-22T20:52:10.279298+00:00"
 }

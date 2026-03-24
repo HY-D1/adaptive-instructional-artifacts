@@ -25,7 +25,7 @@
 | Entity | Count | Description |
 |--------|-------|-------------|
 | Learners | 3 | Alice Chen, Bob Martinez, Carol Williams |
-| Interactions | ~24 | hint_request, error, profile_assigned, hdi_calculated |
+| Interactions | ~24 | hint_request, error, condition_assigned, hdi_calculated |
 | Textbook Units | 0 | *Note: textbook units not yet seeded* |
 
 ### Operational Telemetry Note

@@ -82,6 +82,7 @@ export type InteractionEvent = {
     | 'guidance_view'
     | 'guidance_escalate'
     | 'textbook_unit_upsert'
+    | 'textbook_unit_shown'
     | 'source_view'
     // Week 3 Feature: Ask My Textbook chat
     | 'chat_interaction'
@@ -91,6 +92,8 @@ export type InteractionEvent = {
     | 'profile_assigned'
     | 'escalation_triggered'
     | 'profile_adjusted'
+    // Week 6: Experimental condition tracking
+    | 'condition_assigned'
     // Week 5: Multi-Armed Bandit (Component 8)
     | 'bandit_arm_selected'
     | 'bandit_reward_observed'
@@ -209,9 +212,31 @@ export type InteractionEvent = {
   isCorrect?: boolean;
   scheduledTime?: number;
   shownTime?: number;
+  // Delayed reinforcement outcome fields (Week 6 experiment pipeline)
+  /** Whether the learner answered the reinforcement prompt correctly */
+  reinforcementCorrect?: boolean;
+  /** Response latency in milliseconds */
+  reinforcementLatencyMs?: number;
+  /** Source unit ID that triggered this reinforcement prompt */
+  sourceUnitId?: string;
+  /** Source concept ID (corpus-stable) for the reinforced unit */
+  sourceConceptId?: string;
+  /** Delay bucket: immediate (same session), 3d, 7d, or 14d */
+  delayBucket?: 'immediate' | '3d' | '7d' | '14d' | '21d';
   
   // Week 6: Experimental condition tracking
   conditionId?: string;
+  // Stable corpus concept key from helper-export (e.g. "dbms-ramakrishnan-3rd-edition/joins")
+  corpusConceptId?: string;
+  // RESEARCH-4: Canonical study-facing fields (explicit names for analysis)
+  // These mirror existing internal fields but use the names required by the study plan.
+  learnerProfileId?: string;        // canonical: assigned escalation profile (mirrors profileId)
+  escalationTriggerReason?: string; // canonical: why escalation fired (e.g. 'threshold_met')
+  errorCountAtEscalation?: number;  // canonical: error count at moment of escalation
+  timeToEscalation?: number;        // canonical: ms from first problem interaction to escalation event
+  strategyAssigned?: string;        // canonical: instructional policy/arm assigned (e.g. 'conservative')
+  strategyUpdated?: string;         // canonical: arm/strategy updated after reward observation
+  rewardValue?: number;             // canonical: total reward signal 0–1 (mirrors reward.total)
   // Additional metadata for logging/debugging
   payload?: Record<string, unknown>;
   metadata?: Record<string, unknown>;

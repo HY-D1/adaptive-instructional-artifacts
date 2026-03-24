@@ -1,0 +1,213 @@
+-- ============================================================================
+-- NEON-1: Authenticated Per-User Neon Persistence
+-- Migration SQL for PostgreSQL (Neon)
+-- ============================================================================
+
+-- Run this SQL in your Neon SQL Editor to set up the database schema
+-- Get your connection string from: https://console.neon.tech
+
+-- ============================================================================
+-- Users table (minimal auth identity)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('student', 'instructor')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+
+-- ============================================================================
+-- Learner sessions (experimental condition tracking)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS learner_sessions (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_id TEXT NOT NULL,
+  condition_id TEXT NOT NULL,
+  textbook_disabled BOOLEAN NOT NULL DEFAULT FALSE,
+  adaptive_ladder_disabled BOOLEAN NOT NULL DEFAULT FALSE,
+  immediate_explanation_mode BOOLEAN NOT NULL DEFAULT FALSE,
+  static_hint_mode BOOLEAN NOT NULL DEFAULT FALSE,
+  escalation_policy TEXT NOT NULL DEFAULT 'adaptive',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, session_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_learner_sessions_user_id ON learner_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_learner_sessions_session_id ON learner_sessions(session_id);
+
+-- ============================================================================
+-- Problem progress (per-user problem completion tracking)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS problem_progress (
+  id SERIAL PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  problem_id TEXT NOT NULL,
+  solved BOOLEAN NOT NULL DEFAULT FALSE,
+  attempts_count INTEGER NOT NULL DEFAULT 0,
+  hints_used INTEGER NOT NULL DEFAULT 0,
+  last_code TEXT,
+  first_attempted_at TIMESTAMPTZ,
+  solved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, problem_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_problem_progress_user_id ON problem_progress(user_id);
+CREATE INDEX IF NOT EXISTS idx_problem_progress_problem_id ON problem_progress(problem_id);
+
+-- ============================================================================
+-- Interaction events (append-only research log)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS interaction_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  session_id TEXT,
+  timestamp TIMESTAMPTZ NOT NULL,
+  event_type TEXT NOT NULL,
+  problem_id TEXT NOT NULL,
+  problem_set_id TEXT,
+  problem_number INTEGER,
+  code TEXT,
+  error TEXT,
+  error_subtype_id TEXT,
+  hint_id TEXT,
+  explanation_id TEXT,
+  hint_text TEXT,
+  hint_level INTEGER,
+  help_request_index INTEGER,
+  sql_engage_subtype TEXT,
+  sql_engage_row_id TEXT,
+  policy_version TEXT,
+  time_spent INTEGER,
+  successful BOOLEAN,
+  rule_fired TEXT,
+  template_id TEXT,
+  input_hash TEXT,
+  model TEXT,
+  note_id TEXT,
+  note_title TEXT,
+  note_content TEXT,
+  retrieved_source_ids TEXT,
+  retrieved_chunks TEXT,
+  trigger_interaction_ids TEXT,
+  evidence_interaction_ids TEXT,
+  source_interaction_ids TEXT,
+  inputs TEXT,
+  outputs TEXT,
+  concept_ids TEXT,
+  request_type TEXT,
+  current_rung INTEGER,
+  rung INTEGER,
+  grounded BOOLEAN,
+  content_length INTEGER,
+  from_rung INTEGER,
+  to_rung INTEGER,
+  trigger_reason TEXT,
+  unit_id TEXT,
+  action TEXT,
+  dedupe_key TEXT,
+  revision_count INTEGER,
+  passage_count INTEGER,
+  expanded BOOLEAN,
+  chat_message TEXT,
+  chat_response TEXT,
+  chat_quick_chip TEXT,
+  saved_to_notes BOOLEAN,
+  textbook_units_retrieved TEXT,
+  profile_id TEXT,
+  assignment_strategy TEXT,
+  previous_thresholds TEXT,
+  new_thresholds TEXT,
+  selected_arm TEXT,
+  selection_method TEXT,
+  arm_stats_at_selection TEXT,
+  reward_total NUMERIC,
+  reward_components TEXT,
+  new_alpha NUMERIC,
+  new_beta NUMERIC,
+  hdi NUMERIC,
+  hdi_level TEXT,
+  hdi_components TEXT,
+  trend TEXT,
+  slope NUMERIC,
+  intervention_type TEXT,
+  schedule_id TEXT,
+  prompt_id TEXT,
+  prompt_type TEXT,
+  response TEXT,
+  is_correct BOOLEAN,
+  scheduled_time BIGINT,
+  shown_time BIGINT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_interaction_events_user_id ON interaction_events(user_id);
+CREATE INDEX IF NOT EXISTS idx_interaction_events_session_id ON interaction_events(session_id);
+CREATE INDEX IF NOT EXISTS idx_interaction_events_event_type ON interaction_events(event_type);
+CREATE INDEX IF NOT EXISTS idx_interaction_events_timestamp ON interaction_events(timestamp);
+CREATE INDEX IF NOT EXISTS idx_interaction_events_problem_id ON interaction_events(problem_id);
+
+-- ============================================================================
+-- Textbook units (My Textbook)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS textbook_units (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  unit_id TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('hint', 'explanation', 'example', 'summary')),
+  concept_ids TEXT NOT NULL DEFAULT '[]',
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  content_format TEXT NOT NULL DEFAULT 'markdown' CHECK (content_format IN ('markdown', 'html')),
+  source_interaction_ids TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'primary' CHECK (status IN ('primary', 'alternative', 'archived')),
+  summary TEXT,
+  common_mistakes TEXT,
+  minimal_example TEXT,
+  source_ref_ids TEXT,
+  created_from_interaction_ids TEXT,
+  revision_count INTEGER NOT NULL DEFAULT 0,
+  quality_score NUMERIC,
+  auto_created BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, unit_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_textbook_units_user_id ON textbook_units(user_id);
+CREATE INDEX IF NOT EXISTS idx_textbook_units_unit_id ON textbook_units(unit_id);
+CREATE INDEX IF NOT EXISTS idx_textbook_units_type ON textbook_units(type);
+
+-- ============================================================================
+-- Textbook unit event links (provenance)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS textbook_unit_event_links (
+  id SERIAL PRIMARY KEY,
+  unit_id TEXT NOT NULL REFERENCES textbook_units(id) ON DELETE CASCADE,
+  event_id TEXT NOT NULL REFERENCES interaction_events(id) ON DELETE CASCADE,
+  link_type TEXT NOT NULL DEFAULT 'trigger',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(unit_id, event_id, link_type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_textbook_unit_event_links_unit_id ON textbook_unit_event_links(unit_id);
+CREATE INDEX IF NOT EXISTS idx_textbook_unit_event_links_event_id ON textbook_unit_event_links(event_id);
+
+-- ============================================================================
+-- Verification query
+-- ============================================================================
+
+-- Run this to verify the schema was created correctly:
+-- SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;

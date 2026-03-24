@@ -3,11 +3,20 @@
  * Express server with SQLite database
  */
 
-import express, { Request, Response, NextFunction } from 'express';
-import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Load environment variables BEFORE any other imports
+// This ensures DATABASE_URL is available when db/index.ts is evaluated
+const envPath = path.resolve(__dirname, '../.env');
+dotenv.config({ path: envPath });
+
+import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import fs from 'fs';
 
 import { initializeSchema, closeDb } from './db/index.js';
@@ -18,13 +27,18 @@ import { sessionsRouter } from './routes/sessions.js';
 import { researchRouter } from './routes/research.js';
 import { pdfIndexRouter } from './routes/pdf-index.js';
 import { llmRouter } from './routes/llm.js';
+
+// Neon PostgreSQL routes (new)
+import { neonLearnersRouter } from './routes/neon-learners.js';
+import { neonInteractionsRouter } from './routes/neon-interactions.js';
+import { neonTextbooksRouter } from './routes/neon-textbooks.js';
+import { neonSessionsRouter } from './routes/neon-sessions.js';
+import { authRouter } from './routes/auth.js';
+
 import { ENABLE_PDF_INDEX, ENABLE_LLM, PORT, CORS_ORIGIN, getFeatureStatus, OLLAMA_BASE_URL } from './config.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// Load environment variables
-const envPath = path.resolve(__dirname, '../.env');
-dotenv.config({ path: envPath });
+import { isUsingNeon } from './db/index.js';
+import { resolveDbEnv } from './db/env-resolver.js';
+import { optionalAuth, requireAuth } from './middleware/auth.js';
 
 // Ensure data directory exists
 const DATA_DIR = path.resolve(__dirname, '../data');
@@ -43,6 +57,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
+app.use(cookieParser());
+app.use(optionalAuth);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -59,12 +75,33 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 
 app.get('/health', async (_req: Request, res: Response) => {
   const featureStatus = await getFeatureStatus();
-  
+  const { source } = resolveDbEnv();
+
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
+    db: {
+      mode: isUsingNeon() ? 'neon' : 'sqlite',
+      envSource: source,
+    },
     features: featureStatus,
+  });
+});
+
+// ============================================================================
+// Persistence Status
+// ============================================================================
+
+app.get('/api/system/persistence-status', (_req: Request, res: Response) => {
+  const neon = isUsingNeon();
+  const { source } = resolveDbEnv();
+
+  res.json({
+    backendReachable: true,
+    dbMode: neon ? 'neon' : 'sqlite',
+    resolvedEnvSource: source,
+    persistenceRoutesEnabled: true,
   });
 });
 
@@ -72,10 +109,28 @@ app.get('/health', async (_req: Request, res: Response) => {
 // API Routes
 // ============================================================================
 
-app.use('/api/learners', learnersRouter);
-app.use('/api/interactions', interactionsRouter);
-app.use('/api/textbooks', textbooksRouter);
-app.use('/api/sessions', sessionsRouter);
+// Use Neon PostgreSQL routes when DATABASE_URL is set, otherwise use SQLite routes
+const usingNeon = isUsingNeon();
+
+if (usingNeon) {
+  console.log('🔌 Using Neon PostgreSQL routes (auth required)');
+  // requireAuth enforces JWT cookie on all Neon data routes
+  // Per-resource ownership is enforced by router.param() in each Neon router
+  app.use('/api/learners', requireAuth, neonLearnersRouter);
+  app.use('/api/interactions', requireAuth, neonInteractionsRouter);
+  app.use('/api/textbooks', requireAuth, neonTextbooksRouter);
+  app.use('/api/sessions', requireAuth, neonSessionsRouter);
+} else {
+  console.log('💾 Using SQLite routes (legacy)');
+  app.use('/api/learners', learnersRouter);
+  app.use('/api/interactions', interactionsRouter);
+  app.use('/api/textbooks', textbooksRouter);
+  app.use('/api/sessions', sessionsRouter);
+}
+
+// Auth routes (always mounted, route returns 503 in SQLite mode)
+app.use('/api/auth', authRouter);
+
 app.use('/api/research', researchRouter);
 
 // ============================================================================
@@ -142,6 +197,7 @@ app.get('/ollama/api/tags', async (_req: Request, res: Response) => {
 // ============================================================================
 
 function displayServerStatus() {
+  const dbType = isUsingNeon() ? 'Neon PostgreSQL' : 'SQLite';
   console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║                                                            ║
@@ -149,7 +205,7 @@ function displayServerStatus() {
 ║                                                            ║
 ║   🚀 Server running on http://localhost:${PORT}              ║
 ║   📊 API endpoints available at /api/*                     ║
-║   💾 Database: SQLite                                      ║
+║   💾 Database: ${dbType.padEnd(46)}║
 ║                                                            ║`);
 
   // PDF Index status

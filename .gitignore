@@ -10,6 +10,8 @@ playwright-report/
 playwright-report-*/
 playwright-report */
 test-results/
+# Playwright auth state — captured cookies/localStorage, never commit
+playwright/.auth/*.json
 coverage/
 *.tsbuildinfo
 
@@ -82,7 +84,11 @@ dist/pdf-index/
 !dist/pdf-index/.gitkeep
 
 # But KEEP the static textbook content for deployment
+# The directory itself, all sub-paths, and specifically all concept markdown files
+# must be unignored so that new docId directories are not silently dropped by *.md above.
 !apps/web/public/textbook-static/
+!apps/web/public/textbook-static/**
+!apps/web/public/textbook-static/**/*.md
 
 # Temporary screenshot files from UI testing
 *.png
@@ -108,3 +114,5 @@ apps/server/data/*.db
 apps/server/data/*.db-shm
 apps/server/data/*.db-wal
 apps/server/dist/
+.vercel
+.gstack/

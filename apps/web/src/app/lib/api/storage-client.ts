@@ -13,8 +13,10 @@ import type {
 } from '@/app/types';
 
 // API Configuration
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-const USE_BACKEND = import.meta.env.VITE_USE_BACKEND === 'true' || !!import.meta.env.VITE_API_URL;
+// VITE_API_BASE_URL is the canonical env var (e.g. https://my-api.vercel.app — no trailing /api)
+const _API_BASE = import.meta.env.VITE_API_BASE_URL;
+const API_URL = _API_BASE ? `${_API_BASE}/api` : 'http://localhost:3001/api';
+const USE_BACKEND = !!_API_BASE;
 
 // ============================================================================
 // Types
@@ -181,10 +183,20 @@ interface BackendInteraction {
   scheduledTime?: number;
   shownTime?: number;
   
+  // RESEARCH-4: Canonical study-facing fields
+  conditionId?: string;            // canonical session-init field (condition_assigned events)
+  learnerProfileId?: string;
+  escalationTriggerReason?: string;
+  errorCountAtEscalation?: number;
+  timeToEscalation?: number;
+  strategyAssigned?: string;
+  strategyUpdated?: string;
+  rewardValue?: number;
+
   // Legacy fields
   payload?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
-  
+
   createdAt: string;
 }
 
@@ -242,6 +254,7 @@ async function fetchApi<T>(
   try {
     const response = await fetch(url, {
       ...options,
+      credentials: 'include',   // send JWT cookie for auth-protected API routes
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
@@ -357,6 +370,7 @@ export async function getProfile(learnerId: string): Promise<LearnerProfile | nu
     conceptsCovered: new Set(data.conceptsCovered),
     conceptCoverageEvidence: new Map(Object.entries(data.conceptCoverageEvidence)),
     errorHistory: new Map(Object.entries(data.errorHistory)),
+    solvedProblemIds: new Set(),
     interactionCount: data.interactionCount,
     currentStrategy: data.currentStrategy as LearnerProfile['currentStrategy'],
     preferences: data.preferences,
@@ -398,6 +412,7 @@ export async function getAllProfiles(): Promise<LearnerProfile[]> {
     conceptsCovered: new Set(data.conceptsCovered),
     conceptCoverageEvidence: new Map(Object.entries(data.conceptCoverageEvidence)),
     errorHistory: new Map(Object.entries(data.errorHistory)),
+    solvedProblemIds: new Set(),
     interactionCount: data.interactionCount,
     currentStrategy: data.currentStrategy as LearnerProfile['currentStrategy'],
     preferences: data.preferences,
@@ -445,6 +460,7 @@ export async function updateProfileFromEvent(
     conceptsCovered: new Set(data.conceptsCovered),
     conceptCoverageEvidence: new Map(Object.entries(data.conceptCoverageEvidence)),
     errorHistory: new Map(Object.entries(data.errorHistory)),
+    solvedProblemIds: new Set(),
     interactionCount: data.interactionCount,
     currentStrategy: data.currentStrategy as LearnerProfile['currentStrategy'],
     preferences: data.preferences,
@@ -576,6 +592,16 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
     scheduledTime: event.scheduledTime,
     shownTime: event.shownTime,
     
+    // RESEARCH-4: Canonical study-facing fields
+    conditionId: event.conditionId,
+    learnerProfileId: event.learnerProfileId,
+    escalationTriggerReason: event.escalationTriggerReason,
+    errorCountAtEscalation: event.errorCountAtEscalation,
+    timeToEscalation: event.timeToEscalation,
+    strategyAssigned: event.strategyAssigned,
+    strategyUpdated: event.strategyUpdated,
+    rewardValue: event.rewardValue,
+
     // Legacy payload for extensibility/backward compatibility
     payload: event.payload,
     metadata: event.metadata,

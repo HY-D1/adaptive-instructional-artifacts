@@ -332,10 +332,19 @@ export interface Interaction {
   scheduledTime?: number;
   shownTime?: number;
   
+  // RESEARCH-4: Canonical study-facing fields
+  learnerProfileId?: string;        // canonical: assigned escalation profile (mirrors profileId)
+  escalationTriggerReason?: string; // canonical: reason escalation fired
+  errorCountAtEscalation?: number;  // canonical: error count at moment of escalation
+  timeToEscalation?: number;        // canonical: ms from first problem interaction to escalation
+  strategyAssigned?: string;        // canonical: instructional policy/arm assigned
+  strategyUpdated?: string;         // canonical: arm/strategy updated after reward observation
+  rewardValue?: number;             // canonical: total reward signal 0–1
+
   // Legacy payload for extensibility/backward compatibility
   payload?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
-  
+
   createdAt: string;
 }
 
@@ -454,6 +463,15 @@ export interface CreateInteractionRequest {
   scheduledTime?: number;
   shownTime?: number;
   
+  // RESEARCH-4: Canonical study-facing fields
+  learnerProfileId?: string;
+  escalationTriggerReason?: string;
+  errorCountAtEscalation?: number;
+  timeToEscalation?: number;
+  strategyAssigned?: string;
+  strategyUpdated?: string;
+  rewardValue?: number;
+
   // Legacy payload for extensibility
   payload?: Record<string, unknown>;
   metadata?: Record<string, unknown>;

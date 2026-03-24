@@ -29,6 +29,7 @@ import type { EnhancedHint } from '../../../lib/ml/enhanced-hint-service';
 import { useUserRole } from '../../../hooks/useUserRole';
 import type { EscalationProfile } from '../../../lib/ml/escalation-profiles';
 import type { SessionConfig } from '../../../types';
+import { orchestrate, type OrchestrationDecision } from '../../../lib/ml/textbook-orchestrator';
 
 /**
  * Props for the HintSystem component
@@ -49,7 +50,7 @@ interface HintSystemProps {
   /** Recent interaction events for context */
   recentInteractions: InteractionEvent[];
   /** Callback when escalation to explanation occurs */
-  onEscalate?: (sourceInteractionIds?: string[]) => void;
+  onEscalate?: (sourceInteractionIds?: string[], subtype?: string) => void;
   /** Callback when a new interaction is logged */
   onInteractionLogged?: (event: InteractionEvent) => void;
   /** Escalation profile for profile-specific thresholds (Week 5) */
@@ -81,6 +82,7 @@ export function HintSystem({
   const [conceptIds, setConceptIds] = useState<string[]>([]);
   const [showSourceViewer, setShowSourceViewer] = useState(false);
   const [isAddingToTextbook, setIsAddingToTextbook] = useState(false);
+  const [saveToNotesError, setSaveToNotesError] = useState<string | null>(null);
   const [isProcessingHint, setIsProcessingHint] = useState(false);
   const [autoEscalationInfo, setAutoEscalationInfo] = useState<{
     triggered: boolean;
@@ -194,9 +196,14 @@ export function HintSystem({
   // Week 3 D7: Handle "Add to My Textbook" (learner-initiated rung 3)
   const handleAddToTextbook = async () => {
     if (!sessionId || !profile) return;
-    
+
+    setSaveToNotesError(null);
     setIsAddingToTextbook(true);
-    
+
+    // Resolve the subtype to pass to the parent — use active hint subtype first,
+    // then fall back to the error subtype prop from the parent.
+    const subtypeForSave = activeHintSubtype || errorSubtypeId || null;
+
     try {
       // Week 3 D8: Log guidance request for textbook
       storage.logGuidanceRequest({
@@ -214,9 +221,9 @@ export function HintSystem({
           learnerId,
           problem,
           interactions: recentInteractions,
-          lastErrorSubtypeId: activeHintSubtype || errorSubtypeId
+          lastErrorSubtypeId: subtypeForSave || undefined
         });
-        
+
         // Week 3 D8: Log escalation to rung 3
         const problemTrace = getProblemTrace();
         const errorCount = problemTrace.filter((i) => i.eventType === 'error').length;
@@ -241,9 +248,10 @@ export function HintSystem({
           sessionId
         });
 
-        // Trigger escalation with textbook aggregation
-        onEscalate?.(bundle.triggerInteractionIds);
-        
+        // Trigger escalation, passing the resolved subtype explicitly so the
+        // parent does not need to infer it from interaction history.
+        onEscalate?.(bundle.triggerInteractionIds, subtypeForSave || undefined);
+
         // Update state to rung 3
         setCurrentRung(3);
 
@@ -258,7 +266,16 @@ export function HintSystem({
           contentLength: bundleToPrompt(bundle).length,
           sessionId
         });
+      } else {
+        // No problem context — still fire the callback so the parent can save
+        // using whatever subtype context it has available.
+        onEscalate?.([], subtypeForSave || undefined);
+        if (!subtypeForSave) {
+          setSaveToNotesError('No concept context found. Try submitting a query first so the system can identify what to save.');
+        }
       }
+    } catch (err) {
+      setSaveToNotesError((err as Error).message || 'Failed to save note. Please try again.');
     } finally {
       setIsAddingToTextbook(false);
     }
@@ -601,7 +618,8 @@ export function HintSystem({
   const handleShowExplanation = async (
     source: 'auto' | 'manual' = 'auto',
     forcedHelpRequestIndex?: number,
-    traceOverride?: InteractionEvent[]
+    traceOverride?: InteractionEvent[],
+    orchestrationDecision?: OrchestrationDecision
   ) => {
     if (!profile || !sessionId) {
       return;
@@ -637,7 +655,10 @@ export function HintSystem({
       latestProblemError
         ? [latestProblemError.id]
         : [];
-    onEscalate?.(sourceInteractionIds);
+    // Pass the active hint subtype explicitly so the parent does not need to
+    // infer it from interaction history (fixes Save-to-Notes silent failure
+    // when no SQL error has been submitted yet).
+    onEscalate?.(sourceInteractionIds, activeHintSubtype || errorSubtypeId || undefined);
 
     // Calculate evidence for escalation logging
     const errorCount = problemTrace.filter((interaction) => interaction.eventType === 'error').length;
@@ -679,7 +700,14 @@ export function HintSystem({
         sqlEngageSubtype: helpSelection.sqlEngageSubtype,
         sqlEngageRowId: helpSelection.sqlEngageRowId,
         policyVersion: helpSelection.policyVersion,
-        ruleFired: 'escalation',
+        ruleFired: orchestrationDecision?.escalationTriggerReason ?? 'escalation',
+        // RESEARCH-4 canonical fields from the orchestration decision
+        escalationTriggerReason: orchestrationDecision?.escalationTriggerReason,
+        errorCountAtEscalation: orchestrationDecision?.errorCountAtDecision,
+        timeToEscalation: orchestrationDecision?.timeToDecision,
+        corpusConceptId: orchestrationDecision?.corpusConceptId ?? undefined,
+        conditionId: sessionConfig?.conditionId,
+        strategyAssigned: sessionConfig?.conditionId ?? sessionConfig?.escalationPolicy,
         inputs: {
           retry_count: Math.max(0, errorCount - 1),
           hint_count: hintCount,
@@ -721,16 +749,6 @@ export function HintSystem({
     }
     setIsProcessingHint(true);
 
-    // Week 6: Immediate explanation mode - skip hints, go straight to explanation
-    if (sessionConfig?.immediateExplanationMode && !showExplanation) {
-      const problemTrace = getProblemTrace();
-      setShowExplanation(true);
-      setCurrentRung(2);
-      await handleShowExplanation('manual', undefined, problemTrace);
-      setIsProcessingHint(false);
-      return;
-    }
-
     // Week 3 D8: Log guidance request event
     storage.logGuidanceRequest({
       learnerId,
@@ -748,13 +766,43 @@ export function HintSystem({
       setIsProcessingHint(false);
       return;
     }
-    
+
     const problemTrace = getProblemTrace();
     const nextHelpRequestIndex = allocateNextHelpRequestIndex(problemTrace);
-    
-    if (nextHelpRequestIndex >= autoEscalationThreshold) {
+
+    // --- Canonical orchestration decision (Week 6) ---
+    // When a session condition is assigned, use textbook-orchestrator as the single
+    // decision source for escalation (replaces immediateExplanationMode check and
+    // autoEscalationThreshold check).
+    if (sessionConfig) {
+      const retryCount = problemTrace.filter(i => i.eventType === 'error').length;
+      const hintCountForOrchestration = problemTrace.filter(i => i.eventType === 'hint_view').length;
+      const elapsedMs = problemTrace.length > 0 ? Date.now() - problemTrace[0].timestamp : 0;
+      // Use first available concept ID for corpus resolution; fall back to error subtype
+      const conceptId = conceptIds[0] || activeHintSubtype || errorSubtypeId || 'unknown';
+
+      const decision = orchestrate({
+        conceptId,
+        retryCount,
+        hintCount: hintCountForOrchestration,
+        elapsedMs,
+        sessionConfig: {
+          textbookDisabled: sessionConfig.textbookDisabled ?? false,
+          adaptiveLadderDisabled: sessionConfig.adaptiveLadderDisabled ?? false,
+          immediateExplanationMode: sessionConfig.immediateExplanationMode ?? false,
+          staticHintMode: sessionConfig.staticHintMode ?? false,
+        },
+      });
+
+      if (decision.action !== 'stay_hint') {
+        setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
+        await handleShowExplanation('auto', nextHelpRequestIndex, problemTrace, decision);
+        setIsProcessingHint(false);
+        return;
+      }
+    } else if (nextHelpRequestIndex >= autoEscalationThreshold) {
+      // Fallback when no session config: use legacy hint-count threshold
       setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
-      // Wait for explanation to be generated
       await handleShowExplanation('auto', nextHelpRequestIndex, problemTrace);
       setIsProcessingHint(false);
       return;
@@ -900,7 +948,23 @@ export function HintSystem({
       setTimeout(() => {
         setShowExplanation(true);
         setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
-        handleShowExplanation('auto', nextHelpRequestIndex + 1, [...problemTrace, hintEvent]);
+        // Re-run canonical orchestrator with updated hint count for canonical RESEARCH-4 fields
+        const traceForDecision = [...problemTrace, hintEvent];
+        const rungExhaustedDecision = sessionConfig
+          ? orchestrate({
+              conceptId: conceptIds[0] || activeHintSubtype || errorSubtypeId || 'unknown',
+              retryCount: errorCount,
+              hintCount: hintCount + 1, // include the hint we just showed
+              elapsedMs: timeSpent,
+              sessionConfig: {
+                textbookDisabled: sessionConfig.textbookDisabled ?? false,
+                adaptiveLadderDisabled: sessionConfig.adaptiveLadderDisabled ?? false,
+                immediateExplanationMode: sessionConfig.immediateExplanationMode ?? false,
+                staticHintMode: sessionConfig.staticHintMode ?? false,
+              },
+            })
+          : undefined;
+        handleShowExplanation('auto', nextHelpRequestIndex + 1, traceForDecision, rungExhaustedDecision);
       }, 500); // 500ms delay to show L3 hint before switching to explanation
     }
   };
@@ -1271,6 +1335,18 @@ export function HintSystem({
         </Tooltip>
         )}
       </div>
+
+      {/* Save-to-Notes error feedback (learner-visible) */}
+      {saveToNotesError && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="rounded-md bg-red-50 border border-red-200 px-3 py-2 flex items-start gap-2"
+        >
+          <AlertCircle className="size-4 text-red-500 shrink-0 mt-0.5" />
+          <p className="text-xs text-red-700">{saveToNotesError}</p>
+        </div>
+      )}
 
       {showExplanation && (
         <div className="rounded-md bg-emerald-50 border border-emerald-100 px-3 py-2">

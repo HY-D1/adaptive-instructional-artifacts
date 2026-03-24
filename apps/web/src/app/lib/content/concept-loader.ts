@@ -1,8 +1,34 @@
 import { storage } from '../storage/storage';
 import type { PdfIndexChunk, SQLProblem } from '../../types';
 import { sqlProblems } from '../../data/problems';
+import { CONCEPT_COMPATIBILITY_MAP, getCompatibleCorpusIds } from './concept-compatibility-map';
+
+export { getCompatibleCorpusIds };
 
 // Types
+
+/**
+ * Helper-produced quality metadata. When present this takes precedence over
+ * the local heuristics in assessConceptQuality so adaptive does not duplicate
+ * work that the upstream helper already computed.
+ */
+export interface QualityMetadata {
+  /** Overall readability of the explanation text. */
+  readabilityStatus: 'clean' | 'garbled' | 'partial' | 'fallback_only';
+  /** Short learner-safe summary to show instead of the garbled explanation. */
+  learnerSafeSummary?: string;
+  /** Key points for learner-safe fallback mode (bulleted list). */
+  learnerSafeKeyPoints?: string[];
+  /** Verified examples for learner-safe fallback mode. */
+  learnerSafeExamples?: Array<{
+    title: string;
+    sql?: string;
+    explanation?: string;
+  }>;
+  /** Whether code examples passed a basic sanity check. */
+  exampleQuality?: 'clean' | 'contaminated' | 'partial';
+}
+
 export interface ConceptInfo {
   id: string;
   title: string;
@@ -19,6 +45,8 @@ export interface ConceptInfo {
   practiceProblemIds: string[];
   // Helper export may include sourceDocId for namespaced concepts
   sourceDocId?: string;
+  /** Optional quality metadata produced by the upstream helper pipeline. */
+  qualityMetadata?: QualityMetadata;
 }
 
 export interface LoadedConcept extends ConceptInfo {
@@ -53,14 +81,116 @@ interface ConceptMapData {
   concepts: Record<string, ConceptInfo>;
 }
 
+/**
+ * Normalized internal shape of concept quality metadata, used throughout the app.
+ * Both the legacy placeholder schema and the real helper v1 schema are normalized
+ * into this shape at load time.
+ */
+export interface ConceptQualityFile {
+  version: string;
+  generatedAt: string;
+  /** Keys are the full namespaced concept IDs used in concept-map.json. */
+  quality: Record<string, QualityMetadata>;
+}
+
+/**
+ * Shape of apps/web/public/textbook-static/textbook-units.json (normalized).
+ * Both legacy placeholder and real helper v1 schema are normalized into this shape.
+ */
+export interface TextbookUnitMeta {
+  /** Full namespaced concept ID, e.g. "murachs-mysql-3rd-edition/select-basic". */
+  id: string;
+  sourceDocId?: string;
+  chapterNumber?: number;
+  sectionTitle?: string;
+  displayOrder?: number;
+}
+
+export interface TextbookUnitsFile {
+  version: string;
+  generatedAt: string;
+  units: TextbookUnitMeta[];
+}
+
+// ─── Schema normalization (private) ─────────────────────────────────────────
+// Supports two on-disk formats:
+//   Legacy placeholder  — { version, quality: Record<id, QualityMetadata> }
+//   Helper v1           — { schemaVersion: "concept-quality-v1", qualityByConcept: Record<id, {...}> }
+// Both are normalized into ConceptQualityFile / TextbookUnitsFile at load time.
+
+function normalizeConceptQualityFile(raw: Record<string, unknown>): ConceptQualityFile {
+  if ((raw as { schemaVersion?: string }).schemaVersion === 'concept-quality-v1') {
+    const qualityByConcept = (raw as { qualityByConcept: Record<string, {
+      readabilityStatus: 'ok' | 'fallback_only';
+      exampleQuality?: 'valid' | 'filtered';
+      learnerSafeSummary?: string;
+      learnerSafeKeyPoints?: string[];
+      learnerSafeExamples?: Array<{ title: string; sql?: string; explanation?: string }>;
+    }> }).qualityByConcept;
+    const quality: Record<string, QualityMetadata> = {};
+    for (const [id, entry] of Object.entries(qualityByConcept)) {
+      // Map helper v1 readabilityStatus to internal shape
+      // 'ok' -> 'clean', 'fallback_only' -> 'fallback_only' (preserved)
+      const readabilityStatus = entry.readabilityStatus === 'ok' ? 'clean' : 'fallback_only';
+      quality[id] = {
+        readabilityStatus,
+        learnerSafeSummary: entry.learnerSafeSummary,
+        learnerSafeKeyPoints: entry.learnerSafeKeyPoints,
+        learnerSafeExamples: entry.learnerSafeExamples,
+        exampleQuality:
+          entry.exampleQuality === 'valid'
+            ? 'clean'
+            : entry.exampleQuality === 'filtered'
+            ? 'contaminated'
+            : undefined,
+      };
+    }
+    return {
+      version: 'concept-quality-v1',
+      generatedAt: (raw as { generatedAt?: string }).generatedAt ?? '',
+      quality,
+    };
+  }
+  // Legacy schema — passes through as-is
+  return raw as unknown as ConceptQualityFile;
+}
+
+function normalizeTextbookUnitsFile(raw: Record<string, unknown>): TextbookUnitsFile {
+  if ((raw as { schemaVersion?: string }).schemaVersion === 'textbook-units-v1') {
+    const rawUnits = (raw as { units: Array<{
+      namespacedId: string;
+      sourceDocId?: string;
+      shortExcerpt?: string;
+      sourceOrder?: number;
+    }> }).units;
+    const units: TextbookUnitMeta[] = rawUnits.map(u => ({
+      id: u.namespacedId,
+      sourceDocId: u.sourceDocId,
+      sectionTitle: u.shortExcerpt,
+      displayOrder: typeof u.sourceOrder === 'number' ? u.sourceOrder : undefined,
+    }));
+    return {
+      version: 'textbook-units-v1',
+      generatedAt: (raw as { generatedAt?: string }).generatedAt ?? '',
+      units,
+    };
+  }
+  // Legacy schema — passes through as-is
+  return raw as unknown as TextbookUnitsFile;
+}
+
 // Cache
 let conceptMapCache: ConceptMapData | null = null;
+let conceptQualityCache: ConceptQualityFile | null | false = false; // false = not yet fetched
+let textbookUnitsCache: TextbookUnitsFile | null | false = false;   // false = not yet fetched
 
 /**
  * Clear the concept map cache. Used for testing.
  */
 export function clearConceptMapCache(): void {
   conceptMapCache = null;
+  conceptQualityCache = false;
+  textbookUnitsCache = false;
 }
 
 /**
@@ -70,59 +200,60 @@ export function clearConceptMapCache(): void {
  * This function resolves such IDs to match the keys in concept-map.json.
  * 
  * Resolution strategy:
- * 1. Try exact match first (for already-canonical IDs)
- * 2. If input is namespaced (contains "/"):
- *    - Try suffix match against concept map keys (flat key lookup)
- *    - Try exact namespaced key match
- * 3. If input is flat (no "/"):
- *    - Try to find a unique namespaced key that ends with this suffix
- *    - If multiple matches, return original (ambiguous)
- *    - If single match, return the namespaced key
- * 4. Return original ID if no resolution found (caller handles not-found)
+ * 1. Exact match (for already-canonical corpus keys or legacy flat IDs)
+ * 2. Compatibility map (concept-compatibility-map.ts) — deterministic internal→corpus mapping;
+ *    returns the first entry that actually exists in the loaded corpus
+ * 3. Namespaced-input suffix strip (docId/conceptId → try flat legacy key)
+ * 4. Flat-input suffix scan — find a unique corpus key ending with /${conceptId}
+ * 5. Return original ID if nothing resolves (caller handles not-found)
  */
 export function resolveConceptId(
   conceptId: string,
   availableConcepts: Record<string, ConceptInfo>
 ): string {
-  // Already exact match
+  // 1. Exact match
   if (availableConcepts[conceptId]) {
     return conceptId;
   }
-  
-  // Case 1: Input is namespaced (docId/conceptId)
-  // Try to find a flat key matching the suffix
+
+  // 2. Compatibility map: deterministic internal-ID → corpus-key resolution
+  //    Skipped for namespaced inputs (those go through step 3/4).
+  if (!conceptId.includes('/')) {
+    const candidates = CONCEPT_COMPATIBILITY_MAP[conceptId];
+    if (candidates) {
+      for (const candidate of candidates) {
+        if (availableConcepts[candidate]) {
+          return candidate;
+        }
+      }
+    }
+  }
+
+  // 3. Input is namespaced (docId/conceptId) — try suffix as flat legacy key
   if (conceptId.includes('/')) {
     const suffix = conceptId.split('/').pop()!;
-    
-    // If suffix exists as a flat concept key, use it (backward compatibility)
     if (availableConcepts[suffix]) {
       return suffix;
     }
-    
-    // Return original for namespaced lookup
+    // Return original for direct namespaced lookup
     return conceptId;
   }
-  
-  // Case 2: Input is flat (conceptId)
-  // Try to find a unique namespaced key that ends with this suffix
+
+  // 4. Flat input: find a unique corpus key whose suffix equals this ID
   const allKeys = Object.keys(availableConcepts);
-  const matchingKeys = allKeys.filter(key => {
-    // Key ends with /conceptId or equals conceptId
-    return key === conceptId || key.endsWith(`/${conceptId}`);
-  });
-  
+  const matchingKeys = allKeys.filter(key => key === conceptId || key.endsWith(`/${conceptId}`));
+
   if (matchingKeys.length === 1) {
-    // Unique match found - use the namespaced key
     return matchingKeys[0];
   }
-  
+
   if (matchingKeys.length > 1) {
-    // Ambiguous - multiple docs have this concept
-    // Return original and let caller handle or use first match
-    console.warn(`[resolveConceptId] Ambiguous concept ID "${conceptId}" matches multiple keys: ${matchingKeys.join(', ')}`);
+    console.warn(
+      `[resolveConceptId] Ambiguous concept ID "${conceptId}" matches multiple keys: ${matchingKeys.join(', ')}`
+    );
   }
-  
-  // No resolution found - return original for error handling
+
+  // 5. No resolution found — return original for error handling
   return conceptId;
 }
 
@@ -166,7 +297,7 @@ export async function loadConceptMap(): Promise<ConceptMapData | null> {
   if (conceptMapCache) {
     return conceptMapCache;
   }
-  
+
   try {
     const response = await fetch('/textbook-static/concept-map.json');
     if (!response.ok) return null;
@@ -178,28 +309,85 @@ export async function loadConceptMap(): Promise<ConceptMapData | null> {
 }
 
 /**
+ * Load the helper-produced concept-quality.json.
+ *
+ * Returns null when the file is absent (corpus predates the quality pipeline).
+ * Entries here take precedence over qualityMetadata embedded in concept-map.json.
+ * Results are cached for the page lifetime.
+ */
+export async function loadConceptQuality(): Promise<ConceptQualityFile | null> {
+  if (conceptQualityCache !== false) return conceptQualityCache;
+  try {
+    const res = await fetch('/textbook-static/concept-quality.json');
+    if (!res.ok) {
+      conceptQualityCache = null;
+    } else {
+      const raw = await res.json() as Record<string, unknown>;
+      conceptQualityCache = normalizeConceptQualityFile(raw);
+    }
+  } catch {
+    conceptQualityCache = null;
+  }
+  return conceptQualityCache;
+}
+
+/**
+ * Load the helper-produced textbook-units.json.
+ *
+ * Returns null when the file is absent.
+ * Results are cached for the page lifetime.
+ */
+export async function loadTextbookUnitsMeta(): Promise<TextbookUnitsFile | null> {
+  if (textbookUnitsCache !== false) return textbookUnitsCache;
+  try {
+    const res = await fetch('/textbook-static/textbook-units.json');
+    if (!res.ok) {
+      textbookUnitsCache = null;
+    } else {
+      const raw = await res.json() as Record<string, unknown>;
+      textbookUnitsCache = normalizeTextbookUnitsFile(raw);
+    }
+  } catch {
+    textbookUnitsCache = null;
+  }
+  return textbookUnitsCache;
+}
+
+/**
  * Get single concept info with alias resolution.
- * 
+ *
  * Supports both plain concept IDs ("select-basic") and namespaced IDs
  * ("murachs-mysql-3rd-edition/select-basic").
+ *
+ * Quality metadata priority (highest → lowest):
+ *   1. concept-quality.json entry (helper pipeline, fetched once and cached)
+ *   2. qualityMetadata embedded in concept-map.json
+ *   3. Absent (assessConceptQuality falls back to local heuristics)
  */
 export async function getConcept(conceptId: string): Promise<ConceptInfo | null> {
-  const map = await loadConceptMap();
+  const [map, qualityFile] = await Promise.all([
+    loadConceptMap(),
+    loadConceptQuality(),
+  ]);
   if (!map) return null;
-  
+
   const resolvedId = resolveConceptId(conceptId, map.concepts);
   const concept = map.concepts[resolvedId] || null;
-  
-  // Preserve the original ID if we resolved to a different key
-  // This helps downstream code know what was requested vs what was found
-  if (concept && resolvedId !== conceptId) {
-    return {
-      ...concept,
-      id: conceptId // Keep original requested ID for URL consistency
-    };
-  }
-  
-  return concept;
+  if (!concept) return null;
+
+  // Merge quality metadata: concept-quality.json wins over embedded per-concept metadata.
+  const producerQuality = qualityFile?.quality?.[resolvedId];
+  const mergedQuality: QualityMetadata | undefined =
+    producerQuality ?? concept.qualityMetadata;
+
+  const result: ConceptInfo = {
+    ...concept,
+    ...(mergedQuality !== undefined ? { qualityMetadata: mergedQuality } : {}),
+    // Preserve the original requested ID for URL consistency
+    ...(resolvedId !== conceptId ? { id: conceptId } : {}),
+  };
+
+  return result;
 }
 
 /**
@@ -408,6 +596,183 @@ function parseMistakes(section: string): Mistake[] {
   }
   
   return mistakes;
+}
+
+// ---------------------------------------------------------------------------
+// Learner-safe quality checks
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when an explanation string is likely garbled / not learner-safe.
+ *
+ * Heuristics (all tuned to catch raw textbook export noise):
+ * 1. Very long block (>3 000 chars) with a low ratio of sentence-ending punctuation
+ *    → raw paragraph dumps from pdftotext.
+ * 2. High density of Markdown structural markers that were never rendered
+ *    (##, ----, ===, **, __, ```).
+ * 3. Contains known extraction artefacts: page-number-only lines, CHAPTER / FIGURE
+ *    labels, repeated whitespace / control characters.
+ */
+export function isExplanationGarbled(text: string): boolean {
+  if (!text || text.length === 0) return false;
+
+  // Heuristic 3: known textbook extraction artefacts — checked first, before
+  // any length gate, because artefacts can appear in short text too.
+  const artefactPatterns: RegExp[] = [
+    /\x0c/,                                    // form-feed (pdftotext page break)
+    /^(?:CHAPTER|FIGURE|TABLE|SECTION)\s+\d+/im, // structural labels
+    /^\d+\s*$/m,                               // page-number-only lines
+  ];
+  for (const pattern of artefactPatterns) {
+    if (pattern.test(text)) return true;
+  }
+
+  // Short text without artefacts is considered safe
+  if (text.length < 120) return false;
+
+  // Heuristic 1: very long with almost no sentence-ending punctuation
+  if (text.length > 3000) {
+    const sentenceEnders = (text.match(/[.!?]/g) || []).length;
+    const ratio = sentenceEnders / (text.length / 100); // per 100 chars
+    if (ratio < 0.3) return true;
+  }
+
+  // Heuristic 2: high density of unrendered Markdown structural markers
+  const markdownMarkers = (text.match(/^#{1,6}\s|^[-=]{3,}$|^```|\*\*[^*]{1,80}\*\*/gm) || []).length;
+  const lines = text.split('\n').length;
+  if (lines > 5 && markdownMarkers / lines > 0.3) return true;
+
+  return false;
+}
+
+/**
+ * Returns true when a learnerSafeExample from the helper pipeline is safe to show
+ * as a "verified example" in the browser.
+ *
+ * This is the FINAL sanity gate before rendering helper-produced examples.
+ * The helper already filters, but some contaminated examples slip through
+ * (e.g., malformed mixed prose/OCR text).
+ *
+ * Rejection criteria:
+ * 1. No SQL structure — must contain a primary SQL keyword.
+ * 2. Obvious OCR/prose contamination — long narrative fragments without SQL syntax.
+ * 3. SQL with embedded prose — sentences mixed into the SQL (indicates pdftotext artefact).
+ */
+export function isLearnerSafeExample(example: { title?: string; sql?: string; explanation?: string }): boolean {
+  const sql = example.sql?.trim() ?? '';
+  const title = example.title?.trim() ?? '';
+
+  // Must have non-empty SQL
+  if (sql.length === 0) return false;
+
+  // Must have a primary SQL statement keyword (not just fragments like "FROM")
+  const primarySqlPattern = /\b(SELECT|INSERT\s+INTO|UPDATE\s+\w+|DELETE\s+FROM|CREATE\s+(TABLE|INDEX|VIEW)|DROP\s+(TABLE|INDEX|VIEW)|ALTER\s+TABLE)\b/i;
+  if (!primarySqlPattern.test(sql)) return false;
+
+  // Reject if SQL looks like prose (long sentences without SQL structure)
+  // Heuristic: if there are sentence-ending punctuation marks and few SQL markers, it's likely prose
+  const sentenceEnders = (sql.match(/[.!?]/g) || []).length;
+  const sqlMarkers = (sql.match(/[;(),=<>]/g) || []).length;
+  if (sentenceEnders > 2 && sqlMarkers < 5) return false;
+
+  // Reject if SQL contains long narrative fragments (>100 chars without SQL syntax)
+  // This catches OCR artefacts where prose is embedded in the SQL field
+  const lines = sql.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.length > 100) {
+      // Long line — check if it has SQL structure or is just prose
+      const hasSqlStructure = /[;(),=<>]/.test(trimmed);
+      const looksLikeProse = /\b(the|and|or|but|however|therefore|because|this|that|these|those)\b/i.test(trimmed);
+      if (!hasSqlStructure && looksLikeProse) return false;
+    }
+  }
+
+  // Reject obvious OCR artefacts: mixed case anomalies or excessive punctuation
+  if (/\.{3,}/.test(sql) && !sql.includes(';')) return false;
+
+  // Title must not be empty and should look like a title (not a sentence)
+  if (title.length === 0) return false;
+  if (title.length > 150) return false; // Too long for a title
+
+  return true;
+}
+
+/**
+ * Filter learnerSafeExamples to only those passing the final browser sanity check.
+ */
+export function filterLearnerSafeExamples(
+  examples: Array<{ title?: string; sql?: string; explanation?: string }> | undefined
+): Array<{ title: string; sql: string; explanation: string }> {
+  if (!examples || examples.length === 0) return [];
+  return examples
+    .filter(isLearnerSafeExample)
+    .map(ex => ({
+      title: ex.title ?? '',
+      sql: ex.sql ?? '',
+      explanation: ex.explanation ?? '',
+    }));
+}
+
+/**
+ * Returns true when a code example contains at least basic SQL structure.
+ *
+ * A "contaminated" example fails this check. Criteria:
+ * - Must contain at least one SQL keyword (SELECT, INSERT, UPDATE, DELETE,
+ *   CREATE, DROP, FROM, WHERE, JOIN).
+ * - Must not be pure prose (no semicolons or parentheses and no SQL keyword).
+ */
+export function isExampleSqlSane(code: string): boolean {
+  if (!code || code.trim().length === 0) return false;
+  // Require at least one primary DML/DDL statement keyword (not just FROM/WHERE
+  // which appear in prose).  Word-boundary matching prevents 'JOINS' from
+  // matching 'JOIN'.
+  const primarySqlPattern = /\b(SELECT|INSERT\s+INTO|UPDATE\s+\w+|DELETE\s+FROM|CREATE\s+(TABLE|INDEX|VIEW)|DROP\s+(TABLE|INDEX|VIEW)|ALTER\s+TABLE)\b/i;
+  return primarySqlPattern.test(code);
+}
+
+/**
+ * Filter code examples to only those that pass the SQL sanity check.
+ */
+export function filterSaneExamples(examples: CodeExample[]): CodeExample[] {
+  return examples.filter(ex => isExampleSqlSane(ex.code));
+}
+
+/**
+ * Assess overall content quality for a loaded concept.
+ *
+ * Decision order:
+ * 1. Helper-produced `qualityMetadata` (upstream pipeline) — consumed first so
+ *    adaptive does not duplicate quality logic already run at export time.
+ * 2. Local heuristics (isExplanationGarbled / filterSaneExamples) — used as a
+ *    fallback when no metadata is present.
+ *
+ * Returns:
+ * - `'good'`     — content is safe to render as primary learning material.
+ * - `'fallback'` — explanation is garbled or all examples failed the SQL check;
+ *                  render only safe fields (definition, frontmatter, sane examples).
+ */
+export function assessConceptQuality(concept: LoadedConcept): 'good' | 'fallback' {
+  // 1. Prefer helper-produced metadata when available.
+  if (concept.qualityMetadata) {
+    const { readabilityStatus, exampleQuality } = concept.qualityMetadata;
+    if (readabilityStatus === 'garbled' || readabilityStatus === 'fallback_only' || exampleQuality === 'contaminated') {
+      return 'fallback';
+    }
+    if (readabilityStatus === 'clean') {
+      return 'good';
+    }
+    // 'partial' falls through to local heuristics for a second opinion.
+  }
+
+  // 2. Local heuristics.
+  const explanationGarbled = isExplanationGarbled(concept.content.explanation);
+  const saneExamples = filterSaneExamples(concept.content.examples);
+  const allExamplesContaminated =
+    concept.content.examples.length > 0 && saneExamples.length === 0;
+
+  if (explanationGarbled || allExamplesContaminated) return 'fallback';
+  return 'good';
 }
 
 /**

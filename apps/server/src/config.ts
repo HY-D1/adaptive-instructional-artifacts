@@ -122,6 +122,32 @@ export function getDocAlias(filename: string): string {
 }
 
 // ============================================================================
+// Auth Configuration
+// ============================================================================
+
+/**
+ * Secret used to sign and verify JWT tokens.
+ * MUST be set in production. Falls back to a dev-only default locally.
+ */
+export const JWT_SECRET: string = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('JWT_SECRET must be set in production');
+    }
+    return 'dev-only-jwt-secret-change-in-production';
+  }
+  return secret;
+})();
+
+/**
+ * Code required for instructor signup.
+ * Set INSTRUCTOR_SIGNUP_CODE on the backend to protect instructor registration.
+ */
+export const INSTRUCTOR_SIGNUP_CODE: string =
+  process.env.INSTRUCTOR_SIGNUP_CODE || (process.env.NODE_ENV !== 'production' ? 'TeachSQL2024' : '');
+
+// ============================================================================
 // Server Configuration
 // ============================================================================
 

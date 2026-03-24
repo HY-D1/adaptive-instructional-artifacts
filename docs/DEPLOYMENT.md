@@ -11,12 +11,121 @@
 
 ### Environment Variables
 
-Required:
-- `VITE_INSTRUCTOR_PASSCODE`
+**Frontend project (Vercel):**
 
-Optional (local only):
-- `VITE_OLLAMA_URL`
-- `VITE_PDF_INDEX_ENABLED`
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_INSTRUCTOR_PASSCODE` | Yes | Passcode for instructor access |
+| `VITE_API_BASE_URL` | For persistence | Base URL of the backend API, no trailing `/api` (e.g. `https://my-api.vercel.app`). Leave empty for localStorage-only (static) mode. |
+| `VITE_OLLAMA_URL` | Local only | Local Ollama URL — not available on Vercel |
+| `VITE_ENABLE_PDF_INDEX` | Local only | PDF indexing — requires local backend |
+
+> **Note on `VITE_API_BASE_URL`**: this is the single canonical variable used by all three frontend API clients (`storage-client.ts`, `dual-storage.ts`, `learner-profile-client.ts`). Setting it enables backend/Neon persistence mode. When not set, the app runs in localStorage-only mode.
+
+**Backend project (Vercel Serverless / any Node host):**
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DATABASE_URL` | Yes (preferred) | Neon PostgreSQL connection string (pooled endpoint recommended) |
+| `NEON_DATABASE_URL` | Alternative | Secondary name accepted if `DATABASE_URL` is absent |
+| `adaptive_data_DATABASE_URL` | Vercel Neon integration | Auto-injected by Vercel when you attach the Neon integration to a project named `adaptive_data` |
+| `adaptive_data_POSTGRES_URL` | Vercel Neon integration | Postgres-alias variant injected by the same Vercel Neon integration |
+| `JWT_SECRET` | Yes (production) | Secret for signing auth JWT cookies — must be at least 32 random characters |
+| `INSTRUCTOR_SIGNUP_CODE` | Instructor accounts | Code required when creating an instructor account. Falls back to `TeachSQL2024` in dev. |
+| `PORT` | No | HTTP port (default 3001) |
+
+> **Auth setup**: Set `JWT_SECRET` to a strong random value (e.g. `openssl rand -base64 32`). Set `INSTRUCTOR_SIGNUP_CODE` to protect instructor registration. After adding these vars, redeploy the backend and run `npm run db:init:neon` to create the `auth_accounts` table.
+
+> **Env var resolution order**: The backend checks these four names in priority order (`DATABASE_URL` → `NEON_DATABASE_URL` → `adaptive_data_DATABASE_URL` → `adaptive_data_POSTGRES_URL`) and uses the first non-empty value. You only need to set one.
+> **After changing env vars you must redeploy** — Vercel bakes env vars into the build/runtime at deploy time. Adding or changing a variable without redeploying has no effect.
+
+---
+
+## Vercel + Neon Persistence Mode
+
+Use this topology when you need real multi-user persistence (research data that survives browser clears):
+
+```text
+┌──────────────────────────┐      HTTPS /api/*      ┌────────────────────────────┐
+│  Frontend (Vercel)        │ ─────────────────────► │  Backend (Vercel/Render)   │
+│  React + Vite             │                        │  Express + @neondatabase   │
+│  VITE_API_BASE_URL set    │ ◄───────────────────── │  DATABASE_URL → Neon PG    │
+└──────────────────────────┘      JSON responses     └────────────────────────────┘
+```
+
+### Setup Checklist
+
+#### 1. Provision Neon database
+
+- Create a project at [neon.tech](https://neon.tech)
+- Copy the **pooled connection string** (e.g. `postgres://...@ep-xxx.pooler.neon.tech/neondb?sslmode=require`)
+- Set `DATABASE_URL` on your backend Vercel project
+
+#### 2. Deploy the backend
+
+```bash
+# From apps/server — deploy as a separate Vercel project
+cd apps/server
+vercel deploy --prod
+# Note the deployment URL, e.g. https://sql-adapt-api.vercel.app
+```
+
+#### 3. Configure the frontend
+
+In your frontend Vercel project settings, add:
+
+```text
+VITE_API_BASE_URL = https://sql-adapt-api.vercel.app
+VITE_INSTRUCTOR_PASSCODE = <your-passcode>
+```
+
+Then redeploy (VITE_ vars are baked at build time).
+
+#### 4. Verify persistence
+
+```bash
+node scripts/smoke-test-persistence.mjs https://sql-adapt-api.vercel.app
+```
+
+Expected output: all 5 checks pass with a learner, session, interaction, and textbook unit created server-side.
+
+### Deployment Topology
+
+| Scenario | Frontend env vars | Backend env vars | Persistence |
+|----------|-------------------|------------------|-------------|
+| Frontend-only / static demo | `VITE_INSTRUCTOR_PASSCODE` only | n/a | localStorage (per-browser, ephemeral) |
+| Separate frontend + backend | `VITE_INSTRUCTOR_PASSCODE` + `VITE_API_BASE_URL` | `DATABASE_URL` | Neon PostgreSQL (durable, multi-user) |
+| Vercel Neon integration | `VITE_INSTRUCTOR_PASSCODE` + `VITE_API_BASE_URL` | `adaptive_data_DATABASE_URL` (auto-injected) | Neon PostgreSQL (durable, multi-user) |
+| Local dev with backend | `VITE_API_BASE_URL=http://localhost:3001` | `DATABASE_URL` or none (SQLite) | Local Neon or SQLite |
+
+#### Vercel Neon integration — prefixed variables
+
+When you attach the Neon integration to a Vercel project named **`adaptive_data`**, Vercel injects
+these variables automatically instead of plain `DATABASE_URL`:
+
+- `adaptive_data_DATABASE_URL` — primary pooled connection string
+- `adaptive_data_POSTGRES_URL` — postgres-alias variant
+
+The backend resolves all four known names in priority order, so no manual renaming is needed.
+To confirm which variable is active, call the diagnostic endpoint after deploying:
+
+```bash
+curl https://your-api.vercel.app/api/system/persistence-status
+```
+
+Expected response in Neon mode:
+
+```json
+{
+  "backendReachable": true,
+  "dbMode": "neon",
+  "resolvedEnvSource": "adaptive_data_DATABASE_URL",
+  "persistenceRoutesEnabled": true
+}
+```
+
+If `dbMode` is `"sqlite"` and `resolvedEnvSource` is `null`, no database URL was found —
+check that the Neon integration is attached to the correct Vercel project and that you have redeployed since attaching it.
 
 ### Local Build Test
 
@@ -436,4 +545,201 @@ curl http://localhost:3001/api/llm/status
 
 ---
 
-*Last updated: 2026-03-11*
+---
+
+## Real-Browser Regression Runbook
+
+### Sync the helper corpus
+
+```bash
+node scripts/sync-helper-export.mjs "/path/to/algl-pdf-helper/output/textbook-static"
+```
+
+This copies `concept-map.json`, `textbook-manifest.json`, `chunks-metadata.json`,
+`concept-quality.json`, and `textbook-units.json` from the helper export into
+`apps/web/public/textbook-static/`. A `validate-corpus.mjs` run is triggered
+automatically; it checks all 8 corpus integrity rules including the two new files.
+
+### Validate the corpus (standalone)
+
+```bash
+node scripts/validate-corpus.mjs
+```
+
+Expected output: `PASS: all N entries resolve; both required textbooks present.`
+Checks 7 and 8 confirm `concept-quality.json` and `textbook-units.json` are present.
+
+### Install Playwright browsers (first time)
+
+```bash
+npm run test:install-browsers
+# or directly:
+npx playwright install --with-deps chromium
+```
+
+---
+
+### Playwright test suites
+
+The config defines three Playwright **projects**:
+
+| Project | What it runs | Auth |
+|---------|-------------|------|
+| `setup:auth` | `tests/e2e/setup/auth.setup.ts` | Captures JWT cookie → `playwright/.auth/*.json` |
+| `chromium` | All `*.spec.ts` except auth smoke | localStorage / StartPage (no backend required) |
+| `chromium:auth` | `deployed-auth-smoke.spec.ts` only | Pre-loaded JWT cookie via `storageState` |
+
+#### Local regression suite (no backend required)
+
+```bash
+# UX regression — save-to-notes + concept readability
+npx playwright test -c playwright.config.ts --grep "@ux-bugs|@no-external"
+
+# Full suite (chromium project only — no auth dependency)
+npx playwright test -c playwright.config.ts --project=chromium
+```
+
+#### Richer fallback rendering regression (concept quality metadata)
+
+Tests the enhanced fallback mode that displays `learnerSafeKeyPoints` and
+`learnerSafeExamples` from the helper-produced quality metadata:
+
+```bash
+# Run concept readability regression including key points and examples
+npx playwright test -c playwright.config.ts \
+  tests/e2e/regression/ux-bugs-concept-readability.spec.ts
+```
+
+This suite verifies:
+- **fallback_only concepts** show `learnerSafeKeyPoints` as bullet list
+- **fallback_only concepts** with `learnerSafeExamples` render verified SQL examples
+- **fallback_only concepts** without examples show "no verified examples" message
+- **clean concepts** show full explanation without quality banner
+- **Local heuristics** still trigger quality banner when helper metadata absent
+
+---
+
+### Authenticated smoke (real auth backend required)
+
+The `@deployed-auth-smoke` suite signs in via the real `/auth` page (JWT cookie),
+saves a note, then opens a **fresh browser context** from the saved auth state to
+prove the note persists across sessions.
+
+#### Step 1 — Capture auth state (run once per environment)
+
+The `setup:auth` project runs automatically as a dependency of `chromium:auth`.
+You can also trigger it explicitly:
+
+```bash
+# Local dev server + backend on :3001
+npx playwright test -c playwright.config.ts --project=setup:auth
+
+# Against a deployed preview
+PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
+E2E_STUDENT_EMAIL="student@yourdomain.com" \
+E2E_STUDENT_PASSWORD="YourPassword123!" \
+E2E_INSTRUCTOR_CODE="<instructor-code>" \
+  npx playwright test -c playwright.config.ts --project=setup:auth
+```
+
+Auth state is saved to `playwright/.auth/student.json` and
+`playwright/.auth/instructor.json` (gitignored — never commit these).
+
+#### Step 2 — Run the auth smoke
+
+```bash
+# Local (dev server + backend must be running)
+npx playwright test -c playwright.config.ts --project=chromium:auth \
+  --grep "@deployed-auth-smoke"
+
+# Shorthand — runs setup:auth first automatically, then chromium:auth
+npx playwright test -c playwright.config.ts \
+  --project=setup:auth --project=chromium:auth
+```
+
+#### Deployed authenticated smoke (Vercel preview, no protection bypass)
+
+```bash
+PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
+E2E_STUDENT_EMAIL="student@yourdomain.com" \
+E2E_STUDENT_PASSWORD="YourPassword123!" \
+E2E_INSTRUCTOR_CODE="<instructor-code>" \
+  npx playwright test -c playwright.config.ts \
+    --project=setup:auth --project=chromium:auth \
+    --grep "@deployed-auth-smoke"
+```
+
+#### Deployed authenticated smoke (Vercel protected preview)
+
+```bash
+PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
+VERCEL_AUTOMATION_BYPASS_SECRET="<secret-from-vercel-dashboard>" \
+E2E_STUDENT_EMAIL="student@yourdomain.com" \
+E2E_STUDENT_PASSWORD="YourPassword123!" \
+E2E_INSTRUCTOR_CODE="<instructor-code>" \
+  npx playwright test -c playwright.config.ts \
+    --project=setup:auth --project=chromium:auth \
+    --grep "@deployed-auth-smoke"
+```
+
+The `VERCEL_AUTOMATION_BYPASS_SECRET` is set via the Vercel dashboard under
+**Project → Settings → Deployment Protection → Automation bypass secret**.
+When set, the `x-vercel-protection-bypass` and `x-vercel-set-bypass-cookie`
+headers are injected automatically on every Playwright request.
+
+#### Environment variables reference
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `PLAYWRIGHT_BASE_URL` | `http://127.0.0.1:4173` | Target URL (set for deployed runs) |
+| `VERCEL_AUTOMATION_BYPASS_SECRET` | — | Vercel protection bypass header |
+| `E2E_STUDENT_EMAIL` | `e2e-student-<ts>@sql-adapt.test` | Student account email |
+| `E2E_STUDENT_PASSWORD` | `E2eTestPass!123` | Student account password |
+| `E2E_INSTRUCTOR_EMAIL` | `e2e-instructor-<ts>@sql-adapt.test` | Instructor account email |
+| `E2E_INSTRUCTOR_PASSWORD` | `E2eInstrPass!123` | Instructor account password |
+| `E2E_INSTRUCTOR_CODE` | `TeachSQL2024` | Instructor signup code (dev default) |
+
+> **Note:** Set `E2E_STUDENT_EMAIL` / `E2E_STUDENT_PASSWORD` to stable values in CI
+> so the setup project can log in to an existing account (idempotent). When not set,
+> a fresh unique email is generated each run and signup is attempted first with login
+> as a fallback.
+
+#### What the auth smoke proves
+
+1. **Real JWT auth** — signs in via `/auth`, no `addInitScript` seeding.
+2. **Note saved** — Save to Notes succeeds and the success banner appears.
+3. **SPA navigation** — note visible in `/textbook` without a page reload.
+4. **Cross-session persistence** — a **fresh `browser.newContext()`** loaded with
+   the post-note `storageState` (JWT cookie + localStorage) shows the note.
+   This is the strongest persistence claim: equivalent to closing the browser
+   and reopening it on a different device sharing the same credentials.
+5. **Instructor gate** — wrong code → error; right code → redirect.
+
+---
+
+### Run against a deployed Vercel URL (non-auth smoke only)
+
+```bash
+# Public deployment (no protection bypass needed)
+PLAYWRIGHT_BASE_URL="https://<deployment-url>.vercel.app" \
+  npx playwright test -c playwright.config.ts --project=chromium \
+    --grep "@ux-bugs|@deployed-smoke"
+
+# Protected Vercel preview (deployment protection enabled)
+PLAYWRIGHT_BASE_URL="https://<preview-url>.vercel.app" \
+VERCEL_AUTOMATION_BYPASS_SECRET="<secret-from-vercel-dashboard>" \
+  npx playwright test -c playwright.config.ts --project=chromium \
+    --grep "@ux-bugs|@deployed-smoke"
+```
+
+### Build check
+
+```bash
+npm run build
+```
+
+Expected: zero TypeScript errors, `dist/app/` contains the production bundle
+including the new `textbook-static/concept-quality.json` and
+`textbook-static/textbook-units.json` assets.
+
+*Last updated: 2026-03-22*

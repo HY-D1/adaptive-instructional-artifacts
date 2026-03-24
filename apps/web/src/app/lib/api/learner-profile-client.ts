@@ -15,8 +15,10 @@ import type {
 } from '@/app/types';
 
 // API Configuration
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-const USE_BACKEND = import.meta.env.VITE_USE_BACKEND === 'true' || !!import.meta.env.VITE_API_URL;
+// VITE_API_BASE_URL is the canonical env var (e.g. https://my-api.vercel.app — no trailing /api)
+const _API_BASE = import.meta.env.VITE_API_BASE_URL;
+const API_URL = _API_BASE ? `${_API_BASE}/api` : 'http://localhost:3001/api';
+const USE_BACKEND = !!_API_BASE;
 
 // Cache configuration
 const CACHE_KEY = 'sql-adapt-profile-cache';
@@ -40,6 +42,7 @@ interface BackendLearnerProfile {
   conceptsCovered: string[];
   conceptCoverageEvidence: Record<string, ConceptCoverageEvidence>;
   errorHistory: Record<string, number>;
+  solvedProblemIds?: string[];
   interactionCount: number;
   currentStrategy: string;
   preferences: {
@@ -144,6 +147,7 @@ function getCachedProfile(learnerId: string): CachedProfile | null {
       conceptsCovered: new Set(cached.profile.conceptsCovered),
       conceptCoverageEvidence: new Map(Object.entries(cached.profile.conceptCoverageEvidence)),
       errorHistory: new Map(Object.entries(cached.profile.errorHistory)),
+      solvedProblemIds: new Set((cached.profile.solvedProblemIds as unknown as string[]) || []),
     },
   };
 }
@@ -157,6 +161,7 @@ function setCachedProfile(learnerId: string, profile: LearnerProfile, synced: bo
       conceptsCovered: Array.from(profile.conceptsCovered) as unknown as Set<string>,
       conceptCoverageEvidence: Object.fromEntries(profile.conceptCoverageEvidence) as unknown as Map<string, ConceptCoverageEvidence>,
       errorHistory: Object.fromEntries(profile.errorHistory) as unknown as Map<string, number>,
+      solvedProblemIds: Array.from(profile.solvedProblemIds) as unknown as Set<string>,
     },
     timestamp: Date.now(),
     synced,
@@ -197,6 +202,7 @@ function convertToFrontendProfile(data: BackendLearnerProfile): LearnerProfile {
     conceptsCovered: new Set(data.conceptsCovered),
     conceptCoverageEvidence: new Map(Object.entries(data.conceptCoverageEvidence)),
     errorHistory: new Map(Object.entries(data.errorHistory)),
+    solvedProblemIds: new Set(data.solvedProblemIds || []),
     interactionCount: data.interactionCount,
     currentStrategy: data.currentStrategy as LearnerProfile['currentStrategy'],
     preferences: data.preferences,
@@ -429,6 +435,7 @@ async function applyEventToLocalProfile(
       conceptsCovered: new Set(),
       conceptCoverageEvidence: new Map(),
       errorHistory: new Map(),
+      solvedProblemIds: new Set(),
       interactionCount: 0,
       currentStrategy: 'adaptive-medium',
       preferences: {

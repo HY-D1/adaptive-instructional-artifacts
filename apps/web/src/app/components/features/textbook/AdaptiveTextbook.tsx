@@ -9,7 +9,8 @@ import type { TextbookUnitStatus } from '../../../types';
 import { Link } from 'react-router';
 import { renderTextbookContent } from '../../../lib/content/textbook-renderer';
 import { InstructionalUnit, InteractionEvent } from '../../../types';
-import { storage } from '../../../lib/storage';
+import { storage, subscribeToSync } from '../../../lib/storage';
+import { loadTextbookUnitsMeta, type TextbookUnitMeta } from '../../../lib/content/concept-loader';
 import { getConceptById } from '../../../data/sql-engage';
 import { buildTextbookInsights, SortMode } from '../../../lib/content/textbook-insights';
 import { 
@@ -101,6 +102,9 @@ function UnitStatusBadge({
   );
 }
 
+/** Index of textbook-units.json entries keyed by concept ID for O(1) lookup. */
+type TextbookUnitsMetaIndex = Record<string, TextbookUnitMeta>;
+
 export function AdaptiveTextbook({
   learnerId,
   selectedUnitId,
@@ -114,11 +118,25 @@ export function AdaptiveTextbook({
   const [showArchived, setShowArchived] = useState(false);
   const [expandedAlternatives, setExpandedAlternatives] = useState<Record<string, boolean>>({});
   const [legacyUnitsInfo, setLegacyUnitsInfo] = useState<{ hasLegacyUnits: boolean; count: number }>({ hasLegacyUnits: false, count: 0 });
+  const [corpusUnitsMeta, setCorpusUnitsMeta] = useState<TextbookUnitsMetaIndex>({});
   const pendingUnitIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     loadTextbook();
   }, [learnerId]);
+
+  // Load static corpus unit metadata from textbook-units.json (once per mount).
+  // Used to display chapter/section context alongside learner-saved units.
+  useEffect(() => {
+    loadTextbookUnitsMeta().then(file => {
+      if (!file) return;
+      const index: TextbookUnitsMetaIndex = {};
+      for (const entry of file.units) {
+        index[entry.id] = entry;
+      }
+      setCorpusUnitsMeta(index);
+    });
+  }, []);
 
   // Refresh data when component becomes visible (e.g., navigating back from practice page)
   useEffect(() => {
@@ -138,10 +156,18 @@ export function AdaptiveTextbook({
     // Polling fallback for same-tab changes
     const interval = setInterval(loadTextbook, 3000);
 
+    // Immediate refresh when practice page broadcasts a textbook save.
+    const unsubscribeSync = subscribeToSync((key) => {
+      if (key === 'sql-adapt-textbook') {
+        loadTextbook();
+      }
+    });
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
       clearInterval(interval);
+      unsubscribeSync();
     };
   }, [learnerId]);
 
@@ -161,11 +187,13 @@ export function AdaptiveTextbook({
     () => buildTextbookInsights({
       units: textbookUnits,
       interactions: learnerInteractions,
-      sortMode,
-      learnerId, // Enable prerequisite-aware ordering and blocked-node detection
-      prerequisiteThreshold: 40 // Minimum score to consider prerequisite "met"
+      sortMode
+      // Note: We intentionally don't pass learnerId here because saved textbook
+      // units should NEVER be blocked based on prerequisite status. The learner
+      // explicitly saved these notes - they should always be visible.
+      // The prerequisiteThreshold parameter is only used when learnerId is provided.
     }),
-    [textbookUnits, learnerInteractions, sortMode, learnerId]
+    [textbookUnits, learnerInteractions, sortMode]
   );
   const orderedUnits = textbookInsights.orderedUnits;
   const blockedUnits = textbookInsights.blockedUnits;
@@ -426,7 +454,14 @@ export function AdaptiveTextbook({
           {Object.entries(groupedUnits).map(([conceptName, problems]) => {
             const isConceptExpanded = expandedConcepts[conceptName] ?? false;
             const totalUnits = Object.values(problems).flat().length;
-            
+            // Derive a representative conceptId for this group to look up corpus metadata
+            const representativeUnit = Object.values(problems).flat()[0];
+            const corpusMeta = representativeUnit
+              ? (corpusUnitsMeta[representativeUnit.conceptId] ??
+                 // also try suffix-only lookup for short IDs stored in units
+                 Object.values(corpusUnitsMeta).find(m => m.id.endsWith(`/${representativeUnit.conceptId}`)))
+              : undefined;
+
             return (
               <div key={conceptName} className="border rounded-lg overflow-hidden">
                 {/* Concept Header - Click to expand/collapse */}
@@ -439,7 +474,17 @@ export function AdaptiveTextbook({
                 >
                   <div className="flex items-center gap-2">
                     <Folder className="size-4 text-blue-500" />
-                    <span className="font-medium text-sm">{conceptName}</span>
+                    <div className="flex flex-col items-start">
+                      <span className="font-medium text-sm">{conceptName}</span>
+                      {corpusMeta?.sectionTitle && (
+                        <span
+                          className="text-[10px] text-gray-400 leading-tight"
+                          data-testid="corpus-section-title"
+                        >
+                          {corpusMeta.sectionTitle}
+                        </span>
+                      )}
+                    </div>
                     <Badge variant="secondary" className="text-xs">
                       {totalUnits}
                     </Badge>

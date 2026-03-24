@@ -16,6 +16,9 @@ const EXPORT_POLICY_VERSION = 'week2-real-trace-export-v1';
 const DEFAULT_OUTPUT_PATH = path.join(REPO_ROOT, 'dist/replay/real/export.json');
 
 const EVENT_TYPE_ALIASES = {
+  // Backward compat: legacy profile_assigned traces are normalized to condition_assigned
+  // This lets old exports pass through replay without re-exporting.
+  // NOTE: profile_assigned is also kept in ALLOWED_EVENT_TYPES so genuine legacy events pass the whitelist check unchanged.
   hint: 'hint_view',
   hintview: 'hint_view',
   hint_view: 'hint_view',
@@ -66,7 +69,9 @@ const ALLOWED_EVENT_TYPES = new Set([
   // Reinforcement events
   'reinforcement_response',
   'reinforcement_shown',
-  // Profile/policy events
+  // Session-init / condition events
+  'condition_assigned',
+  // Profile/policy events (legacy — kept for backward compat)
   'profile_assigned',
   'escalation_triggered',
   // Bandit events
@@ -414,6 +419,14 @@ function normalizeRawRecord(record, index, subtypeIndex) {
   const policyVersion = readFirstString(record.policyVersion, record.policy_version);
   if ((eventType === 'hint_view' || eventType === 'explanation_view') && policyVersion) {
     event.policyVersion = policyVersion;
+  }
+
+  // Backward compat: promote profile_assigned → condition_assigned fields
+  if (eventType === 'condition_assigned' || eventType === 'profile_assigned') {
+    const conditionId = readFirstString(record.conditionId, record.condition_id, record.profileId, record.profile_id);
+    if (conditionId) event.conditionId = conditionId;
+    const strategyAssigned = readFirstString(record.strategyAssigned, record.strategy_assigned, record.profileId, record.profile_id);
+    if (strategyAssigned) event.strategyAssigned = strategyAssigned;
   }
 
   return event;

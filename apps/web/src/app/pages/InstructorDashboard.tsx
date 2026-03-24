@@ -301,11 +301,15 @@ export function InstructorDashboard() {
 
   // Memoized helper to calculate student adaptive profiles
   const studentAdaptiveProfiles = useMemo(() => {
-    // Get latest profile assignment per learner
+    // Get latest condition/profile assignment per learner.
+    // condition_assigned is canonical; profile_assigned is kept for legacy traces.
     const latestProfiles = interactions
-      .filter(e => e.eventType === 'profile_assigned')
+      .filter(e => e.eventType === 'condition_assigned' || e.eventType === 'profile_assigned')
       .reduce((acc, e) => {
-        acc[e.learnerId] = e;
+        // condition_assigned always wins over a profile_assigned for the same learner
+        if (!acc[e.learnerId] || e.eventType === 'condition_assigned' || e.timestamp > acc[e.learnerId].timestamp) {
+          acc[e.learnerId] = e;
+        }
         return acc;
       }, {} as Record<string, InteractionEvent>);
 
@@ -957,8 +961,10 @@ export function InstructorDashboard() {
                                 id: `override-${Date.now()}`,
                                 learnerId: student.learnerId,
                                 timestamp: Date.now(),
-                                eventType: 'profile_assigned',
+                                eventType: 'condition_assigned',
                                 problemId: 'instructor-override',
+                                conditionId: e.target.value,
+                                strategyAssigned: e.target.value,
                                 payload: {
                                   profile: e.target.value,
                                   strategy: 'static',

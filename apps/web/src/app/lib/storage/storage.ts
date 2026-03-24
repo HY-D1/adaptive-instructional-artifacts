@@ -1219,11 +1219,39 @@ class StorageManager {
       profileId,
       assignmentStrategy: strategy,
       policyVersion: 'profile-assign-v1',
+      // RESEARCH-4: canonical study fields
+      learnerProfileId: profileId,
+      strategyAssigned: profileId,
       payload: {
         profileId,
         strategy,
         reason
       }
+    };
+    this.saveInteraction(event);
+  }
+
+  /**
+   * Log condition assigned event — canonical RESEARCH-4 session-init event.
+   * Replaces profile_assigned as the primary session-init signal.
+   */
+  logConditionAssigned(
+    learnerId: string,
+    conditionId: string,
+    sessionId: string,
+    problemId: string,
+    strategyAssigned?: string
+  ): void {
+    const event: InteractionEvent = {
+      id: createEventId('condition', 'assigned'),
+      sessionId: sessionId || this.getActiveSessionId(),
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'condition_assigned',
+      problemId,
+      conditionId,
+      strategyAssigned: strategyAssigned ?? conditionId,
+      policyVersion: 'condition-assign-v1',
     };
     this.saveInteraction(event);
   }
@@ -1239,7 +1267,9 @@ class StorageManager {
     learnerId: string,
     profileId: string,
     errorCount: number,
-    problemId: string
+    problemId: string,
+    reason: string = 'threshold_met',
+    timeToEscalationMs?: number
   ): void {
     const event: InteractionEvent = {
       id: createEventId('escalation', 'triggered'),
@@ -1250,8 +1280,13 @@ class StorageManager {
       problemId,
       profileId,
       policyVersion: 'escalation-trigger-v1',
+      // RESEARCH-4: canonical study fields
+      learnerProfileId: profileId,
+      escalationTriggerReason: reason,
+      errorCountAtEscalation: errorCount,
+      ...(timeToEscalationMs !== undefined && { timeToEscalation: timeToEscalationMs }),
       payload: {
-        trigger: 'threshold_met',
+        trigger: reason,
         errorCount,
         profileId
       }
@@ -1351,6 +1386,9 @@ class StorageManager {
         components
       },
       policyVersion: 'bandit-reward-v1',
+      // RESEARCH-4: canonical study fields
+      selectedArm: armId,
+      rewardValue: reward,
       payload: {
         armId,
         reward: {
@@ -1387,6 +1425,9 @@ class StorageManager {
       newAlpha: alpha,
       newBeta: beta,
       policyVersion: 'bandit-update-v1',
+      // RESEARCH-4: canonical study fields
+      selectedArm: armId,
+      strategyUpdated: armId,
       payload: {
         armId,
         newAlpha: alpha,
@@ -2645,6 +2686,7 @@ class StorageManager {
       // Update evidence-based coverage for all valid concept IDs in the event
       // Skip system-level events that don't have associated SQL concepts
       const SYSTEM_EVENT_TYPES = new Set([
+        'condition_assigned',
         'profile_assigned',
         'bandit_arm_selected',
         'bandit_reward_observed',
@@ -2697,6 +2739,7 @@ class StorageManager {
       'hint_view',
       'explanation_view',
       'textbook_unit_upsert',
+      'condition_assigned',
       'profile_assigned',
       'hdi_calculated',
     ]);
