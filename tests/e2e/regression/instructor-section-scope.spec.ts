@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { createApiContext, resolveApiBaseUrl } from '../helpers/auth-env';
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 async function signup(
   request: import('@playwright/test').APIRequestContext,
@@ -11,11 +14,10 @@ async function signup(
 
 async function loginContext(
   playwright: import('@playwright/test').Playwright,
-  baseURL: string,
   email: string,
   password: string
 ) {
-  const context = await playwright.request.newContext({ baseURL });
+  const context = await createApiContext(playwright, API_BASE_URL);
   const loginResponse = await context.post('/api/auth/login', {
     data: { email, password },
   });
@@ -87,12 +89,7 @@ function assertOnlyLearnerAndSection(
 }
 
 test.describe('@authz @section-scope instructor sees only own section', () => {
-  test('instructor A and B are isolated by enrollment scope', async ({ request, playwright, baseURL }) => {
-    if (!baseURL) {
-      test.skip();
-      return;
-    }
-
+  test('instructor A and B are isolated by enrollment scope', async ({ playwright }) => {
     const instructorCode = process.env.E2E_INSTRUCTOR_CODE ?? process.env.VITE_INSTRUCTOR_PASSCODE ?? 'TeachSQL2024';
 
     const ts = Date.now();
@@ -102,7 +99,9 @@ test.describe('@authz @section-scope instructor sees only own section', () => {
     const studentBEmail = `student-b-${ts}@sql-adapt.test`;
     const password = 'SectionScope!123';
 
-    const instructorASignup = await signup(request, {
+    const bootstrap = await createApiContext(playwright, API_BASE_URL);
+    try {
+      const instructorASignup = await signup(bootstrap, {
       name: 'Instructor A',
       email: instrAEmail,
       password,
@@ -115,7 +114,7 @@ test.describe('@authz @section-scope instructor sees only own section', () => {
     expect(sectionAId).toBeTruthy();
     expect(codeA).toBeTruthy();
 
-    const instructorBSignup = await signup(request, {
+      const instructorBSignup = await signup(bootstrap, {
       name: 'Instructor B',
       email: instrBEmail,
       password,
@@ -128,7 +127,7 @@ test.describe('@authz @section-scope instructor sees only own section', () => {
     expect(sectionBId).toBeTruthy();
     expect(codeB).toBeTruthy();
 
-    const studentASignup = await signup(request, {
+      const studentASignup = await signup(bootstrap, {
       name: 'Student A',
       email: studentAEmail,
       password,
@@ -138,7 +137,7 @@ test.describe('@authz @section-scope instructor sees only own section', () => {
     expect(studentASignup.response.ok()).toBeTruthy();
     const studentAId = studentASignup.body.user.learnerId as string;
 
-    const studentBSignup = await signup(request, {
+      const studentBSignup = await signup(bootstrap, {
       name: 'Student B',
       email: studentBEmail,
       password,
@@ -148,14 +147,14 @@ test.describe('@authz @section-scope instructor sees only own section', () => {
     expect(studentBSignup.response.ok()).toBeTruthy();
     const studentBId = studentBSignup.body.user.learnerId as string;
 
-    const instructorA = await loginContext(playwright, baseURL, instrAEmail, password);
-    const instructorB = await loginContext(playwright, baseURL, instrBEmail, password);
-    const studentA = await loginContext(playwright, baseURL, studentAEmail, password);
-    const studentB = await loginContext(playwright, baseURL, studentBEmail, password);
+      const instructorA = await loginContext(playwright, instrAEmail, password);
+      const instructorB = await loginContext(playwright, instrBEmail, password);
+      const studentA = await loginContext(playwright, studentAEmail, password);
+      const studentB = await loginContext(playwright, studentBEmail, password);
 
-    try {
-      await seedLearnerData(studentA.context, studentAId, studentA.csrfToken, 'scope-a');
-      await seedLearnerData(studentB.context, studentBId, studentB.csrfToken, 'scope-b');
+      try {
+        await seedLearnerData(studentA.context, studentAId, studentA.csrfToken, 'scope-a');
+        await seedLearnerData(studentB.context, studentBId, studentB.csrfToken, 'scope-b');
 
       const learnersARes = await instructorA.context.get('/api/instructor/learners');
       expect(learnersARes.ok()).toBeTruthy();
@@ -262,11 +261,14 @@ test.describe('@authz @section-scope instructor sees only own section', () => {
       for (const row of researchTextbookB) {
         expect(row.learnerId).toBe(studentBId);
       }
+      } finally {
+        await instructorA.context.dispose();
+        await instructorB.context.dispose();
+        await studentA.context.dispose();
+        await studentB.context.dispose();
+      }
     } finally {
-      await instructorA.context.dispose();
-      await instructorB.context.dispose();
-      await studentA.context.dispose();
-      await studentB.context.dispose();
+      await bootstrap.dispose();
     }
   });
 });

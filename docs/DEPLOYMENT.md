@@ -633,9 +633,21 @@ This suite verifies:
 
 ### Authenticated smoke (real auth backend required)
 
-The auth regression suite signs in via the real `/auth` page (JWT cookie),
+The auth regression suite signs in via the real `/login` + `/signup` account UI (JWT cookie),
 saves a note, then opens a **fresh browser context** and logs in with credentials
 to prove backend hydration across true second-context login.
+
+#### Step 0 — Neon preflight (required before setup)
+
+```bash
+curl https://<backend>/health
+curl https://<backend>/api/system/persistence-status
+```
+
+Expected:
+- `dbMode` is `neon`
+- `resolvedEnvSource` is non-null
+- `persistenceRoutesEnabled` is `true`
 
 #### Step 1 — Capture auth state (run once per environment)
 
@@ -648,12 +660,16 @@ npx playwright test -c playwright.config.ts --project=setup:auth
 
 # Against a deployed preview
 PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
+PLAYWRIGHT_API_BASE_URL="https://<backend>.vercel.app" \
 E2E_STUDENT_EMAIL="student@yourdomain.com" \
 E2E_STUDENT_PASSWORD="YourPassword123!" \
 E2E_STUDENT_CLASS_CODE="<class-code>" \
 E2E_INSTRUCTOR_CODE="<instructor-code>" \
   npx playwright test -c playwright.config.ts --project=setup:auth
 ```
+
+`setup:auth` now fails fast when the backend is unreachable or not Neon-backed.
+It will not silently write empty auth state files for launch-proof runs.
 
 Auth state is saved to `playwright/.auth/student.json` and
 `playwright/.auth/instructor.json` (gitignored — never commit these).
@@ -683,6 +699,7 @@ npx playwright test -c playwright.config.ts --project=chromium:auth \
 
 ```bash
 PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
+PLAYWRIGHT_API_BASE_URL="https://<backend>.vercel.app" \
 E2E_STUDENT_EMAIL="student@yourdomain.com" \
 E2E_STUDENT_PASSWORD="YourPassword123!" \
 E2E_STUDENT_CLASS_CODE="<class-code>" \
@@ -696,6 +713,7 @@ E2E_INSTRUCTOR_CODE="<instructor-code>" \
 
 ```bash
 PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
+PLAYWRIGHT_API_BASE_URL="https://<backend>.vercel.app" \
 VERCEL_AUTOMATION_BYPASS_SECRET="<secret-from-vercel-dashboard>" \
 E2E_STUDENT_EMAIL="student@yourdomain.com" \
 E2E_STUDENT_PASSWORD="YourPassword123!" \
@@ -716,6 +734,7 @@ headers are injected automatically on every Playwright request.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `PLAYWRIGHT_BASE_URL` | `http://127.0.0.1:4173` | Target URL (set for deployed runs) |
+| `PLAYWRIGHT_API_BASE_URL` | `http://127.0.0.1:3001` | Backend API origin for split frontend/backend proofs |
 | `VERCEL_AUTOMATION_BYPASS_SECRET` | — | Vercel protection bypass header |
 | `E2E_STUDENT_EMAIL` | `e2e-student-<ts>@sql-adapt.test` | Student account email |
 | `E2E_STUDENT_PASSWORD` | `E2eTestPass!123` | Student account password |
@@ -731,7 +750,7 @@ headers are injected automatically on every Playwright request.
 
 #### What the auth smoke proves
 
-1. **Real JWT auth** — signs in via `/auth`, no `addInitScript` seeding.
+1. **Real JWT auth** — signs in via `/login` / `/signup`, no `addInitScript` seeding.
 2. **Note saved** — Save to Notes succeeds and the success banner appears.
 3. **SPA navigation** — note visible in `/textbook` without a page reload.
 4. **Cross-device hydration** — a **fresh `browser.newContext()`** logs in again
@@ -838,6 +857,7 @@ What this proves:
 Neon prerequisite for auth-backed proof:
 
 ```bash
+curl https://<backend>/health
 curl https://<backend>/api/system/persistence-status
 ```
 

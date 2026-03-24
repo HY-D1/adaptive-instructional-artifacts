@@ -1,8 +1,11 @@
 import { expect, test } from '@playwright/test';
 import { replaceEditorText, getEditorText, getTextbookUnits } from '../../helpers/test-helpers';
+import { resolveApiBaseUrl } from '../helpers/auth-env';
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 async function login(page: import('@playwright/test').Page, email: string, password: string): Promise<void> {
-  await page.goto('/auth', { waitUntil: 'domcontentloaded' });
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#login-email')).toBeVisible({ timeout: 10000 });
   await page.fill('#login-email', email);
   await page.fill('#login-password', password);
@@ -14,8 +17,7 @@ async function signupOrLoginStudent(
   page: import('@playwright/test').Page,
   params: { name: string; email: string; password: string; classCode: string }
 ): Promise<void> {
-  await page.goto('/auth', { waitUntil: 'domcontentloaded' });
-  await page.getByRole('button', { name: /Create Account/i }).first().click();
+  await page.goto('/login?tab=signup', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#signup-name')).toBeVisible({ timeout: 10000 });
   await page.fill('#signup-name', params.name);
   await page.fill('#signup-email', params.email);
@@ -56,16 +58,16 @@ test.describe('@authz @multi-device student persistence without storageState clo
     }
     await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible({ timeout: 15000 });
 
-    const activeEmail = await page.evaluate(async () => {
+    const activeEmail = await page.evaluate(async (apiBaseUrl) => {
       try {
-        const response = await fetch('/api/auth/me', { credentials: 'include' });
+        const response = await fetch(`${apiBaseUrl}/api/auth/me`, { credentials: 'include' });
         if (!response.ok) return null;
         const body = await response.json();
         return body?.user?.email ?? null;
       } catch {
         return null;
       }
-    });
+    }, API_BASE_URL);
     if (activeEmail) {
       email = activeEmail;
     }
@@ -110,24 +112,26 @@ test.describe('@authz @multi-device student persistence without storageState clo
     };
 
     const sessionWrite = await page.evaluate(
-      async ({ seededLearnerId, payload }) => {
-        const csrfToken = document.cookie
-          .split('; ')
-          .find((entry) => entry.startsWith('sql_adapt_csrf='))
-          ?.split('=')[1];
-        const response = await fetch(`/api/sessions/${seededLearnerId}/active`, {
+      async ({ seededLearnerId, payload, apiBaseUrl }) => {
+        const meResponse = await fetch(`${apiBaseUrl}/api/auth/me`, {
+          credentials: 'include',
+        });
+        const meBody = await meResponse.json().catch(() => null);
+        const csrfToken = (meBody?.csrfToken as string | undefined) ?? '';
+
+        const response = await fetch(`${apiBaseUrl}/api/sessions/${seededLearnerId}/active`, {
           method: 'POST',
           credentials: 'include',
           headers: {
             'Content-Type': 'application/json',
-            'x-csrf-token': csrfToken || '',
+            'x-csrf-token': csrfToken,
           },
           body: JSON.stringify(payload),
         });
         const body = await response.json().catch(() => null);
         return { ok: response.ok, status: response.status, body };
       },
-      { seededLearnerId: learnerId!, payload: sessionSeed }
+      { seededLearnerId: learnerId!, payload: sessionSeed, apiBaseUrl: API_BASE_URL }
     );
     expect(sessionWrite.ok).toBeTruthy();
 
@@ -157,24 +161,24 @@ test.describe('@authz @multi-device student persistence without storageState clo
         await expect(second.getByText(createdUnitSnippet, { exact: false }).first()).toBeVisible({ timeout: 15000 });
       }
 
-      const resumedSession = await second.evaluate(async (hydratedLearnerId) => {
-        const response = await fetch(`/api/sessions/${hydratedLearnerId}/active`, {
+      const resumedSession = await second.evaluate(async ({ hydratedLearnerId, apiBaseUrl }) => {
+        const response = await fetch(`${apiBaseUrl}/api/sessions/${hydratedLearnerId}/active`, {
           credentials: 'include',
         });
         const body = await response.json().catch(() => null);
         return { ok: response.ok, body };
-      }, secondLearnerId!);
+      }, { hydratedLearnerId: secondLearnerId!, apiBaseUrl: API_BASE_URL });
       expect(resumedSession.ok).toBeTruthy();
       expect(resumedSession.body?.data?.currentCode).toBe(sessionSeed.currentCode);
       expect(resumedSession.body?.data?.guidanceState?.source).toBe('e2e-session-seed');
 
-      const interactionRead = await second.evaluate(async (hydratedLearnerId) => {
-        const response = await fetch(`/api/interactions?learnerId=${hydratedLearnerId}`, {
+      const interactionRead = await second.evaluate(async ({ hydratedLearnerId, apiBaseUrl }) => {
+        const response = await fetch(`${apiBaseUrl}/api/interactions?learnerId=${hydratedLearnerId}`, {
           credentials: 'include',
         });
         const body = await response.json().catch(() => null);
         return { ok: response.ok, count: Array.isArray(body?.data) ? body.data.length : 0 };
-      }, secondLearnerId!);
+      }, { hydratedLearnerId: secondLearnerId!, apiBaseUrl: API_BASE_URL });
       expect(interactionRead.ok).toBeTruthy();
       expect(interactionRead.count).toBeGreaterThan(0);
 

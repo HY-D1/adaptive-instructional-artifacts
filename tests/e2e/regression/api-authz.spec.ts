@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { createApiContext, resolveApiBaseUrl } from '../helpers/auth-env';
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 async function signup(
   request: import('@playwright/test').APIRequestContext,
@@ -11,11 +14,10 @@ async function signup(
 
 async function loginContext(
   playwright: import('@playwright/test').Playwright,
-  baseURL: string,
   email: string,
   password: string
 ) {
-  const context = await playwright.request.newContext({ baseURL });
+  const context = await createApiContext(playwright, API_BASE_URL);
   const loginResponse = await context.post('/api/auth/login', {
     data: { email, password },
   });
@@ -28,12 +30,7 @@ async function loginContext(
 }
 
 test.describe('@authz API authorization and learner spoof protections', () => {
-  test('student blocked on instructor/research and cross-learner access', async ({ request, playwright, baseURL }) => {
-    if (!baseURL) {
-      test.skip();
-      return;
-    }
-
+  test('student blocked on instructor/research and cross-learner access', async ({ playwright }) => {
     const instructorCode = process.env.E2E_INSTRUCTOR_CODE ?? process.env.VITE_INSTRUCTOR_PASSCODE ?? 'TeachSQL2024';
     const ts = Date.now();
     const instructorEmail = `authz-instructor-${ts}@sql-adapt.test`;
@@ -43,7 +40,9 @@ test.describe('@authz API authorization and learner spoof protections', () => {
     const externalStudentEmail = `authz-external-${ts}@sql-adapt.test`;
     const password = 'AuthzCase!123';
 
-    const instructorSignup = await signup(request, {
+    const bootstrap = await createApiContext(playwright, API_BASE_URL);
+    try {
+      const instructorSignup = await signup(bootstrap, {
       name: 'Authz Instructor',
       email: instructorEmail,
       password,
@@ -54,7 +53,7 @@ test.describe('@authz API authorization and learner spoof protections', () => {
     const classCode = instructorSignup.body.user?.ownedSections?.[0]?.studentSignupCode as string;
     expect(classCode).toBeTruthy();
 
-    const instructorOtherSignup = await signup(request, {
+      const instructorOtherSignup = await signup(bootstrap, {
       name: 'Other Instructor',
       email: instructorOtherEmail,
       password,
@@ -65,7 +64,7 @@ test.describe('@authz API authorization and learner spoof protections', () => {
     const otherClassCode = instructorOtherSignup.body.user?.ownedSections?.[0]?.studentSignupCode as string;
     expect(otherClassCode).toBeTruthy();
 
-    const studentSignup = await signup(request, {
+      const studentSignup = await signup(bootstrap, {
       name: 'Authz Student',
       email: studentEmail,
       password,
@@ -75,7 +74,7 @@ test.describe('@authz API authorization and learner spoof protections', () => {
     expect(studentSignup.response.ok()).toBeTruthy();
     const studentId = studentSignup.body.user.learnerId as string;
 
-    const otherStudentSignup = await signup(request, {
+      const otherStudentSignup = await signup(bootstrap, {
       name: 'Other Student',
       email: otherStudentEmail,
       password,
@@ -85,7 +84,7 @@ test.describe('@authz API authorization and learner spoof protections', () => {
     expect(otherStudentSignup.response.ok()).toBeTruthy();
     const otherStudentId = otherStudentSignup.body.user.learnerId as string;
 
-    const externalStudentSignup = await signup(request, {
+      const externalStudentSignup = await signup(bootstrap, {
       name: 'External Student',
       email: externalStudentEmail,
       password,
@@ -95,11 +94,11 @@ test.describe('@authz API authorization and learner spoof protections', () => {
     expect(externalStudentSignup.response.ok()).toBeTruthy();
     const externalStudentId = externalStudentSignup.body.user.learnerId as string;
 
-    const anonymous = await playwright.request.newContext({ baseURL });
-    const student = await loginContext(playwright, baseURL, studentEmail, password);
-    const instructor = await loginContext(playwright, baseURL, instructorEmail, password);
-    const externalStudent = await loginContext(playwright, baseURL, externalStudentEmail, password);
-    try {
+      const anonymous = await createApiContext(playwright, API_BASE_URL);
+      const student = await loginContext(playwright, studentEmail, password);
+      const instructor = await loginContext(playwright, instructorEmail, password);
+      const externalStudent = await loginContext(playwright, externalStudentEmail, password);
+      try {
       const anonInstructor = await anonymous.get('/api/instructor/learners');
       expect(anonInstructor.status()).toBe(401);
       const anonResearch = await anonymous.get('/api/research/export');
@@ -203,11 +202,14 @@ test.describe('@authz API authorization and learner spoof protections', () => {
         headers: { 'x-csrf-token': externalStudent.csrfToken },
       });
       expect(externalEventWrite.ok()).toBeTruthy();
+      } finally {
+        await anonymous.dispose();
+        await student.context.dispose();
+        await instructor.context.dispose();
+        await externalStudent.context.dispose();
+      }
     } finally {
-      await anonymous.dispose();
-      await student.context.dispose();
-      await instructor.context.dispose();
-      await externalStudent.context.dispose();
+      await bootstrap.dispose();
     }
   });
 });
