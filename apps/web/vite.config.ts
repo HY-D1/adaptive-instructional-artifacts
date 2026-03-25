@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import { withRelatedProject } from '@vercel/related-projects'
 import {
   PDF_CHUNKER_VERSION,
   PDF_EMBEDDING_MODEL_ID,
@@ -14,7 +15,31 @@ import { loadOrBuildPdfIndexFromDisk, buildPdfIndexFromBuffer } from './src/serv
 const wasmFilePath = path.resolve(__dirname, 'public/sql-wasm.wasm')
 
 const ollamaTarget = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434'
-const backendTarget = process.env.VITE_BACKEND_URL || 'http://127.0.0.1:3001'
+
+// Backend target for local dev proxy only
+const backendTarget =
+  process.env.VITE_BACKEND_URL ||
+  process.env.VITE_API_BASE_URL ||
+  'http://127.0.0.1:3001'
+
+// Resolve deployed backend host for frontend build/runtime on Vercel
+const resolvedApiBaseUrl =
+  process.env.VITE_API_BASE_URL ||
+  (
+    process.env.VERCEL
+      ? withRelatedProject({
+          projectName: 'adaptive-instructional-artifacts-api-backend',
+          defaultHost: process.env.VITE_API_BASE_URL || ''
+        })
+      : ''
+  )
+
+if (resolvedApiBaseUrl && !process.env.VITE_API_BASE_URL) {
+  process.env.VITE_API_BASE_URL = resolvedApiBaseUrl.startsWith('http')
+    ? resolvedApiBaseUrl
+    : `https://${resolvedApiBaseUrl}`
+}
+
 const repoRoot = path.resolve(__dirname, '../..')
 const pdfIndexDir = process.env.PDF_INDEX_DIR || path.resolve(repoRoot, 'dist/pdf-index')
 const pdfSourceDir = process.env.PDF_SOURCE_DIR || path.resolve(repoRoot, 'dist')
@@ -23,7 +48,6 @@ function pdfIndexApiPlugin() {
   return {
     name: 'pdf-index-api',
     configureServer(server: any) {
-      // Existing endpoint: load/build from disk
       server.middlewares.use('/api/pdf-index/load', async (req: any, res: any, next: () => void) => {
         if (req.method !== 'POST' && req.method !== 'GET') {
           next()
@@ -51,7 +75,6 @@ function pdfIndexApiPlugin() {
         }
       })
 
-      // New endpoint: upload PDF and build index
       server.middlewares.use('/api/pdf-index/upload', async (req: any, res: any, next: () => void) => {
         if (req.method !== 'POST') {
           next()
@@ -59,14 +82,13 @@ function pdfIndexApiPlugin() {
         }
 
         try {
-          // Parse multipart form data
           const chunks: Buffer[] = []
           req.on('data', (chunk: Buffer) => chunks.push(chunk))
           req.on('end', async () => {
             try {
               const buffer = Buffer.concat(chunks)
               const contentType = req.headers['content-type'] || ''
-              
+
               if (!contentType.includes('multipart/form-data')) {
                 res.statusCode = 400
                 res.setHeader('Content-Type', 'application/json')
@@ -74,7 +96,6 @@ function pdfIndexApiPlugin() {
                 return
               }
 
-              // Extract boundary
               const boundaryMatch = contentType.match(/boundary=([^;]+)/)
               if (!boundaryMatch) {
                 res.statusCode = 400
@@ -84,10 +105,9 @@ function pdfIndexApiPlugin() {
               }
               const boundary = boundaryMatch[1].trim().replace(/^"|"$/g, '')
 
-              // Parse multipart data
               const parts = parseMultipart(buffer, boundary)
               const filePart = parts.find(p => p.filename && p.filename.endsWith('.pdf'))
-              
+
               if (!filePart) {
                 res.statusCode = 400
                 res.setHeader('Content-Type', 'application/json')
@@ -95,11 +115,9 @@ function pdfIndexApiPlugin() {
                 return
               }
 
-              // Ensure directories exist
               await fs.promises.mkdir(pdfSourceDir, { recursive: true })
               await fs.promises.mkdir(pdfIndexDir, { recursive: true })
 
-              // Build index from uploaded PDF
               const result = await buildPdfIndexFromBuffer(
                 filePart.data,
                 filePart.filename || 'uploaded.pdf',
@@ -140,33 +158,30 @@ function pdfIndexApiPlugin() {
   }
 }
 
-// Simple multipart parser
 function parseMultipart(buffer: Buffer, boundary: string): Array<{ name?: string; filename?: string; data: Buffer }> {
   const parts: Array<{ name?: string; filename?: string; data: Buffer }> = []
   const boundaryBuffer = Buffer.from(`--${boundary}`)
-  
+
   let start = buffer.indexOf(boundaryBuffer)
   while (start !== -1) {
     const end = buffer.indexOf(boundaryBuffer, start + boundaryBuffer.length)
-    const partBuffer = end !== -1 
+    const partBuffer = end !== -1
       ? buffer.slice(start + boundaryBuffer.length, end)
       : buffer.slice(start + boundaryBuffer.length)
-    
-    // Parse headers and data
+
     const headerEnd = partBuffer.indexOf('\r\n\r\n')
     if (headerEnd !== -1) {
       const headerBuffer = partBuffer.slice(0, headerEnd)
       const dataBuffer = partBuffer.slice(headerEnd + 4)
-      
-      // Remove trailing \r\n before boundary
-      const cleanData = dataBuffer.toString().endsWith('\r\n') 
-        ? dataBuffer.slice(0, -2) 
+
+      const cleanData = dataBuffer.toString().endsWith('\r\n')
+        ? dataBuffer.slice(0, -2)
         : dataBuffer
-      
+
       const headerStr = headerBuffer.toString()
       const nameMatch = headerStr.match(/name="([^"]+)"/)
       const filenameMatch = headerStr.match(/filename="([^"]+)"/)
-      
+
       if (nameMatch || filenameMatch) {
         parts.push({
           name: nameMatch?.[1],
@@ -175,45 +190,38 @@ function parseMultipart(buffer: Buffer, boundary: string): Array<{ name?: string
         })
       }
     }
-    
+
     start = end
   }
-  
+
   return parts
 }
 
-// WASM serving plugin - ensures correct MIME type for .wasm files
-// Lodash resolution fix for Rollup - handles lodash internal modules that Rollup can't resolve
-// This plugin resolves lodash internal module paths correctly when they use .js extension
 function lodashResolvePlugin(): Plugin {
   return {
     name: 'lodash-resolve',
     enforce: 'pre' as const,
     resolveId(id: string, importer: string | undefined) {
-      // Handle bare relative imports within lodash (ensure .js extension)
       if (id.startsWith('./_') && importer?.includes('/lodash/') && !id.endsWith('.js')) {
-        const resolvedPath = path.resolve(path.dirname(importer), id + '.js');
-        return resolvedPath;
+        return path.resolve(path.dirname(importer), id + '.js')
       }
-      return null;
+      return null
     }
-  };
+  }
 }
 
 function wasmServePlugin(): Plugin {
-  // Shared middleware handler for both dev and preview servers
   const wasmMiddleware = (req: any, res: any, next: () => void) => {
-    // Only handle requests to /sql-wasm.wasm
     if (req.url !== '/sql-wasm.wasm' && !req.url?.startsWith('/sql-wasm.wasm?')) {
       next()
       return
     }
-    
+
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       next()
       return
     }
-    
+
     try {
       if (fs.existsSync(wasmFilePath)) {
         const wasmContent = fs.readFileSync(wasmFilePath)
@@ -235,9 +243,8 @@ function wasmServePlugin(): Plugin {
 
   return {
     name: 'wasm-serve',
-    enforce: 'pre' as const, // Run before other middleware (including Vite's SPA fallback)
+    enforce: 'pre' as const,
     configureServer(server: any) {
-      // Add middleware at the beginning to intercept WASM requests before SPA fallback
       server.middlewares.stack.unshift({
         route: '',
         handle: wasmMiddleware
@@ -247,17 +254,17 @@ function wasmServePlugin(): Plugin {
 }
 
 export default defineConfig({
-  // App lives in apps/web; keep dist artifacts in the repository-level dist/.
   root: path.resolve(__dirname),
   plugins: [
-    // Lodash resolution fix must be first to handle Rollup resolution issues
     lodashResolvePlugin(),
-    // WASM plugin must be early to intercept requests before SPA fallback
     wasmServePlugin(),
     react(),
     pdfIndexApiPlugin(),
     tailwindcss(),
   ],
+  define: {
+    __API_BASE_URL__: JSON.stringify(process.env.VITE_API_BASE_URL || ''),
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -283,13 +290,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/ollama': {
-        // Local default works on macOS and Windows; allow override for custom setups.
         target: ollamaTarget,
         changeOrigin: true,
         rewrite: (requestPath) => requestPath.replace(/^\/ollama/, '')
       },
       '/api': {
-        // Proxy API requests to backend server in development
         target: backendTarget,
         changeOrigin: true,
       }

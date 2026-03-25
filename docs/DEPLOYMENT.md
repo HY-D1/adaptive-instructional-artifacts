@@ -836,6 +836,7 @@ rg -n --fixed-strings -- '-03-24' \
 What this proves:
 - integrity scan now covers the full app source + build/test config surface before builds.
 - tokenized corruption markers are absent from critical source/config files before build/tests.
+- integrity scanner is portable across environments (`rg` preferred, `grep` fallback) without weakening fail behavior.
 
 ### Proof of multi-device UI restore
 
