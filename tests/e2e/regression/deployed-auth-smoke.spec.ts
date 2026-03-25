@@ -38,7 +38,7 @@
  *
  * How to run (protected Vercel preview):
  *   PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
- *   VERCEL_AUTOMATION_BYPASS_SECRET="<secret>" \
+ *   VERCEL_AUTOMATION_BYPASS_SECRET="<secret>" \  # alias: E2E_VERCEL_BYPASS_SECRET
  *   E2E_STUDENT_EMAIL="student@yourdomain.com" \
  *   E2E_STUDENT_PASSWORD="YourPassword123!" \
  *   E2E_INSTRUCTOR_CODE="<your-instructor-code>" \

@@ -28,8 +28,12 @@ export function apiUrl(path: string, apiBase = resolveApiBaseUrl()): string {
   return `${trimTrailingSlash(apiBase)}${normalizedPath}`;
 }
 
+export function getVercelBypassSecret(): string | undefined {
+  return process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? process.env.E2E_VERCEL_BYPASS_SECRET;
+}
+
 export function getVercelBypassHeaders(): Record<string, string> {
-  const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+  const bypassSecret = getVercelBypassSecret();
   if (!bypassSecret) return {};
   return {
     'x-vercel-protection-bypass': bypassSecret,

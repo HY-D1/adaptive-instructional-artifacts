@@ -17,6 +17,8 @@
 |----------|----------|-------------|
 | `VITE_INSTRUCTOR_PASSCODE` | Yes | Passcode for instructor access |
 | `VITE_API_BASE_URL` | For persistence | Base URL of the backend API, no trailing `/api` (e.g. `https://my-api.vercel.app`). Leave empty for localStorage-only (static) mode. |
+| `VITE_ENABLE_VERCEL_ANALYTICS` | Optional | Set to `true` to load `@vercel/analytics/react` at runtime (launch default: `false`) |
+| `VITE_ENABLE_VERCEL_SPEED_INSIGHTS` | Optional | Set to `false` to disable Speed Insights (default: enabled) |
 | `VITE_OLLAMA_URL` | Local only | Local Ollama URL — not available on Vercel |
 | `VITE_ENABLE_PDF_INDEX` | Local only | PDF indexing — requires local backend |
 
@@ -192,6 +194,7 @@ Must match these exactly:
 | 404 on all routes | Wrong Output Directory | Set to dist/app |
 | Blank page | COOP/COEP headers | Headers already in vercel.json |
 | Instructor mode fails | Missing env var | Add VITE_INSTRUCTOR_PASSCODE |
+| Build fails on `@vercel/analytics/react` | Missing dependency or optional analytics mode | Install `@vercel/analytics` or keep `VITE_ENABLE_VERCEL_ANALYTICS=false` for launch-safe builds |
 | PDF/Ollama fails | Hosted mode limitation | Expected - use local dev |
 
 ---
@@ -385,6 +388,8 @@ See [DEPLOYMENT_MODES.md](./DEPLOYMENT_MODES.md) for the complete capability mat
 |----------|-------------|---------|----------|
 | `VITE_INSTRUCTOR_PASSCODE` | Passcode for instructor access | `TeachSQL2024` | Yes |
 | `VITE_API_BASE_URL` | Backend API URL | (empty) | For hosted backend |
+| `VITE_ENABLE_VERCEL_ANALYTICS` | Load Vercel analytics bundle at runtime | `false` | No |
+| `VITE_ENABLE_VERCEL_SPEED_INSIGHTS` | Enable Vercel speed insights component | `true` | No |
 | `VITE_ENABLE_PDF_INDEX` | Enable PDF index UI | `false` | No |
 | `VITE_ENABLE_LLM` | Enable LLM UI | `false` | No |
 
@@ -670,7 +675,20 @@ Expected:
 - `resolvedEnvSource` is non-null
 - `persistenceRoutesEnabled` is `true`
 
-#### Step 1 — Capture auth state (run once per environment)
+#### Step 1 — One-time deterministic auth seed (deployed runs)
+
+Before running deployed Playwright auth proofs, set one stable instructor + class code pair:
+
+1. Create one fresh instructor account manually in production or preview.
+2. Capture the generated `studentSignupCode` from instructor UI or `GET /api/auth/me`.
+3. Set these env vars in Vercel for test runs:
+   - `E2E_INSTRUCTOR_EMAIL`
+   - `E2E_INSTRUCTOR_PASSWORD`
+   - `E2E_INSTRUCTOR_CODE` (must match backend `INSTRUCTOR_SIGNUP_CODE`)
+   - `E2E_STUDENT_CLASS_CODE` (captured real section code)
+4. Redeploy after env updates (Vercel env changes apply only to new deployments).
+
+#### Step 2 — Capture auth state (run once per environment)
 
 The `setup:auth` project runs automatically as a dependency of `chromium:auth`.
 You can also trigger it explicitly:
@@ -691,15 +709,15 @@ E2E_INSTRUCTOR_CODE="<instructor-code>" \
 
 `setup:auth` now fails fast when the backend is unreachable or not Neon-backed.
 It will not silently write empty auth state files for launch-proof runs.
+For deployed targets, it also fails fast unless deterministic `E2E_*` auth vars are provided.
 If logs show `Invalid instructor code`, set `E2E_INSTRUCTOR_CODE` to the backend's
 actual `INSTRUCTOR_SIGNUP_CODE` value and provide `E2E_STUDENT_CLASS_CODE` from an
-existing section (or use stable existing `E2E_*` account credentials that can log in
-without creating new accounts).
+existing section.
 
 Auth state is saved to `playwright/.auth/student.json` and
 `playwright/.auth/instructor.json` (gitignored — never commit these).
 
-#### Step 2 — Run the auth smoke
+#### Step 3 — Run the auth smoke
 
 ```bash
 # Local (dev server + backend must be running)
@@ -711,7 +729,7 @@ npx playwright test -c playwright.config.ts \
   --project=setup:auth --project=chromium:auth
 ```
 
-#### Step 3 — Run multi-device + section-scope + authz proofs
+#### Step 4 — Run multi-device + section-scope + authz proofs
 
 ```bash
 npx playwright test -c playwright.config.ts --project=chromium:auth \
@@ -751,6 +769,7 @@ E2E_INSTRUCTOR_CODE="<instructor-code>" \
 
 The `VERCEL_AUTOMATION_BYPASS_SECRET` is set via the Vercel dashboard under
 **Project → Settings → Deployment Protection → Automation bypass secret**.
+`E2E_VERCEL_BYPASS_SECRET` is supported as a backward-compatible alias.
 When set, the `x-vercel-protection-bypass` and `x-vercel-set-bypass-cookie`
 headers are injected automatically on every Playwright request.
 
@@ -761,17 +780,16 @@ headers are injected automatically on every Playwright request.
 | `PLAYWRIGHT_BASE_URL` | `http://127.0.0.1:4173` | Target URL (set for deployed runs) |
 | `PLAYWRIGHT_API_BASE_URL` | `http://127.0.0.1:3001` | Backend API origin for split frontend/backend proofs |
 | `VERCEL_AUTOMATION_BYPASS_SECRET` | — | Vercel protection bypass header |
+| `E2E_VERCEL_BYPASS_SECRET` | — | Alias for `VERCEL_AUTOMATION_BYPASS_SECRET` |
 | `E2E_STUDENT_EMAIL` | `e2e-student-<ts>@sql-adapt.test` | Student account email |
 | `E2E_STUDENT_PASSWORD` | `E2eTestPass!123` | Student account password |
-| `E2E_STUDENT_CLASS_CODE` | — | Section signup code for student signup (required for new student creation) |
+| `E2E_STUDENT_CLASS_CODE` | — | Section signup code (required for deployed deterministic setup) |
 | `E2E_INSTRUCTOR_EMAIL` | `e2e-instructor-<ts>@sql-adapt.test` | Instructor account email |
 | `E2E_INSTRUCTOR_PASSWORD` | `E2eInstrPass!123` | Instructor account password |
-| `E2E_INSTRUCTOR_CODE` | `TeachSQL2024` | Instructor signup code (dev default) |
+| `E2E_INSTRUCTOR_CODE` | `TeachSQL2024` (local default) | Instructor signup code (required for deployed deterministic setup) |
 
-> **Note:** Set `E2E_STUDENT_EMAIL` / `E2E_STUDENT_PASSWORD` to stable values in CI
-> so the setup project can log in to an existing account (idempotent). When not set,
-> a fresh unique email is generated each run and signup is attempted first with login
-> as a fallback.
+> **Note:** Set both student and instructor `E2E_*` credentials to stable values in CI
+> so setup can log in first (idempotent) and only fall back to signup when necessary.
 
 #### What the auth smoke proves
 
