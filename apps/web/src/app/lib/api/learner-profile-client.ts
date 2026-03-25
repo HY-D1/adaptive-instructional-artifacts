@@ -79,15 +79,16 @@ async function fetchApi<T>(
 ): Promise<ApiResponse<T>> {
   const url = `${API_URL}${endpoint}`;
   const requestInit = withCsrfHeader(options);
+  const headers = new Headers(requestInit.headers || {});
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
   
   try {
     const response = await fetch(url, {
       ...requestInit,
       credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        ...requestInit.headers,
-      },
+      headers,
     });
 
     if (!response.ok) {

@@ -64,13 +64,14 @@ export interface LogoutResult {
 
 async function authFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const requestInit = withCsrfHeader(init);
+  const headers = new Headers(requestInit.headers || {});
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
   return fetch(`${AUTH_BASE}${path}`, {
     ...requestInit,
     credentials: 'include',         // send/receive httpOnly cookies
-    headers: {
-      'Content-Type': 'application/json',
-      ...requestInit.headers,
-    },
+    headers,
   });
 }
 

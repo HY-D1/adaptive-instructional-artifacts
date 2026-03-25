@@ -21,7 +21,7 @@ function getCookie(name: string): string | null {
   return null;
 }
 
-function isMutatingMethod(method?: string): boolean {
+export function isMutatingMethod(method?: string): boolean {
   if (!method) return false;
   const normalized = method.toUpperCase();
   return normalized === 'POST' || normalized === 'PUT' || normalized === 'PATCH' || normalized === 'DELETE';
@@ -52,4 +52,35 @@ export function setCsrfToken(token: string | null | undefined): void {
 
 export function clearCsrfToken(): void {
   csrfTokenOverride = null;
+}
+
+type AuthMeResponse = {
+  csrfToken?: string;
+};
+
+export async function refreshCsrfTokenFromAuthMe(authMeUrl: string): Promise<boolean> {
+  try {
+    const response = await fetch(authMeUrl, {
+      method: 'GET',
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        clearCsrfToken();
+      }
+      return false;
+    }
+
+    const body = await response.json().catch(() => null as AuthMeResponse | null);
+    const token = normalizeToken(body?.csrfToken);
+    if (!token) {
+      return false;
+    }
+
+    setCsrfToken(token);
+    return true;
+  } catch {
+    return false;
+  }
 }

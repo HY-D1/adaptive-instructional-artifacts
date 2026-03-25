@@ -42,6 +42,7 @@ import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePo
 import { useUserRole } from '../hooks/useUserRole';
 import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync } from '../lib/storage';
 import { useAuth } from '../lib/auth-context';
+import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
 import { clearUiStateForActor, getUiState, setUiState } from '../lib/ui-state';
 import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
@@ -248,10 +249,11 @@ function analyzeLearnerHistory(interactions: InteractionEvent[]) {
  */
 export function LearningInterface() {
   const location = useLocation();
-  const { role, isStudent, isInstructor, profile } = useUserRole();
+  const { role, isStudent, isInstructor, profile, isLoading: isRoleLoading } = useUserRole();
   const { isHydrating } = useAuth();
+  const cachedProfileId = storage.getUserProfile()?.id;
   // Use actual user profile ID for data isolation (aligned with TextbookPage)
-  const learnerId = profile?.id || 'learner-1';
+  const learnerId = profile?.id || cachedProfileId || (AUTH_BACKEND_CONFIGURED ? '' : 'learner-1');
   const [sessionId, setSessionId] = useState('');
   const [currentProblem, setCurrentProblem] = useState<SQLProblem>(sqlProblems[0]);
   const [activeConceptId, setActiveConceptId] = useState<string | null>(null);
@@ -608,7 +610,7 @@ export function LearningInterface() {
 
   // Load initial data
   useEffect(() => {
-    if (isHydrating) {
+    if (isHydrating || (AUTH_BACKEND_CONFIGURED && (isRoleLoading || !learnerId))) {
       return undefined;
     }
     const timer = window.setTimeout(() => setIsLoading(false), 500);
@@ -618,7 +620,7 @@ export function LearningInterface() {
       notificationTimeoutsRef.current.forEach(id => window.clearTimeout(id));
       notificationTimeoutsRef.current.clear();
     };
-  }, [isHydrating]);
+  }, [isHydrating, isRoleLoading, learnerId]);
 
   // Parse query params on mount to set problem/concept context
   useEffect(() => {
@@ -701,6 +703,10 @@ export function LearningInterface() {
 
   // Calculate total time across sessions
   useEffect(() => {
+    if (!learnerId) {
+      setTotalTimeAcrossSessions(0);
+      return;
+    }
     const learnerInteractions = storage.getInteractionsByLearner(learnerId);
     const totalMs = learnerInteractions.reduce((total, interaction) => {
       return total + (interaction.timeSpent || 0);
@@ -849,6 +855,9 @@ export function LearningInterface() {
 
   // Effect 1: Session initialization - handles profile, session ID, and state reset
   useEffect(() => {
+    if (!learnerId) {
+      return;
+    }
     // Initialize learner profile if doesn't exist
     let profile = storage.getProfile(learnerId);
     if (!profile) {

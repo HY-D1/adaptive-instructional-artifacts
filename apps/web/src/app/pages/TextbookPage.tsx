@@ -28,6 +28,7 @@ import { useUserRole } from '../hooks/useUserRole';
 import { getTextbookSummaryCounts } from '../lib/counts/selectors';
 import { storage } from '../lib/storage';
 import { useAuth } from '../lib/auth-context';
+import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
 import { getUiState, setUiState } from '../lib/ui-state';
 import type { InteractionEvent } from '../types';
 
@@ -54,14 +55,15 @@ interface TextbookUiState {
 
 export function TextbookPage() {
   const navigate = useNavigate();
-  const { isStudent, isInstructor, profile } = useUserRole();
+  const { isStudent, isInstructor, profile, isLoading: isRoleLoading } = useUserRole();
   const { isHydrating } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Use the actual user's ID as the learner ID (aligned with LearningInterface)
   // For students: always use their own profile ID
   // For instructors: can view other learners via URL param (for research purposes)
-  const userLearnerId = profile?.id || 'learner-1';
+  const cachedProfileId = storage.getUserProfile()?.id;
+  const userLearnerId = profile?.id || cachedProfileId || (AUTH_BACKEND_CONFIGURED ? '' : 'learner-1');
   const urlLearnerId = searchParams.get('learnerId');
   
   // Students always see their own data; instructors can view others via URL
@@ -82,18 +84,20 @@ export function TextbookPage() {
   const [storageVersion, setStorageVersion] = useState(0);
   
   useEffect(() => {
-    if (isHydrating) {
+    if (isHydrating || (AUTH_BACKEND_CONFIGURED && (isRoleLoading || !learnerId))) {
       return undefined;
     }
     const timer = setTimeout(() => setIsLoading(false), 500);
     return () => clearTimeout(timer);
-  }, [isHydrating]);
+  }, [isHydrating, isRoleLoading, learnerId]);
 
   useEffect(() => {
+    if (!learnerId) return;
     void storage.hydrateLearner(learnerId);
   }, [learnerId]);
 
   useEffect(() => {
+    if (!learnerId) return;
     const persisted = getUiState<TextbookUiState>('textbook', {
       role: isInstructor ? 'instructor' : 'student',
       actorId: learnerId,
@@ -107,6 +111,7 @@ export function TextbookPage() {
   }, [isInstructor, learnerId]);
 
   useEffect(() => {
+    if (!learnerId) return;
     setUiState<TextbookUiState>(
       'textbook',
       { role: isInstructor ? 'instructor' : 'student', actorId: learnerId },

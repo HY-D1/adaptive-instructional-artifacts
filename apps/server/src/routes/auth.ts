@@ -31,6 +31,7 @@ import {
 import {
   createCsrfToken,
   setCsrfCookie,
+  CSRF_COOKIE_NAME,
   clearCsrfCookie,
   requireCsrf,
 } from '../middleware/csrf.js';
@@ -84,6 +85,16 @@ async function withSectionContext(account: AuthAccountPublic) {
       studentSignupCode: section.studentSignupCode,
     })),
   };
+}
+
+function getOrCreateCsrfToken(req: Request, res: Response): string {
+  const existingToken = req.cookies?.[CSRF_COOKIE_NAME];
+  if (typeof existingToken === 'string' && existingToken.trim().length > 0) {
+    return existingToken;
+  }
+  const csrfToken = createCsrfToken();
+  setCsrfCookie(res, csrfToken);
+  return csrfToken;
 }
 
 // ============================================================================
@@ -316,8 +327,7 @@ router.get('/me', (req: Request, res: Response) => {
           res.status(401).json({ success: false, error: 'Account not found' });
           return;
         }
-        const csrfToken = createCsrfToken();
-        setCsrfCookie(res, csrfToken);
+        const csrfToken = getOrCreateCsrfToken(req, res);
         withSectionContext(toPublicAccount(account))
           .then((userWithContext) => {
             res.json({ success: true, user: userWithContext, csrfToken });
@@ -335,8 +345,7 @@ router.get('/me', (req: Request, res: Response) => {
   }
 
   // SQLite mode: return payload claims directly (no real accounts)
-  const csrfToken = createCsrfToken();
-  setCsrfCookie(res, csrfToken);
+  const csrfToken = getOrCreateCsrfToken(req, res);
   res.json({
     success: true,
     user: {

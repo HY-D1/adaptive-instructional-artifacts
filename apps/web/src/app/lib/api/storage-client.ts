@@ -11,7 +11,11 @@ import type {
   LearnerProfile,
   ConceptCoverageEvidence,
 } from '@/app/types';
-import { withCsrfHeader } from './csrf-client';
+import {
+  withCsrfHeader,
+  isMutatingMethod,
+  refreshCsrfTokenFromAuthMe,
+} from './csrf-client';
 
 // API Configuration
 // VITE_API_BASE_URL is the canonical env var (e.g. https://my-api.vercel.app — no trailing /api)
@@ -260,20 +264,42 @@ async function fetchApi<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   const url = `${API_URL}${endpoint}`;
-  const requestInit = withCsrfHeader(options);
+  const authMeUrl = `${API_URL}/auth/me`;
+
+  const executeRequest = async (requestOptions: RequestInit): Promise<Response> => {
+    const headers = new Headers(requestOptions.headers || {});
+    if (!headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+
+    return fetch(url, {
+      ...requestOptions,
+      credentials: 'include',   // send JWT cookie for auth-protected API routes
+      headers,
+    });
+  };
   
   try {
-    const response = await fetch(url, {
-      ...requestInit,
-      credentials: 'include',   // send JWT cookie for auth-protected API routes
-      headers: {
-        'Content-Type': 'application/json',
-        ...requestInit.headers,
-      },
-    });
+    const mutating = isMutatingMethod(options.method);
+    let response = await executeRequest(withCsrfHeader(options));
+    let errorData = await response.json().catch(() => ({} as { error?: string; message?: string }));
+
+    // CSRF cookie/token can drift after auth state checks; refresh once and retry.
+    if (
+      !response.ok &&
+      mutating &&
+      response.status === 403 &&
+      typeof errorData.error === 'string' &&
+      errorData.error.toLowerCase().includes('csrf')
+    ) {
+      const refreshed = await refreshCsrfTokenFromAuthMe(authMeUrl);
+      if (refreshed) {
+        response = await executeRequest(withCsrfHeader(options));
+        errorData = await response.json().catch(() => ({} as { error?: string; message?: string }));
+      }
+    }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
       return {
         success: false,
         error: errorData.error || `HTTP ${response.status}: ${response.statusText}`,
@@ -281,7 +307,7 @@ async function fetchApi<T>(
       };
     }
 
-    const data = await response.json();
+    const data = errorData;
     return data;
   } catch (error) {
     return {
