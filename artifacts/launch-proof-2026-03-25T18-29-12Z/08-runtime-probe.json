@@ -1,0 +1,812 @@
+{
+  "testedAt": "2026-03-25T18:56:01.056Z",
+  "frontendUrl": "https://adaptive-instructional-artifacts.vercel.app",
+  "backendUrl": "https://adaptive-instructional-artifacts-ap.vercel.app",
+  "steps": [
+    {
+      "step": "auth-me-before",
+      "url": "https://adaptive-instructional-artifacts-ap.vercel.app/api/auth/me",
+      "status": 200,
+      "body": {
+        "success": true,
+        "user": {
+          "id": "326335d1-6768-4c3d-90bd-0a3279d6d595",
+          "email": "e2e-student-1774464870651@sql-adapt.test",
+          "role": "student",
+          "learnerId": "7a505481-ccd4-4ba5-ad6e-4a9175fb0f0d",
+          "name": "E2E Student",
+          "createdAt": "Wed Mar 25 2026 18:54:33 GMT+0000 (Coordinated Universal Time)",
+          "sectionId": "e57489af-668b-42d6-ae96-1f83211e593a",
+          "sectionName": "Fresh E2E Instructor's Section"
+        },
+        "csrfToken": "26f7d9e84581dccda02810adc91922629ea4622e7c71656c77937373927af183"
+      },
+      "pageUrl": "https://adaptive-instructional-artifacts.vercel.app/practice"
+    },
+    {
+      "step": "identity-after-save",
+      "status": 200,
+      "user": {
+        "id": "326335d1-6768-4c3d-90bd-0a3279d6d595",
+        "email": "e2e-student-1774464870651@sql-adapt.test",
+        "role": "student",
+        "learnerId": "7a505481-ccd4-4ba5-ad6e-4a9175fb0f0d",
+        "name": "E2E Student",
+        "createdAt": "Wed Mar 25 2026 18:54:33 GMT+0000 (Coordinated Universal Time)",
+        "sectionId": "e57489af-668b-42d6-ae96-1f83211e593a",
+        "sectionName": "Fresh E2E Instructor's Section"
+      },
+      "csrfToken": "552cde4215222d152c2031b564b500bcd684813ed1f5a3648b9fc9621b2ead47",
+      "pageUrl": "https://adaptive-instructional-artifacts.vercel.app/practice"
+    },
+    {
+      "step": "backend-textbook-after-save",
+      "url": "https://adaptive-instructional-artifacts-ap.vercel.app/api/textbooks/7a505481-ccd4-4ba5-ad6e-4a9175fb0f0d",
+      "status": 200,
+      "body": {
+        "success": true,
+        "data": []
+      },
+      "unitCount": 0,
+      "pageUrl": "https://adaptive-instructional-artifacts.vercel.app/practice"
+    },
+    {
+      "step": "auth-me-after-logout",
+      "url": "https://adaptive-instructional-artifacts-ap.vercel.app/api/auth/me",
+      "status": 200,
+      "body": {
+        "success": true,
+        "user": {
+          "id": "326335d1-6768-4c3d-90bd-0a3279d6d595",
+          "email": "e2e-student-1774464870651@sql-adapt.test",
+          "role": "student",
+          "learnerId": "7a505481-ccd4-4ba5-ad6e-4a9175fb0f0d",
+          "name": "E2E Student",
+          "createdAt": "Wed Mar 25 2026 18:54:33 GMT+0000 (Coordinated Universal Time)",
+          "sectionId": "e57489af-668b-42d6-ae96-1f83211e593a",
+          "sectionName": "Fresh E2E Instructor's Section"
+        },
+        "csrfToken": "2bc5f08c0ddebc68f330a8e6d3bb466a123d3b7b4beb5a2f4a3216a22f40592f"
+      },
+      "pageUrl": "https://adaptive-instructional-artifacts.vercel.app/practice"
+    }
+  ],
+  "consoleErrors": [
+    {
+      "type": "warning",
+      "text": "[Storage] Skipping invalid concept ID: syntax-error"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] Skipping invalid concept ID: syntax-error"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963172-g-e6fe6e3e-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963187-h-b455b832-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963198-i-4eb45e7f-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963202-j-f40cbef0-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963204-k-f71ba11c-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963215-l-e332e040-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963226-m-e3e819ac-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963238-n-28adbb78-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963248-o-5204a028-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963260-p-d17038e2-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963262-q-9e63c2d7-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963274-r-525e73b6-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963283-s-67f0d326-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963293-t-7265e575-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963296-u-a0802fb4-code-change (type: code_change)"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963307-v-a5f59cb1-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963316-w-47e04341-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963326-x-b107c6c3-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963335-y-6719c6ed-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963340-z-2f4ef36a-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963343-10-86a127d5-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963346-11-0079dad5-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963360-12-ae1f78a4-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963366-13-32afb12c-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963369-14-153f1cb3-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963371-15-8357f33f-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963374-16-28a14b5f-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963376-17-e7107192-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963378-18-1d194ac1-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963379-19-51cef2dc-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963383-1a-ce861b01-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963385-1b-376fc6f3-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963388-1c-6911f288-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963391-1d-f64a0e12-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963393-1e-b915d820-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963395-1f-922b7b6d-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963399-1g-fd336395-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963401-1h-83beba4c-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963403-1i-5e7cd517-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963407-1j-2c47e9a5-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963409-1k-048e95c9-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963411-1l-a79af770-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963415-1m-09c13819-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963417-1n-7e640504-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963419-1o-71c62bef-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963423-1p-2624a34f-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963426-1q-3e8236e6-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963427-1r-1c51120e-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963429-1s-e559257b-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963433-1t-f9cfac36-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963435-1u-323be480-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963439-1v-bbd3b135-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963442-1w-49be8f6e-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963444-1x-eab9f34e-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963448-1y-d397a21f-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963450-1z-f7c210f4-code-change (type: code_change)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event event-1774464963451-20-4ebd08bd-code-change (type: code_change)"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event guidance-req-1774464963533-22-fa9ded15 (type: guidance_request)"
+    },
+    {
+      "type": "error",
+      "text": "[AdaptiveHint] Hint generation failed: Demo mode: LLM not available, using fallback hints."
+    },
+    {
+      "type": "warning",
+      "text": "[EnhancedHint] Adaptive LLM generation failed: Demo mode: LLM not available, using fallback hints."
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event hint-1774464963536-23-c271a6e8-1-1 (type: hint_view)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] Skipping invalid concept ID: undefined table"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event guidance-view-1774464963537-24-a5484bfc (type: guidance_view)"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event guidance-req-1774464963574-25-fd5c6561 (type: guidance_request)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event guidance-esc-1774464963575-26-4541a086 (type: guidance_escalate)"
+    },
+    {
+      "type": "warning",
+      "text": "[Storage] No valid concept IDs found for event llm-1774464963581-29-3552a303-explanation.v1 (type: llm_generate)"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 403 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    }
+  ]
+}

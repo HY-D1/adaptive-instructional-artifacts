@@ -8,7 +8,7 @@
  * these functions return no-op results and the app falls back to passcode auth.
  */
 
-import { withCsrfHeader } from './csrf-client';
+import { withCsrfHeader, setCsrfToken, clearCsrfToken } from './csrf-client';
 
 const _API_BASE = import.meta.env.VITE_API_BASE_URL;
 const AUTH_BASE = _API_BASE ? `${_API_BASE}/api/auth` : 'http://localhost:3001/api/auth';
@@ -92,6 +92,7 @@ export async function signup(params: {
       body: JSON.stringify(params),
     });
     const data = await res.json();
+    setCsrfToken(data?.csrfToken);
     if (!res.ok) {
       return { success: false, error: data.error ?? `HTTP ${res.status}`, details: data.details };
     }
@@ -108,6 +109,7 @@ export async function login(email: string, password: string): Promise<AuthResult
       body: JSON.stringify({ email, password }),
     });
     const data = await res.json();
+    setCsrfToken(data?.csrfToken);
     if (!res.ok) {
       return { success: false, error: data.error ?? `HTTP ${res.status}` };
     }
@@ -126,12 +128,16 @@ export async function logout(): Promise<LogoutResult> {
     const res = await authFetch('/logout', { method: 'POST' });
     if (!res.ok) {
       const data = await res.json().catch(() => ({} as { error?: string }));
+      if (res.status === 401) {
+        clearCsrfToken();
+      }
       return {
         success: false,
         status: res.status,
         error: data.error ?? `HTTP ${res.status}`,
       };
     }
+    clearCsrfToken();
     return { success: true };
   } catch (err) {
     return {
@@ -144,8 +150,14 @@ export async function logout(): Promise<LogoutResult> {
 export async function getMe(): Promise<AuthUser | null> {
   try {
     const res = await authFetch('/me');
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (res.status === 401) {
+        clearCsrfToken();
+      }
+      return null;
+    }
     const data = await res.json();
+    setCsrfToken(data?.csrfToken);
     return data.success ? data.user : null;
   } catch {
     return null;

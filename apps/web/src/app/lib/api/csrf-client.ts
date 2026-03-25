@@ -1,4 +1,11 @@
 const CSRF_COOKIE_NAME = 'sql_adapt_csrf';
+let csrfTokenOverride: string | null = null;
+
+function normalizeToken(token: string | null | undefined): string | null {
+  if (!token) return null;
+  const trimmed = token.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
 
 function getCookie(name: string): string | null {
   if (typeof document === 'undefined') return null;
@@ -25,7 +32,7 @@ export function withCsrfHeader(init: RequestInit = {}): RequestInit {
     return init;
   }
 
-  const token = getCookie(CSRF_COOKIE_NAME);
+  const token = csrfTokenOverride ?? getCookie(CSRF_COOKIE_NAME);
   if (!token) {
     return init;
   }
@@ -39,3 +46,10 @@ export function withCsrfHeader(init: RequestInit = {}): RequestInit {
   };
 }
 
+export function setCsrfToken(token: string | null | undefined): void {
+  csrfTokenOverride = normalizeToken(token);
+}
+
+export function clearCsrfToken(): void {
+  csrfTokenOverride = null;
+}

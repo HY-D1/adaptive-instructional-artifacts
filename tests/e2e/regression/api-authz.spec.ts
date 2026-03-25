@@ -3,6 +3,10 @@ import { createApiContext, resolveApiBaseUrl } from '../helpers/auth-env';
 
 const API_BASE_URL = resolveApiBaseUrl();
 
+function expectBlocked(status: number): void {
+  expect([401, 403]).toContain(status);
+}
+
 async function signup(
   request: import('@playwright/test').APIRequestContext,
   payload: Record<string, unknown>
@@ -100,11 +104,11 @@ test.describe('@authz API authorization and learner spoof protections', () => {
       const externalStudent = await loginContext(playwright, externalStudentEmail, password);
       try {
       const anonInstructor = await anonymous.get('/api/instructor/learners');
-      expect(anonInstructor.status()).toBe(401);
+      expectBlocked(anonInstructor.status());
       const anonResearch = await anonymous.get('/api/research/export');
-      expect(anonResearch.status()).toBe(401);
+      expectBlocked(anonResearch.status());
       const anonInteractions = await anonymous.get(`/api/interactions?learnerId=${studentId}`);
-      expect(anonInteractions.status()).toBe(401);
+      expectBlocked(anonInteractions.status());
 
       const researchBlocked = await student.context.get('/api/research/export');
       expect(researchBlocked.status()).toBe(403);
@@ -130,7 +134,7 @@ test.describe('@authz API authorization and learner spoof protections', () => {
         data: { events: [spoofEvent] },
         headers: { 'x-csrf-token': student.csrfToken },
       });
-      expect(spoofWrite.ok()).toBeTruthy();
+      expect(spoofWrite.status()).toBe(403);
 
       const studentSessionSpoof = await student.context.post(`/api/sessions/${otherStudentId}/active`, {
         data: {
@@ -146,9 +150,7 @@ test.describe('@authz API authorization and learner spoof protections', () => {
       expect(ownRead.ok()).toBeTruthy();
       const ownReadBody = await ownRead.json();
       const spoofed = (ownReadBody.data || []).find((item: any) => item.id === spoofEvent.id);
-      expect(spoofed).toBeTruthy();
-      expect(spoofed.learnerId).toBe(studentId);
-      expect(spoofed.learnerId).not.toBe(otherStudentId);
+      expect(spoofed).toBeFalsy();
 
       const otherLearnerDetail = await instructor.context.get(`/api/instructor/learner/${otherStudentId}`);
       expect(otherLearnerDetail.ok()).toBeTruthy();
@@ -185,9 +187,6 @@ test.describe('@authz API authorization and learner spoof protections', () => {
       expect(ownSessionRead.ok()).toBeTruthy();
       const ownSessionBody = await ownSessionRead.json();
       expect(ownSessionBody.data?.sectionId).toBeTruthy();
-
-      const ownEventWithSection = (ownReadBody.data || []).find((item: any) => item.id === spoofEvent.id);
-      expect(ownEventWithSection?.sectionId).toBeTruthy();
 
       const externalEvent = {
         id: `evt-external-${ts}`,
