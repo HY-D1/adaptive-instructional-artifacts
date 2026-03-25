@@ -65,7 +65,13 @@ export function setAuthCookie(res: Response, token: string): void {
 }
 
 export function clearAuthCookie(res: Response): void {
-  res.clearCookie(COOKIE_NAME, { path: '/' });
+  const isProd = process.env.NODE_ENV === 'production';
+  res.clearCookie(COOKIE_NAME, {
+    path: '/',
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+    httpOnly: true,
+  });
 }
 
 // ============================================================================

@@ -14,7 +14,8 @@ const _API_BASE = import.meta.env.VITE_API_BASE_URL;
 const AUTH_BASE = _API_BASE ? `${_API_BASE}/api/auth` : 'http://localhost:3001/api/auth';
 
 /** True only when a backend API is configured */
-export const AUTH_ENABLED = !!_API_BASE || import.meta.env.DEV;
+export const AUTH_BACKEND_CONFIGURED = !!_API_BASE;
+export const AUTH_ENABLED = AUTH_BACKEND_CONFIGURED || import.meta.env.DEV;
 
 // ============================================================================
 // Types
@@ -41,6 +42,12 @@ export interface AuthResult {
   user?: AuthUser;
   error?: string;
   details?: Record<string, string[]>;
+}
+
+export interface LogoutResult {
+  success: boolean;
+  status?: number;
+  error?: string;
 }
 
 // ============================================================================
@@ -102,11 +109,27 @@ export async function login(email: string, password: string): Promise<AuthResult
   }
 }
 
-export async function logout(): Promise<void> {
+export async function logout(): Promise<LogoutResult> {
+  if (!AUTH_BACKEND_CONFIGURED) {
+    return { success: true };
+  }
+
   try {
-    await authFetch('/logout', { method: 'POST' });
-  } catch {
-    // Ignore errors on logout
+    const res = await authFetch('/logout', { method: 'POST' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({} as { error?: string }));
+      return {
+        success: false,
+        status: res.status,
+        error: data.error ?? `HTTP ${res.status}`,
+      };
+    }
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: (err as Error).message,
+    };
   }
 }
 

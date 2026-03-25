@@ -49,7 +49,7 @@
 import { expect, test } from '@playwright/test';
 import fs from 'fs';
 import { replaceEditorText, getTextbookUnits } from '../../helpers/test-helpers';
-import { STUDENT_AUTH_FILE } from '../setup/auth.setup';
+import { STUDENT_AUTH_FILE } from '../helpers/auth-state-paths';
 
 // ─── Auth availability guard ───────────────────────────────────────────────────
 // The 'setup:auth' project writes an empty { cookies:[], origins:[] } file when
@@ -216,6 +216,52 @@ test.describe('@deployed-auth-smoke Student journey with real auth', () => {
         path: 'test-results/deployed-auth-smoke-textbook-fresh-context.png',
         fullPage: true,
       });
+    } finally {
+      await freshCtx.close();
+    }
+  });
+
+  test('logout from nav redirects to /login and invalidates backend session', async ({ page }) => {
+    await page.goto('/practice');
+    await expect(
+      page.getByRole('button', { name: 'Run Query' }),
+    ).toBeEnabled({ timeout: 30_000 });
+
+    const statusBefore = await page.evaluate(async () => {
+      const response = await fetch('/api/auth/me', { credentials: 'include' });
+      return response.status;
+    });
+    expect(statusBefore).toBe(200);
+
+    const logoutButton = page.getByRole('button', { name: /logout/i }).first();
+    await expect(logoutButton).toBeVisible({ timeout: 10_000 });
+    await logoutButton.click();
+
+    await expect(page).toHaveURL(/\/login$/, { timeout: 15_000 });
+    await expect.poll(
+      async () => page.evaluate(async () => {
+        const response = await fetch('/api/auth/me', { credentials: 'include' });
+        return response.status;
+      }),
+      { timeout: 15_000, intervals: [500] },
+    ).toBe(401);
+  });
+
+  test('auth mode start page blocks local-only onboarding', async ({ page, browser }) => {
+    await page.goto('/practice');
+    const origin = new URL(page.url()).origin;
+
+    const freshCtx = await browser.newContext();
+    const freshPage = await freshCtx.newPage();
+    try {
+      await freshPage.goto(`${origin}/`, { waitUntil: 'domcontentloaded' });
+      await expect(
+        freshPage.getByRole('heading', { name: 'SQL-Adapt Learning System' }),
+      ).toBeVisible({ timeout: 15_000 });
+      await expect(freshPage.getByRole('button', { name: /^Sign In$/i })).toBeVisible();
+      await expect(freshPage.getByRole('button', { name: /^Create Account$/i })).toBeVisible();
+      await expect(freshPage.getByRole('button', { name: /Get Started/i })).toHaveCount(0);
+      await expect(freshPage.getByPlaceholder('Enter your username')).toHaveCount(0);
     } finally {
       await freshCtx.close();
     }

@@ -34,9 +34,7 @@ import {
   resolveFrontendBaseUrl,
   runNeonPreflight,
 } from '../helpers/auth-env';
-
-export const STUDENT_AUTH_FILE = path.resolve('playwright/.auth/student.json');
-export const INSTRUCTOR_AUTH_FILE = path.resolve('playwright/.auth/instructor.json');
+import { STUDENT_AUTH_FILE, INSTRUCTOR_AUTH_FILE } from '../helpers/auth-state-paths';
 
 const API_BASE_URL = resolveApiBaseUrl();
 

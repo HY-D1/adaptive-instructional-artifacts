@@ -10,7 +10,7 @@ import { Label } from '../components/ui/label';
 import { cn } from '../components/ui/utils';
 import { storage } from '../lib/storage';
 import { isInstructorModeAvailable, isHostedMode, logRuntimeConfig } from '../lib/runtime-config';
-import { AUTH_ENABLED } from '../lib/api/auth-client';
+import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
 import { useAuth } from '../lib/auth-context';
 import type { UserRole, UserProfile } from '../types';
 
@@ -25,6 +25,7 @@ import type { UserRole, UserProfile } from '../types';
 const ENV_PASSCODE = import.meta.env.VITE_INSTRUCTOR_PASSCODE;
 const IS_DEV = import.meta.env.DEV;
 const INSTRUCTOR_PASSCODE = ENV_PASSCODE || (IS_DEV ? 'TeachSQL2024' : '');
+const ACCOUNT_MODE_ENABLED = AUTH_BACKEND_CONFIGURED;
 
 /**
  * StartPage - Entry point for the application
@@ -64,6 +65,10 @@ export function StartPage() {
         navigate(user.role === 'instructor' ? '/instructor-dashboard' : '/practice', { replace: true });
         return;
       }
+      if (ACCOUNT_MODE_ENABLED) {
+        setIsLoading(false);
+        return;
+      }
       try {
         const profile = storage.getUserProfile();
         if (profile) {
@@ -98,6 +103,11 @@ export function StartPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (ACCOUNT_MODE_ENABLED) {
+      navigate('/login');
+      return;
+    }
     
     if (!username.trim() || !selectedRole) return;
 
@@ -185,24 +195,34 @@ export function StartPage() {
             </p>
           </div>
 
-          {/* Account sign-in CTA (when backend is configured) */}
-          {AUTH_ENABLED && (
-            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-800 mb-3">
-                <strong>Have an account?</strong> Sign in to sync your progress across devices.
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full border-blue-300 text-blue-700 hover:bg-blue-100"
-                onClick={() => navigate('/login')}
-              >
-                <LogIn className="w-4 h-4 mr-2" />
-                Sign In / Create Account
-              </Button>
-            </div>
-          )}
-
+          {ACCOUNT_MODE_ENABLED ? (
+            <Card className="border-blue-200 shadow-sm">
+              <CardHeader>
+                <CardTitle>Sign in required</CardTitle>
+                <CardDescription>
+                  This deployment uses account-based persistence. Sign in to restore your saved SQL practice data.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => navigate('/login')}
+                >
+                  <LogIn className="w-4 h-4 mr-2" />
+                  Sign In
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => navigate('/login?tab=signup')}
+                >
+                  Create Account
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Username Input */}
             <div className="space-y-2">
@@ -364,6 +384,7 @@ export function StartPage() {
               </p>
             )}
           </form>
+          )}
 
           {/* Feature Availability Notice */}
           {!isInstructorConfigured && (
@@ -398,7 +419,9 @@ export function StartPage() {
           {/* Footer */}
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-400">
-              Your progress will be saved locally on this device
+              {ACCOUNT_MODE_ENABLED
+                ? 'Your progress is saved to your account and restored when you sign in.'
+                : 'Your progress will be saved locally on this device'}
             </p>
           </div>
         </div>

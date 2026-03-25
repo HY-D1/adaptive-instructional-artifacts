@@ -20,7 +20,12 @@ export function setCsrfCookie(res: Response, token: string): void {
 }
 
 export function clearCsrfCookie(res: Response): void {
-  res.clearCookie(CSRF_COOKIE_NAME, { path: '/' });
+  const isProd = process.env.NODE_ENV === 'production';
+  res.clearCookie(CSRF_COOKIE_NAME, {
+    path: '/',
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+  });
 }
 
 function timingSafeEqual(a: string, b: string): boolean {
@@ -49,4 +54,3 @@ export function requireCsrf(req: Request, res: Response, next: NextFunction): vo
 
   next();
 }
-

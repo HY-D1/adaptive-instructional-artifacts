@@ -12,8 +12,15 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { getMe, login as apiLogin, logout as apiLogout, signup as apiSignup, AUTH_ENABLED } from './api/auth-client';
-import type { AuthUser, AuthResult } from './api/auth-client';
+import {
+  getMe,
+  login as apiLogin,
+  logout as apiLogout,
+  signup as apiSignup,
+  AUTH_ENABLED,
+  AUTH_BACKEND_CONFIGURED,
+} from './api/auth-client';
+import type { AuthUser, AuthResult, LogoutResult } from './api/auth-client';
 import { storage } from './storage/index';
 import { clearUiStateForActor } from './ui-state';
 
@@ -28,7 +35,7 @@ interface AuthContextValue {
   isHydrating: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<AuthResult>;
-  logout: () => Promise<void>;
+  logout: () => Promise<LogoutResult>;
   signup: (params: {
     name: string;
     email: string;
@@ -49,7 +56,7 @@ const AuthContext = createContext<AuthContextValue>({
   isHydrating: false,
   isAuthenticated: false,
   login: async () => ({ success: false, error: 'AuthProvider not mounted' }),
-  logout: async () => {},
+  logout: async () => ({ success: false, error: 'AuthProvider not mounted' }),
   signup: async () => ({ success: false, error: 'AuthProvider not mounted' }),
 });
 
@@ -114,13 +121,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return result;
   }, [user]);
 
-  const logout = useCallback(async () => {
-    await apiLogout();
+  const logout = useCallback(async (): Promise<LogoutResult> => {
+    let result = await apiLogout();
+    if (!result.success && result.status === 403 && AUTH_BACKEND_CONFIGURED) {
+      // CSRF token can be stale after long-lived sessions; refresh once and retry.
+      await getMe();
+      result = await apiLogout();
+    }
+    if (!result.success && AUTH_BACKEND_CONFIGURED && result.status !== 401) {
+      return result;
+    }
     if (user?.learnerId) {
       clearUiStateForActor(user.learnerId);
     }
     setUser(null);
     storage.clearUserProfile();
+    return { success: true };
   }, [user]);
 
   const signup = useCallback(async (params: {

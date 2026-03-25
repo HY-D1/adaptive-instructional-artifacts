@@ -10,6 +10,8 @@ import { useSessionPersistence } from '../hooks/useSessionPersistence';
 import { storage } from '../lib/storage';
 import { isPreviewModeActive } from '../lib/auth-guard';
 import { clearAllUiState, clearUiStateForActor } from '../lib/ui-state';
+import { useAuth } from '../lib/auth-context';
+import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
 
 /**
  * Sync toast notification component
@@ -90,6 +92,10 @@ function SessionExpired({ onRedirect }: SessionExpiredProps) {
 export function RootLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { logout } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const postLogoutPath = AUTH_BACKEND_CONFIGURED ? '/login' : '/';
   
   // Session persistence hook for cross-tab sync (must come before useUserRole)
   const {
@@ -171,19 +177,45 @@ export function RootLayout() {
     clearAllUiState();
   }, [syncedProfile?.id]);
 
-  // Handle session expired redirect
-  const handleSessionExpiredRedirect = () => {
+  const finalizeLocalSignOut = useCallback(() => {
     clearScopedUiState();
     clearProfile();
-    navigate('/');
+  }, [clearScopedUiState, clearProfile]);
+
+  const handleLogout = useCallback(async () => {
+    if (isLoggingOut) {
+      return;
+    }
+    setLogoutError(null);
+    setIsLoggingOut(true);
+    const result = await logout();
+    if (!result.success) {
+      setLogoutError(result.error ?? 'Sign out failed. Please try again.');
+      setIsLoggingOut(false);
+      return;
+    }
+
+    finalizeLocalSignOut();
+    setMobileMenuOpen(false);
+    navigate(postLogoutPath, { replace: true });
+    setIsLoggingOut(false);
+  }, [isLoggingOut, logout, finalizeLocalSignOut, navigate, postLogoutPath]);
+
+  // Handle session expired redirect
+  const handleSessionExpiredRedirect = () => {
+    finalizeLocalSignOut();
+    navigate(postLogoutPath, { replace: true });
   };
 
   // Handle switch user - clear profile and go to start page
-  const handleSwitchUser = () => {
-    clearScopedUiState();
-    clearProfile();
-    navigate('/');
-  };
+  const handleSwitchUser = useCallback(() => {
+    if (AUTH_BACKEND_CONFIGURED) {
+      void handleLogout();
+      return;
+    }
+    finalizeLocalSignOut();
+    navigate(postLogoutPath, { replace: true });
+  }, [finalizeLocalSignOut, handleLogout, navigate, postLogoutPath]);
 
   // Redirect instructor accessing /practice (student-only) to instructor dashboard
   // BUT allow access in preview mode
@@ -314,6 +346,7 @@ export function RootLayout() {
                         variant="ghost"
                         size="sm"
                         onClick={handleSwitchUser}
+                        disabled={isLoggingOut}
                         className="touch-manipulation hidden md:flex"
                         aria-label="Switch User"
                       >
@@ -333,20 +366,19 @@ export function RootLayout() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
-                        clearScopedUiState();
-                        storage.clearUserProfile();
-                        window.location.href = '/';
-                      }}
+                      onClick={() => { void handleLogout(); }}
+                      disabled={isLoggingOut}
                       className="touch-manipulation hidden md:flex"
                       aria-label="Logout"
                     >
                       <LogOut className="size-4 mr-2 hidden sm:block" />
-                      <span className="hidden sm:inline">Logout</span>
+                      <span className="hidden sm:inline">
+                        {isLoggingOut ? 'Signing Out...' : 'Logout'}
+                      </span>
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>Logout and return to start page</p>
+                    <p>Sign out of your account</p>
                   </TooltipContent>
                 </Tooltip>
 
@@ -389,6 +421,7 @@ export function RootLayout() {
                               setMobileMenuOpen(false);
                               handleSwitchUser();
                             }}
+                            disabled={isLoggingOut}
                           >
                             <Users className="size-5 mr-3" />
                             <span>Switch User</span>
@@ -399,14 +432,12 @@ export function RootLayout() {
                           size="lg"
                           className="w-full justify-start touch-manipulation text-red-600 hover:text-red-700 hover:bg-red-50"
                           onClick={() => {
-                            setMobileMenuOpen(false);
-                            clearScopedUiState();
-                            storage.clearUserProfile();
-                            window.location.href = '/';
+                            void handleLogout();
                           }}
+                          disabled={isLoggingOut}
                         >
                           <LogOut className="size-5 mr-3" />
-                          <span>Logout</span>
+                          <span>{isLoggingOut ? 'Signing Out...' : 'Logout'}</span>
                         </Button>
                         <div className="px-2 text-sm text-gray-600">
                           <p className="font-medium mb-2">Keyboard Shortcuts</p>
@@ -432,6 +463,11 @@ export function RootLayout() {
               </div>
             </div>
           </div>
+          {logoutError && (
+            <div className="border-t border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700" role="alert">
+              {logoutError}
+            </div>
+          )}
         </nav>
 
         <div className="flex-1 overflow-auto relative h-full">
