@@ -160,10 +160,25 @@ export const STUDENT_SIGNUP_CODE: string =
 
 export const PORT = parseInt(process.env.PORT || '3001', 10);
 export const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
-export const CORS_ORIGINS = (process.env.CORS_ORIGINS || CORS_ORIGIN)
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+
+function parseCsv(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function normalizeOriginValue(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+export const CORS_ORIGINS = Array.from(
+  new Set(parseCsv(process.env.CORS_ORIGINS || CORS_ORIGIN).map(normalizeOriginValue)),
+);
+export const CORS_ORIGIN_PATTERNS = Array.from(
+  new Set(parseCsv(process.env.CORS_ORIGIN_PATTERNS).map(normalizeOriginValue)),
+);
 export const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // ============================================================================

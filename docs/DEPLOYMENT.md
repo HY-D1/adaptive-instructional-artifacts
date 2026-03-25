@@ -34,9 +34,17 @@
 | `STUDENT_SIGNUP_CODE` | Student accounts | Class code required when creating a student account. Falls back to `ClassSQL2024` in dev. |
 | `INSTRUCTOR_SIGNUP_CODE` | Instructor accounts | Code required when creating an instructor account. Falls back to `TeachSQL2024` in dev. |
 | `CORS_ORIGINS` | Recommended | Comma-separated frontend origins allowed to use credentialed requests (for example `https://app.example.com,https://www.example.com`) |
+| `CORS_ORIGIN_PATTERNS` | Optional | Comma-separated wildcard origin patterns for trusted preview domains (for example `https://adaptive-instructional-artifacts-*.vercel.app`) |
 | `PORT` | No | HTTP port (default 3001) |
 
 > **Auth setup**: Set `JWT_SECRET` to a strong random value (e.g. `openssl rand -base64 32`). Set both `STUDENT_SIGNUP_CODE` and `INSTRUCTOR_SIGNUP_CODE` to protect account creation. After adding these vars, redeploy the backend and run `npm run db:init:neon` to create the `auth_accounts` table.
+>
+> **CORS setup (preview + prod)**:
+> - Keep stable domains in `CORS_ORIGINS`, for example:
+>   `https://adaptive-instructional-artifacts.vercel.app`
+> - Add trusted wildcard preview domains in `CORS_ORIGIN_PATTERNS`, for example:
+>   `https://adaptive-instructional-artifacts-*.vercel.app`
+> - Do not use `*` with credentialed cookies.
 
 > **Env var resolution order**: The backend checks these four names in priority order (`DATABASE_URL` → `NEON_DATABASE_URL` → `adaptive_data_DATABASE_URL` → `adaptive_data_POSTGRES_URL`) and uses the first non-empty value. You only need to set one.
 > **After changing env vars you must redeploy** — Vercel bakes env vars into the build/runtime at deploy time. Adding or changing a variable without redeploying has no effect.

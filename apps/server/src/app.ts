@@ -27,6 +27,7 @@ import { authRouter } from './routes/auth.js';
 import { instructorRouter } from './routes/instructor.js';
 import {
   ENABLE_LLM,
+  CORS_ORIGIN_PATTERNS,
   CORS_ORIGINS,
   getFeatureStatus,
   OLLAMA_BASE_URL,
@@ -59,7 +60,36 @@ export function ensureSchemaInitialized(): Promise<void> {
 }
 
 function isAllowedOrigin(origin: string): boolean {
-  return CORS_ORIGINS.includes(origin);
+  if (!isValidOrigin(origin)) {
+    return false;
+  }
+
+  const normalizedOrigin = normalizeOrigin(origin);
+  if (CORS_ORIGINS.includes(normalizedOrigin)) {
+    return true;
+  }
+
+  return CORS_ORIGIN_REGEXPS.some((pattern) => pattern.test(normalizedOrigin));
+}
+
+function normalizeOrigin(origin: string): string {
+  return origin.replace(/\/+$/, '');
+}
+
+function isValidOrigin(origin: string): boolean {
+  try {
+    const parsed = new URL(origin);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.origin === origin;
+  } catch {
+    return false;
+  }
+}
+
+function wildcardPatternToRegExp(pattern: string): RegExp {
+  const escaped = pattern
+    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/\*/g, '[^/]*');
+  return new RegExp(`^${escaped}$`);
 }
 
 function originGuard(req: Request, res: Response, next: NextFunction): void {
@@ -86,6 +116,7 @@ function originGuard(req: Request, res: Response, next: NextFunction): void {
 }
 
 const app = express();
+const CORS_ORIGIN_REGEXPS = CORS_ORIGIN_PATTERNS.map((pattern) => wildcardPatternToRegExp(pattern));
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -93,11 +124,7 @@ app.use(cors({
       callback(null, true);
       return;
     }
-    if (isAllowedOrigin(origin)) {
-      callback(null, true);
-      return;
-    }
-    callback(new Error('Origin not allowed by CORS'));
+    callback(null, isAllowedOrigin(origin));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
