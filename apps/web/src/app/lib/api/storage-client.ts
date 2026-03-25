@@ -508,7 +508,7 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
     executionTimeMs: event.executionTimeMs,
     
     // Hint/Explanation fields
-    hintId: event.hintId,
+    hintId: event.eventType === 'hint_view' ? undefined : event.hintId,
     explanationId: event.explanationId,
     hintText: event.hintText,
     hintLevel: event.hintLevel,
@@ -673,7 +673,7 @@ function convertToFrontendEvent(i: BackendInteraction): InteractionEvent {
     executionTimeMs: i.executionTimeMs,
     
     // Hint/Explanation fields
-    hintId: i.hintId,
+    hintId: i.eventType === 'hint_view' ? undefined : i.hintId,
     explanationId: i.explanationId,
     hintText: i.hintText,
     hintLevel: i.hintLevel as 1 | 2 | 3 | undefined,

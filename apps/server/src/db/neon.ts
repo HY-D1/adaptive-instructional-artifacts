@@ -626,6 +626,7 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
   const now = new Date().toISOString();
 
   const payload = data.payload || {};
+  const storedHintId = data.eventType === 'hint_view' ? null : (payload.hintId || null);
   const resolvedSectionId = data.sectionId ?? await resolveSectionIdForLearner(data.learnerId);
 
   await db`
@@ -663,7 +664,7 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
       ${payload.code || null},
       ${payload.error || null},
       ${payload.errorSubtypeId || null},
-      ${payload.hintId || null},
+      ${storedHintId},
       ${payload.explanationId || null},
       ${payload.hintText || null},
       ${payload.hintLevel || null},
@@ -903,6 +904,7 @@ function rowToLearner(row: any): Learner {
 }
 
 function rowToInteraction(row: any): Interaction {
+  const hintId = row.event_type === 'hint_view' ? undefined : row.hint_id;
   return {
     id: row.id,
     learnerId: row.user_id,
@@ -918,7 +920,7 @@ function rowToInteraction(row: any): Interaction {
       code: row.code,
       error: row.error,
       errorSubtypeId: row.error_subtype_id,
-      hintId: row.hint_id,
+      hintId,
       explanationId: row.explanation_id,
       hintText: row.hint_text,
       hintLevel: row.hint_level,

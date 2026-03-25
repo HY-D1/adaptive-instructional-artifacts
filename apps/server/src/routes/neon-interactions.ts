@@ -43,6 +43,15 @@ interface ScopedTarget {
   sectionId: string | null;
 }
 
+function sanitizeHintViewPayload(eventType: string, payload: Record<string, unknown>): Record<string, unknown> {
+  if (eventType !== 'hint_view') {
+    return payload;
+  }
+  const sanitized = { ...payload };
+  delete sanitized.hintId;
+  return sanitized;
+}
+
 function routeLabel(req: Request): string {
   return `${req.method} ${req.baseUrl}${req.path}`;
 }
@@ -173,7 +182,7 @@ router.post('/', async (req: Request, res: Response) => {
     };
     // RESEARCH-4: Always merge canonical study fields from event top-level into payload.
     // This ensures they reach the DB columns regardless of whether event.payload was set.
-    const payload = {
+    const payload = sanitizeHintViewPayload(event.eventType, {
       ...basePayload,
       selectedArm: event.selectedArm ?? basePayload.selectedArm,
       learnerProfileId: event.learnerProfileId ?? basePayload.learnerProfileId,
@@ -183,7 +192,7 @@ router.post('/', async (req: Request, res: Response) => {
       strategyAssigned: event.strategyAssigned ?? basePayload.strategyAssigned,
       strategyUpdated: event.strategyUpdated ?? basePayload.strategyUpdated,
       rewardValue: event.rewardValue ?? basePayload.rewardValue,
-    };
+    });
 
     const interaction = await db.createInteraction({
       id,
@@ -261,7 +270,7 @@ router.post('/batch', async (req: Request, res: Response) => {
         ...event,
       };
       // RESEARCH-4: Always merge canonical study fields
-      const payload = {
+      const payload = sanitizeHintViewPayload(event.eventType, {
         ...basePayload,
         selectedArm: event.selectedArm ?? basePayload.selectedArm,
         learnerProfileId: event.learnerProfileId ?? basePayload.learnerProfileId,
@@ -271,7 +280,7 @@ router.post('/batch', async (req: Request, res: Response) => {
         strategyAssigned: event.strategyAssigned ?? basePayload.strategyAssigned,
         strategyUpdated: event.strategyUpdated ?? basePayload.strategyUpdated,
         rewardValue: event.rewardValue ?? basePayload.rewardValue,
-      };
+      });
       const interaction = await db.createInteraction({
         id,
         learnerId: scopedTarget.learnerId,

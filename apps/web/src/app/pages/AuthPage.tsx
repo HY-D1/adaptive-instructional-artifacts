@@ -20,6 +20,7 @@ import { Label } from '../components/ui/label';
 import { cn } from '../components/ui/utils';
 import { useAuth } from '../lib/auth-context';
 import { AUTH_ENABLED } from '../lib/api/auth-client';
+import { getApiBaseUrl } from '../lib/runtime-config';
 import type { UserRole } from '../types';
 
 type Tab = 'login' | 'signup';
@@ -47,6 +48,8 @@ export function AuthPage() {
   const [signupError, setSignupError] = useState<string | null>(null);
   const [signupLoading, setSignupLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const showDiagnostic = import.meta.env.DEV || import.meta.env.MODE === 'test';
+  const apiBaseUrl = getApiBaseUrl() || 'not-configured';
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -351,6 +354,11 @@ export function AuthPage() {
                     <Lock className="w-4 h-4" />
                     {signupRole === 'student' ? 'Class code' : 'Instructor code'}
                   </Label>
+                  <p className="text-xs text-gray-500">
+                    {signupRole === 'student'
+                      ? "Use your instructor's class code."
+                      : 'Use the instructor signup code from your course admin.'}
+                  </p>
                   <Input
                     id="signup-code"
                     type="password"
@@ -404,15 +412,11 @@ export function AuthPage() {
           )}
 
           {/* Back to demo link */}
-          <div className="mt-6 text-center">
-            <button
-              type="button"
-              className="text-xs text-gray-400 hover:text-gray-600"
-              onClick={() => navigate('/')}
-            >
-              Continue without an account (demo mode)
-            </button>
-          </div>
+          {showDiagnostic && (
+            <div className="mt-6 text-center text-xs text-gray-500">
+              Auth API target: <code className="bg-gray-100 px-1 rounded">{apiBaseUrl}</code>
+            </div>
+          )}
         </div>
       </main>
     </div>

@@ -47,6 +47,7 @@ import { buildInstructorLearnerRows, filterInteractionsByLearners } from '../lib
 import { getUiState, setUiState } from '../lib/ui-state';
 import { seedDemoDataset, resetDemoDataset, hasDemoData } from '../lib/demo/demo-seed';
 import { useUserRole } from '../hooks/useUserRole';
+import { useAuth } from '../lib/auth-context';
 import { useAllLearnerProfiles } from '../hooks/useLearnerProfile';
 import learnerProfileClient from '../lib/api/learner-profile-client';
 import type { LearnerProfile, InteractionEvent } from '../types';
@@ -153,6 +154,7 @@ interface InstructorDashboardUiState {
 export function InstructorDashboard() {
   const navigate = useNavigate();
   const { isStudent, isLoading: isRoleLoading, profile } = useUserRole();
+  const { user: authUser } = useAuth();
   
   // Use backend profiles with automatic synchronization
   const {
@@ -719,6 +721,23 @@ export function InstructorDashboard() {
           ))}
         </div>
 
+        {!!authUser?.ownedSections?.length && (
+          <Card className="border-blue-200 bg-blue-50/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Student Signup Codes</CardTitle>
+              <CardDescription>Share these class codes with students during account creation.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {authUser.ownedSections.map((section) => (
+                <div key={section.id} className="flex items-center justify-between rounded border bg-white px-3 py-2">
+                  <span className="text-sm font-medium text-gray-700">{section.name}</span>
+                  <code className="text-sm font-semibold text-blue-700">{section.studentSignupCode}</code>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Quick Links */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate('/research')}>
@@ -1194,7 +1213,7 @@ export function InstructorDashboard() {
                         <td className="py-3 px-4">
                           <div>
                             <p className="font-medium">{student.name}</p>
-                            <p className="text-sm text-gray-500">{student.email}</p>
+                            <p className="text-sm text-gray-500">{student.email || 'Email not available'}</p>
                           </div>
                         </td>
                         <td className="py-3 px-4">

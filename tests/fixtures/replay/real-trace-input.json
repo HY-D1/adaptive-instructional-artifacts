@@ -52,7 +52,6 @@
       "timestamp": 1700000005000,
       "eventType": "hint_view",
       "hintLevel": 1,
-      "hintId": "hint-001",
       "conceptIds": ["sql-syntax", "select-basics"],
       "sqlEngageSubtype": "incomplete query",
       "sqlEngageRowId": "sql-engage:15",

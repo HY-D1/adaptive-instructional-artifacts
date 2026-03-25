@@ -13,12 +13,13 @@ export interface InstructorLearnerRow {
 export function buildInstructorLearnerRows(profiles: LearnerProfile[]): InstructorLearnerRow[] {
   const now = Date.now();
   return profiles.map((profile) => {
+    const candidateEmail = (profile as LearnerProfile & { email?: string }).email;
     const conceptIds = Array.from(profile.conceptsCovered ?? new Set<string>());
     const lastActive = profile.lastActive || profile.createdAt || now;
     return {
       id: profile.id,
       name: profile.name || profile.id,
-      email: `${profile.id}@local`,
+      email: candidateEmail && candidateEmail.trim().length > 0 ? candidateEmail : '',
       lastActive,
       conceptsCount: conceptIds.length,
       conceptIds,

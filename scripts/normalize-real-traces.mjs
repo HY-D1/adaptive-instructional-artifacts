@@ -488,16 +488,7 @@ function assignSessionAndHelpMetadata(events, sqlEngagePolicyVersion, subtypeInd
     }
 
     if (event.eventType === 'hint_view') {
-      const hintLevel = Number.isFinite(Number(event.hintLevel))
-        ? Math.max(1, Math.min(3, Math.round(Number(event.hintLevel))))
-        : 1;
-      const rowId = String(event.sqlEngageRowId || '').trim() || getDeterministicAnchorRowId(
-        subtype,
-        `${event.learnerId}|${event.problemId}|${helpIndex}|${hintLevel}`,
-        subtypeIndex
-      );
-      event.hintId = String(event.hintId || '').trim()
-        || `sql-engage:${subtype}:L${hintLevel}:${rowId}`;
+      delete event.hintId;
     }
   }
 

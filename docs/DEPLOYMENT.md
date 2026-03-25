@@ -49,6 +49,19 @@
 > **Env var resolution order**: The backend checks these four names in priority order (`DATABASE_URL` → `NEON_DATABASE_URL` → `adaptive_data_DATABASE_URL` → `adaptive_data_POSTGRES_URL`) and uses the first non-empty value. You only need to set one.
 > **After changing env vars you must redeploy** — Vercel bakes env vars into the build/runtime at deploy time. Adding or changing a variable without redeploying has no effect.
 
+### Deployment Matrix (Last Verified)
+
+| Environment | Frontend URL | Backend URL | Env source | Last verified (UTC) |
+|-------------|--------------|-------------|------------|---------------------|
+| Production | `https://adaptive-instructional-artifacts.vercel.app` | `https://adaptive-instructional-artifacts-ap.vercel.app` | `DATABASE_URL` via `/health` + `/api/system/persistence-status` | 2026-03-25T03:42Z |
+| Preview | `https://adaptive-instructional-artifacts-epaibrvsf-hy-d1s-projects.vercel.app` | `https://adaptive-instructional-artifacts-ap.vercel.app` (paired backend) | n/a (frontend is Vercel-protected without bypass secret) | 2026-03-25T03:42Z |
+
+### Related Projects Note
+
+- Root `vercel.json` includes `relatedProjects` to discover the backend host during Git-connected Vercel builds.
+- This only helps when both frontend and backend are linked Git-connected projects in Vercel.
+- CLI-only/manual deployments still require explicit `VITE_API_BASE_URL` and a new frontend deployment after env changes.
+
 ---
 
 ## Vercel + Neon Persistence Mode

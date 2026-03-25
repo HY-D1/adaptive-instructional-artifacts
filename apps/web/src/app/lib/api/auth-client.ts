@@ -17,6 +17,14 @@ const AUTH_BASE = _API_BASE ? `${_API_BASE}/api/auth` : 'http://localhost:3001/a
 export const AUTH_BACKEND_CONFIGURED = !!_API_BASE;
 export const AUTH_ENABLED = AUTH_BACKEND_CONFIGURED || import.meta.env.DEV;
 
+function formatNetworkError(error: Error): string {
+  const base = error.message || 'Network request failed';
+  const diagnostic = AUTH_BACKEND_CONFIGURED
+    ? `Unable to reach ${AUTH_BASE}. Check deployment URL, browser network requests, and current origin.`
+    : 'Backend API base URL is not configured.';
+  return `${base}. ${diagnostic}`;
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -89,7 +97,7 @@ export async function signup(params: {
     }
     return { success: true, user: data.user };
   } catch (err) {
-    return { success: false, error: (err as Error).message };
+    return { success: false, error: formatNetworkError(err as Error) };
   }
 }
 
@@ -105,7 +113,7 @@ export async function login(email: string, password: string): Promise<AuthResult
     }
     return { success: true, user: data.user };
   } catch (err) {
-    return { success: false, error: (err as Error).message };
+    return { success: false, error: formatNetworkError(err as Error) };
   }
 }
 
@@ -128,7 +136,7 @@ export async function logout(): Promise<LogoutResult> {
   } catch (err) {
     return {
       success: false,
-      error: (err as Error).message,
+      error: formatNetworkError(err as Error),
     };
   }
 }

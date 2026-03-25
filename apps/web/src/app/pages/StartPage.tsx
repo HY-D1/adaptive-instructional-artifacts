@@ -47,6 +47,7 @@ export function StartPage() {
   const [passcodeError, setPasscodeError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const showDiagnostic = import.meta.env.DEV || import.meta.env.MODE === 'test';
 
   // Log runtime configuration in development
   useEffect(() => {
@@ -204,6 +205,10 @@ export function StartPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
+                <p className="text-xs text-gray-500">
+                  Students: use your instructor&apos;s class code when creating an account.
+                  Instructors: use the instructor signup code.
+                </p>
                 <Button
                   type="button"
                   className="w-full"
@@ -220,6 +225,11 @@ export function StartPage() {
                 >
                   Create Account
                 </Button>
+                {showDiagnostic && (
+                  <p className="text-xs text-gray-500">
+                    API target: <code className="bg-gray-100 px-1 rounded">{import.meta.env.VITE_API_BASE_URL || 'not-configured'}</code>
+                  </p>
+                )}
               </CardContent>
             </Card>
           ) : (

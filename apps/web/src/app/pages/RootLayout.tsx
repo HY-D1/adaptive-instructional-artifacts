@@ -178,6 +178,8 @@ export function RootLayout() {
   }, [syncedProfile?.id]);
 
   const finalizeLocalSignOut = useCallback(() => {
+    // Clear all cached UI state on account switches to prevent stale role-scoped views.
+    clearAllUiState();
     clearScopedUiState();
     clearProfile();
   }, [clearScopedUiState, clearProfile]);

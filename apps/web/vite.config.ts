@@ -40,6 +40,13 @@ if (resolvedApiBaseUrl && !process.env.VITE_API_BASE_URL) {
     : `https://${resolvedApiBaseUrl}`
 }
 
+if (process.env.NODE_ENV !== 'production') {
+  const diagnosticBase = process.env.VITE_API_BASE_URL || '(unset)';
+  // Non-production only: make API target explicit to debug stale env/deploy mismatches.
+  // eslint-disable-next-line no-console
+  console.log(`[vite] resolved VITE_API_BASE_URL=${diagnosticBase}`);
+}
+
 const repoRoot = path.resolve(__dirname, '../..')
 const pdfIndexDir = process.env.PDF_INDEX_DIR || path.resolve(repoRoot, 'dist/pdf-index')
 const pdfSourceDir = process.env.PDF_SOURCE_DIR || path.resolve(repoRoot, 'dist')
