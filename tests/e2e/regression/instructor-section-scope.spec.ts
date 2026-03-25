@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { createApiContext, resolveApiBaseUrl } from '../helpers/auth-env';
 
 const API_BASE_URL = resolveApiBaseUrl();
+const IS_DEPLOYED_AUTH_TARGET = !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(API_BASE_URL);
 
 async function signup(
   request: import('@playwright/test').APIRequestContext,
@@ -90,7 +91,13 @@ function assertOnlyLearnerAndSection(
 
 test.describe('@authz @section-scope instructor sees only own section', () => {
   test('instructor A and B are isolated by enrollment scope', async ({ playwright }) => {
-    const instructorCode = process.env.E2E_INSTRUCTOR_CODE ?? process.env.VITE_INSTRUCTOR_PASSCODE ?? 'TeachSQL2024';
+    const instructorCode = process.env.E2E_INSTRUCTOR_CODE ?? (IS_DEPLOYED_AUTH_TARGET ? undefined : 'TeachSQL2024');
+    if (!instructorCode) {
+      throw new Error(
+        '[section-scope] Missing E2E_INSTRUCTOR_CODE for deployed run. ' +
+        'Set E2E_INSTRUCTOR_CODE to the backend INSTRUCTOR_SIGNUP_CODE.',
+      );
+    }
 
     const ts = Date.now();
     const instrAEmail = `instr-a-${ts}@sql-adapt.test`;

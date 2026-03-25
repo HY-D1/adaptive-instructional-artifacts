@@ -21,7 +21,8 @@
  *   E2E_STUDENT_CLASS_CODE   required for deployed runs (local can auto-provision if missing)
  *   E2E_INSTRUCTOR_EMAIL     default: e2e-instructor-<ts>@sql-adapt.test
  *   E2E_INSTRUCTOR_PASSWORD  default: E2eInstrPass!123
- *   E2E_INSTRUCTOR_CODE      required for deployed runs (local default: TeachSQL2024)
+ *   E2E_ALLOW_INSTRUCTOR_SIGNUP set true to allow instructor signup fallback in deployed runs
+ *   E2E_INSTRUCTOR_CODE      required only when E2E_ALLOW_INSTRUCTOR_SIGNUP=true
  */
 
 import { test as setup, expect } from '@playwright/test';
@@ -44,6 +45,7 @@ function isLocalBaseUrl(url: string): boolean {
 }
 
 const IS_DEPLOYED_AUTH_TARGET = !isLocalBaseUrl(FRONTEND_BASE_URL);
+const ALLOW_INSTRUCTOR_SIGNUP = process.env.E2E_ALLOW_INSTRUCTOR_SIGNUP === 'true';
 
 const TS = Date.now();
 
@@ -66,8 +68,10 @@ function requireDeterministicEnvForDeployed(): void {
   const missing: string[] = [];
   if (!process.env.E2E_INSTRUCTOR_EMAIL) missing.push('E2E_INSTRUCTOR_EMAIL');
   if (!process.env.E2E_INSTRUCTOR_PASSWORD) missing.push('E2E_INSTRUCTOR_PASSWORD');
-  if (!process.env.E2E_INSTRUCTOR_CODE) missing.push('E2E_INSTRUCTOR_CODE');
   if (!process.env.E2E_STUDENT_CLASS_CODE) missing.push('E2E_STUDENT_CLASS_CODE');
+  if (ALLOW_INSTRUCTOR_SIGNUP && !process.env.E2E_INSTRUCTOR_CODE) {
+    missing.push('E2E_INSTRUCTOR_CODE');
+  }
 
   if (missing.length > 0) {
     throw new Error(
@@ -76,6 +80,22 @@ function requireDeterministicEnvForDeployed(): void {
       '. Seed one real instructor account once, capture its studentSignupCode, ' +
       'set stable E2E_* values, then rerun setup:auth.',
     );
+  }
+}
+
+async function captureAuthDiagnostic(
+  page: Page,
+  role: 'student' | 'instructor',
+  phase: string,
+): Promise<string | null> {
+  try {
+    const directory = 'test-results/auth-setup';
+    fs.mkdirSync(directory, { recursive: true });
+    const filePath = path.join(directory, `${role}-${phase}-${Date.now()}.png`);
+    await page.screenshot({ path: filePath, fullPage: true });
+    return filePath;
+  } catch {
+    return null;
   }
 }
 
@@ -113,11 +133,26 @@ async function assertAuthUiAvailable(page: Page): Promise<void> {
 type AuthOutcome = {
   redirected: boolean;
   alertText: string | null;
-  outcome: 'redirected' | 'error' | 'timeout';
+  outcome: 'redirected' | 'authenticated' | 'error' | 'timeout';
 };
 
+async function hasAuthenticatedSession(page: Page): Promise<boolean> {
+  try {
+    return await page.evaluate(async (apiBaseUrl) => {
+      const response = await fetch(`${apiBaseUrl}/api/auth/me`, {
+        credentials: 'include',
+      });
+      if (!response.ok) return false;
+      const body = await response.json().catch(() => null);
+      return Boolean(body?.success && body?.user?.id);
+    }, API_BASE_URL);
+  } catch {
+    return false;
+  }
+}
+
 async function submitAndWaitForAuthOutcome(page: Page): Promise<AuthOutcome> {
-  const outcome = await Promise.race([
+  const initialOutcome = await Promise.race([
     page
       .waitForURL(/\/(practice|instructor-dashboard)/, { timeout: 15_000 })
       .then(() => 'redirected' as const),
@@ -128,14 +163,15 @@ async function submitAndWaitForAuthOutcome(page: Page): Promise<AuthOutcome> {
       .then(() => 'error' as const),
   ]).catch(() => 'timeout' as const);
 
-  const alertText = outcome === 'error'
+  const alertText = initialOutcome === 'error'
     ? await page.locator('[role="alert"]').first().textContent().catch(() => null)
     : null;
+  const authenticated = initialOutcome !== 'redirected' && await hasAuthenticatedSession(page);
 
   return {
-    redirected: outcome === 'redirected',
+    redirected: initialOutcome === 'redirected' || authenticated,
     alertText: alertText?.trim() || null,
-    outcome,
+    outcome: authenticated ? 'authenticated' : initialOutcome,
   };
 }
 
@@ -207,6 +243,17 @@ async function signupOrLogin(
   const loginAttempt = await attemptLogin(page, email, password);
   if (loginAttempt.redirected) return;
 
+  if (role === 'instructor' && IS_DEPLOYED_AUTH_TARGET && !ALLOW_INSTRUCTOR_SIGNUP) {
+    const screenshotPath = await captureAuthDiagnostic(page, role, 'login1-failure');
+    throw new Error(
+      '[auth-setup] Deterministic deployed instructor login failed. ' +
+      `phase=login1 url=${page.url()} alert=${loginAttempt.alertText ?? 'none'} ` +
+      `apiBaseUrl=${API_BASE_URL} screenshot=${screenshotPath ?? 'none'} trace=playwright trace on failure. ` +
+      'Set valid E2E_INSTRUCTOR_EMAIL/E2E_INSTRUCTOR_PASSWORD for the deployed account, ' +
+      'or opt in to signup fallback with E2E_ALLOW_INSTRUCTOR_SIGNUP=true and E2E_INSTRUCTOR_CODE.',
+    );
+  }
+
   console.log(
     `[auth-setup] login returned ${loginAttempt.outcome} for ${email}` +
     (loginAttempt.alertText ? ` (alert="${loginAttempt.alertText}")` : '') +
@@ -225,15 +272,21 @@ async function signupOrLogin(
   if (signupAttempt.redirected) return;
 
   if (role === 'instructor' && /invalid instructor code/i.test(signupAttempt.alertText ?? '')) {
+    const screenshotPath = await captureAuthDiagnostic(page, role, 'signup-invalid-code');
     throw new Error(
       '[auth-setup] Instructor signup failed with "Invalid instructor code". ' +
+      `phase=signup url=${page.url()} alert=${signupAttempt.alertText ?? 'none'} ` +
+      `apiBaseUrl=${API_BASE_URL} screenshot=${screenshotPath ?? 'none'} trace=playwright trace on failure. ` +
       'Set E2E_INSTRUCTOR_CODE to the deployed backend INSTRUCTOR_SIGNUP_CODE.',
     );
   }
 
   if (role === 'student' && /invalid class code/i.test(signupAttempt.alertText ?? '')) {
+    const screenshotPath = await captureAuthDiagnostic(page, role, 'signup-invalid-class-code');
     throw new Error(
       '[auth-setup] Student signup failed with "Invalid class code". ' +
+      `phase=signup url=${page.url()} alert=${signupAttempt.alertText ?? 'none'} ` +
+      `apiBaseUrl=${API_BASE_URL} screenshot=${screenshotPath ?? 'none'} trace=playwright trace on failure. ` +
       'Set E2E_STUDENT_CLASS_CODE to a real studentSignupCode from an instructor-owned section.',
     );
   }
@@ -241,15 +294,18 @@ async function signupOrLogin(
   const retryLoginAttempt = await attemptLogin(page, email, password);
   if (retryLoginAttempt.redirected) return;
 
+  const screenshotPath = await captureAuthDiagnostic(page, role, 'auth-final-failure');
   throw new Error(
     `[auth-setup] Could not authenticate ${role} account ${email}. ` +
+    `frontendUrl=${page.url()} apiBaseUrl=${API_BASE_URL} ` +
     `login1=${loginAttempt.outcome}` +
     (loginAttempt.alertText ? `("${loginAttempt.alertText}")` : '') +
     ` signup=${signupAttempt.outcome}` +
     (signupAttempt.alertText ? `("${signupAttempt.alertText}")` : '') +
     ` login2=${retryLoginAttempt.outcome}` +
     (retryLoginAttempt.alertText ? `("${retryLoginAttempt.alertText}")` : '') +
-    '. Verify stable E2E credentials and signup codes for this deployment.',
+    ` screenshot=${screenshotPath ?? 'none'} trace=playwright trace on failure. ` +
+    'Verify stable E2E credentials and signup codes for this deployment.',
   );
 }
 

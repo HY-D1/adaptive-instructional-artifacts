@@ -34,7 +34,7 @@
 | `adaptive_data_POSTGRES_URL` | Vercel Neon integration | Postgres-alias variant injected by the same Vercel Neon integration |
 | `JWT_SECRET` | Yes (production) | Secret for signing auth JWT cookies — must be at least 32 random characters |
 | `STUDENT_SIGNUP_CODE` | Student accounts | Class code required when creating a student account. Falls back to `ClassSQL2024` in dev. |
-| `INSTRUCTOR_SIGNUP_CODE` | Instructor accounts | Code required when creating an instructor account. Falls back to `TeachSQL2024` in dev. |
+| `INSTRUCTOR_SIGNUP_CODE` | Instructor accounts | Code required when creating an instructor account. Keep this explicit in deployed envs. |
 | `CORS_ORIGINS` | Recommended | Comma-separated frontend origins allowed to use credentialed requests (for example `https://app.example.com,https://www.example.com`) |
 | `CORS_ORIGIN_PATTERNS` | Optional | Comma-separated wildcard origin patterns for trusted preview domains (for example `https://adaptive-instructional-artifacts-*.vercel.app`) |
 | `PORT` | No | HTTP port (default 3001) |
@@ -386,7 +386,7 @@ See [DEPLOYMENT_MODES.md](./DEPLOYMENT_MODES.md) for the complete capability mat
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `VITE_INSTRUCTOR_PASSCODE` | Passcode for instructor access | `TeachSQL2024` | Yes |
+| `VITE_INSTRUCTOR_PASSCODE` | Passcode for instructor access | `TEACHSQL2026` (example) | Yes |
 | `VITE_API_BASE_URL` | Backend API URL | (empty) | For hosted backend |
 | `VITE_ENABLE_VERCEL_ANALYTICS` | Load Vercel analytics bundle at runtime | `false` | No |
 | `VITE_ENABLE_VERCEL_SPEED_INSIGHTS` | Enable Vercel speed insights component | `true` | No |
@@ -684,8 +684,8 @@ Before running deployed Playwright auth proofs, set one stable instructor + clas
 3. Set these env vars in Vercel for test runs:
    - `E2E_INSTRUCTOR_EMAIL`
    - `E2E_INSTRUCTOR_PASSWORD`
-   - `E2E_INSTRUCTOR_CODE` (must match backend `INSTRUCTOR_SIGNUP_CODE`)
    - `E2E_STUDENT_CLASS_CODE` (captured real section code)
+   - Optional: `E2E_ALLOW_INSTRUCTOR_SIGNUP=true` + `E2E_INSTRUCTOR_CODE` if you explicitly want signup fallback
 4. Redeploy after env updates (Vercel env changes apply only to new deployments).
 
 #### Step 2 — Capture auth state (run once per environment)
@@ -700,19 +700,20 @@ npx playwright test -c playwright.config.ts --project=setup:auth
 # Against a deployed preview
 PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
 PLAYWRIGHT_API_BASE_URL="https://<backend>.vercel.app" \
+E2E_INSTRUCTOR_EMAIL="instructor-e2e@example.com" \
+E2E_INSTRUCTOR_PASSWORD="TestPassword123!" \
 E2E_STUDENT_EMAIL="student@yourdomain.com" \
 E2E_STUDENT_PASSWORD="YourPassword123!" \
 E2E_STUDENT_CLASS_CODE="<class-code>" \
-E2E_INSTRUCTOR_CODE="<instructor-code>" \
   npx playwright test -c playwright.config.ts --project=setup:auth
 ```
 
 `setup:auth` now fails fast when the backend is unreachable or not Neon-backed.
 It will not silently write empty auth state files for launch-proof runs.
 For deployed targets, it also fails fast unless deterministic `E2E_*` auth vars are provided.
-If logs show `Invalid instructor code`, set `E2E_INSTRUCTOR_CODE` to the backend's
-actual `INSTRUCTOR_SIGNUP_CODE` value and provide `E2E_STUDENT_CLASS_CODE` from an
-existing section.
+Default deployed mode is instructor login-first. If you opt in to signup fallback
+and logs show `Invalid instructor code`, set `E2E_INSTRUCTOR_CODE` to the backend's
+actual `INSTRUCTOR_SIGNUP_CODE`.
 
 Auth state is saved to `playwright/.auth/student.json` and
 `playwright/.auth/instructor.json` (gitignored — never commit these).
@@ -743,10 +744,11 @@ npx playwright test -c playwright.config.ts --project=chromium:auth \
 ```bash
 PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
 PLAYWRIGHT_API_BASE_URL="https://<backend>.vercel.app" \
+E2E_INSTRUCTOR_EMAIL="instructor-e2e@example.com" \
+E2E_INSTRUCTOR_PASSWORD="TestPassword123!" \
 E2E_STUDENT_EMAIL="student@yourdomain.com" \
 E2E_STUDENT_PASSWORD="YourPassword123!" \
 E2E_STUDENT_CLASS_CODE="<class-code>" \
-E2E_INSTRUCTOR_CODE="<instructor-code>" \
   npx playwright test -c playwright.config.ts \
     --project=setup:auth --project=chromium:auth \
     --grep "@deployed-auth-smoke"
@@ -758,10 +760,11 @@ E2E_INSTRUCTOR_CODE="<instructor-code>" \
 PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
 PLAYWRIGHT_API_BASE_URL="https://<backend>.vercel.app" \
 VERCEL_AUTOMATION_BYPASS_SECRET="<secret-from-vercel-dashboard>" \
+E2E_INSTRUCTOR_EMAIL="instructor-e2e@example.com" \
+E2E_INSTRUCTOR_PASSWORD="TestPassword123!" \
 E2E_STUDENT_EMAIL="student@yourdomain.com" \
 E2E_STUDENT_PASSWORD="YourPassword123!" \
 E2E_STUDENT_CLASS_CODE="<class-code>" \
-E2E_INSTRUCTOR_CODE="<instructor-code>" \
   npx playwright test -c playwright.config.ts \
     --project=setup:auth --project=chromium:auth \
     --grep "@deployed-auth-smoke"
@@ -786,7 +789,8 @@ headers are injected automatically on every Playwright request.
 | `E2E_STUDENT_CLASS_CODE` | — | Section signup code (required for deployed deterministic setup) |
 | `E2E_INSTRUCTOR_EMAIL` | `e2e-instructor-<ts>@sql-adapt.test` | Instructor account email |
 | `E2E_INSTRUCTOR_PASSWORD` | `E2eInstrPass!123` | Instructor account password |
-| `E2E_INSTRUCTOR_CODE` | `TeachSQL2024` (local default) | Instructor signup code (required for deployed deterministic setup) |
+| `E2E_ALLOW_INSTRUCTOR_SIGNUP` | `false` | Opt in to instructor signup fallback during setup |
+| `E2E_INSTRUCTOR_CODE` | `TeachSQL2024` (local only) | Instructor signup code (required only when signup fallback is enabled) |
 
 > **Note:** Set both student and instructor `E2E_*` credentials to stable values in CI
 > so setup can log in first (idempotent) and only fall back to signup when necessary.

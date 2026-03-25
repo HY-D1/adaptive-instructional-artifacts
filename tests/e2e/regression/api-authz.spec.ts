@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { createApiContext, resolveApiBaseUrl } from '../helpers/auth-env';
 
 const API_BASE_URL = resolveApiBaseUrl();
+const IS_DEPLOYED_AUTH_TARGET = !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(API_BASE_URL);
 
 function expectBlocked(status: number): void {
   expect([401, 403]).toContain(status);
@@ -35,7 +36,13 @@ async function loginContext(
 
 test.describe('@authz API authorization and learner spoof protections', () => {
   test('student blocked on instructor/research and cross-learner access', async ({ playwright }) => {
-    const instructorCode = process.env.E2E_INSTRUCTOR_CODE ?? process.env.VITE_INSTRUCTOR_PASSCODE ?? 'TeachSQL2024';
+    const instructorCode = process.env.E2E_INSTRUCTOR_CODE ?? (IS_DEPLOYED_AUTH_TARGET ? undefined : 'TeachSQL2024');
+    if (!instructorCode) {
+      throw new Error(
+        '[api-authz] Missing E2E_INSTRUCTOR_CODE for deployed run. ' +
+        'Set E2E_INSTRUCTOR_CODE to the backend INSTRUCTOR_SIGNUP_CODE.',
+      );
+    }
     const ts = Date.now();
     const instructorEmail = `authz-instructor-${ts}@sql-adapt.test`;
     const instructorOtherEmail = `authz-instructor-other-${ts}@sql-adapt.test`;
