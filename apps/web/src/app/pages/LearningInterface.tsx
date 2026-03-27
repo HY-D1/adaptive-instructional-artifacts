@@ -988,6 +988,33 @@ export function LearningInterface() {
         }
       }
 
+      if (!isMeaningfulDraft(resolvedDraft) && AUTH_BACKEND_CONFIGURED) {
+        const backendSessionSnapshot = await storage.getBackendSessionSnapshot(learnerId);
+        if (!cancelled && backendSessionSnapshot && isMeaningfulDraft(backendSessionSnapshot.currentCode)) {
+          const snapshotSessionId = backendSessionSnapshot.sessionId?.trim();
+          if (snapshotSessionId) {
+            resolvedSessionId = snapshotSessionId;
+            storage.setActiveSessionId(snapshotSessionId);
+          }
+
+          const snapshotProblemId = backendSessionSnapshot.currentProblemId?.trim();
+          if (snapshotProblemId) {
+            const snapshotProblem = sqlProblems.find((problem) => problem.id === snapshotProblemId);
+            if (snapshotProblem) {
+              resolvedProblem = snapshotProblem;
+            }
+          }
+
+          resolvedDraft = backendSessionSnapshot.currentCode;
+          storage.savePracticeDraft(
+            learnerId,
+            resolvedSessionId,
+            resolvedProblem.id,
+            backendSessionSnapshot.currentCode,
+          );
+        }
+      }
+
       if (cancelled) return;
 
       setSessionId(resolvedSessionId);

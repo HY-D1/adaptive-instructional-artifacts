@@ -39,7 +39,8 @@ export async function replaceEditorText(page: Page, text: string) {
  * Get current text from the Monaco editor
  */
 export async function getEditorText(page: Page): Promise<string> {
-  return page.locator('.monaco-editor .view-lines').first().innerText();
+  const rawText = await page.locator('.monaco-editor .view-lines').first().innerText();
+  return rawText.replace(/\u00a0/g, ' ');
 }
 
 // =============================================================================

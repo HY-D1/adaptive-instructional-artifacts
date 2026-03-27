@@ -156,4 +156,30 @@ describe('dual-storage restore hydration', () => {
     expect(forced).toBe(true);
     expect(getSessionMock).toHaveBeenCalledTimes(2);
   });
+
+  it('returns backend session snapshot when backend is healthy', async () => {
+    getSessionMock.mockResolvedValue({
+      sessionId: 'session-backend',
+      currentProblemId: 'problem-2',
+      currentCode: 'SELECT * FROM employees WHERE salary > 70000',
+    });
+
+    const snapshot = await dualStorageModule.dualStorage.getBackendSessionSnapshot('learner-backend');
+
+    expect(snapshot).toMatchObject({
+      sessionId: 'session-backend',
+      currentProblemId: 'problem-2',
+      currentCode: 'SELECT * FROM employees WHERE salary > 70000',
+    });
+    expect(getSessionMock).toHaveBeenCalledWith('learner-backend');
+  });
+
+  it('returns null backend session snapshot when backend is unavailable', async () => {
+    checkBackendHealthMock.mockResolvedValue(false);
+
+    const snapshot = await dualStorageModule.dualStorage.getBackendSessionSnapshot('learner-offline');
+
+    expect(snapshot).toBeNull();
+    expect(getSessionMock).not.toHaveBeenCalled();
+  });
 });

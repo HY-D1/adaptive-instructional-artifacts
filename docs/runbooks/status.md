@@ -274,3 +274,39 @@ Changed files (this checkpoint scope):
 
 Next smallest fix:
 - Provide deterministic deployed auth env (`PLAYWRIGHT_BASE_URL`, `PLAYWRIGHT_API_BASE_URL`, `E2E_INSTRUCTOR_EMAIL`, `E2E_INSTRUCTOR_PASSWORD`, `E2E_STUDENT_CLASS_CODE`, plus bypass secret if preview protected), rerun only `tests/e2e/regression/student-multi-device-persistence.spec.ts`, and confirm assertion at `:267` now restores seeded backend `currentCode`.
+
+## Checkpoint — 2026-03-27 15:49 PDT
+
+Status: **PARTIAL**
+
+Evidence:
+- Implemented backend-authoritative restore fallback in `/practice` bootstrap and added backend session snapshot accessor:
+  - `apps/web/src/app/pages/LearningInterface.tsx`
+  - `apps/web/src/app/lib/storage/dual-storage.ts`
+- Added unit coverage for backend session snapshot accessor:
+  - `npx vitest run apps/web/src/app/lib/storage/dual-storage.test.ts` ✅ (8 passed)
+- Build gates passed after patch:
+  - `npm run server:build` ✅
+  - `npm run build` ✅
+- Frontend deployed to production and aliased:
+  - `VERCEL_ORG_ID=team_BxlA36kEPgWxAMjQnJ4DBtQ2 VERCEL_PROJECT_ID=prj_39bY93BbbDoT6A0avxsLNxXtxKra npx vercel deploy --prod --yes` ✅
+  - Deployment ID: `dpl_A2Bva2apm8rpZGDYQjUyfoTFqzxK`
+  - Production URL: `https://adaptive-instructional-artifacts-dxj0vhxud-hy-d1s-projects.vercel.app`
+  - Alias: `https://adaptive-instructional-artifacts.vercel.app`
+- First deployed regression rerun showed restore value present but assertion failed due whitespace encoding in Monaco text extraction:
+  - expected `SELECT * FROM employees WHERE salary > 70000`
+  - received `SELECT * FROM employees WHERE salary > 70000` (non-breaking spaces)
+- Normalized Monaco text in test helper (`\u00a0` → space):
+  - `tests/helpers/test-helpers.ts`
+- Deployed regression gate now passes:
+  - `npx playwright test -c playwright.config.ts tests/e2e/regression/student-multi-device-persistence.spec.ts --reporter=line --workers=1 --global-timeout=0` ✅ (`3 passed`)
+
+Changed files (this checkpoint scope):
+- `apps/web/src/app/lib/storage/dual-storage.ts`
+- `apps/web/src/app/pages/LearningInterface.tsx`
+- `apps/web/src/app/lib/storage/dual-storage.test.ts`
+- `tests/helpers/test-helpers.ts`
+- `docs/runbooks/status.md`
+
+Next smallest fix:
+- Run the full deployed launch-smoke gate (`@deployed-auth-smoke` + `student-multi-device-persistence` + `instructor-section-scope` + `api-authz`) to confirm no regressions outside this targeted blocker path.

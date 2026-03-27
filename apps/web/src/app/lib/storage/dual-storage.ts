@@ -834,6 +834,28 @@ class DualStorageManager {
     }
   }
 
+  /**
+   * Fetch active backend session snapshot for restore-critical flows.
+   * Returns null when backend mode is disabled, unhealthy, or no session exists.
+   */
+  async getBackendSessionSnapshot(
+    learnerId: string,
+  ): Promise<Awaited<ReturnType<typeof storageClient.getSession>>> {
+    if (!this.config.useBackend) {
+      return null;
+    }
+    const healthy = await this.checkHealth();
+    if (!healthy) {
+      return null;
+    }
+    try {
+      return await storageClient.getSession(learnerId);
+    } catch (error) {
+      console.warn('[DualStorage] getBackendSessionSnapshot failed:', error);
+      return null;
+    }
+  }
+
   async hydrateInstructorDashboard(): Promise<boolean> {
     if (!this.config.useBackend) {
       return false;
