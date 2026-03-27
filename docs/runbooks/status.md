@@ -177,3 +177,73 @@ Changed files (this checkpoint scope):
 
 Next smallest fix:
 - Run `npm run test:e2e:launch-smoke` with deterministic deployed env (`PLAYWRIGHT_BASE_URL`, `PLAYWRIGHT_API_BASE_URL`, fixed `E2E_*`, and `VERCEL_AUTOMATION_BYPASS_SECRET` for protected previews), then confirm `tests/e2e/regression/student-multi-device-persistence.spec.ts` editor-restore assertion is green on preview before production promote.
+
+## Checkpoint — 2026-03-27 12:33 America/Vancouver
+
+Status: **PARTIAL**
+
+Evidence:
+- Environment contract validated for deployed production URL pair:
+  - frontend: `https://adaptive-instructional-artifacts.vercel.app` reachable
+  - backend health: `/health` ✅
+  - persistence status: `dbMode=neon`, `resolvedEnvSource=DATABASE_URL`, `persistenceRoutesEnabled=true` ✅
+- `setup:auth` with fixed existing `E2E_*` credentials failed due credential mismatch:
+  - student: login invalid password; signup blocked by existing email
+  - instructor: deterministic login invalid password
+- `setup:auth` with fresh emails and signup fallback succeeded:
+  - command used runtime vars: fresh `E2E_STUDENT_EMAIL`, fresh `E2E_INSTRUCTOR_EMAIL`,
+    `E2E_ALLOW_INSTRUCTOR_SIGNUP=true`, `E2E_INSTRUCTOR_CODE=TEACHSQL2026`
+  - result: `2 passed`
+- Full launch gate with the same fresh-email config progressed and confirmed current blocker remains:
+  - `@deployed-auth-smoke` ✅ (9 passed)
+  - `api-authz.spec.ts` ✅
+  - `instructor-section-scope.spec.ts` ✅
+  - `student-multi-device-persistence.spec.ts` ❌ at editor restore assertion
+    (`tests/e2e/regression/student-multi-device-persistence.spec.ts:267`,
+    expected seeded SQL, received default editor placeholder)
+
+Changed files (this checkpoint scope):
+- `docs/runbooks/status.md`
+
+Next smallest fix:
+- Instrument and patch the practice restore path for second-context login so seeded
+  backend session `currentCode` is applied to editor state before the assertion in
+  `student-multi-device-persistence.spec.ts:267`, then rerun only that spec against
+  deployed targets.
+
+
+## Checkpoint — 2026-03-27 15:16 PDT
+
+Status: **PARTIAL**
+
+Evidence:
+- Backend redeployed from current local apps/server source and promoted to production alias.
+  - Deploy command used:
+    VERCEL_ORG_ID=team_BxlA36kEPgWxAMjQnJ4DBtQ2 VERCEL_PROJECT_ID=prj_vR3HTHqulLCVqv5EnSMfnStWP4cZ npx vercel deploy --prod --yes
+  - Deployment 1: dpl_25EYbCZbX5BM8Wve8zhYBwAKaYzZ
+    - URL: https://adaptive-instructional-artifacts-api-backend-c5ycftfpb.vercel.app
+    - Aliased: https://adaptive-instructional-artifacts-ap.vercel.app
+  - Deployment 2 (accidental duplicate from shell quoting issue): dpl_9tU3kiujvkpkXvKXsugW5fmroptU
+    - URL: https://adaptive-instructional-artifacts-api-backend-c9vv8754e.vercel.app
+    - Aliased: https://adaptive-instructional-artifacts-ap.vercel.app
+- Backend build gate passed before deploy:
+  - npm run server:build ✅
+- Deployed auth setup passed against production URLs with deterministic env:
+  - npx playwright test -c playwright.config.ts --project=setup:auth --reporter=line ✅ (2 passed)
+- Blocker spec rerun after redeploy still fails at editor restore assertion:
+  - npx playwright test -c playwright.config.ts tests/e2e/regression/student-multi-device-persistence.spec.ts --reporter=line --workers=1 --global-timeout=0 ❌
+  - failure at tests/e2e/regression/student-multi-device-persistence.spec.ts:267
+  - expected editor content: SELECT * FROM employees WHERE salary > 70000
+  - received editor content: -- Write your SQL query here
+- Trace evidence confirms backend session contract is now stable post-redeploy:
+  - /tmp/sqladapt-trace-latest/resources/428d7af68f41493633c573737d7535e5ee002cd1.json
+  - contains sessionId=session-3170a9d0-1eb8-4b66-a432-20cdc2128e05-1774641116744
+  - contains currentProblemId=problem-2
+  - contains currentCode=SELECT * FROM employees WHERE salary > 70000
+  - This removes backend deploy drift as primary cause; remaining issue is frontend practice-page restore application timing/state wiring.
+
+Changed files (this checkpoint scope):
+- docs/runbooks/status.md
+
+Next smallest fix:
+- Add focused frontend instrumentation and restore-application guard in apps/web/src/app/pages/LearningInterface.tsx so backend-seeded currentCode is force-applied on /practice mount before default draft reset paths can overwrite it; then rerun only tests/e2e/regression/student-multi-device-persistence.spec.ts against production.
