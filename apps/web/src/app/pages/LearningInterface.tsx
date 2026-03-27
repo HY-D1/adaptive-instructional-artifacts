@@ -865,115 +865,152 @@ export function LearningInterface() {
         cancelled = true;
       };
     }
-    // Initialize learner profile if doesn't exist
-    let profile = storage.getProfile(learnerId);
-    if (!profile) {
-      profile = storage.createDefaultProfile(learnerId, 'adaptive-medium');
-    }
+    const isMeaningfulDraft = (draft: string | null | undefined): draft is string =>
+      typeof draft === 'string' &&
+      draft.trim().length > 0 &&
+      draft.trim() !== DEFAULT_SQL_EDITOR_CODE.trim();
 
-    // Prefer active session from storage (hydrated from backend in account mode).
-    // Fall back to sessionConfig only when storage still has its sentinel value.
-    const storageSessionId = storage.getActiveSessionId();
-    const activeSessionId =
-      storageSessionId === 'session-unknown' && sessionConfig?.sessionId
-        ? sessionConfig.sessionId
-        : storageSessionId;
-    // Validate session belongs to current learner using exact pattern match
-    // for locally-generated IDs, while accepting backend-hydrated legacy IDs.
-    const expectedPrefix = `session-${learnerId}-`;
-    const belongsToLearner = (() => {
-      if (!activeSessionId) return false;
-      if (activeSessionId === 'session-unknown') return false;
-      if (activeSessionId.startsWith('session-')) {
-        if (AUTH_BACKEND_CONFIGURED) {
-          return true;
-        }
-        return activeSessionId.startsWith(expectedPrefix) &&
-          activeSessionId.length > expectedPrefix.length;
+    const resolveDraftState = (
+      candidateSessionId: string,
+      fallbackProblem: SQLProblem,
+    ): { problem: SQLProblem; draft: string | null } => {
+      const currentSessionDraft = storage.getPracticeDraft(learnerId, candidateSessionId, fallbackProblem.id);
+      if (isMeaningfulDraft(currentSessionDraft)) {
+        return { problem: fallbackProblem, draft: currentSessionDraft };
       }
-      // Backend sessions may use non-prefixed IDs (for example problem IDs).
-      // Treat them as valid so we don't create a fresh empty session that
-      // overrides resumable state in Neon.
-      return true;
-    })();
-    
-    // First, try to find any existing draft for this learner+problem (handles navigation)
-    const existingDraft = storage.findAnyPracticeDraft(learnerId, currentProblem.id);
-    
-    // Use existing session if valid, otherwise create new one
-    const newSessionId = belongsToLearner
-      ? activeSessionId
-      : storage.startSession(learnerId);
-    
-    // Restore draft: prefer existing draft from any session, then try current session
-    let restoredDraft = existingDraft ?? storage.getPracticeDraft(learnerId, newSessionId, currentProblem.id);
-    if (!restoredDraft) {
-      const problemWithDraft = sqlProblems.find((problem) =>
-        Boolean(storage.getPracticeDraft(learnerId, newSessionId, problem.id))
-      );
-      if (problemWithDraft) {
-        restoredDraft = storage.getPracticeDraft(learnerId, newSessionId, problemWithDraft.id);
-        if (currentProblem.id !== problemWithDraft.id) {
-          setCurrentProblem(problemWithDraft);
+      const currentAnySessionDraft = storage.findAnyPracticeDraft(learnerId, fallbackProblem.id);
+      if (isMeaningfulDraft(currentAnySessionDraft)) {
+        return { problem: fallbackProblem, draft: currentAnySessionDraft };
+      }
+
+      let fallbackAnyDraft: { problem: SQLProblem; draft: string } | null = null;
+      for (const problem of sqlProblems) {
+        const sessionDraft = storage.getPracticeDraft(learnerId, candidateSessionId, problem.id);
+        if (isMeaningfulDraft(sessionDraft)) {
+          return { problem, draft: sessionDraft };
+        }
+        if (!fallbackAnyDraft && typeof sessionDraft === 'string' && sessionDraft.trim().length > 0) {
+          fallbackAnyDraft = { problem, draft: sessionDraft };
         }
       }
-    }
-    const activeProblemFromSessionId = activeSessionId && !activeSessionId.startsWith('session-')
-      ? sqlProblems.find((problem) => problem.id === activeSessionId)
-      : undefined;
-    if (!restoredDraft && activeProblemFromSessionId) {
-      const activeProblemDraft = storage.getPracticeDraft(
-        learnerId,
-        newSessionId,
-        activeProblemFromSessionId.id,
-      );
-      if (activeProblemDraft) {
-        restoredDraft = activeProblemDraft;
-        if (currentProblem.id !== activeProblemFromSessionId.id) {
-          setCurrentProblem(activeProblemFromSessionId);
+
+      for (const problem of sqlProblems) {
+        const anySessionDraft = storage.findAnyPracticeDraft(learnerId, problem.id);
+        if (isMeaningfulDraft(anySessionDraft)) {
+          return { problem, draft: anySessionDraft };
+        }
+        if (!fallbackAnyDraft && typeof anySessionDraft === 'string' && anySessionDraft.trim().length > 0) {
+          fallbackAnyDraft = { problem, draft: anySessionDraft };
         }
       }
-    }
-    
-    setSessionId(newSessionId);
-    setSqlDraft(restoredDraft ?? DEFAULT_SQL_EDITOR_CODE);
-    setInteractions(
-      storage
-        .getInteractionsByLearner(learnerId)
-        .filter((interaction) => interaction.sessionId === newSessionId)
-    );
-    setLastError(undefined);
-    setLastErrorEventId(undefined);
-    setEscalationTriggered(false);
-    setNotesActionMessage(undefined);
-    setGenerationError(undefined);
-    setLatestGeneratedUnit(null);
-    setStartTime(Date.now());
-    setElapsedTime(0);
 
-    const hasMeaningfulDraft =
-      typeof restoredDraft === 'string' &&
-      restoredDraft.trim().length > 0 &&
-      restoredDraft.trim() !== DEFAULT_SQL_EDITOR_CODE.trim();
-
-    if (!hasMeaningfulDraft && AUTH_BACKEND_CONFIGURED) {
-      void storage.hydrateLearner(learnerId, { force: true }).then((hydrated) => {
-        if (!hydrated || cancelled) return;
-        const hydratedSessionId = storage.getActiveSessionId();
-        const hydratedProblem = sqlProblems.find((problem) =>
-          Boolean(storage.getPracticeDraft(learnerId, hydratedSessionId, problem.id))
+      const activeProblemFromSessionId = candidateSessionId && !candidateSessionId.startsWith('session-')
+        ? sqlProblems.find((problem) => problem.id === candidateSessionId)
+        : undefined;
+      if (activeProblemFromSessionId) {
+        const activeProblemDraft = storage.getPracticeDraft(
+          learnerId,
+          candidateSessionId,
+          activeProblemFromSessionId.id,
         );
-        if (!hydratedProblem) return;
-        const hydratedDraft = storage.getPracticeDraft(learnerId, hydratedSessionId, hydratedProblem.id);
-        if (!hydratedDraft) return;
-
-        setSessionId(hydratedSessionId);
-        if (currentProblem.id !== hydratedProblem.id) {
-          setCurrentProblem(hydratedProblem);
+        if (isMeaningfulDraft(activeProblemDraft)) {
+          return { problem: activeProblemFromSessionId, draft: activeProblemDraft };
         }
-        setSqlDraft(hydratedDraft);
-      });
-    }
+        const activeProblemAnySessionDraft = storage.findAnyPracticeDraft(
+          learnerId,
+          activeProblemFromSessionId.id,
+        );
+        if (isMeaningfulDraft(activeProblemAnySessionDraft)) {
+          return { problem: activeProblemFromSessionId, draft: activeProblemAnySessionDraft };
+        }
+      }
+
+      if (fallbackAnyDraft) {
+        return fallbackAnyDraft;
+      }
+
+      return { problem: fallbackProblem, draft: null };
+    };
+
+    const initializeSessionState = async () => {
+      // Initialize learner profile if doesn't exist
+      let profile = storage.getProfile(learnerId);
+      if (!profile) {
+        profile = storage.createDefaultProfile(learnerId, 'adaptive-medium');
+      }
+
+      // Prefer active session from storage (hydrated from backend in account mode).
+      // Fall back to sessionConfig only when storage still has its sentinel value.
+      const storageSessionId = storage.getActiveSessionId();
+      const activeSessionId =
+        storageSessionId === 'session-unknown' && sessionConfig?.sessionId
+          ? sessionConfig.sessionId
+          : storageSessionId;
+
+      // Validate session belongs to current learner using exact pattern match
+      // for locally-generated IDs, while accepting backend-hydrated legacy IDs.
+      const expectedPrefix = `session-${learnerId}-`;
+      const belongsToLearner = (() => {
+        if (!activeSessionId) return false;
+        if (activeSessionId === 'session-unknown') return false;
+        if (activeSessionId.startsWith('session-')) {
+          if (AUTH_BACKEND_CONFIGURED) {
+            return true;
+          }
+          return activeSessionId.startsWith(expectedPrefix) &&
+            activeSessionId.length > expectedPrefix.length;
+        }
+        // Backend sessions may use non-prefixed IDs (for example problem IDs).
+        // Treat them as valid so we don't create a fresh empty session that
+        // overrides resumable state in Neon.
+        return true;
+      })();
+
+      let resolvedSessionId = belongsToLearner
+        ? activeSessionId
+        : storage.startSession(learnerId);
+
+      let { problem: resolvedProblem, draft: resolvedDraft } = resolveDraftState(
+        resolvedSessionId,
+        currentProblem,
+      );
+
+      if (!isMeaningfulDraft(resolvedDraft) && AUTH_BACKEND_CONFIGURED) {
+        const hydrated = await storage.hydrateLearner(learnerId, { force: true });
+        if (!cancelled && hydrated) {
+          const hydratedSessionId = storage.getActiveSessionId();
+          if (hydratedSessionId && hydratedSessionId !== 'session-unknown') {
+            resolvedSessionId = hydratedSessionId;
+          }
+          const hydratedState = resolveDraftState(resolvedSessionId, resolvedProblem);
+          resolvedProblem = hydratedState.problem;
+          resolvedDraft = hydratedState.draft;
+        }
+      }
+
+      if (cancelled) return;
+
+      setSessionId(resolvedSessionId);
+      if (currentProblem.id !== resolvedProblem.id) {
+        setCurrentProblem(resolvedProblem);
+      }
+      setSqlDraft(resolvedDraft ?? DEFAULT_SQL_EDITOR_CODE);
+      setInteractions(
+        storage
+          .getInteractionsByLearner(learnerId)
+          .filter((interaction) => interaction.sessionId === resolvedSessionId)
+      );
+      setLastError(undefined);
+      setLastErrorEventId(undefined);
+      setEscalationTriggered(false);
+      setNotesActionMessage(undefined);
+      setGenerationError(undefined);
+      setLatestGeneratedUnit(null);
+      setStartTime(Date.now());
+      setElapsedTime(0);
+    };
+
+    void initializeSessionState();
 
     return () => {
       cancelled = true;

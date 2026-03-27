@@ -247,3 +247,30 @@ Changed files (this checkpoint scope):
 
 Next smallest fix:
 - Add focused frontend instrumentation and restore-application guard in apps/web/src/app/pages/LearningInterface.tsx so backend-seeded currentCode is force-applied on /practice mount before default draft reset paths can overwrite it; then rerun only tests/e2e/regression/student-multi-device-persistence.spec.ts against production.
+
+## Checkpoint — 2026-03-27 15:29 PDT
+
+Status: **PARTIAL**
+
+Evidence:
+- Frontend hydration-order patch applied in `LearningInterface` to avoid split-phase default clobber:
+  - session initialization now resolves/restores drafts via one deterministic async bootstrap path
+  - backend forced hydration (`storage.hydrateLearner(..., { force: true })`) is awaited before final editor state commit when no meaningful local draft exists
+  - restore selection now prefers meaningful drafts over placeholder-only drafts
+- Safety build gates passed:
+  - `npm run server:build` ✅
+  - `npm run build` ✅
+- Targeted storage hydration unit tests passed:
+  - `npx vitest run apps/web/src/app/lib/storage/dual-storage.test.ts` ✅ (6 passed)
+- Deployed blocker spec could not be executed to completion in this shell due deterministic env prerequisites:
+  - `npx playwright test -c playwright.config.ts tests/e2e/regression/student-multi-device-persistence.spec.ts --reporter=line --workers=1 --global-timeout=0` ❌
+    - failure: `[auth-setup] Backend health check failed for http://127.0.0.1:3001: fetch failed`
+  - rerun with deployed base URLs also blocked at setup:
+    - failure: `[auth-setup] Deployed auth runs require deterministic env vars: E2E_INSTRUCTOR_EMAIL, E2E_INSTRUCTOR_PASSWORD, E2E_STUDENT_CLASS_CODE`
+
+Changed files (this checkpoint scope):
+- `apps/web/src/app/pages/LearningInterface.tsx`
+- `docs/runbooks/status.md`
+
+Next smallest fix:
+- Provide deterministic deployed auth env (`PLAYWRIGHT_BASE_URL`, `PLAYWRIGHT_API_BASE_URL`, `E2E_INSTRUCTOR_EMAIL`, `E2E_INSTRUCTOR_PASSWORD`, `E2E_STUDENT_CLASS_CODE`, plus bypass secret if preview protected), rerun only `tests/e2e/regression/student-multi-device-persistence.spec.ts`, and confirm assertion at `:267` now restores seeded backend `currentCode`.
