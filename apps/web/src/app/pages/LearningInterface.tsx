@@ -883,7 +883,11 @@ export function LearningInterface() {
     const expectedPrefix = `session-${learnerId}-`;
     const belongsToLearner = (() => {
       if (!activeSessionId) return false;
+      if (activeSessionId === 'session-unknown') return false;
       if (activeSessionId.startsWith('session-')) {
+        if (AUTH_BACKEND_CONFIGURED) {
+          return true;
+        }
         return activeSessionId.startsWith(expectedPrefix) &&
           activeSessionId.length > expectedPrefix.length;
       }
@@ -953,7 +957,7 @@ export function LearningInterface() {
       restoredDraft.trim() !== DEFAULT_SQL_EDITOR_CODE.trim();
 
     if (!hasMeaningfulDraft && AUTH_BACKEND_CONFIGURED) {
-      void storage.hydrateLearner(learnerId).then((hydrated) => {
+      void storage.hydrateLearner(learnerId, { force: true }).then((hydrated) => {
         if (!hydrated || cancelled) return;
         const hydratedSessionId = storage.getActiveSessionId();
         const hydratedProblem = sqlProblems.find((problem) =>

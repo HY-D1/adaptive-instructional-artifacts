@@ -98,6 +98,19 @@ describe('dual-storage critical write semantics', () => {
 });
 
 describe('dual-storage restore hydration', () => {
+  it('finds drafts across opaque backend session ids', () => {
+    dualStorageModule.dualStorage.savePracticeDraft(
+      'learner-opaque',
+      'opaque-backend-session',
+      'problem-2',
+      'SELECT id FROM employees',
+    );
+
+    expect(
+      dualStorageModule.dualStorage.findAnyPracticeDraft('learner-opaque', 'problem-2'),
+    ).toBe('SELECT id FROM employees');
+  });
+
   it('hydrates session draft from backend payload without waiting for heavy interaction sync', async () => {
     getSessionMock.mockResolvedValue({
       sessionId: 'session-seeded',
@@ -125,5 +138,22 @@ describe('dual-storage restore hydration', () => {
         'problem-2',
       ),
     ).toBe('SELECT * FROM employees WHERE salary > 70000');
+  });
+
+  it('supports forced re-hydration to bypass throttle window', async () => {
+    getSessionMock.mockResolvedValue({
+      sessionId: 'session-force',
+      currentProblemId: 'problem-2',
+      currentCode: 'SELECT * FROM employees',
+    });
+
+    const first = await dualStorageModule.dualStorage.hydrateLearner('learner-force');
+    const second = await dualStorageModule.dualStorage.hydrateLearner('learner-force');
+    const forced = await dualStorageModule.dualStorage.hydrateLearner('learner-force', { force: true });
+
+    expect(first).toBe(true);
+    expect(second).toBe(true);
+    expect(forced).toBe(true);
+    expect(getSessionMock).toHaveBeenCalledTimes(2);
   });
 });

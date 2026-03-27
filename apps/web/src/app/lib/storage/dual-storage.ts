@@ -753,12 +753,12 @@ class DualStorageManager {
       .filter((profile): profile is LearnerProfile => Boolean(profile));
   }
 
-  async hydrateLearner(learnerId: string): Promise<boolean> {
+  async hydrateLearner(learnerId: string, options?: { force?: boolean }): Promise<boolean> {
     if (!this.config.useBackend) {
       return false;
     }
     const now = Date.now();
-    if (this.lastHydratedAt[learnerId] && now - this.lastHydratedAt[learnerId] < 3000) {
+    if (!options?.force && this.lastHydratedAt[learnerId] && now - this.lastHydratedAt[learnerId] < 3000) {
       return true;
     }
 

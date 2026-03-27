@@ -3,6 +3,10 @@ import type { APIRequestContext, Playwright } from '@playwright/test';
 const DEFAULT_FRONTEND_BASE_URL = 'http://127.0.0.1:4173';
 const DEFAULT_API_BASE_URL = 'http://127.0.0.1:3001';
 
+function isLocalUrl(url: string): boolean {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url);
+}
+
 function trimTrailingSlash(url: string): string {
   let value = url;
   while (value.endsWith('/')) {
@@ -20,6 +24,15 @@ export function resolveApiBaseUrl(): string {
   if (configured && configured.trim().length > 0) {
     return trimTrailingSlash(configured.trim());
   }
+
+  const explicitFrontendBase = process.env.PLAYWRIGHT_BASE_URL;
+  if (explicitFrontendBase && !isLocalUrl(trimTrailingSlash(explicitFrontendBase))) {
+    throw new Error(
+      '[auth-env] PLAYWRIGHT_API_BASE_URL is required for deployed targets. ' +
+      'Set PLAYWRIGHT_API_BASE_URL (or VITE_API_BASE_URL) to the deployed backend URL.',
+    );
+  }
+
   return DEFAULT_API_BASE_URL;
 }
 

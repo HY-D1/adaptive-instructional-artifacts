@@ -133,3 +133,47 @@ Implemented in this checkpoint:
 
 Next smallest fix:
 - Run `npm run test:e2e:launch-smoke` against deployed frontend/backend with deterministic `PLAYWRIGHT_*` + `E2E_*` env vars (and `VERCEL_AUTOMATION_BYPASS_SECRET` for protected previews), then resolve any remaining second-context restore mismatch surfaced by deployed test evidence.
+
+## Checkpoint — 2026-03-27 12:14 America/Vancouver
+
+Status: **PARTIAL**
+
+Evidence:
+- Restore-path hardening and deployed-auth env contract updates compiled successfully:
+  - `npm run server:build` ✅
+  - `npm run build` ✅
+- Focused persistence/session regression tests passed:
+  - `npx vitest run apps/web/src/app/lib/storage/dual-storage.test.ts tests/unit/server/neon-sessions.contract.test.ts` ✅ (8 passed)
+- Launch smoke still fails in this local environment because deployed/auth env contract is not provided:
+  - `npm run test:e2e:launch-smoke` ❌
+  - failure: `[auth-setup] Backend health check failed for http://127.0.0.1:3001: fetch failed`
+
+Implemented in this checkpoint:
+- Deployed E2E auth contract hardening:
+  - `tests/e2e/helpers/auth-env.ts`
+    - `resolveApiBaseUrl()` now fails fast for deployed targets when `PLAYWRIGHT_API_BASE_URL`/`VITE_API_BASE_URL` is missing.
+- Multi-device restore hardening for backend session IDs:
+  - `apps/web/src/app/lib/storage/storage.ts`
+    - `findAnyPracticeDraft()` now resolves learner+problem drafts across any session-id shape (including opaque backend session IDs).
+  - `apps/web/src/app/lib/storage/dual-storage.ts`
+    - `hydrateLearner()` now accepts `{ force?: boolean }` to bypass short hydration throttle when needed.
+  - `apps/web/src/app/pages/LearningInterface.tsx`
+    - session initialization no longer rejects backend-authenticated session IDs by local prefix rule in account mode.
+    - login-time fallback hydration now uses `storage.hydrateLearner(learnerId, { force: true })`.
+- Regression coverage additions:
+  - `apps/web/src/app/lib/storage/dual-storage.test.ts`
+    - added test for opaque session-id draft lookup.
+    - added test for forced hydration bypass.
+- Deployment runbook updates for preview→promote launch gate:
+  - `docs/DEPLOYMENT.md`
+
+Changed files (this checkpoint scope):
+- `tests/e2e/helpers/auth-env.ts`
+- `apps/web/src/app/lib/storage/storage.ts`
+- `apps/web/src/app/lib/storage/dual-storage.ts`
+- `apps/web/src/app/pages/LearningInterface.tsx`
+- `apps/web/src/app/lib/storage/dual-storage.test.ts`
+- `docs/DEPLOYMENT.md`
+
+Next smallest fix:
+- Run `npm run test:e2e:launch-smoke` with deterministic deployed env (`PLAYWRIGHT_BASE_URL`, `PLAYWRIGHT_API_BASE_URL`, fixed `E2E_*`, and `VERCEL_AUTOMATION_BYPASS_SECRET` for protected previews), then confirm `tests/e2e/regression/student-multi-device-persistence.spec.ts` editor-restore assertion is green on preview before production promote.

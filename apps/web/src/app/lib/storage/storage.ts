@@ -420,11 +420,12 @@ class StorageManager {
    */
   findAnyPracticeDraft(learnerId: string, problemId: string): string | null {
     const drafts = this.readParsedStorage<Record<string, string>>(this.PRACTICE_DRAFTS_KEY, {});
-    const prefix = `${learnerId}::session-${learnerId}-`;
-    const suffix = `::${problemId}`;
-    
     for (const [key, value] of Object.entries(drafts)) {
-      if (key.startsWith(prefix) && key.endsWith(suffix)) {
+      const parts = key.split('::');
+      if (parts.length < 3) continue;
+      const keyLearnerId = parts[0]?.trim();
+      const keyProblemId = parts[parts.length - 1]?.trim();
+      if (keyLearnerId === learnerId && keyProblemId === problemId) {
         return value;
       }
     }

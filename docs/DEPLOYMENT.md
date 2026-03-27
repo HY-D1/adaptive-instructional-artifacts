@@ -757,6 +757,37 @@ npm run test:e2e:launch-smoke
 3. `instructor-section-scope.spec.ts`
 4. `api-authz.spec.ts`
 
+#### Preview → promote release gate (required)
+
+Use a two-phase launch gate:
+
+1. Run `npm run test:e2e:launch-smoke` against the protected preview pair.
+2. Promote the exact tested frontend/backend pair.
+3. Re-run `npm run test:e2e:launch-smoke` against production URLs.
+
+```bash
+# Phase A: preview
+PLAYWRIGHT_BASE_URL="https://<frontend-preview>.vercel.app" \
+PLAYWRIGHT_API_BASE_URL="https://<backend-preview>.vercel.app" \
+VERCEL_AUTOMATION_BYPASS_SECRET="<secret>" \
+E2E_INSTRUCTOR_EMAIL="instructor-e2e@example.com" \
+E2E_INSTRUCTOR_PASSWORD="TestPassword123!" \
+E2E_STUDENT_EMAIL="student@yourdomain.com" \
+E2E_STUDENT_PASSWORD="YourPassword123!" \
+E2E_STUDENT_CLASS_CODE="<class-code>" \
+  npm run test:e2e:launch-smoke
+
+# Phase B: production (post-promote)
+PLAYWRIGHT_BASE_URL="https://adaptive-instructional-artifacts.vercel.app" \
+PLAYWRIGHT_API_BASE_URL="https://adaptive-instructional-artifacts-ap.vercel.app" \
+E2E_INSTRUCTOR_EMAIL="instructor-e2e@example.com" \
+E2E_INSTRUCTOR_PASSWORD="TestPassword123!" \
+E2E_STUDENT_EMAIL="student@yourdomain.com" \
+E2E_STUDENT_PASSWORD="YourPassword123!" \
+E2E_STUDENT_CLASS_CODE="<class-code>" \
+  npm run test:e2e:launch-smoke
+```
+
 #### Deployed authenticated smoke (Vercel preview, no protection bypass)
 
 ```bash
@@ -799,7 +830,7 @@ headers are injected automatically on every Playwright request.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `PLAYWRIGHT_BASE_URL` | `http://127.0.0.1:4173` | Target URL (set for deployed runs) |
-| `PLAYWRIGHT_API_BASE_URL` | `http://127.0.0.1:3001` | Backend API origin for split frontend/backend proofs |
+| `PLAYWRIGHT_API_BASE_URL` | `http://127.0.0.1:3001` (local) | Backend API origin for split frontend/backend proofs |
 | `VERCEL_AUTOMATION_BYPASS_SECRET` | — | Vercel protection bypass header |
 | `E2E_VERCEL_BYPASS_SECRET` | — | Alias for `VERCEL_AUTOMATION_BYPASS_SECRET` |
 | `E2E_STUDENT_EMAIL` | `e2e-student-<ts>@sql-adapt.test` | Student account email |
@@ -812,6 +843,8 @@ headers are injected automatically on every Playwright request.
 
 > **Note:** Set both student and instructor `E2E_*` credentials to stable values in CI
 > so setup can log in first (idempotent) and only fall back to signup when necessary.
+> For deployed targets (`PLAYWRIGHT_BASE_URL` not localhost), `PLAYWRIGHT_API_BASE_URL`
+> is mandatory; the helper no longer falls back silently to `127.0.0.1:3001`.
 
 #### What the auth smoke proves
 
