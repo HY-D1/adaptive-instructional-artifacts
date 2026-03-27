@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS learner_sessions (
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL,
   session_id TEXT NOT NULL,
+  current_problem_id TEXT,
   condition_id TEXT NOT NULL,
   textbook_disabled BOOLEAN NOT NULL DEFAULT FALSE,
   adaptive_ladder_disabled BOOLEAN NOT NULL DEFAULT FALSE,
@@ -70,12 +71,14 @@ CREATE INDEX IF NOT EXISTS idx_learner_sessions_user_id ON learner_sessions(user
 CREATE INDEX IF NOT EXISTS idx_learner_sessions_session_id ON learner_sessions(session_id);
 
 ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS current_code TEXT;
+ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS current_problem_id TEXT;
 ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS guidance_state TEXT;
 ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS hdi_state TEXT;
 ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS bandit_state TEXT;
 ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS last_activity TIMESTAMPTZ;
 ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_learner_sessions_section_id ON learner_sessions(section_id);
+CREATE INDEX IF NOT EXISTS idx_learner_sessions_current_problem_id ON learner_sessions(current_problem_id);
 
 -- ============================================================================
 -- Problem progress (per-user problem completion tracking)

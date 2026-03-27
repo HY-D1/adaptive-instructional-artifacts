@@ -3,11 +3,12 @@
  *
  * Provides account-based auth state to the app. On mount it checks the JWT
  * cookie via GET /api/auth/me. If authenticated, it also populates the local
- * storage profile so existing routes and guards keep working unchanged.
+ * storage profile as a UX cache.
  *
- * Falls back gracefully: if VITE_API_BASE_URL is not set or the backend is
- * unreachable, AUTH_ENABLED is false and the context is a no-op (the existing
- * localStorage-passcode flow handles auth instead).
+ * When VITE_API_BASE_URL is not configured, account auth is disabled and the
+ * existing local passcode flow remains active. In dev mode with a configured
+ * backend URL, AUTH_ENABLED stays true and route protection is backend-auth
+ * authoritative.
  */
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';

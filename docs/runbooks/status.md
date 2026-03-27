@@ -1,6 +1,6 @@
 # Project Status — SQL-Adapt
 
-**Last Updated**: 2026-03-24  
+**Last Updated**: 2026-03-27  
 **Purpose**: Single durable status file for implementation and deployment readiness.
 
 ---
@@ -53,3 +53,83 @@ See:
 - Use this as the primary status ledger for active engineering status.
 - Archive obsolete weekly snapshots under `docs/archive/` instead of adding new week-specific status files.
 
+---
+
+## Checkpoint — 2026-03-27 11:15 America/Vancouver
+
+Status: **PARTIAL**
+
+Evidence:
+- Local compile/test gates passed after auth/persistence hardening changes:
+  - `npm run server:build` ✅
+  - `npm run build` ✅
+  - `npx vitest run apps/web/src/app/lib/auth.test.ts apps/web/src/app/lib/content/concept-loader.test.ts` ✅ (49/49)
+- Deployed authz/smoke gates against production URLs:
+  - `npx playwright test -c playwright.config.ts tests/e2e/regression/instructor-section-scope.spec.ts tests/e2e/regression/api-authz.spec.ts --reporter=line` ✅ (4 passed)
+  - `npx playwright test -c playwright.config.ts --project=chromium:auth --grep '@deployed-auth-smoke' --reporter=line` ✅ (9 passed)
+- Remaining blocker:
+  - `npx playwright test -c playwright.config.ts tests/e2e/regression/student-multi-device-persistence.spec.ts --reporter=line` ❌
+  - failure at `tests/e2e/regression/student-multi-device-persistence.spec.ts:267` where second-context editor text remains default (`"-- Write your SQL query here"`) instead of seeded backend `currentCode`.
+
+Changed files (this checkpoint scope):
+- `apps/server/src/db/migrate-neon.sql`
+- `apps/server/src/db/neon.ts`
+- `apps/server/src/db/index.ts`
+- `apps/server/src/routes/neon-sessions.ts`
+- `apps/web/src/app/lib/api/storage-client.ts`
+- `apps/web/src/app/lib/storage/dual-storage.ts`
+- `apps/web/src/app/pages/LearningInterface.tsx`
+- `apps/web/src/app/lib/auth-guard.ts`
+- `apps/web/src/app/routes.tsx`
+- `apps/web/src/app/components/features/chat/AskMyTextbookChat.tsx`
+- `apps/web/src/app/lib/content/concept-loader.test.ts`
+
+Next smallest fix:
+- Add focused instrumentation/test hook around practice-page hydration path (`sessionId`, `currentProblemId`, resolved `draft source`) and rerun only `student-multi-device-persistence.spec.ts` against a deployment where both frontend and backend changes are live and accessible without Vercel auth-gating.
+
+## Checkpoint — 2026-03-27 11:49 America/Vancouver
+
+Status: **PARTIAL**
+
+Evidence:
+- Local build gates passed after launch-readiness hardening updates:
+  - `npm run server:build` ✅
+  - `npm run build` ✅
+  - bundle split baseline improved via manual chunking:
+    - main chunk reduced from ~`2,136.77 kB` (`566.34 kB` gzip) to ~`1,419.93 kB` (`355.32 kB` gzip)
+- Targeted auth/content/storage/session tests passed:
+  - `npx vitest run apps/web/src/app/lib/auth.test.ts apps/web/src/app/lib/content/concept-loader.test.ts apps/web/src/app/lib/auth-route-loader.test.ts apps/web/src/app/lib/storage/dual-storage.test.ts tests/unit/server/neon-sessions.contract.test.ts` ✅ (57 passed)
+- Canonical auth/storage import-path guard passed:
+  - `npm run check:auth-storage-imports` ✅
+- Canonical launch smoke command exists and is wired:
+  - `npm run test:e2e:launch-smoke`
+- In this environment, launch smoke currently fails at auth setup due missing reachable backend target/env contract:
+  - `npm run test:e2e:launch-smoke` ❌
+  - failure: `[auth-setup] Backend health check failed for http://127.0.0.1:3001: fetch failed`
+
+Implemented in this checkpoint:
+- Backend-authoritative loader logic extracted and tested:
+  - `apps/web/src/app/lib/auth-route-loader.ts`
+  - `apps/web/src/app/lib/auth-route-loader.test.ts`
+  - `apps/web/src/app/routes.tsx`
+- Deterministic session-first hydration for multi-device restore:
+  - `apps/web/src/app/lib/storage/dual-storage.ts`
+  - `apps/web/src/app/lib/storage/dual-storage.test.ts`
+  - `apps/web/src/app/pages/LearningInterface.tsx`
+- Backend session contract test coverage (`sessionId` vs `currentProblemId` + heartbeat no-clobber):
+  - `tests/unit/server/neon-sessions.contract.test.ts`
+- Canonical import-path enforcement for auth-critical files:
+  - `scripts/check-auth-storage-imports.mjs`
+  - `package.json` script `check:auth-storage-imports`
+  - `package.json` `integrity:scan` now runs the import guard so build/CI fails on regressions
+- Reproducible launch-smoke script and deployment runbook updates:
+  - `package.json` script `test:e2e:launch-smoke`
+  - `docs/DEPLOYMENT.md`
+- Initial bundle-risk reduction without runtime refactor:
+  - `apps/web/vite.config.ts` manual chunk config (`vendor-react`, `vendor-editor`, `vendor-charts`)
+- Docs consistency updates:
+  - `apps/web/src/app/lib/auth-context.tsx` comments aligned with actual auth enablement semantics
+  - `docs/runbooks/ux-bugs-regression.md` quality metadata source path clarified
+
+Next smallest fix:
+- Run `npm run test:e2e:launch-smoke` against deployed frontend/backend with deterministic `PLAYWRIGHT_*` + `E2E_*` env vars (and `VERCEL_AUTOMATION_BYPASS_SECRET` for protected previews), then resolve any remaining second-context restore mismatch surfaced by deployed test evidence.

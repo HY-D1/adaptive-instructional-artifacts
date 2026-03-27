@@ -283,6 +283,15 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, '../../dist/app'),
     emptyOutDir: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router'],
+          'vendor-editor': ['@monaco-editor/react', 'sql.js'],
+          'vendor-charts': ['recharts'],
+        },
+      },
+    },
     commonjsOptions: {
       transformMixedEsModules: true,
       ignoreTryCatch: true,

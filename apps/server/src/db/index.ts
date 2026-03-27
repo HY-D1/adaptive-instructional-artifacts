@@ -81,6 +81,7 @@ export async function saveSession(
   conditionId: string,
   config: {
     sectionId?: string | null;
+    currentProblemId?: string | null;
     textbookDisabled?: boolean;
     adaptiveLadderDisabled?: boolean;
     immediateExplanationMode?: boolean;

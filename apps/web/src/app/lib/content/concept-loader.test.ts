@@ -304,6 +304,10 @@ SELECT id, name
         json: () => Promise.resolve(mockMap)
       } as Response)
       .mockResolvedValueOnce({
+        ok: false,
+        status: 404
+      } as Response)
+      .mockResolvedValueOnce({
         ok: true,
         text: () => Promise.resolve(mockMarkdown)
       } as Response);
@@ -500,6 +504,10 @@ The relational model organizes data into tables (relations) with rows and column
       .mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockDualMap),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
       } as Response)
       .mockResolvedValueOnce({
         ok: true,

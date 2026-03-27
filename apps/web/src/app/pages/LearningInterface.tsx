@@ -269,6 +269,8 @@ export function LearningInterface() {
   const [subtypeOverride, setSubtypeOverride] = useState('auto');
   const [escalationTriggered, setEscalationTriggered] = useState(false);
   const [notesActionMessage, setNotesActionMessage] = useState<string | undefined>();
+  const [sessionSyncStatus, setSessionSyncStatus] = useState<'checking' | 'confirmed' | 'pending' | 'failed'>('checking');
+  const [sessionSyncError, setSessionSyncError] = useState<string | undefined>();
   const [isGeneratingUnit, setIsGeneratingUnit] = useState(false);
   const [generationError, setGenerationError] = useState<string | undefined>();
   const [latestGeneratedUnit, setLatestGeneratedUnit] = useState<InstructionalUnit | null>(null);
@@ -853,10 +855,15 @@ export function LearningInterface() {
     }
   }, [learnerId, currentProblem.id]);
 
-  // Effect 1: Session initialization - handles profile, session ID, and state reset
+  // Effect 1: Session initialization - handles profile, session ID, and state reset.
+  // Runs when learner/auth readiness changes (not on problem/session-config churn)
+  // to avoid clobbering hydrated drafts with defaults.
   useEffect(() => {
-    if (!learnerId) {
-      return;
+    let cancelled = false;
+    if (!learnerId || isHydrating || (AUTH_BACKEND_CONFIGURED && isRoleLoading)) {
+      return () => {
+        cancelled = true;
+      };
     }
     // Initialize learner profile if doesn't exist
     let profile = storage.getProfile(learnerId);
@@ -864,12 +871,27 @@ export function LearningInterface() {
       profile = storage.createDefaultProfile(learnerId, 'adaptive-medium');
     }
 
-    // Use session ID from sessionConfig if available, otherwise get from storage
-    const activeSessionId = sessionConfig?.sessionId || storage.getActiveSessionId();
+    // Prefer active session from storage (hydrated from backend in account mode).
+    // Fall back to sessionConfig only when storage still has its sentinel value.
+    const storageSessionId = storage.getActiveSessionId();
+    const activeSessionId =
+      storageSessionId === 'session-unknown' && sessionConfig?.sessionId
+        ? sessionConfig.sessionId
+        : storageSessionId;
     // Validate session belongs to current learner using exact pattern match
+    // for locally-generated IDs, while accepting backend-hydrated legacy IDs.
     const expectedPrefix = `session-${learnerId}-`;
-    const belongsToLearner = activeSessionId?.startsWith(expectedPrefix) === true && 
-      activeSessionId.length > expectedPrefix.length;
+    const belongsToLearner = (() => {
+      if (!activeSessionId) return false;
+      if (activeSessionId.startsWith('session-')) {
+        return activeSessionId.startsWith(expectedPrefix) &&
+          activeSessionId.length > expectedPrefix.length;
+      }
+      // Backend sessions may use non-prefixed IDs (for example problem IDs).
+      // Treat them as valid so we don't create a fresh empty session that
+      // overrides resumable state in Neon.
+      return true;
+    })();
     
     // First, try to find any existing draft for this learner+problem (handles navigation)
     const existingDraft = storage.findAnyPracticeDraft(learnerId, currentProblem.id);
@@ -880,7 +902,34 @@ export function LearningInterface() {
       : storage.startSession(learnerId);
     
     // Restore draft: prefer existing draft from any session, then try current session
-    const restoredDraft = existingDraft ?? storage.getPracticeDraft(learnerId, newSessionId, currentProblem.id);
+    let restoredDraft = existingDraft ?? storage.getPracticeDraft(learnerId, newSessionId, currentProblem.id);
+    if (!restoredDraft) {
+      const problemWithDraft = sqlProblems.find((problem) =>
+        Boolean(storage.getPracticeDraft(learnerId, newSessionId, problem.id))
+      );
+      if (problemWithDraft) {
+        restoredDraft = storage.getPracticeDraft(learnerId, newSessionId, problemWithDraft.id);
+        if (currentProblem.id !== problemWithDraft.id) {
+          setCurrentProblem(problemWithDraft);
+        }
+      }
+    }
+    const activeProblemFromSessionId = activeSessionId && !activeSessionId.startsWith('session-')
+      ? sqlProblems.find((problem) => problem.id === activeSessionId)
+      : undefined;
+    if (!restoredDraft && activeProblemFromSessionId) {
+      const activeProblemDraft = storage.getPracticeDraft(
+        learnerId,
+        newSessionId,
+        activeProblemFromSessionId.id,
+      );
+      if (activeProblemDraft) {
+        restoredDraft = activeProblemDraft;
+        if (currentProblem.id !== activeProblemFromSessionId.id) {
+          setCurrentProblem(activeProblemFromSessionId);
+        }
+      }
+    }
     
     setSessionId(newSessionId);
     setSqlDraft(restoredDraft ?? DEFAULT_SQL_EDITOR_CODE);
@@ -897,7 +946,35 @@ export function LearningInterface() {
     setLatestGeneratedUnit(null);
     setStartTime(Date.now());
     setElapsedTime(0);
-  }, [learnerId, currentProblem.id, sessionConfig]);
+
+    const hasMeaningfulDraft =
+      typeof restoredDraft === 'string' &&
+      restoredDraft.trim().length > 0 &&
+      restoredDraft.trim() !== DEFAULT_SQL_EDITOR_CODE.trim();
+
+    if (!hasMeaningfulDraft && AUTH_BACKEND_CONFIGURED) {
+      void storage.hydrateLearner(learnerId).then((hydrated) => {
+        if (!hydrated || cancelled) return;
+        const hydratedSessionId = storage.getActiveSessionId();
+        const hydratedProblem = sqlProblems.find((problem) =>
+          Boolean(storage.getPracticeDraft(learnerId, hydratedSessionId, problem.id))
+        );
+        if (!hydratedProblem) return;
+        const hydratedDraft = storage.getPracticeDraft(learnerId, hydratedSessionId, hydratedProblem.id);
+        if (!hydratedDraft) return;
+
+        setSessionId(hydratedSessionId);
+        if (currentProblem.id !== hydratedProblem.id) {
+          setCurrentProblem(hydratedProblem);
+        }
+        setSqlDraft(hydratedDraft);
+      });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [learnerId, isHydrating, isRoleLoading]);
 
   // Effect 2: Background analysis - handles trace analysis lifecycle
   useEffect(() => {
@@ -1160,6 +1237,22 @@ export function LearningInterface() {
     return subtype ? canonicalizeSqlEngageSubtype(subtype) : undefined;
   };
 
+  const formatTextbookSaveMessage = (
+    title: string,
+    action: 'created' | 'updated',
+    status: { backendConfirmed: boolean; pendingSync: boolean; error?: string },
+    createdLabel: string,
+    updatedLabel: string,
+  ): string => {
+    if (status.backendConfirmed) {
+      return action === 'created' ? createdLabel : updatedLabel;
+    }
+    if (status.pendingSync) {
+      return `Saved "${title}" locally — syncing to backend now.`;
+    }
+    return status.error ?? `Failed to sync "${title}" to backend.`;
+  };
+
   const persistGeneratedUnit = async (
     templateId: 'explanation.v1' | 'notebook_unit.v1',
     sourceInteractionIds: string[],
@@ -1189,7 +1282,11 @@ export function LearningInterface() {
       triggerInteractionIds: sourceInteractionIds
     });
 
-    const textbookResult = storage.saveTextbookUnit(learnerId, generation.unit);
+    const textbookWrite = await storage.saveTextbookUnitCritical(learnerId, generation.unit);
+    const textbookResult = textbookWrite.result;
+    if (!textbookWrite.status.backendConfirmed && !textbookWrite.status.pendingSync) {
+      throw new Error(textbookWrite.status.error ?? 'Failed to persist textbook unit.');
+    }
     setLatestGeneratedUnit(textbookResult.unit);
     const parseSuccess = generation.parseTelemetry.status === 'success';
     const parseMode = generation.parseTelemetry.mode || null;
@@ -1286,7 +1383,7 @@ export function LearningInterface() {
     storage.saveInteraction(textbookEvent);
     setInteractions((previousInteractions) => [...previousInteractions, textbookEvent]);
 
-    return { generation, textbookResult };
+    return { generation, textbookResult, textbookWriteStatus: textbookWrite.status };
   };
 
   const handleExecute = async (query: string, result: QueryResult, isCorrect?: boolean) => {
@@ -1442,17 +1539,19 @@ export function LearningInterface() {
       setIsGeneratingUnit(true);
       setGenerationError(undefined);
       try {
-        const { textbookResult } = await persistGeneratedUnit(
+        const { textbookResult, textbookWriteStatus } = await persistGeneratedUnit(
           'notebook_unit.v1',
           sourceIds,
           resolvedSubtype,
           decision.ruleFired || 'aggregation-threshold-met'
         );
-        setNotesActionMessage(
-          textbookResult.action === 'created'
-            ? `Saved "${textbookResult.unit.title}" to My Textbook — review it anytime!`
-            : `Updated "${textbookResult.unit.title}" in My Textbook.`
-        );
+        setNotesActionMessage(formatTextbookSaveMessage(
+          textbookResult.unit.title,
+          textbookResult.action,
+          textbookWriteStatus,
+          `Saved "${textbookResult.unit.title}" to My Textbook — review it anytime!`,
+          `Updated "${textbookResult.unit.title}" in My Textbook.`,
+        ));
       } catch (error) {
         setGenerationError((error as Error).message);
       } finally {
@@ -1511,12 +1610,14 @@ export function LearningInterface() {
     setIsGeneratingUnit(true);
     setGenerationError(undefined);
     void persistGeneratedUnit('explanation.v1', sourceIds, escalationSubtype, 'show-explanation-escalation')
-      .then(({ textbookResult }) => {
-        setNotesActionMessage(
-          textbookResult.action === 'created'
-            ? `Saved "${textbookResult.unit.title}" to My Textbook for review`
-            : `Updated "${textbookResult.unit.title}" in My Textbook`
-        );
+      .then(({ textbookResult, textbookWriteStatus }) => {
+        setNotesActionMessage(formatTextbookSaveMessage(
+          textbookResult.unit.title,
+          textbookResult.action,
+          textbookWriteStatus,
+          `Saved "${textbookResult.unit.title}" to My Textbook for review`,
+          `Updated "${textbookResult.unit.title}" in My Textbook`,
+        ));
         // Signal other tabs (e.g. TextbookPage open alongside) to reload units.
         broadcastSync('sql-adapt-textbook', learnerId);
       })
@@ -1559,23 +1660,60 @@ export function LearningInterface() {
     setIsGeneratingUnit(true);
     setGenerationError(undefined);
     try {
-      const { textbookResult } = await persistGeneratedUnit(
+      const { textbookResult, textbookWriteStatus } = await persistGeneratedUnit(
         'notebook_unit.v1',
         sourceIds,
         noteSubtype,
         'manual-add-to-notes'
       );
-      setNotesActionMessage(
-        textbookResult.action === 'created'
-          ? `✓ Saved "${textbookResult.unit.title}" — find it in My Textbook`
-          : `✓ Updated "${textbookResult.unit.title}" in My Textbook`
-      );
+      setNotesActionMessage(formatTextbookSaveMessage(
+        textbookResult.unit.title,
+        textbookResult.action,
+        textbookWriteStatus,
+        `✓ Saved "${textbookResult.unit.title}" — find it in My Textbook`,
+        `✓ Updated "${textbookResult.unit.title}" in My Textbook`,
+      ));
     } catch (error) {
       setGenerationError((error as Error).message);
     } finally {
       setIsGeneratingUnit(false);
     }
   };
+
+  useEffect(() => {
+    if (!learnerId || !sessionId) {
+      return;
+    }
+    if (!AUTH_BACKEND_CONFIGURED) {
+      setSessionSyncStatus('confirmed');
+      setSessionSyncError(undefined);
+      return;
+    }
+
+    let cancelled = false;
+    setSessionSyncStatus('checking');
+    setSessionSyncError(undefined);
+
+    void storage.ensureSessionPersisted(learnerId, sessionId).then((status) => {
+      if (cancelled) return;
+      if (status.backendConfirmed) {
+        setSessionSyncStatus('confirmed');
+        setSessionSyncError(undefined);
+        return;
+      }
+      if (status.pendingSync) {
+        setSessionSyncStatus('pending');
+        setSessionSyncError(status.error);
+        return;
+      }
+      setSessionSyncStatus('failed');
+      setSessionSyncError(status.error ?? 'Session is currently only saved locally.');
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [learnerId, sessionId]);
 
   const timeSpent = Date.now() - startTime;
 
@@ -2380,6 +2518,19 @@ export function LearningInterface() {
                   <div className="text-gray-600">Session ID:</div>
                   <div className="max-w-[180px] break-all text-right text-[11px] font-medium text-gray-700 sm:max-w-[220px] sm:text-xs">
                     {sessionId || 'pending'}
+                  </div>
+                  <div className="text-gray-600">Session sync:</div>
+                  <div
+                    className={cn(
+                      'text-right text-xs font-medium capitalize',
+                      sessionSyncStatus === 'confirmed' && 'text-green-700',
+                      sessionSyncStatus === 'pending' && 'text-amber-700',
+                      sessionSyncStatus === 'failed' && 'text-red-700',
+                      sessionSyncStatus === 'checking' && 'text-gray-600',
+                    )}
+                    title={sessionSyncError}
+                  >
+                    {sessionSyncStatus}
                   </div>
                   <div className="text-gray-600">Time spent:</div>
                   <div className="font-medium text-right">

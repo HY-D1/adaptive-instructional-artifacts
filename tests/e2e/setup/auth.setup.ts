@@ -151,6 +151,15 @@ async function hasAuthenticatedSession(page: Page): Promise<boolean> {
   }
 }
 
+async function ensureAuthenticatedRoute(page: Page, targetPath: '/practice' | '/instructor-dashboard'): Promise<void> {
+  if (await hasAuthenticatedSession(page)) {
+    const currentPath = new URL(page.url()).pathname;
+    if (currentPath === '/login' || currentPath === '/login/') {
+      await page.goto(targetPath, { waitUntil: 'domcontentloaded' });
+    }
+  }
+}
+
 async function submitAndWaitForAuthOutcome(page: Page): Promise<AuthOutcome> {
   const initialOutcome = await Promise.race([
     page
@@ -376,6 +385,7 @@ setup.describe('@auth-setup', () => {
       studentClassCode,
     );
 
+    await ensureAuthenticatedRoute(page, '/practice');
     await expect(page).toHaveURL(/\/practice/, { timeout: 15_000 });
     await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible({ timeout: 20_000 });
 
@@ -398,6 +408,7 @@ setup.describe('@auth-setup', () => {
       INSTRUCTOR_CODE,
     );
 
+    await ensureAuthenticatedRoute(page, '/instructor-dashboard');
     await expect(page).toHaveURL(/\/(instructor-dashboard|practice)/, { timeout: 15_000 });
 
     await page.context().storageState({ path: INSTRUCTOR_AUTH_FILE });

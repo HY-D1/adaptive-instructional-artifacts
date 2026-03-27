@@ -112,6 +112,7 @@ export async function initializeSchema(): Promise<void> {
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL,
       session_id TEXT NOT NULL,
+      current_problem_id TEXT,
       condition_id TEXT NOT NULL,
       textbook_disabled BOOLEAN NOT NULL DEFAULT FALSE,
       adaptive_ladder_disabled BOOLEAN NOT NULL DEFAULT FALSE,
@@ -129,12 +130,14 @@ export async function initializeSchema(): Promise<void> {
 
   // Session state fields for multi-device resume (idempotent on existing schema)
   await db`ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS current_code TEXT`;
+  await db`ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS current_problem_id TEXT`;
   await db`ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS guidance_state TEXT`;
   await db`ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS hdi_state TEXT`;
   await db`ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS bandit_state TEXT`;
   await db`ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS last_activity TIMESTAMPTZ`;
   await db`ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL`;
   await db`CREATE INDEX IF NOT EXISTS idx_learner_sessions_section_id ON learner_sessions(section_id)`;
+  await db`CREATE INDEX IF NOT EXISTS idx_learner_sessions_current_problem_id ON learner_sessions(current_problem_id)`;
 
   // Problem progress
   await db`
@@ -416,6 +419,7 @@ export async function saveSession(
   conditionId: string,
   config: {
     sectionId?: string | null;
+    currentProblemId?: string | null;
     textbookDisabled?: boolean;
     adaptiveLadderDisabled?: boolean;
     immediateExplanationMode?: boolean;
@@ -435,12 +439,12 @@ export async function saveSession(
 
   await db`
     INSERT INTO learner_sessions (
-      id, user_id, section_id, session_id, condition_id,
+      id, user_id, section_id, session_id, current_problem_id, condition_id,
       textbook_disabled, adaptive_ladder_disabled, immediate_explanation_mode,
       static_hint_mode, escalation_policy, current_code, guidance_state,
       hdi_state, bandit_state, last_activity, created_at, updated_at
     ) VALUES (
-      ${id}, ${userId}, ${resolvedSectionId}, ${sessionId}, ${conditionId},
+      ${id}, ${userId}, ${resolvedSectionId}, ${sessionId}, ${config.currentProblemId ?? null}, ${conditionId},
       ${config.textbookDisabled ?? false}, ${config.adaptiveLadderDisabled ?? false},
       ${config.immediateExplanationMode ?? false}, ${config.staticHintMode ?? false},
       ${config.escalationPolicy ?? 'adaptive'}, ${config.currentCode ?? null},
@@ -452,6 +456,7 @@ export async function saveSession(
     ON CONFLICT (user_id, session_id) DO UPDATE SET
       condition_id = EXCLUDED.condition_id,
       section_id = EXCLUDED.section_id,
+      current_problem_id = COALESCE(EXCLUDED.current_problem_id, learner_sessions.current_problem_id),
       textbook_disabled = EXCLUDED.textbook_disabled,
       adaptive_ladder_disabled = EXCLUDED.adaptive_ladder_disabled,
       immediate_explanation_mode = EXCLUDED.immediate_explanation_mode,
@@ -477,6 +482,7 @@ export async function getSession(userId: string, sessionId: string): Promise<any
 
   return {
     sessionId: result.session_id,
+    currentProblemId: result.current_problem_id ?? null,
     sectionId: result.section_id ?? null,
     conditionId: result.condition_id,
     textbookDisabled: result.textbook_disabled,
@@ -507,6 +513,7 @@ export async function getActiveSession(userId: string): Promise<any | null> {
 
   return {
     sessionId: result.session_id,
+    currentProblemId: result.current_problem_id ?? null,
     sectionId: result.section_id ?? null,
     conditionId: result.condition_id,
     textbookDisabled: result.textbook_disabled,

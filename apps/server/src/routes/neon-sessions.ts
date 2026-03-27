@@ -44,7 +44,7 @@ router.get('/:learnerId/active', async (req: Request, res: Response) => {
     res.json({
       success: true,
       data: {
-        currentProblemId: session.sessionId,
+        currentProblemId: session.currentProblemId ?? session.sessionId,
         sectionId: session.sectionId ?? null,
         currentCode: session.lastCode,
         guidanceState: session.guidanceState,
@@ -89,11 +89,57 @@ router.post('/:learnerId/active', async (req: Request, res: Response) => {
       escalationPolicy,
     } = req.body;
 
+    const hasExplicitProblemContext = Boolean(currentProblemId);
+    const hasSessionStatePayload =
+      currentCode !== undefined ||
+      guidanceState !== undefined ||
+      hdiState !== undefined ||
+      banditState !== undefined;
+
+    // Treat heartbeat-only writes as read-through when an active session exists.
+    // This prevents session bootstrapping calls from replacing resumable state
+    // with an empty session that has null currentCode.
+    if (!hasExplicitProblemContext && !hasSessionStatePayload) {
+      const activeSession = await db.getActiveSession(req.params.learnerId);
+      if (activeSession) {
+        res.json({
+          success: true,
+          data: {
+            currentProblemId: activeSession.currentProblemId ?? activeSession.sessionId,
+            sectionId: activeSession.sectionId ?? null,
+            currentCode: activeSession.lastCode,
+            guidanceState: activeSession.guidanceState,
+            hdiState: activeSession.hdiState,
+            banditState: activeSession.banditState,
+            startTime: activeSession.createdAt ? new Date(activeSession.createdAt).toISOString() : undefined,
+            lastActivity:
+              activeSession.lastActivity
+                ? new Date(activeSession.lastActivity).toISOString()
+                : activeSession.updatedAt
+                  ? new Date(activeSession.updatedAt).toISOString()
+                  : undefined,
+            sessionId: activeSession.sessionId,
+          }
+        });
+        return;
+      }
+    }
+
+    const activeSession = await db.getActiveSession(req.params.learnerId);
+
     // Map frontend format to backend format
-    const actualSessionId = sessionId || currentProblemId || `session-${Date.now()}`;
+    const actualSessionId =
+      sessionId ||
+      activeSession?.sessionId ||
+      `session-${req.params.learnerId}-${Date.now()}`;
+    const actualCurrentProblemId =
+      currentProblemId ||
+      activeSession?.currentProblemId ||
+      null;
     const actualConditionId = conditionId || 'default';
 
     await db.saveSession(req.params.learnerId, actualSessionId, actualConditionId, {
+      currentProblemId: actualCurrentProblemId,
       textbookDisabled: textbookDisabled ?? false,
       adaptiveLadderDisabled: adaptiveLadderDisabled ?? false,
       immediateExplanationMode: immediateExplanationMode ?? false,
@@ -111,12 +157,13 @@ router.post('/:learnerId/active', async (req: Request, res: Response) => {
     res.json({
       success: true,
       data: {
-        currentProblemId: session?.sessionId,
+        currentProblemId: session?.currentProblemId ?? actualCurrentProblemId ?? session?.sessionId,
         sectionId: session?.sectionId ?? null,
         currentCode: session?.lastCode ?? currentCode,
         guidanceState: session?.guidanceState ?? guidanceState,
         hdiState: session?.hdiState ?? hdiState,
         banditState: session?.banditState ?? banditState,
+        sessionId: session?.sessionId ?? actualSessionId,
         startTime: startTime || (session?.createdAt ? new Date(session.createdAt).toISOString() : undefined),
         lastActivity:
           lastActivity ||
@@ -155,10 +202,52 @@ router.put('/:learnerId/active', async (req: Request, res: Response) => {
       escalationPolicy,
     } = req.body;
 
-    const actualSessionId = sessionId || currentProblemId || `session-${Date.now()}`;
+    const hasExplicitProblemContext = Boolean(currentProblemId);
+    const hasSessionStatePayload =
+      currentCode !== undefined ||
+      guidanceState !== undefined ||
+      hdiState !== undefined ||
+      banditState !== undefined;
+
+    if (!hasExplicitProblemContext && !hasSessionStatePayload) {
+      const activeSession = await db.getActiveSession(req.params.learnerId);
+      if (activeSession) {
+        res.json({
+          success: true,
+          data: {
+            currentProblemId: activeSession.currentProblemId ?? activeSession.sessionId,
+            sectionId: activeSession.sectionId ?? null,
+            currentCode: activeSession.lastCode,
+            guidanceState: activeSession.guidanceState,
+            hdiState: activeSession.hdiState,
+            banditState: activeSession.banditState,
+            startTime: activeSession.createdAt ? new Date(activeSession.createdAt).toISOString() : undefined,
+            lastActivity:
+              activeSession.lastActivity
+                ? new Date(activeSession.lastActivity).toISOString()
+                : activeSession.updatedAt
+                  ? new Date(activeSession.updatedAt).toISOString()
+                  : undefined,
+            sessionId: activeSession.sessionId,
+          }
+        });
+        return;
+      }
+    }
+
+    const activeSession = await db.getActiveSession(req.params.learnerId);
+    const actualSessionId =
+      sessionId ||
+      activeSession?.sessionId ||
+      `session-${req.params.learnerId}-${Date.now()}`;
+    const actualCurrentProblemId =
+      currentProblemId ||
+      activeSession?.currentProblemId ||
+      null;
     const actualConditionId = conditionId || 'default';
 
     await db.saveSession(req.params.learnerId, actualSessionId, actualConditionId, {
+      currentProblemId: actualCurrentProblemId,
       textbookDisabled: textbookDisabled ?? false,
       adaptiveLadderDisabled: adaptiveLadderDisabled ?? false,
       immediateExplanationMode: immediateExplanationMode ?? false,
@@ -176,12 +265,13 @@ router.put('/:learnerId/active', async (req: Request, res: Response) => {
     res.json({
       success: true,
       data: {
-        currentProblemId: session?.sessionId,
+        currentProblemId: session?.currentProblemId ?? actualCurrentProblemId ?? session?.sessionId,
         sectionId: session?.sectionId ?? null,
         currentCode: session?.lastCode ?? currentCode,
         guidanceState: session?.guidanceState ?? guidanceState,
         hdiState: session?.hdiState ?? hdiState,
         banditState: session?.banditState ?? banditState,
+        sessionId: session?.sessionId ?? actualSessionId,
         startTime: startTime || (session?.createdAt ? new Date(session.createdAt).toISOString() : undefined),
         lastActivity:
           lastActivity ||

@@ -619,6 +619,12 @@ npx playwright install --with-deps chromium
 
 ### Playwright test suites
 
+One-time browser bootstrap (local and CI images without preinstalled Playwright):
+
+```bash
+npm run test:install-browsers
+```
+
 The config defines three Playwright **projects**:
 
 | Project | What it runs | Auth |
@@ -738,6 +744,18 @@ npx playwright test -c playwright.config.ts --project=chromium:auth \
   tests/e2e/regression/instructor-section-scope.spec.ts \
   tests/e2e/regression/api-authz.spec.ts
 ```
+
+#### Canonical launch smoke command (release gate)
+
+```bash
+npm run test:e2e:launch-smoke
+```
+
+`test:e2e:launch-smoke` runs:
+1. `@deployed-auth-smoke` on `chromium:auth`
+2. `student-multi-device-persistence.spec.ts`
+3. `instructor-section-scope.spec.ts`
+4. `api-authz.spec.ts`
 
 #### Deployed authenticated smoke (Vercel preview, no protection bypass)
 

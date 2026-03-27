@@ -226,7 +226,9 @@ interface BackendLearnerProfile {
 }
 
 interface SessionData {
+  sessionId?: string;
   currentProblemId?: string;
+  sectionId?: string | null;
   currentCode?: string;
   guidanceState?: Record<string, unknown>;
   hdiState?: Record<string, unknown>;
