@@ -4,6 +4,10 @@
 
 import { Router, Request, Response } from 'express';
 import * as db from '../db/neon.js';
+import {
+  getSectionForLearnerInInstructorScope,
+  getSectionForStudent,
+} from '../db/sections.js';
 
 const router = Router();
 
@@ -16,8 +20,108 @@ const router = Router();
  * When authenticated: always uses the JWT-authenticated learnerId (prevents spoofing).
  * When not authenticated (legacy/local mode): uses the body-supplied learnerId.
  */
-function resolveLearnerId(req: Request, bodyLearnerId: string): string {
-  return req.auth?.learnerId ?? bodyLearnerId;
+class AccessError extends Error {
+  status: number;
+  targetLearnerId?: string;
+  targetSectionId?: string | null;
+  constructor(
+    status: number,
+    message: string,
+    context?: { targetLearnerId?: string; targetSectionId?: string | null }
+  ) {
+    super(message);
+    this.status = status;
+    this.targetLearnerId = context?.targetLearnerId;
+    this.targetSectionId = context?.targetSectionId;
+  }
+}
+
+type AccessMode = 'read' | 'write';
+
+interface ScopedTarget {
+  learnerId: string;
+  sectionId: string | null;
+}
+
+function sanitizeHintViewPayload(eventType: string, payload: Record<string, unknown>): Record<string, unknown> {
+  if (eventType !== 'hint_view') {
+    return payload;
+  }
+  const sanitized = { ...payload };
+  delete sanitized.hintId;
+  return sanitized;
+}
+
+function routeLabel(req: Request): string {
+  return `${req.method} ${req.baseUrl}${req.path}`;
+}
+
+function logAuthzFailure(req: Request, error: AccessError): void {
+  console.warn('[authz/interactions]', {
+    route: routeLabel(req),
+    actorRole: req.auth?.role ?? 'anonymous',
+    actorId: req.auth?.learnerId ?? null,
+    targetLearnerId: error.targetLearnerId ?? null,
+    targetSectionId: error.targetSectionId ?? null,
+    status: error.status,
+    reason: error.message,
+  });
+}
+
+function logInteractionWrite(req: Request, target: ScopedTarget): void {
+  console.info('[interaction/write]', {
+    route: routeLabel(req),
+    actorRole: req.auth?.role ?? 'anonymous',
+    actorId: req.auth?.learnerId ?? null,
+    targetLearnerId: target.learnerId,
+    targetSectionId: target.sectionId,
+  });
+}
+
+async function resolveScopedTarget(
+  req: Request,
+  requestedLearnerId: string | undefined,
+  mode: AccessMode
+): Promise<ScopedTarget> {
+  const auth = req.auth;
+  if (!auth) {
+    if (!requestedLearnerId) {
+      throw new AccessError(400, 'Missing learnerId');
+    }
+    return { learnerId: requestedLearnerId, sectionId: null };
+  }
+
+  if (auth.role === 'student') {
+    if (requestedLearnerId && requestedLearnerId !== auth.learnerId) {
+      throw new AccessError(403, 'Access denied: not your data', {
+        targetLearnerId: requestedLearnerId,
+      });
+    }
+    const section = await getSectionForStudent(auth.learnerId);
+    return { learnerId: auth.learnerId, sectionId: section?.id ?? null };
+  }
+
+  if (!requestedLearnerId) {
+    if (mode === 'write') {
+      throw new AccessError(400, 'learnerId is required for instructor writes');
+    }
+    return { learnerId: auth.learnerId, sectionId: null };
+  }
+
+  if (requestedLearnerId === auth.learnerId) {
+    return { learnerId: requestedLearnerId, sectionId: null };
+  }
+
+  const scopedSection = await getSectionForLearnerInInstructorScope({
+    instructorUserId: auth.learnerId,
+    learnerId: requestedLearnerId,
+  });
+  if (!scopedSection) {
+    throw new AccessError(403, 'Access denied: learner not in your section', {
+      targetLearnerId: requestedLearnerId,
+    });
+  }
+  return { learnerId: requestedLearnerId, sectionId: scopedSection.id };
 }
 
 // ============================================================================
@@ -37,11 +141,11 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    // When authenticated, always use the server-verified learnerId (ignores spoofed body value)
-    const canonicalLearnerId = resolveLearnerId(req, event.learnerId);
-    event.learnerId = canonicalLearnerId;
+    const scopedTarget = await resolveScopedTarget(req, event.learnerId, 'write');
+    event.learnerId = scopedTarget.learnerId;
+    event.sectionId = scopedTarget.sectionId;
 
-    const id = event.id || `${event.eventType}-${canonicalLearnerId}-${Date.now()}`;
+    const id = event.id || `${event.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
 
     // Extract payload - frontend sends nested payload, direct API calls send flat structure
     // RESEARCH-3B: Explicitly extract bandit/escalation fields for proper column mapping
@@ -78,7 +182,7 @@ router.post('/', async (req: Request, res: Response) => {
     };
     // RESEARCH-4: Always merge canonical study fields from event top-level into payload.
     // This ensures they reach the DB columns regardless of whether event.payload was set.
-    const payload = {
+    const payload = sanitizeHintViewPayload(event.eventType, {
       ...basePayload,
       selectedArm: event.selectedArm ?? basePayload.selectedArm,
       learnerProfileId: event.learnerProfileId ?? basePayload.learnerProfileId,
@@ -88,19 +192,26 @@ router.post('/', async (req: Request, res: Response) => {
       strategyAssigned: event.strategyAssigned ?? basePayload.strategyAssigned,
       strategyUpdated: event.strategyUpdated ?? basePayload.strategyUpdated,
       rewardValue: event.rewardValue ?? basePayload.rewardValue,
-    };
+    });
 
     const interaction = await db.createInteraction({
       id,
       learnerId: event.learnerId,
+      sectionId: scopedTarget.sectionId,
       timestamp: event.timestamp || new Date().toISOString(),
       eventType: event.eventType,
       problemId: event.problemId,
       payload,
     });
+    logInteractionWrite(req, scopedTarget);
 
     res.status(201).json({ success: true, data: interaction });
   } catch (error) {
+    if (error instanceof AccessError) {
+      logAuthzFailure(req, error);
+      res.status(error.status).json({ success: false, error: error.message });
+      return;
+    }
     console.error('Error logging interaction:', error);
     res.status(500).json({ success: false, error: 'Failed to log interaction' });
   }
@@ -121,7 +232,10 @@ router.post('/batch', async (req: Request, res: Response) => {
 
     const results = [];
     for (const event of events) {
-      const id = event.id || `${event.eventType}-${event.learnerId}-${Date.now()}`;
+      const scopedTarget = await resolveScopedTarget(req, event.learnerId, 'write');
+      event.learnerId = scopedTarget.learnerId;
+      event.sectionId = scopedTarget.sectionId;
+      const id = event.id || `${event.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
       // Extract payload - frontend sends nested payload, direct API calls send flat structure
       // RESEARCH-3B: Explicitly extract bandit/escalation fields for proper column mapping
       const basePayload = event.payload || {
@@ -156,7 +270,7 @@ router.post('/batch', async (req: Request, res: Response) => {
         ...event,
       };
       // RESEARCH-4: Always merge canonical study fields
-      const payload = {
+      const payload = sanitizeHintViewPayload(event.eventType, {
         ...basePayload,
         selectedArm: event.selectedArm ?? basePayload.selectedArm,
         learnerProfileId: event.learnerProfileId ?? basePayload.learnerProfileId,
@@ -166,20 +280,27 @@ router.post('/batch', async (req: Request, res: Response) => {
         strategyAssigned: event.strategyAssigned ?? basePayload.strategyAssigned,
         strategyUpdated: event.strategyUpdated ?? basePayload.strategyUpdated,
         rewardValue: event.rewardValue ?? basePayload.rewardValue,
-      };
+      });
       const interaction = await db.createInteraction({
         id,
-        learnerId: event.learnerId,
+        learnerId: scopedTarget.learnerId,
+        sectionId: scopedTarget.sectionId,
         timestamp: event.timestamp || new Date().toISOString(),
         eventType: event.eventType,
         problemId: event.problemId,
         payload,
       });
+      logInteractionWrite(req, scopedTarget);
       results.push(interaction);
     }
 
     res.status(201).json({ success: true, data: { count: results.length } });
   } catch (error) {
+    if (error instanceof AccessError) {
+      logAuthzFailure(req, error);
+      res.status(error.status).json({ success: false, error: error.message });
+      return;
+    }
     console.error('Error logging interactions batch:', error);
     res.status(500).json({ success: false, error: 'Failed to log interactions' });
   }
@@ -190,15 +311,10 @@ router.get('/', async (req: Request, res: Response) => {
   try {
     const { learnerId, sessionId, eventType, problemId, limit, offset } = req.query;
 
-    if (!learnerId) {
-      res.status(400).json({
-        success: false,
-        error: 'learnerId query parameter is required',
-      });
-      return;
-    }
+    const requestedLearnerId = typeof learnerId === 'string' ? learnerId : undefined;
+    const scopedTarget = await resolveScopedTarget(req, requestedLearnerId, 'read');
 
-    const result = await db.getInteractionsByUser(learnerId as string, {
+    const result = await db.getInteractionsByUser(scopedTarget.learnerId, {
       sessionId: sessionId as string | undefined,
       eventType: eventType as string | undefined,
       problemId: problemId as string | undefined,
@@ -217,6 +333,11 @@ router.get('/', async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
+    if (error instanceof AccessError) {
+      logAuthzFailure(req, error);
+      res.status(error.status).json({ success: false, error: error.message });
+      return;
+    }
     console.error('Error fetching interactions:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch interactions' });
   }
@@ -232,8 +353,15 @@ router.get('/:id', async (req: Request, res: Response) => {
       return;
     }
 
+    await resolveScopedTarget(req, interaction.learnerId, 'read');
+
     res.json({ success: true, data: interaction });
   } catch (error) {
+    if (error instanceof AccessError) {
+      logAuthzFailure(req, error);
+      res.status(error.status).json({ success: false, error: error.message });
+      return;
+    }
     console.error('Error fetching interaction:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch interaction' });
   }

@@ -41,6 +41,9 @@ import { sqlProblems } from '../data/problems';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
 import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync } from '../lib/storage';
+import { useAuth } from '../lib/auth-context';
+import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
+import { clearUiStateForActor, getUiState, setUiState } from '../lib/ui-state';
 import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content/content-generator';
@@ -141,6 +144,13 @@ interface DependencyWarningToastProps {
   onClose: () => void;
 }
 
+interface PracticePageUiState {
+  currentProblemId?: string;
+  activeConceptId?: string | null;
+  activeConceptTitle?: string | null;
+  subtypeOverride?: string;
+}
+
 function DependencyWarningToast({ onClose }: DependencyWarningToastProps) {
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -239,9 +249,11 @@ function analyzeLearnerHistory(interactions: InteractionEvent[]) {
  */
 export function LearningInterface() {
   const location = useLocation();
-  const { role, isStudent, isInstructor, profile } = useUserRole();
+  const { role, isStudent, isInstructor, profile, isLoading: isRoleLoading } = useUserRole();
+  const { isHydrating } = useAuth();
+  const cachedProfileId = storage.getUserProfile()?.id;
   // Use actual user profile ID for data isolation (aligned with TextbookPage)
-  const learnerId = profile?.id || 'learner-1';
+  const learnerId = profile?.id || cachedProfileId || (AUTH_BACKEND_CONFIGURED ? '' : 'learner-1');
   const [sessionId, setSessionId] = useState('');
   const [currentProblem, setCurrentProblem] = useState<SQLProblem>(sqlProblems[0]);
   const [activeConceptId, setActiveConceptId] = useState<string | null>(null);
@@ -257,6 +269,8 @@ export function LearningInterface() {
   const [subtypeOverride, setSubtypeOverride] = useState('auto');
   const [escalationTriggered, setEscalationTriggered] = useState(false);
   const [notesActionMessage, setNotesActionMessage] = useState<string | undefined>();
+  const [sessionSyncStatus, setSessionSyncStatus] = useState<'checking' | 'confirmed' | 'pending' | 'failed'>('checking');
+  const [sessionSyncError, setSessionSyncError] = useState<string | undefined>();
   const [isGeneratingUnit, setIsGeneratingUnit] = useState(false);
   const [generationError, setGenerationError] = useState<string | undefined>();
   const [latestGeneratedUnit, setLatestGeneratedUnit] = useState<InstructionalUnit | null>(null);
@@ -598,6 +612,9 @@ export function LearningInterface() {
 
   // Load initial data
   useEffect(() => {
+    if (isHydrating || (AUTH_BACKEND_CONFIGURED && (isRoleLoading || !learnerId))) {
+      return undefined;
+    }
     const timer = window.setTimeout(() => setIsLoading(false), 500);
     return () => {
       window.clearTimeout(timer);
@@ -605,7 +622,7 @@ export function LearningInterface() {
       notificationTimeoutsRef.current.forEach(id => window.clearTimeout(id));
       notificationTimeoutsRef.current.clear();
     };
-  }, []);
+  }, [isHydrating, isRoleLoading, learnerId]);
 
   // Parse query params on mount to set problem/concept context
   useEffect(() => {
@@ -639,8 +656,59 @@ export function LearningInterface() {
     }
   }, [location.search]);
 
+  useEffect(() => {
+    if (!learnerId) return;
+    const params = new URLSearchParams(location.search);
+    const queryHasExplicitContext = params.has('problemId') || params.has('conceptId');
+    if (queryHasExplicitContext) return;
+
+    const persisted = getUiState<PracticePageUiState>('practice', {
+      role: isInstructor ? 'instructor' : 'student',
+      actorId: learnerId,
+    });
+    if (!persisted) return;
+
+    if (persisted.currentProblemId) {
+      const persistedProblem = sqlProblems.find((problem) => problem.id === persisted.currentProblemId);
+      if (persistedProblem) {
+        setCurrentProblem(persistedProblem);
+      }
+    }
+
+    if (persisted.activeConceptId) {
+      setActiveConceptId(persisted.activeConceptId);
+      void getConcept(persisted.activeConceptId).then((concept) => {
+        if (concept) setActiveConceptTitle(concept.title);
+      });
+    } else if (persisted.activeConceptTitle === null) {
+      setActiveConceptTitle(null);
+    }
+
+    if (persisted.subtypeOverride) {
+      setSubtypeOverride(persisted.subtypeOverride);
+    }
+  }, [learnerId, isInstructor, location.search]);
+
+  useEffect(() => {
+    if (!learnerId) return;
+    setUiState<PracticePageUiState>(
+      'practice',
+      { role: isInstructor ? 'instructor' : 'student', actorId: learnerId },
+      {
+        currentProblemId: currentProblem.id,
+        activeConceptId,
+        activeConceptTitle,
+        subtypeOverride,
+      }
+    );
+  }, [learnerId, isInstructor, currentProblem.id, activeConceptId, activeConceptTitle, subtypeOverride]);
+
   // Calculate total time across sessions
   useEffect(() => {
+    if (!learnerId) {
+      setTotalTimeAcrossSessions(0);
+      return;
+    }
     const learnerInteractions = storage.getInteractionsByLearner(learnerId);
     const totalMs = learnerInteractions.reduce((total, interaction) => {
       return total + (interaction.timeSpent || 0);
@@ -787,49 +855,194 @@ export function LearningInterface() {
     }
   }, [learnerId, currentProblem.id]);
 
-  // Effect 1: Session initialization - handles profile, session ID, and state reset
+  // Effect 1: Session initialization - handles profile, session ID, and state reset.
+  // Runs when learner/auth readiness changes (not on problem/session-config churn)
+  // to avoid clobbering hydrated drafts with defaults.
   useEffect(() => {
-    // Initialize learner profile if doesn't exist
-    let profile = storage.getProfile(learnerId);
-    if (!profile) {
-      profile = storage.createDefaultProfile(learnerId, 'adaptive-medium');
+    let cancelled = false;
+    if (!learnerId || isHydrating || (AUTH_BACKEND_CONFIGURED && isRoleLoading)) {
+      return () => {
+        cancelled = true;
+      };
     }
-    setSubtypeOverride('auto');
+    const isMeaningfulDraft = (draft: string | null | undefined): draft is string =>
+      typeof draft === 'string' &&
+      draft.trim().length > 0 &&
+      draft.trim() !== DEFAULT_SQL_EDITOR_CODE.trim();
 
-    // Use session ID from sessionConfig if available, otherwise get from storage
-    const activeSessionId = sessionConfig?.sessionId || storage.getActiveSessionId();
-    // Validate session belongs to current learner using exact pattern match
-    const expectedPrefix = `session-${learnerId}-`;
-    const belongsToLearner = activeSessionId?.startsWith(expectedPrefix) === true && 
-      activeSessionId.length > expectedPrefix.length;
-    
-    // First, try to find any existing draft for this learner+problem (handles navigation)
-    const existingDraft = storage.findAnyPracticeDraft(learnerId, currentProblem.id);
-    
-    // Use existing session if valid, otherwise create new one
-    const newSessionId = belongsToLearner
-      ? activeSessionId
-      : storage.startSession(learnerId);
-    
-    // Restore draft: prefer existing draft from any session, then try current session
-    const restoredDraft = existingDraft ?? storage.getPracticeDraft(learnerId, newSessionId, currentProblem.id);
-    
-    setSessionId(newSessionId);
-    setSqlDraft(restoredDraft ?? DEFAULT_SQL_EDITOR_CODE);
-    setInteractions(
-      storage
-        .getInteractionsByLearner(learnerId)
-        .filter((interaction) => interaction.sessionId === newSessionId)
-    );
-    setLastError(undefined);
-    setLastErrorEventId(undefined);
-    setEscalationTriggered(false);
-    setNotesActionMessage(undefined);
-    setGenerationError(undefined);
-    setLatestGeneratedUnit(null);
-    setStartTime(Date.now());
-    setElapsedTime(0);
-  }, [learnerId, currentProblem.id, sessionConfig]);
+    const resolveDraftState = (
+      candidateSessionId: string,
+      fallbackProblem: SQLProblem,
+    ): { problem: SQLProblem; draft: string | null } => {
+      const currentSessionDraft = storage.getPracticeDraft(learnerId, candidateSessionId, fallbackProblem.id);
+      if (isMeaningfulDraft(currentSessionDraft)) {
+        return { problem: fallbackProblem, draft: currentSessionDraft };
+      }
+      const currentAnySessionDraft = storage.findAnyPracticeDraft(learnerId, fallbackProblem.id);
+      if (isMeaningfulDraft(currentAnySessionDraft)) {
+        return { problem: fallbackProblem, draft: currentAnySessionDraft };
+      }
+
+      let fallbackAnyDraft: { problem: SQLProblem; draft: string } | null = null;
+      for (const problem of sqlProblems) {
+        const sessionDraft = storage.getPracticeDraft(learnerId, candidateSessionId, problem.id);
+        if (isMeaningfulDraft(sessionDraft)) {
+          return { problem, draft: sessionDraft };
+        }
+        if (!fallbackAnyDraft && typeof sessionDraft === 'string' && sessionDraft.trim().length > 0) {
+          fallbackAnyDraft = { problem, draft: sessionDraft };
+        }
+      }
+
+      for (const problem of sqlProblems) {
+        const anySessionDraft = storage.findAnyPracticeDraft(learnerId, problem.id);
+        if (isMeaningfulDraft(anySessionDraft)) {
+          return { problem, draft: anySessionDraft };
+        }
+        if (!fallbackAnyDraft && typeof anySessionDraft === 'string' && anySessionDraft.trim().length > 0) {
+          fallbackAnyDraft = { problem, draft: anySessionDraft };
+        }
+      }
+
+      const activeProblemFromSessionId = candidateSessionId && !candidateSessionId.startsWith('session-')
+        ? sqlProblems.find((problem) => problem.id === candidateSessionId)
+        : undefined;
+      if (activeProblemFromSessionId) {
+        const activeProblemDraft = storage.getPracticeDraft(
+          learnerId,
+          candidateSessionId,
+          activeProblemFromSessionId.id,
+        );
+        if (isMeaningfulDraft(activeProblemDraft)) {
+          return { problem: activeProblemFromSessionId, draft: activeProblemDraft };
+        }
+        const activeProblemAnySessionDraft = storage.findAnyPracticeDraft(
+          learnerId,
+          activeProblemFromSessionId.id,
+        );
+        if (isMeaningfulDraft(activeProblemAnySessionDraft)) {
+          return { problem: activeProblemFromSessionId, draft: activeProblemAnySessionDraft };
+        }
+      }
+
+      if (fallbackAnyDraft) {
+        return fallbackAnyDraft;
+      }
+
+      return { problem: fallbackProblem, draft: null };
+    };
+
+    const initializeSessionState = async () => {
+      // Initialize learner profile if doesn't exist
+      let profile = storage.getProfile(learnerId);
+      if (!profile) {
+        profile = storage.createDefaultProfile(learnerId, 'adaptive-medium');
+      }
+
+      // Prefer active session from storage (hydrated from backend in account mode).
+      // Fall back to sessionConfig only when storage still has its sentinel value.
+      const storageSessionId = storage.getActiveSessionId();
+      const activeSessionId =
+        storageSessionId === 'session-unknown' && sessionConfig?.sessionId
+          ? sessionConfig.sessionId
+          : storageSessionId;
+
+      // Validate session belongs to current learner using exact pattern match
+      // for locally-generated IDs, while accepting backend-hydrated legacy IDs.
+      const expectedPrefix = `session-${learnerId}-`;
+      const belongsToLearner = (() => {
+        if (!activeSessionId) return false;
+        if (activeSessionId === 'session-unknown') return false;
+        if (activeSessionId.startsWith('session-')) {
+          if (AUTH_BACKEND_CONFIGURED) {
+            return true;
+          }
+          return activeSessionId.startsWith(expectedPrefix) &&
+            activeSessionId.length > expectedPrefix.length;
+        }
+        // Backend sessions may use non-prefixed IDs (for example problem IDs).
+        // Treat them as valid so we don't create a fresh empty session that
+        // overrides resumable state in Neon.
+        return true;
+      })();
+
+      let resolvedSessionId = belongsToLearner
+        ? activeSessionId
+        : storage.startSession(learnerId);
+
+      let { problem: resolvedProblem, draft: resolvedDraft } = resolveDraftState(
+        resolvedSessionId,
+        currentProblem,
+      );
+
+      if (!isMeaningfulDraft(resolvedDraft) && AUTH_BACKEND_CONFIGURED) {
+        const hydrated = await storage.hydrateLearner(learnerId, { force: true });
+        if (!cancelled && hydrated) {
+          const hydratedSessionId = storage.getActiveSessionId();
+          if (hydratedSessionId && hydratedSessionId !== 'session-unknown') {
+            resolvedSessionId = hydratedSessionId;
+          }
+          const hydratedState = resolveDraftState(resolvedSessionId, resolvedProblem);
+          resolvedProblem = hydratedState.problem;
+          resolvedDraft = hydratedState.draft;
+        }
+      }
+
+      if (!isMeaningfulDraft(resolvedDraft) && AUTH_BACKEND_CONFIGURED) {
+        const backendSessionSnapshot = await storage.getBackendSessionSnapshot(learnerId);
+        if (!cancelled && backendSessionSnapshot && isMeaningfulDraft(backendSessionSnapshot.currentCode)) {
+          const snapshotSessionId = backendSessionSnapshot.sessionId?.trim();
+          if (snapshotSessionId) {
+            resolvedSessionId = snapshotSessionId;
+            storage.setActiveSessionId(snapshotSessionId);
+          }
+
+          const snapshotProblemId = backendSessionSnapshot.currentProblemId?.trim();
+          if (snapshotProblemId) {
+            const snapshotProblem = sqlProblems.find((problem) => problem.id === snapshotProblemId);
+            if (snapshotProblem) {
+              resolvedProblem = snapshotProblem;
+            }
+          }
+
+          resolvedDraft = backendSessionSnapshot.currentCode;
+          storage.savePracticeDraft(
+            learnerId,
+            resolvedSessionId,
+            resolvedProblem.id,
+            backendSessionSnapshot.currentCode,
+          );
+        }
+      }
+
+      if (cancelled) return;
+
+      setSessionId(resolvedSessionId);
+      if (currentProblem.id !== resolvedProblem.id) {
+        setCurrentProblem(resolvedProblem);
+      }
+      setSqlDraft(resolvedDraft ?? DEFAULT_SQL_EDITOR_CODE);
+      setInteractions(
+        storage
+          .getInteractionsByLearner(learnerId)
+          .filter((interaction) => interaction.sessionId === resolvedSessionId)
+      );
+      setLastError(undefined);
+      setLastErrorEventId(undefined);
+      setEscalationTriggered(false);
+      setNotesActionMessage(undefined);
+      setGenerationError(undefined);
+      setLatestGeneratedUnit(null);
+      setStartTime(Date.now());
+      setElapsedTime(0);
+    };
+
+    void initializeSessionState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [learnerId, isHydrating, isRoleLoading]);
 
   // Effect 2: Background analysis - handles trace analysis lifecycle
   useEffect(() => {
@@ -1092,6 +1305,22 @@ export function LearningInterface() {
     return subtype ? canonicalizeSqlEngageSubtype(subtype) : undefined;
   };
 
+  const formatTextbookSaveMessage = (
+    title: string,
+    action: 'created' | 'updated',
+    status: { backendConfirmed: boolean; pendingSync: boolean; error?: string },
+    createdLabel: string,
+    updatedLabel: string,
+  ): string => {
+    if (status.backendConfirmed) {
+      return action === 'created' ? createdLabel : updatedLabel;
+    }
+    if (status.pendingSync) {
+      return `Saved "${title}" locally — syncing to backend now.`;
+    }
+    return status.error ?? `Failed to sync "${title}" to backend.`;
+  };
+
   const persistGeneratedUnit = async (
     templateId: 'explanation.v1' | 'notebook_unit.v1',
     sourceInteractionIds: string[],
@@ -1121,7 +1350,11 @@ export function LearningInterface() {
       triggerInteractionIds: sourceInteractionIds
     });
 
-    const textbookResult = storage.saveTextbookUnit(learnerId, generation.unit);
+    const textbookWrite = await storage.saveTextbookUnitCritical(learnerId, generation.unit);
+    const textbookResult = textbookWrite.result;
+    if (!textbookWrite.status.backendConfirmed && !textbookWrite.status.pendingSync) {
+      throw new Error(textbookWrite.status.error ?? 'Failed to persist textbook unit.');
+    }
     setLatestGeneratedUnit(textbookResult.unit);
     const parseSuccess = generation.parseTelemetry.status === 'success';
     const parseMode = generation.parseTelemetry.mode || null;
@@ -1218,7 +1451,7 @@ export function LearningInterface() {
     storage.saveInteraction(textbookEvent);
     setInteractions((previousInteractions) => [...previousInteractions, textbookEvent]);
 
-    return { generation, textbookResult };
+    return { generation, textbookResult, textbookWriteStatus: textbookWrite.status };
   };
 
   const handleExecute = async (query: string, result: QueryResult, isCorrect?: boolean) => {
@@ -1374,17 +1607,19 @@ export function LearningInterface() {
       setIsGeneratingUnit(true);
       setGenerationError(undefined);
       try {
-        const { textbookResult } = await persistGeneratedUnit(
+        const { textbookResult, textbookWriteStatus } = await persistGeneratedUnit(
           'notebook_unit.v1',
           sourceIds,
           resolvedSubtype,
           decision.ruleFired || 'aggregation-threshold-met'
         );
-        setNotesActionMessage(
-          textbookResult.action === 'created'
-            ? `Saved "${textbookResult.unit.title}" to My Textbook — review it anytime!`
-            : `Updated "${textbookResult.unit.title}" in My Textbook.`
-        );
+        setNotesActionMessage(formatTextbookSaveMessage(
+          textbookResult.unit.title,
+          textbookResult.action,
+          textbookWriteStatus,
+          `Saved "${textbookResult.unit.title}" to My Textbook — review it anytime!`,
+          `Updated "${textbookResult.unit.title}" in My Textbook.`,
+        ));
       } catch (error) {
         setGenerationError((error as Error).message);
       } finally {
@@ -1443,12 +1678,14 @@ export function LearningInterface() {
     setIsGeneratingUnit(true);
     setGenerationError(undefined);
     void persistGeneratedUnit('explanation.v1', sourceIds, escalationSubtype, 'show-explanation-escalation')
-      .then(({ textbookResult }) => {
-        setNotesActionMessage(
-          textbookResult.action === 'created'
-            ? `Saved "${textbookResult.unit.title}" to My Textbook for review`
-            : `Updated "${textbookResult.unit.title}" in My Textbook`
-        );
+      .then(({ textbookResult, textbookWriteStatus }) => {
+        setNotesActionMessage(formatTextbookSaveMessage(
+          textbookResult.unit.title,
+          textbookResult.action,
+          textbookWriteStatus,
+          `Saved "${textbookResult.unit.title}" to My Textbook for review`,
+          `Updated "${textbookResult.unit.title}" in My Textbook`,
+        ));
         // Signal other tabs (e.g. TextbookPage open alongside) to reload units.
         broadcastSync('sql-adapt-textbook', learnerId);
       })
@@ -1479,7 +1716,10 @@ export function LearningInterface() {
 
   const handleAddToNotes = async () => {
     const noteSubtype = lastError || resolveLatestProblemErrorSubtype();
-    if (!noteSubtype) return;
+    if (!noteSubtype) {
+      setGenerationError('Could not save note: no concept context identified. Try submitting a query or requesting a hint first.');
+      return;
+    }
     if (!lastError) {
       setLastError(noteSubtype);
     }
@@ -1488,23 +1728,60 @@ export function LearningInterface() {
     setIsGeneratingUnit(true);
     setGenerationError(undefined);
     try {
-      const { textbookResult } = await persistGeneratedUnit(
+      const { textbookResult, textbookWriteStatus } = await persistGeneratedUnit(
         'notebook_unit.v1',
         sourceIds,
         noteSubtype,
         'manual-add-to-notes'
       );
-      setNotesActionMessage(
-        textbookResult.action === 'created'
-          ? `✓ Saved "${textbookResult.unit.title}" — find it in My Textbook`
-          : `✓ Updated "${textbookResult.unit.title}" in My Textbook`
-      );
+      setNotesActionMessage(formatTextbookSaveMessage(
+        textbookResult.unit.title,
+        textbookResult.action,
+        textbookWriteStatus,
+        `✓ Saved "${textbookResult.unit.title}" — find it in My Textbook`,
+        `✓ Updated "${textbookResult.unit.title}" in My Textbook`,
+      ));
     } catch (error) {
       setGenerationError((error as Error).message);
     } finally {
       setIsGeneratingUnit(false);
     }
   };
+
+  useEffect(() => {
+    if (!learnerId || !sessionId) {
+      return;
+    }
+    if (!AUTH_BACKEND_CONFIGURED) {
+      setSessionSyncStatus('confirmed');
+      setSessionSyncError(undefined);
+      return;
+    }
+
+    let cancelled = false;
+    setSessionSyncStatus('checking');
+    setSessionSyncError(undefined);
+
+    void storage.ensureSessionPersisted(learnerId, sessionId).then((status) => {
+      if (cancelled) return;
+      if (status.backendConfirmed) {
+        setSessionSyncStatus('confirmed');
+        setSessionSyncError(undefined);
+        return;
+      }
+      if (status.pendingSync) {
+        setSessionSyncStatus('pending');
+        setSessionSyncError(status.error);
+        return;
+      }
+      setSessionSyncStatus('failed');
+      setSessionSyncError(status.error ?? 'Session is currently only saved locally.');
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [learnerId, sessionId]);
 
   const timeSpent = Date.now() - startTime;
 
@@ -1817,23 +2094,10 @@ export function LearningInterface() {
                   </Tooltip>
                 )}
 
-                {/* Exit Preview button - Only shown in preview mode */}
-                {isPreviewMode && (
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={exitPreviewMode}
-                    className="border-purple-300 text-purple-700 hover:bg-purple-50"
-                    aria-label="Exit Student Preview mode and return to instructor dashboard"
-                  >
-                    <LogOut className="size-4 mr-2" aria-hidden="true" />
-                    Exit Preview
-                  </Button>
-                )}
-
                 {/* Role selector - Instructors only (allows testing student view) */}
                 {isInstructor && (
                   <Select value={role} onValueChange={(value) => {
+                    clearUiStateForActor(learnerId);
                     localStorage.setItem('sql-adapt-user-role', value);
                     window.location.reload();
                   }}>
@@ -2323,6 +2587,19 @@ export function LearningInterface() {
                   <div className="max-w-[180px] break-all text-right text-[11px] font-medium text-gray-700 sm:max-w-[220px] sm:text-xs">
                     {sessionId || 'pending'}
                   </div>
+                  <div className="text-gray-600">Session sync:</div>
+                  <div
+                    className={cn(
+                      'text-right text-xs font-medium capitalize',
+                      sessionSyncStatus === 'confirmed' && 'text-green-700',
+                      sessionSyncStatus === 'pending' && 'text-amber-700',
+                      sessionSyncStatus === 'failed' && 'text-red-700',
+                      sessionSyncStatus === 'checking' && 'text-gray-600',
+                    )}
+                    title={sessionSyncError}
+                  >
+                    {sessionSyncStatus}
+                  </div>
                   <div className="text-gray-600">Time spent:</div>
                   <div className="font-medium text-right">
                     {formatTime(timeSpent)}
@@ -2566,4 +2843,3 @@ export function LearningInterface() {
       </div>
   );
 }
-

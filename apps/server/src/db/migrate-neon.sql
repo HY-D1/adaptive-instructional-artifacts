@@ -21,13 +21,41 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 
 -- ============================================================================
+-- Course sections + enrollments (durable instructor ownership model)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS course_sections (
+  id TEXT PRIMARY KEY,
+  instructor_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  student_signup_code TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS section_enrollments (
+  id SERIAL PRIMARY KEY,
+  section_id TEXT NOT NULL REFERENCES course_sections(id) ON DELETE CASCADE,
+  student_user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(section_id, student_user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_course_sections_instructor ON course_sections(instructor_user_id);
+CREATE INDEX IF NOT EXISTS idx_course_sections_signup_code ON course_sections(student_signup_code);
+CREATE INDEX IF NOT EXISTS idx_section_enrollments_section ON section_enrollments(section_id);
+CREATE INDEX IF NOT EXISTS idx_section_enrollments_student ON section_enrollments(student_user_id);
+
+-- ============================================================================
 -- Learner sessions (experimental condition tracking)
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS learner_sessions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL,
   session_id TEXT NOT NULL,
+  current_problem_id TEXT,
   condition_id TEXT NOT NULL,
   textbook_disabled BOOLEAN NOT NULL DEFAULT FALSE,
   adaptive_ladder_disabled BOOLEAN NOT NULL DEFAULT FALSE,
@@ -41,6 +69,16 @@ CREATE TABLE IF NOT EXISTS learner_sessions (
 
 CREATE INDEX IF NOT EXISTS idx_learner_sessions_user_id ON learner_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_learner_sessions_session_id ON learner_sessions(session_id);
+
+ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS current_code TEXT;
+ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS current_problem_id TEXT;
+ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS guidance_state TEXT;
+ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS hdi_state TEXT;
+ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS bandit_state TEXT;
+ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS last_activity TIMESTAMPTZ;
+ALTER TABLE learner_sessions ADD COLUMN IF NOT EXISTS section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_learner_sessions_section_id ON learner_sessions(section_id);
+CREATE INDEX IF NOT EXISTS idx_learner_sessions_current_problem_id ON learner_sessions(current_problem_id);
 
 -- ============================================================================
 -- Problem progress (per-user problem completion tracking)
@@ -71,6 +109,7 @@ CREATE INDEX IF NOT EXISTS idx_problem_progress_problem_id ON problem_progress(p
 CREATE TABLE IF NOT EXISTS interaction_events (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL,
   session_id TEXT,
   timestamp TIMESTAMPTZ NOT NULL,
   event_type TEXT NOT NULL,
@@ -156,6 +195,8 @@ CREATE INDEX IF NOT EXISTS idx_interaction_events_session_id ON interaction_even
 CREATE INDEX IF NOT EXISTS idx_interaction_events_event_type ON interaction_events(event_type);
 CREATE INDEX IF NOT EXISTS idx_interaction_events_timestamp ON interaction_events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_interaction_events_problem_id ON interaction_events(problem_id);
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_interaction_events_section_id ON interaction_events(section_id);
 
 -- ============================================================================
 -- Textbook units (My Textbook)

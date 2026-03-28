@@ -13,6 +13,7 @@ import type {
   ConceptCoverageEvidence,
   InteractionEvent,
 } from '@/app/types';
+import { withCsrfHeader } from './csrf-client';
 
 // API Configuration
 // VITE_API_BASE_URL is the canonical env var (e.g. https://my-api.vercel.app — no trailing /api)
@@ -77,14 +78,17 @@ async function fetchApi<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   const url = `${API_URL}${endpoint}`;
+  const requestInit = withCsrfHeader(options);
+  const headers = new Headers(requestInit.headers || {});
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
   
   try {
     const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      ...requestInit,
+      credentials: 'include',
+      headers,
     });
 
     if (!response.ok) {

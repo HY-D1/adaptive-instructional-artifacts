@@ -820,11 +820,21 @@ export function AskMyTextbookChat({
         problemId // Associate with current problem
       };
       
-      // Save using V2 API for deduplication
-      const result = storage.saveTextbookUnitV2(learnerId, unitInput, problemId);
-      
-      if (result.success) {
-        showToast(result.action === 'created' ? 'Saved to My Textbook' : 'Updated in My Textbook', 'success');
+      // Save using backend-confirmed critical write path for account mode.
+      const write = await storage.saveTextbookUnitV2Critical(learnerId, unitInput, problemId);
+      if (write.result.success === false && !write.status.pendingSync) {
+        showToast('Save failed. Please try again.', 'error');
+        return;
+      }
+      if (write.status.backendConfirmed) {
+        showToast(
+          write.result.action === 'created' ? 'Saved to My Textbook' : 'Updated in My Textbook',
+          'success',
+        );
+        return;
+      }
+      if (write.status.pendingSync) {
+        showToast('Saved locally. Syncing to backend…', 'info');
       }
     } catch {
       // Failed to save to textbook - error handled via UI

@@ -147,12 +147,38 @@ export const JWT_SECRET: string = (() => {
 export const INSTRUCTOR_SIGNUP_CODE: string =
   process.env.INSTRUCTOR_SIGNUP_CODE || (process.env.NODE_ENV !== 'production' ? 'TeachSQL2024' : '');
 
+/**
+ * Code required for student signup.
+ * Set STUDENT_SIGNUP_CODE on the backend to gate student account creation.
+ */
+export const STUDENT_SIGNUP_CODE: string =
+  process.env.STUDENT_SIGNUP_CODE || (process.env.NODE_ENV !== 'production' ? 'ClassSQL2024' : '');
+
 // ============================================================================
 // Server Configuration
 // ============================================================================
 
 export const PORT = parseInt(process.env.PORT || '3001', 10);
 export const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+
+function parseCsv(value: string | undefined): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function normalizeOriginValue(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+export const CORS_ORIGINS = Array.from(
+  new Set(parseCsv(process.env.CORS_ORIGINS || CORS_ORIGIN).map(normalizeOriginValue)),
+);
+export const CORS_ORIGIN_PATTERNS = Array.from(
+  new Set(parseCsv(process.env.CORS_ORIGIN_PATTERNS).map(normalizeOriginValue)),
+);
 export const NODE_ENV = process.env.NODE_ENV || 'development';
 
 // ============================================================================

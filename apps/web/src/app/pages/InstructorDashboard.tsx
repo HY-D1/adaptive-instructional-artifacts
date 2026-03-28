@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, Link } from 'react-router';
+import { useNavigate } from 'react-router';
 
 import {
   BarChart3,
@@ -43,8 +43,11 @@ import {
   DialogDescription
 } from '../components/ui/dialog';
 import { storage, broadcastSync, setDebugProfileWithSync, setDebugStrategyWithSync } from '../lib/storage';
+import { buildInstructorLearnerRows, filterInteractionsByLearners } from '../lib/counts/selectors';
+import { getUiState, setUiState } from '../lib/ui-state';
 import { seedDemoDataset, resetDemoDataset, hasDemoData } from '../lib/demo/demo-seed';
 import { useUserRole } from '../hooks/useUserRole';
+import { useAuth } from '../lib/auth-context';
 import { useAllLearnerProfiles } from '../hooks/useLearnerProfile';
 import learnerProfileClient from '../lib/api/learner-profile-client';
 import type { LearnerProfile, InteractionEvent } from '../types';
@@ -131,6 +134,10 @@ interface AdaptiveStats {
   degradingStudents: StudentAdaptiveProfile[];
 }
 
+interface InstructorDashboardUiState {
+  previewProfile?: 'fast' | 'slow' | 'adaptive' | 'explanation-first';
+}
+
 /**
  * InstructorDashboard - Overview dashboard for instructors
  * 
@@ -146,14 +153,13 @@ interface AdaptiveStats {
  */
 export function InstructorDashboard() {
   const navigate = useNavigate();
-  const { isStudent, isLoading: isRoleLoading } = useUserRole();
+  const { isStudent, isLoading: isRoleLoading, profile } = useUserRole();
+  const { user: authUser } = useAuth();
   
   // Use backend profiles with automatic synchronization
   const {
     profiles: backendProfiles,
     isLoading: isProfilesLoading,
-    refresh: refreshProfiles,
-    totalInteractionCount: backendTotalInteractions,
     averageConceptCoverage: backendAvgCoverage,
   } = useAllLearnerProfiles();
   
@@ -189,22 +195,20 @@ export function InstructorDashboard() {
   useEffect(() => {
     const loadData = async () => {
       setIsDataLoading(true);
-      
-      // Try backend first
-      if (isBackendAvailable && backendProfiles.length > 0) {
-        setProfiles(backendProfiles);
-      } else {
-        // Fallback to localStorage
-        const allProfiles = storage.getAllProfiles().map(p => storage.getProfile(p.id)).filter(Boolean) as LearnerProfile[];
-        const allInteractions = storage.getAllInteractions();
-        setProfiles(allProfiles);
-        setInteractions(allInteractions);
+
+      if (isBackendAvailable) {
+        await storage.hydrateInstructorDashboard();
       }
-      
+
+      const allProfiles = storage.getAllProfiles().map(p => storage.getProfile(p.id)).filter(Boolean) as LearnerProfile[];
+      const allInteractions = storage.getAllInteractions();
+      setProfiles(backendProfiles.length > 0 ? backendProfiles : allProfiles);
+      setInteractions(allInteractions);
+
       setIsDataLoading(false);
     };
     
-    loadData();
+    void loadData();
   }, [isBackendAvailable, backendProfiles]);
 
   // Toast auto-hide
@@ -214,10 +218,6 @@ export function InstructorDashboard() {
       return () => clearTimeout(timer);
     }
   }, [toastMessage]);
-
-  // Determine if we should show demo data
-  const hasRealData = profiles.length > 0 || interactions.length > 0;
-  const showDemoData = DEMO_MODE && !hasRealData;
 
   // Normalize profiles once at load time - ensures consistent data quality
   // Backend profiles are already normalized, local profiles need normalization
@@ -239,28 +239,55 @@ export function InstructorDashboard() {
     }));
   }, [profiles]);
 
+  const hasProfileData = normalizedProfiles.length > 0;
+  const showDemoData = DEMO_MODE && !hasProfileData && interactions.length === 0;
+  const dashboardRows = useMemo(() => {
+    if (hasProfileData) {
+      return buildInstructorLearnerRows(normalizedProfiles);
+    }
+    if (!showDemoData) {
+      return [];
+    }
+    return DEMO_STUDENTS.map((student) => ({
+      id: student.id,
+      name: student.name,
+      email: student.email,
+      lastActive: student.lastActive,
+      conceptsCount: (student.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0) % 4) + 1,
+      conceptIds: [],
+      isActive: Date.now() - student.lastActive < 60 * 60 * 1000,
+    }));
+  }, [hasProfileData, normalizedProfiles, showDemoData]);
+
+  const scopedInteractions = useMemo(() => {
+    if (!hasProfileData) {
+      return [];
+    }
+    const learnerIds = new Set(dashboardRows.map((row) => row.id));
+    return filterInteractionsByLearners(interactions, learnerIds);
+  }, [hasProfileData, dashboardRows, interactions]);
+
+  const hasRealData = hasProfileData || scopedInteractions.length > 0;
+
   // Calculate class statistics
   const classStats: ClassStats = useMemo(() => {
-    // Use normalized profiles if available, otherwise use demo students in dev mode
-    const studentList = hasRealData ? normalizedProfiles : (showDemoData ? DEMO_STUDENTS : []);
+    const studentList = dashboardRows;
     const totalStudents = studentList.length;
-    const activeToday = studentList.filter(s => Date.now() - (s.lastActive || 0) < 86400000).length;
+    const activeToday = studentList.filter((student) => Date.now() - student.lastActive < 86400000).length;
     
     // Calculate average progress based on concept coverage
-    // Use backend average if available, otherwise calculate from profiles
-    const avgProgress = isBackendAvailable && backendAvgCoverage > 0
+    // Use backend aggregate only when local row-level data is unavailable.
+    const avgProgress = !hasProfileData && isBackendAvailable && backendAvgCoverage > 0
       ? Math.round((backendAvgCoverage / 6) * 100)
-      : normalizedProfiles.length > 0
-        ? Math.round(normalizedProfiles.reduce((sum, p) => sum + (p.conceptsCovered?.size || 0), 0) / normalizedProfiles.length / 6 * 100)
+      : dashboardRows.length > 0
+        ? Math.round(dashboardRows.reduce((sum, row) => sum + row.conceptsCount, 0) / dashboardRows.length / 6 * 100)
         : (showDemoData ? 45 : 0);
 
-    // Use real interactions or backend total, add demo interactions in dev mode
-    const totalInteractions = isBackendAvailable && backendTotalInteractions > 0
-      ? backendTotalInteractions
-      : interactions.length + (showDemoData ? DEMO_STATS.interactions : 0);
+    // Keep count source aligned with the currently displayed learner scope.
+    const totalInteractions = scopedInteractions.length + (showDemoData ? DEMO_STATS.interactions : 0);
 
     // Analyze common errors from real data
-    const errorCounts = interactions
+    const errorCounts = scopedInteractions
       .filter(i => i.eventType === 'error' && i.errorSubtypeId)
       .reduce((acc, i) => {
         acc[i.errorSubtypeId!] = (acc[i.errorSubtypeId!] || 0) + 1;
@@ -284,10 +311,24 @@ export function InstructorDashboard() {
         percentage: Math.round((count / totalErrors) * 100)
       }));
 
-    // Concept mastery rates - use demo only in dev mode when no real data
-    const conceptMastery = hasRealData 
-      ? [] // Would calculate from real data
-      : (showDemoData ? DEMO_STATS.conceptMastery : []);
+    const conceptMastery = showDemoData
+      ? DEMO_STATS.conceptMastery
+      : (() => {
+          if (dashboardRows.length === 0) return [];
+          const coverageCounts: Record<string, number> = {};
+          dashboardRows.forEach((row) => {
+            row.conceptIds.forEach((conceptId) => {
+              coverageCounts[conceptId] = (coverageCounts[conceptId] || 0) + 1;
+            });
+          });
+          return Object.entries(coverageCounts)
+            .map(([conceptId, count]) => ({
+              concept: conceptId.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase()),
+              masteryRate: Math.round((count / dashboardRows.length) * 100),
+            }))
+            .sort((a, b) => b.masteryRate - a.masteryRate)
+            .slice(0, 6);
+        })();
 
     return {
       totalStudents,
@@ -297,7 +338,7 @@ export function InstructorDashboard() {
       commonErrors: commonErrors.length > 0 ? commonErrors : [],
       conceptMastery
     };
-  }, [normalizedProfiles, interactions, hasRealData, showDemoData]);
+  }, [dashboardRows, hasProfileData, isBackendAvailable, backendAvgCoverage, scopedInteractions, showDemoData]);
 
   // Memoized helper to calculate student adaptive profiles
   const studentAdaptiveProfiles = useMemo(() => {
@@ -443,7 +484,24 @@ export function InstructorDashboard() {
   // Student Preview state
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [previewProfile, setPreviewProfile] = useState<'fast' | 'slow' | 'adaptive' | 'explanation-first'>('adaptive');
-  const [previewProblem, setPreviewProblem] = useState<string>('problem-1');
+
+  useEffect(() => {
+    const persisted = getUiState<InstructorDashboardUiState>('instructor-dashboard', {
+      role: 'instructor',
+      actorId: profile?.id || 'unknown',
+    });
+    if (persisted?.previewProfile) {
+      setPreviewProfile(persisted.previewProfile);
+    }
+  }, [profile?.id]);
+
+  useEffect(() => {
+    setUiState<InstructorDashboardUiState>(
+      'instructor-dashboard',
+      { role: 'instructor', actorId: profile?.id || 'unknown' },
+      { previewProfile }
+    );
+  }, [profile?.id, previewProfile]);
 
   
   const handleTriggerIntervention = async (student: StudentAdaptiveProfile) => {
@@ -488,6 +546,7 @@ export function InstructorDashboard() {
     { 
       label: 'Total Students', 
       value: classStats.totalStudents, 
+      testId: 'instructor-total-students-value',
       icon: Users, 
       color: 'text-blue-600',
       bgColor: 'bg-blue-50'
@@ -495,6 +554,7 @@ export function InstructorDashboard() {
     { 
       label: 'Active Today', 
       value: classStats.activeToday, 
+      testId: 'instructor-active-today-value',
       icon: Activity, 
       color: 'text-green-600',
       bgColor: 'bg-green-50'
@@ -502,6 +562,7 @@ export function InstructorDashboard() {
     { 
       label: 'Avg Progress', 
       value: `${classStats.avgProgress}%`, 
+      testId: 'instructor-avg-progress-value',
       icon: TrendingUp, 
       color: 'text-purple-600',
       bgColor: 'bg-purple-50'
@@ -509,6 +570,7 @@ export function InstructorDashboard() {
     { 
       label: 'Total Interactions', 
       value: classStats.totalInteractions, 
+      testId: 'instructor-total-interactions-value',
       icon: Target, 
       color: 'text-orange-600',
       bgColor: 'bg-orange-50'
@@ -646,7 +708,9 @@ export function InstructorDashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-gray-600">{stat.label}</p>
-                    <p className="text-3xl font-bold mt-1">{stat.value}</p>
+                    <p className="text-3xl font-bold mt-1" data-testid={stat.testId}>
+                      {stat.value}
+                    </p>
                   </div>
                   <div className={`p-3 rounded-lg ${stat.bgColor}`}>
                     <stat.icon className={`size-6 ${stat.color}`} />
@@ -656,6 +720,23 @@ export function InstructorDashboard() {
             </Card>
           ))}
         </div>
+
+        {!!authUser?.ownedSections?.length && (
+          <Card className="border-blue-200 bg-blue-50/50">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Student Signup Codes</CardTitle>
+              <CardDescription>Share these class codes with students during account creation.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {authUser.ownedSections.map((section) => (
+                <div key={section.id} className="flex items-center justify-between rounded border bg-white px-3 py-2">
+                  <span className="text-sm font-medium text-gray-700">{section.name}</span>
+                  <code className="text-sm font-semibold text-blue-700">{section.studentSignupCode}</code>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Quick Links */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1018,25 +1099,31 @@ export function InstructorDashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {classStats.conceptMastery.map((concept) => (
-                  <div key={concept.concept} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">{concept.concept}</span>
-                      <span className={`font-semibold ${
-                        concept.masteryRate >= 70 ? 'text-green-600' :
-                        concept.masteryRate >= 40 ? 'text-yellow-600' : 'text-red-600'
-                      }`}>
-                        {concept.masteryRate}%
-                      </span>
+              {classStats.conceptMastery.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                  Concept mastery will appear after learners complete SQL runs tied to concept coverage.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {classStats.conceptMastery.map((concept) => (
+                    <div key={concept.concept} className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium">{concept.concept}</span>
+                        <span className={`font-semibold ${
+                          concept.masteryRate >= 70 ? 'text-green-600' :
+                          concept.masteryRate >= 40 ? 'text-yellow-600' : 'text-red-600'
+                        }`}>
+                          {concept.masteryRate}%
+                        </span>
+                      </div>
+                      <Progress 
+                        value={concept.masteryRate} 
+                        className="h-2"
+                      />
                     </div>
-                    <Progress 
-                      value={concept.masteryRate} 
-                      className="h-2"
-                    />
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -1115,35 +1202,29 @@ export function InstructorDashboard() {
                     <th className="text-left py-3 px-4 font-medium text-gray-600">Action</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {(hasRealData ? normalizedProfiles.map(p => ({ 
-                    id: p.id, 
-                    name: p.name,  // already normalized
-                    email: `${p.id}@local`, 
-                    lastActive: p.lastActive  // already normalized
-                  })) : showDemoData ? DEMO_STUDENTS : []).map((student) => {
-                    const profile = normalizedProfiles.find(p => p.id === student.id);
-                    // Deterministic pseudo-random based on student ID to avoid hydration mismatch
-                    const conceptsCount = profile?.conceptsCovered.size || (student.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0) % 4) + 1;
-                    const isActive = student.lastActive && Date.now() - student.lastActive < 3600000;
-                    
+                <tbody data-testid="instructor-student-table-body">
+                  {dashboardRows.map((student) => {
                     return (
-                      <tr key={student.id} className="border-b last:border-0 hover:bg-gray-50">
+                      <tr
+                        key={student.id}
+                        className="border-b last:border-0 hover:bg-gray-50"
+                        data-testid="instructor-student-row"
+                      >
                         <td className="py-3 px-4">
                           <div>
                             <p className="font-medium">{student.name}</p>
-                            <p className="text-sm text-gray-500">{student.email}</p>
+                            <p className="text-sm text-gray-500">{student.email || 'Email not available'}</p>
                           </div>
                         </td>
                         <td className="py-3 px-4">
-                          <Badge variant={isActive ? 'default' : 'secondary'} className="text-xs">
-                            {isActive ? 'Active' : 'Away'}
+                          <Badge variant={student.isActive ? 'default' : 'secondary'} className="text-xs">
+                            {student.isActive ? 'Active' : 'Away'}
                           </Badge>
                         </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Lightbulb className="size-4 text-yellow-500" />
-                            <span className="font-medium">{conceptsCount}</span>
+                            <span className="font-medium">{student.conceptsCount}</span>
                             <span className="text-sm text-gray-500">/ 6 concepts</span>
                           </div>
                         </td>
@@ -1165,7 +1246,7 @@ export function InstructorDashboard() {
                   })}
                 </tbody>
               </table>
-              {!hasRealData && !showDemoData && (
+              {dashboardRows.length === 0 && !showDemoData && (
                 <div className="text-center py-12 text-gray-500">
                   <Users className="size-12 mx-auto mb-4 text-gray-300" />
                   <p className="font-medium">No students yet</p>

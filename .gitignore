@@ -116,3 +116,4 @@ apps/server/data/*.db-wal
 apps/server/dist/
 .vercel
 .gstack/
+.env*.local

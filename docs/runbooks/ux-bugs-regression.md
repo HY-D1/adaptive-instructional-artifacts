@@ -74,7 +74,10 @@ not triggered, so garbled extraction artefacts were shown as primary learning co
   matching the `QualityMetadata` interface.
 - `ConceptDetailPage` passes `qualityMetadata` down to `LearnTab`, which renders a
   `data-testid="learner-safe-summary"` overview box when in fallback mode.
-- Two known-bad concepts are seeded with `qualityMetadata` in `concept-map.json`:
+- Helper-produced quality metadata is read from
+  `apps/web/public/textbook-static/concept-quality.json` and takes precedence over
+  embedded `qualityMetadata` in `concept-map.json`.
+- Two known-bad concepts are seeded with compatibility metadata in `concept-map.json`:
   - `murachs-mysql-3rd-edition/mysql-intro`
   - `dbms-ramakrishnan-3rd-edition/select-basic`
 
@@ -117,6 +120,7 @@ npx playwright test -c playwright.config.ts --grep "@ux-bugs"
 | File | Role |
 |------|------|
 | `apps/web/src/app/lib/content/concept-loader.ts` | `QualityMetadata` type, `assessConceptQuality` |
+| `apps/web/public/textbook-static/concept-quality.json` | Helper-produced quality metadata (primary source) |
 | `apps/web/src/app/pages/ConceptDetailPage.tsx` | Renders quality banner and `learnerSafeSummary` |
 | `apps/web/public/textbook-static/concept-map.json` | Seeded `qualityMetadata` for known-bad concepts |
 | `apps/web/src/app/lib/content/concept-quality.test.ts` | Unit tests for quality functions |

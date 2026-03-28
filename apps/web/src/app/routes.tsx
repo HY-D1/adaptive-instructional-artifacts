@@ -1,5 +1,4 @@
-import { createBrowserRouter, Navigate, redirect } from 'react-router';
-import type { LoaderFunction } from 'react-router';
+import { createBrowserRouter, Navigate } from 'react-router';
 
 import { RouteError } from './components/layout/RouteError';
 import { RootLayout } from './pages/RootLayout';
@@ -13,13 +12,14 @@ import { SettingsPage } from './pages/SettingsPage';
 import { ConceptLibraryPage } from './pages/ConceptLibraryPage';
 import { ConceptDetailPage } from './pages/ConceptDetailPage';
 import { storage } from './lib/storage';
+import { useAuth } from './lib/auth-context';
+import { AUTH_BACKEND_CONFIGURED } from './lib/api/auth-client';
+import { createProtectedLoader } from './lib/auth-route-loader';
 import { 
   ROUTES, 
-  protectRoute, 
   getDefaultRouteForRole,
   isPreviewModeActive
 } from './lib/auth-guard';
-import type { GuardResult } from './lib/auth-guard';
 
 /**
  * Start page loader - redirects authenticated users to their default route
@@ -35,29 +35,6 @@ function startPageLoader(): null {
 }
 
 /**
- * Protected route loader factory
- * Creates a loader function that checks authentication and role
- * Returns redirect response if access denied, null if allowed
- */
-function createProtectedLoader(options?: { 
-  requiredRole?: 'student' | 'instructor';
-  allowAuthenticated?: boolean;
-}): LoaderFunction {
-  return () => {
-    const result = protectRoute(options);
-    
-    if (!result.allowed && result.redirect) {
-      // Use React Router's redirect for proper navigation
-      // If redirecting to login and no login route exists, go to home
-      const redirectTo = result.redirect === ROUTES.LOGIN ? ROUTES.HOME : result.redirect;
-      return redirect(redirectTo);
-    }
-    
-    return null;
-  };
-}
-
-/**
  * Component wrapper that enforces role-based access
  * Redirects if not authorized
  * Note: Loader should handle redirects, this is a fallback
@@ -70,6 +47,23 @@ function ProtectedRoute({
   children: React.ReactNode; 
   requiredRole?: 'student' | 'instructor';
 }) {
+  const { user, isLoading } = useAuth();
+  if (AUTH_BACKEND_CONFIGURED) {
+    if (isLoading) {
+      return null;
+    }
+    if (!user) {
+      return <Navigate to={ROUTES.HOME} replace />;
+    }
+    if (requiredRole === 'student' && user.role === 'instructor' && isPreviewModeActive()) {
+      return <>{children}</>;
+    }
+    if (requiredRole && user.role !== requiredRole) {
+      return <Navigate to={getDefaultRouteForRole(user.role)} replace />;
+    }
+    return <>{children}</>;
+  }
+
   const profile = storage.getUserProfile();
   
   // Not authenticated - redirect to home (start page)
@@ -166,7 +160,7 @@ export const router = createBrowserRouter([
             <TextbookPage />
           </AuthenticatedRoute>
         ),
-        loader: createProtectedLoader({ allowAuthenticated: true }),
+        loader: createProtectedLoader(),
       },
       {
         path: 'research',

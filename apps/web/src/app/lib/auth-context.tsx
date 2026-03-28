@@ -3,18 +3,27 @@
  *
  * Provides account-based auth state to the app. On mount it checks the JWT
  * cookie via GET /api/auth/me. If authenticated, it also populates the local
- * storage profile so existing routes and guards keep working unchanged.
+ * storage profile as a UX cache.
  *
- * Falls back gracefully: if VITE_API_BASE_URL is not set or the backend is
- * unreachable, AUTH_ENABLED is false and the context is a no-op (the existing
- * localStorage-passcode flow handles auth instead).
+ * When VITE_API_BASE_URL is not configured, account auth is disabled and the
+ * existing local passcode flow remains active. In dev mode with a configured
+ * backend URL, AUTH_ENABLED stays true and route protection is backend-auth
+ * authoritative.
  */
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import { getMe, login as apiLogin, logout as apiLogout, signup as apiSignup, AUTH_ENABLED } from './api/auth-client';
-import type { AuthUser, AuthResult } from './api/auth-client';
+import {
+  getMe,
+  login as apiLogin,
+  logout as apiLogout,
+  signup as apiSignup,
+  AUTH_ENABLED,
+  AUTH_BACKEND_CONFIGURED,
+} from './api/auth-client';
+import type { AuthUser, AuthResult, LogoutResult } from './api/auth-client';
 import { storage } from './storage/index';
+import { clearUiStateForActor } from './ui-state';
 
 // ============================================================================
 // Context types
@@ -24,14 +33,16 @@ interface AuthContextValue {
   /** Null if not authenticated via account system */
   user: AuthUser | null;
   isLoading: boolean;
+  isHydrating: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<AuthResult>;
-  logout: () => Promise<void>;
+  logout: () => Promise<LogoutResult>;
   signup: (params: {
     name: string;
     email: string;
     password: string;
     role: 'student' | 'instructor';
+    classCode?: string;
     instructorCode?: string;
   }) => Promise<AuthResult>;
 }
@@ -43,9 +54,10 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   isLoading: false,
+  isHydrating: false,
   isAuthenticated: false,
   login: async () => ({ success: false, error: 'AuthProvider not mounted' }),
-  logout: async () => {},
+  logout: async () => ({ success: false, error: 'AuthProvider not mounted' }),
   signup: async () => ({ success: false, error: 'AuthProvider not mounted' }),
 });
 
@@ -56,6 +68,7 @@ const AuthContext = createContext<AuthContextValue>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(AUTH_ENABLED);
+  const [isHydrating, setIsHydrating] = useState(false);
 
   /** Sync authenticated user into localStorage so existing guards work */
   function syncToLocalStorage(authUser: AuthUser) {
@@ -67,16 +80,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  async function hydrateFromBackend(authUser: AuthUser): Promise<void> {
+    if (!AUTH_ENABLED) return;
+    setIsHydrating(true);
+    try {
+      await storage.hydrateLearner(authUser.learnerId);
+      if (authUser.role === 'instructor') {
+        await storage.hydrateInstructorDashboard();
+      }
+    } finally {
+      setIsHydrating(false);
+    }
+  }
+
   // On mount: check JWT cookie
   useEffect(() => {
     if (!AUTH_ENABLED) {
       setIsLoading(false);
       return;
     }
-    getMe().then((authUser) => {
+    getMe().then(async (authUser) => {
       if (authUser) {
-        setUser(authUser);
         syncToLocalStorage(authUser);
+        await hydrateFromBackend(authUser);
+        setUser(authUser);
       }
       setIsLoading(false);
     });
@@ -85,38 +112,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (email: string, password: string): Promise<AuthResult> => {
     const result = await apiLogin(email, password);
     if (result.success && result.user) {
-      setUser(result.user);
+      if (user?.learnerId && user.learnerId !== result.user.learnerId) {
+        clearUiStateForActor(user.learnerId);
+      }
       syncToLocalStorage(result.user);
+      await hydrateFromBackend(result.user);
+      setUser(result.user);
     }
     return result;
-  }, []);
+  }, [user]);
 
-  const logout = useCallback(async () => {
-    await apiLogout();
+  const logout = useCallback(async (): Promise<LogoutResult> => {
+    let result = await apiLogout();
+    if (!result.success && result.status === 403 && AUTH_BACKEND_CONFIGURED) {
+      // CSRF token can be stale after long-lived sessions; refresh once and retry.
+      await getMe();
+      result = await apiLogout();
+    }
+    if (!result.success && AUTH_BACKEND_CONFIGURED && result.status !== 401) {
+      return result;
+    }
+    if (user?.learnerId) {
+      clearUiStateForActor(user.learnerId);
+    }
     setUser(null);
     storage.clearUserProfile();
-  }, []);
+    return { success: true };
+  }, [user]);
 
   const signup = useCallback(async (params: {
     name: string;
     email: string;
     password: string;
     role: 'student' | 'instructor';
+    classCode?: string;
     instructorCode?: string;
   }): Promise<AuthResult> => {
     const result = await apiSignup(params);
     if (result.success && result.user) {
-      setUser(result.user);
+      if (user?.learnerId && user.learnerId !== result.user.learnerId) {
+        clearUiStateForActor(user.learnerId);
+      }
       syncToLocalStorage(result.user);
+      await hydrateFromBackend(result.user);
+      setUser(result.user);
     }
     return result;
-  }, []);
+  }, [user]);
 
   return (
     <AuthContext.Provider
       value={{
         user,
         isLoading,
+        isHydrating,
         isAuthenticated: user !== null,
         login,
         logout,

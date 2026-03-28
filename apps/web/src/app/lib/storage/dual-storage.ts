@@ -15,6 +15,7 @@ import {
   isBackendAvailable,
   checkBackendHealth,
 } from '../api/storage-client';
+import { clearAllUiState, clearUiStateForActor } from '../ui-state';
 import type {
   UserProfile,
   InteractionEvent,
@@ -46,6 +47,12 @@ interface QueuedItem {
   retries: number;
   timestamp: number;
 }
+
+export type CriticalWriteStatus = {
+  backendConfirmed: boolean;
+  pendingSync: boolean;
+  error?: string;
+};
 
 export type StorageMode = 'local' | 'backend' | 'offline';
 
@@ -207,6 +214,7 @@ class DualStorageManager {
   private config: StorageConfig;
   private backendHealthy: boolean = false;
   private offlineQueue: OfflineQueueManager;
+  private lastHydratedAt: Record<string, number> = {};
 
   constructor() {
     this.config = {
@@ -312,6 +320,12 @@ class DualStorageManager {
     if (this.config.useBackend) {
       // Backend doesn't support delete yet, just clear local
     }
+    const profile = localStorageManager.getUserProfile();
+    if (profile?.id) {
+      clearUiStateForActor(profile.id);
+    } else {
+      clearAllUiState();
+    }
     return localStorageManager.clearUserProfile();
   }
 
@@ -346,11 +360,17 @@ class DualStorageManager {
   }
 
   getAllInteractions(): InteractionEvent[] {
-    // localStorage is the cache for interactions
+    const learnerId = this.getCurrentLearnerId();
+    if (learnerId && this.shouldUseBackend()) {
+      void this.hydrateLearner(learnerId);
+    }
     return localStorageManager.getAllInteractions();
   }
 
   getInteractionsByLearner(learnerId: string): InteractionEvent[] {
+    if (this.shouldUseBackend()) {
+      void this.hydrateLearner(learnerId);
+    }
     return localStorageManager.getInteractionsByLearner(learnerId);
   }
 
@@ -382,6 +402,81 @@ class DualStorageManager {
     
     // Always cache in localStorage (synchronous return)
     return localStorageManager.saveTextbookUnit(learnerId, unit);
+  }
+
+  async saveTextbookUnitCritical(
+    learnerId: string,
+    unit: InstructionalUnit,
+  ): Promise<{ result: SaveTextbookUnitResult; status: CriticalWriteStatus }> {
+    const result = localStorageManager.saveTextbookUnit(learnerId, unit);
+    if (result.success === false) {
+      return {
+        result,
+        status: {
+          backendConfirmed: false,
+          pendingSync: false,
+          error: result.quotaExceeded
+            ? 'Failed to save locally: browser storage quota exceeded.'
+            : 'Failed to save locally.',
+        },
+      };
+    }
+
+    if (!this.config.useBackend) {
+      return { result, status: { backendConfirmed: true, pendingSync: false } };
+    }
+
+    const healthy = await this.checkHealth();
+    if (!healthy) {
+      this.offlineQueue.add({
+        id: `textbook-${unit.id}-${Date.now()}`,
+        type: 'textbookUnit',
+        data: { learnerId, unit },
+      });
+      return {
+        result,
+        status: {
+          backendConfirmed: false,
+          pendingSync: true,
+          error: 'Saved locally. Backend unavailable; queued for sync.',
+        },
+      };
+    }
+
+    try {
+      const backendSuccess = await storageClient.saveTextbookUnit(learnerId, unit);
+      if (backendSuccess) {
+        return { result, status: { backendConfirmed: true, pendingSync: false } };
+      }
+      this.offlineQueue.add({
+        id: `textbook-${unit.id}-${Date.now()}`,
+        type: 'textbookUnit',
+        data: { learnerId, unit },
+      });
+      return {
+        result,
+        status: {
+          backendConfirmed: false,
+          pendingSync: true,
+          error: 'Saved locally. Backend did not confirm; queued for retry.',
+        },
+      };
+    } catch (error) {
+      console.warn('[DualStorage] saveTextbookUnitCritical backend failure, queued:', error);
+      this.offlineQueue.add({
+        id: `textbook-${unit.id}-${Date.now()}`,
+        type: 'textbookUnit',
+        data: { learnerId, unit },
+      });
+      return {
+        result,
+        status: {
+          backendConfirmed: false,
+          pendingSync: true,
+          error: 'Saved locally. Backend request failed; queued for retry.',
+        },
+      };
+    }
   }
 
   saveTextbookUnitV2(
@@ -431,6 +526,35 @@ class DualStorageManager {
     return localResult;
   }
 
+  async saveTextbookUnitV2Critical(
+    learnerId: string,
+    input: CreateUnitInput,
+    problemId?: string,
+    useCompetition = true,
+  ): Promise<{
+    result: SaveTextbookUnitResult & { action: 'created' | 'updated'; why: string; competitionResult?: unknown };
+    status: CriticalWriteStatus;
+  }> {
+    const result = localStorageManager.saveTextbookUnitV2(learnerId, input, problemId, useCompetition);
+    const unit: InstructionalUnit = {
+      id: result.unit.id,
+      type: result.unit.type,
+      conceptId: result.unit.conceptId,
+      conceptIds: result.unit.conceptIds,
+      title: result.unit.title,
+      content: result.unit.content,
+      contentFormat: result.unit.contentFormat,
+      sourceInteractionIds: result.unit.sourceInteractionIds,
+      provenance: result.unit.provenance,
+      status: result.unit.status,
+      prerequisites: result.unit.prerequisites,
+      addedTimestamp: result.unit.addedTimestamp,
+    };
+
+    const write = await this.saveTextbookUnitCritical(learnerId, unit);
+    return { result, status: write.status };
+  }
+
   getTextbook(learnerId: string): InstructionalUnit[] {
     // Try backend FIRST (primary source of truth) - async in background
     if (this.shouldUseBackend()) {
@@ -460,6 +584,7 @@ class DualStorageManager {
     if (this.shouldUseBackend()) {
       try {
         const sessionData = {
+          sessionId,
           startTime: new Date().toISOString(),
           lastActivity: new Date().toISOString(),
         };
@@ -478,6 +603,58 @@ class DualStorageManager {
     }
     
     return sessionId;
+  }
+
+  async ensureSessionPersisted(learnerId: string, sessionId: string): Promise<CriticalWriteStatus> {
+    if (!this.config.useBackend) {
+      return { backendConfirmed: true, pendingSync: false };
+    }
+    const healthy = await this.checkHealth();
+    const sessionData = {
+      sessionId,
+      startTime: new Date().toISOString(),
+      lastActivity: new Date().toISOString(),
+    };
+    if (!healthy) {
+      this.offlineQueue.add({
+        id: `session-${learnerId}-${Date.now()}`,
+        type: 'session',
+        data: { learnerId, data: sessionData },
+      });
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Session started locally. Backend unavailable; queued for sync.',
+      };
+    }
+    try {
+      const success = await storageClient.saveSession(learnerId, sessionData);
+      if (success) {
+        return { backendConfirmed: true, pendingSync: false };
+      }
+      this.offlineQueue.add({
+        id: `session-${learnerId}-${Date.now()}`,
+        type: 'session',
+        data: { learnerId, data: sessionData },
+      });
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Session saved locally. Backend did not confirm; queued for retry.',
+      };
+    } catch (error) {
+      console.warn('[DualStorage] ensureSessionPersisted backend failure, queued:', error);
+      this.offlineQueue.add({
+        id: `session-${learnerId}-${Date.now()}`,
+        type: 'session',
+        data: { learnerId, data: sessionData },
+      });
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Session saved locally. Backend request failed; queued for retry.',
+      };
+    }
   }
 
   getActiveSessionId(): string {
@@ -570,8 +747,150 @@ class DualStorageManager {
       });
     }
     
-    // Fall back to localStorage - only has current user's profile
-    return [];
+    return localStorageManager
+      .getAllProfiles()
+      .map((profile: { id: string }) => localStorageManager.getProfile(profile.id))
+      .filter((profile): profile is LearnerProfile => Boolean(profile));
+  }
+
+  async hydrateLearner(learnerId: string, options?: { force?: boolean }): Promise<boolean> {
+    if (!this.config.useBackend) {
+      return false;
+    }
+    const now = Date.now();
+    if (!options?.force && this.lastHydratedAt[learnerId] && now - this.lastHydratedAt[learnerId] < 3000) {
+      return true;
+    }
+
+    const healthy = await this.checkHealth();
+    if (!healthy) {
+      return false;
+    }
+
+    try {
+      // Hydrate session/profile first so resumed editor state is available quickly
+      // on first render in account mode.
+      const [profile, session] = await Promise.all([
+        storageClient.getProfile(learnerId),
+        storageClient.getSession(learnerId),
+      ]);
+
+      if (profile) {
+        localStorageManager.saveProfile(profile);
+      }
+
+      const hydratedSessionId =
+        session?.sessionId?.trim() || localStorageManager.getActiveSessionId();
+      const hydratedProblemId = session?.currentProblemId?.trim();
+
+      if (hydratedSessionId) {
+        localStorageManager.setActiveSessionId(hydratedSessionId);
+      }
+
+      if (
+        hydratedSessionId &&
+        hydratedProblemId &&
+        typeof session.currentCode === 'string' &&
+        session.currentCode.trim().length > 0
+      ) {
+        localStorageManager.savePracticeDraft(
+          learnerId,
+          hydratedSessionId,
+          hydratedProblemId,
+          session.currentCode,
+        );
+      }
+
+      // Continue heavy sync in background so session restore is deterministic
+      // even when interaction/textbook payloads are large.
+      void Promise.all([
+        storageClient.getInteractions(learnerId, { limit: 5000 }),
+        storageClient.getTextbook(learnerId),
+      ])
+        .then(([interactionsResult, textbookUnits]) => {
+          const existing = localStorageManager.getAllInteractions();
+          const byId = new Map(existing.map((item) => [item.id, item]));
+          for (const interaction of interactionsResult.events) {
+            byId.set(interaction.id, interaction);
+          }
+          localStorageManager.importData({
+            interactions: Array.from(byId.values()).sort((a, b) => a.timestamp - b.timestamp),
+            activeSessionId: hydratedSessionId || localStorageManager.getActiveSessionId(),
+          });
+
+          for (const unit of textbookUnits) {
+            localStorageManager.saveTextbookUnit(learnerId, unit);
+          }
+        })
+        .catch((syncError) => {
+          console.warn('[DualStorage] hydrateLearner background sync failed:', syncError);
+        });
+
+      this.lastHydratedAt[learnerId] = now;
+      return true;
+    } catch (error) {
+      console.warn('[DualStorage] hydrateLearner failed:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Fetch active backend session snapshot for restore-critical flows.
+   * Returns null when backend mode is disabled, unhealthy, or no session exists.
+   */
+  async getBackendSessionSnapshot(
+    learnerId: string,
+  ): Promise<Awaited<ReturnType<typeof storageClient.getSession>>> {
+    if (!this.config.useBackend) {
+      return null;
+    }
+    const healthy = await this.checkHealth();
+    if (!healthy) {
+      return null;
+    }
+    try {
+      return await storageClient.getSession(learnerId);
+    } catch (error) {
+      console.warn('[DualStorage] getBackendSessionSnapshot failed:', error);
+      return null;
+    }
+  }
+
+  async hydrateInstructorDashboard(): Promise<boolean> {
+    if (!this.config.useBackend) {
+      return false;
+    }
+    const healthy = await this.checkHealth();
+    if (!healthy) {
+      return false;
+    }
+
+    try {
+      const [overview, learners, profiles] = await Promise.all([
+        storageClient.getInstructorOverview(),
+        storageClient.getInstructorLearners(),
+        storageClient.getAllProfiles(),
+      ]);
+
+      for (const profile of profiles) {
+        localStorageManager.saveProfile(profile);
+      }
+
+      for (const learner of learners) {
+        if (learner?.learner?.id) {
+          await this.hydrateLearner(learner.learner.id);
+        }
+      }
+
+      console.log('[DualStorage] Instructor dashboard hydrated', {
+        sectionCount: overview?.sections?.length ?? 0,
+        learnerCount: learners.length,
+      });
+      return true;
+    } catch (error) {
+      console.warn('[DualStorage] hydrateInstructorDashboard failed:', error);
+      return false;
+    }
   }
 
   /**

@@ -80,11 +80,18 @@ export async function saveSession(
   sessionId: string,
   conditionId: string,
   config: {
+    sectionId?: string | null;
+    currentProblemId?: string | null;
     textbookDisabled?: boolean;
     adaptiveLadderDisabled?: boolean;
     immediateExplanationMode?: boolean;
     staticHintMode?: boolean;
     escalationPolicy?: string;
+    currentCode?: string;
+    guidanceState?: Record<string, unknown>;
+    hdiState?: Record<string, unknown>;
+    banditState?: Record<string, unknown>;
+    lastActivity?: string;
   }
 ): Promise<void> {
   if (isUsingNeon()) {

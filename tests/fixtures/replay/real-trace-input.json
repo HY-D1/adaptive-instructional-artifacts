@@ -52,7 +52,6 @@
       "timestamp": 1700000005000,
       "eventType": "hint_view",
       "hintLevel": 1,
-      "hintId": "hint-001",
       "conceptIds": ["sql-syntax", "select-basics"],
       "sqlEngageSubtype": "incomplete query",
       "sqlEngageRowId": "sql-engage:15",
@@ -340,8 +339,8 @@
       "strategy": "bandit"
     }
   ],
-  "exportPolicyVersion": "week2-real-trace-export-v2",
-  "normalizerPolicyVersion": "week2-real-trace-normalize-v1",
+  "exportPolicyVersion": "2026-03-24-real-trace-export-v2",
+  "normalizerPolicyVersion": "2026-03-24-real-trace-normalize-v1",
   "sqlEngagePolicyVersion": "sql-engage-v3",
   "activeSessionId": "sess-001",
   "exportScope": "learner-1-session",

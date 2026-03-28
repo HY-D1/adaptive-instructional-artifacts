@@ -17,6 +17,8 @@
 |----------|----------|-------------|
 | `VITE_INSTRUCTOR_PASSCODE` | Yes | Passcode for instructor access |
 | `VITE_API_BASE_URL` | For persistence | Base URL of the backend API, no trailing `/api` (e.g. `https://my-api.vercel.app`). Leave empty for localStorage-only (static) mode. |
+| `VITE_ENABLE_VERCEL_ANALYTICS` | Optional | Set to `true` to load `@vercel/analytics/react` at runtime (launch default: `false`) |
+| `VITE_ENABLE_VERCEL_SPEED_INSIGHTS` | Optional | Set to `false` to disable Speed Insights (default: enabled) |
 | `VITE_OLLAMA_URL` | Local only | Local Ollama URL — not available on Vercel |
 | `VITE_ENABLE_PDF_INDEX` | Local only | PDF indexing — requires local backend |
 
@@ -31,13 +33,36 @@
 | `adaptive_data_DATABASE_URL` | Vercel Neon integration | Auto-injected by Vercel when you attach the Neon integration to a project named `adaptive_data` |
 | `adaptive_data_POSTGRES_URL` | Vercel Neon integration | Postgres-alias variant injected by the same Vercel Neon integration |
 | `JWT_SECRET` | Yes (production) | Secret for signing auth JWT cookies — must be at least 32 random characters |
-| `INSTRUCTOR_SIGNUP_CODE` | Instructor accounts | Code required when creating an instructor account. Falls back to `TeachSQL2024` in dev. |
+| `STUDENT_SIGNUP_CODE` | Student accounts | Class code required when creating a student account. Falls back to `ClassSQL2024` in dev. |
+| `INSTRUCTOR_SIGNUP_CODE` | Instructor accounts | Code required when creating an instructor account. Keep this explicit in deployed envs. |
+| `CORS_ORIGINS` | Recommended | Comma-separated frontend origins allowed to use credentialed requests (for example `https://app.example.com,https://www.example.com`) |
+| `CORS_ORIGIN_PATTERNS` | Optional | Comma-separated wildcard origin patterns for trusted preview domains (for example `https://adaptive-instructional-artifacts-*.vercel.app`) |
 | `PORT` | No | HTTP port (default 3001) |
 
-> **Auth setup**: Set `JWT_SECRET` to a strong random value (e.g. `openssl rand -base64 32`). Set `INSTRUCTOR_SIGNUP_CODE` to protect instructor registration. After adding these vars, redeploy the backend and run `npm run db:init:neon` to create the `auth_accounts` table.
+> **Auth setup**: Set `JWT_SECRET` to a strong random value (e.g. `openssl rand -base64 32`). Set both `STUDENT_SIGNUP_CODE` and `INSTRUCTOR_SIGNUP_CODE` to protect account creation. After adding these vars, redeploy the backend and run `npm run db:init:neon` to create the `auth_accounts` table.
+>
+> **CORS setup (preview + prod)**:
+> - Keep stable domains in `CORS_ORIGINS`, for example:
+>   `https://adaptive-instructional-artifacts.vercel.app`
+> - Add trusted wildcard preview domains in `CORS_ORIGIN_PATTERNS`, for example:
+>   `https://adaptive-instructional-artifacts-*.vercel.app`
+> - Do not use `*` with credentialed cookies.
 
 > **Env var resolution order**: The backend checks these four names in priority order (`DATABASE_URL` → `NEON_DATABASE_URL` → `adaptive_data_DATABASE_URL` → `adaptive_data_POSTGRES_URL`) and uses the first non-empty value. You only need to set one.
 > **After changing env vars you must redeploy** — Vercel bakes env vars into the build/runtime at deploy time. Adding or changing a variable without redeploying has no effect.
+
+### Deployment Matrix (Last Verified)
+
+| Environment | Frontend URL | Backend URL | Env source | Last verified (UTC) |
+|-------------|--------------|-------------|------------|---------------------|
+| Production | `https://adaptive-instructional-artifacts.vercel.app` | `https://adaptive-instructional-artifacts-ap.vercel.app` | `DATABASE_URL` via `/health` + `/api/system/persistence-status` | 2026-03-25T03:42Z |
+| Preview | `https://adaptive-instructional-artifacts-epaibrvsf-hy-d1s-projects.vercel.app` | `https://adaptive-instructional-artifacts-ap.vercel.app` (paired backend) | n/a (frontend is Vercel-protected without bypass secret) | 2026-03-25T03:42Z |
+
+### Related Projects Note
+
+- Root `vercel.json` includes `relatedProjects` to discover the backend host during Git-connected Vercel builds.
+- This only helps when both frontend and backend are linked Git-connected projects in Vercel.
+- CLI-only/manual deployments still require explicit `VITE_API_BASE_URL` and a new frontend deployment after env changes.
 
 ---
 
@@ -70,6 +95,12 @@ vercel deploy --prod
 # Note the deployment URL, e.g. https://sql-adapt-api.vercel.app
 ```
 
+Backend project settings:
+- Framework preset: **Other**
+- Root directory: `apps/server`
+- Build command: `npm run build`
+- Output directory: leave empty (serverless functions)
+
 #### 3. Configure the frontend
 
 In your frontend Vercel project settings, add:
@@ -88,6 +119,10 @@ node scripts/smoke-test-persistence.mjs https://sql-adapt-api.vercel.app
 ```
 
 Expected output: all 5 checks pass with a learner, session, interaction, and textbook unit created server-side.
+
+Security notes for deployed auth:
+- JWT auth cookie uses `Secure` + `SameSite=None` in production for cross-origin frontend/backend deployments.
+- CSRF uses double-submit cookie protection; mutating API requests must send `x-csrf-token` matching the `sql_adapt_csrf` cookie (frontend API clients handle this automatically).
 
 ### Deployment Topology
 
@@ -159,6 +194,7 @@ Must match these exactly:
 | 404 on all routes | Wrong Output Directory | Set to dist/app |
 | Blank page | COOP/COEP headers | Headers already in vercel.json |
 | Instructor mode fails | Missing env var | Add VITE_INSTRUCTOR_PASSCODE |
+| Build fails on `@vercel/analytics/react` | Missing dependency or optional analytics mode | Install `@vercel/analytics` or keep `VITE_ENABLE_VERCEL_ANALYTICS=false` for launch-safe builds |
 | PDF/Ollama fails | Hosted mode limitation | Expected - use local dev |
 
 ---
@@ -350,8 +386,10 @@ See [DEPLOYMENT_MODES.md](./DEPLOYMENT_MODES.md) for the complete capability mat
 
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
-| `VITE_INSTRUCTOR_PASSCODE` | Passcode for instructor access | `TeachSQL2024` | Yes |
+| `VITE_INSTRUCTOR_PASSCODE` | Passcode for instructor access | `TEACHSQL2026` (example) | Yes |
 | `VITE_API_BASE_URL` | Backend API URL | (empty) | For hosted backend |
+| `VITE_ENABLE_VERCEL_ANALYTICS` | Load Vercel analytics bundle at runtime | `false` | No |
+| `VITE_ENABLE_VERCEL_SPEED_INSIGHTS` | Enable Vercel speed insights component | `true` | No |
 | `VITE_ENABLE_PDF_INDEX` | Enable PDF index UI | `false` | No |
 | `VITE_ENABLE_LLM` | Enable LLM UI | `false` | No |
 
@@ -581,13 +619,19 @@ npx playwright install --with-deps chromium
 
 ### Playwright test suites
 
+One-time browser bootstrap (local and CI images without preinstalled Playwright):
+
+```bash
+npm run test:install-browsers
+```
+
 The config defines three Playwright **projects**:
 
 | Project | What it runs | Auth |
 |---------|-------------|------|
 | `setup:auth` | `tests/e2e/setup/auth.setup.ts` | Captures JWT cookie → `playwright/.auth/*.json` |
 | `chromium` | All `*.spec.ts` except auth smoke | localStorage / StartPage (no backend required) |
-| `chromium:auth` | `deployed-auth-smoke.spec.ts` only | Pre-loaded JWT cookie via `storageState` |
+| `chromium:auth` | Authenticated deployment/spec checks | Real login + JWT cookie |
 
 #### Local regression suite (no backend required)
 
@@ -621,11 +665,36 @@ This suite verifies:
 
 ### Authenticated smoke (real auth backend required)
 
-The `@deployed-auth-smoke` suite signs in via the real `/auth` page (JWT cookie),
-saves a note, then opens a **fresh browser context** from the saved auth state to
-prove the note persists across sessions.
+The auth regression suite signs in via the real `/login` + `/signup` account UI (JWT cookie),
+saves a note, then opens a **fresh browser context** and logs in with credentials
+to prove backend hydration across true second-context login.
 
-#### Step 1 — Capture auth state (run once per environment)
+#### Step 0 — Neon preflight (required before setup)
+
+```bash
+curl https://<backend>/health
+curl https://<backend>/api/system/persistence-status
+```
+
+Expected:
+- `dbMode` is `neon`
+- `resolvedEnvSource` is non-null
+- `persistenceRoutesEnabled` is `true`
+
+#### Step 1 — One-time deterministic auth seed (deployed runs)
+
+Before running deployed Playwright auth proofs, set one stable instructor + class code pair:
+
+1. Create one fresh instructor account manually in production or preview.
+2. Capture the generated `studentSignupCode` from instructor UI or `GET /api/auth/me`.
+3. Set these env vars in Vercel for test runs:
+   - `E2E_INSTRUCTOR_EMAIL`
+   - `E2E_INSTRUCTOR_PASSWORD`
+   - `E2E_STUDENT_CLASS_CODE` (captured real section code)
+   - Optional: `E2E_ALLOW_INSTRUCTOR_SIGNUP=true` + `E2E_INSTRUCTOR_CODE` if you explicitly want signup fallback
+4. Redeploy after env updates (Vercel env changes apply only to new deployments).
+
+#### Step 2 — Capture auth state (run once per environment)
 
 The `setup:auth` project runs automatically as a dependency of `chromium:auth`.
 You can also trigger it explicitly:
@@ -636,16 +705,26 @@ npx playwright test -c playwright.config.ts --project=setup:auth
 
 # Against a deployed preview
 PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
+PLAYWRIGHT_API_BASE_URL="https://<backend>.vercel.app" \
+E2E_INSTRUCTOR_EMAIL="instructor-e2e@example.com" \
+E2E_INSTRUCTOR_PASSWORD="TestPassword123!" \
 E2E_STUDENT_EMAIL="student@yourdomain.com" \
 E2E_STUDENT_PASSWORD="YourPassword123!" \
-E2E_INSTRUCTOR_CODE="<instructor-code>" \
+E2E_STUDENT_CLASS_CODE="<class-code>" \
   npx playwright test -c playwright.config.ts --project=setup:auth
 ```
+
+`setup:auth` now fails fast when the backend is unreachable or not Neon-backed.
+It will not silently write empty auth state files for launch-proof runs.
+For deployed targets, it also fails fast unless deterministic `E2E_*` auth vars are provided.
+Default deployed mode is instructor login-first. If you opt in to signup fallback
+and logs show `Invalid instructor code`, set `E2E_INSTRUCTOR_CODE` to the backend's
+actual `INSTRUCTOR_SIGNUP_CODE`.
 
 Auth state is saved to `playwright/.auth/student.json` and
 `playwright/.auth/instructor.json` (gitignored — never commit these).
 
-#### Step 2 — Run the auth smoke
+#### Step 3 — Run the auth smoke
 
 ```bash
 # Local (dev server + backend must be running)
@@ -657,13 +736,68 @@ npx playwright test -c playwright.config.ts \
   --project=setup:auth --project=chromium:auth
 ```
 
+#### Step 4 — Run multi-device + section-scope + authz proofs
+
+```bash
+npx playwright test -c playwright.config.ts --project=chromium:auth \
+  tests/e2e/regression/student-multi-device-persistence.spec.ts \
+  tests/e2e/regression/instructor-section-scope.spec.ts \
+  tests/e2e/regression/api-authz.spec.ts
+```
+
+#### Canonical launch smoke command (release gate)
+
+```bash
+npm run test:e2e:launch-smoke
+```
+
+`test:e2e:launch-smoke` runs:
+1. `@deployed-auth-smoke` on `chromium:auth`
+2. `student-multi-device-persistence.spec.ts`
+3. `instructor-section-scope.spec.ts`
+4. `api-authz.spec.ts`
+
+#### Preview → promote release gate (required)
+
+Use a two-phase launch gate:
+
+1. Run `npm run test:e2e:launch-smoke` against the protected preview pair.
+2. Promote the exact tested frontend/backend pair.
+3. Re-run `npm run test:e2e:launch-smoke` against production URLs.
+
+```bash
+# Phase A: preview
+PLAYWRIGHT_BASE_URL="https://<frontend-preview>.vercel.app" \
+PLAYWRIGHT_API_BASE_URL="https://<backend-preview>.vercel.app" \
+VERCEL_AUTOMATION_BYPASS_SECRET="<secret>" \
+E2E_INSTRUCTOR_EMAIL="instructor-e2e@example.com" \
+E2E_INSTRUCTOR_PASSWORD="TestPassword123!" \
+E2E_STUDENT_EMAIL="student@yourdomain.com" \
+E2E_STUDENT_PASSWORD="YourPassword123!" \
+E2E_STUDENT_CLASS_CODE="<class-code>" \
+  npm run test:e2e:launch-smoke
+
+# Phase B: production (post-promote)
+PLAYWRIGHT_BASE_URL="https://adaptive-instructional-artifacts.vercel.app" \
+PLAYWRIGHT_API_BASE_URL="https://adaptive-instructional-artifacts-ap.vercel.app" \
+E2E_INSTRUCTOR_EMAIL="instructor-e2e@example.com" \
+E2E_INSTRUCTOR_PASSWORD="TestPassword123!" \
+E2E_STUDENT_EMAIL="student@yourdomain.com" \
+E2E_STUDENT_PASSWORD="YourPassword123!" \
+E2E_STUDENT_CLASS_CODE="<class-code>" \
+  npm run test:e2e:launch-smoke
+```
+
 #### Deployed authenticated smoke (Vercel preview, no protection bypass)
 
 ```bash
 PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
+PLAYWRIGHT_API_BASE_URL="https://<backend>.vercel.app" \
+E2E_INSTRUCTOR_EMAIL="instructor-e2e@example.com" \
+E2E_INSTRUCTOR_PASSWORD="TestPassword123!" \
 E2E_STUDENT_EMAIL="student@yourdomain.com" \
 E2E_STUDENT_PASSWORD="YourPassword123!" \
-E2E_INSTRUCTOR_CODE="<instructor-code>" \
+E2E_STUDENT_CLASS_CODE="<class-code>" \
   npx playwright test -c playwright.config.ts \
     --project=setup:auth --project=chromium:auth \
     --grep "@deployed-auth-smoke"
@@ -673,10 +807,13 @@ E2E_INSTRUCTOR_CODE="<instructor-code>" \
 
 ```bash
 PLAYWRIGHT_BASE_URL="https://<preview>.vercel.app" \
+PLAYWRIGHT_API_BASE_URL="https://<backend>.vercel.app" \
 VERCEL_AUTOMATION_BYPASS_SECRET="<secret-from-vercel-dashboard>" \
+E2E_INSTRUCTOR_EMAIL="instructor-e2e@example.com" \
+E2E_INSTRUCTOR_PASSWORD="TestPassword123!" \
 E2E_STUDENT_EMAIL="student@yourdomain.com" \
 E2E_STUDENT_PASSWORD="YourPassword123!" \
-E2E_INSTRUCTOR_CODE="<instructor-code>" \
+E2E_STUDENT_CLASS_CODE="<class-code>" \
   npx playwright test -c playwright.config.ts \
     --project=setup:auth --project=chromium:auth \
     --grep "@deployed-auth-smoke"
@@ -684,6 +821,7 @@ E2E_INSTRUCTOR_CODE="<instructor-code>" \
 
 The `VERCEL_AUTOMATION_BYPASS_SECRET` is set via the Vercel dashboard under
 **Project → Settings → Deployment Protection → Automation bypass secret**.
+`E2E_VERCEL_BYPASS_SECRET` is supported as a backward-compatible alias.
 When set, the `x-vercel-protection-bypass` and `x-vercel-set-bypass-cookie`
 headers are injected automatically on every Playwright request.
 
@@ -692,27 +830,30 @@ headers are injected automatically on every Playwright request.
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `PLAYWRIGHT_BASE_URL` | `http://127.0.0.1:4173` | Target URL (set for deployed runs) |
+| `PLAYWRIGHT_API_BASE_URL` | `http://127.0.0.1:3001` (local) | Backend API origin for split frontend/backend proofs |
 | `VERCEL_AUTOMATION_BYPASS_SECRET` | — | Vercel protection bypass header |
+| `E2E_VERCEL_BYPASS_SECRET` | — | Alias for `VERCEL_AUTOMATION_BYPASS_SECRET` |
 | `E2E_STUDENT_EMAIL` | `e2e-student-<ts>@sql-adapt.test` | Student account email |
 | `E2E_STUDENT_PASSWORD` | `E2eTestPass!123` | Student account password |
+| `E2E_STUDENT_CLASS_CODE` | — | Section signup code (required for deployed deterministic setup) |
 | `E2E_INSTRUCTOR_EMAIL` | `e2e-instructor-<ts>@sql-adapt.test` | Instructor account email |
 | `E2E_INSTRUCTOR_PASSWORD` | `E2eInstrPass!123` | Instructor account password |
-| `E2E_INSTRUCTOR_CODE` | `TeachSQL2024` | Instructor signup code (dev default) |
+| `E2E_ALLOW_INSTRUCTOR_SIGNUP` | `false` | Opt in to instructor signup fallback during setup |
+| `E2E_INSTRUCTOR_CODE` | `TeachSQL2024` (local only) | Instructor signup code (required only when signup fallback is enabled) |
 
-> **Note:** Set `E2E_STUDENT_EMAIL` / `E2E_STUDENT_PASSWORD` to stable values in CI
-> so the setup project can log in to an existing account (idempotent). When not set,
-> a fresh unique email is generated each run and signup is attempted first with login
-> as a fallback.
+> **Note:** Set both student and instructor `E2E_*` credentials to stable values in CI
+> so setup can log in first (idempotent) and only fall back to signup when necessary.
+> For deployed targets (`PLAYWRIGHT_BASE_URL` not localhost), `PLAYWRIGHT_API_BASE_URL`
+> is mandatory; the helper no longer falls back silently to `127.0.0.1:3001`.
 
 #### What the auth smoke proves
 
-1. **Real JWT auth** — signs in via `/auth`, no `addInitScript` seeding.
+1. **Real JWT auth** — signs in via `/login` / `/signup`, no `addInitScript` seeding.
 2. **Note saved** — Save to Notes succeeds and the success banner appears.
 3. **SPA navigation** — note visible in `/textbook` without a page reload.
-4. **Cross-session persistence** — a **fresh `browser.newContext()`** loaded with
-   the post-note `storageState` (JWT cookie + localStorage) shows the note.
-   This is the strongest persistence claim: equivalent to closing the browser
-   and reopening it on a different device sharing the same credentials.
+4. **Cross-device hydration** — a **fresh `browser.newContext()`** logs in again
+   using credentials (no copied storage state) and still shows persisted note/data.
+   StorageState cloning is not accepted as the primary persistence proof.
 5. **Instructor gate** — wrong code → error; right code → redirect.
 
 ---
@@ -735,11 +876,120 @@ VERCEL_AUTOMATION_BYPASS_SECRET="<secret-from-vercel-dashboard>" \
 ### Build check
 
 ```bash
+npm run server:build
 npm run build
+npx vitest run apps/web/src/app/lib/auth.test.ts
 ```
 
 Expected: zero TypeScript errors, `dist/app/` contains the production bundle
 including the new `textbook-static/concept-quality.json` and
 `textbook-static/textbook-units.json` assets.
 
-*Last updated: 2026-03-22*
+### Section-linkage schema version
+
+- Current Neon schema baseline for launch: `2026-03-24-section-linkage-v1`.
+- Required linkage columns:
+  - `learner_sessions.section_id` (nullable FK to `course_sections.id`)
+  - `interaction_events.section_id` (nullable FK to `course_sections.id`)
+- These columns are persisted on writes and included in scoped export records.
+
+### Launch-ready verification command set
+
+```bash
+# Build + unit
+npm run server:build
+npm run build
+npx vitest run apps/web/src/app/lib/auth.test.ts
+
+# Auth bootstrap and scoped persistence/authz proofs
+npx playwright test -c playwright.config.ts --project=setup:auth
+npx playwright test -c playwright.config.ts --project=chromium:auth --grep "multi-device|section-scope|authz"
+```
+
+StorageState cloning is not accepted as the primary persistence proof.
+Second-context tests must perform credential login in a clean browser context.
+
+### Integrity gate added
+
+Run this before any proof commands:
+
+```bash
+npm run integrity:scan
+rg -n --fixed-strings -- '-03-24' \
+  apps/web/src/app \
+  apps/server/src \
+  package.json \
+  apps/server/package.json \
+  apps/web/vite.config.ts \
+  apps/server/tsconfig.json \
+  playwright.config.ts \
+  tsconfig.json \
+  vercel.json
+```
+
+What this proves:
+- integrity scan now covers the full app source + build/test config surface before builds.
+- tokenized corruption markers are absent from critical source/config files before build/tests.
+- integrity scanner is portable across environments (`rg` preferred, `grep` fallback) without weakening fail behavior.
+
+### Proof of multi-device UI restore
+
+```bash
+npx playwright test -c playwright.config.ts tests/e2e/regression/student-multi-device-persistence.spec.ts
+# run a second time to detect timing flake
+npx playwright test -c playwright.config.ts tests/e2e/regression/student-multi-device-persistence.spec.ts
+```
+
+What this proves:
+- device A saves a note and seeds active session state.
+- device B is a fresh browser context and logs in with credentials.
+- textbook UI visibly shows the same saved note (title + content snippet), not just a count.
+- practice/editor UI visibly resumes the saved `currentCode`.
+- direct API checks (`/api/sessions/:learnerId/active`, `/api/interactions`) are retained as secondary evidence.
+
+### Proof of instructor section isolation
+
+```bash
+npx playwright test -c playwright.config.ts tests/e2e/regression/instructor-section-scope.spec.ts
+npx playwright test -c playwright.config.ts tests/e2e/regression/api-authz.spec.ts
+```
+
+What this proves:
+- instructor A/B isolation on list/detail endpoints.
+- scoped behavior on high-risk aggregate/export endpoints:
+  - `/api/instructor/overview`
+  - `/api/instructor/export`
+  - `/api/research/aggregates`
+  - `/api/research/export`
+- anonymous 401 coverage and cross-section/session ownership denial paths.
+
+Neon prerequisite for auth-backed proof:
+
+```bash
+curl https://<backend>/health
+curl https://<backend>/api/system/persistence-status
+```
+
+Expected before claiming proof:
+- `dbMode: "neon"`
+- `persistenceRoutesEnabled: true`
+- `resolvedEnvSource` is non-null
+
+If `dbMode` is `"sqlite"`, account signup/login proofs are not valid launch evidence.
+
+### Launch UX/Product Guard Regressions
+
+Use this compact guard pack for launch-visible behavior checks (not broad auth/replay coverage):
+
+```bash
+npx playwright test -c playwright.config.ts tests/e2e/regression/launch-readiness-guards.spec.ts
+```
+
+This suite is intentionally narrow and maps to real product risks:
+- textbook visible note count matches rendered note rows
+- textbook view/filter state survives refresh
+- instructor dashboard learner count matches visible learner table rows
+- logout/login role switches clear prior role-scoped UI state
+- primary CTA stability and labeled icon-only controls after hydration
+
+*Last updated: 2026-03-24*

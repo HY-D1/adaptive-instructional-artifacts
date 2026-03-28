@@ -8,11 +8,22 @@
  * these functions return no-op results and the app falls back to passcode auth.
  */
 
+import { withCsrfHeader, setCsrfToken, clearCsrfToken } from './csrf-client';
+
 const _API_BASE = import.meta.env.VITE_API_BASE_URL;
 const AUTH_BASE = _API_BASE ? `${_API_BASE}/api/auth` : 'http://localhost:3001/api/auth';
 
 /** True only when a backend API is configured */
-export const AUTH_ENABLED = !!_API_BASE || import.meta.env.DEV;
+export const AUTH_BACKEND_CONFIGURED = !!_API_BASE;
+export const AUTH_ENABLED = AUTH_BACKEND_CONFIGURED || import.meta.env.DEV;
+
+function formatNetworkError(error: Error): string {
+  const base = error.message || 'Network request failed';
+  const diagnostic = AUTH_BACKEND_CONFIGURED
+    ? `Unable to reach ${AUTH_BASE}. Check deployment URL, browser network requests, and current origin.`
+    : 'Backend API base URL is not configured.';
+  return `${base}. ${diagnostic}`;
+}
 
 // ============================================================================
 // Types
@@ -25,6 +36,13 @@ export interface AuthUser {
   learnerId: string;    // users.id — used for all data operations
   name: string;
   createdAt: string;
+  sectionId?: string | null;
+  sectionName?: string | null;
+  ownedSections?: Array<{
+    id: string;
+    name: string;
+    studentSignupCode: string;
+  }>;
 }
 
 export interface AuthResult {
@@ -34,18 +52,26 @@ export interface AuthResult {
   details?: Record<string, string[]>;
 }
 
+export interface LogoutResult {
+  success: boolean;
+  status?: number;
+  error?: string;
+}
+
 // ============================================================================
 // HTTP helper
 // ============================================================================
 
 async function authFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const requestInit = withCsrfHeader(init);
+  const headers = new Headers(requestInit.headers || {});
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
   return fetch(`${AUTH_BASE}${path}`, {
-    ...init,
+    ...requestInit,
     credentials: 'include',         // send/receive httpOnly cookies
-    headers: {
-      'Content-Type': 'application/json',
-      ...init.headers,
-    },
+    headers,
   });
 }
 
@@ -58,6 +84,7 @@ export async function signup(params: {
   email: string;
   password: string;
   role: 'student' | 'instructor';
+  classCode?: string;
   instructorCode?: string;
 }): Promise<AuthResult> {
   try {
@@ -66,12 +93,13 @@ export async function signup(params: {
       body: JSON.stringify(params),
     });
     const data = await res.json();
+    setCsrfToken(data?.csrfToken);
     if (!res.ok) {
       return { success: false, error: data.error ?? `HTTP ${res.status}`, details: data.details };
     }
     return { success: true, user: data.user };
   } catch (err) {
-    return { success: false, error: (err as Error).message };
+    return { success: false, error: formatNetworkError(err as Error) };
   }
 }
 
@@ -82,28 +110,55 @@ export async function login(email: string, password: string): Promise<AuthResult
       body: JSON.stringify({ email, password }),
     });
     const data = await res.json();
+    setCsrfToken(data?.csrfToken);
     if (!res.ok) {
       return { success: false, error: data.error ?? `HTTP ${res.status}` };
     }
     return { success: true, user: data.user };
   } catch (err) {
-    return { success: false, error: (err as Error).message };
+    return { success: false, error: formatNetworkError(err as Error) };
   }
 }
 
-export async function logout(): Promise<void> {
+export async function logout(): Promise<LogoutResult> {
+  if (!AUTH_BACKEND_CONFIGURED) {
+    return { success: true };
+  }
+
   try {
-    await authFetch('/logout', { method: 'POST' });
-  } catch {
-    // Ignore errors on logout
+    const res = await authFetch('/logout', { method: 'POST' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({} as { error?: string }));
+      if (res.status === 401) {
+        clearCsrfToken();
+      }
+      return {
+        success: false,
+        status: res.status,
+        error: data.error ?? `HTTP ${res.status}`,
+      };
+    }
+    clearCsrfToken();
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: formatNetworkError(err as Error),
+    };
   }
 }
 
 export async function getMe(): Promise<AuthUser | null> {
   try {
     const res = await authFetch('/me');
-    if (!res.ok) return null;
+    if (!res.ok) {
+      if (res.status === 401) {
+        clearCsrfToken();
+      }
+      return null;
+    }
     const data = await res.json();
+    setCsrfToken(data?.csrfToken);
     return data.success ? data.user : null;
   } catch {
     return null;

@@ -19,11 +19,13 @@ const BASE_URL = DEPLOYED_BASE_URL || LOCAL_BASE_URL;
 /**
  * VERCEL_AUTOMATION_BYPASS_SECRET — required to access Vercel Preview
  * deployments that have deployment protection enabled.
+ * E2E_VERCEL_BYPASS_SECRET is supported as a backward-compatible alias.
  *
  * Passed as the x-vercel-protection-bypass HTTP header on every request.
  * See: https://vercel.com/docs/security/deployment-protection/methods-to-bypass-deployment-protection
  */
-const VERCEL_BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+const VERCEL_BYPASS_SECRET =
+  process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? process.env.E2E_VERCEL_BYPASS_SECRET;
 
 // ─── Auth state file paths ────────────────────────────────────────────────────
 // Created by the 'setup:auth' project via tests/e2e/setup/auth.setup.ts.
@@ -81,8 +83,7 @@ export default defineConfig({
     // ── Auth setup ─────────────────────────────────────────────────────────────
     // Runs once before any auth-dependent project.
     // Creates playwright/.auth/student.json and playwright/.auth/instructor.json.
-    // Writes empty storageState files and logs a warning when the backend is
-    // unreachable (no-op graceful degradation).
+    // Fails fast when backend/auth prerequisites are missing for launch-proof runs.
     {
       name: 'setup:auth',
       testMatch: '**/setup/auth.setup.ts',
@@ -97,6 +98,9 @@ export default defineConfig({
       testIgnore: [
         '**/setup/**',
         '**/deployed-auth-smoke.spec.ts',
+        '**/student-multi-device-persistence.spec.ts',
+        '**/instructor-section-scope.spec.ts',
+        '**/api-authz.spec.ts',
       ],
     },
 
@@ -106,7 +110,12 @@ export default defineConfig({
     // Tests self-skip when the auth file contains no cookies (backend absent).
     {
       name: 'chromium:auth',
-      testMatch: ['**/deployed-auth-smoke.spec.ts'],
+      testMatch: [
+        '**/deployed-auth-smoke.spec.ts',
+        '**/student-multi-device-persistence.spec.ts',
+        '**/instructor-section-scope.spec.ts',
+        '**/api-authz.spec.ts',
+      ],
       dependencies: ['setup:auth'],
       use: {
         ...devices['Desktop Chrome'],

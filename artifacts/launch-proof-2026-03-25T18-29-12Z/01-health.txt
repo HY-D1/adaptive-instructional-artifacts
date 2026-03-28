@@ -1,0 +1,17 @@
+# health 2026-03-25T18:29:12Z
+HTTP/2 200 
+access-control-allow-credentials: true
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json; charset=utf-8
+date: Wed, 25 Mar 2026 18:29:12 GMT
+etag: W/"16b-jvH4X/fUMOeZDcflYpfDFxpcmpA"
+server: Vercel
+strict-transport-security: max-age=63072000; includeSubDomains; preload
+vary: Origin
+x-powered-by: Express
+x-vercel-cache: MISS
+x-vercel-id: pdx1::iad1::5hfhp-1774463352719-32bebc9484be
+content-length: 363
+
+{"status":"ok","timestamp":"2026-03-25T18:29:12.786Z","version":"1.0.0","db":{"mode":"neon","envSource":"DATABASE_URL"},"features":{"pdfIndex":{"enabled":false,"available":false,"message":"PDF index disabled (set ENABLE_PDF_INDEX=true to enable)"},"llm":{"enabled":false,"available":false,"message":"LLM disabled (set ENABLE_LLM=true to enable)","ollamaUrl":""}}}

@@ -3,7 +3,7 @@
  * Week 4: Authentication and authorization utilities
  */
 
-import { storage } from './storage/storage';
+import { storage } from './storage';
 import type { UserRole } from '../types';
 
 // Route paths
