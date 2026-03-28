@@ -19,10 +19,13 @@
 | `VITE_API_BASE_URL` | For persistence | Base URL of the backend API, no trailing `/api` (e.g. `https://my-api.vercel.app`). Leave empty for localStorage-only (static) mode. |
 | `VITE_ENABLE_VERCEL_ANALYTICS` | Optional | Set to `true` to load `@vercel/analytics/react` at runtime (launch default: `false`) |
 | `VITE_ENABLE_VERCEL_SPEED_INSIGHTS` | Optional | Set to `false` to disable Speed Insights (default: enabled) |
+| `VITE_TEXTBOOK_CORPUS_MODE` | Optional (recommended) | `remote` to prefer Neon-backed `/api/corpus` content in hosted/full-stack mode, `static` for bundled fallback content |
 | `VITE_OLLAMA_URL` | Local only | Local Ollama URL — not available on Vercel |
 | `VITE_ENABLE_PDF_INDEX` | Local only | PDF indexing — requires local backend |
 
 > **Note on `VITE_API_BASE_URL`**: this is the single canonical variable used by all three frontend API clients (`storage-client.ts`, `dual-storage.ts`, `learner-profile-client.ts`). Setting it enables backend/Neon persistence mode. When not set, the app runs in localStorage-only mode.
+>
+> **Note on `VITE_TEXTBOOK_CORPUS_MODE`**: set to `remote` in hosted full-stack mode to read processed corpus units from Neon via `/api/corpus/*`. The app still falls back to static textbook assets when remote corpus is unavailable.
 
 **Backend project (Vercel Serverless / any Node host):**
 
@@ -123,6 +126,12 @@ Expected output: all 5 checks pass with a learner, session, interaction, and tex
 Security notes for deployed auth:
 - JWT auth cookie uses `Secure` + `SameSite=None` in production for cross-origin frontend/backend deployments.
 - CSRF uses double-submit cookie protection; mutating API requests must send `x-csrf-token` matching the `sql_adapt_csrf` cookie (frontend API clients handle this automatically).
+
+### Local-only raw PDF policy
+
+- Raw PDF files remain local-only and are not uploaded to Neon.
+- Hosted Vercel runtime should depend on processed corpus rows (`corpus_documents`, `corpus_units`, `corpus_chunks`) only.
+- Legacy `/api/pdf-index/*` remains local-dev oriented; hosted runtime should use `/api/corpus/*`.
 
 ### Deployment Topology
 

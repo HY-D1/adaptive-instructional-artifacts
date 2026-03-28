@@ -23,6 +23,46 @@ import type {
   LearnerProfile,
 } from '../types.js';
 
+export interface CorpusManifestDocumentRow {
+  docId: string;
+  title: string;
+  filename: string;
+  sha256: string;
+  pageCount: number;
+  parserBackend: string;
+  pipelineVersion: string;
+  runId: string | null;
+  unitCount: number;
+  chunkCount: number;
+  createdAt: string;
+}
+
+export interface CorpusUnitRow {
+  unitId: string;
+  docId: string;
+  conceptId: string | null;
+  title: string;
+  summary: string;
+  contentMarkdown: string;
+  difficulty: string | null;
+  pageStart: number;
+  pageEnd: number;
+  runId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface CorpusChunkRow {
+  chunkId: string;
+  unitId: string;
+  docId: string;
+  page: number;
+  chunkText: string;
+  runId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
 // Configure Neon for serverless environment
 neonConfig.fetchConnectionCache = true;
 
@@ -309,6 +349,81 @@ export async function initializeSchema(): Promise<void> {
 
   await db`CREATE INDEX IF NOT EXISTS idx_textbook_unit_event_links_unit_id ON textbook_unit_event_links(unit_id)`;
   await db`CREATE INDEX IF NOT EXISTS idx_textbook_unit_event_links_event_id ON textbook_unit_event_links(event_id)`;
+
+  // Processed corpus tables (raw PDFs remain local-only; Neon stores processed outputs only)
+  await db`CREATE EXTENSION IF NOT EXISTS vector`;
+
+  await db`
+    CREATE TABLE IF NOT EXISTS corpus_documents (
+      doc_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      filename TEXT NOT NULL,
+      sha256 TEXT NOT NULL,
+      page_count INT NOT NULL,
+      parser_backend TEXT NOT NULL,
+      pipeline_version TEXT NOT NULL,
+      run_id TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (doc_id, sha256, pipeline_version)
+    )
+  `;
+
+  await db`
+    CREATE TABLE IF NOT EXISTS corpus_units (
+      unit_id TEXT PRIMARY KEY,
+      doc_id TEXT NOT NULL REFERENCES corpus_documents(doc_id) ON DELETE CASCADE,
+      concept_id TEXT,
+      title TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      content_markdown TEXT NOT NULL,
+      difficulty TEXT,
+      page_start INT NOT NULL,
+      page_end INT NOT NULL,
+      parser_backend TEXT NOT NULL,
+      pipeline_version TEXT NOT NULL,
+      run_id TEXT,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  await db`CREATE INDEX IF NOT EXISTS idx_corpus_units_doc_id ON corpus_units(doc_id)`;
+  await db`CREATE INDEX IF NOT EXISTS idx_corpus_units_concept_id ON corpus_units(concept_id)`;
+
+  await db`
+    CREATE TABLE IF NOT EXISTS corpus_chunks (
+      chunk_id TEXT PRIMARY KEY,
+      unit_id TEXT NOT NULL REFERENCES corpus_units(unit_id) ON DELETE CASCADE,
+      doc_id TEXT NOT NULL REFERENCES corpus_documents(doc_id) ON DELETE CASCADE,
+      page INT NOT NULL,
+      chunk_text TEXT NOT NULL,
+      embedding vector(768) NOT NULL,
+      embedding_model TEXT NOT NULL,
+      parser_backend TEXT NOT NULL,
+      pipeline_version TEXT NOT NULL,
+      run_id TEXT,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  await db`CREATE INDEX IF NOT EXISTS idx_corpus_chunks_doc_id ON corpus_chunks(doc_id)`;
+  await db`CREATE INDEX IF NOT EXISTS idx_corpus_chunks_unit_id ON corpus_chunks(unit_id)`;
+
+  await db`
+    CREATE TABLE IF NOT EXISTS corpus_ingest_runs (
+      run_id TEXT PRIMARY KEY,
+      source_policy TEXT NOT NULL,
+      parser_backend TEXT NOT NULL,
+      embedding_backend TEXT NOT NULL,
+      embedding_model TEXT NOT NULL,
+      embedding_dimension INT NOT NULL,
+      mlx_model TEXT,
+      pipeline_version TEXT NOT NULL,
+      diagnostics JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
 
   // Learner profiles (full rich profile with concept coverage)
   await db`
@@ -1237,4 +1352,179 @@ export async function updateLearnerProfileFromEvent(
 
   // Save updated profile
   return saveLearnerProfile(learnerId, currentProfile);
+}
+
+// ============================================================================
+// Processed corpus read operations
+// ============================================================================
+
+function parseJsonField<T>(value: unknown, fallback: T): T {
+  if (value == null) return fallback;
+  if (typeof value === 'object') return value as T;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
+export async function getCorpusManifest(): Promise<CorpusManifestDocumentRow[]> {
+  const db = getDb();
+  const rows = await db`
+    SELECT
+      d.doc_id,
+      d.title,
+      d.filename,
+      d.sha256,
+      d.page_count,
+      d.parser_backend,
+      d.pipeline_version,
+      d.run_id,
+      d.created_at,
+      COUNT(DISTINCT u.unit_id)::int AS unit_count,
+      COUNT(DISTINCT c.chunk_id)::int AS chunk_count
+    FROM corpus_documents d
+    LEFT JOIN corpus_units u ON u.doc_id = d.doc_id
+    LEFT JOIN corpus_chunks c ON c.doc_id = d.doc_id
+    GROUP BY
+      d.doc_id, d.title, d.filename, d.sha256, d.page_count,
+      d.parser_backend, d.pipeline_version, d.run_id, d.created_at
+    ORDER BY d.created_at DESC
+  `;
+
+  return rows.map((row) => ({
+    docId: row.doc_id,
+    title: row.title,
+    filename: row.filename,
+    sha256: row.sha256,
+    pageCount: Number(row.page_count ?? 0),
+    parserBackend: row.parser_backend,
+    pipelineVersion: row.pipeline_version,
+    runId: row.run_id ?? null,
+    unitCount: Number(row.unit_count ?? 0),
+    chunkCount: Number(row.chunk_count ?? 0),
+    createdAt: new Date(row.created_at).toISOString(),
+  }));
+}
+
+export async function getCorpusUnitsIndex(): Promise<CorpusUnitRow[]> {
+  const db = getDb();
+  const rows = await db`
+    SELECT
+      unit_id, doc_id, concept_id, title, summary, content_markdown,
+      difficulty, page_start, page_end, run_id, metadata, created_at
+    FROM corpus_units
+    ORDER BY created_at DESC
+  `;
+
+  return rows.map((row) => ({
+    unitId: row.unit_id,
+    docId: row.doc_id,
+    conceptId: row.concept_id ?? null,
+    title: row.title,
+    summary: row.summary,
+    contentMarkdown: row.content_markdown,
+    difficulty: row.difficulty ?? null,
+    pageStart: Number(row.page_start ?? 0),
+    pageEnd: Number(row.page_end ?? 0),
+    runId: row.run_id ?? null,
+    metadata: parseJsonField<Record<string, unknown> | null>(row.metadata, null),
+    createdAt: new Date(row.created_at).toISOString(),
+  }));
+}
+
+export async function getCorpusUnitById(unitId: string): Promise<CorpusUnitRow | null> {
+  const db = getDb();
+  const [row] = await db`
+    SELECT
+      unit_id, doc_id, concept_id, title, summary, content_markdown,
+      difficulty, page_start, page_end, run_id, metadata, created_at
+    FROM corpus_units
+    WHERE unit_id = ${unitId}
+    LIMIT 1
+  `;
+  if (!row) return null;
+  return {
+    unitId: row.unit_id,
+    docId: row.doc_id,
+    conceptId: row.concept_id ?? null,
+    title: row.title,
+    summary: row.summary,
+    contentMarkdown: row.content_markdown,
+    difficulty: row.difficulty ?? null,
+    pageStart: Number(row.page_start ?? 0),
+    pageEnd: Number(row.page_end ?? 0),
+    runId: row.run_id ?? null,
+    metadata: parseJsonField<Record<string, unknown> | null>(row.metadata, null),
+    createdAt: new Date(row.created_at).toISOString(),
+  };
+}
+
+export async function getCorpusChunksByUnitId(unitId: string, limit = 50): Promise<CorpusChunkRow[]> {
+  const db = getDb();
+  const rows = await db`
+    SELECT
+      chunk_id, unit_id, doc_id, page, chunk_text, run_id, metadata, created_at
+    FROM corpus_chunks
+    WHERE unit_id = ${unitId}
+    ORDER BY page ASC, chunk_id ASC
+    LIMIT ${Math.max(1, Math.min(limit, 200))}
+  `;
+
+  return rows.map((row) => ({
+    chunkId: row.chunk_id,
+    unitId: row.unit_id,
+    docId: row.doc_id,
+    page: Number(row.page ?? 0),
+    chunkText: row.chunk_text,
+    runId: row.run_id ?? null,
+    metadata: parseJsonField<Record<string, unknown> | null>(row.metadata, null),
+    createdAt: new Date(row.created_at).toISOString(),
+  }));
+}
+
+export async function searchCorpus(
+  query: string,
+  limit = 10,
+): Promise<Array<CorpusChunkRow & { unitTitle: string; conceptId: string | null; summary: string }>> {
+  const db = getDb();
+  const q = `%${query.toLowerCase()}%`;
+  const rows = await db`
+    SELECT
+      c.chunk_id,
+      c.unit_id,
+      c.doc_id,
+      c.page,
+      c.chunk_text,
+      c.run_id,
+      c.metadata,
+      c.created_at,
+      u.title AS unit_title,
+      u.concept_id,
+      u.summary
+    FROM corpus_chunks c
+    INNER JOIN corpus_units u ON u.unit_id = c.unit_id
+    WHERE LOWER(c.chunk_text) LIKE ${q}
+       OR LOWER(u.title) LIKE ${q}
+       OR LOWER(COALESCE(u.summary, '')) LIKE ${q}
+    ORDER BY c.created_at DESC
+    LIMIT ${Math.max(1, Math.min(limit, 100))}
+  `;
+
+  return rows.map((row) => ({
+    chunkId: row.chunk_id,
+    unitId: row.unit_id,
+    docId: row.doc_id,
+    page: Number(row.page ?? 0),
+    chunkText: row.chunk_text,
+    runId: row.run_id ?? null,
+    metadata: parseJsonField<Record<string, unknown> | null>(row.metadata, null),
+    createdAt: new Date(row.created_at).toISOString(),
+    unitTitle: row.unit_title,
+    conceptId: row.concept_id ?? null,
+    summary: row.summary ?? '',
+  }));
 }

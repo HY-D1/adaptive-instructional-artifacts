@@ -25,6 +25,7 @@ import { neonTextbooksRouter } from './routes/neon-textbooks.js';
 import { neonSessionsRouter } from './routes/neon-sessions.js';
 import { authRouter } from './routes/auth.js';
 import { instructorRouter } from './routes/instructor.js';
+import { corpusRouter } from './routes/corpus.js';
 import {
   ENABLE_LLM,
   CORS_ORIGIN_PATTERNS,
@@ -200,6 +201,7 @@ if (usingNeon) {
 app.use('/api/auth', authRouter);
 app.use('/api/research', requireAuth, requireInstructor, researchRouter);
 app.use('/api/instructor', requireAuth, instructorRouter);
+app.use('/api/corpus', corpusRouter);
 app.use('/api/pdf-index', pdfIndexRouter);
 app.use('/api/llm', llmRouter);
 

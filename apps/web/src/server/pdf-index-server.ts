@@ -51,6 +51,10 @@ export type PdfIndexDiskLoadResult = {
 export async function loadOrBuildPdfIndexFromDisk(
   config: PdfIndexDiskConfig
 ): Promise<PdfIndexDiskLoadResult> {
+  if (String(process.env.VITE_TEXTBOOK_CORPUS_MODE ?? '').toLowerCase() === 'remote') {
+    throw new Error('PDF index server is disabled when VITE_TEXTBOOK_CORPUS_MODE=remote.');
+  }
+
   const existing = await readPdfIndexFromDisk(config.indexDir);
   if (existing && isCompatible(existing.manifest, config)) {
     return {

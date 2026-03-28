@@ -78,6 +78,13 @@ diagrams/
 # Only keep README.md
 textbooks/*.pdf
 textbooks/*.PDF
+raw_pdf/
+
+# Local-only ingest worker artifacts
+tools/pdf_ingest/.venv/
+tools/pdf_ingest/.pytest_cache/
+tools/pdf_ingest/.mypy_cache/
+.local/ingest-runs/
 
 # Generated PDF index (rebuildable from source)
 dist/pdf-index/
@@ -117,3 +124,5 @@ apps/server/dist/
 .vercel
 .gstack/
 .env*.local
+.local/
+.env.pdf-local

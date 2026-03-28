@@ -51,7 +51,7 @@ import { buildPdfIndexOutputFields } from '../lib/api/pdf-retrieval';
 import { createEventId } from '../lib/utils/event-id';
 import { startBackgroundAnalysis, stopBackgroundAnalysis, runAnalysisOnce, ANALYSIS_INTERVAL_MS } from '../lib/trace-analyzer';
 import type { AnalysisResult } from '../lib/trace-analyzer';
-import { getConcept } from '../lib/content/concept-loader';
+import { getConcept, getTextbookCorpusMode } from '../lib/content/concept-loader';
 import { banditManager, PROFILE_TO_ARM_ID, BANDIT_ARM_PROFILES } from '../lib/ml/learner-bandit-manager';
 import { calculateHDI, calculateHDIComponents } from '../lib/ml/hdi-calculator';
 import type { HDIComponents, HDILevel } from '../types';
@@ -297,6 +297,7 @@ export function LearningInterface() {
   const [currentProfileId, setCurrentProfileId] = useState<BanditArmId>('adaptive');
   const [currentEscalationProfile, setCurrentEscalationProfile] = useState<EscalationProfile | null>(null);
   const isDev = import.meta.env.DEV;
+  const textbookCorpusMode = useMemo(() => getTextbookCorpusMode(), []);
   
   // Week 5: HDI tracking state (unified 5-component calculator)
   const [currentHDI, setCurrentHDI] = useState<number>(0);
@@ -330,6 +331,10 @@ export function LearningInterface() {
     const previewMode = localStorage.getItem('sql-adapt-preview-mode') === 'true';
     setIsPreviewMode(previewMode);
   }, []);
+
+  useEffect(() => {
+    console.info('[corpus] LearningInterface corpus_mode=%s', textbookCorpusMode);
+  }, [textbookCorpusMode]);
   
   // State refresh trigger for debug profile/strategy cross-tab sync
   const [debugRefreshKey, setDebugRefreshKey] = useState(0);

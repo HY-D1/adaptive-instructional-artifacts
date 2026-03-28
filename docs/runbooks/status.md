@@ -310,3 +310,74 @@ Changed files (this checkpoint scope):
 
 Next smallest fix:
 - Run the full deployed launch-smoke gate (`@deployed-auth-smoke` + `student-multi-device-persistence` + `instructor-section-scope` + `api-authz`) to confirm no regressions outside this targeted blocker path.
+
+## Checkpoint — 2026-03-27 17:28 PDT
+
+Status: **PARTIAL**
+
+Evidence:
+- Branch created from current dirty worktree without discarding local edits:
+  - `git checkout -b feat/local-pdf-ingest-remote-corpus` ✅
+  - working state retained (`.gitignore`, `package.json`, `package-lock.json`, untracked `raw_pdf/`, `tests/unit 2/`).
+- Start protocol rerun from repo root:
+  - `npm run build` ✅ (Vite build completed; chunk-size warnings only)
+  - `npm run server:build` ✅
+  - `npm run replay:gate` ✅ with `toy: SKIPPED` (`fixture/policy inputs changed`)
+- Local ingest environment checks:
+  - `source tools/pdf_ingest/.venv/bin/activate && python -V` ✅ (`Python 3.11.15`)
+  - `python -c "import docling, mlx"` ✅
+  - `python -c "from mlx_lm import load, generate"` ❌ in Codex sandbox (`NSRangeException` / Metal device init)
+- Ollama embedding smoke (local host call):
+  - `POST http://localhost:11434/api/embed` with `embeddinggemma` ✅
+  - `embedding_dimension=768`
+- Host metadata captured:
+  - `machine=arm64`
+  - `os=macOS-26.4-arm64-arm-64bit`
+  - `python=3.11.15`
+  - `psycopg=3.3.3`
+
+Policy/version contract recorded:
+- `LOCAL_CORPUS_PIPELINE_VERSION=v1`
+- `source_policy=local_only_raw_remote_processed`
+- `embedding_model=embeddinggemma`
+- `embedding_dimension=768`
+
+Next smallest step:
+- Implement in-repo local ingest worker (`tools/pdf_ingest`) that emits processed-only bundle artifacts to `.local/ingest-runs/<run_id>/`, then add Neon corpus upload/read path and remote/static runtime fallback.
+
+## Checkpoint — 2026-03-27 17:48 PDT
+
+Status: **PARTIAL**
+
+Scope implemented:
+- Added local ingest worker package under `tools/pdf_ingest/` (`cli`, `docling_pipeline`, `chunking`, `mlx_enricher`, `export_bundle`, schemas, tests).
+- Added Neon processed-corpus schema + runtime read APIs:
+  - tables: `corpus_documents`, `corpus_units`, `corpus_chunks`, `corpus_ingest_runs`
+  - routes: `GET /api/corpus/manifest`, `GET /api/corpus/unit/:unitId`, `POST /api/corpus/search`
+- Added frontend remote/static corpus mode integration:
+  - `VITE_TEXTBOOK_CORPUS_MODE=static|remote`
+  - concept loader now prefers remote corpus when configured, then falls back to static textbook assets.
+- Added scripts/docs/tests:
+  - npm scripts: `ingest:setup`, `ingest:extract`, `ingest:upload`, `ingest:smoke`, `corpus:verify`
+  - docs updated: `README.md`, `docs/DEPLOYMENT.md`
+
+Build/test evidence:
+- `npm run server:build` ✅
+- `npm run build` ✅
+- `npm run replay:gate` ✅ (`toy: SKIPPED`)
+- `npx vitest run apps/web/src/app/lib/content/concept-loader.test.ts tests/unit/server/neon-corpus.contract.test.ts` ✅ (39 passed)
+- `source tools/pdf_ingest/.venv/bin/activate && PYTHONPATH=tools/pdf_ingest/src python -m pytest -q tools/pdf_ingest/tests/test_bundle_schema.py tools/pdf_ingest/tests/test_upload_idempotency.py` ✅ (2 passed)
+- `npm run ingest:setup` ✅
+- `LOCAL_PDF_SOURCE_DIR=raw_pdf npm run ingest:extract` ❌
+  - Docling reported input PDF invalid and emitted empty markdown (`ConversionStatus.FAILURE`) for `dbms-ramakrishnan-3rd-edition.pdf` in this environment.
+
+Policy/version logging:
+- `LOCAL_CORPUS_PIPELINE_VERSION=v1`
+- `source_policy=local_only_raw_remote_processed`
+- `embedding_model=embeddinggemma`
+- `embedding_dimension=768`
+
+Unverified / blockers:
+- Real local extraction on provided textbooks is blocked by Docling parse failure in this environment.
+- Neon upload smoke (`ingest:upload`, `corpus:verify`) is unverified in this run due no successful local bundle extraction.
+- Sample real remote `doc_id` and `run_id` pending first successful ingest+upload run.

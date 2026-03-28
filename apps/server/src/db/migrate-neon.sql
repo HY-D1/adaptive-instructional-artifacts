@@ -247,6 +247,76 @@ CREATE INDEX IF NOT EXISTS idx_textbook_unit_event_links_unit_id ON textbook_uni
 CREATE INDEX IF NOT EXISTS idx_textbook_unit_event_links_event_id ON textbook_unit_event_links(event_id);
 
 -- ============================================================================
+-- Processed corpus tables (local-only raw PDF -> remote Neon corpus)
+-- ============================================================================
+
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE IF NOT EXISTS corpus_documents (
+  doc_id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  filename TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  page_count INT NOT NULL,
+  parser_backend TEXT NOT NULL,
+  pipeline_version TEXT NOT NULL,
+  run_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (doc_id, sha256, pipeline_version)
+);
+
+CREATE TABLE IF NOT EXISTS corpus_units (
+  unit_id TEXT PRIMARY KEY,
+  doc_id TEXT NOT NULL REFERENCES corpus_documents(doc_id) ON DELETE CASCADE,
+  concept_id TEXT,
+  title TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  content_markdown TEXT NOT NULL,
+  difficulty TEXT,
+  page_start INT NOT NULL,
+  page_end INT NOT NULL,
+  parser_backend TEXT NOT NULL,
+  pipeline_version TEXT NOT NULL,
+  run_id TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_corpus_units_doc_id ON corpus_units(doc_id);
+CREATE INDEX IF NOT EXISTS idx_corpus_units_concept_id ON corpus_units(concept_id);
+
+CREATE TABLE IF NOT EXISTS corpus_chunks (
+  chunk_id TEXT PRIMARY KEY,
+  unit_id TEXT NOT NULL REFERENCES corpus_units(unit_id) ON DELETE CASCADE,
+  doc_id TEXT NOT NULL REFERENCES corpus_documents(doc_id) ON DELETE CASCADE,
+  page INT NOT NULL,
+  chunk_text TEXT NOT NULL,
+  embedding vector(768) NOT NULL,
+  embedding_model TEXT NOT NULL,
+  parser_backend TEXT NOT NULL,
+  pipeline_version TEXT NOT NULL,
+  run_id TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_corpus_chunks_doc_id ON corpus_chunks(doc_id);
+CREATE INDEX IF NOT EXISTS idx_corpus_chunks_unit_id ON corpus_chunks(unit_id);
+
+CREATE TABLE IF NOT EXISTS corpus_ingest_runs (
+  run_id TEXT PRIMARY KEY,
+  source_policy TEXT NOT NULL,
+  parser_backend TEXT NOT NULL,
+  embedding_backend TEXT NOT NULL,
+  embedding_model TEXT NOT NULL,
+  embedding_dimension INT NOT NULL,
+  mlx_model TEXT,
+  pipeline_version TEXT NOT NULL,
+  diagnostics JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================================
 -- Verification query
 -- ============================================================================
 

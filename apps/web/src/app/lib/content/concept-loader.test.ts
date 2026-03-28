@@ -5,11 +5,18 @@ import {
   loadConceptContent,
   clearConceptMapCache,
   getCompatibleCorpusIds,
+  getTextbookCorpusMode,
   ConceptInfo
 } from './concept-loader';
 
 // Mock fetch globally
 global.fetch = vi.fn();
+
+describe('getTextbookCorpusMode', () => {
+  it('defaults to static when env is missing', () => {
+    expect(getTextbookCorpusMode()).toBe('static');
+  });
+});
 
 describe('resolveConceptId', () => {
   const mockConcepts: Record<string, ConceptInfo> = {

@@ -20,6 +20,12 @@ import * as neonDb from './neon.js';
 import * as sqliteDb from './sqlite.js';
 import { hasDbEnv } from './env-resolver.js';
 
+export type {
+  CorpusChunkRow,
+  CorpusManifestDocumentRow,
+  CorpusUnitRow,
+} from './neon.js';
+
 // Re-export legacy SQLite functions for existing routes
 // These are used by the legacy routes that haven't been migrated to the unified interface
 export * from './sqlite.js';
@@ -212,6 +218,30 @@ export async function deleteTextbookUnit(userId: string, unitId: string): Promis
   return isUsingNeon()
     ? neonDb.deleteTextbookUnit(userId, unitId)
     : sqliteDb.deleteTextbookUnit(userId, unitId);
+}
+
+// ============================================================================
+// Processed corpus read operations (Neon only)
+// ============================================================================
+
+export async function getCorpusManifest() {
+  return isUsingNeon() ? neonDb.getCorpusManifest() : [];
+}
+
+export async function getCorpusUnitById(unitId: string) {
+  return isUsingNeon() ? neonDb.getCorpusUnitById(unitId) : null;
+}
+
+export async function getCorpusUnitsIndex() {
+  return isUsingNeon() ? neonDb.getCorpusUnitsIndex() : [];
+}
+
+export async function getCorpusChunksByUnitId(unitId: string, limit = 50) {
+  return isUsingNeon() ? neonDb.getCorpusChunksByUnitId(unitId, limit) : [];
+}
+
+export async function searchCorpus(query: string, limit = 10) {
+  return isUsingNeon() ? neonDb.searchCorpus(query, limit) : [];
 }
 
 // ============================================================================

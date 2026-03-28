@@ -257,6 +257,46 @@ interface InstructorLearnerItem {
   lastInteractionAt: string | null;
 }
 
+export interface RemoteCorpusDocument {
+  docId: string;
+  title: string;
+  filename: string;
+  sha256: string;
+  pageCount: number;
+  parserBackend: string;
+  pipelineVersion: string;
+  runId: string | null;
+  unitCount: number;
+  chunkCount: number;
+  createdAt: string;
+}
+
+export interface RemoteCorpusUnit {
+  unitId: string;
+  docId: string;
+  conceptId: string | null;
+  title: string;
+  summary: string;
+  contentMarkdown: string;
+  difficulty: string | null;
+  pageStart: number;
+  pageEnd: number;
+  runId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface RemoteCorpusChunk {
+  chunkId: string;
+  unitId: string;
+  docId: string;
+  page: number;
+  chunkText: string;
+  runId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
 // ============================================================================
 // HTTP Client
 // ============================================================================
@@ -1029,6 +1069,59 @@ export async function getLearnerTrajectory(learnerId: string): Promise<{
 }
 
 // ============================================================================
+// Remote corpus API
+// ============================================================================
+
+export async function fetchCorpusManifest(): Promise<RemoteCorpusDocument[]> {
+  const response = await fetchApi<{ documents: RemoteCorpusDocument[]; units: RemoteCorpusUnit[] }>('/corpus/manifest', {
+    method: 'GET',
+  });
+  if (!response.success || !response.data) return [];
+  return response.data.documents;
+}
+
+export async function fetchCorpusManifestWithUnits(): Promise<{
+  documents: RemoteCorpusDocument[];
+  units: RemoteCorpusUnit[];
+} | null> {
+  const response = await fetchApi<{ documents: RemoteCorpusDocument[]; units: RemoteCorpusUnit[] }>('/corpus/manifest', {
+    method: 'GET',
+  });
+  if (!response.success || !response.data) return null;
+  return response.data;
+}
+
+export async function fetchCorpusUnit(unitId: string): Promise<{
+  unit: RemoteCorpusUnit;
+  chunks: RemoteCorpusChunk[];
+} | null> {
+  const response = await fetchApi<{
+    unit: RemoteCorpusUnit;
+    chunks: RemoteCorpusChunk[];
+  }>(`/corpus/unit/${encodeURIComponent(unitId)}`, {
+    method: 'GET',
+  });
+  if (!response.success || !response.data) return null;
+  return response.data;
+}
+
+export async function searchCorpusChunks(
+  query: string,
+  limit = 10,
+): Promise<Array<RemoteCorpusChunk & { unitTitle: string; conceptId: string | null; summary: string }>> {
+  const response = await fetchApi<{
+    query: string;
+    limit: number;
+    results: Array<RemoteCorpusChunk & { unitTitle: string; conceptId: string | null; summary: string }>;
+  }>('/corpus/search', {
+    method: 'POST',
+    body: JSON.stringify({ query, limit }),
+  });
+  if (!response.success || !response.data) return [];
+  return response.data.results;
+}
+
+// ============================================================================
 // Export
 // ============================================================================
 
@@ -1064,6 +1157,10 @@ export const storageClient = {
   getInstructorLearners,
   getInstructorLearnerDetail,
   getInstructorExport,
+  fetchCorpusManifest,
+  fetchCorpusManifestWithUnits,
+  fetchCorpusUnit,
+  searchCorpusChunks,
 };
 
 export default storageClient;

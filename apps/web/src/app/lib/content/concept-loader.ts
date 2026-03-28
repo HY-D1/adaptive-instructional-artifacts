@@ -2,6 +2,11 @@ import { storage } from '../storage/storage';
 import type { PdfIndexChunk, SQLProblem } from '../../types';
 import { sqlProblems } from '../../data/problems';
 import { CONCEPT_COMPATIBILITY_MAP, getCompatibleCorpusIds } from './concept-compatibility-map';
+import {
+  fetchCorpusManifestWithUnits,
+  fetchCorpusUnit,
+  type RemoteCorpusUnit,
+} from '../api/storage-client';
 
 export { getCompatibleCorpusIds };
 
@@ -183,6 +188,56 @@ function normalizeTextbookUnitsFile(raw: Record<string, unknown>): TextbookUnits
 let conceptMapCache: ConceptMapData | null = null;
 let conceptQualityCache: ConceptQualityFile | null | false = false; // false = not yet fetched
 let textbookUnitsCache: TextbookUnitsFile | null | false = false;   // false = not yet fetched
+let remoteConceptToUnitId: Record<string, string> = {};
+
+function normalizeDifficulty(value: string | null | undefined): ConceptInfo['difficulty'] {
+  if (value === 'beginner' || value === 'intermediate' || value === 'advanced') {
+    return value;
+  }
+  return 'intermediate';
+}
+
+export function getTextbookCorpusMode(): 'remote' | 'static' {
+  const mode = String(import.meta.env.VITE_TEXTBOOK_CORPUS_MODE ?? 'static').trim().toLowerCase();
+  return mode === 'remote' ? 'remote' : 'static';
+}
+
+function buildConceptMapFromRemoteUnits(units: RemoteCorpusUnit[]): ConceptMapData | null {
+  if (!units.length) return null;
+
+  const concepts: Record<string, ConceptInfo> = {};
+  const conceptToUnit: Record<string, string> = {};
+  for (const unit of units) {
+    const conceptKey = unit.conceptId || unit.unitId;
+    const summary = unit.summary || '';
+    const estimatedReadTime = Math.max(1, Math.ceil(summary.split(/\s+/).filter(Boolean).length / 180));
+    concepts[conceptKey] = {
+      id: conceptKey,
+      title: unit.title,
+      definition: summary,
+      difficulty: normalizeDifficulty(unit.difficulty),
+      estimatedReadTime,
+      pageNumbers: [unit.pageStart, unit.pageEnd].filter((v, idx, arr) => Number.isFinite(v) && arr.indexOf(v) === idx),
+      chunkIds: {
+        definition: [],
+        examples: [],
+        commonMistakes: [],
+      },
+      relatedConcepts: [],
+      practiceProblemIds: [],
+      sourceDocId: unit.docId,
+    };
+    conceptToUnit[conceptKey] = unit.unitId;
+  }
+
+  remoteConceptToUnitId = conceptToUnit;
+  return {
+    version: 'remote-corpus-v1',
+    generatedAt: new Date().toISOString(),
+    sourceDocIds: Array.from(new Set(units.map((u) => u.docId))),
+    concepts,
+  };
+}
 
 /**
  * Clear the concept map cache. Used for testing.
@@ -191,6 +246,7 @@ export function clearConceptMapCache(): void {
   conceptMapCache = null;
   conceptQualityCache = false;
   textbookUnitsCache = false;
+  remoteConceptToUnitId = {};
 }
 
 /**
@@ -298,10 +354,26 @@ export async function loadConceptMap(): Promise<ConceptMapData | null> {
     return conceptMapCache;
   }
 
+  if (getTextbookCorpusMode() === 'remote') {
+    try {
+      const manifest = await fetchCorpusManifestWithUnits();
+      const remoteMap = buildConceptMapFromRemoteUnits(manifest?.units ?? []);
+      if (remoteMap) {
+        conceptMapCache = remoteMap;
+        console.info('[corpus] mode=remote source=remote documents=%d units=%d', manifest?.documents.length ?? 0, manifest?.units.length ?? 0);
+        return conceptMapCache;
+      }
+      console.warn('[corpus] mode=remote but no remote units found; falling back to static textbook corpus');
+    } catch {
+      console.warn('[corpus] mode=remote manifest fetch failed; falling back to static textbook corpus');
+    }
+  }
+
   try {
     const response = await fetch('/textbook-static/concept-map.json');
     if (!response.ok) return null;
     conceptMapCache = await response.json();
+    console.info('[corpus] mode=%s source=static', getTextbookCorpusMode());
     return conceptMapCache;
   } catch {
     return null;
@@ -339,6 +411,28 @@ export async function loadConceptQuality(): Promise<ConceptQualityFile | null> {
  */
 export async function loadTextbookUnitsMeta(): Promise<TextbookUnitsFile | null> {
   if (textbookUnitsCache !== false) return textbookUnitsCache;
+
+  if (getTextbookCorpusMode() === 'remote') {
+    try {
+      const manifest = await fetchCorpusManifestWithUnits();
+      if (manifest?.units?.length) {
+        textbookUnitsCache = {
+          version: 'remote-corpus-v1',
+          generatedAt: new Date().toISOString(),
+          units: manifest.units.map((u) => ({
+            id: u.conceptId || u.unitId,
+            sourceDocId: u.docId,
+            sectionTitle: u.title,
+            displayOrder: undefined,
+          })),
+        };
+        return textbookUnitsCache;
+      }
+    } catch {
+      // fallback to static below
+    }
+  }
+
   try {
     const res = await fetch('/textbook-static/textbook-units.json');
     if (!res.ok) {
@@ -396,8 +490,27 @@ export async function getConcept(conceptId: string): Promise<ConceptInfo | null>
 export async function loadConceptContent(conceptId: string): Promise<LoadedConcept | null> {
   const concept = await getConcept(conceptId);
   if (!concept) return null;
-  
-  const markdown = await fetchConceptMarkdown(conceptId, concept);
+
+  let markdown: string | null = null;
+
+  if (getTextbookCorpusMode() === 'remote') {
+    const map = await loadConceptMap();
+    const resolvedId = map ? resolveConceptId(conceptId, map.concepts) : conceptId;
+    const unitId = remoteConceptToUnitId[resolvedId] || remoteConceptToUnitId[concept.id] || resolvedId;
+    const remote = await fetchCorpusUnit(unitId);
+    if (remote?.unit?.contentMarkdown) {
+      markdown = remote.unit.contentMarkdown;
+      console.info('[corpus] corpus_mode=remote corpus_source=remote corpus_doc_id=%s corpus_unit_id=%s', remote.unit.docId, remote.unit.unitId);
+    }
+  }
+
+  if (!markdown) {
+    markdown = await fetchConceptMarkdown(conceptId, concept);
+    if (markdown) {
+      console.info('[corpus] corpus_mode=%s corpus_source=static', getTextbookCorpusMode());
+    }
+  }
+
   if (!markdown) return null;
   
   return {

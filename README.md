@@ -340,38 +340,44 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ## PDF/Textbook Processing
 
-> ⚠️ **External Dependency Required**: The PDF processing pipeline requires an external helper tool (`algl-pdf-helper`) that is **not included** in this repository.
+The repository now includes a local ingest worker at `tools/pdf_ingest/` for local-only raw PDF processing.
 
-### What is `algl-pdf-helper`?
+### Local-Only Raw PDF Policy (Launch Hardening)
 
-The `algl-pdf-helper` is a separate repository/workspace containing proprietary PDF processing utilities used to:
-- Extract and process textbook PDF content
-- Generate structured concept mappings
-- Export processed content to the application's textbook system
+- Raw PDFs must remain local-only on the instructor/research Mac.
+- Raw PDFs must never be uploaded to Neon, committed to git, or required by hosted Vercel runtime paths.
+- Only processed corpus artifacts (manifest/units/chunks/diagnostics) may be uploaded to Neon.
 
-### Script References in package.json
+Tracking contract for local corpus runs:
 
-The following npm scripts reference this external tool:
+- `LOCAL_CORPUS_PIPELINE_VERSION=v1`
+- `source_policy=local_only_raw_remote_processed`
+- `embedding_model=embeddinggemma`
+- `embedding_dimension=768`
+- machine/os/python metadata in `docs/runbooks/status.md` checkpoints
 
-| Script | Command | Purpose |
-|--------|---------|---------|
-| `textbook:process` | `cd ../algl-pdf-helper && ./start.sh` | Process PDF files and generate textbook content |
-| `textbook:export` | `cd ../algl-pdf-helper && algl-pdf export` | Export processed content to the application |
+### In-repo ingest workflow
 
-### If the Helper is Not Available
+```bash
+npm run ingest:setup
+LOCAL_PDF_SOURCE_DIR=/absolute/path/to/local/pdfs npm run ingest:extract
+DATABASE_URL=... npm run ingest:upload
+DATABASE_URL=... npm run corpus:verify
+```
 
-**Cloning this repository alone is not sufficient** to reproduce the full PDF processing pipeline. If you do not have access to `algl-pdf-helper`:
+New scripts:
 
-1. **Use the built-in PDF index commands** (sufficient for most development):
-   ```bash
-   npm run pdf:index    # Build search index from PDF files
-   npm run pdf:search   # Search the index
-   npm run pdf:query    # Query with natural language
-   ```
+- `ingest:setup` — verify local python/docling/mlx toolchain
+- `ingest:extract` — parse local PDF with Docling and emit processed bundle
+- `ingest:upload` — upload processed-only bundle artifacts to Neon corpus tables
+- `ingest:smoke` — extract + upload + fetch `/api/corpus/manifest`
+- `corpus:verify` — validate corpus row counts and provenance invariants in Neon
 
-2. **The application includes pre-processed textbook content** in `apps/web/public/textbook-static/` that is sufficient for development and testing.
+### Remote runtime mode
 
-3. **To obtain the helper tool**: Contact the project maintainers for access to the `algl-pdf-helper` repository.
+- Set `VITE_TEXTBOOK_CORPUS_MODE=remote` to prefer Neon-backed corpus APIs at runtime.
+- If remote corpus is unavailable, the app falls back to static textbook assets in `apps/web/public/textbook-static/`.
+- Hosted runtime does not require local PDF filesystem access.
 
 ---
 
