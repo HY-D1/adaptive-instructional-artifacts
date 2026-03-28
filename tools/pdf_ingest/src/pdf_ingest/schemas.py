@@ -96,6 +96,7 @@ class ManifestRecord(BaseModel):
     run_id: str
     schema_version: str
     pipeline_version: str
+    product_fit_eval_version: str | None = None
     source_policy: str
     parser_backend: str
     embedding_model: str

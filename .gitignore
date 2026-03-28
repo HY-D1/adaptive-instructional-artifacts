@@ -70,6 +70,7 @@ PROFILE_VALIDATION_TEST_REPORT.md
 !docs/README.md
 !docs/week1-status.md
 !docs/runbooks/*.md
+!docs/research/corpus-product-fit-audit.md
 
 # Architecture diagrams (local only)
 diagrams/

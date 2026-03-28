@@ -189,6 +189,7 @@ let conceptMapCache: ConceptMapData | null = null;
 let conceptQualityCache: ConceptQualityFile | null | false = false; // false = not yet fetched
 let textbookUnitsCache: TextbookUnitsFile | null | false = false;   // false = not yet fetched
 let remoteConceptToUnitId: Record<string, string> = {};
+let remoteConceptChunks: Record<string, PdfIndexChunk[]> = {};
 
 function normalizeDifficulty(value: string | null | undefined): ConceptInfo['difficulty'] {
   if (value === 'beginner' || value === 'intermediate' || value === 'advanced') {
@@ -207,13 +208,22 @@ function buildConceptMapFromRemoteUnits(units: RemoteCorpusUnit[]): ConceptMapDa
 
   const concepts: Record<string, ConceptInfo> = {};
   const conceptToUnit: Record<string, string> = {};
+  const conceptToChunks: Record<string, PdfIndexChunk[]> = {};
   for (const unit of units) {
+    const qualityFlags = unit.qualityFlags ?? [];
+    if (qualityFlags.includes('drop_from_learning_page')) {
+      continue;
+    }
+
     const conceptKey = unit.conceptId || unit.unitId;
-    const summary = unit.summary || '';
+    const title = unit.displayTitle || unit.title;
+    const summary = unit.displaySummary || unit.summary || '';
+    const hintSource = unit.hintSourceExcerpt || summary || unit.contentMarkdown || '';
+    const hintChunkText = hintSource.length > 240 ? `${hintSource.slice(0, 240).trim()}...` : hintSource;
     const estimatedReadTime = Math.max(1, Math.ceil(summary.split(/\s+/).filter(Boolean).length / 180));
     concepts[conceptKey] = {
       id: conceptKey,
-      title: unit.title,
+      title,
       definition: summary,
       difficulty: normalizeDifficulty(unit.difficulty),
       estimatedReadTime,
@@ -228,9 +238,16 @@ function buildConceptMapFromRemoteUnits(units: RemoteCorpusUnit[]): ConceptMapDa
       sourceDocId: unit.docId,
     };
     conceptToUnit[conceptKey] = unit.unitId;
+    conceptToChunks[conceptKey] = [{
+      chunkId: `${unit.unitId}#hint-source`,
+      docId: unit.docId,
+      page: unit.pageStart,
+      text: hintChunkText,
+    }];
   }
 
   remoteConceptToUnitId = conceptToUnit;
+  remoteConceptChunks = conceptToChunks;
   return {
     version: 'remote-corpus-v1',
     generatedAt: new Date().toISOString(),
@@ -247,6 +264,7 @@ export function clearConceptMapCache(): void {
   conceptQualityCache = false;
   textbookUnitsCache = false;
   remoteConceptToUnitId = {};
+  remoteConceptChunks = {};
 }
 
 /**
@@ -499,7 +517,12 @@ export async function loadConceptContent(conceptId: string): Promise<LoadedConce
     const unitId = remoteConceptToUnitId[resolvedId] || remoteConceptToUnitId[concept.id] || resolvedId;
     const remote = await fetchCorpusUnit(unitId);
     if (remote?.unit?.contentMarkdown) {
-      markdown = remote.unit.contentMarkdown;
+      const qualityFlags = remote.unit.qualityFlags ?? [];
+      if (qualityFlags.includes('high_noise') && remote.unit.explanationContext) {
+        markdown = `## Definition\n${remote.unit.displaySummary || remote.unit.summary || ''}\n\n## Explanation\n${remote.unit.explanationContext}`;
+      } else {
+        markdown = remote.unit.contentMarkdown;
+      }
       console.info('[corpus] corpus_mode=remote corpus_source=remote corpus_doc_id=%s corpus_unit_id=%s', remote.unit.docId, remote.unit.unitId);
     }
   }
@@ -895,16 +918,24 @@ export function getConceptChunks(
   conceptId: string, 
   type?: 'definition' | 'examples' | 'commonMistakes'
 ): PdfIndexChunk[] | null {
-  const index = storage.getPdfIndex();
   const map = conceptMapCache;
-  
-  if (!index || !map) return null;
+  if (!map) return null;
   
   // Resolve concept ID using same logic as getConcept
   const resolvedId = resolveConceptId(conceptId, map.concepts);
   const concept = map.concepts[resolvedId];
   
   if (!concept) return null;
+
+  if (getTextbookCorpusMode() === 'remote') {
+    const remoteChunks = remoteConceptChunks[resolvedId] || remoteConceptChunks[concept.id];
+    if (remoteChunks && remoteChunks.length > 0) {
+      return remoteChunks;
+    }
+  }
+
+  const index = storage.getPdfIndex();
+  if (!index) return null;
   
   const chunkIds = type 
     ? concept.chunkIds[type]

@@ -1489,10 +1489,19 @@ export async function getCorpusChunksByUnitId(unitId: string, limit = 50): Promi
 export async function searchCorpus(
   query: string,
   limit = 10,
-): Promise<Array<CorpusChunkRow & { unitTitle: string; conceptId: string | null; summary: string }>> {
+): Promise<Array<CorpusChunkRow & { unitTitle: string; conceptId: string | null; summary: string; termHits: number }>> {
   const db = getDb();
-  const q = `%${query.toLowerCase()}%`;
+  const normalized = query.toLowerCase().trim();
+  if (!normalized) {
+    return [];
+  }
+
   const rows = await db`
+    WITH tokens AS (
+      SELECT DISTINCT token
+      FROM regexp_split_to_table(${normalized}, E'\\s+') AS token
+      WHERE token <> ''
+    )
     SELECT
       c.chunk_id,
       c.unit_id,
@@ -1504,13 +1513,24 @@ export async function searchCorpus(
       c.created_at,
       u.title AS unit_title,
       u.concept_id,
-      u.summary
+      u.summary,
+      (
+        SELECT COUNT(*)::int
+        FROM tokens t
+        WHERE LOWER(c.chunk_text) LIKE '%' || t.token || '%'
+           OR LOWER(u.title) LIKE '%' || t.token || '%'
+           OR LOWER(COALESCE(u.summary, '')) LIKE '%' || t.token || '%'
+      ) AS term_hits
     FROM corpus_chunks c
     INNER JOIN corpus_units u ON u.unit_id = c.unit_id
-    WHERE LOWER(c.chunk_text) LIKE ${q}
-       OR LOWER(u.title) LIKE ${q}
-       OR LOWER(COALESCE(u.summary, '')) LIKE ${q}
-    ORDER BY c.created_at DESC
+    WHERE EXISTS (
+      SELECT 1
+      FROM tokens t
+      WHERE LOWER(c.chunk_text) LIKE '%' || t.token || '%'
+         OR LOWER(u.title) LIKE '%' || t.token || '%'
+         OR LOWER(COALESCE(u.summary, '')) LIKE '%' || t.token || '%'
+    )
+    ORDER BY term_hits DESC, c.page ASC, c.chunk_id ASC
     LIMIT ${Math.max(1, Math.min(limit, 100))}
   `;
 
@@ -1526,5 +1546,6 @@ export async function searchCorpus(
     unitTitle: row.unit_title,
     conceptId: row.concept_id ?? null,
     summary: row.summary ?? '',
+    termHits: Number(row.term_hits ?? 0),
   }));
 }

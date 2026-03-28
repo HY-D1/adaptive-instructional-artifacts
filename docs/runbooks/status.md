@@ -535,3 +535,80 @@ Changed files (this checkpoint scope):
 
 Residual risk:
 - Parser quality remains fallback-driven for this source PDF (`docling_fallback_pymupdf`); deployment contract is now green but parser-quality hardening is still pending.
+
+## Checkpoint — 2026-03-27 19:45 PDT
+
+Status: **PARTIAL (local branch passes product-fit gate; deployed API still on pre-hardening behavior)**
+
+Scope completed in this checkpoint:
+- Finished product-fit hardening thread for corpus quality and runtime shaping:
+  - deterministic evaluator + rules with strict per-surface thresholds
+  - minimal ingest and API shaping changes to surface product-facing fields
+  - concept-loader/retrieval wiring and tests for remote corpus hints/explanations
+- Produced full audit artifact with sampled IDs, failing/acceptable examples, and per-surface verdicts:
+  - `docs/research/corpus-product-fit-audit.md`
+- Captured three evidence sources for `docId=dbms-ramakrishnan-3rd-edition` / `runId=run-1774660166-b1353117`:
+  - local bundle/evaluator reports
+  - direct Neon row samples
+  - API payloads (local current branch + deployed)
+
+Version / gate tag:
+- `PRODUCT_FIT_EVAL_VERSION=v1`
+
+Command log (actual reruns in this checkpoint):
+- `npm run build` ✅
+- `npm run server:build` ✅
+- `npx vitest run apps/web/src/app/lib/content/concept-loader.test.ts tests/unit/server/neon-corpus.contract.test.ts apps/web/src/app/lib/content/retrieval-bundle.lib.test.ts` ✅ (54 passed)
+- `bash -lc 'source tools/pdf_ingest/.venv/bin/activate && PYTHONPATH=tools/pdf_ingest/src python -m pytest -q tools/pdf_ingest/tests/test_product_fit_rules.py tools/pdf_ingest/tests/test_bundle_schema.py tools/pdf_ingest/tests/test_upload_idempotency.py tools/pdf_ingest/tests/test_docling_fallback.py'` ✅ (10 passed)
+- `node scripts/evaluate-corpus-product-fit.mjs --doc-id dbms-ramakrishnan-3rd-edition --run-id run-1774660166-b1353117` ✅
+  - source `neon`, `pass_status=false`, `critical_failure_count=47`
+- `node scripts/evaluate-corpus-product-fit.mjs --doc-id dbms-ramakrishnan-3rd-edition --run-id run-1774660166-b1353117 --source api --api-base-url http://127.0.0.1:3001 --output-dir .local/ingest-runs/run-1774660166-b1353117/product-fit-local-api` ✅
+  - source `api` (local current branch), `pass_status=true`, `critical_failure_count=0`
+- `node scripts/evaluate-corpus-product-fit.mjs --doc-id dbms-ramakrishnan-3rd-edition --run-id run-1774660166-b1353117 --source api --api-base-url https://adaptive-instructional-artifacts-ap.vercel.app --output-dir .local/ingest-runs/run-1774660166-b1353117/product-fit-deployed-api` ✅
+  - source `api` (deployed), `pass_status=false`, `critical_failure_count=47`
+
+Score breakdown (strict gate):
+- Neon baseline (`run-1774660166-b1353117`):
+  - hints `0.8965`, explanations `0.9368`, learning_page `0.9627`, overall `0.9320`
+  - fail reasons: `generic_page_title=47`, `page_span_not_unit_scoped=47`, `chunk_too_short=6`, `chunk_too_long=1`
+- Local API (current branch runtime shaping):
+  - hints `0.8931`, explanations `0.9325`, learning_page `0.9576`, overall `0.9277`
+  - critical failures `0`; top failures only length bounds (`chunk_too_short=6`, `chunk_too_long=1`)
+- Post-fix extraction run (`run-1774665066-b1353117`, bundle source):
+  - pass `true`, critical failures `0`, overall `0.957`
+
+Concrete sample IDs logged:
+- 15 sampled units (early/mid/late):
+  - `page-2`, `page-6`, `page-10`, `page-13`, `page-16`, `page-19`, `page-23`, `page-26`, `page-29`, `page-33`, `page-36`, `page-40`, `page-43`, `page-47`, `page-50`
+- 10 bad examples (unit/chunk):
+  - `page-3/chunk-0001`, `page-36/chunk-0001`, `page-4/chunk-0001`, `page-8/chunk-0001`, `page-10/chunk-0001`, `page-21/chunk-0001`, `page-27/chunk-0001`, `page-9/chunk-0001`, `page-2/chunk-0001`, `page-47/chunk-0001`
+- 10 acceptable examples (unit/chunk):
+  - `page-7/chunk-0001`, `page-12/chunk-0001`, `page-13/chunk-0001`, `page-15/chunk-0001`, `page-16/chunk-0001`, `page-19/chunk-0001`, `page-20/chunk-0001`, `page-22/chunk-0001`, `page-23/chunk-0001`, `page-24/chunk-0001`
+
+Adaptive product proof (real payloads):
+- Hint-ready payload examples (5):
+  - `page-40`, `page-41`, `page-42`, `page-43`, `page-44`
+  - source: `.local/ingest-runs/run-1774660166-b1353117/evidence/hint-ready-payloads.jsonl`
+- Explanation-ready context examples (5):
+  - `page-38`, `page-39`, `page-40`, `page-41`, `page-42`
+  - source: `evidence/explanation-unit-page-38.json` ... `42.json`
+- Learning-page concept payload examples (5):
+  - `page-10`, `page-20`, `page-30`, `page-40`, `page-50`
+  - source: `evidence/unit-page-10.json`, `20.json`, `30.json`, `40.json`, `50.json`
+
+Per-surface verdicts:
+- Hints: **usable now**
+- Explanations: **usable with caveats**
+- Learning-page concepts: **usable with caveats**
+
+Key artifacts added/updated:
+- `docs/research/corpus-product-fit-audit.md`
+- `.local/ingest-runs/run-1774660166-b1353117/product-fit-report.json`
+- `.local/ingest-runs/run-1774660166-b1353117/product-fit-local-api/product-fit-report.json`
+- `.local/ingest-runs/run-1774660166-b1353117/product-fit-deployed-api/product-fit-report.json`
+- `.local/ingest-runs/run-1774660166-b1353117/evidence/neon-row-samples.json`
+- `.local/ingest-runs/run-1774660166-b1353117/evidence/local-api/*`
+- `.local/ingest-runs/run-1774660166-b1353117/evidence/deployed-api/*`
+
+Residual risk / next smallest step:
+- Deployed backend still returns pre-hardening corpus shape (wide page spans + no product fields) for this run; deploy current branch backend to close runtime parity between local and production.

@@ -8,11 +8,12 @@
  * Run with: npx vitest run
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
 import { getDeterministicSqlEngageAnchor } from '../../data/sql-engage';
 import { storage } from '../storage/storage';
 import { SQLProblem, InteractionEvent } from '../../types';
+import * as conceptLoader from './concept-loader';
 
 // Test configuration
 const learnerId = 'determinism-learner';
@@ -56,6 +57,10 @@ describe('retrieval-bundle determinism', () => {
   let bundleRunA: RetrievalBundle;
   let bundleRunB: RetrievalBundle;
   let anchorRowIds: (string | null)[];
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   beforeAll(() => {
     // Set up PDF index in storage
@@ -169,5 +174,43 @@ describe('retrieval-bundle determinism', () => {
 
   it('should have conceptSourceRefs', () => {
     expect(bundleRunA.conceptSourceRefs.length).toBeGreaterThan(0);
+  });
+
+  it('uses concept chunks when available (remote corpus path)', () => {
+    const conceptChunkSpy = vi.spyOn(conceptLoader, 'getConceptChunks').mockReturnValue([
+      {
+        chunkId: 'remote/unit-1#hint-source',
+        docId: 'dbms-ramakrishnan-3rd-edition',
+        page: 40,
+        text: 'Use WHERE after FROM and validate each predicate independently.',
+      },
+    ]);
+
+    const bundle = buildRetrievalBundle({
+      learnerId,
+      problem,
+      interactions: buildInteractions('hint-remote-path'),
+      conceptId: 'select-basic',
+      lastErrorSubtypeId: subtype,
+    });
+
+    expect(bundle.pdfPassages[0]?.chunkId).toBe('remote/unit-1#hint-source');
+    expect(bundle.pdfPassages[0]?.score).toBe(0.95);
+    expect(conceptChunkSpy).toHaveBeenCalled();
+  });
+
+  it('falls back to PDF index retrieval when concept chunks are unavailable', () => {
+    vi.spyOn(conceptLoader, 'getConceptChunks').mockReturnValue(null);
+
+    const bundle = buildRetrievalBundle({
+      learnerId,
+      problem,
+      interactions: buildInteractions('hint-fallback-path'),
+      conceptId: 'select-basic',
+      lastErrorSubtypeId: subtype,
+    });
+
+    expect(Array.isArray(bundle.pdfPassages)).toBe(true);
+    expect(bundle.pdfPassages.every((p) => p.chunkId !== 'remote/unit-1#hint-source')).toBe(true);
   });
 });

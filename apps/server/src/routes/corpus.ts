@@ -11,6 +11,117 @@ import {
 
 const router = Router();
 
+function normalizeText(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function asString(value: unknown): string | undefined {
+  const normalized = normalizeText(value);
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function asNumber(value: unknown): number | undefined {
+  if (typeof value !== 'number') return undefined;
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function extractPageFromUnitId(unitId: string): number | undefined {
+  const match = /\/page-(\d+)$/i.exec(unitId);
+  if (!match) return undefined;
+  const page = Number(match[1]);
+  return Number.isFinite(page) && page > 0 ? page : undefined;
+}
+
+function deriveDisplayTitle(unit: { title: string; summary: string; contentMarkdown?: string }): string {
+  const title = normalizeText(unit.title);
+  if (title && !/^page\s+\d+$/i.test(title)) {
+    return title;
+  }
+
+  const source = normalizeText(unit.summary) || normalizeText(unit.contentMarkdown);
+  if (!source) return title || 'Untitled Concept';
+  const firstSentence = source.split(/(?<=[.!?])\s+/)[0] || source;
+  const clipped = firstSentence.slice(0, 80).replace(/[-_.,:; ]+$/g, '');
+  return clipped.length >= 8 ? clipped : (title || 'Untitled Concept');
+}
+
+function deriveDisplaySummary(unit: { summary: string; contentMarkdown?: string }): string {
+  const source = normalizeText(unit.summary) || normalizeText(unit.contentMarkdown);
+  if (!source) return '';
+  if (source.length <= 220) return source;
+  const clip = source.slice(0, 221);
+  const sentenceBreak = Math.max(clip.lastIndexOf('.'), clip.lastIndexOf(';'), clip.lastIndexOf(':'));
+  if (sentenceBreak >= 90) return clip.slice(0, sentenceBreak + 1).trim();
+  return `${clip.slice(0, 220).trim()}...`;
+}
+
+function deriveHintSourceExcerpt(unit: { summary: string; contentMarkdown?: string }): string {
+  const source = normalizeText(unit.contentMarkdown) || normalizeText(unit.summary);
+  if (!source) return '';
+  if (source.length <= 180) return source;
+  return source.slice(0, 180).replace(/[ ,.;]+$/g, '');
+}
+
+function deriveExplanationContext(unit: { summary: string; contentMarkdown?: string }): string {
+  const summary = deriveDisplaySummary(unit);
+  const body = normalizeText(unit.contentMarkdown);
+  const combined = summary && body ? `${summary}\n\n${body}` : (summary || body);
+  if (combined.length <= 420) return combined;
+  return `${combined.slice(0, 420).trim()}...`;
+}
+
+function shapeUnitForProduct<T extends {
+  unitId: string;
+  title: string;
+  summary: string;
+  contentMarkdown: string;
+  pageStart: number;
+  pageEnd: number;
+  metadata: Record<string, unknown> | null;
+}>(unit: T) {
+  const metadata = (unit.metadata ?? {}) as Record<string, unknown>;
+  const fromMetadataFlags = Array.isArray(metadata.quality_flags)
+    ? metadata.quality_flags.filter((v): v is string => typeof v === 'string')
+    : [];
+  const derivedFlags = new Set(fromMetadataFlags);
+  if (/^page\s+\d+$/i.test(unit.title)) {
+    derivedFlags.add('generic_title');
+  }
+  const displayTitle = asString(metadata.display_title) || deriveDisplayTitle(unit);
+  const displaySummary = asString(metadata.display_summary) || deriveDisplaySummary(unit);
+  const hintSourceExcerpt = asString(metadata.hint_source_excerpt) || deriveHintSourceExcerpt(unit);
+  const explanationContext = asString(metadata.explanation_context) || deriveExplanationContext(unit);
+  const productFitScore = asNumber(metadata.product_fit_score) ?? (
+    derivedFlags.has('high_noise') ? 0.4 : 0.75
+  );
+  const pageFromUnitId = extractPageFromUnitId(unit.unitId);
+  const normalizedPageStart = (
+    pageFromUnitId &&
+    unit.pageStart > 0 &&
+    unit.pageEnd >= unit.pageStart &&
+    unit.pageEnd - unit.pageStart >= 20
+  ) ? pageFromUnitId : unit.pageStart;
+  const normalizedPageEnd = (
+    pageFromUnitId &&
+    unit.pageStart > 0 &&
+    unit.pageEnd >= unit.pageStart &&
+    unit.pageEnd - unit.pageStart >= 20
+  ) ? pageFromUnitId : unit.pageEnd;
+
+  return {
+    ...unit,
+    pageStart: normalizedPageStart,
+    pageEnd: normalizedPageEnd,
+    displayTitle,
+    displaySummary,
+    hintSourceExcerpt,
+    explanationContext,
+    productFitScore: Number(productFitScore.toFixed(4)),
+    qualityFlags: Array.from(derivedFlags).sort(),
+  };
+}
+
 router.get('/manifest', async (_req: Request, res: Response) => {
   if (!isUsingNeon()) {
     const response: ApiResponse<never> = {
@@ -24,7 +135,14 @@ router.get('/manifest', async (_req: Request, res: Response) => {
 
   try {
     const docs = await getCorpusManifest();
-    const units = await getCorpusUnitsIndex();
+    const units = (await getCorpusUnitsIndex())
+      .map((unit) => shapeUnitForProduct(unit))
+      .sort((a, b) => {
+        if (a.docId !== b.docId) return a.docId.localeCompare(b.docId);
+        if (a.pageStart !== b.pageStart) return a.pageStart - b.pageStart;
+        if (a.pageEnd !== b.pageEnd) return a.pageEnd - b.pageEnd;
+        return a.unitId.localeCompare(b.unitId);
+      });
     const response: ApiResponse<{ documents: typeof docs; units: typeof units }> = {
       success: true,
       data: { documents: docs, units },
@@ -76,9 +194,10 @@ router.get('/unit/:unitId', async (req: Request, res: Response) => {
     }
 
     const chunks = await getCorpusChunksByUnitId(unitId, 100);
+    const shapedUnit = shapeUnitForProduct(unit);
     const response: ApiResponse<{ unit: typeof unit; chunks: typeof chunks }> = {
       success: true,
-      data: { unit, chunks },
+      data: { unit: shapedUnit, chunks },
     };
     res.json(response);
   } catch (error) {
@@ -117,7 +236,17 @@ router.post('/search', async (req: Request, res: Response) => {
   }
 
   try {
-    const results = await searchCorpus(query, limit);
+    const rawResults = await searchCorpus(query, Math.max(limit * 4, 40));
+    const results = rawResults
+      .sort((a, b) => {
+        if (b.termHits !== a.termHits) return b.termHits - a.termHits;
+        const aScore = asNumber((a.metadata ?? {}).product_fit_score) ?? 0;
+        const bScore = asNumber((b.metadata ?? {}).product_fit_score) ?? 0;
+        if (bScore !== aScore) return bScore - aScore;
+        if (a.page !== b.page) return a.page - b.page;
+        return a.chunkId.localeCompare(b.chunkId);
+      })
+      .slice(0, limit);
     const response: ApiResponse<{ query: string; limit: number; results: typeof results }> = {
       success: true,
       data: {

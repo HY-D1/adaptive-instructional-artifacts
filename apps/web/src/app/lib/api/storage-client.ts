@@ -283,6 +283,12 @@ export interface RemoteCorpusUnit {
   pageEnd: number;
   runId: string | null;
   metadata: Record<string, unknown> | null;
+  displayTitle?: string;
+  displaySummary?: string;
+  hintSourceExcerpt?: string;
+  explanationContext?: string;
+  productFitScore?: number;
+  qualityFlags?: string[];
   createdAt: string;
 }
 
@@ -1108,11 +1114,11 @@ export async function fetchCorpusUnit(unitId: string): Promise<{
 export async function searchCorpusChunks(
   query: string,
   limit = 10,
-): Promise<Array<RemoteCorpusChunk & { unitTitle: string; conceptId: string | null; summary: string }>> {
+): Promise<Array<RemoteCorpusChunk & { unitTitle: string; conceptId: string | null; summary: string; termHits?: number }>> {
   const response = await fetchApi<{
     query: string;
     limit: number;
-    results: Array<RemoteCorpusChunk & { unitTitle: string; conceptId: string | null; summary: string }>;
+    results: Array<RemoteCorpusChunk & { unitTitle: string; conceptId: string | null; summary: string; termHits?: number }>;
   }>('/corpus/search', {
     method: 'POST',
     body: JSON.stringify({ query, limit }),

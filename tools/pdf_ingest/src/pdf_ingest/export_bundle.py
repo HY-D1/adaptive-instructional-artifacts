@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .config import LOCAL_CORPUS_PIPELINE_VERSION, SOURCE_POLICY, ensure_directory
+from .product_fit_rules import PRODUCT_FIT_EVAL_VERSION
 from .schemas import (
     BundleRecord,
     ChunkRecord,
@@ -50,6 +51,7 @@ def write_bundle(
         run_id=diagnostics.run_id,
         schema_version="local-corpus-bundle-v1",
         pipeline_version=LOCAL_CORPUS_PIPELINE_VERSION,
+        product_fit_eval_version=PRODUCT_FIT_EVAL_VERSION,
         source_policy=SOURCE_POLICY,
         parser_backend=source_doc.parser_backend,
         embedding_model=diagnostics.embedding_model,

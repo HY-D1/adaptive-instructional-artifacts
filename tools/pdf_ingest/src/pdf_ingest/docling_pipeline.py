@@ -10,7 +10,7 @@ from typing import Any
 from docling.document_converter import DocumentConverter
 from pypdf import PdfReader
 
-from .chunking import chunk_text, embed_texts
+from .chunking import clean_extracted_text, chunk_text, embed_texts, is_low_signal_text
 from .config import (
     ExtractConfig,
     LOCAL_CORPUS_PIPELINE_VERSION,
@@ -23,6 +23,14 @@ from .config import (
     generate_run_id,
 )
 from .mlx_enricher import enrich_text
+from .product_fit_rules import (
+    UnitForEval,
+    compute_noise_score,
+    derive_display_summary,
+    derive_display_title,
+    derive_explanation_context,
+    derive_hint_source_excerpt,
+)
 from .schemas import (
     ChunkRecord,
     DiagnosticsRecord,
@@ -56,24 +64,33 @@ def _slugify(value: str) -> str:
     return text or "untitled"
 
 
-def _split_markdown_sections(markdown: str) -> list[tuple[str, str]]:
-    sections: list[tuple[str, str]] = []
+def _extract_page_number(label: str) -> int | None:
+    match = re.search(r"\bpage\s+(\d+)\b", label, flags=re.IGNORECASE)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def _split_markdown_sections(markdown: str) -> list[tuple[str, str, int | None]]:
+    sections: list[tuple[str, str, int | None]] = []
     current_title = "Overview"
     current_lines: list[str] = []
+    current_page: int | None = None
 
     for line in markdown.splitlines():
         if line.startswith("#"):
             if current_lines:
-                sections.append((current_title, "\n".join(current_lines).strip()))
+                sections.append((current_title, "\n".join(current_lines).strip(), current_page))
             current_title = line.lstrip("# ").strip() or "Untitled"
+            current_page = _extract_page_number(current_title)
             current_lines = []
             continue
         current_lines.append(line)
 
     if current_lines:
-        sections.append((current_title, "\n".join(current_lines).strip()))
+        sections.append((current_title, "\n".join(current_lines).strip(), current_page))
 
-    return [(title, body) for title, body in sections if body]
+    return [(title, body, page) for title, body, page in sections if body]
 
 
 def _status_to_text(status: Any) -> str:
@@ -502,15 +519,59 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
 
     sections = _split_markdown_sections(selected_markdown)
     if not sections:
-        sections = [("Overview", selected_markdown)]
+        sections = [("Overview", selected_markdown, None)]
 
     units: list[UnitRecord] = []
     chunks: list[ChunkRecord] = []
+    dropped_low_signal_sections = 0
 
-    for section_index, (title, body) in enumerate(sections, start=1):
+    for section_index, (title, raw_body, section_page) in enumerate(sections, start=1):
+        body = clean_extracted_text(raw_body)
+        if not body:
+            dropped_low_signal_sections += 1
+            continue
+        if is_low_signal_text(body) and not re.search(
+            r"\b(select|from|where|join|database|dbms|query|relation|schema)\b",
+            body,
+            flags=re.IGNORECASE,
+        ):
+            dropped_low_signal_sections += 1
+            continue
+
         concept_slug = _slugify(title)
         unit_id = f"{doc_id}/{concept_slug}"
         enrichment = enrich_text(body, enabled=config.mlx_enabled, model=config.mlx_model)
+        if section_page is not None and effective_page_start <= section_page <= effective_page_end:
+            unit_page_start = section_page
+            unit_page_end = section_page
+        else:
+            unit_page_start = effective_page_start
+            unit_page_end = effective_page_end
+
+        unit_seed = UnitForEval(
+            unit_id=unit_id,
+            title=title,
+            summary=enrichment.summary,
+            content_markdown=body,
+            page_start=unit_page_start,
+            page_end=unit_page_end,
+        )
+        display_title = derive_display_title(unit_seed)
+        display_summary = derive_display_summary(unit_seed)
+        hint_source_excerpt = derive_hint_source_excerpt(unit_seed)
+        explanation_context = derive_explanation_context(unit_seed)
+        noise_score = round(compute_noise_score(f"{enrichment.summary} {body}"), 4)
+        quality_flags: list[str] = []
+        if re.fullmatch(r"Page\s+\d+", title, flags=re.IGNORECASE):
+            quality_flags.append("generic_title")
+        if noise_score >= 0.5:
+            quality_flags.append("high_noise")
+        if is_low_signal_text(body):
+            quality_flags.append("low_signal_body")
+
+        windows = chunk_text(body, chunk_words=config.chunk_words, chunk_overlap=config.chunk_overlap)
+        if not windows:
+            continue
 
         unit = UnitRecord(
             unit_id=unit_id,
@@ -521,8 +582,8 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
             summary=enrichment.summary,
             content_markdown=body,
             difficulty=None,
-            page_start=effective_page_start,
-            page_end=effective_page_end,
+            page_start=unit_page_start,
+            page_end=unit_page_end,
             parser_backend=parser_backend,
             pipeline_version=LOCAL_CORPUS_PIPELINE_VERSION,
             run_id=run_id,
@@ -531,13 +592,16 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
                 "chapter_range": f"{config.chapter_start}-{config.chapter_end}",
                 "mlx_backend": enrichment.backend,
                 "hint_draft": enrichment.hint_draft,
+                "display_title": display_title,
+                "display_summary": display_summary,
+                "hint_source_excerpt": hint_source_excerpt,
+                "explanation_context": explanation_context,
+                "quality_flags": quality_flags,
+                "noise_score": noise_score,
+                "product_fit_score": round(max(0.0, 1.0 - noise_score), 4),
             },
         )
         units.append(unit)
-
-        windows = chunk_text(body, chunk_words=config.chunk_words, chunk_overlap=config.chunk_overlap)
-        if not windows:
-            continue
 
         embeddings, embedding_backend = embed_texts(
             [window.text for window in windows],
@@ -545,10 +609,15 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
             dimension=config.embedding_dimension,
         )
 
-        page_span = max(1, effective_page_end - effective_page_start + 1)
+        page_span = max(1, unit_page_end - unit_page_start + 1)
         for idx, window in enumerate(windows):
             rel = idx / max(1, len(windows) - 1)
-            approx_page = effective_page_start + int(rel * (page_span - 1))
+            approx_page = unit_page_start + int(rel * (page_span - 1))
+            chunk_quality_flags: list[str] = []
+            if len(window.text) < 60:
+                chunk_quality_flags.append("too_short_for_hints")
+            if len(window.text) > 1400:
+                chunk_quality_flags.append("too_long_for_hints")
             chunk_id = f"{unit_id}/chunk-{idx + 1:04d}"
             chunk = ChunkRecord(
                 chunk_id=chunk_id,
@@ -567,6 +636,8 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
                     "chunk_index": idx,
                     "section_index": section_index,
                     "embedding_backend": embedding_backend,
+                    "hintable_span": window.text[:180],
+                    "quality_flags": chunk_quality_flags,
                 },
             )
             chunks.append(chunk)
@@ -598,6 +669,7 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
         notes=[
             "chapter range uses approximate page mapping",
             f"docling_status={docling_details['status']}",
+            f"dropped_low_signal_sections={dropped_low_signal_sections}",
             "raw pdf bytes were not emitted to bundle outputs",
         ],
     )

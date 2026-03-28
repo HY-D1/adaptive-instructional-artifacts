@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   resolveConceptId,
   getConcept,
+  getConceptChunks,
+  loadConceptMap,
   loadConceptContent,
   clearConceptMapCache,
   getCompatibleCorpusIds,
@@ -15,6 +17,64 @@ global.fetch = vi.fn();
 describe('getTextbookCorpusMode', () => {
   it('defaults to static when env is missing', () => {
     expect(getTextbookCorpusMode()).toBe('static');
+  });
+});
+
+describe('remote corpus shaping', () => {
+  const envRef = import.meta.env as unknown as Record<string, string | undefined>;
+  const originalMode = envRef.VITE_TEXTBOOK_CORPUS_MODE;
+
+  beforeEach(() => {
+    envRef.VITE_TEXTBOOK_CORPUS_MODE = 'remote';
+    vi.clearAllMocks();
+    clearConceptMapCache();
+  });
+
+  afterEach(() => {
+    envRef.VITE_TEXTBOOK_CORPUS_MODE = originalMode;
+    clearConceptMapCache();
+  });
+
+  it('uses product-facing remote fields and exposes remote hint chunks', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true,
+        data: {
+          documents: [],
+          units: [
+            {
+              unitId: 'dbms-ramakrishnan-3rd-edition/page-40',
+              docId: 'dbms-ramakrishnan-3rd-edition',
+              conceptId: 'dbms-ramakrishnan-3rd-edition/page-40',
+              title: 'Page 40',
+              displayTitle: 'Data Analysis in DBMS',
+              summary: 'Raw summary',
+              displaySummary: 'Learner-safe summary for concept page.',
+              hintSourceExcerpt: 'Use WHERE to filter rows after selecting the right table.',
+              contentMarkdown: 'Original long content',
+              difficulty: 'beginner',
+              pageStart: 40,
+              pageEnd: 40,
+              runId: 'run-1774660166-b1353117',
+              metadata: {},
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        },
+      }),
+    } as Response);
+
+    const map = await loadConceptMap();
+    expect(map).not.toBeNull();
+    const concept = await getConcept('dbms-ramakrishnan-3rd-edition/page-40');
+    expect(concept?.title).toBe('Data Analysis in DBMS');
+    expect(concept?.definition).toBe('Learner-safe summary for concept page.');
+
+    const chunks = getConceptChunks('dbms-ramakrishnan-3rd-edition/page-40');
+    expect(chunks).not.toBeNull();
+    expect(chunks?.[0].chunkId).toBe('dbms-ramakrishnan-3rd-edition/page-40#hint-source');
+    expect(chunks?.[0].text).toContain('WHERE');
   });
 });
 

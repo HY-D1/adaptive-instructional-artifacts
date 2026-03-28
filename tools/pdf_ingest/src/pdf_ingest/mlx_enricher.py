@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 
 @dataclass(frozen=True)
@@ -11,11 +12,28 @@ class MlxEnrichmentResult:
     backend: str
 
 
+def _normalize_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _clip_for_display(text: str, max_chars: int) -> str:
+    normalized = _normalize_text(text)
+    if len(normalized) <= max_chars:
+        return normalized
+
+    clipped = normalized[: max_chars + 1]
+    sentence_break = max(clipped.rfind("."), clipped.rfind(";"), clipped.rfind(":"))
+    if sentence_break >= max(40, max_chars // 2):
+        return clipped[: sentence_break + 1].strip()
+    return clipped[:max_chars].rstrip(" ,.;") + "..."
+
+
 def _fallback_enrichment(text: str) -> MlxEnrichmentResult:
-    clean = " ".join(text.split())
-    summary = clean[:280] if clean else ""
-    explanation = clean[:560] if clean else ""
-    hint = f"Start with a smaller query that validates one predicate, then expand: {summary[:140]}"
+    clean = _normalize_text(text)
+    summary = _clip_for_display(clean, 220) if clean else ""
+    explanation = _clip_for_display(clean, 420) if clean else ""
+    hint_core = _clip_for_display(summary or clean, 140)
+    hint = f"Start with a smaller query that validates one predicate, then expand: {hint_core}".strip()
     return MlxEnrichmentResult(
         summary=summary,
         explanation=explanation,
