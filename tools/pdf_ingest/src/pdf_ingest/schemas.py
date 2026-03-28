@@ -85,6 +85,10 @@ class DiagnosticsRecord(BaseModel):
     machine: str
     os: str
     python_version: str
+    preflight: dict[str, Any] | None = None
+    docling: dict[str, Any] | None = None
+    fallback: dict[str, Any] | None = None
+    artifacts: dict[str, Any] | None = None
     notes: list[str] = Field(default_factory=list)
 
 

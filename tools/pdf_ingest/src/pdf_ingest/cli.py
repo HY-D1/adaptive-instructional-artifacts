@@ -17,7 +17,7 @@ from .config import (
     UploadConfig,
     parse_chapter_range,
 )
-from .docling_pipeline import extract_with_docling
+from .docling_pipeline import ExtractFailure, extract_with_docling
 from .export_bundle import load_bundle, write_bundle
 
 
@@ -148,7 +148,21 @@ def cmd_extract(args: argparse.Namespace) -> int:
         embedding_dimension=args.embedding_dimension,
     )
 
-    result = extract_with_docling(config)
+    print(json.dumps({
+        "resolved_input_path": str(config.input_pdf),
+    }, indent=2))
+
+    try:
+        result = extract_with_docling(config)
+    except ExtractFailure as exc:
+        print(json.dumps({
+            "run_id": exc.run_id,
+            "resolved_input_path": str(exc.resolved_input_path),
+            "diagnostics_path": str(exc.diagnostics_path),
+        }, indent=2))
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
     bundle = write_bundle(
         output_dir=config.output_dir,
         source_doc=result.source_doc,
@@ -165,6 +179,9 @@ def cmd_extract(args: argparse.Namespace) -> int:
         "chunk_count": bundle.manifest.chunk_count,
         "embedding_model": bundle.manifest.embedding_model,
         "embedding_dimension": bundle.manifest.embedding_dimension,
+        "resolved_input_path": str(result.resolved_input_path),
+        "diagnostics_path": str(result.diagnostics_path),
+        "parser_backend": result.source_doc.parser_backend,
     }, indent=2))
     return 0
 

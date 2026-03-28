@@ -18,6 +18,7 @@ dependencies = [
   "orjson",
   "requests",
   "pypdf>=5.0",
+  "PyMuPDF>=1.24",
 ]
 
 [project.scripts]

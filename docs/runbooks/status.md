@@ -381,3 +381,66 @@ Unverified / blockers:
 - Real local extraction on provided textbooks is blocked by Docling parse failure in this environment.
 - Neon upload smoke (`ingest:upload`, `corpus:verify`) is unverified in this run due no successful local bundle extraction.
 - Sample real remote `doc_id` and `run_id` pending first successful ingest+upload run.
+
+## Checkpoint — 2026-03-27 18:12 PDT
+
+Status: **PARTIAL**
+
+Scope implemented (local PDF ingest blocker fix only):
+- Added extraction preflight diagnostics and run-scoped diagnostics artifact emission:
+  - resolved input path, file existence/readability/size, pypdf page count
+  - Docling status/errors/timings/markdown length
+  - fallback attempts + selected backend
+  - artifacts map for optional Docling payload dumps
+- Added dual fallback chain while keeping Docling as primary:
+  - Docling first
+  - PyMuPDF text fallback if Docling fails or markdown is empty
+  - pypdf text fallback if PyMuPDF returns empty text
+- Added parser backend provenance outputs:
+  - `docling`
+  - `docling_fallback_pymupdf`
+  - `docling_fallback_pypdf`
+- Added focused fallback tests and updated bundle schema fixture for diagnostics extensions.
+
+Evidence:
+- Baseline reproduction before patch (same command/path) failed as expected:
+  - `LOCAL_PDF_SOURCE_DIR=raw_pdf npm run ingest:extract` ❌
+  - Docling reported `ConversionStatus.FAILURE` with empty markdown.
+- Ingest test gate after patch:
+  - `source tools/pdf_ingest/.venv/bin/activate && pip install -e tools/pdf_ingest` ✅
+  - `source tools/pdf_ingest/.venv/bin/activate && PYTHONPATH=tools/pdf_ingest/src python -m pytest -q tools/pdf_ingest/tests/test_bundle_schema.py tools/pdf_ingest/tests/test_upload_idempotency.py tools/pdf_ingest/tests/test_docling_fallback.py` ✅ (5 passed)
+- Real extraction on source textbook now succeeds:
+  - `LOCAL_PDF_SOURCE_DIR=raw_pdf npm run ingest:extract` ✅
+  - `run_id=run-1774660166-b1353117`
+  - `doc_id=dbms-ramakrishnan-3rd-edition`
+  - `unit_count=47`, `chunk_count=107`
+  - `parser_backend=docling_fallback_pymupdf`
+  - diagnostics artifact:
+    `.local/ingest-runs/run-1774660166-b1353117/diagnostics.json`
+- Upload + verification against Neon with local env alias mapping
+  (`DATABASE_URL=${adaptive_data_DATABASE_URL}` in shell):
+  - `npm run ingest:upload` ✅
+    - `docs_uploaded=1`, `units_uploaded=47`, `chunks_uploaded=107`
+  - `npm run corpus:verify` ✅
+    - `documents=1`, `units=47`, `chunks=107`
+    - `missingUnitProvenance=0`, `duplicateUnitIds=0`, `emptyChunks=0`
+- App/server corpus reads (Neon-backed) succeeded:
+  - `GET http://127.0.0.1:3001/api/corpus/manifest` ✅
+    - returned `docId=dbms-ramakrishnan-3rd-edition`
+    - returned `parserBackend=docling_fallback_pymupdf`
+    - returned `runId=run-1774660166-b1353117`
+  - `GET http://127.0.0.1:3001/api/corpus/unit/dbms-ramakrishnan-3rd-edition%2Fpage-50` ✅
+    - returned unit/chunk payload with matching `runId`
+
+Changed files (this checkpoint scope):
+- `tools/pdf_ingest/src/pdf_ingest/docling_pipeline.py`
+- `tools/pdf_ingest/src/pdf_ingest/cli.py`
+- `tools/pdf_ingest/src/pdf_ingest/schemas.py`
+- `tools/pdf_ingest/pyproject.toml`
+- `tools/pdf_ingest/tests/test_bundle_schema.py`
+- `tools/pdf_ingest/tests/test_docling_fallback.py`
+- `tools/pdf_ingest/README.md`
+- `docs/runbooks/status.md`
+
+Residual risk:
+- Deployed backend URL configured in local `VITE_API_BASE_URL` returned `404` for `/api/corpus/manifest` during this run; corpus read acceptance was validated through the local `apps/server` process against Neon.
