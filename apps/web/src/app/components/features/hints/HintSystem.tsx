@@ -531,6 +531,11 @@ export function HintSystem({
     policyVersion: string;
     pdfPassages: RetrievalPdfPassage[];
     isEnhanced: boolean;
+    retrievalConfidence: number;
+    fallbackReason?: string | null;
+    safetyFilterApplied: boolean;
+    retrievedSourceIds: string[];
+    retrievedChunkIds: string[];
     llmFailed?: boolean;
     llmErrorMessage?: string;
   } | null> => {
@@ -570,6 +575,11 @@ export function HintSystem({
           policyVersion: enhancedHint.llmGenerated ? 'enhanced-llm-v1' : 'sql-engage-v1',
           pdfPassages,
           isEnhanced: enhancedHint.llmGenerated || enhancedHint.sources.textbook,
+          retrievalConfidence: enhancedHint.retrievalConfidence,
+          fallbackReason: enhancedHint.fallbackReason,
+          safetyFilterApplied: enhancedHint.safetyFilterApplied,
+          retrievedSourceIds: enhancedHint.retrievedSourceIds,
+          retrievedChunkIds: enhancedHint.retrievedChunkIds,
           llmFailed: enhancedHint.llmFailed,
           llmErrorMessage: enhancedHint.llmErrorMessage
         };
@@ -592,6 +602,11 @@ export function HintSystem({
       policyVersion: standardHint.policyVersion,
       pdfPassages,
       isEnhanced: false,
+      retrievalConfidence: 0.5,
+      fallbackReason: 'enhanced_hint_unavailable',
+      safetyFilterApplied: false,
+      retrievedSourceIds: [],
+      retrievedChunkIds: [],
       llmFailed: false
     };
   };
@@ -826,6 +841,11 @@ export function HintSystem({
       policyVersion: string;
       pdfPassages: RetrievalPdfPassage[];
       isEnhanced: boolean;
+      retrievalConfidence: number;
+      fallbackReason?: string | null;
+      safetyFilterApplied: boolean;
+      retrievedSourceIds: string[];
+      retrievedChunkIds: string[];
       llmFailed?: boolean;
       llmErrorMessage?: string;
     } | null = null;
@@ -851,7 +871,12 @@ export function HintSystem({
         sqlEngageRowId: standardHint.sqlEngageRowId,
         policyVersion: standardHint.policyVersion,
         pdfPassages,
-        isEnhanced: false
+        isEnhanced: false,
+        retrievalConfidence: 0.5,
+        fallbackReason: 'standard_hint_fallback',
+        safetyFilterApplied: false,
+        retrievedSourceIds: [],
+        retrievedChunkIds: [],
       };
     }
     
@@ -881,6 +906,18 @@ export function HintSystem({
     // will_escalate indicates that viewing this hint will trigger auto-escalation
     // This happens at max hint level when no explanation has been shown yet
     const willEscalate = hintSelection!.hintLevel === maxHintLevel && !showExplanation;
+    const retrievedChunkIds = Array.from(
+      new Set([
+        ...hintSelection!.retrievedChunkIds,
+        ...hintSelection!.pdfPassages.map((passage) => passage.chunkId).filter(Boolean),
+      ]),
+    );
+    const retrievedSourceIds = Array.from(
+      new Set([
+        ...hintSelection!.retrievedSourceIds,
+        ...retrievedChunkIds,
+      ]),
+    );
     
     const hintEvent: InteractionEvent = {
       id: buildHelpEventId('hint', nextHelpRequestIndex),
@@ -896,6 +933,14 @@ export function HintSystem({
       sqlEngageRowId: hintSelection!.sqlEngageRowId,
       policyVersion: hintSelection!.policyVersion,
       ruleFired: hintSelection!.isEnhanced ? 'enhanced-hint' : 'progressive-hint',
+      retrievedSourceIds,
+      retrievedChunks: hintSelection!.pdfPassages.map((passage) => ({
+        docId: passage.docId,
+        page: passage.page,
+        chunkId: passage.chunkId,
+        score: passage.score,
+        snippet: passage.text.slice(0, 240),
+      })),
       inputs: {
         retry_count: Math.max(0, errorCount - 1),
         hint_count: hintCount,
@@ -910,7 +955,12 @@ export function HintSystem({
         rule_fired: willEscalate ? 'progressive-hint-will-escalate' : (hintSelection!.isEnhanced ? 'enhanced-hint' : 'progressive-hint'),
         is_enhanced: hintSelection!.isEnhanced,
         llm_failed: hintSelection!.llmFailed || false,
-        llm_error_message: hintSelection!.llmErrorMessage || null
+        llm_error_message: hintSelection!.llmErrorMessage || null,
+        retrieval_confidence: Number(hintSelection!.retrievalConfidence.toFixed(4)),
+        fallback_reason: hintSelection!.fallbackReason || null,
+        safety_filter_applied: hintSelection!.safetyFilterApplied,
+        retrieved_source_ids: retrievedSourceIds,
+        retrieved_chunk_ids: retrievedChunkIds,
       },
       conditionId: sessionConfig?.conditionId
     };

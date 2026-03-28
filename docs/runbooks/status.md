@@ -318,6 +318,65 @@ Status: **PARTIAL**
 Evidence:
 - Branch created from current dirty worktree without discarding local edits:
   - `git checkout -b feat/local-pdf-ingest-remote-corpus` ✅
+
+## Checkpoint — 2026-03-27 22:05 PDT
+
+Status: **PARTIAL**
+
+Evidence:
+- Active-run safety implementation builds and unit gates pass:
+  - `npm run server:build` ✅
+  - `npm run build` ✅
+  - `npx vitest run tests/unit/server/neon-corpus.contract.test.ts apps/web/src/app/lib/storage/dual-storage.test.ts apps/web/src/app/lib/ml/enhanced-hint-service.test.ts` ✅ (14 passed)
+- New deployed integrity gate confirms current production backend has not yet been switched to active-run manifest contract:
+  - `node scripts/verify-corpus-active-run.mjs --api-base-url https://adaptive-instructional-artifacts-ap.vercel.app --doc-id dbms-ramakrishnan-3rd-edition` ❌
+  - mismatch: `doc_missing_active_run` for `dbms-ramakrishnan-3rd-edition`
+- New hint-stability Playwright gate is wired but not executable in this shell without deployed auth env + backend target:
+  - `npx playwright test -c playwright.config.ts --project=chromium:auth tests/e2e/regression/hint-stability-beta.spec.ts --reporter=line` ❌
+  - setup failure: backend health check defaulted to `http://127.0.0.1:3001` (unreachable in this environment)
+
+Implemented in this checkpoint:
+- Run-scoped corpus reads via active-run mapping:
+  - `apps/server/src/db/neon.ts`
+  - `apps/server/src/db/index.ts`
+  - `apps/server/src/routes/corpus.ts`
+  - `apps/server/src/db/migrate-neon.sql`
+- Ingest upload support to atomically set active run:
+  - `tools/pdf_ingest/src/pdf_ingest/cli.py` (`--set-active`, default `true`)
+- Ops tooling for run safety:
+  - `scripts/set-corpus-active-run.mjs`
+  - `scripts/verify-corpus-active-run.mjs`
+  - `package.json` scripts: `corpus:set-active-run`, `corpus:set-winner-run`, `corpus:verify-active-run`
+- Hint safety layer + structured hint metadata:
+  - `apps/web/src/app/lib/ml/enhanced-hint-service.ts`
+  - `apps/web/src/app/components/features/hints/HintSystem.tsx`
+  - `apps/web/src/app/lib/ml/enhanced-hint-service.test.ts`
+- Beta gate scaffolding:
+  - `tests/e2e/regression/hint-stability-beta.spec.ts`
+  - `playwright.config.ts`
+  - `package.json` scripts: `test:e2e:hint-stability`, `beta:acceptance`
+
+Next smallest fix:
+- Run `npm run corpus:set-winner-run` against preview+production backend database, redeploy backend to expose active-run manifest fields, then rerun:
+  1. `npm run corpus:verify-active-run -- --api-base-url <backend-url>`
+  2. `npm run test:e2e:hint-stability` with deployed auth env
+  3. `npx playwright test -c playwright.config.ts tests/e2e/regression/student-multi-device-persistence.spec.ts --project=chromium:auth --reporter=line`
+
+## Checkpoint — 2026-03-27 22:08 PDT
+
+Status: **PARTIAL**
+
+Evidence:
+- Initialized Neon schema with active-run table using local deployed env contract:
+  - `set -a; source .env.local; set +a; npm run server:db:init` ✅
+- Winner run mapping explicitly set in Neon:
+  - `set -a; source .env.local; set +a; node scripts/set-corpus-active-run.mjs --doc-id dbms-ramakrishnan-3rd-edition --run-id run-1774671570-b1353117 --updated-by codex:beta-hardening` ✅
+- DB-level run-scoping verification against updated server queries:
+  - `getCorpusManifest()` / `getCorpusUnitsIndex()` check: `unitCount=43`, `mismatchedUnits=0` ✅
+  - `searchCorpus('join')` check: `mismatched=0` ✅
+
+Remaining gap:
+- Production backend API (`https://adaptive-instructional-artifacts-ap.vercel.app`) still returns old manifest contract without active-run metadata until backend redeploy from this branch.
   - working state retained (`.gitignore`, `package.json`, `package-lock.json`, untracked `raw_pdf/`, `tests/unit 2/`).
 - Start protocol rerun from repo root:
   - `npm run build` ✅ (Vite build completed; chunk-size warnings only)

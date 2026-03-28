@@ -266,6 +266,9 @@ export interface RemoteCorpusDocument {
   parserBackend: string;
   pipelineVersion: string;
   runId: string | null;
+  activeRunId: string | null;
+  activeRunUpdatedAt: string | null;
+  activeRunUpdatedBy: string | null;
   unitCount: number;
   chunkCount: number;
   createdAt: string;
@@ -301,6 +304,13 @@ export interface RemoteCorpusChunk {
   runId: string | null;
   metadata: Record<string, unknown> | null;
   createdAt: string;
+}
+
+export interface RemoteCorpusActiveRun {
+  docId: string;
+  runId: string;
+  updatedAt: string;
+  updatedBy: string | null;
 }
 
 // ============================================================================
@@ -1127,6 +1137,26 @@ export async function searchCorpusChunks(
   return response.data.results;
 }
 
+export async function fetchCorpusActiveRuns(): Promise<RemoteCorpusActiveRun[]> {
+  const response = await fetchApi<{ activeRuns: RemoteCorpusActiveRun[] }>('/corpus/active-runs', {
+    method: 'GET',
+  });
+  if (!response.success || !response.data) return [];
+  return response.data.activeRuns;
+}
+
+export async function setCorpusActiveRun(
+  docId: string,
+  runId: string,
+): Promise<RemoteCorpusActiveRun | null> {
+  const response = await fetchApi<{ activeRun: RemoteCorpusActiveRun }>('/corpus/active-run', {
+    method: 'POST',
+    body: JSON.stringify({ docId, runId }),
+  });
+  if (!response.success || !response.data) return null;
+  return response.data.activeRun;
+}
+
 // ============================================================================
 // Export
 // ============================================================================
@@ -1167,6 +1197,8 @@ export const storageClient = {
   fetchCorpusManifestWithUnits,
   fetchCorpusUnit,
   searchCorpusChunks,
+  fetchCorpusActiveRuns,
+  setCorpusActiveRun,
 };
 
 export default storageClient;

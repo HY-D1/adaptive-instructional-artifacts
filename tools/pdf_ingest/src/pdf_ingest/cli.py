@@ -131,6 +131,22 @@ def _ensure_corpus_schema(conn: psycopg.Connection) -> None:
             )
             """
         )
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS corpus_active_runs (
+              doc_id TEXT PRIMARY KEY REFERENCES corpus_documents(doc_id) ON DELETE CASCADE,
+              run_id TEXT NOT NULL,
+              updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+              updated_by TEXT
+            )
+            """
+        )
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_corpus_active_runs_run_id
+            ON corpus_active_runs(run_id)
+            """
+        )
 
 
 def _resolve_database_url(
@@ -238,6 +254,8 @@ def cmd_upload(args: argparse.Namespace) -> int:
         bundle_dir=Path(args.bundle).expanduser().resolve(),
         database_url=database_url,
     )
+    set_active = _parse_bool(str(args.set_active))
+    active_updated_by = (args.updated_by or "").strip() or "pdf_ingest.cli upload"
     if not cfg.database_url:
         raise ValueError(
             "--database-url or one of "
@@ -377,6 +395,24 @@ def cmd_upload(args: argparse.Namespace) -> int:
                     ),
                 )
 
+            if set_active:
+                for doc in bundle.source_docs:
+                    cur.execute(
+                        """
+                        INSERT INTO corpus_active_runs (doc_id, run_id, updated_at, updated_by)
+                        VALUES (%s, %s, NOW(), %s)
+                        ON CONFLICT (doc_id) DO UPDATE
+                        SET run_id = EXCLUDED.run_id,
+                            updated_at = NOW(),
+                            updated_by = EXCLUDED.updated_by
+                        """,
+                        (
+                            doc.doc_id,
+                            bundle.manifest.run_id,
+                            active_updated_by,
+                        ),
+                    )
+
     print(json.dumps({
         "run_id": bundle.manifest.run_id,
         "docs_uploaded": len(bundle.source_docs),
@@ -384,6 +420,8 @@ def cmd_upload(args: argparse.Namespace) -> int:
         "chunks_uploaded": len(bundle.chunks),
         "bundle_dir": str(cfg.bundle_dir),
         "database_env_source": database_env_source,
+        "set_active": set_active,
+        "active_updated_by": active_updated_by if set_active else None,
     }, indent=2))
     return 0
 
@@ -421,6 +459,16 @@ def build_parser() -> argparse.ArgumentParser:
     upload = subparsers.add_parser("upload", help="upload processed bundle to Neon")
     upload.add_argument("--bundle", required=True)
     upload.add_argument("--database-url", default="")
+    upload.add_argument(
+        "--set-active",
+        default="true",
+        help="Whether to mark uploaded run active for each uploaded doc_id (default: true)",
+    )
+    upload.add_argument(
+        "--updated-by",
+        default="",
+        help="Actor tag recorded in corpus_active_runs.updated_by when --set-active=true",
+    )
     upload.set_defaults(func=cmd_upload)
 
     return parser

@@ -55,6 +55,28 @@
 > This includes backend runtime (`/health`, `/api/system/persistence-status`), local ingest upload (`npm run ingest:upload`), and corpus verification (`npm run corpus:verify`).
 > **After changing env vars you must redeploy** — Vercel bakes env vars into the build/runtime at deploy time. Adding or changing a variable without redeploying has no effect.
 
+### Active Corpus Run Safety
+
+Use active-run mapping to prevent mixed-run corpus responses in runtime APIs:
+
+```bash
+# Set active run explicitly (preview/prod DB)
+npm run corpus:set-active-run -- --doc-id dbms-ramakrishnan-3rd-edition --run-id run-1774671570-b1353117
+
+# Convenience command for winner run
+npm run corpus:set-winner-run
+
+# Verify API responses contain only active-run units/chunks
+npm run corpus:verify-active-run -- --api-base-url https://adaptive-instructional-artifacts-ap.vercel.app
+```
+
+For ingest uploads, active-run switching is enabled by default:
+
+```bash
+npm run ingest:upload
+# Equivalent underlying flag: python -m pdf_ingest.cli upload ... --set-active true
+```
+
 ### Deployment Matrix (Last Verified)
 
 | Environment | Frontend URL | Backend URL | Env source | Last verified (UTC) |

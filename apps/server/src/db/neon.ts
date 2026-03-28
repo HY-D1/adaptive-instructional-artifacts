@@ -32,6 +32,9 @@ export interface CorpusManifestDocumentRow {
   parserBackend: string;
   pipelineVersion: string;
   runId: string | null;
+  activeRunId: string | null;
+  activeRunUpdatedAt: string | null;
+  activeRunUpdatedBy: string | null;
   unitCount: number;
   chunkCount: number;
   createdAt: string;
@@ -62,6 +65,16 @@ export interface CorpusChunkRow {
   metadata: Record<string, unknown> | null;
   createdAt: string;
 }
+
+export interface CorpusActiveRunRow {
+  docId: string;
+  runId: string;
+  updatedAt: string;
+  updatedBy: string | null;
+}
+
+export const DEFAULT_ACTIVE_CORPUS_DOC_ID = 'dbms-ramakrishnan-3rd-edition';
+export const DEFAULT_ACTIVE_CORPUS_RUN_ID = 'run-1774671570-b1353117';
 
 // Configure Neon for serverless environment
 neonConfig.fetchConnectionCache = true;
@@ -424,6 +437,21 @@ export async function initializeSchema(): Promise<void> {
       diagnostics JSONB NOT NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `;
+
+  await db`
+    CREATE TABLE IF NOT EXISTS corpus_active_runs (
+      doc_id TEXT PRIMARY KEY REFERENCES corpus_documents(doc_id) ON DELETE CASCADE,
+      run_id TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_by TEXT
+    )
+  `;
+  await db`CREATE INDEX IF NOT EXISTS idx_corpus_active_runs_run_id ON corpus_active_runs(run_id)`;
+  await db`
+    INSERT INTO corpus_active_runs (doc_id, run_id, updated_by)
+    VALUES (${DEFAULT_ACTIVE_CORPUS_DOC_ID}, ${DEFAULT_ACTIVE_CORPUS_RUN_ID}, 'initializeSchema:seed')
+    ON CONFLICT (doc_id) DO NOTHING
   `;
 
   // Learner profiles (full rich profile with concept coverage)
@@ -1372,9 +1400,92 @@ function parseJsonField<T>(value: unknown, fallback: T): T {
   return fallback;
 }
 
+function toCorpusActiveRunRow(row: Record<string, unknown>): CorpusActiveRunRow {
+  return {
+    docId: String(row.doc_id ?? ''),
+    runId: String(row.run_id ?? ''),
+    updatedAt: new Date(String(row.updated_at)).toISOString(),
+    updatedBy: typeof row.updated_by === 'string' ? row.updated_by : null,
+  };
+}
+
+export async function listCorpusActiveRuns(): Promise<CorpusActiveRunRow[]> {
+  const db = getDb();
+  const rows = await db`
+    SELECT doc_id, run_id, updated_at, updated_by
+    FROM corpus_active_runs
+    ORDER BY doc_id ASC
+  `;
+  return rows.map((row) => toCorpusActiveRunRow(row));
+}
+
+export async function getCorpusActiveRun(docId: string): Promise<CorpusActiveRunRow | null> {
+  const db = getDb();
+  const [row] = await db`
+    SELECT doc_id, run_id, updated_at, updated_by
+    FROM corpus_active_runs
+    WHERE doc_id = ${docId}
+    LIMIT 1
+  `;
+  if (!row) return null;
+  return toCorpusActiveRunRow(row);
+}
+
+export async function setCorpusActiveRun(params: {
+  docId: string;
+  runId: string;
+  updatedBy?: string | null;
+}): Promise<CorpusActiveRunRow> {
+  const db = getDb();
+  const { docId, runId } = params;
+  const updatedBy = params.updatedBy ?? null;
+
+  const [docExists] = await db`
+    SELECT doc_id
+    FROM corpus_documents
+    WHERE doc_id = ${docId}
+    LIMIT 1
+  `;
+  if (!docExists) {
+    throw new Error(`Unknown corpus doc_id: ${docId}`);
+  }
+
+  const [runExists] = await db`
+    SELECT unit_id
+    FROM corpus_units
+    WHERE doc_id = ${docId}
+      AND run_id = ${runId}
+    LIMIT 1
+  `;
+  if (!runExists) {
+    throw new Error(`Run ${runId} has no units for doc ${docId}`);
+  }
+
+  const [row] = await db`
+    INSERT INTO corpus_active_runs (doc_id, run_id, updated_at, updated_by)
+    VALUES (${docId}, ${runId}, NOW(), ${updatedBy})
+    ON CONFLICT (doc_id) DO UPDATE
+    SET run_id = EXCLUDED.run_id,
+        updated_at = NOW(),
+        updated_by = EXCLUDED.updated_by
+    RETURNING doc_id, run_id, updated_at, updated_by
+  `;
+
+  return toCorpusActiveRunRow(row);
+}
+
 export async function getCorpusManifest(): Promise<CorpusManifestDocumentRow[]> {
   const db = getDb();
   const rows = await db`
+    WITH run_resolution AS (
+      SELECT
+        d.doc_id,
+        COALESCE(ar.run_id, d.run_id) AS active_run_id,
+        ar.updated_at AS active_run_updated_at,
+        ar.updated_by AS active_run_updated_by
+      FROM corpus_documents d
+      LEFT JOIN corpus_active_runs ar ON ar.doc_id = d.doc_id
+    )
     SELECT
       d.doc_id,
       d.title,
@@ -1384,15 +1495,24 @@ export async function getCorpusManifest(): Promise<CorpusManifestDocumentRow[]> 
       d.parser_backend,
       d.pipeline_version,
       d.run_id,
+      rr.active_run_id,
+      rr.active_run_updated_at,
+      rr.active_run_updated_by,
       d.created_at,
-      COUNT(DISTINCT u.unit_id)::int AS unit_count,
-      COUNT(DISTINCT c.chunk_id)::int AS chunk_count
+      COUNT(DISTINCT u.unit_id) FILTER (
+        WHERE rr.active_run_id IS NOT NULL AND u.run_id = rr.active_run_id
+      )::int AS unit_count,
+      COUNT(DISTINCT c.chunk_id) FILTER (
+        WHERE rr.active_run_id IS NOT NULL AND c.run_id = rr.active_run_id
+      )::int AS chunk_count
     FROM corpus_documents d
+    INNER JOIN run_resolution rr ON rr.doc_id = d.doc_id
     LEFT JOIN corpus_units u ON u.doc_id = d.doc_id
     LEFT JOIN corpus_chunks c ON c.doc_id = d.doc_id
     GROUP BY
       d.doc_id, d.title, d.filename, d.sha256, d.page_count,
-      d.parser_backend, d.pipeline_version, d.run_id, d.created_at
+      d.parser_backend, d.pipeline_version, d.run_id, d.created_at,
+      rr.active_run_id, rr.active_run_updated_at, rr.active_run_updated_by
     ORDER BY d.created_at DESC
   `;
 
@@ -1405,6 +1525,11 @@ export async function getCorpusManifest(): Promise<CorpusManifestDocumentRow[]> 
     parserBackend: row.parser_backend,
     pipelineVersion: row.pipeline_version,
     runId: row.run_id ?? null,
+    activeRunId: row.active_run_id ?? null,
+    activeRunUpdatedAt: row.active_run_updated_at
+      ? new Date(row.active_run_updated_at).toISOString()
+      : null,
+    activeRunUpdatedBy: row.active_run_updated_by ?? null,
     unitCount: Number(row.unit_count ?? 0),
     chunkCount: Number(row.chunk_count ?? 0),
     createdAt: new Date(row.created_at).toISOString(),
@@ -1414,11 +1539,22 @@ export async function getCorpusManifest(): Promise<CorpusManifestDocumentRow[]> 
 export async function getCorpusUnitsIndex(): Promise<CorpusUnitRow[]> {
   const db = getDb();
   const rows = await db`
+    WITH run_resolution AS (
+      SELECT
+        d.doc_id,
+        COALESCE(ar.run_id, d.run_id) AS active_run_id
+      FROM corpus_documents d
+      LEFT JOIN corpus_active_runs ar ON ar.doc_id = d.doc_id
+    )
     SELECT
-      unit_id, doc_id, concept_id, title, summary, content_markdown,
-      difficulty, page_start, page_end, run_id, metadata, created_at
-    FROM corpus_units
-    ORDER BY created_at DESC
+      u.unit_id, u.doc_id, u.concept_id, u.title, u.summary, u.content_markdown,
+      u.difficulty, u.page_start, u.page_end, u.run_id, u.metadata, u.created_at
+    FROM corpus_units u
+    INNER JOIN run_resolution rr
+      ON rr.doc_id = u.doc_id
+     AND rr.active_run_id IS NOT NULL
+     AND u.run_id = rr.active_run_id
+    ORDER BY u.created_at DESC
   `;
 
   return rows.map((row) => ({
@@ -1440,11 +1576,22 @@ export async function getCorpusUnitsIndex(): Promise<CorpusUnitRow[]> {
 export async function getCorpusUnitById(unitId: string): Promise<CorpusUnitRow | null> {
   const db = getDb();
   const [row] = await db`
+    WITH run_resolution AS (
+      SELECT
+        d.doc_id,
+        COALESCE(ar.run_id, d.run_id) AS active_run_id
+      FROM corpus_documents d
+      LEFT JOIN corpus_active_runs ar ON ar.doc_id = d.doc_id
+    )
     SELECT
-      unit_id, doc_id, concept_id, title, summary, content_markdown,
-      difficulty, page_start, page_end, run_id, metadata, created_at
-    FROM corpus_units
-    WHERE unit_id = ${unitId}
+      u.unit_id, u.doc_id, u.concept_id, u.title, u.summary, u.content_markdown,
+      u.difficulty, u.page_start, u.page_end, u.run_id, u.metadata, u.created_at
+    FROM corpus_units u
+    INNER JOIN run_resolution rr
+      ON rr.doc_id = u.doc_id
+     AND rr.active_run_id IS NOT NULL
+     AND u.run_id = rr.active_run_id
+    WHERE u.unit_id = ${unitId}
     LIMIT 1
   `;
   if (!row) return null;
@@ -1467,11 +1614,22 @@ export async function getCorpusUnitById(unitId: string): Promise<CorpusUnitRow |
 export async function getCorpusChunksByUnitId(unitId: string, limit = 50): Promise<CorpusChunkRow[]> {
   const db = getDb();
   const rows = await db`
+    WITH run_resolution AS (
+      SELECT
+        d.doc_id,
+        COALESCE(ar.run_id, d.run_id) AS active_run_id
+      FROM corpus_documents d
+      LEFT JOIN corpus_active_runs ar ON ar.doc_id = d.doc_id
+    )
     SELECT
-      chunk_id, unit_id, doc_id, page, chunk_text, run_id, metadata, created_at
-    FROM corpus_chunks
-    WHERE unit_id = ${unitId}
-    ORDER BY page ASC, chunk_id ASC
+      c.chunk_id, c.unit_id, c.doc_id, c.page, c.chunk_text, c.run_id, c.metadata, c.created_at
+    FROM corpus_chunks c
+    INNER JOIN run_resolution rr
+      ON rr.doc_id = c.doc_id
+     AND rr.active_run_id IS NOT NULL
+     AND c.run_id = rr.active_run_id
+    WHERE c.unit_id = ${unitId}
+    ORDER BY c.page ASC, c.chunk_id ASC
     LIMIT ${Math.max(1, Math.min(limit, 200))}
   `;
 
@@ -1502,6 +1660,13 @@ export async function searchCorpus(
       SELECT DISTINCT token
       FROM regexp_split_to_table(${normalized}, E'\\s+') AS token
       WHERE token <> ''
+    ),
+    run_resolution AS (
+      SELECT
+        d.doc_id,
+        COALESCE(ar.run_id, d.run_id) AS active_run_id
+      FROM corpus_documents d
+      LEFT JOIN corpus_active_runs ar ON ar.doc_id = d.doc_id
     )
     SELECT
       c.chunk_id,
@@ -1523,7 +1688,13 @@ export async function searchCorpus(
            OR LOWER(COALESCE(u.summary, '')) LIKE '%' || t.token || '%'
       ) AS term_hits
     FROM corpus_chunks c
-    INNER JOIN corpus_units u ON u.unit_id = c.unit_id
+    INNER JOIN corpus_units u
+      ON u.unit_id = c.unit_id
+     AND u.run_id = c.run_id
+    INNER JOIN run_resolution rr
+      ON rr.doc_id = c.doc_id
+     AND rr.active_run_id IS NOT NULL
+     AND c.run_id = rr.active_run_id
     WHERE EXISTS (
       SELECT 1
       FROM tokens t

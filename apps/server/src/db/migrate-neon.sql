@@ -319,6 +319,19 @@ CREATE TABLE IF NOT EXISTS corpus_ingest_runs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS corpus_active_runs (
+  doc_id TEXT PRIMARY KEY REFERENCES corpus_documents(doc_id) ON DELETE CASCADE,
+  run_id TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_corpus_active_runs_run_id ON corpus_active_runs(run_id);
+
+INSERT INTO corpus_active_runs (doc_id, run_id, updated_by)
+VALUES ('dbms-ramakrishnan-3rd-edition', 'run-1774671570-b1353117', 'migrate-neon.sql:seed')
+ON CONFLICT (doc_id) DO NOTHING;
+
 -- ============================================================================
 -- Verification query
 -- ============================================================================

@@ -1,13 +1,17 @@
 import { Router, Request, Response } from 'express';
 import type { ApiResponse } from '../types.js';
 import {
+  getCorpusActiveRuns,
   getCorpusChunksByUnitId,
   getCorpusManifest,
+  setCorpusActiveRun,
   getCorpusUnitById,
   getCorpusUnitsIndex,
   isUsingNeon,
   searchCorpus,
 } from '../db/index.js';
+import { requireAuth, requireInstructor } from '../middleware/auth.js';
+import { requireCsrf } from '../middleware/csrf.js';
 
 const router = Router();
 
@@ -156,6 +160,76 @@ router.get('/manifest', async (_req: Request, res: Response) => {
       message: error instanceof Error ? error.message : 'Unknown error',
     };
     res.status(500).json(response);
+  }
+});
+
+router.get('/active-runs', async (_req: Request, res: Response) => {
+  if (!isUsingNeon()) {
+    const response: ApiResponse<never> = {
+      success: false,
+      error: 'Corpus API requires Neon mode',
+      message: 'Set DATABASE_URL (or Neon env aliases) to enable remote corpus.',
+    };
+    res.status(503).json(response);
+    return;
+  }
+
+  try {
+    const activeRuns = await getCorpusActiveRuns();
+    const response: ApiResponse<{ activeRuns: typeof activeRuns }> = {
+      success: true,
+      data: { activeRuns },
+      message: `Loaded ${activeRuns.length} active run mapping(s).`,
+    };
+    res.json(response);
+  } catch (error) {
+    const response: ApiResponse<never> = {
+      success: false,
+      error: 'Failed to read corpus active-run mappings',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    };
+    res.status(500).json(response);
+  }
+});
+
+router.post('/active-run', requireAuth, requireInstructor, requireCsrf, async (req: Request, res: Response) => {
+  if (!isUsingNeon()) {
+    const response: ApiResponse<never> = {
+      success: false,
+      error: 'Corpus API requires Neon mode',
+      message: 'Set DATABASE_URL (or Neon env aliases) to enable remote corpus.',
+    };
+    res.status(503).json(response);
+    return;
+  }
+
+  const docId = asString(req.body?.docId);
+  const runId = asString(req.body?.runId);
+  if (!docId || !runId) {
+    const response: ApiResponse<never> = {
+      success: false,
+      error: 'Invalid request',
+      message: 'docId and runId are required',
+    };
+    res.status(400).json(response);
+    return;
+  }
+
+  try {
+    const activeRun = await setCorpusActiveRun(docId, runId, req.auth?.learnerId ?? null);
+    const response: ApiResponse<{ activeRun: typeof activeRun }> = {
+      success: true,
+      data: { activeRun },
+      message: `Active corpus run updated for ${docId}.`,
+    };
+    res.json(response);
+  } catch (error) {
+    const response: ApiResponse<never> = {
+      success: false,
+      error: 'Failed to set active corpus run',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    };
+    res.status(400).json(response);
   }
 });
 

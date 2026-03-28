@@ -21,6 +21,7 @@ import * as sqliteDb from './sqlite.js';
 import { hasDbEnv } from './env-resolver.js';
 
 export type {
+  CorpusActiveRunRow,
   CorpusChunkRow,
   CorpusManifestDocumentRow,
   CorpusUnitRow,
@@ -242,6 +243,25 @@ export async function getCorpusChunksByUnitId(unitId: string, limit = 50) {
 
 export async function searchCorpus(query: string, limit = 10) {
   return isUsingNeon() ? neonDb.searchCorpus(query, limit) : [];
+}
+
+export async function getCorpusActiveRuns() {
+  return isUsingNeon() ? neonDb.listCorpusActiveRuns() : [];
+}
+
+export async function getCorpusActiveRun(docId: string) {
+  return isUsingNeon() ? neonDb.getCorpusActiveRun(docId) : null;
+}
+
+export async function setCorpusActiveRun(
+  docId: string,
+  runId: string,
+  updatedBy?: string | null,
+) {
+  if (!isUsingNeon()) {
+    throw new Error('Corpus active-run updates require Neon mode');
+  }
+  return neonDb.setCorpusActiveRun({ docId, runId, updatedBy });
 }
 
 // ============================================================================

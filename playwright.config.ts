@@ -101,6 +101,7 @@ export default defineConfig({
         '**/student-multi-device-persistence.spec.ts',
         '**/instructor-section-scope.spec.ts',
         '**/api-authz.spec.ts',
+        '**/hint-stability-beta.spec.ts',
       ],
     },
 
@@ -115,6 +116,7 @@ export default defineConfig({
         '**/student-multi-device-persistence.spec.ts',
         '**/instructor-section-scope.spec.ts',
         '**/api-authz.spec.ts',
+        '**/hint-stability-beta.spec.ts',
       ],
       dependencies: ['setup:auth'],
       use: {

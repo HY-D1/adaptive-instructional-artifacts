@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const isUsingNeonMock = vi.fn();
 const getCorpusManifestMock = vi.fn();
 const getCorpusUnitsIndexMock = vi.fn();
+const getCorpusActiveRunsMock = vi.fn();
+const setCorpusActiveRunMock = vi.fn();
 const getCorpusUnitByIdMock = vi.fn();
 const getCorpusChunksByUnitIdMock = vi.fn();
 const searchCorpusMock = vi.fn();
@@ -13,6 +15,8 @@ vi.mock('../../../apps/server/src/db/index.js', () => ({
   isUsingNeon: isUsingNeonMock,
   getCorpusManifest: getCorpusManifestMock,
   getCorpusUnitsIndex: getCorpusUnitsIndexMock,
+  getCorpusActiveRuns: getCorpusActiveRunsMock,
+  setCorpusActiveRun: setCorpusActiveRunMock,
   getCorpusUnitById: getCorpusUnitByIdMock,
   getCorpusChunksByUnitId: getCorpusChunksByUnitIdMock,
   searchCorpus: searchCorpusMock,
@@ -70,6 +74,8 @@ afterEach(() => {
   isUsingNeonMock.mockReset();
   getCorpusManifestMock.mockReset();
   getCorpusUnitsIndexMock.mockReset();
+  getCorpusActiveRunsMock.mockReset();
+  setCorpusActiveRunMock.mockReset();
   getCorpusUnitByIdMock.mockReset();
   getCorpusChunksByUnitIdMock.mockReset();
   searchCorpusMock.mockReset();
@@ -95,6 +101,9 @@ describe('neon corpus contract', () => {
         parserBackend: 'docling',
         pipelineVersion: 'v1',
         runId: 'run-1',
+        activeRunId: 'run-1',
+        activeRunUpdatedAt: new Date().toISOString(),
+        activeRunUpdatedBy: 'test',
         unitCount: 2,
         chunkCount: 8,
         createdAt: new Date().toISOString(),
@@ -119,9 +128,10 @@ describe('neon corpus contract', () => {
 
     const result = await invokeJsonHandler(handler, {});
     expect(result.status).toBe(200);
-    const json = result.json as { success: boolean; data?: { documents: Array<{ docId: string }> } };
+    const json = result.json as { success: boolean; data?: { documents: Array<{ docId: string; activeRunId: string | null }> } };
     expect(json.success).toBe(true);
     expect(json.data?.documents[0]?.docId).toBe('dbms-ramakrishnan-3rd-edition');
+    expect(json.data?.documents[0]?.activeRunId).toBe('run-1');
   });
 
   it('rejects empty search query', async () => {
@@ -136,6 +146,32 @@ describe('neon corpus contract', () => {
 
     const result = await invokeJsonHandler(handler, { body: { query: '   ' } });
     expect(result.status).toBe(400);
+  });
+
+  it('returns active-run mappings', async () => {
+    const { corpusRouter } = await import('../../../apps/server/src/routes/corpus');
+    const handler = getRouteHandler(
+      corpusRouter as unknown as { stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }> },
+      'get',
+      '/active-runs',
+    );
+
+    isUsingNeonMock.mockReturnValue(true);
+    getCorpusActiveRunsMock.mockResolvedValue([
+      {
+        docId: 'dbms-ramakrishnan-3rd-edition',
+        runId: 'run-1774671570-b1353117',
+        updatedAt: new Date().toISOString(),
+        updatedBy: 'test',
+      },
+    ]);
+
+    const result = await invokeJsonHandler(handler, {});
+    expect(result.status).toBe(200);
+    const json = result.json as { success: boolean; data?: { activeRuns?: Array<{ docId: string; runId: string }> } };
+    expect(json.success).toBe(true);
+    expect(json.data?.activeRuns?.[0]?.docId).toBe('dbms-ramakrishnan-3rd-edition');
+    expect(json.data?.activeRuns?.[0]?.runId).toBe('run-1774671570-b1353117');
   });
 
   it('returns 404 for unknown unit', async () => {
