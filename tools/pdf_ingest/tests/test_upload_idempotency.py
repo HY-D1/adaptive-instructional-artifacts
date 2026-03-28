@@ -132,3 +132,33 @@ def test_upload_uses_upserts_for_idempotency(monkeypatch, tmp_path: Path) -> Non
     assert "ON CONFLICT (unit_id) DO UPDATE" in statements
     assert "INSERT INTO corpus_chunks" in statements
     assert "ON CONFLICT (chunk_id) DO UPDATE" in statements
+
+
+def test_resolve_database_url_uses_runtime_priority() -> None:
+    url, source = cli._resolve_database_url(
+        "",
+        {
+            "adaptive_data_POSTGRES_URL": "postgres://prefixed-postgres",
+            "adaptive_data_DATABASE_URL": "postgres://prefixed-db",
+            "NEON_DATABASE_URL": "postgres://neon",
+        },
+    )
+    assert url == "postgres://neon"
+    assert source == "NEON_DATABASE_URL"
+
+    url2, source2 = cli._resolve_database_url(
+        "",
+        {
+            "adaptive_data_POSTGRES_URL": "postgres://prefixed-postgres",
+            "adaptive_data_DATABASE_URL": "postgres://prefixed-db",
+        },
+    )
+    assert url2 == "postgres://prefixed-db"
+    assert source2 == "adaptive_data_DATABASE_URL"
+
+    explicit_url, explicit_source = cli._resolve_database_url(
+        "postgres://explicit",
+        {"DATABASE_URL": "postgres://ignored"},
+    )
+    assert explicit_url == "postgres://explicit"
+    assert explicit_source == "--database-url"

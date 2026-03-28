@@ -5,6 +5,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Mapping
 
 import psycopg
 
@@ -19,6 +20,13 @@ from .config import (
 )
 from .docling_pipeline import ExtractFailure, extract_with_docling
 from .export_bundle import load_bundle, write_bundle
+
+DB_ENV_PRIORITY = (
+    "DATABASE_URL",
+    "NEON_DATABASE_URL",
+    "adaptive_data_DATABASE_URL",
+    "adaptive_data_POSTGRES_URL",
+)
 
 
 def _parse_bool(value: str) -> bool:
@@ -109,6 +117,21 @@ def _ensure_corpus_schema(conn: psycopg.Connection) -> None:
         )
 
 
+def _resolve_database_url(
+    explicit_database_url: str = "",
+    env: Mapping[str, str | None] = os.environ,
+) -> tuple[str, str | None]:
+    explicit = (explicit_database_url or "").strip()
+    if explicit:
+        return explicit, "--database-url"
+
+    for key in DB_ENV_PRIORITY:
+        value = (env.get(key) or "").strip()
+        if value:
+            return value, key
+    return "", None
+
+
 def cmd_doctor(_args: argparse.Namespace) -> int:
     print(f"LOCAL_CORPUS_PIPELINE_VERSION={LOCAL_CORPUS_PIPELINE_VERSION}")
     print(f"source_policy={SOURCE_POLICY}")
@@ -187,12 +210,17 @@ def cmd_extract(args: argparse.Namespace) -> int:
 
 
 def cmd_upload(args: argparse.Namespace) -> int:
+    database_url, database_env_source = _resolve_database_url(args.database_url)
     cfg = UploadConfig(
         bundle_dir=Path(args.bundle).expanduser().resolve(),
-        database_url=args.database_url or os.getenv("DATABASE_URL", ""),
+        database_url=database_url,
     )
     if not cfg.database_url:
-        raise ValueError("--database-url or DATABASE_URL is required")
+        raise ValueError(
+            "--database-url or one of "
+            + ", ".join(DB_ENV_PRIORITY)
+            + " is required"
+        )
 
     bundle = load_bundle(cfg.bundle_dir)
     embedding_backends = {
@@ -323,6 +351,7 @@ def cmd_upload(args: argparse.Namespace) -> int:
         "units_uploaded": len(bundle.units),
         "chunks_uploaded": len(bundle.chunks),
         "bundle_dir": str(cfg.bundle_dir),
+        "database_env_source": database_env_source,
     }, indent=2))
     return 0
 

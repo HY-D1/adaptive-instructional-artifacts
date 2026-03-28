@@ -51,15 +51,16 @@
 >   `https://adaptive-instructional-artifacts-*.vercel.app`
 > - Do not use `*` with credentialed cookies.
 
-> **Env var resolution order**: The backend checks these four names in priority order (`DATABASE_URL` → `NEON_DATABASE_URL` → `adaptive_data_DATABASE_URL` → `adaptive_data_POSTGRES_URL`) and uses the first non-empty value. You only need to set one.
+> **Env var resolution order**: Runtime + ingest + verification now use the same priority (`DATABASE_URL` → `NEON_DATABASE_URL` → `adaptive_data_DATABASE_URL` → `adaptive_data_POSTGRES_URL`) and use the first non-empty value. You only need to set one.
+> This includes backend runtime (`/health`, `/api/system/persistence-status`), local ingest upload (`npm run ingest:upload`), and corpus verification (`npm run corpus:verify`).
 > **After changing env vars you must redeploy** — Vercel bakes env vars into the build/runtime at deploy time. Adding or changing a variable without redeploying has no effect.
 
 ### Deployment Matrix (Last Verified)
 
 | Environment | Frontend URL | Backend URL | Env source | Last verified (UTC) |
 |-------------|--------------|-------------|------------|---------------------|
-| Production | `https://adaptive-instructional-artifacts.vercel.app` | `https://adaptive-instructional-artifacts-ap.vercel.app` | `DATABASE_URL` via `/health` + `/api/system/persistence-status` | 2026-03-25T03:42Z |
-| Preview | `https://adaptive-instructional-artifacts-epaibrvsf-hy-d1s-projects.vercel.app` | `https://adaptive-instructional-artifacts-ap.vercel.app` (paired backend) | n/a (frontend is Vercel-protected without bypass secret) | 2026-03-25T03:42Z |
+| Production | `https://adaptive-instructional-artifacts.vercel.app` | `https://adaptive-instructional-artifacts-ap.vercel.app` | `DATABASE_URL` via `/health` + `/api/system/persistence-status` | 2026-03-28T01:40Z |
+| Preview | `https://adaptive-instructional-artifacts-git-fea-1e5553-hy-d1s-projects.vercel.app` | `https://adaptive-instructional-artifacts-api-backend-5qfmevvrv.vercel.app` (preview validate), `https://adaptive-instructional-artifacts-ap.vercel.app` (frontend target) | `DATABASE_URL` via preview `/health` + `/api/system/persistence-status` | 2026-03-28T01:40Z |
 
 ### Related Projects Note
 

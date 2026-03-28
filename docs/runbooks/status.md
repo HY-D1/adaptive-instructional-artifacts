@@ -444,3 +444,94 @@ Changed files (this checkpoint scope):
 
 Residual risk:
 - Deployed backend URL configured in local `VITE_API_BASE_URL` returned `404` for `/api/corpus/manifest` during this run; corpus read acceptance was validated through the local `apps/server` process against Neon.
+
+## Checkpoint — 2026-03-27 18:40 PDT
+
+Status: **PARTIAL (deployment contract closed; parser hardening still pending)**
+
+Scope implemented:
+- Closed deployed corpus API contract gap with preview-first rollout:
+  - verified mismatch on production alias before promotion
+  - deployed branch backend preview and validated full `/api/corpus/*` matrix
+  - promoted backend to production alias and revalidated the same matrix
+- Normalized DB env contract for ingest/runtime parity:
+  - local ingest upload now resolves the same env priority as runtime/verify
+  - root `ingest:upload` no longer forces `DATABASE_URL` shell remap
+- Captured app-context readback proof from deployed frontend bundles (preview + production) with in-browser manifest fetch returning real `docId/runId`.
+
+Evidence:
+- Pre-fix production alias mismatch confirmed:
+  - alias target metadata:
+    - `adaptive-instructional-artifacts-ap.vercel.app` → `dpl_ELjiSvDruW7N5b5351CwHeziQJAR`
+    - commit sha: `d0541013d401eec7117784e113d8f98db250e2e4` (`main`)
+  - endpoint checks before promotion:
+    - `GET /health` ✅ `200`
+    - `GET /api/system/persistence-status` ✅ `200`
+    - `GET /api/corpus/manifest` ❌ `404`
+    - `GET /api/corpus/unit/dbms-ramakrishnan-3rd-edition%2Fpage-50` ❌ `404`
+- Preview deploy (branch/backend):
+  - command:
+    - `VERCEL_ORG_ID=team_BxlA36kEPgWxAMjQnJ4DBtQ2 VERCEL_PROJECT_ID=prj_vR3HTHqulLCVqv5EnSMfnStWP4cZ npx vercel deploy --yes`
+  - deployment:
+    - `dpl_3eX1h5fiWToDeNdDLydP2v4kj94G`
+    - `https://adaptive-instructional-artifacts-api-backend-5qfmevvrv.vercel.app`
+  - preview endpoint matrix (via share-cookie curl) all green:
+    - `GET /health` ✅ `200` (`db=neon`, `envSource=DATABASE_URL`)
+    - `GET /api/system/persistence-status` ✅ `200`
+    - `GET /api/corpus/manifest` ✅ `200`
+      - `docId=dbms-ramakrishnan-3rd-edition`
+      - `runId=run-1774660166-b1353117`
+      - `unitCount=47`, `chunkCount=107`
+    - `GET /api/corpus/unit/dbms-ramakrishnan-3rd-edition%2Fpage-50` ✅ `200`
+      - `runId=run-1774660166-b1353117`, `chunkCount=3`
+    - `POST /api/corpus/search` (`query=data independence`, `limit=2`) ✅ `200`
+      - `resultCount=2`, `firstRunId=run-1774660166-b1353117`
+- Production promotion:
+  - command:
+    - `VERCEL_ORG_ID=team_BxlA36kEPgWxAMjQnJ4DBtQ2 VERCEL_PROJECT_ID=prj_vR3HTHqulLCVqv5EnSMfnStWP4cZ npx vercel deploy --prod --yes`
+  - deployment:
+    - `dpl_FYY7Y2DWjN1dgsworErUf5a7eatW`
+    - `https://adaptive-instructional-artifacts-api-backend-ca6dflyn8.vercel.app`
+    - aliased: `https://adaptive-instructional-artifacts-ap.vercel.app`
+  - alias metadata after promotion:
+    - production alias now points to commit `b0d6d5ded6569211a3c7bc4394541aeea9c72624`
+  - production endpoint matrix all green:
+    - `GET /health` ✅ `200`
+    - `GET /api/system/persistence-status` ✅ `200`
+    - `GET /api/corpus/manifest` ✅ `200`
+      - `docId=dbms-ramakrishnan-3rd-edition`
+      - `runId=run-1774660166-b1353117`
+      - `unitCount=47`, `chunkCount=107`
+    - `GET /api/corpus/unit/dbms-ramakrishnan-3rd-edition%2Fpage-50` ✅ `200`
+      - `runId=run-1774660166-b1353117`, `chunkCount=3`
+    - `POST /api/corpus/search` (`query=data independence`, `limit=2`) ✅ `200`
+      - `resultCount=2`, `firstRunId=run-1774660166-b1353117`
+- Deployed app-context readback proof:
+  - one-off Playwright browser probe:
+    - preview frontend:
+      - page: `https://adaptive-instructional-artifacts-git-fea-1e5553-hy-d1s-projects.vercel.app`
+      - bundle module: `/assets/index-KRI5y1_Y.js`
+      - extracted backend target: `https://adaptive-instructional-artifacts-ap.vercel.app`
+      - in-browser `GET /api/corpus/manifest` returned `200`, `docId=dbms-ramakrishnan-3rd-edition`, `runId=run-1774660166-b1353117`
+    - production frontend:
+      - page: `https://adaptive-instructional-artifacts.vercel.app`
+      - bundle module: `/assets/index-CiYtiJNR.js`
+      - extracted backend target: `https://adaptive-instructional-artifacts-ap.vercel.app`
+      - in-browser `GET /api/corpus/manifest` returned `200`, `docId=dbms-ramakrishnan-3rd-edition`, `runId=run-1774660166-b1353117`
+
+Build/test gates in this checkpoint:
+- `source tools/pdf_ingest/.venv/bin/activate && PYTHONPATH=tools/pdf_ingest/src python -m pytest -q tools/pdf_ingest/tests/test_upload_idempotency.py` ✅ (2 passed)
+- `npm run server:build` ✅
+- `npm run build` ✅
+- `npm run test:install-browsers` ✅ (Chromium installed for browser proof script)
+
+Changed files (this checkpoint scope):
+- `tools/pdf_ingest/src/pdf_ingest/cli.py`
+- `tools/pdf_ingest/tests/test_upload_idempotency.py`
+- `package.json`
+- `tools/pdf_ingest/README.md`
+- `docs/DEPLOYMENT.md`
+- `docs/runbooks/status.md`
+
+Residual risk:
+- Parser quality remains fallback-driven for this source PDF (`docling_fallback_pymupdf`); deployment contract is now green but parser-quality hardening is still pending.
