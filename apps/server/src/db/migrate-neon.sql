@@ -291,7 +291,7 @@ CREATE TABLE IF NOT EXISTS corpus_chunks (
   doc_id TEXT NOT NULL REFERENCES corpus_documents(doc_id) ON DELETE CASCADE,
   page INT NOT NULL,
   chunk_text TEXT NOT NULL,
-  embedding vector(768) NOT NULL,
+  embedding vector NOT NULL,
   embedding_model TEXT NOT NULL,
   parser_backend TEXT NOT NULL,
   pipeline_version TEXT NOT NULL,
@@ -299,6 +299,9 @@ CREATE TABLE IF NOT EXISTS corpus_chunks (
   metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE IF EXISTS corpus_chunks
+  ALTER COLUMN embedding TYPE vector;
 
 CREATE INDEX IF NOT EXISTS idx_corpus_chunks_doc_id ON corpus_chunks(doc_id);
 CREATE INDEX IF NOT EXISTS idx_corpus_chunks_unit_id ON corpus_chunks(unit_id);

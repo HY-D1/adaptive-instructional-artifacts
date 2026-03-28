@@ -76,8 +76,12 @@ class DiagnosticsRecord(BaseModel):
     parser_backend: str
     pipeline_version: str
     source_policy: str
+    embedding_backend: str | None = None
+    embedding_backends: list[str] = Field(default_factory=list)
     embedding_model: str
     embedding_dimension: int
+    embedding_bakeoff_version: str | None = None
+    embedding_queryset_version: str | None = None
     mlx_enabled: bool
     mlx_model: str | None = None
     started_at: datetime
@@ -99,8 +103,12 @@ class ManifestRecord(BaseModel):
     product_fit_eval_version: str | None = None
     source_policy: str
     parser_backend: str
+    embedding_backend: str | None = None
+    embedding_backends: list[str] = Field(default_factory=list)
     embedding_model: str
     embedding_dimension: int
+    embedding_bakeoff_version: str | None = None
+    embedding_queryset_version: str | None = None
     doc_count: int
     unit_count: int
     chunk_count: int

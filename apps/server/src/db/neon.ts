@@ -397,7 +397,7 @@ export async function initializeSchema(): Promise<void> {
       doc_id TEXT NOT NULL REFERENCES corpus_documents(doc_id) ON DELETE CASCADE,
       page INT NOT NULL,
       chunk_text TEXT NOT NULL,
-      embedding vector(768) NOT NULL,
+      embedding vector NOT NULL,
       embedding_model TEXT NOT NULL,
       parser_backend TEXT NOT NULL,
       pipeline_version TEXT NOT NULL,
@@ -406,6 +406,7 @@ export async function initializeSchema(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+  await db`ALTER TABLE corpus_chunks ALTER COLUMN embedding TYPE vector`;
 
   await db`CREATE INDEX IF NOT EXISTS idx_corpus_chunks_doc_id ON corpus_chunks(doc_id)`;
   await db`CREATE INDEX IF NOT EXISTS idx_corpus_chunks_unit_id ON corpus_chunks(unit_id)`;

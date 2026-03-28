@@ -10,8 +10,10 @@ from pathlib import Path
 LOCAL_CORPUS_PIPELINE_VERSION = os.getenv("LOCAL_CORPUS_PIPELINE_VERSION", "v1")
 SOURCE_POLICY = "local_only_raw_remote_processed"
 PARSER_BACKEND = "docling"
-DEFAULT_EMBEDDING_MODEL = "embeddinggemma"
-DEFAULT_EMBEDDING_DIMENSION = 768
+DEFAULT_EMBEDDING_MODEL = os.getenv("PDF_INGEST_EMBEDDING_MODEL", "embeddinggemma:latest")
+DEFAULT_EMBEDDING_DIMENSION = int(os.getenv("PDF_INGEST_EMBEDDING_DIMENSION", "0"))
+DEFAULT_EMBEDDING_BAKEOFF_VERSION = os.getenv("EMBEDDING_BAKEOFF_VERSION", "")
+DEFAULT_EMBEDDING_QUERYSET_VERSION = os.getenv("EMBEDDING_QUERYSET_VERSION", "")
 DEFAULT_CHUNK_WORDS = 180
 DEFAULT_CHUNK_OVERLAP = 30
 DEFAULT_APPROX_PAGES_PER_CHAPTER = 25
@@ -30,6 +32,8 @@ class ExtractConfig:
     mlx_model: str = ""
     embedding_model: str = DEFAULT_EMBEDDING_MODEL
     embedding_dimension: int = DEFAULT_EMBEDDING_DIMENSION
+    embedding_bakeoff_version: str = DEFAULT_EMBEDDING_BAKEOFF_VERSION
+    embedding_queryset_version: str = DEFAULT_EMBEDDING_QUERYSET_VERSION
 
 
 @dataclass(frozen=True)

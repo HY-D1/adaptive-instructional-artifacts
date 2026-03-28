@@ -57,6 +57,7 @@
     "ingest:upload": "bash -lc 'source tools/pdf_ingest/.venv/bin/activate && PYTHONPATH=tools/pdf_ingest/src python -m pdf_ingest.cli upload --bundle .local/ingest-runs/ramakrishnan-smoke'",
     "ingest:smoke": "npm run ingest:extract && npm run ingest:upload && curl -sS http://localhost:3001/api/corpus/manifest",
     "corpus:product-fit": "node scripts/evaluate-corpus-product-fit.mjs --doc-id dbms-ramakrishnan-3rd-edition --run-id run-1774660166-b1353117",
+    "embedding:bakeoff": "node scripts/run-embedding-bakeoff.mjs --doc-id dbms-ramakrishnan-3rd-edition --run-id run-1774660166-b1353117 --models embeddinggemma:latest,qwen3-embedding:0.6b,qwen3-embedding:4b",
     "corpus:verify": "node scripts/verify-corpus.mjs",
     "check:source-grounding": "node scripts/check-source-grounding.mjs",
     "textbook:sync": "node scripts/sync-helper-export.mjs",

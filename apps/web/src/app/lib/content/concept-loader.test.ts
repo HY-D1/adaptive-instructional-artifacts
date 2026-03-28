@@ -76,6 +76,47 @@ describe('remote corpus shaping', () => {
     expect(chunks?.[0].chunkId).toBe('dbms-ramakrishnan-3rd-edition/page-40#hint-source');
     expect(chunks?.[0].text).toContain('WHERE');
   });
+
+  it('falls back to base title/summary when product fields are missing', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true,
+        data: {
+          documents: [],
+          units: [
+            {
+              unitId: 'dbms-ramakrishnan-3rd-edition/page-44',
+              docId: 'dbms-ramakrishnan-3rd-edition',
+              conceptId: 'dbms-ramakrishnan-3rd-edition/page-44',
+              title: 'Page 44',
+              displayTitle: null,
+              summary: 'Advantages of a DBMS include data independence and centralized administration.',
+              displaySummary: null,
+              hintSourceExcerpt: null,
+              explanationContext: null,
+              contentMarkdown: 'Longer source body.',
+              difficulty: 'beginner',
+              pageStart: 44,
+              pageEnd: 44,
+              runId: 'run-1774671570-b1353117',
+              metadata: {},
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        },
+      }),
+    } as Response);
+
+    await loadConceptMap();
+    const concept = await getConcept('dbms-ramakrishnan-3rd-edition/page-44');
+    expect(concept).not.toBeNull();
+    expect(concept?.title).toBe('Page 44');
+    expect(concept?.definition).toContain('Advantages of a DBMS');
+
+    const chunks = getConceptChunks('dbms-ramakrishnan-3rd-edition/page-44');
+    expect(chunks?.[0].text).toContain('Advantages of a DBMS');
+  });
 });
 
 describe('resolveConceptId', () => {

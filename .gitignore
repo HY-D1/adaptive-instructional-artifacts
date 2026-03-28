@@ -71,6 +71,7 @@ PROFILE_VALIDATION_TEST_REPORT.md
 !docs/week1-status.md
 !docs/runbooks/*.md
 !docs/research/corpus-product-fit-audit.md
+!docs/research/embedding-bakeoff-dbms-ramakrishnan.md
 
 # Architecture diagrams (local only)
 diagrams/

@@ -2,216 +2,121 @@
 
 Date: 2026-03-27
 Doc: `dbms-ramakrishnan-3rd-edition`
-Run: `run-1774660166-b1353117`
-Product-fit evaluator: `PRODUCT_FIT_EVAL_VERSION=v1`
+
+Versions:
+- `PRODUCT_FIT_EVAL_VERSION=v1`
+- `EMBEDDING_BAKEOFF_VERSION=v1`
+- `EMBEDDING_QUERYSET_VERSION=v1`
 
 ## Scope
 
-This audit answers whether current corpus outputs are usable for:
-1. hints
-2. learner-facing explanations
-3. learning-page concept content
+This audit captures:
+1. locked baseline behavior on legacy run `run-1774660166-b1353117`
+2. post-bakeoff winner run behavior on `run-1774671570-b1353117` (`qwen3-embedding:4b`)
+3. parity across:
+   - raw Neon source
+   - local Neon-backed API (current branch)
+   - deployed backend API (`https://adaptive-instructional-artifacts-ap.vercel.app`)
 
-Evidence sources used:
-- Local bundle artifacts:
-  - `.local/ingest-runs/run-1774660166-b1353117/product-fit-report.json`
-- Neon rows for the same run:
-  - `.local/ingest-runs/run-1774660166-b1353117/evidence/neon-row-samples.json`
-- API payloads:
-  - local current-branch API: `.local/ingest-runs/run-1774660166-b1353117/evidence/local-api/*.json`
-  - deployed API: `.local/ingest-runs/run-1774660166-b1353117/evidence/deployed-api/*.json`
-
-## Gate and Rubric
-
-Thresholds enforced by evaluator (`v1`):
-- structural checks: must pass 100%
-- `hints >= 0.65`
-- `explanations >= 0.70`
-- `learning_page >= 0.70`
-- `overall >= 0.70`
-- critical failures: must be 0
-
-## Baseline vs Current Runtime
+## Baseline (Locked Before Changes)
 
 | Source | Pass | Critical failures | Hints | Explanations | Learning page | Overall | Notes |
 |---|---:|---:|---:|---:|---:|---:|---|
-| Neon rows (`run-1774660166-b1353117`) | ❌ | 47 | 0.8965 | 0.9368 | 0.9627 | 0.9320 | fails on `page_span_not_unit_scoped` + `generic_page_title` |
-| Deployed API (`adaptive-instructional-artifacts-ap.vercel.app`) | ❌ | 47 | 0.8965 | 0.9368 | 0.9627 | 0.9320 | payloads still expose wide page spans and no product fields |
-| Local API (current branch) | ✅ | 0 | 0.8931 | 0.9325 | 0.9576 | 0.9277 | page span normalized, product fields surfaced |
+| Neon (`run-1774660166-b1353117`) | ❌ | 47 | 0.8965 | 0.9368 | 0.9627 | 0.9320 | `generic_page_title`, `page_span_not_unit_scoped` |
+| Local API (`http://127.0.0.1:3001`) | ✅ | 0 | 0.8931 | 0.9325 | 0.9576 | 0.9277 | route-level product shaping masked legacy fields |
+| Deployed API (`adaptive-instructional-artifacts-ap.vercel.app`) | ❌ | 47 | 0.8965 | 0.9368 | 0.9627 | 0.9320 | reflected legacy run payload shape |
 
-Additional post-fix extraction run evidence:
-- Run `run-1774665066-b1353117` (bundle source):
-  - pass: `true`
-  - critical failures: `0`
-  - scores: hints `0.93`, explanations `0.9694`, learning_page `0.9715`, overall `0.957`
-  - artifact: `.local/ingest-runs/run-1774665066-b1353117/product-fit-report.json`
+Baseline artifacts:
+- `.local/ingest-runs/run-1774660166-b1353117/product-fit-neon-baseline-20260327/product-fit-report.json`
+- `.local/ingest-runs/run-1774660166-b1353117/product-fit-local-neon-baseline-20260327/product-fit-report.json`
+- `.local/ingest-runs/run-1774660166-b1353117/product-fit-deployed-baseline-20260327/product-fit-report.json`
 
-## Concrete Evidence of the Main Gap (Before Fix)
+## Winner Run (Post Bake-off Adoption)
 
-From Neon rows (`evidence/neon-row-samples.json`):
-- sampled unit rows show page span mismatch, e.g.:
-  - `dbms-ramakrishnan-3rd-edition/page-10` has `page_start=1`, `page_end=50`
-  - `dbms-ramakrishnan-3rd-edition/page-20` has `page_start=1`, `page_end=50`
-- chunk stats for run:
-  - `chunk_count=107`
-  - `distinct_chunk_text_count=107`
-  - `short_chunks=8`
-  - `long_chunks=0`
-  - `min_len=18`, `max_len=1418`, `avg_len=828.04`
+Winner model: `qwen3-embedding:4b`
+Winner run: `run-1774671570-b1353117`
 
-From deployed API (`evidence/deployed-api/unit-page-40.json`):
-- `pageStart=1`, `pageEnd=50`, `title="Page 40"`
-- no `displayTitle`, `hintSourceExcerpt`, `explanationContext`, or `qualityFlags`
+| Source | Pass | Critical failures | Hints | Explanations | Learning page | Overall |
+|---|---:|---:|---:|---:|---:|---:|
+| Neon (`run-1774671570-b1353117`) | ✅ | 0 | 0.9300 | 0.9694 | 0.9715 | 0.9570 |
+| Local API (`http://127.0.0.1:3001`) | ✅ | 0 | 0.9365 | 0.9776 | 0.9813 | 0.9651 |
+| Deployed API (`adaptive-instructional-artifacts-ap.vercel.app`) | ✅ | 0 | 0.9300 | 0.9694 | 0.9715 | 0.9570 |
 
-From local API (`evidence/local-api/unit-page-40.json`):
-- `pageStart=40`, `pageEnd=40`
-- includes `displayTitle`, `hintSourceExcerpt`, `explanationContext`, `qualityFlags`, `productFitScore`
+Winner-run artifacts:
+- `.local/ingest-runs/run-1774671570-b1353117/product-fit-neon/product-fit-report.json`
+- `.local/ingest-runs/run-1774671570-b1353117/product-fit-local-api/product-fit-report.json`
+- `.local/ingest-runs/run-1774671570-b1353117/product-fit-deployed-api/product-fit-report.json`
 
-## 15 Sampled Units (early/mid/late)
+## Before/After (Neon source, same doc)
 
-Sample set from evaluator (`product-fit-local-api/product-fit-report.json`):
+| Metric | Baseline run (`1774660166`) | Winner run (`1774671570`) | Delta |
+|---|---:|---:|---:|
+| Critical failures | 47 | 0 | -47 |
+| Hints | 0.8965 | 0.9300 | +0.0335 |
+| Explanations | 0.9368 | 0.9694 | +0.0326 |
+| Learning page | 0.9627 | 0.9715 | +0.0088 |
+| Overall | 0.9320 | 0.9570 | +0.0250 |
 
-| Unit ID | Start | End | Hintability | Explainability | Learning-page | Overall | Failures |
-|---|---:|---:|---:|---:|---:|---:|---|
-| `.../page-2` | 2 | 2 | 0.6575 | 0.9000 | 0.8800 | 0.8125 | - |
-| `.../page-6` | 6 | 6 | 0.6975 | 0.9500 | 0.9400 | 0.8625 | - |
-| `.../page-10` | 10 | 10 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | `chunk_too_short` |
-| `.../page-13` | 13 | 13 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | - |
-| `.../page-16` | 16 | 16 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | - |
-| `.../page-19` | 19 | 19 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | - |
-| `.../page-23` | 23 | 23 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | - |
-| `.../page-26` | 26 | 26 | 0.7375 | 1.0000 | 1.0000 | 0.9125 | - |
-| `.../page-29` | 29 | 29 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | - |
-| `.../page-33` | 33 | 33 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | - |
-| `.../page-36` | 36 | 36 | 0.3488 | 0.3903 | 0.6800 | 0.4730 | `chunk_too_short` |
-| `.../page-40` | 40 | 40 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | - |
-| `.../page-43` | 43 | 43 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | - |
-| `.../page-47` | 47 | 47 | 0.9200 | 0.9000 | 0.8800 | 0.9000 | - |
-| `.../page-50` | 50 | 50 | 0.9200 | 0.9000 | 0.8800 | 0.9000 | - |
+## Product Usability Proof (Winner Setup)
 
-## 10 Bad Examples
+### A) Hints — 5 retrieval examples
 
-From `samples.badExamples` (`product-fit-local-api/product-fit-report.json`):
+Source:
+- `.local/ingest-runs/run-1774671570-b1353117/evidence/hint-retrieval-examples-winner.jsonl`
 
-| Unit ID | Chunk ID | Overall | Failure |
-|---|---|---:|---|
-| `dbms-ramakrishnan-3rd-edition/page-3` | `.../page-3/chunk-0001` | 0.6441 | `chunk_too_short` |
-| `dbms-ramakrishnan-3rd-edition/page-36` | `.../page-36/chunk-0001` | 0.4730 | `chunk_too_short` |
-| `dbms-ramakrishnan-3rd-edition/page-4` | `.../page-4/chunk-0001` | 0.5216 | `chunk_too_short` |
-| `dbms-ramakrishnan-3rd-edition/page-8` | `.../page-8/chunk-0001` | 0.7118 | `chunk_too_short` |
-| `dbms-ramakrishnan-3rd-edition/page-10` | `.../page-10/chunk-0001` | 1.0000 | `chunk_too_short` |
-| `dbms-ramakrishnan-3rd-edition/page-21` | `.../page-21/chunk-0001` | 1.0000 | `chunk_too_long` |
-| `dbms-ramakrishnan-3rd-edition/page-27` | `.../page-27/chunk-0001` | 1.0000 | `chunk_too_short` |
-| `dbms-ramakrishnan-3rd-edition/page-9` | `.../page-9/chunk-0001` | 0.7147 | - |
-| `dbms-ramakrishnan-3rd-edition/page-2` | `.../page-2/chunk-0001` | 0.8125 | - |
-| `dbms-ramakrishnan-3rd-edition/page-47` | `.../page-47/chunk-0001` | 0.9000 | - |
+Examples (query → top-1 unit / score):
+1. `hint-logical-vs-physical` → `page-49/chunk-0001` (`queryScore=0.9040`)
+2. `hint-integrity-constraints` → `page-46/chunk-0002` (`queryScore=0.8934`)
+3. `hint-file-system-vs-dbms` → `page-43/chunk-0001` (`queryScore=0.8518`)
+4. `hint-data-independence` → `page-50/chunk-0001` (`queryScore=0.8165`)
+5. `hint-foreign-key-meaning` → `page-46/chunk-0002` (`queryScore=0.8103`)
 
-## 10 Acceptable Examples
+Verdict: usable now (grounded top-k retrievals with high relevance on core hint intents).
 
-From `samples.acceptableExamples` (`product-fit-local-api/product-fit-report.json`):
+### B) Explanations — 5 retrieval/context examples
 
-| Unit ID | Chunk ID | Overall |
-|---|---|---:|
-| `dbms-ramakrishnan-3rd-edition/page-7` | `.../page-7/chunk-0001` | 1.0000 |
-| `dbms-ramakrishnan-3rd-edition/page-12` | `.../page-12/chunk-0001` | 1.0000 |
-| `dbms-ramakrishnan-3rd-edition/page-13` | `.../page-13/chunk-0001` | 1.0000 |
-| `dbms-ramakrishnan-3rd-edition/page-15` | `.../page-15/chunk-0001` | 1.0000 |
-| `dbms-ramakrishnan-3rd-edition/page-16` | `.../page-16/chunk-0001` | 1.0000 |
-| `dbms-ramakrishnan-3rd-edition/page-19` | `.../page-19/chunk-0001` | 1.0000 |
-| `dbms-ramakrishnan-3rd-edition/page-20` | `.../page-20/chunk-0001` | 1.0000 |
-| `dbms-ramakrishnan-3rd-edition/page-22` | `.../page-22/chunk-0001` | 1.0000 |
-| `dbms-ramakrishnan-3rd-edition/page-23` | `.../page-23/chunk-0001` | 1.0000 |
-| `dbms-ramakrishnan-3rd-edition/page-24` | `.../page-24/chunk-0001` | 1.0000 |
+Source:
+- `.local/ingest-runs/run-1774671570-b1353117/evidence/explanation-retrieval-examples-winner.jsonl`
 
-## Product Surface Proof
+Examples (query → top-1 unit / score):
+1. `explain-er-before-relational` → `page-48/chunk-0002` (`queryScore=0.9015`)
+2. `explain-dbms-vs-files` → `page-44/chunk-0002` (`queryScore=0.8787`)
+3. `explain-levels-of-abstraction` → `page-48/chunk-0001` (`queryScore=0.8393`)
+4. `explain-poor-schema-design` → `page-46/chunk-0001` (`queryScore=0.8339`)
+5. `explain-relations-and-keys` → `page-46/chunk-0002` (`queryScore=0.8169`)
 
-### A) Hints (5 real payloads)
+Verdict: usable now (high-scoring explanatory retrievals; contextual snippets are rich enough for learner-facing expansion).
 
-Source: `.local/ingest-runs/run-1774660166-b1353117/evidence/hint-ready-payloads.jsonl`
+### C) Learning-page concepts — 5 payload examples
 
-| Unit ID | Page | Hint source excerpt (truncated) | Flags |
-|---|---:|---|---|
-| `.../page-40` | 40 | `Overview of Databa8e SY8tem8 5 1. Database Design and Application Development...` | `generic_title` |
-| `.../page-41` | 41 | `6 CHAPTERrl vVe then briefly describe the internal structure of a DBMS...` | `generic_title` |
-| `.../page-42` | 42 | `Overview of Database Systems 7 the responsibility for running them concurrently...` | `generic_title` |
-| `.../page-43` | 43 | `8 largest and most vigorous market segments... FILE SYSTEMS VERSUS A DBMS...` | `generic_title` |
-| `.../page-44` | 44 | `ADVANTAGES OF A DBMS ... Data Independence...` | `generic_title` |
+Source (local Neon-backed API payloads):
+- `.local/ingest-runs/run-1774671570-b1353117/evidence/local-api/unit-page-40.json`
+- `.local/ingest-runs/run-1774671570-b1353117/evidence/local-api/unit-page-41.json`
+- `.local/ingest-runs/run-1774671570-b1353117/evidence/local-api/unit-page-42.json`
+- `.local/ingest-runs/run-1774671570-b1353117/evidence/local-api/unit-page-43.json`
+- `.local/ingest-runs/run-1774671570-b1353117/evidence/local-api/unit-page-44.json`
 
-Assessment:
-- short and grounded excerpts are available
-- no answer leakage fields are introduced
-
-Verdict: **usable now**
-
-### B) Explanations (5 real payloads)
-
-Source files:
-- `evidence/explanation-unit-page-38.json`
-- `evidence/explanation-unit-page-39.json`
-- `evidence/explanation-unit-page-40.json`
-- `evidence/explanation-unit-page-41.json`
-- `evidence/explanation-unit-page-42.json`
-
-Each payload includes:
-- `displaySummary`
-- `explanationContext`
-- page-scoped `unit.pageStart/pageEnd`
-
-Representative IDs:
-- `dbms-ramakrishnan-3rd-edition/page-38`
-- `dbms-ramakrishnan-3rd-edition/page-39`
-- `dbms-ramakrishnan-3rd-edition/page-40`
-- `dbms-ramakrishnan-3rd-edition/page-41`
-- `dbms-ramakrishnan-3rd-edition/page-42`
-
-Assessment:
-- explanation context is present and source-grounded
-- OCR/front-matter artifacts remain in some units
-
-Verdict: **usable with caveats**
-
-### C) Learning-page concepts (5 real payloads)
-
-Source files:
-- `evidence/unit-page-10.json`
-- `evidence/unit-page-20.json`
-- `evidence/unit-page-30.json`
-- `evidence/unit-page-40.json`
-- `evidence/unit-page-50.json`
-
-Each payload includes:
+Observed payload fields:
 - `displayTitle`
 - `displaySummary`
-- `qualityFlags`
-- corrected `pageStart/pageEnd` at unit level in local API
+- `hintSourceExcerpt`
+- `explanationContext`
+- page-scoped `pageStart/pageEnd`
+- `runId=run-1774671570-b1353117`
 
-Assessment:
-- concept payload is consumable by learning page without extra transforms
-- many titles are still content-noisy and flagged `generic_title`
+Verdict: usable now for UI consumption (payload contains title/summary/context fields in local current-branch API; deployed API still has title/summary-only fallback but remains product-fit-pass for this run).
 
-Verdict: **usable with caveats**
+## Parity Verdict
 
-## Minimum Changes Required and Implemented
+Verdict: **aligned** (materially)
 
-Evidence-backed minimum files changed:
-- `tools/pdf_ingest/src/pdf_ingest/product_fit_rules.py`
-- `tools/pdf_ingest/src/pdf_ingest/quality_eval.py`
-- `tools/pdf_ingest/tests/test_product_fit_rules.py`
-- `scripts/evaluate-corpus-product-fit.mjs`
-- `tools/pdf_ingest/src/pdf_ingest/chunking.py`
-- `tools/pdf_ingest/src/pdf_ingest/mlx_enricher.py`
-- `tools/pdf_ingest/src/pdf_ingest/docling_pipeline.py`
-- `tools/pdf_ingest/src/pdf_ingest/schemas.py`
-- `tools/pdf_ingest/src/pdf_ingest/export_bundle.py`
-- `apps/server/src/db/neon.ts`
-- `apps/server/src/routes/corpus.ts`
-- `apps/web/src/app/lib/content/concept-loader.ts`
-- `apps/web/src/app/lib/api/storage-client.ts`
-- `apps/web/src/app/lib/content/retrieval-bundle.lib.test.ts`
-- `apps/web/src/app/lib/content/concept-loader.test.ts`
+Rationale:
+- All three sources now pass with `critical_failure_count=0` on the same winner run.
+- Surface scores are close enough for product gating across sources.
+- Local API still provides richer product-facing shaping fields than deployed API, but this no longer causes gate failures for the winner run.
 
 ## Remaining Risks
 
-1. Deployed API is not yet on the current branch behavior. Deployed evaluator still fails with 47 critical failures.
-2. `generic_title` remains common in OCR-heavy/front-matter units; this is now non-critical but visible.
-3. A few very short/long chunks remain (`chunk_too_short=6`, `chunk_too_long=1` in local API run).
+1. Historical run readability is limited by current table keys (`unit_id` / `chunk_id` are not run-scoped), so new uploads can overwrite older unit/chunk rows for the same IDs.
+2. OCR noise remains visible in some titles/summaries (`generic_page_title` appears as non-critical quality issue).
+3. `qwen3-embedding:4b` has substantially higher embedding latency; keep `embeddinggemma:latest` as fallback for lower-resource runs.

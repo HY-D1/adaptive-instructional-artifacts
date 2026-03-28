@@ -643,6 +643,14 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
             chunks.append(chunk)
 
     completed = datetime.now(timezone.utc)
+    embedding_backends = sorted(
+        {
+            str(chunk.metadata.get("embedding_backend", "unknown"))
+            for chunk in chunks
+            if isinstance(chunk.metadata, dict)
+        }
+    )
+    embedding_backend_value = ",".join(embedding_backends) if embedding_backends else None
     diagnostics = DiagnosticsRecord(
         run_id=run_id,
         input_path=str(resolved_input),
@@ -653,8 +661,12 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
         parser_backend=parser_backend,
         pipeline_version=LOCAL_CORPUS_PIPELINE_VERSION,
         source_policy=SOURCE_POLICY,
+        embedding_backend=embedding_backend_value,
+        embedding_backends=embedding_backends,
         embedding_model=config.embedding_model,
         embedding_dimension=config.embedding_dimension,
+        embedding_bakeoff_version=(config.embedding_bakeoff_version or None),
+        embedding_queryset_version=(config.embedding_queryset_version or None),
         mlx_enabled=config.mlx_enabled,
         mlx_model=config.mlx_model or None,
         started_at=started,

@@ -612,3 +612,71 @@ Key artifacts added/updated:
 
 Residual risk / next smallest step:
 - Deployed backend still returns pre-hardening corpus shape (wide page spans + no product fields) for this run; deploy current branch backend to close runtime parity between local and production.
+
+## Checkpoint — 2026-03-27 21:26 PDT
+
+Status: **PARTIAL (embedding bake-off complete; winner adopted; cross-source product-fit parity materially aligned)**
+
+Scope completed in this checkpoint:
+- Implemented embedding bake-off harness and deterministic product query set:
+  - `tools/pdf_ingest/src/pdf_ingest/embedding_backends.py`
+  - `tools/pdf_ingest/src/pdf_ingest/embedding_bakeoff.py`
+  - `tools/pdf_ingest/src/pdf_ingest/eval_queries.py`
+  - `scripts/run-embedding-bakeoff.mjs`
+- Added tests for embedding backends/query set/config:
+  - `tools/pdf_ingest/tests/test_embedding_backends.py`
+  - `tools/pdf_ingest/tests/test_eval_queries.py`
+  - `tools/pdf_ingest/tests/test_cli_embedding_config.py`
+- Added minimal configurable winner-adoption path:
+  - model/dimension inference in ingest extract (`--embedding-dimension 0`)
+  - run metadata propagation for embedding backend/model/dimension and bake-off/queryset versions
+  - dimension-flexible vector storage (`vector` instead of `vector(768)`) in ingest/server schema initialization and migration SQL
+- Re-embedded and uploaded winner run for DBMS corpus:
+  - `run_id=run-1774671570-b1353117`
+  - `embedding_model=qwen3-embedding:4b`
+  - `embedding_dimension=2560`
+  - `embedding_backend=ollama`
+- Captured final usability evidence and refreshed research docs:
+  - `docs/research/embedding-bakeoff-dbms-ramakrishnan.md`
+  - `docs/research/corpus-product-fit-audit.md`
+
+Version tags:
+- `EMBEDDING_BAKEOFF_VERSION=v1`
+- `EMBEDDING_QUERYSET_VERSION=v1`
+- `PRODUCT_FIT_EVAL_VERSION=v1`
+
+Command log (actual runs):
+- Baseline gates:
+  - `npm run build` ✅
+  - `npm run server:build` ✅
+  - `node scripts/evaluate-corpus-product-fit.mjs --doc-id dbms-ramakrishnan-3rd-edition --run-id run-1774660166-b1353117 --source neon --output-dir .local/ingest-runs/run-1774660166-b1353117/product-fit-neon-baseline-20260327` ✅ (`critical_failure_count=47`)
+  - `node scripts/evaluate-corpus-product-fit.mjs --doc-id dbms-ramakrishnan-3rd-edition --run-id run-1774660166-b1353117 --source api --api-base-url http://127.0.0.1:3001 --output-dir .local/ingest-runs/run-1774660166-b1353117/product-fit-local-neon-baseline-20260327` ✅ (`critical_failure_count=0`)
+  - `node scripts/evaluate-corpus-product-fit.mjs --doc-id dbms-ramakrishnan-3rd-edition --run-id run-1774660166-b1353117 --source api --api-base-url https://adaptive-instructional-artifacts-ap.vercel.app --output-dir .local/ingest-runs/run-1774660166-b1353117/product-fit-deployed-baseline-20260327` ✅ (`critical_failure_count=47`)
+- Bake-off:
+  - `node scripts/run-embedding-bakeoff.mjs --doc-id dbms-ramakrishnan-3rd-edition --run-id run-1774660166-b1353117 --models embeddinggemma:latest,qwen3-embedding:0.6b,qwen3-embedding:4b --output-dir .local/embedding-bakeoff/20260327-wrapper` ✅
+  - winner: `qwen3-embedding:4b`
+  - runner_up: `embeddinggemma:latest`
+  - fallback: `embeddinggemma:latest`
+- Winner adoption:
+  - `source tools/pdf_ingest/.venv/bin/activate && PYTHONPATH=tools/pdf_ingest/src python -m pdf_ingest.cli extract --input raw_pdf/dbms-ramakrishnan-3rd-edition.pdf --output .local/ingest-runs/dbms-qwen4b --chapter-range 1-2 --mlx-enabled false --embedding-model qwen3-embedding:4b --embedding-dimension 0 --embedding-bakeoff-version v1 --embedding-queryset-version v1` ✅
+  - `set -a; source .env.local; export DATABASE_URL="${adaptive_data_DATABASE_URL}"; source tools/pdf_ingest/.venv/bin/activate && PYTHONPATH=tools/pdf_ingest/src python -m pdf_ingest.cli upload --bundle .local/ingest-runs/dbms-qwen4b` ✅
+- Winner run parity checks:
+  - `node scripts/evaluate-corpus-product-fit.mjs --doc-id dbms-ramakrishnan-3rd-edition --run-id run-1774671570-b1353117 --source neon --output-dir .local/ingest-runs/run-1774671570-b1353117/product-fit-neon` ✅ (`critical_failure_count=0`, `overall=0.9570`)
+  - `node scripts/evaluate-corpus-product-fit.mjs --doc-id dbms-ramakrishnan-3rd-edition --run-id run-1774671570-b1353117 --source api --api-base-url http://127.0.0.1:3001 --output-dir .local/ingest-runs/run-1774671570-b1353117/product-fit-local-api` ✅ (`critical_failure_count=0`, `overall=0.9651`)
+  - `node scripts/evaluate-corpus-product-fit.mjs --doc-id dbms-ramakrishnan-3rd-edition --run-id run-1774671570-b1353117 --source api --api-base-url https://adaptive-instructional-artifacts-ap.vercel.app --output-dir .local/ingest-runs/run-1774671570-b1353117/product-fit-deployed-api` ✅ (`critical_failure_count=0`, `overall=0.9570`)
+- Focused tests:
+  - `source tools/pdf_ingest/.venv/bin/activate && PYTHONPATH=tools/pdf_ingest/src python -m pytest -q tools/pdf_ingest/tests/test_embedding_backends.py tools/pdf_ingest/tests/test_eval_queries.py tools/pdf_ingest/tests/test_cli_embedding_config.py tools/pdf_ingest/tests/test_bundle_schema.py tools/pdf_ingest/tests/test_upload_idempotency.py` ✅ (13 passed)
+  - `npx vitest run apps/web/src/app/lib/content/concept-loader.test.ts` ✅ (38 passed)
+
+Bake-off summary (adaptive retrieval score):
+- `embeddinggemma:latest`: overall `0.5760`, dim `768`, latency `4572.262ms`
+- `qwen3-embedding:0.6b`: overall `0.4999`, dim `1024`, latency `9953.769ms`
+- `qwen3-embedding:4b`: overall `0.6412`, dim `2560`, latency `63072.205ms`
+
+Parity verdict:
+- **aligned (materially)** for winner run `run-1774671570-b1353117`
+  - all three sources pass with `critical_failure_count=0`
+  - local API retains richer product-facing fields; deployed API remains acceptable for gate metrics on this run
+
+Residual risk:
+- historical run readability is limited by current primary keys (`unit_id` / `chunk_id`), so uploading newer runs can overwrite older unit/chunk rows with the same IDs.

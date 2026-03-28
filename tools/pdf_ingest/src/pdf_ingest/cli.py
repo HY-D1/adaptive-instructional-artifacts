@@ -10,14 +10,17 @@ from typing import Mapping
 import psycopg
 
 from .config import (
+    DEFAULT_EMBEDDING_BAKEOFF_VERSION,
     DEFAULT_EMBEDDING_DIMENSION,
     DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_EMBEDDING_QUERYSET_VERSION,
     ExtractConfig,
     LOCAL_CORPUS_PIPELINE_VERSION,
     SOURCE_POLICY,
     UploadConfig,
     parse_chapter_range,
 )
+from .embedding_backends import expected_dimension_for_model
 from .docling_pipeline import ExtractFailure, extract_with_docling
 from .export_bundle import load_bundle, write_bundle
 
@@ -40,6 +43,18 @@ def _parse_bool(value: str) -> bool:
 
 def _vector_literal(values: list[float]) -> str:
     return "[" + ",".join(f"{v:.8f}" for v in values) + "]"
+
+
+def _resolve_embedding_dimension(model: str, requested_dimension: int) -> int:
+    if requested_dimension > 0:
+        return requested_dimension
+    inferred = expected_dimension_for_model(model)
+    if inferred is None:
+        raise ValueError(
+            f"embedding dimension is required for model '{model}'. "
+            "Pass --embedding-dimension explicitly."
+        )
+    return inferred
 
 
 def _ensure_corpus_schema(conn: psycopg.Connection) -> None:
@@ -89,7 +104,7 @@ def _ensure_corpus_schema(conn: psycopg.Connection) -> None:
               doc_id TEXT NOT NULL REFERENCES corpus_documents(doc_id) ON DELETE CASCADE,
               page INT NOT NULL,
               chunk_text TEXT NOT NULL,
-              embedding vector(768) NOT NULL,
+              embedding vector NOT NULL,
               embedding_model TEXT NOT NULL,
               parser_backend TEXT NOT NULL,
               pipeline_version TEXT NOT NULL,
@@ -99,6 +114,7 @@ def _ensure_corpus_schema(conn: psycopg.Connection) -> None:
             )
             """
         )
+        cur.execute("ALTER TABLE corpus_chunks ALTER COLUMN embedding TYPE vector")
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS corpus_ingest_runs (
@@ -160,6 +176,7 @@ def cmd_doctor(_args: argparse.Namespace) -> int:
 
 def cmd_extract(args: argparse.Namespace) -> int:
     chapter_start, chapter_end = parse_chapter_range(args.chapter_range)
+    embedding_dimension = _resolve_embedding_dimension(args.embedding_model, int(args.embedding_dimension))
     config = ExtractConfig(
         input_pdf=Path(args.input).expanduser().resolve(),
         output_dir=Path(args.output).expanduser().resolve(),
@@ -168,7 +185,9 @@ def cmd_extract(args: argparse.Namespace) -> int:
         mlx_enabled=_parse_bool(str(args.mlx_enabled)),
         mlx_model=args.mlx_model,
         embedding_model=args.embedding_model,
-        embedding_dimension=args.embedding_dimension,
+        embedding_dimension=embedding_dimension,
+        embedding_bakeoff_version=args.embedding_bakeoff_version,
+        embedding_queryset_version=args.embedding_queryset_version,
     )
 
     print(json.dumps({
@@ -200,8 +219,12 @@ def cmd_extract(args: argparse.Namespace) -> int:
         "doc_count": bundle.manifest.doc_count,
         "unit_count": bundle.manifest.unit_count,
         "chunk_count": bundle.manifest.chunk_count,
+        "embedding_backend": bundle.diagnostics.embedding_backend,
+        "embedding_backends": bundle.diagnostics.embedding_backends,
         "embedding_model": bundle.manifest.embedding_model,
         "embedding_dimension": bundle.manifest.embedding_dimension,
+        "embedding_bakeoff_version": bundle.manifest.embedding_bakeoff_version,
+        "embedding_queryset_version": bundle.manifest.embedding_queryset_version,
         "resolved_input_path": str(result.resolved_input_path),
         "diagnostics_path": str(result.diagnostics_path),
         "parser_backend": result.source_doc.parser_backend,
@@ -226,7 +249,16 @@ def cmd_upload(args: argparse.Namespace) -> int:
     embedding_backends = {
         chunk.metadata.get("embedding_backend", "unknown")
         for chunk in bundle.chunks
+        if isinstance(chunk.metadata, dict)
     }
+    if not embedding_backends:
+        embedding_backends.update(bundle.diagnostics.embedding_backends)
+    if bundle.diagnostics.embedding_backend:
+        embedding_backends.update(
+            value.strip()
+            for value in str(bundle.diagnostics.embedding_backend).split(",")
+            if value.strip()
+        )
 
     with psycopg.connect(cfg.database_url, autocommit=True) as conn:
         _ensure_corpus_schema(conn)
@@ -245,7 +277,7 @@ def cmd_upload(args: argparse.Namespace) -> int:
                     bundle.diagnostics.run_id,
                     bundle.diagnostics.source_policy,
                     bundle.diagnostics.parser_backend,
-                    ",".join(sorted(str(x) for x in embedding_backends)),
+                    ",".join(sorted(str(x) for x in embedding_backends if str(x))),
                     bundle.diagnostics.embedding_model,
                     bundle.diagnostics.embedding_dimension,
                     bundle.diagnostics.mlx_model,
@@ -370,7 +402,20 @@ def build_parser() -> argparse.ArgumentParser:
     extract.add_argument("--mlx-enabled", default="false")
     extract.add_argument("--mlx-model", default="")
     extract.add_argument("--embedding-model", default=DEFAULT_EMBEDDING_MODEL)
-    extract.add_argument("--embedding-dimension", type=int, default=DEFAULT_EMBEDDING_DIMENSION)
+    extract.add_argument(
+        "--embedding-dimension",
+        type=int,
+        default=DEFAULT_EMBEDDING_DIMENSION,
+        help="Embedding vector dimension. Use 0 to infer from known model names.",
+    )
+    extract.add_argument(
+        "--embedding-bakeoff-version",
+        default=DEFAULT_EMBEDDING_BAKEOFF_VERSION,
+    )
+    extract.add_argument(
+        "--embedding-queryset-version",
+        default=DEFAULT_EMBEDDING_QUERYSET_VERSION,
+    )
     extract.set_defaults(func=cmd_extract)
 
     upload = subparsers.add_parser("upload", help="upload processed bundle to Neon")
