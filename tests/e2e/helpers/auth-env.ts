@@ -34,6 +34,38 @@ function getApiShareToken(): string | undefined {
   );
 }
 
+function extractCookiePair(setCookieHeader: string | null): string {
+  if (!setCookieHeader) return '';
+  const firstPair = setCookieHeader.split(';')[0]?.trim();
+  return firstPair || '';
+}
+
+let cachedPreviewApiCookie: string | null = null;
+
+async function getPreviewApiCookie(): Promise<string> {
+  if (cachedPreviewApiCookie !== null) {
+    return cachedPreviewApiCookie;
+  }
+
+  const shareUrl = process.env.PLAYWRIGHT_API_SHARE_URL?.trim();
+  if (!shareUrl) {
+    cachedPreviewApiCookie = '';
+    return '';
+  }
+
+  try {
+    const response = await fetch(shareUrl, {
+      method: 'GET',
+      redirect: 'manual',
+    });
+    cachedPreviewApiCookie = extractCookiePair(response.headers.get('set-cookie'));
+  } catch {
+    cachedPreviewApiCookie = '';
+  }
+
+  return cachedPreviewApiCookie;
+}
+
 export function resolveFrontendBaseUrl(): string {
   return trimTrailingSlash(process.env.PLAYWRIGHT_BASE_URL ?? DEFAULT_FRONTEND_BASE_URL);
 }
@@ -88,9 +120,15 @@ export async function createApiContext(
   baseURL = resolveApiBaseUrl(),
 ): Promise<APIRequestContext> {
   const extraHTTPHeaders = getVercelBypassHeaders();
+  const previewCookie = await getPreviewApiCookie();
+  const cookieHeaders = previewCookie ? { Cookie: previewCookie } : {};
   return playwright.request.newContext({
     baseURL,
-    ...(Object.keys(extraHTTPHeaders).length > 0 ? { extraHTTPHeaders } : {}),
+    ...(
+      Object.keys(extraHTTPHeaders).length > 0 || Object.keys(cookieHeaders).length > 0
+        ? { extraHTTPHeaders: { ...extraHTTPHeaders, ...cookieHeaders } }
+        : {}
+    ),
   });
 }
 
@@ -107,9 +145,14 @@ export interface NeonPreflightResult {
 
 export async function runNeonPreflight(apiBase = resolveApiBaseUrl()): Promise<NeonPreflightResult> {
   const headers = getVercelBypassHeaders();
+  const previewCookie = await getPreviewApiCookie();
+  const cookieHeaders = previewCookie ? { Cookie: previewCookie } : {};
   const fetchInit = {
     method: 'GET',
-    headers,
+    headers: {
+      ...headers,
+      ...cookieHeaders,
+    },
     signal: AbortSignal.timeout(10_000),
   } satisfies RequestInit;
 

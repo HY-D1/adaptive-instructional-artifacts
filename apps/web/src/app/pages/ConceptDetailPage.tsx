@@ -350,7 +350,15 @@ function MistakesTab({
   quality?: 'good' | 'fallback';
   qualityMetadata?: QualityMetadata;
 }) {
-  const normalizedMistakes = normalizeMistakes(mistakes);
+  const normalizedMistakes = normalizeMistakes(mistakes).filter((mistake) => {
+    const hasSqlPair = Boolean(mistake.incorrect) || Boolean(mistake.correct);
+    const why = mistake.why.trim().toLowerCase();
+    const genericWhy =
+      why === 'review this pattern and retry with one clause at a time.' ||
+      why === 'compare the two sql statements and focus on the clause/order change.';
+    const hasSpecificWhy = why.length >= 50 && !genericWhy;
+    return hasSqlPair || hasSpecificWhy;
+  });
 
   if (normalizedMistakes.length === 0) {
     if (quality === 'fallback' && qualityMetadata?.learnerSafeKeyPoints && qualityMetadata.learnerSafeKeyPoints.length > 0) {

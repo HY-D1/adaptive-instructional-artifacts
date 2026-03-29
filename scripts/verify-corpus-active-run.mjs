@@ -94,25 +94,53 @@ function withShareToken(rawUrl) {
   }
 }
 
-async function fetchJson(url) {
+function extractCookiePair(setCookieHeader) {
+  if (!setCookieHeader || typeof setCookieHeader !== 'string') return '';
+  const firstSegment = setCookieHeader.split(';')[0]?.trim();
+  return firstSegment || '';
+}
+
+async function getPreviewBypassCookie() {
+  const shareUrl = process.env.PLAYWRIGHT_API_SHARE_URL;
+  if (!shareUrl || shareUrl.trim().length === 0) {
+    return '';
+  }
+
+  try {
+    const response = await fetch(shareUrl.trim(), {
+      method: 'GET',
+      redirect: 'manual',
+    });
+    const setCookie = response.headers.get('set-cookie');
+    return extractCookiePair(setCookie);
+  } catch {
+    return '';
+  }
+}
+
+async function fetchJson(url, previewCookie = '') {
+  const cookieHeader = previewCookie ? { Cookie: previewCookie } : {};
   const response = await fetch(withShareToken(url), {
     method: 'GET',
     headers: {
       Accept: 'application/json',
       ...getVercelBypassHeaders(),
+      ...cookieHeader,
     },
   });
   const body = await response.json().catch(() => null);
   return { ok: response.ok, status: response.status, body };
 }
 
-async function postJson(url, payload) {
+async function postJson(url, payload, previewCookie = '') {
+  const cookieHeader = previewCookie ? { Cookie: previewCookie } : {};
   const response = await fetch(withShareToken(url), {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
       ...getVercelBypassHeaders(),
+      ...cookieHeader,
     },
     body: JSON.stringify(payload),
   });
@@ -128,7 +156,8 @@ function fail(summary, mismatches) {
 async function main() {
   const args = parseArgs(process.argv);
   const apiBaseUrl = normalizeBaseUrl(args.apiBaseUrl);
-  const manifestResponse = await fetchJson(`${apiBaseUrl}/api/corpus/manifest`);
+  const previewCookie = await getPreviewBypassCookie();
+  const manifestResponse = await fetchJson(`${apiBaseUrl}/api/corpus/manifest`, previewCookie);
   const hasBypassSecret = Boolean(
     (process.env.VERCEL_AUTOMATION_BYPASS_SECRET || process.env.E2E_VERCEL_BYPASS_SECRET || '').trim(),
   );
@@ -203,6 +232,7 @@ async function main() {
 
       const unitResponse = await fetchJson(
         `${apiBaseUrl}/api/corpus/unit/${encodeURIComponent(unit.unitId)}`,
+        previewCookie,
       );
       if (!unitResponse.ok || !unitResponse.body?.success || !unitResponse.body?.data) {
         mismatches.push({
@@ -253,7 +283,7 @@ async function main() {
       const searchResponse = await postJson(`${apiBaseUrl}/api/corpus/search`, {
         query: queryToken,
         limit: 25,
-      });
+      }, previewCookie);
 
       if (!searchResponse.ok || !searchResponse.body?.success) {
         mismatches.push({

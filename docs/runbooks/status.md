@@ -871,3 +871,72 @@ Surface verdicts (beta):
 
 Caveat to close before “ready”:
 - Preview frontend+backend protected gate still needs deterministic bypass/share behavior in this environment for full preview-first proof; production path is green.
+
+## Checkpoint — 2026-03-28 21:22 PDT
+
+Status: **PARTIAL (parallel supervised beta yes; preview-proof closure still blocked)**
+
+Execution mode:
+- Parallel supervised beta remains acceptable.
+- Broader rollout remains blocked until preview acceptance pack is green.
+
+Preview pair pinned (Vercel):
+- frontend preview deployment:
+  - id: `dpl_AGd4QsbkrxgtTisH834YSz1Q2PVD`
+  - url: `https://adaptive-instructional-artifacts-bew4edbz4-hy-d1s-projects.vercel.app`
+  - commit: `4478c188129133c471620a1a52b3e7df138fcc95`
+- backend preview deployment:
+  - id: `dpl_7nvcxH1qbXFAkkUkbPXD2yiW4SuB`
+  - url: `https://adaptive-instructional-artifacts-api-backend-4kqtfv0ra.vercel.app`
+  - commit: `4478c188129133c471620a1a52b3e7df138fcc95`
+
+Preview access method attempts (single-method runs):
+1) bypass-secret only (`VERCEL_AUTOMATION_BYPASS_SECRET`)
+- `npm run check:e2e:deployed-env` ✅
+- `npm run corpus:verify-active-run -- --api-base-url https://adaptive-instructional-artifacts-api-backend-4kqtfv0ra.vercel.app` ❌
+  - failure: `status=401` on `/api/corpus/manifest`
+
+2) share-URL only (`PLAYWRIGHT_FRONTEND_SHARE_URL` + `PLAYWRIGHT_API_SHARE_URL`)
+- `npm run check:e2e:deployed-env` ✅
+- `npm run corpus:verify-active-run -- --api-base-url https://adaptive-instructional-artifacts-api-backend-4kqtfv0ra.vercel.app` ❌
+  - failure: `status=401` on `/api/corpus/manifest`
+- `npx playwright test -c playwright.config.ts --project=setup:auth --reporter=line` ❌
+  - failure: `[auth-setup] /health failed ... with HTTP 401`
+
+Focused fix cycle executed:
+- Added preview share-cookie bootstrap support for Node-side API requests in:
+  - `scripts/verify-corpus-active-run.mjs`
+  - `tests/e2e/helpers/auth-env.ts`
+- Result after fix cycle: preview API preflight remains `401` in this environment.
+
+Escalation decision (per plan default):
+- Preview-proof closure remains blocked after one focused fix cycle.
+- Keep supervised beta only; do not promote to broad rollout.
+
+Local safety and regression gates (this checkpoint):
+- `npm run server:build` ✅
+- `npm run build` ✅
+- `npx vitest run apps/web/src/app/lib/content/concept-loader.test.ts` ✅ (41 passed)
+- `npx playwright test -c playwright.config.ts tests/e2e/regression/ux-bugs-concept-readability.spec.ts --reporter=line` ✅ (10 passed)
+- `npx playwright test -c playwright.config.ts tests/e2e/regression/ux-bugs-save-to-notes.spec.ts tests/e2e/regression/ux-bugs-concept-readability.spec.ts --reporter=line` ✅ (14 passed)
+
+Targeted content polish:
+- Suppressed low-value Common Mistakes entries in concept detail so actionable mistakes are prioritized and weak generic rows do not dominate:
+  - `apps/web/src/app/pages/ConceptDetailPage.tsx`
+
+Manual-beta audit pack artifacts:
+- run id: `20260328211937`
+- checklist + hint-quality sample:
+  - `dist/beta/manual-audit/20260328211937/manual-beta-audit.md`
+  - `dist/beta/manual-audit/20260328211937/manual-beta-audit.json`
+- screenshots:
+  - 10 concept pages under `dist/beta/manual-audit/20260328211937/concept-pages/`
+  - 10 hint interaction screenshots under `dist/beta/manual-audit/20260328211937/hint-flows/`
+  - manifest: `dist/beta/manual-audit/20260328211937/screenshots-manifest.json`
+
+Telemetry readiness artifact:
+- `docs/runbooks/beta-telemetry-readiness.md`
+
+Release verdict:
+- Small supervised beta: **allowed**
+- Broader rollout / preview-first closure: **blocked (unresolved preview protected-access 401)**
