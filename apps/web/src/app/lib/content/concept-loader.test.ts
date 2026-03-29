@@ -8,6 +8,9 @@ import {
   clearConceptMapCache,
   getCompatibleCorpusIds,
   getTextbookCorpusMode,
+  normalizeMistakes,
+  selectReadableExamples,
+  toLearnerSafeParagraph,
   ConceptInfo
 } from './concept-loader';
 
@@ -782,6 +785,59 @@ describe('Murach corpus consistency', () => {
     }
 
     expect(murachKeys).toHaveLength(33);
+  });
+});
+
+describe('learner-facing clarity shaping', () => {
+  it('keeps clean examples and removes noisy/duplicate examples', () => {
+    const shaped = selectReadableExamples([
+      {
+        title: 'Example 1',
+        code: 'SELECT id, name FROM employees;',
+        explanation: 'Use SELECT to fetch specific columns from a table.',
+      },
+      {
+        title: 'Example 1',
+        code: 'SELECT id, name FROM employees;',
+        explanation: 'Duplicate row should be removed.',
+      },
+      {
+        title: 'Noisy prose',
+        code: '',
+        explanation: 'Should be filtered out.',
+      },
+    ]);
+
+    expect(shaped).toHaveLength(1);
+    expect(shaped[0].title).toBe('Example');
+    expect(shaped[0].code).toContain('SELECT id, name FROM employees;');
+  });
+
+  it('normalizes mistakes and drops empty/no-action entries', () => {
+    const shaped = normalizeMistakes([
+      { title: 'Common mistake', incorrect: '', correct: '', why: '' },
+      {
+        title: 'Missing WHERE clause',
+        incorrect: 'SELECT name FROM employees;',
+        correct: 'SELECT name FROM employees WHERE department = \'Engineering\';',
+        why: '',
+      },
+    ]);
+
+    expect(shaped).toHaveLength(1);
+    expect(shaped[0].title).toBe('Missing WHERE clause');
+    expect(shaped[0].why.length).toBeGreaterThan(10);
+  });
+
+  it('creates learner-safe paragraph for noisy markdown content', () => {
+    const shaped = toLearnerSafeParagraph(
+      '## Explanation\n**TABLE 1**\nUse `SELECT` with a clear `WHERE` filter.\n\nAdd only the required columns for readability.',
+      120,
+    );
+
+    expect(shaped).toContain('Use SELECT with a clear WHERE filter.');
+    expect(shaped).not.toContain('##');
+    expect(shaped).not.toContain('`');
   });
 });
 

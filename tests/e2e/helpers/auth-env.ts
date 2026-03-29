@@ -15,6 +15,25 @@ function trimTrailingSlash(url: string): string {
   return value;
 }
 
+function extractShareToken(candidate: string | undefined): string | undefined {
+  if (!candidate || candidate.trim().length === 0) return undefined;
+  const trimmed = candidate.trim();
+  try {
+    const parsed = new URL(trimmed);
+    const token = parsed.searchParams.get('_vercel_share');
+    return token && token.trim().length > 0 ? token.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function getApiShareToken(): string | undefined {
+  return (
+    process.env.PLAYWRIGHT_API_SHARE_TOKEN?.trim() ||
+    extractShareToken(process.env.PLAYWRIGHT_API_SHARE_URL)
+  );
+}
+
 export function resolveFrontendBaseUrl(): string {
   return trimTrailingSlash(process.env.PLAYWRIGHT_BASE_URL ?? DEFAULT_FRONTEND_BASE_URL);
 }
@@ -38,7 +57,17 @@ export function resolveApiBaseUrl(): string {
 
 export function apiUrl(path: string, apiBase = resolveApiBaseUrl()): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return `${trimTrailingSlash(apiBase)}${normalizedPath}`;
+  const base = new URL(trimTrailingSlash(apiBase));
+  const basePath = base.pathname === '/' ? '' : base.pathname.replace(/\/+$/, '');
+  base.pathname = `${basePath}${normalizedPath}`;
+
+  const shareToken = getApiShareToken();
+  const origin = `${base.protocol}//${base.host}`;
+  if (shareToken && !isLocalUrl(origin)) {
+    base.searchParams.set('_vercel_share', shareToken);
+  }
+
+  return base.toString();
 }
 
 export function getVercelBypassSecret(): string | undefined {

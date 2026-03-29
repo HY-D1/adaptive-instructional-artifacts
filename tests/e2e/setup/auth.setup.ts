@@ -23,6 +23,7 @@
  *   E2E_INSTRUCTOR_PASSWORD  default: E2eInstrPass!123
  *   E2E_ALLOW_INSTRUCTOR_SIGNUP set true to allow instructor signup fallback in deployed runs
  *   E2E_INSTRUCTOR_CODE      required only when E2E_ALLOW_INSTRUCTOR_SIGNUP=true
+ *   PLAYWRIGHT_FRONTEND_SHARE_URL optional Vercel share URL for protected preview frontend
  */
 
 import { test as setup, expect } from '@playwright/test';
@@ -39,6 +40,8 @@ import { STUDENT_AUTH_FILE, INSTRUCTOR_AUTH_FILE } from '../helpers/auth-state-p
 
 const API_BASE_URL = resolveApiBaseUrl();
 const FRONTEND_BASE_URL = resolveFrontendBaseUrl();
+const FRONTEND_SHARE_URL = process.env.PLAYWRIGHT_FRONTEND_SHARE_URL?.trim();
+const API_SHARE_URL = process.env.PLAYWRIGHT_API_SHARE_URL?.trim();
 
 function isLocalBaseUrl(url: string): boolean {
   return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url);
@@ -83,6 +86,26 @@ function requireDeterministicEnvForDeployed(): void {
   }
 }
 
+async function bootstrapPreviewFrontendAccess(page: Page): Promise<void> {
+  if (!IS_DEPLOYED_AUTH_TARGET) return;
+  if (!FRONTEND_SHARE_URL || FRONTEND_SHARE_URL.length === 0) return;
+  try {
+    await page.goto(FRONTEND_SHARE_URL, { waitUntil: 'domcontentloaded' });
+  } catch {
+    // Best-effort cookie bootstrap for protected previews.
+  }
+}
+
+async function bootstrapPreviewApiAccess(page: Page): Promise<void> {
+  if (!IS_DEPLOYED_AUTH_TARGET) return;
+  if (!API_SHARE_URL || API_SHARE_URL.length === 0) return;
+  try {
+    await page.goto(API_SHARE_URL, { waitUntil: 'domcontentloaded' });
+  } catch {
+    // Best-effort cookie bootstrap for protected preview APIs.
+  }
+}
+
 async function captureAuthDiagnostic(
   page: Page,
   role: 'student' | 'instructor',
@@ -110,6 +133,8 @@ function assertAuthCookieSaved(filePath: string, label: string): void {
 }
 
 async function assertAuthUiAvailable(page: Page): Promise<void> {
+  await bootstrapPreviewFrontendAccess(page);
+  await bootstrapPreviewApiAccess(page);
   await page.addInitScript(() => {
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
     window.localStorage.setItem('sql-adapt-welcome-disabled', 'true');
@@ -189,6 +214,8 @@ async function attemptLogin(
   email: string,
   password: string,
 ): Promise<AuthOutcome> {
+  await bootstrapPreviewFrontendAccess(page);
+  await bootstrapPreviewApiAccess(page);
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#login-email')).toBeVisible({ timeout: 10_000 });
   await page.fill('#login-email', email);
@@ -206,6 +233,8 @@ async function attemptSignup(
   classCode?: string,
   instructorCode?: string,
 ): Promise<AuthOutcome> {
+  await bootstrapPreviewFrontendAccess(page);
+  await bootstrapPreviewApiAccess(page);
   await page.goto('/login?tab=signup', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#signup-name')).toBeVisible({ timeout: 10_000 });
 

@@ -129,7 +129,15 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-csrf-token'],
+  // Include Vercel preview bypass headers so Playwright's protected-preview
+  // contract does not fail CORS preflight on browser auth requests.
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'x-csrf-token',
+    'x-vercel-protection-bypass',
+    'x-vercel-set-bypass-cookie',
+  ],
 }));
 
 app.use(cookieParser());

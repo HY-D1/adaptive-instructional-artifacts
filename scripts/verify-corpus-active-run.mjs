@@ -43,21 +43,76 @@ function normalizeBaseUrl(input) {
   return input.replace(/\/+$/, '');
 }
 
+function isLocalOrigin(url) {
+  try {
+    const parsed = new URL(url);
+    return /^(localhost|127\.0\.0\.1)$/i.test(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function getVercelBypassHeaders() {
+  const secret =
+    process.env.VERCEL_AUTOMATION_BYPASS_SECRET ||
+    process.env.E2E_VERCEL_BYPASS_SECRET;
+  if (!secret || secret.trim().length === 0) return {};
+  return {
+    'x-vercel-protection-bypass': secret.trim(),
+    'x-vercel-set-bypass-cookie': 'true',
+  };
+}
+
+function extractShareToken(value) {
+  if (!value || value.trim().length === 0) return '';
+  try {
+    const parsed = new URL(value.trim());
+    const token = parsed.searchParams.get('_vercel_share');
+    return token && token.trim().length > 0 ? token.trim() : '';
+  } catch {
+    return '';
+  }
+}
+
+function getShareToken() {
+  const token = process.env.PLAYWRIGHT_API_SHARE_TOKEN;
+  if (token && token.trim().length > 0) return token.trim();
+  return extractShareToken(process.env.PLAYWRIGHT_API_SHARE_URL);
+}
+
+function withShareToken(rawUrl) {
+  const shareToken = getShareToken();
+  if (!shareToken) return rawUrl;
+  try {
+    const parsed = new URL(rawUrl);
+    const origin = `${parsed.protocol}//${parsed.host}`;
+    if (isLocalOrigin(origin)) return rawUrl;
+    parsed.searchParams.set('_vercel_share', shareToken);
+    return parsed.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
 async function fetchJson(url) {
-  const response = await fetch(url, {
+  const response = await fetch(withShareToken(url), {
     method: 'GET',
-    headers: { Accept: 'application/json' },
+    headers: {
+      Accept: 'application/json',
+      ...getVercelBypassHeaders(),
+    },
   });
   const body = await response.json().catch(() => null);
   return { ok: response.ok, status: response.status, body };
 }
 
 async function postJson(url, payload) {
-  const response = await fetch(url, {
+  const response = await fetch(withShareToken(url), {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
+      ...getVercelBypassHeaders(),
     },
     body: JSON.stringify(payload),
   });
@@ -74,8 +129,18 @@ async function main() {
   const args = parseArgs(process.argv);
   const apiBaseUrl = normalizeBaseUrl(args.apiBaseUrl);
   const manifestResponse = await fetchJson(`${apiBaseUrl}/api/corpus/manifest`);
+  const hasBypassSecret = Boolean(
+    (process.env.VERCEL_AUTOMATION_BYPASS_SECRET || process.env.E2E_VERCEL_BYPASS_SECRET || '').trim(),
+  );
+  const hasShareToken = Boolean(getShareToken());
 
   if (!manifestResponse.ok || !manifestResponse.body?.success) {
+    if (manifestResponse.status === 401 && !hasBypassSecret && !hasShareToken) {
+      console.error(
+        'Received 401 from preview backend. Set VERCEL_AUTOMATION_BYPASS_SECRET ' +
+        'or PLAYWRIGHT_API_SHARE_TOKEN/PLAYWRIGHT_API_SHARE_URL before running corpus verification.',
+      );
+    }
     console.error(
       `Failed to fetch corpus manifest from ${apiBaseUrl} (status=${manifestResponse.status})`,
     );

@@ -55,6 +55,45 @@
 > This includes backend runtime (`/health`, `/api/system/persistence-status`), local ingest upload (`npm run ingest:upload`), and corpus verification (`npm run corpus:verify`).
 > **After changing env vars you must redeploy** — Vercel bakes env vars into the build/runtime at deploy time. Adding or changing a variable without redeploying has no effect.
 
+### Preview-First Beta Gate (Required)
+
+Run deployed stabilization checks against a **preview frontend + preview backend pair** first, then promote to production only after gates pass.
+
+Deterministic env contract for deployed Playwright runs:
+
+```bash
+PLAYWRIGHT_BASE_URL=<preview-frontend-url>
+PLAYWRIGHT_API_BASE_URL=<preview-backend-url>
+E2E_INSTRUCTOR_EMAIL=<stable-instructor-email>
+E2E_INSTRUCTOR_PASSWORD=<stable-instructor-password>
+E2E_STUDENT_CLASS_CODE=<stable-student-class-code>
+```
+
+Protected preview access (choose one path):
+
+```bash
+# Option A: automation bypass secret
+VERCEL_AUTOMATION_BYPASS_SECRET=<bypass-secret>
+
+# Option B: share-link path (no bypass secret)
+PLAYWRIGHT_FRONTEND_SHARE_URL=<preview-frontend-share-url>
+PLAYWRIGHT_API_SHARE_URL=<preview-backend-share-url>
+# Optional fallback if you only have the token:
+# PLAYWRIGHT_API_SHARE_TOKEN=<preview-backend-share-token>
+```
+
+`setup:auth` now bootstraps both frontend and backend share URLs (when provided)
+before login/signup so protected preview cookies are established in browser context.
+
+Preflight and gate commands:
+
+```bash
+npm run check:e2e:deployed-env
+npm run corpus:verify-active-run -- --api-base-url "$PLAYWRIGHT_API_BASE_URL"
+npm run test:e2e:setup-auth:deployed
+npm run test:e2e:hint-stability
+```
+
 ### Active Corpus Run Safety
 
 Use active-run mapping to prevent mixed-run corpus responses in runtime APIs:

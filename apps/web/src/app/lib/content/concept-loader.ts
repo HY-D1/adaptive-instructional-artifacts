@@ -77,6 +77,126 @@ export interface Mistake {
   why: string;
 }
 
+function compactWhitespace(text: string): string {
+  return text
+    .replace(/\r/g, '')
+    .replace(/\x0c/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function stripFormattingArtifacts(text: string): string {
+  return text
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/\*\*/g, '')
+    .replace(/`{1,3}/g, '')
+    .replace(/\[(.+?)\]\((.+?)\)/g, '$1');
+}
+
+export function toLearnerSafeParagraph(text: string, maxLength = 420): string {
+  const cleaned = compactWhitespace(stripFormattingArtifacts(text));
+  if (!cleaned) return '';
+  if (cleaned.length <= maxLength) return cleaned;
+  const clipped = cleaned.slice(0, maxLength + 1);
+  const sentenceBreak = Math.max(
+    clipped.lastIndexOf('.'),
+    clipped.lastIndexOf('!'),
+    clipped.lastIndexOf('?'),
+    clipped.lastIndexOf(';'),
+  );
+  if (sentenceBreak >= Math.floor(maxLength * 0.45)) {
+    return clipped.slice(0, sentenceBreak + 1).trim();
+  }
+  return `${clipped.slice(0, maxLength).trim()}...`;
+}
+
+function normalizeExampleTitle(title: string, index: number): string {
+  const cleaned = compactWhitespace(stripFormattingArtifacts(title));
+  if (!cleaned) return `Example ${index + 1}`;
+  if (/^(example|sample)\s*\d*$/i.test(cleaned)) {
+    return 'Example';
+  }
+  return cleaned;
+}
+
+export function selectReadableExamples(examples: CodeExample[], maxExamples = 8): CodeExample[] {
+  if (!Array.isArray(examples) || examples.length === 0) return [];
+  const dedupe = new Set<string>();
+  const sanitized: CodeExample[] = [];
+
+  for (let index = 0; index < examples.length; index += 1) {
+    const example = examples[index];
+    const code = compactWhitespace(example.code ?? '');
+    if (!isExampleSqlSane(code)) {
+      continue;
+    }
+
+    const title = normalizeExampleTitle(example.title ?? '', index);
+    const explanation = toLearnerSafeParagraph(example.explanation ?? '', 260);
+    const dedupeKey = `${title.toLowerCase()}|${code.toLowerCase()}`;
+    if (dedupe.has(dedupeKey)) {
+      continue;
+    }
+    dedupe.add(dedupeKey);
+
+    sanitized.push({
+      ...example,
+      title,
+      code: code.replace(/;\s+/g, ';\n').trim(),
+      explanation,
+    });
+    if (sanitized.length >= maxExamples) break;
+  }
+
+  return sanitized;
+}
+
+function normalizeMistakeTitle(title: string): string {
+  const cleaned = compactWhitespace(stripFormattingArtifacts(title));
+  if (!cleaned) return 'Common mistake';
+  if (/^(mistake|common mistake)\s*\d*$/i.test(cleaned)) {
+    return 'Common mistake';
+  }
+  return cleaned;
+}
+
+export function normalizeMistakes(mistakes: Mistake[]): Mistake[] {
+  if (!Array.isArray(mistakes) || mistakes.length === 0) return [];
+  const dedupe = new Set<string>();
+  const normalized: Mistake[] = [];
+
+  for (const mistake of mistakes) {
+    const title = normalizeMistakeTitle(mistake.title ?? '');
+    const incorrect = compactWhitespace(mistake.incorrect ?? '');
+    const correct = compactWhitespace(mistake.correct ?? '');
+    const why = toLearnerSafeParagraph(mistake.why ?? '', 220);
+
+    if (!incorrect && !correct && !why) {
+      continue;
+    }
+
+    const dedupeKey = `${title.toLowerCase()}|${incorrect.toLowerCase()}|${correct.toLowerCase()}`;
+    if (dedupe.has(dedupeKey)) {
+      continue;
+    }
+    dedupe.add(dedupeKey);
+
+    normalized.push({
+      title,
+      incorrect,
+      correct,
+      why:
+        why ||
+        (incorrect && correct
+          ? 'Compare the two SQL statements and focus on the clause/order change.'
+          : 'Review this pattern and retry with one clause at a time.'),
+    });
+  }
+
+  return normalized;
+}
+
 interface ConceptMapData {
   version: string;
   generatedAt: string;
@@ -593,14 +713,19 @@ function parseMarkdownContent(markdown: string): LoadedConcept['content'] {
   }
   
   // Handle both old format (Definition/Explanation) and new pedagogical format (What is This?)
-  const definition = sections['Definition'] || sections['What is This?'] || '';
-  const explanation = sections['Explanation'] || sections['What is This?'] || definition || '';
+  const definition = toLearnerSafeParagraph(sections['Definition'] || sections['What is This?'] || '', 320);
+  const explanation = toLearnerSafeParagraph(
+    sections['Explanation'] || sections['What is This?'] || definition || '',
+    1800,
+  );
+  const parsedExamples = parseExamples(sections['Examples'] || '');
+  const parsedMistakes = parseMistakes(sections['Common Mistakes'] || '');
   
   return {
     definition,
     explanation,
-    examples: parseExamples(sections['Examples'] || ''),
-    commonMistakes: parseMistakes(sections['Common Mistakes'] || '')
+    examples: selectReadableExamples(parsedExamples),
+    commonMistakes: normalizeMistakes(parsedMistakes),
   };
 }
 
@@ -610,15 +735,28 @@ function parseExamples(section: string): CodeExample[] {
   let currentExample: Partial<CodeExample> = {};
   let inCodeBlock = false;
   let codeContent: string[] = [];
+  let explanationLines: string[] = [];
+
+  const flushCurrentExample = () => {
+    if (!currentExample.title) return;
+    if (!currentExample.code && codeContent.length > 0) {
+      currentExample.code = codeContent.join('\n').trim();
+    }
+    currentExample.explanation = compactWhitespace(explanationLines.join(' '));
+    examples.push({
+      title: currentExample.title,
+      code: currentExample.code ?? '',
+      explanation: currentExample.explanation ?? '',
+      output: currentExample.output,
+    });
+  };
   
   for (const line of lines) {
     if (line.startsWith('### ')) {
-      if (currentExample.title) {
-        currentExample.code = codeContent.join('\n').trim();
-        examples.push(currentExample as CodeExample);
-      }
+      flushCurrentExample();
       currentExample = { title: line.replace('### ', '').trim() };
       codeContent = [];
+      explanationLines = [];
       inCodeBlock = false;
     } else if (line.startsWith('```sql')) {
       inCodeBlock = true;
@@ -627,19 +765,12 @@ function parseExamples(section: string): CodeExample[] {
       currentExample.code = codeContent.join('\n').trim();
     } else if (inCodeBlock) {
       codeContent.push(line);
-    } else if (line.trim() && !currentExample.code && !currentExample.explanation) {
-      currentExample.explanation = line.trim();
-    } else if (line.trim() && currentExample.code) {
-      currentExample.explanation = (currentExample.explanation || '') + ' ' + line.trim();
+    } else if (line.trim()) {
+      explanationLines.push(line.trim());
     }
   }
   
-  if (currentExample.title) {
-    if (!currentExample.code && codeContent.length > 0) {
-      currentExample.code = codeContent.join('\n').trim();
-    }
-    examples.push(currentExample as CodeExample);
-  }
+  flushCurrentExample();
   
   return examples;
 }
@@ -726,7 +857,7 @@ function parseMistakes(section: string): Mistake[] {
     incorrect = incorrectLines.join('\n').trim();
     correct = correctLines.join('\n').trim();
     
-    if (title && (incorrect || correct)) {
+    if (title && (incorrect || correct || why)) {
       mistakes.push({ title, incorrect, correct, why });
     }
   }
@@ -758,6 +889,8 @@ export function isExplanationGarbled(text: string): boolean {
     /\x0c/,                                    // form-feed (pdftotext page break)
     /^(?:CHAPTER|FIGURE|TABLE|SECTION)\s+\d+/im, // structural labels
     /^\d+\s*$/m,                               // page-number-only lines
+    /\bcontinued from (?:next|previous) page\b/i, // wrapped-page extraction residue
+    /\bpage break\b/i,                         // explicit page-break prose leakage
   ];
   for (const pattern of artefactPatterns) {
     if (pattern.test(text)) return true;

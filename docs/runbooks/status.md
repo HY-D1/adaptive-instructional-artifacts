@@ -739,3 +739,135 @@ Parity verdict:
 
 Residual risk:
 - historical run readability is limited by current primary keys (`unit_id` / `chunk_id`), so uploading newer runs can overwrite older unit/chunk rows with the same IDs.
+
+## Checkpoint — 2026-03-28 11:22 PDT
+
+Status: **READY WITH CAVEATS (not yet full preview-first proof)**
+
+Scope completed in this checkpoint:
+- Closed deployed auth fetch blocker in production by promoting backend with updated CORS header contract.
+- Stabilized deployed hint-stability gate to match real runtime behavior (policy-dependent 2-3 hint ladders, explanation escalation paths, and active-problem resolution from UI state).
+- Completed Learn / Examples / Common Mistakes clarity shaping and local regression coverage.
+- Produced UI polish screenshots and a Figma review artifact for sign-off.
+
+Deployed auth / runtime parity evidence:
+- Root-cause confirmation before promotion:
+  - `OPTIONS https://adaptive-instructional-artifacts-ap.vercel.app/api/auth/login`
+  - `access-control-allow-headers` previously missing `x-vercel-protection-bypass` + `x-vercel-set-bypass-cookie`.
+- Backend production promotion from this branch:
+  - deployment: `dpl_FMCPTUdAgvi53CiYzVcvdkEDymre`
+  - URL: `https://adaptive-instructional-artifacts-api-backend-dbp712yo4.vercel.app`
+  - aliased: `https://adaptive-instructional-artifacts-ap.vercel.app`
+- Post-promotion verification:
+  - same `OPTIONS` request now returns:
+    - `access-control-allow-headers: Content-Type,Authorization,x-csrf-token,x-vercel-protection-bypass,x-vercel-set-bypass-cookie`
+
+Preview-first caveat (still unverified in this environment):
+- Preview pair deployed:
+  - backend preview: `dpl_7nvcxH1qbXFAkkUkbPXD2yiW4SuB` (`...-4kqtfv0ra.vercel.app`)
+  - frontend preview: `dpl_AGd4QsbkrxgtTisH834YSz1Q2PVD` (`...-bew4edbz4-...vercel.app`)
+- Generated share URLs for preview frontend/backend.
+- Remaining blocker: preview protected-access contract is still not deterministic here for the full Node+browser gate path; production path is verified and green.
+
+Command log (actual runs):
+- Local build/test gates:
+  - `npm run server:build` ✅
+  - `npm run build` ✅
+  - `npx vitest run apps/web/src/app/lib/content/concept-loader.test.ts` ✅ (41 passed)
+- Deployed corpus run contract:
+  - `npm run corpus:verify-active-run -- --api-base-url https://adaptive-instructional-artifacts-ap.vercel.app` ✅
+  - summary: `docsChecked=1`, `unitsChecked=43`, `chunksChecked=101`, `mismatches=0`
+- Deployed auth setup (fresh deterministic users):
+  - `npx playwright test -c playwright.config.ts --project=setup:auth --reporter=line` ✅ (2 passed)
+- Deployed hint gate:
+  - `npx playwright test -c playwright.config.ts --project=chromium:auth tests/e2e/regression/hint-stability-beta.spec.ts --no-deps --reporter=line` ✅ (1 passed, ~44.8s)
+- Local UX regressions for touched surfaces:
+  - `npx playwright test -c playwright.config.ts tests/e2e/regression/ux-bugs-save-to-notes.spec.ts tests/e2e/regression/ux-bugs-concept-readability.spec.ts --reporter=line` ✅ (14 passed)
+
+UI/UX artifact evidence:
+- Before/after screenshots:
+  - `dist/beta/ui-polish/20260328111903/before-learning-hints.png`
+  - `dist/beta/ui-polish/20260328111903/after-learning-hints.png`
+- Figma review artifact (before/after annotated map):
+  - `https://www.figma.com/online-whiteboard/create-diagram/5d75ee58-7193-41a6-be5b-2faec82a8ab8?utm_source=chatgpt&utm_content=edit_in_figjam&oai_id=&request_id=273ea00b-127e-4b5e-8d86-fc127ccde2b5`
+
+Changed files (this checkpoint scope):
+- `apps/server/src/app.ts`
+- `apps/web/src/app/components/features/hints/HintSystem.tsx`
+- `apps/web/src/app/lib/content/concept-loader.ts`
+- `apps/web/src/app/lib/content/concept-loader.test.ts`
+- `apps/web/src/app/pages/ConceptDetailPage.tsx`
+- `tests/e2e/helpers/auth-env.ts`
+- `tests/e2e/setup/auth.setup.ts`
+- `tests/e2e/regression/hint-stability-beta.spec.ts`
+- `scripts/verify-corpus-active-run.mjs`
+- `scripts/check-deployed-e2e-env.mjs`
+- `scripts/audit-concept-clarity.mjs`
+- `docs/DEPLOYMENT.md`
+- `package.json`
+
+Surface verdicts (beta):
+- Learning page: **ready with caveats**
+- Hints: **ready with caveats**
+- Practice workflow: **ready with caveats**
+
+Caveats:
+- Preview-first protected deployment proof remains partially blocked by environment-specific preview access contract.
+- Deterministic long-lived E2E credentials in `.env.development.local` are currently stale and should be re-seeded for consistent unattended runs.
+
+## Checkpoint — 2026-03-28 11:24 PDT
+
+Status: **READY WITH CAVEATS (production gates green; preview-first proof still partial)**
+
+Deployment metadata (Vercel API, exact):
+- Frontend production deployment:
+  - id: `dpl_F5pV6HX5ATf7tixyfEgpmrNqGBf6`
+  - alias: `https://adaptive-instructional-artifacts.vercel.app`
+  - commit: `d0541013d401eec7117784e113d8f98db250e2e4` (`main`)
+- Frontend preview deployment:
+  - id: `dpl_AGd4QsbkrxgtTisH834YSz1Q2PVD`
+  - url: `https://adaptive-instructional-artifacts-bew4edbz4-hy-d1s-projects.vercel.app`
+  - commit: `4478c188129133c471620a1a52b3e7df138fcc95` (`codex/beta-stabilization-preview-first`)
+- Backend production deployment:
+  - id: `dpl_FMCPTUdAgvi53CiYzVcvdkEDymre`
+  - alias: `https://adaptive-instructional-artifacts-ap.vercel.app`
+  - commit: `4478c188129133c471620a1a52b3e7df138fcc95` (`codex/beta-stabilization-preview-first`)
+- Backend preview deployment:
+  - id: `dpl_7nvcxH1qbXFAkkUkbPXD2yiW4SuB`
+  - url: `https://adaptive-instructional-artifacts-api-backend-4kqtfv0ra.vercel.app`
+  - commit: `4478c188129133c471620a1a52b3e7df138fcc95` (`codex/beta-stabilization-preview-first`)
+
+Command log (fresh reruns in this checkpoint):
+- `npm run server:build` ✅
+- `npm run build` ✅
+- `npx vitest run apps/web/src/app/lib/content/concept-loader.test.ts` ✅ (41 passed)
+- `npm run content:clarity:audit` ✅
+  - output: `dist/beta/content-clarity/20260328182236`
+  - sampled payloads: `15`
+  - before/after examples: `10`
+- `set -a && source .env.development.local && set +a && npm run check:e2e:deployed-env` ✅
+- `set -a && source .env.development.local && set +a && npm run corpus:verify-active-run -- --api-base-url "$PLAYWRIGHT_API_BASE_URL"` ✅
+  - summary: `docsChecked=1`, `unitsChecked=43`, `chunksChecked=101`, `mismatches=0`
+- `set -a && source .env.development.local && set +a && E2E_STUDENT_EMAIL=e2e-student-<ts>@sql-adapt.test E2E_INSTRUCTOR_EMAIL=e2e-instructor-<ts>@sql-adapt.test E2E_ALLOW_INSTRUCTOR_SIGNUP=true npx playwright test -c playwright.config.ts --project=setup:auth --reporter=line` ✅ (2 passed)
+- `set -a && source .env.development.local && set +a && npx playwright test -c playwright.config.ts --project=chromium:auth tests/e2e/regression/hint-stability-beta.spec.ts --no-deps --reporter=line` ✅
+  - report: `dist/beta/hint-stability/20260328182404/hint-stability-report.json`
+  - `caseCount=30`, scores all `1.0`, `pass=true`
+- `npx playwright test -c playwright.config.ts tests/e2e/regression/ux-bugs-save-to-notes.spec.ts tests/e2e/regression/ux-bugs-concept-readability.spec.ts --reporter=line` ✅ (14 passed)
+
+Artifacts (current):
+- Content clarity audit:
+  - `dist/beta/content-clarity/20260328182236/concept-clarity-audit.md`
+  - `dist/beta/content-clarity/20260328182236/concept-clarity-audit.json`
+- UI polish screenshots:
+  - `dist/beta/ui-polish/20260328111903/before-learning-hints.png`
+  - `dist/beta/ui-polish/20260328111903/after-learning-hints.png`
+- Figma review artifact:
+  - `https://www.figma.com/online-whiteboard/create-diagram/5d75ee58-7193-41a6-be5b-2faec82a8ab8?utm_source=chatgpt&utm_content=edit_in_figjam&oai_id=&request_id=273ea00b-127e-4b5e-8d86-fc127ccde2b5`
+
+Surface verdicts (beta):
+- Learning page: **ready with caveats**
+- Hints: **ready with caveats**
+- Practice workflow: **ready with caveats**
+
+Caveat to close before “ready”:
+- Preview frontend+backend protected gate still needs deterministic bypass/share behavior in this environment for full preview-first proof; production path is green.
