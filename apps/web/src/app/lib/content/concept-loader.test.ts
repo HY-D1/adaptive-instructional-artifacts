@@ -80,6 +80,125 @@ describe('remote corpus shaping', () => {
     expect(chunks?.[0].text).toContain('WHERE');
   });
 
+  it('prefers refined summary/excerpt fields when present in remote corpus payloads', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        success: true,
+        data: {
+          documents: [],
+          units: [
+            {
+              unitId: 'dbms-ramakrishnan-3rd-edition/page-52',
+              docId: 'dbms-ramakrishnan-3rd-edition',
+              conceptId: 'dbms-ramakrishnan-3rd-edition/page-52',
+              title: 'Page 52',
+              displayTitle: 'Filtering Rows',
+              summary: 'Raw summary should not win.',
+              displaySummary: 'Display summary should not win.',
+              displaySummaryRefined: 'Refined summary wins for concept definition.',
+              hintSourceExcerpt: 'Base hint source.',
+              hintableExcerptRefined: 'Refined hint excerpt should be preferred for grounding.',
+              contentMarkdown: 'Original long content',
+              difficulty: 'beginner',
+              pageStart: 52,
+              pageEnd: 52,
+              runId: 'run-1774671570-b1353117',
+              metadata: {},
+              createdAt: new Date().toISOString(),
+            },
+          ],
+        },
+      }),
+    } as Response);
+
+    await loadConceptMap();
+    const concept = await getConcept('dbms-ramakrishnan-3rd-edition/page-52');
+    expect(concept?.definition).toBe('Refined summary wins for concept definition.');
+
+    const chunks = getConceptChunks('dbms-ramakrishnan-3rd-edition/page-52');
+    expect(chunks?.[0].text).toContain('Refined hint excerpt');
+  });
+
+  it('uses refined content fields first when loading remote concept content', async () => {
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/corpus/manifest')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            data: {
+              documents: [],
+              units: [
+                {
+                  unitId: 'dbms-ramakrishnan-3rd-edition/page-53',
+                  docId: 'dbms-ramakrishnan-3rd-edition',
+                  conceptId: 'dbms-ramakrishnan-3rd-edition/page-53',
+                  title: 'Page 53',
+                  displayTitle: 'Joins',
+                  summary: 'Raw summary',
+                  contentMarkdown: 'Raw markdown',
+                  difficulty: 'beginner',
+                  pageStart: 53,
+                  pageEnd: 53,
+                  runId: 'run-1774671570-b1353117',
+                  metadata: {},
+                  createdAt: new Date().toISOString(),
+                },
+              ],
+            },
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/corpus/unit/')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            data: {
+              unit: {
+                unitId: 'dbms-ramakrishnan-3rd-edition/page-53',
+                docId: 'dbms-ramakrishnan-3rd-edition',
+                conceptId: 'dbms-ramakrishnan-3rd-edition/page-53',
+                title: 'Page 53',
+                summary: 'Raw summary',
+                contentMarkdown: 'Raw markdown',
+                pageStart: 53,
+                pageEnd: 53,
+                runId: 'run-1774671570-b1353117',
+                createdAt: new Date().toISOString(),
+                metadata: {},
+                definitionRefined: 'Refined definition for joins.',
+                exampleRefined: 'Example query pattern: SELECT ___ FROM ___ JOIN ___.',
+                commonMistakesRefined: '- Forgetting join condition\n- Selecting ambiguous columns',
+                displaySummaryRefined: 'Refined join summary.',
+                explanationContext: 'Use join keys that match related rows.',
+              },
+              chunks: [],
+            },
+          }),
+        } as Response;
+      }
+      if (url.includes('/textbook-static/concept-quality.json')) {
+        return {
+          ok: false,
+          json: async () => ({}),
+        } as Response;
+      }
+      return {
+        ok: false,
+        json: async () => ({}),
+      } as Response;
+    });
+
+    const concept = await loadConceptContent('dbms-ramakrishnan-3rd-edition/page-53');
+    expect(concept).not.toBeNull();
+    expect(concept?.content.definition).toContain('Refined definition for joins');
+    expect(concept?.content.examples.length).toBeGreaterThan(0);
+    expect(concept?.content.commonMistakes.length).toBeGreaterThan(0);
+  });
+
   it('falls back to base title/summary when product fields are missing', async () => {
     vi.mocked(fetch).mockResolvedValueOnce({
       ok: true,
@@ -119,6 +238,81 @@ describe('remote corpus shaping', () => {
 
     const chunks = getConceptChunks('dbms-ramakrishnan-3rd-edition/page-44');
     expect(chunks?.[0].text).toContain('Advantages of a DBMS');
+  });
+
+  it('uses explanation-context fallback when remote unit is marked high-noise and lacks refined fields', async () => {
+    vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/api/corpus/manifest')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            data: {
+              documents: [],
+              units: [
+                {
+                  unitId: 'dbms-ramakrishnan-3rd-edition/page-54',
+                  docId: 'dbms-ramakrishnan-3rd-edition',
+                  conceptId: 'dbms-ramakrishnan-3rd-edition/page-54',
+                  title: 'Page 54',
+                  summary: 'Raw summary',
+                  contentMarkdown: 'Raw markdown',
+                  difficulty: 'beginner',
+                  pageStart: 54,
+                  pageEnd: 54,
+                  runId: 'run-1774671570-b1353117',
+                  metadata: {},
+                  createdAt: new Date().toISOString(),
+                },
+              ],
+            },
+          }),
+        } as Response;
+      }
+      if (url.includes('/api/corpus/unit/')) {
+        return {
+          ok: true,
+          json: async () => ({
+            success: true,
+            data: {
+              unit: {
+                unitId: 'dbms-ramakrishnan-3rd-edition/page-54',
+                docId: 'dbms-ramakrishnan-3rd-edition',
+                conceptId: 'dbms-ramakrishnan-3rd-edition/page-54',
+                title: 'Page 54',
+                summary: 'High-noise summary fallback.',
+                displaySummary: 'High-noise display summary fallback.',
+                explanationContext: 'Use one clause at a time and validate output incrementally.',
+                qualityFlags: ['high_noise'],
+                contentMarkdown: 'Noisy markdown that should not be primary.',
+                pageStart: 54,
+                pageEnd: 54,
+                runId: 'run-1774671570-b1353117',
+                metadata: {},
+                createdAt: new Date().toISOString(),
+              },
+              chunks: [],
+            },
+          }),
+        } as Response;
+      }
+      if (url.includes('/textbook-static/concept-quality.json')) {
+        return {
+          ok: false,
+          json: async () => ({}),
+        } as Response;
+      }
+      return {
+        ok: false,
+        json: async () => ({}),
+      } as Response;
+    });
+
+    const concept = await loadConceptContent('dbms-ramakrishnan-3rd-edition/page-54');
+    expect(concept).not.toBeNull();
+    expect(concept?.content.definition).toContain('High-noise display summary fallback');
+    expect(concept?.content.explanation).toContain('validate output incrementally');
   });
 });
 

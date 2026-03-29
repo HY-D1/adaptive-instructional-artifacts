@@ -68,14 +68,32 @@ def _make_config(tmp_path: Path, pdf_path: Path) -> ExtractConfig:
     )
 
 
-def _stub_enrichment(_text: str, enabled: bool, model: str = "") -> MlxEnrichmentResult:
+def _stub_enrichment(
+    _text: str,
+    enabled: bool,
+    model: str = "",
+    fallback_model: str = "",
+) -> MlxEnrichmentResult:
     _ = enabled
     _ = model
+    _ = fallback_model
     return MlxEnrichmentResult(
         summary="summary",
         explanation="explanation",
         hint_draft="hint",
         backend="deterministic_fallback",
+        definition_refined="definition",
+        example_refined="example",
+        common_mistakes_refined="- mistake",
+        display_summary_refined="summary",
+        hintable_excerpt_refined="excerpt",
+        hint_v1="hint one",
+        hint_v2="hint two",
+        hint_escalation="hint escalation",
+        refinement_model="qwen3:4b",
+        refinement_confidence=0.7,
+        refinement_fallback_reason=None,
+        refinement_version="grounded-refinement-v1",
     )
 
 
@@ -85,9 +103,15 @@ def _stub_chunk_text(_text: str, chunk_words: int, chunk_overlap: int) -> list[C
     return [ChunkWindow(index=0, text="SELECT * FROM employees")]
 
 
-def _stub_embeddings(_texts: list[str], model: str, dimension: int) -> tuple[list[list[float]], str]:
+def _stub_embeddings(
+    _texts: list[str],
+    model: str,
+    dimension: int,
+    fallback_models: list[str] | None = None,
+) -> tuple[list[list[float]], str, str, int]:
     _ = model
-    return ([[0.0] * dimension], "deterministic_hash_fallback")
+    _ = fallback_models
+    return ([[0.0] * dimension], "deterministic_hash_fallback", model, dimension)
 
 
 def test_extract_uses_pymupdf_fallback(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

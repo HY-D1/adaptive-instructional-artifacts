@@ -68,6 +68,7 @@
     "corpus:set-winner-run": "node scripts/set-corpus-active-run.mjs --doc-id dbms-ramakrishnan-3rd-edition --run-id run-1774671570-b1353117 --updated-by npm:corpus:set-winner-run",
     "corpus:verify-active-run": "node scripts/verify-corpus-active-run.mjs",
     "content:clarity:audit": "node scripts/audit-concept-clarity.mjs",
+    "content:refinement:audit": "node scripts/audit-refinement-quality.mjs",
     "check:source-grounding": "node scripts/check-source-grounding.mjs",
     "textbook:sync": "node scripts/sync-helper-export.mjs",
     "textbook:verify": "node scripts/validate-corpus.mjs",

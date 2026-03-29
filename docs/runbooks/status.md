@@ -218,6 +218,69 @@ Status: **PARTIAL**
 
 Evidence:
 - Backend redeployed from current local apps/server source and promoted to production alias.
+
+## Checkpoint — 2026-03-28 22:18 America/Vancouver
+
+Status: **PARTIAL (refinement pass implemented, preview/deployed verification unchanged)**
+
+Scope:
+- Grounded refinement layer added for corpus ingest metadata (no schema migration).
+- Embedding defaults/fallback and LLM generation defaults/fallback aligned to installed local Ollama models.
+- Refined fields surfaced through corpus shaping + frontend content/hint consumption with backward-compatible optional fields.
+
+Evidence (commands and actual results):
+- `npx vitest run apps/web/src/app/lib/content/concept-loader.test.ts apps/web/src/app/lib/ml/enhanced-hint-service.test.ts` ✅ (47 passed)
+- `tools/pdf_ingest/.venv/bin/python -m pytest tools/pdf_ingest/tests/test_embedding_backends.py tools/pdf_ingest/tests/test_docling_fallback.py tools/pdf_ingest/tests/test_cli_embedding_config.py` ✅ (12 passed)
+- `npm run server:build` ✅
+- `npm run build` ✅
+- `npx playwright test -c playwright.config.ts tests/e2e/regression/ux-bugs-save-to-notes.spec.ts tests/e2e/regression/ux-bugs-concept-readability.spec.ts --reporter=line` ✅ (14 passed)
+- `npm run test:e2e:hint-stability` ❌ blocked in setup auth:
+  - `[auth-setup] Backend health check failed for http://127.0.0.1:3001: fetch failed`
+  - this run used local defaults (`VITE_API_BASE_URL` unset) and was not pointed to deployed preview/prod URLs.
+
+Model/runtime checks:
+- `curl -sS http://127.0.0.1:11434/api/tags` ✅ confirms local models present:
+  - `qwen3:4b`
+  - `llama3.2:3b`
+  - `qwen3-embedding:4b`
+  - `nomic-embed-text-v2-moe:latest`
+
+Refinement ingest smoke (enabled):
+- Command:
+  - `source tools/pdf_ingest/.venv/bin/activate && PYTHONPATH=tools/pdf_ingest/src python -m pdf_ingest.cli extract --input .local/tmp/refinement-smoke.pdf --output .local/ingest-runs/refinement-smoke --chapter-range 1-1 --mlx-enabled true --refinement-model qwen3:4b --refinement-fallback-model llama3.2:3b --embedding-model qwen3-embedding:4b --embedding-fallback-models nomic-embed-text-v2-moe:latest`
+- Result ✅:
+  - `run_id=run-1774761901-020168df`
+  - `embedding_backend=ollama:qwen3-embedding:4b`
+  - `unit_count=1`, `chunk_count=1`
+- Verified refined metadata keys present in bundle unit metadata:
+  - `definition_refined`
+  - `example_refined`
+  - `common_mistakes_refined`
+  - `display_summary_refined`
+  - `hintable_excerpt_refined`
+  - `hint_v1`
+  - `hint_v2`
+  - `hint_escalation`
+  - `refinement_model`
+  - `refinement_source_chunk_ids`
+  - `refinement_confidence`
+  - `refinement_fallback_reason`
+  - `refinement_version`
+
+Quality audit artifact:
+- `npm run content:refinement:audit -- --api-base-url https://adaptive-instructional-artifacts-ap.vercel.app` ✅
+- Artifact paths:
+  - `dist/beta/refinement-audit/20260329051731/refinement-quality-audit.json`
+  - `dist/beta/refinement-audit/20260329051731/refinement-quality-audit.md`
+- Current deployed audit summary:
+  - `goodCount=0`
+  - `weakCount=10`
+  - indicates deployed corpus units do not yet carry/score as good for new refined fields.
+
+Notes:
+- No new routes added.
+- No DB migration required.
+- Corpus API remains backward-compatible; refined fields are optional.
   - Deploy command used:
     VERCEL_ORG_ID=team_BxlA36kEPgWxAMjQnJ4DBtQ2 VERCEL_PROJECT_ID=prj_vR3HTHqulLCVqv5EnSMfnStWP4cZ npx vercel deploy --prod --yes
   - Deployment 1: dpl_25EYbCZbX5BM8Wve8zhYBwAKaYzZ
@@ -940,3 +1003,47 @@ Telemetry readiness artifact:
 Release verdict:
 - Small supervised beta: **allowed**
 - Broader rollout / preview-first closure: **blocked (unresolved preview protected-access 401)**
+
+## Checkpoint — 2026-03-28 22:37 America/Vancouver
+
+Status: **PARTIAL (grounded refinement pass complete; preview-proof tracked separately)**
+
+Scope:
+- Finalized grounded refinement pass with installed Ollama model defaults and fallback chains.
+- Hardened refinement text sanitation for malformed list-style `common_mistakes_refined` payloads.
+- Completed refinement quality artifact contract with a 10/10 sample packet and explicit strict-good accounting.
+
+Evidence (commands and actual results):
+- `npx vitest run apps/web/src/app/lib/content/concept-loader.test.ts apps/web/src/app/lib/ml/enhanced-hint-service.test.ts` ✅ (47 passed)
+- `tools/pdf_ingest/.venv/bin/python -m pytest tools/pdf_ingest/tests/test_mlx_enricher.py tools/pdf_ingest/tests/test_embedding_backends.py tools/pdf_ingest/tests/test_docling_fallback.py tools/pdf_ingest/tests/test_cli_embedding_config.py` ✅ (14 passed)
+- `npm run server:build` ✅
+- `npm run build` ✅
+- `npx playwright test -c playwright.config.ts tests/e2e/regression/ux-bugs-save-to-notes.spec.ts tests/e2e/regression/ux-bugs-concept-readability.spec.ts --reporter=line` ✅ (14 passed)
+- `set -a && source .env.development.local && set +a && TS=$(date +%s) && E2E_STUDENT_EMAIL=e2e-student-${TS}@sql-adapt.test E2E_INSTRUCTOR_EMAIL=e2e-instructor-${TS}@sql-adapt.test E2E_ALLOW_INSTRUCTOR_SIGNUP=true npx playwright test -c playwright.config.ts --project=setup:auth --reporter=line` ✅ (2 passed)
+- `set -a && source .env.development.local && set +a && npx playwright test -c playwright.config.ts --project=chromium:auth tests/e2e/regression/hint-stability-beta.spec.ts --no-deps --reporter=line` ✅ (1 passed)
+- hint stability artifact:
+  - `dist/beta/hint-stability/20260329053852/hint-stability-report.json` (`caseCount=30`, `pass=true`)
+- `npm run corpus:verify-active-run -- --api-base-url https://adaptive-instructional-artifacts-ap.vercel.app` ✅
+  - summary: `docsChecked=1`, `unitsChecked=43`, `chunksChecked=101`, `mismatchedUnits=0`, `mismatchedChunks=0`
+- `npm run content:refinement:audit -- --api-base-url https://adaptive-instructional-artifacts-ap.vercel.app` ✅
+  - output directory: `dist/beta/refinement-audit/20260329053531`
+  - report summary: `strictGoodCount=0`, `goodCount=10`, `weakCount=10`
+- Local Ollama model presence check:
+  - `curl -sS http://127.0.0.1:11434/api/tags | jq -r '.models[].name'` ✅
+  - includes: `qwen3:4b`, `llama3.2:3b`, `qwen3-embedding:4b`, `nomic-embed-text-v2-moe:latest`
+
+GitHub reporting loop:
+- No open PR exists for this working branch (`codex/beta-stabilization-preview-first`) in `HY-D1/adaptive-instructional-artifacts`.
+- Posted required pass summary on latest repo PR for traceability:
+  - `https://github.com/HY-D1/adaptive-instructional-artifacts/pull/14#issuecomment-4149488217`
+
+Changed files (this checkpoint scope):
+- `tools/pdf_ingest/src/pdf_ingest/mlx_enricher.py`
+- `tools/pdf_ingest/tests/test_mlx_enricher.py`
+- `scripts/audit-refinement-quality.mjs`
+- `apps/web/src/app/lib/content/concept-loader.ts`
+- `docs/runbooks/status.md`
+
+Residual caveats:
+- Deployed refinement audit still has `strictGoodCount=0`; refined field quality requires another content polish pass before broad rollout claims.
+- Preview-protection determinism remains a separate unresolved blocker and was intentionally out-of-scope for this refinement pass.

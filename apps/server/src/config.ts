@@ -29,6 +29,8 @@ export const ENABLE_LLM = process.env.ENABLE_LLM === 'true';
  * Defaults to localhost:11434 for local development
  */
 export const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
+export const OLLAMA_DEFAULT_MODEL = process.env.OLLAMA_DEFAULT_MODEL || 'qwen3:4b';
+export const OLLAMA_FALLBACK_MODEL = process.env.OLLAMA_FALLBACK_MODEL || 'llama3.2:3b';
 
 // ============================================================================
 // PDF Index Configuration

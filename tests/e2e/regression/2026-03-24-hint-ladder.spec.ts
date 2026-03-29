@@ -145,7 +145,7 @@ test.beforeEach(async ({ page }) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ models: [{ name: 'qwen2.5:1.5b-instruct' }] })
+      body: JSON.stringify({ models: [{ name: 'qwen3:4b' }, { name: 'llama3.2:3b' }] })
     });
   });
   
@@ -153,7 +153,7 @@ test.beforeEach(async ({ page }) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ models: [{ name: 'qwen2.5:1.5b-instruct' }] })
+      body: JSON.stringify({ models: [{ name: 'qwen3:4b' }, { name: 'llama3.2:3b' }] })
     });
   });
   

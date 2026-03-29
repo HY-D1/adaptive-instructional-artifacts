@@ -14,6 +14,8 @@ DEFAULT_OLLAMA_ENDPOINT = "http://localhost:11434/api/embed"
 MODEL_DIMENSIONS: dict[str, int] = {
     "embeddinggemma": 768,
     "embeddinggemma:latest": 768,
+    "nomic-embed-text-v2-moe": 768,
+    "nomic-embed-text-v2-moe:latest": 768,
     "qwen3-embedding:0.6b": 1024,
     "qwen3-embedding:4b": 2560,
 }
@@ -163,14 +165,40 @@ def embed_texts_with_fallback(
     model: str,
     expected_dimension: int,
     endpoint: str = DEFAULT_OLLAMA_ENDPOINT,
-) -> tuple[list[list[float]], str]:
-    try:
-        result = embed_texts_strict(
-            texts,
-            model=model,
-            expected_dimension=expected_dimension,
-            endpoint=endpoint,
+    fallback_models: list[str] | None = None,
+) -> tuple[list[list[float]], str, str, int]:
+    candidates = [model]
+    if fallback_models:
+        for candidate in fallback_models:
+            trimmed = candidate.strip()
+            if trimmed and trimmed not in candidates:
+                candidates.append(trimmed)
+
+    for index, candidate_model in enumerate(candidates):
+        candidate_expected_dimension = (
+            expected_dimension
+            if index == 0
+            else expected_dimension_for_model(candidate_model) or expected_dimension
         )
-        return result.embeddings, result.backend
-    except Exception:
-        return deterministic_hash_embeddings(texts, expected_dimension), "deterministic_hash_fallback"
+        try:
+            result = embed_texts_strict(
+                texts,
+                model=candidate_model,
+                expected_dimension=candidate_expected_dimension,
+                endpoint=endpoint,
+            )
+            return (
+                result.embeddings,
+                f"{result.backend}:{candidate_model}",
+                candidate_model,
+                result.dimension,
+            )
+        except Exception:
+            continue
+
+    return (
+        deterministic_hash_embeddings(texts, expected_dimension),
+        "deterministic_hash_fallback",
+        model,
+        expected_dimension,
+    )

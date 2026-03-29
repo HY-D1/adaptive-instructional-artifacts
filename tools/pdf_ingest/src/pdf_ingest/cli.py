@@ -12,8 +12,11 @@ import psycopg
 from .config import (
     DEFAULT_EMBEDDING_BAKEOFF_VERSION,
     DEFAULT_EMBEDDING_DIMENSION,
+    DEFAULT_EMBEDDING_FALLBACK_MODELS,
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_EMBEDDING_QUERYSET_VERSION,
+    DEFAULT_REFINEMENT_FALLBACK_MODEL,
+    DEFAULT_REFINEMENT_MODEL,
     ExtractConfig,
     LOCAL_CORPUS_PIPELINE_VERSION,
     SOURCE_POLICY,
@@ -55,6 +58,10 @@ def _resolve_embedding_dimension(model: str, requested_dimension: int) -> int:
             "Pass --embedding-dimension explicitly."
         )
     return inferred
+
+
+def _parse_csv_list(value: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
 def _ensure_corpus_schema(conn: psycopg.Connection) -> None:
@@ -202,8 +209,11 @@ def cmd_extract(args: argparse.Namespace) -> int:
         mlx_model=args.mlx_model,
         embedding_model=args.embedding_model,
         embedding_dimension=embedding_dimension,
+        embedding_fallback_models=_parse_csv_list(args.embedding_fallback_models),
         embedding_bakeoff_version=args.embedding_bakeoff_version,
         embedding_queryset_version=args.embedding_queryset_version,
+        refinement_model=args.refinement_model,
+        refinement_fallback_model=args.refinement_fallback_model,
     )
 
     print(json.dumps({
@@ -438,8 +448,13 @@ def build_parser() -> argparse.ArgumentParser:
     extract.add_argument("--output", required=True)
     extract.add_argument("--chapter-range", required=True)
     extract.add_argument("--mlx-enabled", default="false")
-    extract.add_argument("--mlx-model", default="")
+    extract.add_argument("--mlx-model", default=DEFAULT_REFINEMENT_MODEL)
     extract.add_argument("--embedding-model", default=DEFAULT_EMBEDDING_MODEL)
+    extract.add_argument(
+        "--embedding-fallback-models",
+        default=",".join(DEFAULT_EMBEDDING_FALLBACK_MODELS),
+        help="Comma-separated fallback embedding model IDs if the primary model is unavailable.",
+    )
     extract.add_argument(
         "--embedding-dimension",
         type=int,
@@ -453,6 +468,16 @@ def build_parser() -> argparse.ArgumentParser:
     extract.add_argument(
         "--embedding-queryset-version",
         default=DEFAULT_EMBEDDING_QUERYSET_VERSION,
+    )
+    extract.add_argument(
+        "--refinement-model",
+        default=DEFAULT_REFINEMENT_MODEL,
+        help="Primary local generation model for grounded refinement.",
+    )
+    extract.add_argument(
+        "--refinement-fallback-model",
+        default=DEFAULT_REFINEMENT_FALLBACK_MODEL,
+        help="Fallback generation model when primary refinement model is unavailable.",
     )
     extract.set_defaults(func=cmd_extract)
 

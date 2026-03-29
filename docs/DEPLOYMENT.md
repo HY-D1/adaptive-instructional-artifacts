@@ -41,6 +41,8 @@
 | `CORS_ORIGINS` | Recommended | Comma-separated frontend origins allowed to use credentialed requests (for example `https://app.example.com,https://www.example.com`) |
 | `CORS_ORIGIN_PATTERNS` | Optional | Comma-separated wildcard origin patterns for trusted preview domains (for example `https://adaptive-instructional-artifacts-*.vercel.app`) |
 | `PORT` | No | HTTP port (default 3001) |
+| `OLLAMA_DEFAULT_MODEL` | Optional (LLM) | Primary local generation model used when client request omits model (default `qwen3:4b`) |
+| `OLLAMA_FALLBACK_MODEL` | Optional (LLM) | Fallback local generation model when primary Ollama model fails (default `llama3.2:3b`) |
 
 > **Auth setup**: Set `JWT_SECRET` to a strong random value (e.g. `openssl rand -base64 32`). Set both `STUDENT_SIGNUP_CODE` and `INSTRUCTOR_SIGNUP_CODE` to protect account creation. After adding these vars, redeploy the backend and run `npm run db:init:neon` to create the `auth_accounts` table.
 >

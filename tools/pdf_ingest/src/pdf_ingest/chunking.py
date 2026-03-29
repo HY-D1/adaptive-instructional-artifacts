@@ -97,9 +97,11 @@ def embed_texts(
     texts: list[str],
     model: str,
     dimension: int,
-) -> tuple[list[list[float]], str]:
+    fallback_models: list[str] | None = None,
+) -> tuple[list[list[float]], str, str, int]:
     return embed_texts_with_fallback(
         texts,
         model=model,
         expected_dimension=dimension,
+        fallback_models=fallback_models,
     )

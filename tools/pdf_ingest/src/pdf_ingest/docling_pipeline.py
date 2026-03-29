@@ -13,6 +13,8 @@ from pypdf import PdfReader
 from .chunking import clean_extracted_text, chunk_text, embed_texts, is_low_signal_text
 from .config import (
     ExtractConfig,
+    DEFAULT_REFINEMENT_FALLBACK_MODEL,
+    DEFAULT_REFINEMENT_MODEL,
     LOCAL_CORPUS_PIPELINE_VERSION,
     PARSER_BACKEND,
     SOURCE_POLICY,
@@ -540,7 +542,14 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
 
         concept_slug = _slugify(title)
         unit_id = f"{doc_id}/{concept_slug}"
-        enrichment = enrich_text(body, enabled=config.mlx_enabled, model=config.mlx_model)
+        refinement_model = config.refinement_model or config.mlx_model or DEFAULT_REFINEMENT_MODEL
+        refinement_fallback_model = config.refinement_fallback_model or DEFAULT_REFINEMENT_FALLBACK_MODEL
+        enrichment = enrich_text(
+            body,
+            enabled=config.mlx_enabled,
+            model=refinement_model,
+            fallback_model=refinement_fallback_model,
+        )
         if section_page is not None and effective_page_start <= section_page <= effective_page_end:
             unit_page_start = section_page
             unit_page_end = section_page
@@ -573,6 +582,12 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
         if not windows:
             continue
 
+        planned_chunk_ids = [
+            f"{unit_id}/chunk-{idx + 1:04d}"
+            for idx, _window in enumerate(windows)
+        ]
+        refinement_source_chunk_ids = planned_chunk_ids[:5]
+
         unit = UnitRecord(
             unit_id=unit_id,
             doc_id=doc_id,
@@ -596,6 +611,19 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
                 "display_summary": display_summary,
                 "hint_source_excerpt": hint_source_excerpt,
                 "explanation_context": explanation_context,
+                "definition_refined": enrichment.definition_refined,
+                "example_refined": enrichment.example_refined,
+                "common_mistakes_refined": enrichment.common_mistakes_refined,
+                "display_summary_refined": enrichment.display_summary_refined,
+                "hintable_excerpt_refined": enrichment.hintable_excerpt_refined,
+                "hint_v1": enrichment.hint_v1,
+                "hint_v2": enrichment.hint_v2,
+                "hint_escalation": enrichment.hint_escalation,
+                "refinement_model": enrichment.refinement_model,
+                "refinement_source_chunk_ids": refinement_source_chunk_ids,
+                "refinement_confidence": enrichment.refinement_confidence,
+                "refinement_fallback_reason": enrichment.refinement_fallback_reason,
+                "refinement_version": enrichment.refinement_version,
                 "quality_flags": quality_flags,
                 "noise_score": noise_score,
                 "product_fit_score": round(max(0.0, 1.0 - noise_score), 4),
@@ -603,10 +631,11 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
         )
         units.append(unit)
 
-        embeddings, embedding_backend = embed_texts(
+        embeddings, embedding_backend, embedding_model_used, embedding_dimension_used = embed_texts(
             [window.text for window in windows],
             model=config.embedding_model,
             dimension=config.embedding_dimension,
+            fallback_models=list(config.embedding_fallback_models),
         )
 
         page_span = max(1, unit_page_end - unit_page_start + 1)
@@ -618,7 +647,7 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
                 chunk_quality_flags.append("too_short_for_hints")
             if len(window.text) > 1400:
                 chunk_quality_flags.append("too_long_for_hints")
-            chunk_id = f"{unit_id}/chunk-{idx + 1:04d}"
+            chunk_id = planned_chunk_ids[idx]
             chunk = ChunkRecord(
                 chunk_id=chunk_id,
                 unit_id=unit_id,
@@ -627,8 +656,8 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
                 page=approx_page,
                 chunk_text=window.text,
                 embedding=embeddings[idx],
-                embedding_model=config.embedding_model,
-                embedding_dimension=config.embedding_dimension,
+                embedding_model=embedding_model_used,
+                embedding_dimension=embedding_dimension_used,
                 parser_backend=parser_backend,
                 pipeline_version=LOCAL_CORPUS_PIPELINE_VERSION,
                 run_id=run_id,
@@ -636,6 +665,8 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
                     "chunk_index": idx,
                     "section_index": section_index,
                     "embedding_backend": embedding_backend,
+                    "embedding_model_used": embedding_model_used,
+                    "embedding_dimension_used": embedding_dimension_used,
                     "hintable_span": window.text[:180],
                     "quality_flags": chunk_quality_flags,
                 },
@@ -650,7 +681,27 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
             if isinstance(chunk.metadata, dict)
         }
     )
+    embedding_models_used = sorted(
+        {
+            str(chunk.embedding_model).strip()
+            for chunk in chunks
+            if str(chunk.embedding_model).strip()
+        }
+    )
+    embedding_dimensions_used = sorted(
+        {
+            int(chunk.embedding_dimension)
+            for chunk in chunks
+            if isinstance(chunk.embedding_dimension, int) and chunk.embedding_dimension > 0
+        }
+    )
     embedding_backend_value = ",".join(embedding_backends) if embedding_backends else None
+    diagnostics_embedding_model = ",".join(embedding_models_used) if embedding_models_used else config.embedding_model
+    diagnostics_embedding_dimension = (
+        embedding_dimensions_used[0]
+        if len(embedding_dimensions_used) == 1
+        else config.embedding_dimension
+    )
     diagnostics = DiagnosticsRecord(
         run_id=run_id,
         input_path=str(resolved_input),
@@ -663,8 +714,8 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
         source_policy=SOURCE_POLICY,
         embedding_backend=embedding_backend_value,
         embedding_backends=embedding_backends,
-        embedding_model=config.embedding_model,
-        embedding_dimension=config.embedding_dimension,
+        embedding_model=diagnostics_embedding_model,
+        embedding_dimension=diagnostics_embedding_dimension,
         embedding_bakeoff_version=(config.embedding_bakeoff_version or None),
         embedding_queryset_version=(config.embedding_queryset_version or None),
         mlx_enabled=config.mlx_enabled,
@@ -682,6 +733,8 @@ def extract_with_docling(config: ExtractConfig) -> ExtractResult:
             "chapter range uses approximate page mapping",
             f"docling_status={docling_details['status']}",
             f"dropped_low_signal_sections={dropped_low_signal_sections}",
+            f"embedding_models_used={','.join(embedding_models_used) if embedding_models_used else config.embedding_model}",
+            f"embedding_dimensions_used={','.join(str(d) for d in embedding_dimensions_used) if embedding_dimensions_used else config.embedding_dimension}",
             "raw pdf bytes were not emitted to bundle outputs",
         ],
     )

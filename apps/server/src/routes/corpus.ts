@@ -30,6 +30,14 @@ function asNumber(value: unknown): number | undefined {
   return Number.isFinite(value) ? value : undefined;
 }
 
+function asStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const normalized = value
+    .map((entry) => (typeof entry === 'string' ? normalizeText(entry) : ''))
+    .filter((entry) => entry.length > 0);
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 function extractPageFromUnitId(unitId: string): number | undefined {
   const match = /\/page-(\d+)$/i.exec(unitId);
   if (!match) return undefined;
@@ -99,6 +107,19 @@ function shapeUnitForProduct<T extends {
   const productFitScore = asNumber(metadata.product_fit_score) ?? (
     derivedFlags.has('high_noise') ? 0.4 : 0.75
   );
+  const definitionRefined = asString(metadata.definition_refined);
+  const exampleRefined = asString(metadata.example_refined);
+  const commonMistakesRefined = asString(metadata.common_mistakes_refined);
+  const displaySummaryRefined = asString(metadata.display_summary_refined);
+  const hintableExcerptRefined = asString(metadata.hintable_excerpt_refined);
+  const hintV1 = asString(metadata.hint_v1);
+  const hintV2 = asString(metadata.hint_v2);
+  const hintEscalation = asString(metadata.hint_escalation);
+  const refinementModel = asString(metadata.refinement_model);
+  const refinementSourceChunkIds = asStringArray(metadata.refinement_source_chunk_ids);
+  const refinementConfidence = asNumber(metadata.refinement_confidence);
+  const refinementFallbackReason = asString(metadata.refinement_fallback_reason);
+  const refinementVersion = asString(metadata.refinement_version);
   const pageFromUnitId = extractPageFromUnitId(unit.unitId);
   const normalizedPageStart = (
     pageFromUnitId &&
@@ -121,6 +142,19 @@ function shapeUnitForProduct<T extends {
     displaySummary,
     hintSourceExcerpt,
     explanationContext,
+    definitionRefined,
+    exampleRefined,
+    commonMistakesRefined,
+    displaySummaryRefined,
+    hintableExcerptRefined,
+    hintV1,
+    hintV2,
+    hintEscalation,
+    refinementModel,
+    refinementSourceChunkIds,
+    refinementConfidence,
+    refinementFallbackReason,
+    refinementVersion,
     productFitScore: Number(productFitScore.toFixed(4)),
     qualityFlags: Array.from(derivedFlags).sort(),
   };

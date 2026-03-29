@@ -92,12 +92,47 @@ def test_embed_texts_with_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(embedding_backends, "embed_texts_strict", fail_strict)
 
-    embeddings, backend = embedding_backends.embed_texts_with_fallback(
+    embeddings, backend, model_used, dimension_used = embedding_backends.embed_texts_with_fallback(
         ["schema versus instance"],
         model="embeddinggemma:latest",
         expected_dimension=6,
     )
 
     assert backend == "deterministic_hash_fallback"
+    assert model_used == "embeddinggemma:latest"
+    assert dimension_used == 6
     assert len(embeddings) == 1
     assert len(embeddings[0]) == 6
+
+
+def test_embed_texts_with_fallback_model_chain(monkeypatch: pytest.MonkeyPatch) -> None:
+    attempts: list[str] = []
+
+    def strict_with_secondary(texts: list[str], *, model: str, expected_dimension: int | None = None, endpoint: str = ""):
+        _ = texts
+        _ = endpoint
+        attempts.append(model)
+        if model == "qwen3-embedding:4b":
+            raise embedding_backends.EmbeddingBackendError("primary unavailable")
+        return embedding_backends.EmbeddingBatchResult(
+            model=model,
+            backend="ollama",
+            embeddings=[[0.1] * (expected_dimension or 768)],
+            dimension=expected_dimension or 768,
+            latency_ms=1.0,
+        )
+
+    monkeypatch.setattr(embedding_backends, "embed_texts_strict", strict_with_secondary)
+
+    embeddings, backend, model_used, dimension_used = embedding_backends.embed_texts_with_fallback(
+        ["join condition"],
+        model="qwen3-embedding:4b",
+        expected_dimension=2560,
+        fallback_models=["nomic-embed-text-v2-moe:latest"],
+    )
+
+    assert attempts == ["qwen3-embedding:4b", "nomic-embed-text-v2-moe:latest"]
+    assert backend == "ollama:nomic-embed-text-v2-moe:latest"
+    assert model_used == "nomic-embed-text-v2-moe:latest"
+    assert dimension_used == 768
+    assert len(embeddings) == 1

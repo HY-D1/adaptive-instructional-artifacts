@@ -32,6 +32,7 @@ import {
 import { storage } from '../storage/storage';
 import { createEventId } from '../utils/event-id';
 import { buildRetrievalBundle, RetrievalBundle } from '../content/retrieval-bundle';
+import { getRefinedHintsForConcept, loadConceptMap } from '../content/concept-loader';
 import { getProblemById } from '../../data/problems';
 
 /**
@@ -52,6 +53,16 @@ type RetrievalSignalMeta = {
   retrievalConfidence: number;
   retrievedSourceIds: string[];
   retrievedChunkIds: string[];
+};
+
+type RefinedHintResolution = {
+  content: string;
+  sourceChunkIds: string[];
+  refinementModel?: string;
+  refinementConfidence?: number;
+} | {
+  content: null;
+  rejectReason?: string;
 };
 
 const MIN_RETRIEVAL_CONFIDENCE = 0.45;
@@ -280,6 +291,93 @@ function generateSqlEngageFallbackHint(
   };
 }
 
+function mergeFallbackReasons(...reasons: Array<string | null | undefined>): string | null {
+  const normalized = reasons
+    .map((reason) => (reason || '').trim())
+    .filter((reason) => reason.length > 0);
+  if (normalized.length === 0) return null;
+  return Array.from(new Set(normalized)).join(',');
+}
+
+function scoreRefinedHintCandidate(
+  value: string,
+  rung: GuidanceRung,
+  errorSubtypeId: string,
+): {
+  accepted: boolean;
+  content: string;
+  fallbackReason: string | null;
+  safetyFilterApplied: boolean;
+} {
+  if (!value || value.trim().length === 0) {
+    return {
+      accepted: false,
+      content: '',
+      fallbackReason: 'refined_hint_missing',
+      safetyFilterApplied: false,
+    };
+  }
+
+  const safety = applyHintSafetyLayer(value, rung, errorSubtypeId);
+  if (!safety.content.trim()) {
+    return {
+      accepted: false,
+      content: '',
+      fallbackReason: mergeFallbackReasons('refined_hint_empty', safety.fallbackReason),
+      safetyFilterApplied: true,
+    };
+  }
+
+  if (rung >= 2 && safety.content.trim().length < 40) {
+    return {
+      accepted: false,
+      content: '',
+      fallbackReason: mergeFallbackReasons('refined_hint_too_short', safety.fallbackReason),
+      safetyFilterApplied: true,
+    };
+  }
+
+  return {
+    accepted: true,
+    content: safety.content,
+    fallbackReason: safety.fallbackReason,
+    safetyFilterApplied: safety.safetyFilterApplied,
+  };
+}
+
+async function resolveRefinedHintForProblem(
+  problemId: string,
+  rung: GuidanceRung,
+  errorSubtypeId: string,
+): Promise<RefinedHintResolution> {
+  await loadConceptMap();
+  const problem = getProblemById(problemId);
+  if (!problem) return { content: null, rejectReason: 'problem_not_found' };
+
+  for (const conceptId of problem.concepts) {
+    const refined = getRefinedHintsForConcept(conceptId);
+    if (!refined) continue;
+    const candidateText = rung === 1
+      ? refined.hintV1
+      : rung === 2
+      ? refined.hintV2
+      : refined.hintEscalation;
+    const scored = scoreRefinedHintCandidate(candidateText || '', rung, errorSubtypeId);
+    if (!scored.accepted) {
+      continue;
+    }
+
+    return {
+      content: scored.content,
+      sourceChunkIds: refined.refinementSourceChunkIds ?? [],
+      refinementModel: refined.refinementModel,
+      refinementConfidence: refined.refinementConfidence,
+    };
+  }
+
+  return { content: null, rejectReason: 'refined_hint_unavailable' };
+}
+
 /**
  * Get generic fallback hint when no SQL-Engage record exists
  */
@@ -462,11 +560,56 @@ export async function generateEnhancedHint(
   }
 
   const retrievalSignals = extractRetrievalSignals(retrievalBundle);
+
+  const refinedHintResult = errorSubtypeId
+    ? await resolveRefinedHintForProblem(options.problemId, rung, errorSubtypeId)
+    : { content: null, rejectReason: 'missing_error_subtype' as const };
+
+  if (refinedHintResult.content) {
+    const refinedSourceIds = Array.from(
+      new Set([
+        ...retrievalSignals.retrievedSourceIds,
+        ...refinedHintResult.sourceChunkIds,
+      ]),
+    );
+    const refinedChunkIds = Array.from(
+      new Set([
+        ...retrievalSignals.retrievedChunkIds,
+        ...refinedHintResult.sourceChunkIds,
+      ]),
+    );
+    return {
+      content: refinedHintResult.content,
+      rung,
+      sources: {
+        sqlEngage: false,
+        textbook: true,
+        llm: false,
+        pdfPassages: false,
+      },
+      conceptIds: getProblemById(options.problemId)?.concepts ?? [],
+      sourceRefIds: refinedHintResult.sourceChunkIds,
+      llmGenerated: false,
+      confidence: Number(
+        Math.max(
+          retrievalSignals.retrievalConfidence,
+          Math.min(refinedHintResult.refinementConfidence ?? 0.75, 0.95),
+        ).toFixed(4),
+      ),
+      retrievalConfidence: retrievalSignals.retrievalConfidence,
+      fallbackReason: null,
+      safetyFilterApplied: false,
+      retrievedSourceIds: refinedSourceIds,
+      retrievedChunkIds: refinedChunkIds,
+    };
+  }
+
+  const refinedFallbackReason = refinedHintResult.rejectReason ?? null;
   if (retrievalSignals.retrievalConfidence < MIN_RETRIEVAL_CONFIDENCE) {
     if (errorSubtypeId) {
       return generateSqlEngageFallbackHint(errorSubtypeId, rung, {
         ...retrievalSignals,
-        fallbackReason: 'low_retrieval_confidence',
+        fallbackReason: mergeFallbackReasons('low_retrieval_confidence', refinedFallbackReason),
         safetyFilterApplied: true,
       });
     }
@@ -478,7 +621,7 @@ export async function generateEnhancedHint(
       llmGenerated: false,
       confidence: retrievalSignals.retrievalConfidence,
       retrievalConfidence: retrievalSignals.retrievalConfidence,
-      fallbackReason: 'low_retrieval_confidence',
+      fallbackReason: mergeFallbackReasons('low_retrieval_confidence', refinedFallbackReason),
       safetyFilterApplied: true,
       retrievedSourceIds: retrievalSignals.retrievedSourceIds,
       retrievedChunkIds: retrievalSignals.retrievedChunkIds,
@@ -513,7 +656,7 @@ export async function generateEnhancedHint(
     // Using SQL-Engage fallback
     return generateSqlEngageFallbackHint(errorSubtypeId, rung, {
       ...retrievalSignals,
-      fallbackReason: 'no_llm_or_textbook',
+      fallbackReason: mergeFallbackReasons('no_llm_or_textbook', refinedFallbackReason),
     });
   }
   
@@ -531,7 +674,7 @@ export async function generateEnhancedHint(
     llmGenerated: false,
     confidence: retrievalSignals.retrievalConfidence,
     retrievalConfidence: retrievalSignals.retrievalConfidence,
-    fallbackReason: 'no_llm_or_textbook',
+    fallbackReason: mergeFallbackReasons('no_llm_or_textbook', refinedFallbackReason),
     safetyFilterApplied: false,
     retrievedSourceIds: retrievalSignals.retrievedSourceIds,
     retrievedChunkIds: retrievalSignals.retrievedChunkIds,

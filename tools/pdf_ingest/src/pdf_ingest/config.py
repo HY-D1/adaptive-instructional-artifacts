@@ -10,10 +10,20 @@ from pathlib import Path
 LOCAL_CORPUS_PIPELINE_VERSION = os.getenv("LOCAL_CORPUS_PIPELINE_VERSION", "v1")
 SOURCE_POLICY = "local_only_raw_remote_processed"
 PARSER_BACKEND = "docling"
-DEFAULT_EMBEDDING_MODEL = os.getenv("PDF_INGEST_EMBEDDING_MODEL", "embeddinggemma:latest")
+DEFAULT_EMBEDDING_MODEL = os.getenv("PDF_INGEST_EMBEDDING_MODEL", "qwen3-embedding:4b")
 DEFAULT_EMBEDDING_DIMENSION = int(os.getenv("PDF_INGEST_EMBEDDING_DIMENSION", "0"))
+DEFAULT_EMBEDDING_FALLBACK_MODELS = tuple(
+    model.strip()
+    for model in os.getenv(
+        "PDF_INGEST_EMBEDDING_FALLBACK_MODELS",
+        "nomic-embed-text-v2-moe:latest",
+    ).split(",")
+    if model.strip()
+)
 DEFAULT_EMBEDDING_BAKEOFF_VERSION = os.getenv("EMBEDDING_BAKEOFF_VERSION", "")
 DEFAULT_EMBEDDING_QUERYSET_VERSION = os.getenv("EMBEDDING_QUERYSET_VERSION", "")
+DEFAULT_REFINEMENT_MODEL = os.getenv("PDF_INGEST_REFINEMENT_MODEL", "qwen3:4b")
+DEFAULT_REFINEMENT_FALLBACK_MODEL = os.getenv("PDF_INGEST_REFINEMENT_FALLBACK_MODEL", "llama3.2:3b")
 DEFAULT_CHUNK_WORDS = 180
 DEFAULT_CHUNK_OVERLAP = 30
 DEFAULT_APPROX_PAGES_PER_CHAPTER = 25
@@ -32,8 +42,11 @@ class ExtractConfig:
     mlx_model: str = ""
     embedding_model: str = DEFAULT_EMBEDDING_MODEL
     embedding_dimension: int = DEFAULT_EMBEDDING_DIMENSION
+    embedding_fallback_models: tuple[str, ...] = DEFAULT_EMBEDDING_FALLBACK_MODELS
     embedding_bakeoff_version: str = DEFAULT_EMBEDDING_BAKEOFF_VERSION
     embedding_queryset_version: str = DEFAULT_EMBEDDING_QUERYSET_VERSION
+    refinement_model: str = DEFAULT_REFINEMENT_MODEL
+    refinement_fallback_model: str = DEFAULT_REFINEMENT_FALLBACK_MODEL
 
 
 @dataclass(frozen=True)

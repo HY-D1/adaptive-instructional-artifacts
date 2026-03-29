@@ -2,7 +2,8 @@ import { LLMGenerationParams } from '../../types';
 import { isDemoMode, shouldAttemptLLM } from '../utils/demo-mode';
 import { isHostedMode, getLLMUnavailableError } from '../runtime-config';
 
-export const OLLAMA_MODEL = 'qwen2.5:1.5b-instruct';
+export const OLLAMA_MODEL = 'qwen3:4b';
+export const OLLAMA_FALLBACK_MODEL = 'llama3.2:3b';
 const HEALTHCHECK_TIMEOUT_MS = 8000;
 const PROBE_PROMPT = 'Reply with exactly: OLLAMA_OK';
 const PROBE_TIMEOUT_MS = 12000;
@@ -244,58 +245,80 @@ export async function generateWithOllama(prompt: string, options?: OllamaGenerat
     ...(options?.params || {})
   };
   const params = validateLLMParams(rawParams);
+  const candidateModels = model === OLLAMA_FALLBACK_MODEL
+    ? [model]
+    : [model, OLLAMA_FALLBACK_MODEL];
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), params.timeoutMs);
+  let lastError: OllamaClientError | null = null;
 
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/llm/generate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model,
-        prompt,
-        stream: params.stream,
-        options: {
-          temperature: params.temperature,
-          top_p: params.top_p
+  for (const candidateModel of candidateModels) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), params.timeoutMs);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/llm/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: candidateModel,
+          prompt,
+          stream: params.stream,
+          options: {
+            temperature: params.temperature,
+            top_p: params.top_p
+          }
+        }),
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        if (response.status === 503) {
+          throw buildClientError('NOT_ENABLED', 'LLM is not enabled on the backend.', response.status);
         }
-      }),
-      signal: controller.signal
-    });
-
-    if (!response.ok) {
-      if (response.status === 503) {
-        throw buildClientError('NOT_ENABLED', 'LLM is not enabled on the backend.', response.status);
+        const body = await response.text();
+        throw buildClientError('HTTP', `LLM backend HTTP ${response.status}: ${body}`, response.status);
       }
-      const body = await response.text();
-      throw buildClientError('HTTP', `LLM backend HTTP ${response.status}: ${body}`, response.status);
-    }
 
-    const payload = await response.json();
-    
-    if (!payload.success || !payload.data || typeof payload.data.response !== 'string') {
-      throw buildClientError('INVALID_RESPONSE', 'LLM backend returned an unexpected response payload.');
-    }
+      const payload = await response.json();
 
-    return {
-      text: payload.data.response,
-      model,
-      params
-    };
-  } catch (error) {
-    if ((error as Error).name === 'AbortError') {
-      throw buildClientError('TIMEOUT', `LLM request timed out after ${params.timeoutMs}ms.`);
+      if (!payload.success || !payload.data || typeof payload.data.response !== 'string') {
+        throw buildClientError('INVALID_RESPONSE', 'LLM backend returned an unexpected response payload.');
+      }
+
+      return {
+        text: payload.data.response,
+        model: candidateModel,
+        params
+      };
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        lastError = buildClientError('TIMEOUT', `LLM request timed out after ${params.timeoutMs}ms.`);
+      } else if ((error as OllamaClientError).code) {
+        lastError = error as OllamaClientError;
+      } else {
+        lastError = buildClientError('NETWORK', (error as Error).message || 'Failed to reach LLM backend.');
+      }
+
+      if (lastError.code === 'NOT_ENABLED') {
+        throw lastError;
+      }
+
+      if (candidateModel !== candidateModels[candidateModels.length - 1]) {
+        console.warn('[LLM] Primary model failed, trying fallback model', {
+          failedModel: candidateModel,
+          fallbackModel: OLLAMA_FALLBACK_MODEL,
+          reason: lastError.code,
+        });
+        continue;
+      }
+    } finally {
+      clearTimeout(timeoutId);
     }
-    if ((error as OllamaClientError).code) {
-      throw error;
-    }
-    throw buildClientError('NETWORK', (error as Error).message || 'Failed to reach LLM backend.');
-  } finally {
-    clearTimeout(timeoutId);
   }
+
+  throw (lastError ?? buildClientError('NETWORK', 'Failed to reach LLM backend.'));
 }
 
 /**
