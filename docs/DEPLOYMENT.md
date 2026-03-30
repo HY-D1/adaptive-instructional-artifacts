@@ -1,6 +1,54 @@
 # Deployment Guide
 
 > **Quick Reference**: See [DEPLOYMENT_MODES.md](./DEPLOYMENT_MODES.md) for a detailed capability matrix showing which features work in local vs hosted mode.
+>
+> **Beta Launch Status**: See [Beta Launch Readiness](../.claude/state/runs/run-1774826173/beta-launch-packet.json) for current release candidate details.
+
+## Production Release Candidate (v1.0.0-beta)
+
+**Release Commit**: `a799561a13791771f4e30097af15021e4c7c2415`
+**Branch**: `codex/beta-stabilization-preview-first`
+**Status**: Ready for Controlled Student Beta Launch
+**Last Verified**: 2026-03-30
+
+### Production URLs
+
+| Service | URL | Health Status |
+|---------|-----|---------------|
+| Frontend | `https://adaptive-instructional-artifacts.vercel.app` | Verified (HTTP 200) |
+| Backend | `https://adaptive-instructional-artifacts-ap.vercel.app` | Verified (/health OK) |
+| Health Endpoint | `https://adaptive-instructional-artifacts-ap.vercel.app/health` | OK - Neon DB connected |
+
+### Active Corpus Configuration
+
+- **Document ID**: `dbms-ramakrishnan-3rd-edition`
+- **Active Run ID**: `run-1774671570-b1353117`
+- **Units**: 43
+- **Chunks**: 101
+- **Last Updated**: 2026-03-28T05:10:52.069Z
+
+### Rollback Procedure
+
+If critical issues are discovered during beta launch, follow these steps to rollback:
+
+**Rollback Target**: `fc143c6` (Merge pull request #7 from HY-D1/feat/student-preview)
+
+1. **Identify rollback target commit**: `fc143c6` (last stable main merge)
+2. **Frontend rollback**: Use Vercel Dashboard to revert to previous production deployment or redeploy from `fc143c6`
+3. **Backend rollback**: Use Vercel Dashboard to revert API deployment to `fc143c6`
+4. **Verify rollback health**: Check `/health` endpoint returns 200 with expected response
+5. **Verify active-run still set**: Run `node scripts/verify-corpus-active-run.mjs`
+6. **Smoke test critical flows**: Login, load learning interface, request hint, submit answer
+
+**Database Considerations**:
+- Schema is stable - no migration required for rollback
+- Active run persists in database across deployments
+- Neon provides point-in-time recovery if needed
+
+**Emergency Command** (use with caution):
+```bash
+git checkout fc143c6 && git push -f origin HEAD:main  # DANGER: force push
+```
 
 ## Vercel Deployment
 
