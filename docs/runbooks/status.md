@@ -1047,3 +1047,46 @@ Changed files (this checkpoint scope):
 Residual caveats:
 - Deployed refinement audit still has `strictGoodCount=0`; refined field quality requires another content polish pass before broad rollout claims.
 - Preview-protection determinism remains a separate unresolved blocker and was intentionally out-of-scope for this refinement pass.
+
+## Checkpoint — 2026-03-29 23:57 PDT (Round 2)
+
+Status: **BLOCKED**
+
+Scope:
+- Update `.env.development.local` to use actual branch preview URLs (not production aliases).
+- Rerun the full preview gate suite against the preview URLs.
+- Briefly investigate persistent 401 failures and determine whether a repo-side fix is possible.
+
+Evidence:
+- Configuration updated:
+  - `PLAYWRIGHT_BASE_URL=https://adaptive-instructional-artifacts-bew4edbz4-hy-d1s-projects.vercel.app`
+  - `PLAYWRIGHT_API_BASE_URL=https://adaptive-instructional-artifacts-api-backend-4kqtfv0ra.vercel.app`
+  - `VITE_API_BASE_URL=https://adaptive-instructional-artifacts-api-backend-4kqtfv0ra.vercel.app`
+- Build gates passed:
+  - `npm run build` ✅
+  - `npm run server:build` ✅
+- Deployed env preflight passed (heuristic does not flag these URLs as protected previews):
+  - `npm run check:e2e:deployed-env` ✅
+- Preview gate suite failures against actual preview URLs:
+  - `npm run corpus:verify-active-run -- --api-base-url https://adaptive-instructional-artifacts-api-backend-4kqtfv0ra.vercel.app` ❌ (`status=401` on `/api/corpus/manifest`)
+  - `npm run test:e2e:setup-auth:deployed` ❌ (`[auth-setup] /health failed for https://adaptive-instructional-artifacts-api-backend-4kqtfv0ra.vercel.app with HTTP 401`)
+  - `npm run test:e2e:hint-stability` ❌ (timed out waiting for "Run Query" because auth setup could not complete due to backend 401)
+- Direct curl inspection:
+  - Frontend preview with bypass headers returns `307` + `set-cookie: _vercel_jwt=...` (working cookie-jar flow confirmed) ✅
+  - Backend preview with identical bypass headers returns `401` + `set-cookie: _vercel_sso_nonce=...` ❌
+- Backend route protection audit:
+  - `apps/server/src/app.ts` `/health` is public (no auth middleware)
+  - `apps/server/src/routes/corpus.ts` `/manifest` is public (no `requireAuth`)
+  - 401 originates at Vercel edge before application code is reached
+- Missing env vars identified:
+  - `PLAYWRIGHT_API_SHARE_URL` / `PLAYWRIGHT_API_SHARE_TOKEN` are not configured and could not be generated in this session
+
+Release verdict:
+- Preview-first beta release gate for the current branch: **BLOCKED**
+- Root cause: Backend preview deployment is protected by Vercel SSO/Deployment Protection, which the configured `VERCEL_AUTOMATION_BYPASS_SECRET` does not bypass. The frontend and backend are separate Vercel projects and appear to have different protection configurations.
+
+Blocker packet:
+- `.claude/state/runs/run-1774826161/blocker-packet.json`
+
+Minimum required manual change:
+- In the Vercel dashboard for the backend project `adaptive-instructional-artifacts-api-backend`, either disable Deployment Protection / Vercel Authentication for preview deployments, or retrieve the correct bypass secret for that project and update `VERCEL_AUTOMATION_BYPASS_SECRET` in `.env.development.local`. Alternatively, generate a Vercel Share URL for backend preview deployment `dpl_7nvcxH1qbXFAkkUkbPXD2yiW4SuB` and set `PLAYWRIGHT_API_SHARE_URL`.
