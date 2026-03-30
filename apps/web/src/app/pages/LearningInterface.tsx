@@ -378,6 +378,8 @@ export function LearningInterface() {
   const elapsedTimeRef = useRef(elapsedTime);
   // Track notification timeout IDs for cleanup on unmount
   const notificationTimeoutsRef = useRef<Set<number>>(new Set());
+  // Track if profile assignment has been logged for this session
+  const profileAssignedLoggedRef = useRef<boolean>(false);
   
   // Screen reader announcements for accessibility
   const { announcement: hintAnnouncement, announce: announceHint } = useScreenReaderAnnouncer();
@@ -396,13 +398,16 @@ export function LearningInterface() {
       const staticProfile = assignProfile({ learnerId }, 'static');
       setCurrentProfileId(getArmIdFromProfileId(staticProfile.id));
       setCurrentEscalationProfile(staticProfile);
-      storage.logProfileAssigned(
-        learnerId,
-        staticProfile.id,
-        'static',
-        currentProblem.id,
-        'experimental_static_hint_mode'
-      );
+      if (!profileAssignedLoggedRef.current) {
+        profileAssignedLoggedRef.current = true;
+        storage.logProfileAssigned(
+          learnerId,
+          staticProfile.id,
+          'static',
+          currentProblem.id,
+          'experimental_static_hint_mode'
+        );
+      }
       return;
     }
     
@@ -413,13 +418,16 @@ export function LearningInterface() {
       const diagnosticProfile = assignProfile({ learnerId, diagnosticResults }, 'diagnostic');
       setCurrentProfileId(getArmIdFromProfileId(diagnosticProfile.id));
       setCurrentEscalationProfile(diagnosticProfile);
-      storage.logProfileAssigned(
-        learnerId,
-        diagnosticProfile.id,
-        'diagnostic',
-        currentProblem.id,
-        'experimental_adaptive_disabled'
-      );
+      if (!profileAssignedLoggedRef.current) {
+        profileAssignedLoggedRef.current = true;
+        storage.logProfileAssigned(
+          learnerId,
+          diagnosticProfile.id,
+          'diagnostic',
+          currentProblem.id,
+          'experimental_adaptive_disabled'
+        );
+      }
       return;
     }
     
@@ -487,15 +495,18 @@ export function LearningInterface() {
     
     // Set the escalation profile for hint system thresholds
     setCurrentEscalationProfile(effectiveProfile);
-    
-    // Log profile assignment event
-    storage.logProfileAssigned(
-      learnerId,
-      effectiveProfile.id,
-      debugProfileOverride ? 'static' : assignmentStrategy,
-      currentProblem.id,
-      selectionReason
-    );
+
+    // Log profile assignment event (only once per session)
+    if (!profileAssignedLoggedRef.current) {
+      profileAssignedLoggedRef.current = true;
+      storage.logProfileAssigned(
+        learnerId,
+        effectiveProfile.id,
+        debugProfileOverride ? 'static' : assignmentStrategy,
+        currentProblem.id,
+        selectionReason
+      );
+    }
   }, [learnerId, currentProblem.id, sessionId, debugRefreshKey, sessionConfig]);
 
   // Week 5: Listen for HDI calculated events

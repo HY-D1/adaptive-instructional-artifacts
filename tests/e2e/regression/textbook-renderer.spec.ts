@@ -284,6 +284,6 @@ test.describe('@weekly @no-external @textbook Textbook Content Rendering', () =>
     });
 
     await page.goto('/textbook?learnerId=learner-1');
-    await expect(page.getByRole('heading', { name: /textbook/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'My Textbook' })).toBeVisible();
   });
 });

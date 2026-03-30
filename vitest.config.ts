@@ -1,3 +1,4 @@
+import path from 'path';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import plainText from 'vite-plugin-plain-text';
@@ -43,6 +44,8 @@ export default defineConfig({
   resolve: {
     alias: {
       // Ensure proper path resolution
+      // Resolve express from server directory for unit tests importing server routes
+      'express': path.resolve(__dirname, 'apps/server/node_modules/express')
     }
   }
 });
