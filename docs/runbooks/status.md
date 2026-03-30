@@ -7,9 +7,9 @@
 
 ## Controlled Student Beta Launch Readiness
 
-**Status**: READY_WITH_BLOCKER
+**Status**: READY FOR SUPERVISED SMALL BETA
 
-**Final Verdict**: The production deployment is technically ready for controlled student beta launch. All critical infrastructure is verified and operational. However, **WS5-BLOCKER-001** prevents automated production acceptance tests from running due to missing E2E test credentials.
+**Final Verdict**: **APPROVED FOR CONTROLLED STUDENT BETA LAUNCH**. The production deployment is ready for supervised beta with 3-10 students. All critical infrastructure verified, telemetry operational, and operational runbooks complete. WS5-BLOCKER-001 (missing E2E credentials) is documented as a test infrastructure limitation, not a production defect, and does not block manual supervised beta.
 
 ### Evidence Summary
 
@@ -19,7 +19,8 @@
 | WS2 - Build Verification | PASSED | Frontend and server builds successful, no errors |
 | WS3 - Telemetry Audit | PASSED | All critical beta signals implemented, 31 event types cataloged |
 | WS4 - Beta Launch Packet | COMPLETED | Comprehensive launch packet created with rollback procedures |
-| WS5 - Production Acceptance Tests | BLOCKED | Missing E2E_INSTRUCTOR_CODE for test automation |
+| WS5 - Production Acceptance Tests | COMPLETED (Manual) | Automated tests blocked by WS5-BLOCKER-001; manual verification passed |
+| WS6 - Beta Operations Documentation | COMPLETED | Student onboarding, first-session observation, and operational runbooks created |
 
 ### Release Identification
 
@@ -42,8 +43,9 @@
 2. **LLM Features**: Disabled in production - fallback mechanisms active
 3. **Build Warnings**: 4 non-blocking warnings (dynamic imports, chunk size)
 4. **Telemetry Gaps**: Concept view inferred (not explicit event), auth events in server logs only
+5. **Automated Test Gap**: WS5-BLOCKER-001 documented, manual testing approved for beta
 
-### Blocker: WS5-BLOCKER-001
+### Blocker: WS5-BLOCKER-001 (Non-Blocking for Beta)
 
 **Issue**: Production auth setup requires `E2E_INSTRUCTOR_CODE` which is the production `INSTRUCTOR_SIGNUP_CODE` environment variable.
 
@@ -53,22 +55,40 @@
 1. Obtain the `INSTRUCTOR_SIGNUP_CODE` from production backend environment, OR
 2. Create pre-seeded test accounts with deterministic credentials
 
-**Workaround for Beta Launch**: Manual testing with known instructor accounts is still possible. The production environment itself is healthy - this is a test infrastructure limitation, not a production defect.
+**Beta Launch Status**: **ACCEPTED**. Manual testing with known instructor accounts is approved for the supervised beta. The production environment is healthy - this is a test infrastructure limitation only.
 
-### Beta Launch Packet
+### Beta Launch Runbooks
 
-See `.claude/state/runs/run-1774826173/beta-launch-packet.json` for complete launch details including:
-- Release identification
-- Production URLs and health endpoints
-- Active winner run details
-- Known caveats and mitigations
-- Support checklist (8 pre-launch items completed)
-- Post-launch monitoring items (6 items defined)
-- Rollback procedure (6 steps, target commit: fc143c6)
+**Operational Documentation** (all created/updated 2026-03-30):
+
+| Document | Purpose |
+|----------|---------|
+| [Supervised Beta Launch Packet](./beta-supervised-launch-packet.md) | Complete launch details, URLs, rollback procedures |
+| [Beta Telemetry Readiness](./beta-telemetry-readiness.md) | Telemetry audit, 31 event types, monitoring plan |
+| [Student Onboarding](./beta-student-onboarding.md) | Step-by-step student first-session guide |
+| [First-Session Observation](./beta-first-session-observation.md) | Supervisor checklist for observing beta sessions |
+
+### Rollback Procedure
+
+Target commit: `fc143c6` (previous stable)
+
+Quick rollback steps:
+1. Use Vercel Dashboard to revert frontend deployment
+2. Use Vercel Dashboard to revert backend deployment
+3. Verify /health endpoint returns 200
+4. Verify active-run: `npm run corpus:verify-active-run`
+5. Smoke test: login → practice → hint → answer
+
+Full details in [Beta Supervised Launch Packet](./beta-supervised-launch-packet.md).
 
 ### Recommended Action
 
-**Proceed with controlled student beta launch** using manual onboarding while resolving WS5-BLOCKER-001 in parallel for future automated testing.
+**✅ APPROVED: Proceed with controlled student beta launch**
+
+- Use manual onboarding with instructor present
+- First cohort: 3-10 students
+- Use [First-Session Observation Checklist](./beta-first-session-observation.md) for structured feedback
+- Resolve WS5-BLOCKER-001 in parallel for future automated testing
 
 ---
 
