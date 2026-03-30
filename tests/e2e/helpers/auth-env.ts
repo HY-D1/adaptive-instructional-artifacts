@@ -47,16 +47,38 @@ async function getPreviewApiCookie(): Promise<string> {
     return cachedPreviewApiCookie;
   }
 
+  // First try share URL if available
   const shareUrl = process.env.PLAYWRIGHT_API_SHARE_URL?.trim();
-  if (!shareUrl) {
+  if (shareUrl) {
+    try {
+      const response = await fetch(shareUrl, {
+        method: 'GET',
+        redirect: 'manual',
+      });
+      cachedPreviewApiCookie = extractCookiePair(response.headers.get('set-cookie'));
+      return cachedPreviewApiCookie;
+    } catch {
+      cachedPreviewApiCookie = '';
+      return '';
+    }
+  }
+
+  // Otherwise, use bypass secret to get a cookie from the API base URL
+  const apiBase = resolveApiBaseUrl();
+  const secret = getVercelBypassSecret();
+  if (!secret || isLocalUrl(apiBase)) {
     cachedPreviewApiCookie = '';
     return '';
   }
 
   try {
-    const response = await fetch(shareUrl, {
+    const response = await fetch(`${apiBase}/health`, {
       method: 'GET',
       redirect: 'manual',
+      headers: {
+        'x-vercel-protection-bypass': secret,
+        'x-vercel-set-bypass-cookie': 'true',
+      },
     });
     cachedPreviewApiCookie = extractCookiePair(response.headers.get('set-cookie'));
   } catch {

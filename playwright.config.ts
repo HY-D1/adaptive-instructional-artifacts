@@ -87,6 +87,21 @@ export default defineConfig({
     {
       name: 'setup:auth',
       testMatch: '**/setup/auth.setup.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        // Enable third-party cookies for cross-origin auth between preview deployments
+        // Chromium flags to disable cookie restrictions in headless/incognito mode
+        launchOptions: {
+          args: [
+            '--disable-web-security',
+            '--disable-features=IsolateOrigins,site-per-process,SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure,ImprovedCookieControls,ImprovedCookieControlsForThirdPartyCookieBlocking',
+          ],
+        },
+        contextOptions: {
+          bypassCSP: true,
+          ignoreHTTPSErrors: true,
+        },
+      },
     },
 
     // ── Main test suite (no auth dependency) ────────────────────────────────────

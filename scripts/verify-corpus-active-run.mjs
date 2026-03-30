@@ -100,16 +100,36 @@ function extractCookiePair(setCookieHeader) {
   return firstSegment || '';
 }
 
-async function getPreviewBypassCookie() {
+async function getPreviewBypassCookie(apiBaseUrl) {
+  // First try share URL if available
   const shareUrl = process.env.PLAYWRIGHT_API_SHARE_URL;
-  if (!shareUrl || shareUrl.trim().length === 0) {
+  if (shareUrl && shareUrl.trim().length > 0) {
+    try {
+      const response = await fetch(shareUrl.trim(), {
+        method: 'GET',
+        redirect: 'manual',
+      });
+      const setCookie = response.headers.get('set-cookie');
+      return extractCookiePair(setCookie);
+    } catch {
+      return '';
+    }
+  }
+
+  // Otherwise, use bypass secret to get a cookie from the API base URL
+  const secret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET || process.env.E2E_VERCEL_BYPASS_SECRET;
+  if (!secret || !apiBaseUrl || isLocalOrigin(apiBaseUrl)) {
     return '';
   }
 
   try {
-    const response = await fetch(shareUrl.trim(), {
+    const response = await fetch(`${apiBaseUrl}/health`, {
       method: 'GET',
       redirect: 'manual',
+      headers: {
+        'x-vercel-protection-bypass': secret.trim(),
+        'x-vercel-set-bypass-cookie': 'true',
+      },
     });
     const setCookie = response.headers.get('set-cookie');
     return extractCookiePair(setCookie);
@@ -156,7 +176,7 @@ function fail(summary, mismatches) {
 async function main() {
   const args = parseArgs(process.argv);
   const apiBaseUrl = normalizeBaseUrl(args.apiBaseUrl);
-  const previewCookie = await getPreviewBypassCookie();
+  const previewCookie = await getPreviewBypassCookie(apiBaseUrl);
   const manifestResponse = await fetchJson(`${apiBaseUrl}/api/corpus/manifest`, previewCookie);
   const hasBypassSecret = Boolean(
     (process.env.VERCEL_AUTOMATION_BYPASS_SECRET || process.env.E2E_VERCEL_BYPASS_SECRET || '').trim(),

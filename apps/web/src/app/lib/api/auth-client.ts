@@ -68,11 +68,32 @@ async function authFetch(path: string, init: RequestInit = {}): Promise<Response
   if (!headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
-  return fetch(`${AUTH_BASE}${path}`, {
-    ...requestInit,
-    credentials: 'include',         // send/receive httpOnly cookies
-    headers,
-  });
+
+  // Add Vercel bypass secret for E2E testing on protected previews
+  // @ts-expect-error - global injected by E2E tests
+  const bypassSecret = typeof window !== 'undefined' ? window.__VERCEL_BYPASS_SECRET__ : undefined;
+  if (bypassSecret && !headers.has('x-vercel-protection-bypass')) {
+    headers.set('x-vercel-protection-bypass', bypassSecret);
+    headers.set('x-vercel-set-bypass-cookie', 'true');
+  }
+
+  // Add timeout to prevent hanging on cross-origin requests in E2E tests
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+  try {
+    const response = await fetch(`${AUTH_BASE}${path}`, {
+      ...requestInit,
+      credentials: 'include',         // send/receive httpOnly cookies
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
 }
 
 // ============================================================================
