@@ -125,6 +125,12 @@ artifacts/
 # UX audit evidence (temporary screenshots)
 ux-audit-evidence/
 
+# Debug artifacts - ad hoc scripts and local testing
+debug/
+
+# Historical reports and audits (archived)
+.claude/archived/
+
 # Debug artifacts
 cookies.txt
 *.cookies.txt
