@@ -13,7 +13,7 @@
 
 import type { GuidanceRung } from './ml/guidance-ladder';
 import type { RetrievalBundle } from './retrieval-bundle';
-import type { InstructionalUnit } from '../types';
+import type { InstructionalUnit, LLMProvider } from '../types';
 
 /**
  * Metadata for validated LLM output
@@ -31,6 +31,32 @@ export type LLMOutputMetadata = {
   contractVersion: string;
   /** Validation error messages */
   validationErrors: string[];
+};
+
+/**
+ * LLM Telemetry metadata for provider/model tracking
+ */
+export type LLMTelemetryMetadata = {
+  /** Provider used (ollama or groq) */
+  provider: LLMProvider;
+  /** Model name used */
+  model: string;
+  /** Purpose of the LLM request */
+  purpose: string;
+  /** Request latency in milliseconds */
+  latencyMs: number;
+  /** Input token count */
+  inputTokens?: number;
+  /** Output token count */
+  outputTokens?: number;
+  /** Reasoning effort level */
+  reasoningEffort: 'low' | 'medium' | 'high';
+  /** Whether fallback was used */
+  fallbackUsed: boolean;
+  /** Reason for fallback if used */
+  fallbackReason?: string;
+  /** Whether this was a cache hit */
+  cacheHit: boolean;
 };
 
 /**
@@ -449,16 +475,18 @@ function buildPrompt(template: string, bundle: RetrievalBundle): string {
 }
 
 /**
- * Create log entry for LLM generation
+ * Create log entry for LLM generation with telemetry
  * @param output - LLM output to log
  * @param rung - Guidance rung level
  * @param bundle - Retrieval bundle used
+ * @param telemetry - LLM telemetry metadata
  * @returns Log entry object
  */
 export function createLLMLogEntry(
   output: LLMGuidanceOutput,
   rung: GuidanceRung,
-  bundle: RetrievalBundle
+  bundle: RetrievalBundle,
+  telemetry: LLMTelemetryMetadata
 ): {
   eventType: 'llm_generation';
   timestamp: number;
@@ -468,6 +496,7 @@ export function createLLMLogEntry(
   conceptIdsCount: number;
   fallbackUsed: boolean;
   contractVersion: string;
+  telemetry: LLMTelemetryMetadata;
 } {
   return {
     eventType: 'llm_generation',
@@ -477,6 +506,7 @@ export function createLLMLogEntry(
     sourceRefIdsCount: output.metadata.sourceRefIdsCount,
     conceptIdsCount: output.metadata.conceptIdsCount,
     fallbackUsed: output.fallbackUsed || false,
-    contractVersion: LLM_CONTRACT_VERSION
+    contractVersion: LLM_CONTRACT_VERSION,
+    telemetry
   };
 }

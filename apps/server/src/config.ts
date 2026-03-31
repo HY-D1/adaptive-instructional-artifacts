@@ -20,9 +20,15 @@ export const ENABLE_PDF_INDEX = process.env.ENABLE_PDF_INDEX === 'true';
 
 /**
  * Whether LLM proxy features are enabled
- * Set ENABLE_LLM=true to enable Ollama proxy endpoints
+ * Set ENABLE_LLM=true to enable LLM endpoints
  */
 export const ENABLE_LLM = process.env.ENABLE_LLM === 'true';
+
+/**
+ * LLM Provider selection: 'ollama' or 'groq'
+ * Defaults to 'ollama' for local development
+ */
+export const LLM_PROVIDER = (process.env.LLM_PROVIDER || 'ollama') as 'ollama' | 'groq';
 
 /**
  * Ollama base URL for LLM proxy
@@ -31,6 +37,13 @@ export const ENABLE_LLM = process.env.ENABLE_LLM === 'true';
 export const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
 export const OLLAMA_DEFAULT_MODEL = process.env.OLLAMA_DEFAULT_MODEL || 'qwen3:4b';
 export const OLLAMA_FALLBACK_MODEL = process.env.OLLAMA_FALLBACK_MODEL || 'llama3.2:3b';
+
+/**
+ * Groq API configuration for hosted LLM
+ * GROQ_API_KEY is required when LLM_PROVIDER=groq
+ */
+export const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+export const GROQ_MODEL = process.env.GROQ_MODEL || 'gpt-oss-20b';
 
 // ============================================================================
 // PDF Index Configuration
@@ -218,13 +231,8 @@ export interface FeatureStatus {
     enabled: boolean;
     available: boolean;
     message: string;
-    ollamaUrl: string;
+    provider: string;
   };
-}
-
-// Define interface for Ollama tags response
-interface OllamaTagsResponse {
-  models?: Array<{ name?: string }>;
 }
 
 /**
@@ -235,7 +243,7 @@ export async function getFeatureStatus(): Promise<FeatureStatus> {
     pdfIndex: {
       enabled: ENABLE_PDF_INDEX,
       available: false,
-      message: ENABLE_PDF_INDEX 
+      message: ENABLE_PDF_INDEX
         ? 'PDF index enabled but not yet initialized'
         : 'PDF index disabled (set ENABLE_PDF_INDEX=true to enable)',
     },
@@ -243,29 +251,40 @@ export async function getFeatureStatus(): Promise<FeatureStatus> {
       enabled: ENABLE_LLM,
       available: false,
       message: ENABLE_LLM
-        ? 'LLM enabled but Ollama not yet checked'
+        ? `LLM enabled with provider ${LLM_PROVIDER}`
         : 'LLM disabled (set ENABLE_LLM=true to enable)',
-      ollamaUrl: ENABLE_LLM ? OLLAMA_BASE_URL : '',
+      provider: LLM_PROVIDER,
     },
   };
 
-  // Check Ollama availability if enabled
+  // Check LLM availability if enabled
   if (ENABLE_LLM) {
     try {
-      const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
-        method: 'GET',
-        signal: AbortSignal.timeout(5000),
-      });
-      if (response.ok) {
-        const data = await response.json() as OllamaTagsResponse;
-        const models = Array.isArray(data?.models) ? data.models : [];
-        status.llm.available = true;
-        status.llm.message = `Ollama connected with ${models.length} model(s) available`;
-      } else {
-        status.llm.message = `Ollama responded with status ${response.status}`;
-      }
+      // Dynamically import to avoid circular dependencies
+      const { createLLMProvider } = await import('./llm/index.js');
+      const provider = createLLMProvider(
+        LLM_PROVIDER === 'groq'
+          ? {
+              type: 'groq',
+              groqConfig: {
+                apiKey: GROQ_API_KEY,
+                defaultModel: GROQ_MODEL,
+              },
+            }
+          : {
+              type: 'ollama',
+              ollamaConfig: {
+                baseUrl: OLLAMA_BASE_URL,
+                defaultModel: OLLAMA_DEFAULT_MODEL,
+                fallbackModel: OLLAMA_FALLBACK_MODEL,
+              },
+            }
+      );
+      const health = await provider.health();
+      status.llm.available = health.ok;
+      status.llm.message = health.message;
     } catch (error) {
-      status.llm.message = `Ollama not reachable at ${OLLAMA_BASE_URL}: ${(error as Error).message}`;
+      status.llm.message = `LLM health check failed: ${(error as Error).message}`;
     }
   }
 

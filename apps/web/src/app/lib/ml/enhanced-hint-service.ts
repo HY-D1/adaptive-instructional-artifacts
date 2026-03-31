@@ -629,9 +629,9 @@ export async function generateEnhancedHint(
   }
   
   // Decision: Can we use LLM?
-  // For now, allow LLM for all rungs if forceLLM is true or for rung 2+
-  // In the future, we could enable LLM for L1 too for consistency
-  const canUseLLM = resources.llm && (forceLLM || rung >= 1);
+  // Retrieval-first design: LLM reserved for rung 3+ (explanations/textbook units)
+  // L1/L2 use templates/retrieval-first for cost efficiency and grounding
+  const canUseLLM = resources.llm && (forceLLM || rung >= 3);
   
   // Debug: Enhanced hint decision check - logged in development mode
   

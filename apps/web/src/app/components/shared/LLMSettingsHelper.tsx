@@ -19,12 +19,21 @@ import {
   Sparkles,
   Save,
   RotateCcw,
-  Bot
+  Bot,
+  Cloud,
+  Server,
 } from 'lucide-react';
 import { cn } from '../ui/utils';
-import { checkOllamaHealth, OllamaHealthStatus, OLLAMA_MODEL } from '../../lib/api/llm-client';
+import {
+  checkLLMHealth,
+  LLMHealthStatus,
+  LLMProvider,
+  OLLAMA_MODEL,
+  GROQ_MODEL,
+} from '../../lib/api/llm-client';
 
 interface LLMSettings {
+  provider: LLMProvider;
   temperature: number;
   topP: number;
   timeoutMs: number;
@@ -32,6 +41,7 @@ interface LLMSettings {
 }
 
 const DEFAULT_SETTINGS: LLMSettings = {
+  provider: 'ollama',
   temperature: 0,
   topP: 1,
   timeoutMs: 25000,
@@ -40,9 +50,27 @@ const DEFAULT_SETTINGS: LLMSettings = {
 
 const STORAGE_KEY = 'sql-adapt-llm-settings';
 
+// Provider-specific default models
+const PROVIDER_DEFAULTS: Record<LLMProvider, string> = {
+  ollama: OLLAMA_MODEL,
+  groq: GROQ_MODEL,
+};
+
+// Provider display names
+const PROVIDER_NAMES: Record<LLMProvider, string> = {
+  ollama: 'Local (Ollama)',
+  groq: 'Hosted (Groq)',
+};
+
+// Provider icons
+const PROVIDER_ICONS: Record<LLMProvider, typeof Server> = {
+  ollama: Server,
+  groq: Cloud,
+};
+
 export function LLMSettingsHelper() {
   const [settings, setSettings] = useState<LLMSettings>(DEFAULT_SETTINGS);
-  const [healthStatus, setHealthStatus] = useState<OllamaHealthStatus | null>(null);
+  const [healthStatus, setHealthStatus] = useState<LLMHealthStatus | null>(null);
   const [isCheckingHealth, setIsCheckingHealth] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
@@ -61,7 +89,7 @@ export function LLMSettingsHelper() {
     }
   }, []);
 
-  // Check Ollama health on mount
+  // Check LLM health on mount
   useEffect(() => {
     checkHealth();
   }, []);
@@ -69,17 +97,19 @@ export function LLMSettingsHelper() {
   const checkHealth = async () => {
     setIsCheckingHealth(true);
     try {
-      const status = await checkOllamaHealth(settings.model);
+      const status = await checkLLMHealth();
       setHealthStatus(status);
       // Store available models from health check
       if (status.availableModels && status.availableModels.length > 0) {
         setAvailableModels(status.availableModels);
       }
-      // Technical details logged in development mode if health check fails
     } catch {
       setHealthStatus({
         ok: false,
-        message: 'Failed to check Ollama health'
+        provider: settings.provider,
+        message: 'Failed to check LLM health',
+        availableModels: [],
+        enabled: false,
       });
     } finally {
       setIsCheckingHealth(false);
@@ -87,10 +117,17 @@ export function LLMSettingsHelper() {
   };
 
   const updateSetting = <K extends keyof LLMSettings>(
-    key: K, 
+    key: K,
     value: LLMSettings[K]
   ) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
+    setSettings(prev => {
+      const updated = { ...prev, [key]: value };
+      // If provider changed, update model to default for that provider
+      if (key === 'provider') {
+        updated.model = PROVIDER_DEFAULTS[value as LLMProvider];
+      }
+      return updated;
+    });
     setHasChanges(true);
     setSaveStatus('idle');
   };
@@ -98,15 +135,15 @@ export function LLMSettingsHelper() {
   const saveSettings = () => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-      
+
       // Dispatch event to notify other components
       window.dispatchEvent(new CustomEvent('llm-settings-changed', {
         detail: settings
       }));
-      
+
       setHasChanges(false);
       setSaveStatus('saved');
-      
+
       // Reset status after 3 seconds
       setTimeout(() => setSaveStatus('idle'), 3000);
     } catch {
@@ -125,36 +162,75 @@ export function LLMSettingsHelper() {
     return `${(ms / 1000).toFixed(1)}s`;
   };
 
+  const ProviderIcon = PROVIDER_ICONS[settings.provider];
+
   return (
     <div className="space-y-4">
+      {/* Provider Selection */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <Cloud className="size-3.5 text-blue-500" />
+            <span className="text-sm font-medium">Provider</span>
+          </div>
+        </div>
+        <Select
+          value={settings.provider}
+          onValueChange={(value) => updateSetting('provider', value as LLMProvider)}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select a provider" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ollama">
+              <div className="flex items-center gap-2">
+                <Server className="size-4" />
+                {PROVIDER_NAMES.ollama}
+              </div>
+            </SelectItem>
+            <SelectItem value="groq">
+              <div className="flex items-center gap-2">
+                <Cloud className="size-4" />
+                {PROVIDER_NAMES.groq}
+              </div>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-gray-500">
+          {settings.provider === 'ollama'
+            ? 'Use local Ollama instance. Requires Ollama running locally.'
+            : 'Use hosted Groq API. Requires GROQ_API_KEY on backend.'}
+        </p>
+      </div>
+
       {/* Health Status */}
       <div className="flex items-center justify-between">
-          {isCheckingHealth ? (
-            <Badge variant="outline" className="text-xs">
-              <Loader2 className="size-3 mr-1 animate-spin" />
-              Checking...
-            </Badge>
-          ) : healthStatus?.ok ? (
-            <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
-              <CheckCircle className="size-3 mr-1" />
-              Connected
-            </Badge>
-          ) : (
-            <Badge className="bg-red-100 text-red-800 border-red-200 text-xs">
-              <AlertCircle className="size-3 mr-1" />
-              Offline
-            </Badge>
-          )}
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={checkHealth}
-            disabled={isCheckingHealth}
-            className="h-7 px-2"
-          >
-            <RotateCcw className={cn("size-3", isCheckingHealth && "animate-spin")} />
-          </Button>
-        </div>
+        {isCheckingHealth ? (
+          <Badge variant="outline" className="text-xs">
+            <Loader2 className="size-3 mr-1 animate-spin" />
+            Checking...
+          </Badge>
+        ) : healthStatus?.ok ? (
+          <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
+            <CheckCircle className="size-3 mr-1" />
+            Connected
+          </Badge>
+        ) : (
+          <Badge className="bg-red-100 text-red-800 border-red-200 text-xs">
+            <AlertCircle className="size-3 mr-1" />
+            Offline
+          </Badge>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={checkHealth}
+          disabled={isCheckingHealth}
+          className="h-7 px-2"
+        >
+          <RotateCcw className={cn("size-3", isCheckingHealth && "animate-spin")} />
+        </Button>
+      </div>
 
       {/* Health Status Message */}
       {healthStatus && (
@@ -164,6 +240,10 @@ export function LLMSettingsHelper() {
             ? 'bg-green-50 text-green-800 border border-green-200'
             : 'bg-red-50 text-red-800 border border-red-200'
         )}>
+          <div className="flex items-center gap-1.5 mb-1">
+            <ProviderIcon className="size-3" />
+            <span className="font-medium capitalize">{healthStatus.provider}</span>
+          </div>
           {healthStatus.message}
           {healthStatus.availableModels && healthStatus.availableModels.length > 0 && (
             <div className="mt-1 text-gray-600">
@@ -185,23 +265,29 @@ export function LLMSettingsHelper() {
         <Select
           value={settings.model}
           onValueChange={(value) => updateSetting('model', value)}
-          disabled={availableModels.length === 0}
+          disabled={availableModels.length === 0 && settings.provider === 'ollama'}
         >
           <SelectTrigger className="w-full">
-            <SelectValue placeholder={availableModels.length === 0 ? 'Loading models...' : 'Select a model'} />
+            <SelectValue placeholder={availableModels.length === 0 && settings.provider === 'ollama' ? 'Loading models...' : 'Select a model'} />
           </SelectTrigger>
           <SelectContent>
-            {availableModels.map((model) => (
-              <SelectItem key={model} value={model}>
-                {model}
-              </SelectItem>
-            ))}
+            {settings.provider === 'groq' ? (
+              <SelectItem value={GROQ_MODEL}>{GROQ_MODEL}</SelectItem>
+            ) : (
+              availableModels.map((model) => (
+                <SelectItem key={model} value={model}>
+                  {model}
+                </SelectItem>
+              ))
+            )}
           </SelectContent>
         </Select>
         <p className="text-xs text-gray-500">
-          {availableModels.length === 0
-            ? 'Connect to Ollama to see available models.'
-            : `Using ${settings.model} for hint generation.`}
+          {settings.provider === 'groq'
+            ? `Using ${GROQ_MODEL} for AI-powered features.`
+            : availableModels.length === 0
+              ? 'Connect to Ollama to see available models.'
+              : `Using ${settings.model} for hint generation.`}
         </p>
       </div>
 

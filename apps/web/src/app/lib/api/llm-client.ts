@@ -4,6 +4,10 @@ import { isHostedMode, getLLMUnavailableError } from '../runtime-config';
 
 export const OLLAMA_MODEL = 'qwen3:4b';
 export const OLLAMA_FALLBACK_MODEL = 'llama3.2:3b';
+export const GROQ_MODEL = 'gpt-oss-20b';
+
+export type LLMProvider = 'ollama' | 'groq';
+
 const HEALTHCHECK_TIMEOUT_MS = 8000;
 const PROBE_PROMPT = 'Reply with exactly: OLLAMA_OK';
 const PROBE_TIMEOUT_MS = 12000;
@@ -515,23 +519,98 @@ export function isLLMFeatureEnabled(): boolean {
 }
 
 /**
- * Get available models from the backend
- * @returns Promise with list of available models
+ * Provider-agnostic LLM health status
  */
-export async function getAvailableModels(): Promise<string[]> {
+export interface LLMHealthStatus {
+  ok: boolean;
+  provider: LLMProvider;
+  message: string;
+  details?: string;
+  availableModels: string[];
+  enabled: boolean;
+}
+
+/**
+ * Get provider from backend status
+ */
+export async function getProvider(): Promise<LLMProvider> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/llm/models`, {
+    const response = await fetch(`${API_BASE_URL}/api/llm/status`, {
       method: 'GET',
       signal: AbortSignal.timeout(5000),
     });
-    
+
     if (!response.ok) {
-      return [];
+      return 'ollama';
     }
-    
+
     const data = await response.json();
-    return data.data?.models || [];
+    return data.data?.provider || 'ollama';
   } catch {
-    return [];
+    return 'ollama';
+  }
+}
+
+/**
+ * Check LLM health (provider-agnostic)
+ * @returns Health status with provider info
+ */
+export async function checkLLMHealth(): Promise<LLMHealthStatus> {
+  // In hosted mode
+  if (isHostedMode()) {
+    return {
+      ok: true,
+      provider: 'groq',
+      message: '🌐 Hosted Mode: AI features use deterministic content. Run locally for LLM.',
+      availableModels: [],
+      enabled: false,
+    };
+  }
+
+  // In demo mode
+  if (isDemoMode()) {
+    return {
+      ok: true,
+      provider: 'ollama',
+      message: '🎓 Demo Mode: AI features use pre-built content. No local setup needed!',
+      availableModels: [OLLAMA_MODEL],
+      enabled: false,
+    };
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/llm/status`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(HEALTHCHECK_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        provider: 'ollama',
+        message: 'Failed to check LLM status',
+        availableModels: [],
+        enabled: false,
+      };
+    }
+
+    const payload = await response.json();
+    const status = payload.data;
+
+    return {
+      ok: status.available,
+      provider: status.provider || 'ollama',
+      message: payload.message || status.message,
+      availableModels: status.models || [],
+      enabled: status.enabled,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      provider: 'ollama',
+      message: `LLM health check failed: ${(error as Error).message}`,
+      availableModels: [],
+      enabled: false,
+    };
   }
 }

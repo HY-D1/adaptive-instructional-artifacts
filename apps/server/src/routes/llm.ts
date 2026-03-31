@@ -1,19 +1,54 @@
 /**
  * LLM API Routes
- * Proxies requests to Ollama for LLM generation
- * Never exposes Ollama directly to public
+ * Provider-agnostic LLM API using the provider abstraction layer
+ * Supports both Ollama (local) and Groq (hosted) providers
  */
 
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Request, Response } from 'express';
 import type { ApiResponse } from '../types.js';
 import {
   ENABLE_LLM,
+  LLM_PROVIDER,
   OLLAMA_BASE_URL,
   OLLAMA_DEFAULT_MODEL,
   OLLAMA_FALLBACK_MODEL,
+  GROQ_API_KEY,
+  GROQ_MODEL,
 } from '../config.js';
+import {
+  createLLMProvider,
+  LLMProvider,
+  LLMGenerationParams,
+} from '../llm/index.js';
 
 const router = Router();
+
+// ============================================================================
+// Provider Instance
+// ============================================================================
+
+function getProvider(): LLMProvider {
+  if (LLM_PROVIDER === 'groq') {
+    return createLLMProvider({
+      type: 'groq',
+      groqConfig: {
+        apiKey: GROQ_API_KEY,
+        defaultModel: GROQ_MODEL,
+        timeoutMs: 30000,
+      },
+    });
+  }
+
+  return createLLMProvider({
+    type: 'ollama',
+    ollamaConfig: {
+      baseUrl: OLLAMA_BASE_URL,
+      defaultModel: OLLAMA_DEFAULT_MODEL,
+      fallbackModel: OLLAMA_FALLBACK_MODEL,
+      timeoutMs: 60000,
+    },
+  });
+}
 
 // ============================================================================
 // Types
@@ -27,21 +62,23 @@ interface GenerateRequest {
     temperature?: number;
     top_p?: number;
   };
+  structuredOutput?: {
+    format: 'json';
+    schema: Record<string, unknown>;
+  };
 }
 
-interface OllamaTagsResponse {
-  models?: Array<{ name?: string }>;
-}
-
-interface OllamaGenerateResponse {
+interface GenerateResponse {
   model: string;
   response: string;
   done: boolean;
-  context?: number[];
-  total_duration?: number;
-  load_duration?: number;
-  prompt_eval_count?: number;
-  eval_count?: number;
+  usage?: {
+    inputTokens: number;
+    outputTokens: number;
+  };
+  latencyMs: number;
+  provider: string;
+  fallbackUsed?: boolean;
 }
 
 // ============================================================================
@@ -68,7 +105,7 @@ function validateGenerateRequest(body: unknown): { valid: boolean; error?: strin
   if (req.options && typeof req.options === 'object') {
     const opts = req.options as Record<string, unknown>;
     result.options = {};
-    
+
     if (typeof opts.temperature === 'number') {
       result.options.temperature = Math.max(0, Math.min(2, opts.temperature));
     }
@@ -77,25 +114,19 @@ function validateGenerateRequest(body: unknown): { valid: boolean; error?: strin
     }
   }
 
+  // Validate structured output if provided
+  if (req.structuredOutput && typeof req.structuredOutput === 'object') {
+    const so = req.structuredOutput as Record<string, unknown>;
+    if (so.format === 'json' && so.schema && typeof so.schema === 'object') {
+      result.structuredOutput = {
+        format: 'json',
+        schema: so.schema as Record<string, unknown>,
+      };
+    }
+  }
+
   return { valid: true, data: result };
 }
-
-// ============================================================================
-// Middleware: Check if LLM is enabled
-// ============================================================================
-
-const checkEnabled = (_req: Request, res: Response, next: NextFunction): void => {
-  if (!ENABLE_LLM) {
-    const response: ApiResponse<never> = {
-      success: false,
-      error: 'LLM not enabled',
-      message: 'Set ENABLE_LLM=true and configure OLLAMA_BASE_URL to enable LLM features',
-    };
-    res.status(503).json(response);
-    return;
-  }
-  next();
-};
 
 // ============================================================================
 // GET /api/llm/status - Get LLM service status
@@ -107,14 +138,14 @@ router.get('/status', async (_req: Request, res: Response) => {
       const response: ApiResponse<{
         enabled: boolean;
         available: boolean;
-        ollamaUrl: string;
+        provider: string;
         models: string[];
       }> = {
         success: true,
         data: {
           enabled: false,
           available: false,
-          ollamaUrl: '',
+          provider: LLM_PROVIDER,
           models: [],
         },
         message: 'LLM is disabled (set ENABLE_LLM=true to enable)',
@@ -123,72 +154,25 @@ router.get('/status', async (_req: Request, res: Response) => {
       return;
     }
 
-    // Check Ollama availability
-    try {
-      const ollamaResponse = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
-        method: 'GET',
-        signal: AbortSignal.timeout(5000),
-      });
+    const provider = getProvider();
+    const health = await provider.health();
 
-      if (!ollamaResponse.ok) {
-        const response: ApiResponse<{
-          enabled: boolean;
-          available: boolean;
-          ollamaUrl: string;
-          models: string[];
-        }> = {
-          success: true,
-          data: {
-            enabled: true,
-            available: false,
-            ollamaUrl: OLLAMA_BASE_URL,
-            models: [],
-          },
-          message: `Ollama responded with status ${ollamaResponse.status}`,
-        };
-        res.json(response);
-        return;
-      }
-
-      const data = await ollamaResponse.json() as OllamaTagsResponse;
-      const models = Array.isArray(data?.models)
-        ? data.models.map((entry: { name?: string }) => entry?.name).filter((name): name is string => Boolean(name))
-        : [];
-
-      const response: ApiResponse<{
-        enabled: boolean;
-        available: boolean;
-        ollamaUrl: string;
-        models: string[];
-      }> = {
-        success: true,
-        data: {
-          enabled: true,
-          available: true,
-          ollamaUrl: OLLAMA_BASE_URL,
-          models,
-        },
-        message: `Ollama connected with ${models.length} model(s) available`,
-      };
-      res.json(response);
-    } catch (error) {
-      const response: ApiResponse<{
-        enabled: boolean;
-        available: boolean;
-        ollamaUrl: string;
-        models: string[];
-      }> = {
-        success: true,
-        data: {
-          enabled: true,
-          available: false,
-          ollamaUrl: OLLAMA_BASE_URL,
-          models: [],
-        },
-        message: `Ollama not reachable at ${OLLAMA_BASE_URL}: ${(error as Error).message}`,
-      };
-      res.json(response);
-    }
+    const response: ApiResponse<{
+      enabled: boolean;
+      available: boolean;
+      provider: string;
+      models: string[];
+    }> = {
+      success: true,
+      data: {
+        enabled: health.enabled,
+        available: health.ok,
+        provider: health.provider,
+        models: health.models.map((m) => m.name),
+      },
+      message: health.message,
+    };
+    res.json(response);
   } catch (error) {
     const response: ApiResponse<never> = {
       success: false,
@@ -200,7 +184,7 @@ router.get('/status', async (_req: Request, res: Response) => {
 });
 
 // ============================================================================
-// GET /api/llm/models - Get available models (alias for /api/llm/status)
+// GET /api/llm/models - Get available models
 // ============================================================================
 
 router.get('/models', async (_req: Request, res: Response) => {
@@ -215,56 +199,40 @@ router.get('/models', async (_req: Request, res: Response) => {
       return;
     }
 
-    try {
-      const ollamaResponse = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
-        method: 'GET',
-        signal: AbortSignal.timeout(5000),
-      });
+    const provider = getProvider();
+    const models = await provider.listModels();
 
-      if (!ollamaResponse.ok) {
-        const response: ApiResponse<{ models: string[] }> = {
-          success: true,
-          data: { models: [] },
-          message: `Ollama responded with status ${ollamaResponse.status}`,
-        };
-        res.json(response);
-        return;
-      }
-
-      const data = await ollamaResponse.json() as OllamaTagsResponse;
-      const models = Array.isArray(data?.models)
-        ? data.models.map((entry: { name?: string }) => entry?.name).filter((name): name is string => Boolean(name))
-        : [];
-
-      const response: ApiResponse<{ models: string[] }> = {
-        success: true,
-        data: { models },
-      };
-      res.json(response);
-    } catch (error) {
-      const response: ApiResponse<{ models: string[] }> = {
-        success: true,
-        data: { models: [] },
-        message: `Ollama not reachable: ${(error as Error).message}`,
-      };
-      res.json(response);
-    }
-  } catch (error) {
-    const response: ApiResponse<never> = {
-      success: false,
-      error: 'Failed to get models',
-      message: error instanceof Error ? error.message : 'Unknown error',
+    const response: ApiResponse<{ models: string[] }> = {
+      success: true,
+      data: { models: models.map((m) => m.name) },
     };
-    res.status(500).json(response);
+    res.json(response);
+  } catch (error) {
+    const response: ApiResponse<{ models: string[] }> = {
+      success: true,
+      data: { models: [] },
+      message: `Failed to get models: ${error instanceof Error ? error.message : 'Unknown error'}`,
+    };
+    res.json(response);
   }
 });
 
 // ============================================================================
-// POST /api/llm/generate - Generate text using Ollama
+// POST /api/llm/generate - Generate text using configured provider
 // ============================================================================
 
-router.post('/generate', checkEnabled, async (req: Request, res: Response) => {
+router.post('/generate', async (req: Request, res: Response) => {
   try {
+    if (!ENABLE_LLM) {
+      const response: ApiResponse<never> = {
+        success: false,
+        error: 'LLM not enabled',
+        message: 'Set ENABLE_LLM=true and configure LLM_PROVIDER to enable LLM features',
+      };
+      res.status(503).json(response);
+      return;
+    }
+
     const validation = validateGenerateRequest(req.body);
 
     if (!validation.valid) {
@@ -277,152 +245,43 @@ router.post('/generate', checkEnabled, async (req: Request, res: Response) => {
       return;
     }
 
-    const { model, prompt, stream, options } = validation.data!;
-    const requestedModel = model || OLLAMA_DEFAULT_MODEL;
-    const candidateModels = stream
-      ? [requestedModel]
-      : Array.from(new Set([requestedModel, OLLAMA_FALLBACK_MODEL].filter(Boolean)));
+    const { model, prompt, options, structuredOutput } = validation.data!;
 
-    const attemptErrors: string[] = [];
-    for (const candidateModel of candidateModels) {
-      const ollamaBody: Record<string, unknown> = {
-        model: candidateModel,
-        prompt,
-        stream: stream || false,
-      };
-
-      if (options) {
-        if (options.temperature !== undefined) {
-          ollamaBody.temperature = options.temperature;
-        }
-        if (options.top_p !== undefined) {
-          ollamaBody.top_p = options.top_p;
-        }
-      }
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000);
-
-      try {
-        const ollamaResponse = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(ollamaBody),
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        if (!ollamaResponse.ok) {
-          const errorText = await ollamaResponse.text().catch(() => 'Unknown error');
-          attemptErrors.push(`${candidateModel}:${ollamaResponse.status}:${errorText}`);
-          if (candidateModel !== candidateModels[candidateModels.length - 1]) {
-            continue;
-          }
-          const response: ApiResponse<never> = {
-            success: false,
-            error: 'Ollama generation failed',
-            message: `Ollama returned status ${ollamaResponse.status}: ${errorText}`,
-          };
-          res.status(502).json(response);
-          return;
-        }
-
-        // If streaming, pipe the response
-        if (stream) {
-          res.setHeader('Content-Type', 'application/x-ndjson');
-          res.setHeader('Transfer-Encoding', 'chunked');
-          
-          const reader = ollamaResponse.body?.getReader();
-          if (!reader) {
-            const response: ApiResponse<never> = {
-              success: false,
-              error: 'Stream error',
-              message: 'Failed to get response stream from Ollama',
-            };
-            res.status(502).json(response);
-            return;
-          }
-
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              res.write(value);
-            }
-            res.end();
-          } catch (error) {
-            console.error('Stream error:', error);
-            res.end();
-          }
-          return;
-        }
-
-        // Non-streaming: return the full response
-        const data = await ollamaResponse.json() as OllamaGenerateResponse;
-        
-        const response: ApiResponse<{
-          model: string;
-          response: string;
-          done: boolean;
-          context?: number[];
-          total_duration?: number;
-          load_duration?: number;
-          prompt_eval_count?: number;
-          eval_count?: number;
-        }> = {
-          success: true,
-          data: {
-            model: data.model,
-            response: data.response,
-            done: data.done,
-            context: data.context,
-            total_duration: data.total_duration,
-            load_duration: data.load_duration,
-            prompt_eval_count: data.prompt_eval_count,
-            eval_count: data.eval_count,
-          },
-          message:
-            candidateModel === requestedModel
-              ? undefined
-              : `Primary model unavailable; served by fallback ${candidateModel}.`,
-        };
-        res.json(response);
-        return;
-      } catch (error) {
-        clearTimeout(timeoutId);
-        
-        if ((error as Error).name === 'AbortError') {
-          attemptErrors.push(`${candidateModel}:timeout`);
-          if (candidateModel !== candidateModels[candidateModels.length - 1]) {
-            continue;
-          }
-          const response: ApiResponse<never> = {
-            success: false,
-            error: 'Timeout',
-            message: 'LLM generation timed out after 60 seconds',
-          };
-          res.status(504).json(response);
-          return;
-        }
-
-        attemptErrors.push(`${candidateModel}:${error instanceof Error ? error.message : 'unknown_error'}`);
-        if (candidateModel !== candidateModels[candidateModels.length - 1]) {
-          continue;
-        }
-      }
-    }
-
-    const response: ApiResponse<never> = {
-      success: false,
-      error: 'Failed to generate text',
-      message: attemptErrors.length > 0
-        ? `All model attempts failed (${attemptErrors.join(' | ')})`
-        : 'Unknown error',
+    const params: LLMGenerationParams = {
+      temperature: options?.temperature ?? 0,
+      top_p: options?.top_p ?? 1,
+      stream: false,
+      timeoutMs: LLM_PROVIDER === 'groq' ? 30000 : 60000,
     };
-    res.status(500).json(response);
+
+    const provider = getProvider();
+    const result = await provider.generate({
+      model,
+      prompt,
+      params,
+      structuredOutput: structuredOutput ? {
+        format: 'json',
+        schema: structuredOutput.schema,
+      } : undefined,
+    });
+
+    const requestedModel = model || provider.defaultModel;
+    const fallbackUsed = result.model !== requestedModel;
+
+    const response: ApiResponse<GenerateResponse> = {
+      success: true,
+      data: {
+        model: result.model,
+        response: result.text,
+        done: true,
+        usage: result.usage,
+        latencyMs: result.latencyMs,
+        provider: result.provider,
+        fallbackUsed,
+      },
+      message: fallbackUsed ? `Primary model unavailable; served by fallback ${result.model}.` : undefined,
+    };
+    res.json(response);
   } catch (error) {
     const response: ApiResponse<never> = {
       success: false,
@@ -456,6 +315,8 @@ router.post('/generate/validate', (req: Request, res: Response) => {
       return;
     }
 
+    const provider = ENABLE_LLM ? getProvider() : null;
+
     const response: ApiResponse<{
       valid: boolean;
       errors: string[];
@@ -466,7 +327,7 @@ router.post('/generate/validate', (req: Request, res: Response) => {
       data: {
         valid: true,
         errors: [],
-        model: validation.data!.model || OLLAMA_DEFAULT_MODEL,
+        model: validation.data!.model || (provider?.defaultModel ?? OLLAMA_DEFAULT_MODEL),
         promptLength: validation.data!.prompt.length,
       },
     };

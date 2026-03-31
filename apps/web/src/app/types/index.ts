@@ -26,6 +26,8 @@ export type GuidanceEscalationTrigger =
 export type TextbookUnitAction = 'created' | 'updated';
 export type TextbookUnitStatus = 'primary' | 'alternative' | 'archived';
 
+export type LLMProvider = 'ollama' | 'groq';
+
 export type ConceptNode = {
   id: string;
   name: string;
@@ -106,6 +108,8 @@ export type InteractionEvent = {
     | 'reinforcement_scheduled'
     | 'reinforcement_prompt_shown'
     | 'reinforcement_response'
+    // WS12: Hint helpfulness feedback (HintWise UX refinement)
+    | 'hint_helpfulness_rating'
     // Knowledge-Structure Adaptive Features
     | 'prerequisite_violation_detected'
     | 'mastery_updated'
@@ -240,6 +244,19 @@ export type InteractionEvent = {
   // Additional metadata for logging/debugging
   payload?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
+  // LLM telemetry metadata (Workstream 5)
+  llmProvider?: 'ollama' | 'groq';
+  llmModel?: string;
+  llmPurpose?: string;
+  llmLatencyMs?: number;
+  llmInputTokens?: number;
+  llmOutputTokens?: number;
+  llmReasoningEffort?: 'low' | 'medium' | 'high';
+  llmFallbackReason?: string;
+  llmCacheHit?: boolean;
+  // WS12: Hint helpfulness feedback fields
+  hintIndex?: number;
+  helpfulnessRating?: 'helpful' | 'not_helpful';
 };
 
 export type ConceptCoverageEvidence = {
@@ -330,7 +347,14 @@ export type PdfIndexProvenance = {
 };
 
 export type UnitProvenance = {
+  // Provider/model information (Workstream 11)
+  provider: 'ollama' | 'groq';
   model: string;
+  generationMode?: 'cheap_mode' | 'quality_mode';
+  sourceMix: string[];
+  fallbackReason?: string;
+
+  // Original fields
   params: LLMGenerationParams;
   templateId: string;
   inputHash: string;
@@ -342,7 +366,7 @@ export type UnitProvenance = {
   parserAttempts?: number;
   parserRawLength?: number;
   parserFailureReason?: string;
-  fallbackReason?: 'none' | 'replay_mode' | 'parse_failure' | 'llm_error';
+  fallbackReasonLegacy?: 'none' | 'replay_mode' | 'parse_failure' | 'llm_error';
 };
 
 export type InstructionalUnit = {
@@ -709,19 +733,22 @@ export interface HDIComponents {
 export interface SessionConfig {
   sessionId: string;
   learnerId: string;
-  
+
   // Experimental toggles
   textbookDisabled: boolean;
   adaptiveLadderDisabled: boolean;
   immediateExplanationMode: boolean;
   staticHintMode: boolean;
-  
+
   // Policy assignment
   escalationPolicy: 'aggressive' | 'conservative' | 'explanation_first' | 'adaptive' | 'no_hints';
-  
+
   // Randomization
   conditionId: string; // For A/B test group assignment
-  
+
+  // LLM Generation mode (Workstream 8)
+  generationMode?: 'cheap_mode' | 'quality_mode';
+
   createdAt: number;
 }
 
