@@ -231,7 +231,8 @@ jobs:
         run: |
           npm cache clean --force
           npm ci
-      
+          cd apps/server && npm ci
+
       - name: Run unit tests
         run: npm run test:unit
       
