@@ -51,6 +51,7 @@ BANDIT_TEST_REPORT.md
 *.agent-session.md
 chat-history/
 .claude/
+.claude-plugin/
 .kimi/
 .cursor/
 .aider*
