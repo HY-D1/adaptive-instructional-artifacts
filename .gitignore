@@ -1,4 +1,5 @@
 .DS_Store
+__MACOSX/
 node_modules/
 dist/
 build/
@@ -50,8 +51,12 @@ BANDIT_TEST_REPORT.md
 *.llm-context.md
 *.agent-session.md
 chat-history/
+
+# Claude Code configuration - do not track
 .claude/
 .claude-plugin/
+
+# But KEEP the production-grade quality-loop system
 .kimi/
 .cursor/
 .aider*
@@ -113,6 +118,16 @@ TEXTBOOK_INTEGRATION_PLAN.md
 
 # Test output logs
 test-output.log
+
+# Launch proof artifacts (temporary validation files)
+artifacts/
+
+# UX audit evidence (temporary screenshots)
+ux-audit-evidence/
+
+# Debug artifacts
+cookies.txt
+*.cookies.txt
 
 # Root-level test screenshots
 /concept-*.png

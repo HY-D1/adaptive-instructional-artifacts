@@ -1,6 +1,6 @@
 # Project Status — SQL-Adapt
 
-**Last Updated**: 2026-03-31
+**Last Updated**: 2026-03-31 (UX Audit Complete)
 **Purpose**: Single durable status file for implementation and deployment readiness.
 
 ---
@@ -142,6 +142,104 @@ Full details in [Beta Supervised Launch Packet](./beta-supervised-launch-packet.
 - Use [Beta 50-Student Operations Runbook](./beta-50-student-operations.md) for stop/rollback decisions
 - Use the new audit framework (observation forms, telemetry script, audit packet template) to collect and evaluate live-session evidence at each stage
 - Resolve WS5-BLOCKER-001 in parallel for future fully-automated acceptance testing
+
+---
+
+---
+
+## UX Audit Checkpoint — 2026-03-31
+
+**Status**: COMPLETE  
+**Phase**: Forced Cross-Role Real-User UX Audit and Fix Plan  
+**Verdict**: **ACCEPTABLE WITH CAVEATS FOR STAGED BETA**
+
+### Audit Summary
+
+A comprehensive cross-role UX audit was conducted using 4 parallel agents with browser-based QA, code analysis, and existing E2E test review. The audit examined all student flows (onboarding, learning, practice, hints, notes), instructor flows (dashboard, settings, preview, research), cross-role consistency, and technical quality.
+
+**Full Report**: [Comprehensive UX Audit Report](../audits/comprehensive-ux-audit-report-2026-03-31.md)
+
+### Findings Summary
+
+| Severity | Count | Status |
+|----------|-------|--------|
+| P0 - Blockers | 0 | None found in product (1 test infrastructure issue identified) |
+| P1 - Major | 5 | Must fix before 15-student ramp |
+| P2 - Minor | 8 | Should fix before 50-student ramp |
+| P3 - Polish | 6 | Can fix post-beta |
+
+### P0 Blocker Resolution
+
+**P0-001: Welcome Modal Blocks Student Flows** — **RESOLVED (FALSE POSITIVE)**
+
+The reported modal blocking issue was a test infrastructure problem, not a product bug. The WelcomeModal component correctly:
+- Saves `sql-adapt-welcome-seen` and `sql-adapt-welcome-disabled` to localStorage
+- Respects the "Don't show again" preference
+- Is properly dismissed by existing E2E tests
+
+Existing production E2E tests (`ux-bugs-save-to-notes.spec.ts`, etc.) correctly handle the modal by setting both flags before navigation.
+
+### P1 Issues (Fix Before 15-Student Ramp)
+
+| ID | Issue | Location | Impact |
+|----|-------|----------|--------|
+| P1-001 | Debug controls visible in Settings | SettingsPage.tsx:355-601 | Instructors may accidentally use research features |
+| P1-002 | No preview mode indicator | RootLayout.tsx | Instructors may confuse preview with real data |
+| P1-003 | Silent redirects on unauthorized access | auth-guard.ts | Users confused by unexplained redirects |
+| P1-004 | HDI clear lacks confirmation | SettingsPage.tsx:486-495 | Potential accidental data loss |
+| P1-005 | UI state key collision in preview | ui-state.ts | State pollution between modes |
+
+### Critical Fix: Hide Debug Controls
+
+**File**: `apps/web/src/app/pages/SettingsPage.tsx`  
+**Lines**: 355-601 ("Week 5 Testing Controls" section)  
+**Fix**: Wrap in `{import.meta.env.DEV && (...)}`
+
+The "Week 5 Testing Controls" section contains research/debug features that should not be visible to instructors in production:
+- Profile Override
+- Assignment Strategy
+- HDI display and clear
+- Bandit Debug Panel
+- Force Arm Selection
+
+### UX Verdict for Staged Beta
+
+**Stage 1 (5 students)**: ✅ **APPROVED**
+- No P0 blockers in product
+- All student flows functional
+- Support owner can guide around known issues
+
+**Stage 2 (15 students)**: ⚠️ **CONDITIONAL**
+- P1 issues must be resolved before ramp
+- Debug controls must be hidden
+- Preview mode indicator must be added
+
+**Stage 3 (50 students)**: ⚠️ **CONDITIONAL**
+- All P1 issues resolved
+- P2 loading states recommended
+- No unresolved usability blockers
+
+### Support Owner Guidance
+
+For Stage 1, support owner should be aware of:
+
+1. **Settings Page**: Instructors should NOT use "Week 5 Testing Controls" section (research features)
+2. **Preview Mode**: No visual indicator when instructors view as students (they should remember they're in preview)
+3. **Loading States**: Some pages lack loading indicators (this is normal, not broken)
+4. **Redirects**: Users may be silently redirected from unauthorized pages (expected behavior)
+
+### Evidence Artifacts
+
+- [Comprehensive UX Audit Report](../audits/comprehensive-ux-audit-report-2026-03-31.md)
+- [Instructor UX Audit Report](../audits/instructor-ux-audit-report.md)
+- Test screenshots: `/test-results/ux-audit/`
+- E2E test suite: `tests/e2e/regression/`
+
+### Next UX Review
+
+**Trigger**: After Stage 1 (5 students) completes  
+**Focus**: Real student confusion points, P1 fix verification  
+**Method**: Live observation forms + telemetry analysis
 
 ---
 
