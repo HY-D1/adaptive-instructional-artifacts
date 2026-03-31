@@ -9,7 +9,7 @@
 
 **Status**: READY FOR CONTROLLED 50-STUDENT BETA
 
-**Final Verdict**: **READY FOR CONTROLLED 50-STUDENT BETA**. The production deployment is the single supported release candidate for a supervised 50-student beta. All critical infrastructure verified, telemetry operational, staged rollout controls documented, and operational runbooks complete. The mandatory staged ramp (5 → 15 → 50) de-risks authenticated concurrent-use validation by proving real student behavior at each stage before scale-up.
+**Final Verdict**: **READY FOR STAGED BETA EXECUTION**. The production deployment is the single supported release candidate for a supervised 50-student beta. All critical infrastructure verified, telemetry operational, staged rollout controls documented, and operational runbooks complete. The mandatory staged ramp (5 → 15 → 50) de-risks authenticated concurrent-use validation by proving real student behavior at each stage before scale-up. **Final 50-student approval requires real live-session evidence from all three stages.**
 
 ### Evidence Summary
 
@@ -22,6 +22,27 @@
 | WS5 - Production Acceptance Tests | PASSED | Core supervised-beta flows covered by regression tests (auth/resume, learning page, hints, save-to-notes, refresh/resume, active-run integrity) |
 | WS5b - Public Edge Concurrent Load Test | PASSED | 300 concurrent requests against production public endpoints, 100% success, 0 errors, p95 < 2400ms |
 | WS6 - Beta Operations Documentation | COMPLETED | 50-student operations runbook with stop conditions, escalation path, and incident runbook |
+| WS7 - Live Staged Beta Audit | PENDING | Requires real student sessions: observation forms, telemetry audit, and stage-gate evidence |
+
+### Live Beta Evidence Requirement
+
+**Status**: PENDING
+
+Final approval for the controlled 50-student beta is gated on real supervised session evidence from the staged ramp (5 → 15 → 50). Synthetic load tests and regression tests have passed, but the go/no-go verdict requires:
+
+- **Stage 1 (5 students)**: Completed observation forms, telemetry audit artifact, and active-run verification.
+- **Stage 2 (15 students)**: Same evidence suite, plus supervisor debrief and no unresolved P1 issues.
+- **Stage 3 (50 students)**: Same evidence suite, cumulative findings document, and explicit final verdict.
+
+**Audit Framework** (created 2026-03-30):
+
+| Document | Purpose |
+|----------|---------|
+| [Beta Stage Observation Form](./beta-stage-observation-form.md) | Per-student checkpoint form for supervisors |
+| [Beta Staged Audit Packet Template](./beta-staged-audit-packet-template.md) | Stage 1/2/3 evidence compilation and final verdict skeleton |
+| [Beta Live Findings Template](./beta-live-findings-template.md) | Issue registry, confusion points, and ranked action items |
+| [Beta Blocker Packet Template](./beta-blocker-packet-template.md) | Stage-failure documentation with minimum fixes and retry criteria |
+| scripts/audit-beta-telemetry.mjs | Neon DB telemetry extraction script for each stage |
 
 ### Release Identification
 
@@ -94,6 +115,10 @@ Rollback to `fc143c6` immediately on:
 | [Beta Telemetry Readiness](./beta-telemetry-readiness.md) | Telemetry audit, 31 event types, monitoring plan |
 | [Student Onboarding](./beta-student-onboarding.md) | Step-by-step student first-session guide |
 | [First-Session Observation](./beta-first-session-observation.md) | Supervisor checklist for observing beta sessions |
+| [Beta Stage Observation Form](./beta-stage-observation-form.md) | Streamlined per-student form for Stage 1/2/3 |
+| [Beta Staged Audit Packet Template](./beta-staged-audit-packet-template.md) | Skeleton for compiling stage evidence and final verdict |
+| [Beta Live Findings Template](./beta-live-findings-template.md) | Issue registry and priority-ranked action items |
+| [Beta Blocker Packet Template](./beta-blocker-packet-template.md) | Stage-failure documentation and retry criteria |
 
 ### Rollback Procedure
 
@@ -115,6 +140,7 @@ Full details in [Beta Supervised Launch Packet](./beta-supervised-launch-packet.
 - Execute the mandatory staged ramp: 5 → 15 → 50 students
 - Maintain instructor supervision during each stage
 - Use [Beta 50-Student Operations Runbook](./beta-50-student-operations.md) for stop/rollback decisions
+- Use the new audit framework (observation forms, telemetry script, audit packet template) to collect and evaluate live-session evidence at each stage
 - Resolve WS5-BLOCKER-001 in parallel for future fully-automated acceptance testing
 
 ---
