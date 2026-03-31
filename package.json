@@ -24,6 +24,7 @@
     "test:e2e:preview-beta": "npm run check:e2e:deployed-env && npm run corpus:verify-active-run -- --api-base-url \"$PLAYWRIGHT_API_BASE_URL\" && npm run test:e2e:setup-auth:deployed && npm run test:e2e:hint-stability && npx playwright test -c playwright.config.ts tests/e2e/regression/ux-bugs-save-to-notes.spec.ts tests/e2e/regression/ux-bugs-concept-readability.spec.ts --reporter=line",
     "test:e2e:launch-smoke": "npx playwright test -c playwright.config.ts --project=chromium:auth --grep '@deployed-auth-smoke' --reporter=line && npx playwright test -c playwright.config.ts tests/e2e/regression/student-multi-device-persistence.spec.ts tests/e2e/regression/instructor-section-scope.spec.ts tests/e2e/regression/api-authz.spec.ts --reporter=line",
     "beta:acceptance": "npm run server:build && npm run build && npm run corpus:verify-active-run && npm run test:e2e:hint-stability && npx playwright test -c playwright.config.ts --project=chromium:auth tests/e2e/regression/student-multi-device-persistence.spec.ts tests/e2e/regression/deployed-auth-smoke.spec.ts --reporter=line",
+    "beta:50-student-readiness": "node scripts/beta-50-student-readiness.mjs",
     "integrity:scan": "bash scripts/check-token-corruption.sh && node scripts/check-auth-storage-imports.mjs",
     "check:auth-storage-imports": "node scripts/check-auth-storage-imports.mjs",
     "check:e2e:deployed-env": "node scripts/check-deployed-e2e-env.mjs",

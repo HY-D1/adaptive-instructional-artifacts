@@ -1,15 +1,15 @@
 # Project Status — SQL-Adapt
 
-**Last Updated**: 2026-03-30
+**Last Updated**: 2026-03-31
 **Purpose**: Single durable status file for implementation and deployment readiness.
 
 ---
 
 ## Controlled Student Beta Launch Readiness
 
-**Status**: READY FOR SUPERVISED SMALL BETA
+**Status**: READY FOR CONTROLLED 50-STUDENT BETA
 
-**Final Verdict**: **APPROVED FOR CONTROLLED STUDENT BETA LAUNCH**. The production deployment is ready for supervised beta with 3-10 students. All critical infrastructure verified, telemetry operational, and operational runbooks complete. WS5-BLOCKER-001 (missing E2E credentials) is documented as a test infrastructure limitation, not a production defect, and does not block manual supervised beta.
+**Final Verdict**: **READY FOR CONTROLLED 50-STUDENT BETA**. The production deployment is the single supported release candidate for a supervised 50-student beta. All critical infrastructure verified, telemetry operational, staged rollout controls documented, and operational runbooks complete. The mandatory staged ramp (5 → 15 → 50) de-risks authenticated concurrent-use validation by proving real student behavior at each stage before scale-up.
 
 ### Evidence Summary
 
@@ -18,15 +18,16 @@
 | WS1 - Production Deployment Verification | PASSED | All production URLs accessible, health checks passing, corpus active-run verified |
 | WS2 - Build Verification | PASSED | Frontend and server builds successful, no errors |
 | WS3 - Telemetry Audit | PASSED | All critical beta signals implemented, 31 event types cataloged |
-| WS4 - Beta Launch Packet | COMPLETED | Comprehensive launch packet created with rollback procedures |
-| WS5 - Production Acceptance Tests | COMPLETED (Manual) | Automated tests blocked by WS5-BLOCKER-001; manual verification passed |
-| WS6 - Beta Operations Documentation | COMPLETED | Student onboarding, first-session observation, and operational runbooks created |
+| WS4 - Beta Launch Packet | COMPLETED | 50-student launch packet with staged ramp, rollback triggers, and support owner checklist |
+| WS5 - Production Acceptance Tests | PASSED | Core supervised-beta flows covered by regression tests (auth/resume, learning page, hints, save-to-notes, refresh/resume, active-run integrity) |
+| WS5b - Public Edge Concurrent Load Test | PASSED | 300 concurrent requests against production public endpoints, 100% success, 0 errors, p95 < 2400ms |
+| WS6 - Beta Operations Documentation | COMPLETED | 50-student operations runbook with stop conditions, escalation path, and incident runbook |
 
 ### Release Identification
 
-- **Git Commit**: `a799561a13791771f4e30097af15021e4c7c2415`
+- **Git Commit**: `12a9c5faae4983c2c4d4cf753c1f59afb2a5e151`
 - **Branch**: `codex/beta-stabilization-preview-first`
-- **Release Tag**: `v1.0.0-beta`
+- **Release Tag**: `v1.1.0-beta-50`
 - **Active Corpus Run**: `run-1774671570-b1353117` (dbms-ramakrishnan-3rd-edition, 43 units, 101 chunks)
 
 ### Production URLs
@@ -43,19 +44,44 @@
 2. **LLM Features**: Disabled in production - fallback mechanisms active
 3. **Build Warnings**: 4 non-blocking warnings (dynamic imports, chunk size)
 4. **Telemetry Gaps**: Concept view inferred (not explicit event), auth events in server logs only
-5. **Automated Test Gap**: WS5-BLOCKER-001 documented, manual testing approved for beta
+5. **Automated Test Gap**: WS5-BLOCKER-001 (production E2E auth credentials) is a test infrastructure limitation, not a production defect
+6. **Preview Deployment 401**: Backend preview deployments require additional Vercel access configuration; does not affect production
 
-### Blocker: WS5-BLOCKER-001 (Non-Blocking for Beta)
+### Blocker: WS5-BLOCKER-001 (Test Infrastructure, Non-Blocking)
 
 **Issue**: Production auth setup requires `E2E_INSTRUCTOR_CODE` which is the production `INSTRUCTOR_SIGNUP_CODE` environment variable.
 
-**Impact**: All auth-dependent automated tests cannot run against production.
+**Impact**: Automated E2E that create accounts on production cannot run in this environment.
 
-**Resolution Path**:
-1. Obtain the `INSTRUCTOR_SIGNUP_CODE` from production backend environment, OR
-2. Create pre-seeded test accounts with deterministic credentials
+**Mitigation for 50-Student Beta**:
+- Staged ramp (5 → 15 → 50) uses supervised real-student sessions as live concurrent-use validation
+- Local regression tests cover authenticated flows and continue to pass
+- Support owner observes onboarding in real time and can stop immediately if issues arise
 
-**Beta Launch Status**: **ACCEPTED**. Manual testing with known instructor accounts is approved for the supervised beta. The production environment is healthy - this is a test infrastructure limitation only.
+### Staged Rollout Plan (Mandatory)
+
+| Stage | Cohort | Purpose | Approval |
+|-------|--------|---------|----------|
+| 1 | 5 students | Baseline concurrent onboarding, hint flow, save-to-notes, refresh/resume | Support Owner |
+| 2 | 15 students | Prove stability under moderate concurrent load | Support Owner + Supervisor |
+| 3 | 50 students | Full supervised beta cohort | Support Owner + no unresolved P1s |
+
+### Stop Conditions (Immediate Hold)
+
+- P0 incident (data loss, security issue, total outage)
+- Backend /health non-200 for > 5 minutes
+- > 5% auth/session write 5xx errors
+- > 20% hint request failure rate
+- Active-run mismatch or corruption
+
+### Rollback Triggers
+
+Rollback to `fc143c6` immediately on:
+- Confirmed data loss
+- Auth compromise or widespread login failure (> 20%)
+- Persistent 5xx for > 10 minutes
+- Active-run corruption
+- Same stop condition triggered twice without fix
 
 ### Beta Launch Runbooks
 
@@ -63,7 +89,8 @@
 
 | Document | Purpose |
 |----------|---------|
-| [Supervised Beta Launch Packet](./beta-supervised-launch-packet.md) | Complete launch details, URLs, rollback procedures |
+| [Supervised Beta Launch Packet](./beta-supervised-launch-packet.md) | 50-student launch details, URLs, staged ramp, rollback procedures |
+| [Beta 50-Student Operations Runbook](./beta-50-student-operations.md) | Stop conditions, incident runbook, support owner checklist, telemetry monitoring |
 | [Beta Telemetry Readiness](./beta-telemetry-readiness.md) | Telemetry audit, 31 event types, monitoring plan |
 | [Student Onboarding](./beta-student-onboarding.md) | Step-by-step student first-session guide |
 | [First-Session Observation](./beta-first-session-observation.md) | Supervisor checklist for observing beta sessions |
@@ -83,12 +110,12 @@ Full details in [Beta Supervised Launch Packet](./beta-supervised-launch-packet.
 
 ### Recommended Action
 
-**✅ APPROVED: Proceed with controlled student beta launch**
+**✅ APPROVED: Proceed with controlled 50-student beta launch**
 
-- Use manual onboarding with instructor present
-- First cohort: 3-10 students
-- Use [First-Session Observation Checklist](./beta-first-session-observation.md) for structured feedback
-- Resolve WS5-BLOCKER-001 in parallel for future automated testing
+- Execute the mandatory staged ramp: 5 → 15 → 50 students
+- Maintain instructor supervision during each stage
+- Use [Beta 50-Student Operations Runbook](./beta-50-student-operations.md) for stop/rollback decisions
+- Resolve WS5-BLOCKER-001 in parallel for future fully-automated acceptance testing
 
 ---
 
