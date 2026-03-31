@@ -446,6 +446,35 @@ export type UploadedPdfList = {
   lastUpdated: number;
 };
 
+export type RemoteCorpusDocument = {
+  docId: string;
+  title: string;
+  filename: string;
+  sha256: string;
+  pageCount: number;
+  parserBackend: string;
+  pipelineVersion: string;
+  runId: string | null;
+  unitCount: number;
+  chunkCount: number;
+  createdAt: string;
+};
+
+export type RemoteCorpusUnit = {
+  unitId: string;
+  docId: string;
+  conceptId: string | null;
+  title: string;
+  summary: string;
+  contentMarkdown: string;
+  difficulty: string | null;
+  pageStart: number;
+  pageEnd: number;
+  runId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+};
+
 export type AdaptiveDecision = {
   timestamp: number;
   learnerId: string;

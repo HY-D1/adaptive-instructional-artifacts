@@ -1,6 +1,54 @@
 # Deployment Guide
 
 > **Quick Reference**: See [DEPLOYMENT_MODES.md](./DEPLOYMENT_MODES.md) for a detailed capability matrix showing which features work in local vs hosted mode.
+>
+> **Beta Launch Status**: See [Beta Launch Readiness](../.claude/state/runs/run-1774826173/beta-launch-packet.json) for current release candidate details.
+
+## Production Release Candidate (v1.0.0-beta)
+
+**Release Commit**: `a799561a13791771f4e30097af15021e4c7c2415`
+**Branch**: `codex/beta-stabilization-preview-first`
+**Status**: Ready for Controlled Student Beta Launch
+**Last Verified**: 2026-03-30
+
+### Production URLs
+
+| Service | URL | Health Status |
+|---------|-----|---------------|
+| Frontend | `https://adaptive-instructional-artifacts.vercel.app` | Verified (HTTP 200) |
+| Backend | `https://adaptive-instructional-artifacts-ap.vercel.app` | Verified (/health OK) |
+| Health Endpoint | `https://adaptive-instructional-artifacts-ap.vercel.app/health` | OK - Neon DB connected |
+
+### Active Corpus Configuration
+
+- **Document ID**: `dbms-ramakrishnan-3rd-edition`
+- **Active Run ID**: `run-1774671570-b1353117`
+- **Units**: 43
+- **Chunks**: 101
+- **Last Updated**: 2026-03-28T05:10:52.069Z
+
+### Rollback Procedure
+
+If critical issues are discovered during beta launch, follow these steps to rollback:
+
+**Rollback Target**: `fc143c6` (Merge pull request #7 from HY-D1/feat/student-preview)
+
+1. **Identify rollback target commit**: `fc143c6` (last stable main merge)
+2. **Frontend rollback**: Use Vercel Dashboard to revert to previous production deployment or redeploy from `fc143c6`
+3. **Backend rollback**: Use Vercel Dashboard to revert API deployment to `fc143c6`
+4. **Verify rollback health**: Check `/health` endpoint returns 200 with expected response
+5. **Verify active-run still set**: Run `node scripts/verify-corpus-active-run.mjs`
+6. **Smoke test critical flows**: Login, load learning interface, request hint, submit answer
+
+**Database Considerations**:
+- Schema is stable - no migration required for rollback
+- Active run persists in database across deployments
+- Neon provides point-in-time recovery if needed
+
+**Emergency Command** (use with caution):
+```bash
+git checkout fc143c6 && git push -f origin HEAD:main  # DANGER: force push
+```
 
 ## Vercel Deployment
 
@@ -19,10 +67,13 @@
 | `VITE_API_BASE_URL` | For persistence | Base URL of the backend API, no trailing `/api` (e.g. `https://my-api.vercel.app`). Leave empty for localStorage-only (static) mode. |
 | `VITE_ENABLE_VERCEL_ANALYTICS` | Optional | Set to `true` to load `@vercel/analytics/react` at runtime (launch default: `false`) |
 | `VITE_ENABLE_VERCEL_SPEED_INSIGHTS` | Optional | Set to `false` to disable Speed Insights (default: enabled) |
+| `VITE_TEXTBOOK_CORPUS_MODE` | Optional (recommended) | `remote` to prefer Neon-backed `/api/corpus` content in hosted/full-stack mode, `static` for bundled fallback content |
 | `VITE_OLLAMA_URL` | Local only | Local Ollama URL — not available on Vercel |
 | `VITE_ENABLE_PDF_INDEX` | Local only | PDF indexing — requires local backend |
 
 > **Note on `VITE_API_BASE_URL`**: this is the single canonical variable used by all three frontend API clients (`storage-client.ts`, `dual-storage.ts`, `learner-profile-client.ts`). Setting it enables backend/Neon persistence mode. When not set, the app runs in localStorage-only mode.
+>
+> **Note on `VITE_TEXTBOOK_CORPUS_MODE`**: set to `remote` in hosted full-stack mode to read processed corpus units from Neon via `/api/corpus/*`. The app still falls back to static textbook assets when remote corpus is unavailable.
 
 **Backend project (Vercel Serverless / any Node host):**
 
@@ -38,6 +89,8 @@
 | `CORS_ORIGINS` | Recommended | Comma-separated frontend origins allowed to use credentialed requests (for example `https://app.example.com,https://www.example.com`) |
 | `CORS_ORIGIN_PATTERNS` | Optional | Comma-separated wildcard origin patterns for trusted preview domains (for example `https://adaptive-instructional-artifacts-*.vercel.app`) |
 | `PORT` | No | HTTP port (default 3001) |
+| `OLLAMA_DEFAULT_MODEL` | Optional (LLM) | Primary local generation model used when client request omits model (default `qwen3:4b`) |
+| `OLLAMA_FALLBACK_MODEL` | Optional (LLM) | Fallback local generation model when primary Ollama model fails (default `llama3.2:3b`) |
 
 > **Auth setup**: Set `JWT_SECRET` to a strong random value (e.g. `openssl rand -base64 32`). Set both `STUDENT_SIGNUP_CODE` and `INSTRUCTOR_SIGNUP_CODE` to protect account creation. After adding these vars, redeploy the backend and run `npm run db:init:neon` to create the `auth_accounts` table.
 >
@@ -48,15 +101,77 @@
 >   `https://adaptive-instructional-artifacts-*.vercel.app`
 > - Do not use `*` with credentialed cookies.
 
-> **Env var resolution order**: The backend checks these four names in priority order (`DATABASE_URL` → `NEON_DATABASE_URL` → `adaptive_data_DATABASE_URL` → `adaptive_data_POSTGRES_URL`) and uses the first non-empty value. You only need to set one.
+> **Env var resolution order**: Runtime + ingest + verification now use the same priority (`DATABASE_URL` → `NEON_DATABASE_URL` → `adaptive_data_DATABASE_URL` → `adaptive_data_POSTGRES_URL`) and use the first non-empty value. You only need to set one.
+> This includes backend runtime (`/health`, `/api/system/persistence-status`), local ingest upload (`npm run ingest:upload`), and corpus verification (`npm run corpus:verify`).
 > **After changing env vars you must redeploy** — Vercel bakes env vars into the build/runtime at deploy time. Adding or changing a variable without redeploying has no effect.
+
+### Preview-First Beta Gate (Required)
+
+Run deployed stabilization checks against a **preview frontend + preview backend pair** first, then promote to production only after gates pass.
+
+Deterministic env contract for deployed Playwright runs:
+
+```bash
+PLAYWRIGHT_BASE_URL=<preview-frontend-url>
+PLAYWRIGHT_API_BASE_URL=<preview-backend-url>
+E2E_INSTRUCTOR_EMAIL=<stable-instructor-email>
+E2E_INSTRUCTOR_PASSWORD=<stable-instructor-password>
+E2E_STUDENT_CLASS_CODE=<stable-student-class-code>
+```
+
+Protected preview access (choose one path):
+
+```bash
+# Option A: automation bypass secret
+VERCEL_AUTOMATION_BYPASS_SECRET=<bypass-secret>
+
+# Option B: share-link path (no bypass secret)
+PLAYWRIGHT_FRONTEND_SHARE_URL=<preview-frontend-share-url>
+PLAYWRIGHT_API_SHARE_URL=<preview-backend-share-url>
+# Optional fallback if you only have the token:
+# PLAYWRIGHT_API_SHARE_TOKEN=<preview-backend-share-token>
+```
+
+`setup:auth` now bootstraps both frontend and backend share URLs (when provided)
+before login/signup so protected preview cookies are established in browser context.
+
+Preflight and gate commands:
+
+```bash
+npm run check:e2e:deployed-env
+npm run corpus:verify-active-run -- --api-base-url "$PLAYWRIGHT_API_BASE_URL"
+npm run test:e2e:setup-auth:deployed
+npm run test:e2e:hint-stability
+```
+
+### Active Corpus Run Safety
+
+Use active-run mapping to prevent mixed-run corpus responses in runtime APIs:
+
+```bash
+# Set active run explicitly (preview/prod DB)
+npm run corpus:set-active-run -- --doc-id dbms-ramakrishnan-3rd-edition --run-id run-1774671570-b1353117
+
+# Convenience command for winner run
+npm run corpus:set-winner-run
+
+# Verify API responses contain only active-run units/chunks
+npm run corpus:verify-active-run -- --api-base-url https://adaptive-instructional-artifacts-ap.vercel.app
+```
+
+For ingest uploads, active-run switching is enabled by default:
+
+```bash
+npm run ingest:upload
+# Equivalent underlying flag: python -m pdf_ingest.cli upload ... --set-active true
+```
 
 ### Deployment Matrix (Last Verified)
 
 | Environment | Frontend URL | Backend URL | Env source | Last verified (UTC) |
 |-------------|--------------|-------------|------------|---------------------|
-| Production | `https://adaptive-instructional-artifacts.vercel.app` | `https://adaptive-instructional-artifacts-ap.vercel.app` | `DATABASE_URL` via `/health` + `/api/system/persistence-status` | 2026-03-25T03:42Z |
-| Preview | `https://adaptive-instructional-artifacts-epaibrvsf-hy-d1s-projects.vercel.app` | `https://adaptive-instructional-artifacts-ap.vercel.app` (paired backend) | n/a (frontend is Vercel-protected without bypass secret) | 2026-03-25T03:42Z |
+| Production | `https://adaptive-instructional-artifacts.vercel.app` | `https://adaptive-instructional-artifacts-ap.vercel.app` | `DATABASE_URL` via `/health` + `/api/system/persistence-status` | 2026-03-28T01:40Z |
+| Preview | `https://adaptive-instructional-artifacts-git-fea-1e5553-hy-d1s-projects.vercel.app` | `https://adaptive-instructional-artifacts-api-backend-5qfmevvrv.vercel.app` (preview validate), `https://adaptive-instructional-artifacts-ap.vercel.app` (frontend target) | `DATABASE_URL` via preview `/health` + `/api/system/persistence-status` | 2026-03-28T01:40Z |
 
 ### Related Projects Note
 
@@ -123,6 +238,12 @@ Expected output: all 5 checks pass with a learner, session, interaction, and tex
 Security notes for deployed auth:
 - JWT auth cookie uses `Secure` + `SameSite=None` in production for cross-origin frontend/backend deployments.
 - CSRF uses double-submit cookie protection; mutating API requests must send `x-csrf-token` matching the `sql_adapt_csrf` cookie (frontend API clients handle this automatically).
+
+### Local-only raw PDF policy
+
+- Raw PDF files remain local-only and are not uploaded to Neon.
+- Hosted Vercel runtime should depend on processed corpus rows (`corpus_documents`, `corpus_units`, `corpus_chunks`) only.
+- Legacy `/api/pdf-index/*` remains local-dev oriented; hosted runtime should use `/api/corpus/*`.
 
 ### Deployment Topology
 

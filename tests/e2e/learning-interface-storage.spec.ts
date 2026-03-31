@@ -12,11 +12,11 @@ import { expect, test } from '@playwright/test';
  */
 
 test.describe('@weekly LearningInterface Storage Validation', () => {
-  test.beforeEach(async ({ page }) => {
-    // Clear all localStorage to ensure clean state
-    await page.addInitScript(() => {
-      localStorage.clear();
-    });
+  test.beforeEach(async () => {
+    // Note: Each Playwright test gets a fresh page with empty localStorage.
+    // We intentionally do NOT use addInitScript(localStorage.clear()) here
+    // because that would run on every navigation (including page.reload()),
+    // wiping state that tests intentionally persist across reloads.
   });
 
   test('happy path: default bandit strategy assigns profile correctly', async ({ page }) => {
@@ -354,6 +354,12 @@ test.describe('@weekly LearningInterface Storage Validation', () => {
   test('clearing override reverts to strategy-based assignment', async ({ page }) => {
     // Arrange: Start with override and static strategy
     await page.addInitScript(() => {
+      // Guard so this init script only seeds state on the first navigation.
+      // Without this, a subsequent page.reload() would re-add the override
+      // that the test intentionally clears.
+      if ((window as unknown as Record<string, boolean>).__testInitDone) return;
+      (window as unknown as Record<string, boolean>).__testInitDone = true;
+
       localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: 'test-user',
         name: 'Test User',

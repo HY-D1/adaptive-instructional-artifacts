@@ -8,6 +8,10 @@ import {
 import { PdfIndexDocument } from '../types';
 import { isHostedMode, getPDFUnavailableError } from './runtime-config';
 
+function isRemoteCorpusMode(): boolean {
+  return String(import.meta.env.VITE_TEXTBOOK_CORPUS_MODE ?? 'static').toLowerCase() === 'remote';
+}
+
 /**
  * Response type for PDF index load/upload operations
  */
@@ -29,7 +33,7 @@ export type PdfIndexLoadResponse = {
  */
 export async function loadOrBuildPdfIndex(): Promise<PdfIndexLoadResponse> {
   // Check for hosted mode - PDF index building requires Vite dev server
-  if (isHostedMode()) {
+  if (isHostedMode() || isRemoteCorpusMode()) {
     throw new Error(getPDFUnavailableError());
   }
   
@@ -72,7 +76,7 @@ export async function loadOrBuildPdfIndex(): Promise<PdfIndexLoadResponse> {
  */
 export async function uploadPdfAndBuildIndex(file: File): Promise<PdfIndexLoadResponse> {
   // Check for hosted mode - PDF upload requires Vite dev server
-  if (isHostedMode()) {
+  if (isHostedMode() || isRemoteCorpusMode()) {
     throw new Error(getPDFUnavailableError());
   }
   

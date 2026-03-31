@@ -29,6 +29,8 @@ export const ENABLE_LLM = process.env.ENABLE_LLM === 'true';
  * Defaults to localhost:11434 for local development
  */
 export const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
+export const OLLAMA_DEFAULT_MODEL = process.env.OLLAMA_DEFAULT_MODEL || 'qwen3:4b';
+export const OLLAMA_FALLBACK_MODEL = process.env.OLLAMA_FALLBACK_MODEL || 'llama3.2:3b';
 
 // ============================================================================
 // PDF Index Configuration
@@ -161,6 +163,18 @@ export const STUDENT_SIGNUP_CODE: string =
 export const PORT = parseInt(process.env.PORT || '3001', 10);
 export const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 
+const DEFAULT_CORS_ORIGINS = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:4173',
+  'http://127.0.0.1:4173',
+  'https://adaptive-instructional-artifacts.vercel.app',
+];
+
+const DEFAULT_CORS_ORIGIN_PATTERNS = [
+  'https://adaptive-instructional-artifacts-*.vercel.app',
+];
+
 function parseCsv(value: string | undefined): string[] {
   if (!value) return [];
   return value
@@ -173,11 +187,20 @@ function normalizeOriginValue(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
+const explicitCorsOrigins = parseCsv(process.env.CORS_ORIGINS).map(normalizeOriginValue);
+const explicitCorsPatterns = parseCsv(process.env.CORS_ORIGIN_PATTERNS).map(normalizeOriginValue);
+
 export const CORS_ORIGINS = Array.from(
-  new Set(parseCsv(process.env.CORS_ORIGINS || CORS_ORIGIN).map(normalizeOriginValue)),
+  new Set(
+    (
+      explicitCorsOrigins.length > 0
+        ? explicitCorsOrigins
+        : [...DEFAULT_CORS_ORIGINS, CORS_ORIGIN]
+    ).map(normalizeOriginValue),
+  ),
 );
 export const CORS_ORIGIN_PATTERNS = Array.from(
-  new Set(parseCsv(process.env.CORS_ORIGIN_PATTERNS).map(normalizeOriginValue)),
+  new Set((explicitCorsPatterns.length > 0 ? explicitCorsPatterns : DEFAULT_CORS_ORIGIN_PATTERNS).map(normalizeOriginValue)),
 );
 export const NODE_ENV = process.env.NODE_ENV || 'development';
 

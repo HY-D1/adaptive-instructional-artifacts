@@ -23,6 +23,7 @@
  *   E2E_INSTRUCTOR_PASSWORD  default: E2eInstrPass!123
  *   E2E_ALLOW_INSTRUCTOR_SIGNUP set true to allow instructor signup fallback in deployed runs
  *   E2E_INSTRUCTOR_CODE      required only when E2E_ALLOW_INSTRUCTOR_SIGNUP=true
+ *   PLAYWRIGHT_FRONTEND_SHARE_URL optional Vercel share URL for protected preview frontend
  */
 
 import { test as setup, expect } from '@playwright/test';
@@ -34,11 +35,14 @@ import {
   resolveApiBaseUrl,
   resolveFrontendBaseUrl,
   runNeonPreflight,
+  getVercelBypassHeaders,
 } from '../helpers/auth-env';
 import { STUDENT_AUTH_FILE, INSTRUCTOR_AUTH_FILE } from '../helpers/auth-state-paths';
 
 const API_BASE_URL = resolveApiBaseUrl();
 const FRONTEND_BASE_URL = resolveFrontendBaseUrl();
+const FRONTEND_SHARE_URL = process.env.PLAYWRIGHT_FRONTEND_SHARE_URL?.trim();
+const API_SHARE_URL = process.env.PLAYWRIGHT_API_SHARE_URL?.trim();
 
 function isLocalBaseUrl(url: string): boolean {
   return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(url);
@@ -83,6 +87,177 @@ function requireDeterministicEnvForDeployed(): void {
   }
 }
 
+async function bootstrapPreviewFrontendAccess(page: Page): Promise<void> {
+  if (!IS_DEPLOYED_AUTH_TARGET) return;
+  if (!FRONTEND_SHARE_URL || FRONTEND_SHARE_URL.length === 0) return;
+  try {
+    await page.goto(FRONTEND_SHARE_URL, { waitUntil: 'domcontentloaded' });
+  } catch {
+    // Best-effort cookie bootstrap for protected previews.
+  }
+}
+
+/**
+ * API-first authentication for deployed targets.
+ * Bypasses UI login issues with cross-origin cookie handling in headless browsers.
+ */
+async function apiLoginAndCaptureState(
+  page: Page,
+  email: string,
+  password: string,
+  _role: 'student' | 'instructor',
+  targetPath: '/practice' | '/instructor-dashboard',
+): Promise<void> {
+  // Use Node.js fetch directly for API login to get cookies
+  const loginUrl = `${API_BASE_URL}/api/auth/login`;
+  const bypassHeaders = getVercelBypassHeaders();
+
+  const loginRes = await fetch(loginUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...bypassHeaders,
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!loginRes.ok) {
+    const body = await loginRes.json().catch(() => ({ error: 'Unknown' }));
+    throw new Error(`API login failed: ${(body as { error?: string }).error ?? loginRes.status}`);
+  }
+
+  const loginData = await loginRes.json() as { success: boolean; user?: { id: string; name: string; role: string; learnerId: string }; error?: string };
+  if (!loginData.success || !loginData.user) {
+    throw new Error(`API login unsuccessful: ${loginData.error ?? 'Unknown'}`);
+  }
+
+  // Extract cookies from response headers
+  const setCookieHeader = loginRes.headers.get('set-cookie');
+  if (!setCookieHeader) {
+    throw new Error('API login did not return cookies');
+  }
+
+  // Parse cookies
+  const apiUrl = new URL(API_BASE_URL);
+  const cookies: { name: string; value: string; domain: string; path: string; httpOnly: boolean; secure: boolean; sameSite: 'None' | 'Lax' | 'Strict' }[] = [];
+
+  // Handle multiple cookies - split by comma but be careful of cookie attributes that may contain commas
+  const cookieStrings = setCookieHeader.split(/,(?=[^;]*=)/).map(s => s.trim());
+  for (const cs of cookieStrings) {
+    const parts = cs.split(';').map(s => s.trim());
+    const [nameValue] = parts;
+    const [name, ...valueParts] = nameValue.split('=');
+    const value = valueParts.join('='); // Handle values with = in them
+    if (name && value) {
+      const attrLower = parts.map(p => p.toLowerCase());
+      const sameSiteAttr = parts.find(p => p.toLowerCase().startsWith('samesite='));
+      const sameSite = sameSiteAttr ? (sameSiteAttr.split('=')[1] as 'None' | 'Lax' | 'Strict') : 'Lax';
+      cookies.push({
+        name: name.trim(),
+        value: value.trim(),
+        domain: apiUrl.hostname,
+        path: '/',
+        httpOnly: attrLower.some(a => a === 'httponly'),
+        secure: attrLower.some(a => a === 'secure'),
+        sameSite: sameSite,
+      });
+    }
+  }
+
+  // Add cookies to page context
+  await page.context().addCookies(cookies);
+
+  // Inject user profile to localStorage
+  const user = loginData.user;
+  await page.addInitScript((userData: { id: string; name: string; role: string; learnerId: string }) => {
+    window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+    window.localStorage.setItem('sql-adapt-welcome-disabled', 'true');
+    window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+      id: userData.learnerId,
+      name: userData.name,
+      role: userData.role,
+      createdAt: Date.now(),
+    }));
+  }, user);
+
+  // Navigate to target page
+  await page.goto(targetPath, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2000); // Wait for JS hydration
+}
+
+async function bootstrapPreviewApiAccess(page: Page): Promise<void> {
+  if (!IS_DEPLOYED_AUTH_TARGET) return;
+
+  // If we have a share URL, use it to get the bypass cookie
+  if (API_SHARE_URL && API_SHARE_URL.length > 0) {
+    try {
+      await page.goto(API_SHARE_URL, { waitUntil: 'domcontentloaded' });
+    } catch {
+      // Best-effort cookie bootstrap for protected previews.
+    }
+    return;
+  }
+
+  // Otherwise, use route interception to proxy API requests
+  const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET || process.env.E2E_VERCEL_BYPASS_SECRET;
+  if (!bypassSecret) return;
+
+  // Store route handlers for cleanup
+  const routes: Array<{ url: string; handler: (route: any) => Promise<void> }> = [];
+
+  // Intercept all API requests and proxy them with bypass headers
+  const apiRouteHandler = async (route: any) => {
+    const request = route.request();
+    const url = request.url();
+
+    try {
+      // Make the request with bypass headers using Node fetch
+      const headers: Record<string, string> = {
+        ...await request.allHeaders(),
+        'x-vercel-protection-bypass': bypassSecret,
+        'x-vercel-set-bypass-cookie': 'true',
+      };
+
+      const fetchOptions: RequestInit = {
+        method: request.method(),
+        headers,
+        redirect: 'manual',
+      };
+
+      const postData = request.postData();
+      if (postData) {
+        fetchOptions.body = postData;
+      }
+
+      const response = await fetch(url, fetchOptions);
+
+      // Get response headers
+      const responseHeaders: Record<string, string> = {};
+      response.headers.forEach((value, key) => {
+        responseHeaders[key] = value;
+      });
+
+      // Get response body
+      const bodyBuffer = await response.arrayBuffer();
+
+      // Fulfill the route with the response
+      await route.fulfill({
+        status: response.status,
+        headers: responseHeaders,
+        body: Buffer.from(bodyBuffer),
+      });
+    } catch (error) {
+      console.error(`[auth-setup] Route proxy error for ${url}:`, error);
+      await route.abort('failed');
+    }
+  };
+
+  await page.route(`${API_BASE_URL}/**/*`, apiRouteHandler);
+
+  // Store for potential cleanup
+  (page as any).__apiRouteHandler__ = apiRouteHandler;
+}
+
 async function captureAuthDiagnostic(
   page: Page,
   role: 'student' | 'instructor',
@@ -110,6 +285,8 @@ function assertAuthCookieSaved(filePath: string, label: string): void {
 }
 
 async function assertAuthUiAvailable(page: Page): Promise<void> {
+  await bootstrapPreviewFrontendAccess(page);
+  await bootstrapPreviewApiAccess(page);
   await page.addInitScript(() => {
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
     window.localStorage.setItem('sql-adapt-welcome-disabled', 'true');
@@ -189,6 +366,8 @@ async function attemptLogin(
   email: string,
   password: string,
 ): Promise<AuthOutcome> {
+  await bootstrapPreviewFrontendAccess(page);
+  await bootstrapPreviewApiAccess(page);
   await page.goto('/login', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#login-email')).toBeVisible({ timeout: 10_000 });
   await page.fill('#login-email', email);
@@ -206,6 +385,8 @@ async function attemptSignup(
   classCode?: string,
   instructorCode?: string,
 ): Promise<AuthOutcome> {
+  await bootstrapPreviewFrontendAccess(page);
+  await bootstrapPreviewApiAccess(page);
   await page.goto('/login?tab=signup', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#signup-name')).toBeVisible({ timeout: 10_000 });
 
@@ -331,12 +512,83 @@ setup.describe('@auth-setup', () => {
 
   setup('capture student auth state', async ({ page, playwright }) => {
     fs.mkdirSync(path.dirname(STUDENT_AUTH_FILE), { recursive: true });
+
+    // Use API-first auth for deployed targets to avoid cross-origin cookie issues in headless browsers
+    if (IS_DEPLOYED_AUTH_TARGET) {
+      console.log('[auth-setup] Using API-first auth for student (deployed target)');
+
+      let studentClassCode = STUDENT_CLASS_CODE;
+      const apiContext = await createApiContext(playwright, API_BASE_URL);
+      try {
+        if (!studentClassCode) {
+          // Provision instructor account to get class code
+          const provisionEmail = `e2e-classcode-${Date.now()}@sql-adapt.test`;
+          const provisionPassword = 'E2eCodeProvision!123';
+          const provisionResponse = await apiContext.post('/api/auth/signup', {
+            data: {
+              name: 'E2E ClassCode Provisioner',
+              email: provisionEmail,
+              password: provisionPassword,
+              role: 'instructor',
+              instructorCode: INSTRUCTOR_CODE,
+            },
+          });
+          const provisionBody = await provisionResponse.json().catch(() => null);
+          if (provisionResponse.ok() && provisionBody?.user?.ownedSections?.[0]?.studentSignupCode) {
+            studentClassCode = provisionBody.user.ownedSections[0].studentSignupCode;
+          } else {
+            throw new Error(
+              '[auth-setup] Failed to provision class code: ' +
+              `${provisionBody?.error ?? provisionResponse.status()}`,
+            );
+          }
+        }
+
+        // Create student account via API
+        const signupRes = await apiContext.post('/api/auth/signup', {
+          data: {
+            name: STUDENT_NAME,
+            email: STUDENT_EMAIL,
+            password: STUDENT_PASSWORD,
+            role: 'student',
+            classCode: studentClassCode,
+          },
+        });
+
+        if (!signupRes.ok()) {
+          const body = await signupRes.json().catch(() => ({ error: 'Unknown' }));
+          // Account may already exist, try login
+          if (!/already exists/i.test(body.error)) {
+            console.log(`[auth-setup] Student signup failed: ${body.error}, will try login`);
+          }
+        }
+      } finally {
+        await apiContext.dispose();
+      }
+
+      if (!studentClassCode) {
+        throw new Error('[auth-setup] Missing student class code for deployed run');
+      }
+
+      // Use API login to capture auth state
+      await apiLoginAndCaptureState(page, STUDENT_EMAIL, STUDENT_PASSWORD, 'student', '/practice');
+
+      // Verify we're on the practice page
+      await expect(page).toHaveURL(/\/practice/, { timeout: 15_000 });
+
+      await page.context().storageState({ path: STUDENT_AUTH_FILE });
+      assertAuthCookieSaved(STUDENT_AUTH_FILE, 'student');
+      console.log(`[auth-setup] Student auth state saved → ${STUDENT_AUTH_FILE}`);
+      return;
+    }
+
+    // Local testing: use UI-based auth
     await assertAuthUiAvailable(page);
 
     let studentClassCode = STUDENT_CLASS_CODE;
     const apiContext = await createApiContext(playwright, API_BASE_URL);
     try {
-      if (!studentClassCode && !IS_DEPLOYED_AUTH_TARGET) {
+      if (!studentClassCode) {
         const provisionEmail = `e2e-classcode-${Date.now()}@sql-adapt.test`;
         const provisionPassword = 'E2eCodeProvision!123';
         const provisionResponse = await apiContext.post('/api/auth/signup', {
@@ -351,18 +603,6 @@ setup.describe('@auth-setup', () => {
         const provisionBody = await provisionResponse.json().catch(() => null);
         if (provisionResponse.ok() && provisionBody?.user?.ownedSections?.[0]?.studentSignupCode) {
           studentClassCode = provisionBody.user.ownedSections[0].studentSignupCode;
-        } else {
-          if (/invalid instructor code/i.test(String(provisionBody?.error ?? ''))) {
-            throw new Error(
-              '[auth-setup] class-code auto-provision failed: Invalid instructor code. ' +
-              'Set E2E_INSTRUCTOR_CODE to the backend INSTRUCTOR_SIGNUP_CODE and provide ' +
-              'E2E_STUDENT_CLASS_CODE for deterministic deployed runs.',
-            );
-          }
-          console.log(
-            `[auth-setup] class-code auto-provision failed: status=${provisionResponse.status()} ` +
-            `error=${String(provisionBody?.error ?? 'unknown')}`,
-          );
         }
       }
     } finally {
@@ -370,10 +610,7 @@ setup.describe('@auth-setup', () => {
     }
 
     if (!studentClassCode) {
-      throw new Error(
-        '[auth-setup] Missing student class code and failed to auto-provision one from backend signup. ' +
-        'Set E2E_STUDENT_CLASS_CODE (recommended) or set a valid E2E_INSTRUCTOR_CODE for this backend.',
-      );
+      throw new Error('[auth-setup] Missing student class code');
     }
 
     await signupOrLogin(
@@ -392,10 +629,59 @@ setup.describe('@auth-setup', () => {
     await page.context().storageState({ path: STUDENT_AUTH_FILE });
     assertAuthCookieSaved(STUDENT_AUTH_FILE, 'student');
     console.log(`[auth-setup] Student auth state saved → ${STUDENT_AUTH_FILE}`);
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
   });
 
-  setup('capture instructor auth state', async ({ page }) => {
+  setup('capture instructor auth state', async ({ page, playwright }) => {
     fs.mkdirSync(path.dirname(INSTRUCTOR_AUTH_FILE), { recursive: true });
+
+    // Use API-first auth for deployed targets to avoid cross-origin cookie issues in headless browsers
+    if (IS_DEPLOYED_AUTH_TARGET) {
+      console.log('[auth-setup] Using API-first auth for instructor (deployed target)');
+
+      const apiContext = await createApiContext(playwright, API_BASE_URL);
+      try {
+        // Create instructor account via API if needed
+        const signupRes = await apiContext.post('/api/auth/signup', {
+          data: {
+            name: INSTRUCTOR_NAME,
+            email: INSTRUCTOR_EMAIL,
+            password: INSTRUCTOR_PASSWORD,
+            role: 'instructor',
+            instructorCode: INSTRUCTOR_CODE,
+          },
+        });
+
+        if (!signupRes.ok()) {
+          const body = await signupRes.json().catch(() => ({ error: 'Unknown' }));
+          // Account may already exist, try login
+          if (!/already exists/i.test(body.error)) {
+            console.log(`[auth-setup] Instructor signup failed: ${body.error}, will try login`);
+          }
+        }
+      } finally {
+        await apiContext.dispose();
+      }
+
+      // Use API login to capture auth state
+      await apiLoginAndCaptureState(
+        page,
+        INSTRUCTOR_EMAIL,
+        INSTRUCTOR_PASSWORD,
+        'instructor',
+        '/instructor-dashboard',
+      );
+
+      // Verify we're on the instructor dashboard
+      await expect(page).toHaveURL(/\/(instructor-dashboard|practice)/, { timeout: 15_000 });
+
+      await page.context().storageState({ path: INSTRUCTOR_AUTH_FILE });
+      assertAuthCookieSaved(INSTRUCTOR_AUTH_FILE, 'instructor');
+      console.log(`[auth-setup] Instructor auth state saved → ${INSTRUCTOR_AUTH_FILE}`);
+      return;
+    }
+
+    // Local testing: use UI-based auth
     await assertAuthUiAvailable(page);
 
     await signupOrLogin(
@@ -414,5 +700,6 @@ setup.describe('@auth-setup', () => {
     await page.context().storageState({ path: INSTRUCTOR_AUTH_FILE });
     assertAuthCookieSaved(INSTRUCTOR_AUTH_FILE, 'instructor');
     console.log(`[auth-setup] Instructor auth state saved → ${INSTRUCTOR_AUTH_FILE}`);
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
   });
 });

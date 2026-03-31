@@ -1,7 +1,8 @@
 import { LLMGenerationParams } from '../types';
 import { isDemoMode, shouldAttemptLLM } from './utils/demo-mode';
 
-export const OLLAMA_MODEL = 'qwen2.5:1.5b-instruct';
+export const OLLAMA_MODEL = 'qwen3:4b';
+export const OLLAMA_FALLBACK_MODEL = 'llama3.2:3b';
 const OLLAMA_PROXY_BASE = '/ollama';
 const OLLAMA_LOCAL_URL = 'http://127.0.0.1:11434';
 const HEALTHCHECK_TIMEOUT_MS = 8000;
@@ -224,54 +225,72 @@ export async function generateWithOllama(prompt: string, options?: OllamaGenerat
     ...(options?.params || {})
   };
   const params = validateLLMParams(rawParams);
+  const candidateModels = model === OLLAMA_FALLBACK_MODEL
+    ? [model]
+    : [model, OLLAMA_FALLBACK_MODEL];
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), params.timeoutMs);
+  let lastError: OllamaClientError | null = null;
 
-  try {
-    const response = await fetch('/ollama/api/generate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model,
-        prompt,
-        stream: params.stream,
-        options: {
-          temperature: params.temperature,
-          top_p: params.top_p
-        }
-      }),
-      signal: controller.signal
-    });
+  for (const candidateModel of candidateModels) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), params.timeoutMs);
 
-    if (!response.ok) {
-      const body = await response.text();
-      throw buildClientError('HTTP', `Ollama HTTP ${response.status}: ${body}`, response.status);
+    try {
+      const response = await fetch('/ollama/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: candidateModel,
+          prompt,
+          stream: params.stream,
+          options: {
+            temperature: params.temperature,
+            top_p: params.top_p
+          }
+        }),
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw buildClientError('HTTP', `Ollama HTTP ${response.status}: ${body}`, response.status);
+      }
+
+      const payload = await response.json();
+      if (!payload || typeof payload.response !== 'string') {
+        throw buildClientError('INVALID_RESPONSE', 'Ollama returned an unexpected response payload.');
+      }
+
+      return {
+        text: payload.response,
+        model: candidateModel,
+        params
+      };
+    } catch (error) {
+      if ((error as Error).name === 'AbortError') {
+        lastError = buildClientError('TIMEOUT', `Ollama request timed out after ${params.timeoutMs}ms.`);
+      } else if ((error as OllamaClientError).code) {
+        lastError = error as OllamaClientError;
+      } else {
+        lastError = buildClientError('NETWORK', (error as Error).message || 'Failed to reach Ollama.');
+      }
+
+      if (candidateModel !== candidateModels[candidateModels.length - 1]) {
+        console.warn('[LLM] Primary model failed, trying fallback model', {
+          failedModel: candidateModel,
+          fallbackModel: OLLAMA_FALLBACK_MODEL,
+          reason: lastError.code,
+        });
+        continue;
+      }
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    const payload = await response.json();
-    if (!payload || typeof payload.response !== 'string') {
-      throw buildClientError('INVALID_RESPONSE', 'Ollama returned an unexpected response payload.');
-    }
-
-    return {
-      text: payload.response,
-      model,
-      params
-    };
-  } catch (error) {
-    if ((error as Error).name === 'AbortError') {
-      throw buildClientError('TIMEOUT', `Ollama request timed out after ${params.timeoutMs}ms.`);
-    }
-    if ((error as OllamaClientError).code) {
-      throw error;
-    }
-    throw buildClientError('NETWORK', (error as Error).message || 'Failed to reach Ollama.');
-  } finally {
-    clearTimeout(timeoutId);
   }
+
+  throw (lastError ?? buildClientError('NETWORK', 'Failed to reach Ollama.'));
 }
 
 /**

@@ -93,6 +93,16 @@ interface MultipartPart {
 // ============================================================================
 
 const checkEnabled = (_req: Request, res: Response, next: NextFunction): void => {
+  if (process.env.NODE_ENV === 'production') {
+    const response: ApiResponse<never> = {
+      success: false,
+      error: 'PDF index route is local-dev only',
+      message: 'Use remote corpus APIs in hosted environments.',
+    };
+    res.status(403).json(response);
+    return;
+  }
+
   if (!ENABLE_PDF_INDEX) {
     const response: ApiResponse<never> = {
       success: false,

@@ -9,6 +9,8 @@ import type { ApiResponse } from '../types.js';
 import {
   ENABLE_LLM,
   OLLAMA_BASE_URL,
+  OLLAMA_DEFAULT_MODEL,
+  OLLAMA_FALLBACK_MODEL,
 } from '../config.js';
 
 const router = Router();
@@ -18,7 +20,7 @@ const router = Router();
 // ============================================================================
 
 interface GenerateRequest {
-  model: string;
+  model?: string;
   prompt: string;
   stream?: boolean;
   options?: {
@@ -53,16 +55,12 @@ function validateGenerateRequest(body: unknown): { valid: boolean; error?: strin
 
   const req = body as Record<string, unknown>;
 
-  if (typeof req.model !== 'string' || req.model.length === 0) {
-    return { valid: false, error: 'model is required and must be a non-empty string' };
-  }
-
   if (typeof req.prompt !== 'string' || req.prompt.length === 0) {
     return { valid: false, error: 'prompt is required and must be a non-empty string' };
   }
 
   const result: GenerateRequest = {
-    model: req.model,
+    model: typeof req.model === 'string' && req.model.trim().length > 0 ? req.model.trim() : undefined,
     prompt: req.prompt,
     stream: typeof req.stream === 'boolean' ? req.stream : false,
   };
@@ -280,121 +278,151 @@ router.post('/generate', checkEnabled, async (req: Request, res: Response) => {
     }
 
     const { model, prompt, stream, options } = validation.data!;
+    const requestedModel = model || OLLAMA_DEFAULT_MODEL;
+    const candidateModels = stream
+      ? [requestedModel]
+      : Array.from(new Set([requestedModel, OLLAMA_FALLBACK_MODEL].filter(Boolean)));
 
-    // Build request body for Ollama
-    const ollamaBody: Record<string, unknown> = {
-      model,
-      prompt,
-      stream: stream || false,
-    };
+    const attemptErrors: string[] = [];
+    for (const candidateModel of candidateModels) {
+      const ollamaBody: Record<string, unknown> = {
+        model: candidateModel,
+        prompt,
+        stream: stream || false,
+      };
 
-    if (options) {
-      if (options.temperature !== undefined) {
-        ollamaBody.temperature = options.temperature;
-      }
-      if (options.top_p !== undefined) {
-        ollamaBody.top_p = options.top_p;
-      }
-    }
-
-    // Call Ollama
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000);
-
-    try {
-      const ollamaResponse = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(ollamaBody),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!ollamaResponse.ok) {
-        const errorText = await ollamaResponse.text().catch(() => 'Unknown error');
-        const response: ApiResponse<never> = {
-          success: false,
-          error: 'Ollama generation failed',
-          message: `Ollama returned status ${ollamaResponse.status}: ${errorText}`,
-        };
-        res.status(502).json(response);
-        return;
+      if (options) {
+        if (options.temperature !== undefined) {
+          ollamaBody.temperature = options.temperature;
+        }
+        if (options.top_p !== undefined) {
+          ollamaBody.top_p = options.top_p;
+        }
       }
 
-      // If streaming, pipe the response
-      if (stream) {
-        res.setHeader('Content-Type', 'application/x-ndjson');
-        res.setHeader('Transfer-Encoding', 'chunked');
-        
-        const reader = ollamaResponse.body?.getReader();
-        if (!reader) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+      try {
+        const ollamaResponse = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(ollamaBody),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!ollamaResponse.ok) {
+          const errorText = await ollamaResponse.text().catch(() => 'Unknown error');
+          attemptErrors.push(`${candidateModel}:${ollamaResponse.status}:${errorText}`);
+          if (candidateModel !== candidateModels[candidateModels.length - 1]) {
+            continue;
+          }
           const response: ApiResponse<never> = {
             success: false,
-            error: 'Stream error',
-            message: 'Failed to get response stream from Ollama',
+            error: 'Ollama generation failed',
+            message: `Ollama returned status ${ollamaResponse.status}: ${errorText}`,
           };
           res.status(502).json(response);
           return;
         }
 
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            res.write(value);
+        // If streaming, pipe the response
+        if (stream) {
+          res.setHeader('Content-Type', 'application/x-ndjson');
+          res.setHeader('Transfer-Encoding', 'chunked');
+          
+          const reader = ollamaResponse.body?.getReader();
+          if (!reader) {
+            const response: ApiResponse<never> = {
+              success: false,
+              error: 'Stream error',
+              message: 'Failed to get response stream from Ollama',
+            };
+            res.status(502).json(response);
+            return;
           }
-          res.end();
-        } catch (error) {
-          console.error('Stream error:', error);
-          res.end();
+
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              res.write(value);
+            }
+            res.end();
+          } catch (error) {
+            console.error('Stream error:', error);
+            res.end();
+          }
+          return;
         }
-        return;
-      }
 
-      // Non-streaming: return the full response
-      const data = await ollamaResponse.json() as OllamaGenerateResponse;
-      
-      const response: ApiResponse<{
-        model: string;
-        response: string;
-        done: boolean;
-        context?: number[];
-        total_duration?: number;
-        load_duration?: number;
-        prompt_eval_count?: number;
-        eval_count?: number;
-      }> = {
-        success: true,
-        data: {
-          model: data.model,
-          response: data.response,
-          done: data.done,
-          context: data.context,
-          total_duration: data.total_duration,
-          load_duration: data.load_duration,
-          prompt_eval_count: data.prompt_eval_count,
-          eval_count: data.eval_count,
-        },
-      };
-      res.json(response);
-    } catch (error) {
-      clearTimeout(timeoutId);
-      
-      if ((error as Error).name === 'AbortError') {
-        const response: ApiResponse<never> = {
-          success: false,
-          error: 'Timeout',
-          message: 'LLM generation timed out after 60 seconds',
+        // Non-streaming: return the full response
+        const data = await ollamaResponse.json() as OllamaGenerateResponse;
+        
+        const response: ApiResponse<{
+          model: string;
+          response: string;
+          done: boolean;
+          context?: number[];
+          total_duration?: number;
+          load_duration?: number;
+          prompt_eval_count?: number;
+          eval_count?: number;
+        }> = {
+          success: true,
+          data: {
+            model: data.model,
+            response: data.response,
+            done: data.done,
+            context: data.context,
+            total_duration: data.total_duration,
+            load_duration: data.load_duration,
+            prompt_eval_count: data.prompt_eval_count,
+            eval_count: data.eval_count,
+          },
+          message:
+            candidateModel === requestedModel
+              ? undefined
+              : `Primary model unavailable; served by fallback ${candidateModel}.`,
         };
-        res.status(504).json(response);
+        res.json(response);
         return;
-      }
+      } catch (error) {
+        clearTimeout(timeoutId);
+        
+        if ((error as Error).name === 'AbortError') {
+          attemptErrors.push(`${candidateModel}:timeout`);
+          if (candidateModel !== candidateModels[candidateModels.length - 1]) {
+            continue;
+          }
+          const response: ApiResponse<never> = {
+            success: false,
+            error: 'Timeout',
+            message: 'LLM generation timed out after 60 seconds',
+          };
+          res.status(504).json(response);
+          return;
+        }
 
-      throw error;
+        attemptErrors.push(`${candidateModel}:${error instanceof Error ? error.message : 'unknown_error'}`);
+        if (candidateModel !== candidateModels[candidateModels.length - 1]) {
+          continue;
+        }
+      }
     }
+
+    const response: ApiResponse<never> = {
+      success: false,
+      error: 'Failed to generate text',
+      message: attemptErrors.length > 0
+        ? `All model attempts failed (${attemptErrors.join(' | ')})`
+        : 'Unknown error',
+    };
+    res.status(500).json(response);
   } catch (error) {
     const response: ApiResponse<never> = {
       success: false,
@@ -438,7 +466,7 @@ router.post('/generate/validate', (req: Request, res: Response) => {
       data: {
         valid: true,
         errors: [],
-        model: validation.data!.model,
+        model: validation.data!.model || OLLAMA_DEFAULT_MODEL,
         promptLength: validation.data!.prompt.length,
       },
     };

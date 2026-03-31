@@ -2,6 +2,11 @@ import { storage } from '../storage/storage';
 import type { PdfIndexChunk, SQLProblem } from '../../types';
 import { sqlProblems } from '../../data/problems';
 import { CONCEPT_COMPATIBILITY_MAP, getCompatibleCorpusIds } from './concept-compatibility-map';
+import {
+  fetchCorpusManifestWithUnits,
+  fetchCorpusUnit,
+  type RemoteCorpusUnit,
+} from '../api/storage-client';
 
 export { getCompatibleCorpusIds };
 
@@ -70,6 +75,137 @@ export interface Mistake {
   incorrect: string;
   correct: string;
   why: string;
+}
+
+export interface RefinedHintSet {
+  hintV1?: string;
+  hintV2?: string;
+  hintEscalation?: string;
+  refinementModel?: string;
+  refinementSourceChunkIds?: string[];
+  refinementConfidence?: number;
+  refinementFallbackReason?: string;
+  refinementVersion?: string;
+}
+
+function compactWhitespace(text: string): string {
+  return text
+    .replace(/\r/g, '')
+    .replace(/\x0c/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function stripFormattingArtifacts(text: string): string {
+  return text
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/^\s*[-*+]\s+/gm, '')
+    .replace(/\*\*/g, '')
+    .replace(/`{1,3}/g, '')
+    .replace(/\[(.+?)\]\((.+?)\)/g, '$1');
+}
+
+export function toLearnerSafeParagraph(text: string, maxLength = 420): string {
+  const cleaned = compactWhitespace(stripFormattingArtifacts(text));
+  if (!cleaned) return '';
+  if (cleaned.length <= maxLength) return cleaned;
+  const clipped = cleaned.slice(0, maxLength + 1);
+  const sentenceBreak = Math.max(
+    clipped.lastIndexOf('.'),
+    clipped.lastIndexOf('!'),
+    clipped.lastIndexOf('?'),
+    clipped.lastIndexOf(';'),
+  );
+  if (sentenceBreak >= Math.floor(maxLength * 0.45)) {
+    return clipped.slice(0, sentenceBreak + 1).trim();
+  }
+  return `${clipped.slice(0, maxLength).trim()}...`;
+}
+
+function normalizeExampleTitle(title: string, index: number): string {
+  const cleaned = compactWhitespace(stripFormattingArtifacts(title));
+  if (!cleaned) return `Example ${index + 1}`;
+  if (/^(example|sample)\s*\d*$/i.test(cleaned)) {
+    return 'Example';
+  }
+  return cleaned;
+}
+
+export function selectReadableExamples(examples: CodeExample[], maxExamples = 8): CodeExample[] {
+  if (!Array.isArray(examples) || examples.length === 0) return [];
+  const dedupe = new Set<string>();
+  const sanitized: CodeExample[] = [];
+
+  for (let index = 0; index < examples.length; index += 1) {
+    const example = examples[index];
+    const code = compactWhitespace(example.code ?? '');
+    if (!isExampleSqlSane(code)) {
+      continue;
+    }
+
+    const title = normalizeExampleTitle(example.title ?? '', index);
+    const explanation = toLearnerSafeParagraph(example.explanation ?? '', 260);
+    const dedupeKey = `${title.toLowerCase()}|${code.toLowerCase()}`;
+    if (dedupe.has(dedupeKey)) {
+      continue;
+    }
+    dedupe.add(dedupeKey);
+
+    sanitized.push({
+      ...example,
+      title,
+      code: code.replace(/;\s+/g, ';\n').trim(),
+      explanation,
+    });
+    if (sanitized.length >= maxExamples) break;
+  }
+
+  return sanitized;
+}
+
+function normalizeMistakeTitle(title: string): string {
+  const cleaned = compactWhitespace(stripFormattingArtifacts(title));
+  if (!cleaned) return 'Common mistake';
+  if (/^(mistake|common mistake)\s*\d*$/i.test(cleaned)) {
+    return 'Common mistake';
+  }
+  return cleaned;
+}
+
+export function normalizeMistakes(mistakes: Mistake[]): Mistake[] {
+  if (!Array.isArray(mistakes) || mistakes.length === 0) return [];
+  const dedupe = new Set<string>();
+  const normalized: Mistake[] = [];
+
+  for (const mistake of mistakes) {
+    const title = normalizeMistakeTitle(mistake.title ?? '');
+    const incorrect = compactWhitespace(mistake.incorrect ?? '');
+    const correct = compactWhitespace(mistake.correct ?? '');
+    const why = toLearnerSafeParagraph(mistake.why ?? '', 220);
+
+    if (!incorrect && !correct && !why) {
+      continue;
+    }
+
+    const dedupeKey = `${title.toLowerCase()}|${incorrect.toLowerCase()}|${correct.toLowerCase()}`;
+    if (dedupe.has(dedupeKey)) {
+      continue;
+    }
+    dedupe.add(dedupeKey);
+
+    normalized.push({
+      title,
+      incorrect,
+      correct,
+      why:
+        why ||
+        (incorrect && correct
+          ? 'Compare the two SQL statements and focus on the clause/order change.'
+          : 'Review this pattern and retry with one clause at a time.'),
+    });
+  }
+
+  return normalized;
 }
 
 interface ConceptMapData {
@@ -183,6 +319,133 @@ function normalizeTextbookUnitsFile(raw: Record<string, unknown>): TextbookUnits
 let conceptMapCache: ConceptMapData | null = null;
 let conceptQualityCache: ConceptQualityFile | null | false = false; // false = not yet fetched
 let textbookUnitsCache: TextbookUnitsFile | null | false = false;   // false = not yet fetched
+let remoteConceptToUnitId: Record<string, string> = {};
+let remoteConceptChunks: Record<string, PdfIndexChunk[]> = {};
+let remoteConceptRefinedHints: Record<string, RefinedHintSet> = {};
+
+function normalizeDifficulty(value: string | null | undefined): ConceptInfo['difficulty'] {
+  if (value === 'beginner' || value === 'intermediate' || value === 'advanced') {
+    return value;
+  }
+  return 'intermediate';
+}
+
+function toRefinedHintSet(unit: RemoteCorpusUnit): RefinedHintSet {
+  return {
+    hintV1: unit.hintV1,
+    hintV2: unit.hintV2,
+    hintEscalation: unit.hintEscalation,
+    refinementModel: unit.refinementModel,
+    refinementSourceChunkIds: unit.refinementSourceChunkIds,
+    refinementConfidence: unit.refinementConfidence,
+    refinementFallbackReason: unit.refinementFallbackReason,
+    refinementVersion: unit.refinementVersion,
+  };
+}
+
+function getPreferredRemoteDefinition(unit: RemoteCorpusUnit): string {
+  return (
+    unit.definitionRefined ||
+    unit.displaySummaryRefined ||
+    unit.displaySummary ||
+    unit.summary ||
+    ''
+  );
+}
+
+function buildRemoteRefinedMarkdown(unit: RemoteCorpusUnit): string {
+  const definition = getPreferredRemoteDefinition(unit);
+  const explanation = unit.explanationContext || unit.contentMarkdown || definition;
+  const example = unit.exampleRefined || '';
+  const mistakes = unit.commonMistakesRefined || '';
+
+  const sections: string[] = [];
+  sections.push(`## Definition\n${definition}`.trim());
+  if (explanation) {
+    sections.push(`## Explanation\n${explanation}`.trim());
+  }
+  if (example) {
+    const sqlMatch = example.match(/\b(SELECT|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b[\s\S]{4,}?(?:;|$)/i);
+    const sqlSnippet = sqlMatch ? sqlMatch[0].trim() : 'SELECT ___ FROM ___;';
+    const explanationSnippet = toLearnerSafeParagraph(
+      example.replace(sqlSnippet, '').trim() || example,
+      220,
+    );
+    sections.push(
+      `## Examples\n### Refined Example\n\`\`\`sql\n${sqlSnippet}\n\`\`\`\n${explanationSnippet}`.trim(),
+    );
+  }
+  if (mistakes) {
+    const bulletLines = mistakes
+      .split('\n')
+      .map((line) => line.replace(/^\s*-\s*/, '').trim())
+      .filter(Boolean);
+    const why = toLearnerSafeParagraph(bulletLines.join(' '), 260);
+    sections.push(`## Common Mistakes\n### Common mistake\nWhy it happens\n${why}`.trim());
+  }
+  return sections.join('\n\n').trim();
+}
+
+export function getTextbookCorpusMode(): 'remote' | 'static' {
+  const mode = String(import.meta.env.VITE_TEXTBOOK_CORPUS_MODE ?? 'static').trim().toLowerCase();
+  return mode === 'remote' ? 'remote' : 'static';
+}
+
+function buildConceptMapFromRemoteUnits(units: RemoteCorpusUnit[]): ConceptMapData | null {
+  if (!units.length) return null;
+
+  const concepts: Record<string, ConceptInfo> = {};
+  const conceptToUnit: Record<string, string> = {};
+  const conceptToChunks: Record<string, PdfIndexChunk[]> = {};
+  const conceptToRefinedHints: Record<string, RefinedHintSet> = {};
+  for (const unit of units) {
+    const qualityFlags = unit.qualityFlags ?? [];
+    if (qualityFlags.includes('drop_from_learning_page')) {
+      continue;
+    }
+
+    const conceptKey = unit.conceptId || unit.unitId;
+    const title = unit.displayTitle || unit.title;
+    const summary = getPreferredRemoteDefinition(unit);
+    const hintSource = unit.hintableExcerptRefined || unit.hintSourceExcerpt || summary || unit.contentMarkdown || '';
+    const hintChunkText = hintSource.length > 240 ? `${hintSource.slice(0, 240).trim()}...` : hintSource;
+    const estimatedReadTime = Math.max(1, Math.ceil(summary.split(/\s+/).filter(Boolean).length / 180));
+    concepts[conceptKey] = {
+      id: conceptKey,
+      title,
+      definition: summary,
+      difficulty: normalizeDifficulty(unit.difficulty),
+      estimatedReadTime,
+      pageNumbers: [unit.pageStart, unit.pageEnd].filter((v, idx, arr) => Number.isFinite(v) && arr.indexOf(v) === idx),
+      chunkIds: {
+        definition: [],
+        examples: [],
+        commonMistakes: [],
+      },
+      relatedConcepts: [],
+      practiceProblemIds: [],
+      sourceDocId: unit.docId,
+    };
+    conceptToUnit[conceptKey] = unit.unitId;
+    conceptToRefinedHints[conceptKey] = toRefinedHintSet(unit);
+    conceptToChunks[conceptKey] = [{
+      chunkId: `${unit.unitId}#hint-source`,
+      docId: unit.docId,
+      page: unit.pageStart,
+      text: hintChunkText,
+    }];
+  }
+
+  remoteConceptToUnitId = conceptToUnit;
+  remoteConceptChunks = conceptToChunks;
+  remoteConceptRefinedHints = conceptToRefinedHints;
+  return {
+    version: 'remote-corpus-v1',
+    generatedAt: new Date().toISOString(),
+    sourceDocIds: Array.from(new Set(units.map((u) => u.docId))),
+    concepts,
+  };
+}
 
 /**
  * Clear the concept map cache. Used for testing.
@@ -191,6 +454,9 @@ export function clearConceptMapCache(): void {
   conceptMapCache = null;
   conceptQualityCache = false;
   textbookUnitsCache = false;
+  remoteConceptToUnitId = {};
+  remoteConceptChunks = {};
+  remoteConceptRefinedHints = {};
 }
 
 /**
@@ -298,10 +564,26 @@ export async function loadConceptMap(): Promise<ConceptMapData | null> {
     return conceptMapCache;
   }
 
+  if (getTextbookCorpusMode() === 'remote') {
+    try {
+      const manifest = await fetchCorpusManifestWithUnits();
+      const remoteMap = buildConceptMapFromRemoteUnits(manifest?.units ?? []);
+      if (remoteMap) {
+        conceptMapCache = remoteMap;
+        console.info('[corpus] mode=remote source=remote documents=%d units=%d', manifest?.documents.length ?? 0, manifest?.units.length ?? 0);
+        return conceptMapCache;
+      }
+      console.warn('[corpus] mode=remote but no remote units found; falling back to static textbook corpus');
+    } catch {
+      console.warn('[corpus] mode=remote manifest fetch failed; falling back to static textbook corpus');
+    }
+  }
+
   try {
     const response = await fetch('/textbook-static/concept-map.json');
     if (!response.ok) return null;
     conceptMapCache = await response.json();
+    console.info('[corpus] mode=%s source=static', getTextbookCorpusMode());
     return conceptMapCache;
   } catch {
     return null;
@@ -339,6 +621,28 @@ export async function loadConceptQuality(): Promise<ConceptQualityFile | null> {
  */
 export async function loadTextbookUnitsMeta(): Promise<TextbookUnitsFile | null> {
   if (textbookUnitsCache !== false) return textbookUnitsCache;
+
+  if (getTextbookCorpusMode() === 'remote') {
+    try {
+      const manifest = await fetchCorpusManifestWithUnits();
+      if (manifest?.units?.length) {
+        textbookUnitsCache = {
+          version: 'remote-corpus-v1',
+          generatedAt: new Date().toISOString(),
+          units: manifest.units.map((u) => ({
+            id: u.conceptId || u.unitId,
+            sourceDocId: u.docId,
+            sectionTitle: u.title,
+            displayOrder: undefined,
+          })),
+        };
+        return textbookUnitsCache;
+      }
+    } catch {
+      // fallback to static below
+    }
+  }
+
   try {
     const res = await fetch('/textbook-static/textbook-units.json');
     if (!res.ok) {
@@ -396,8 +700,40 @@ export async function getConcept(conceptId: string): Promise<ConceptInfo | null>
 export async function loadConceptContent(conceptId: string): Promise<LoadedConcept | null> {
   const concept = await getConcept(conceptId);
   if (!concept) return null;
-  
-  const markdown = await fetchConceptMarkdown(conceptId, concept);
+
+  let markdown: string | null = null;
+
+  if (getTextbookCorpusMode() === 'remote') {
+    const map = await loadConceptMap();
+    const resolvedId = map ? resolveConceptId(conceptId, map.concepts) : conceptId;
+    const unitId = remoteConceptToUnitId[resolvedId] || remoteConceptToUnitId[concept.id] || resolvedId;
+    const remote = await fetchCorpusUnit(unitId);
+    if (remote?.unit?.contentMarkdown) {
+      const qualityFlags = remote.unit.qualityFlags ?? [];
+      const hasRefined = Boolean(
+        remote.unit.definitionRefined ||
+        remote.unit.exampleRefined ||
+        remote.unit.commonMistakesRefined ||
+        remote.unit.displaySummaryRefined,
+      );
+      if (hasRefined) {
+        markdown = buildRemoteRefinedMarkdown(remote.unit);
+      } else if (qualityFlags.includes('high_noise') && remote.unit.explanationContext) {
+        markdown = `## Definition\n${remote.unit.displaySummary || remote.unit.summary || ''}\n\n## Explanation\n${remote.unit.explanationContext}`;
+      } else {
+        markdown = remote.unit.contentMarkdown;
+      }
+      console.info('[corpus] corpus_mode=remote corpus_source=remote corpus_doc_id=%s corpus_unit_id=%s', remote.unit.docId, remote.unit.unitId);
+    }
+  }
+
+  if (!markdown) {
+    markdown = await fetchConceptMarkdown(conceptId, concept);
+    if (markdown) {
+      console.info('[corpus] corpus_mode=%s corpus_source=static', getTextbookCorpusMode());
+    }
+  }
+
   if (!markdown) return null;
   
   return {
@@ -457,14 +793,19 @@ function parseMarkdownContent(markdown: string): LoadedConcept['content'] {
   }
   
   // Handle both old format (Definition/Explanation) and new pedagogical format (What is This?)
-  const definition = sections['Definition'] || sections['What is This?'] || '';
-  const explanation = sections['Explanation'] || sections['What is This?'] || definition || '';
+  const definition = toLearnerSafeParagraph(sections['Definition'] || sections['What is This?'] || '', 320);
+  const explanation = toLearnerSafeParagraph(
+    sections['Explanation'] || sections['What is This?'] || definition || '',
+    1800,
+  );
+  const parsedExamples = parseExamples(sections['Examples'] || '');
+  const parsedMistakes = parseMistakes(sections['Common Mistakes'] || '');
   
   return {
     definition,
     explanation,
-    examples: parseExamples(sections['Examples'] || ''),
-    commonMistakes: parseMistakes(sections['Common Mistakes'] || '')
+    examples: selectReadableExamples(parsedExamples),
+    commonMistakes: normalizeMistakes(parsedMistakes),
   };
 }
 
@@ -474,15 +815,28 @@ function parseExamples(section: string): CodeExample[] {
   let currentExample: Partial<CodeExample> = {};
   let inCodeBlock = false;
   let codeContent: string[] = [];
+  let explanationLines: string[] = [];
+
+  const flushCurrentExample = () => {
+    if (!currentExample.title) return;
+    if (!currentExample.code && codeContent.length > 0) {
+      currentExample.code = codeContent.join('\n').trim();
+    }
+    currentExample.explanation = compactWhitespace(explanationLines.join(' '));
+    examples.push({
+      title: currentExample.title,
+      code: currentExample.code ?? '',
+      explanation: currentExample.explanation ?? '',
+      output: currentExample.output,
+    });
+  };
   
   for (const line of lines) {
     if (line.startsWith('### ')) {
-      if (currentExample.title) {
-        currentExample.code = codeContent.join('\n').trim();
-        examples.push(currentExample as CodeExample);
-      }
+      flushCurrentExample();
       currentExample = { title: line.replace('### ', '').trim() };
       codeContent = [];
+      explanationLines = [];
       inCodeBlock = false;
     } else if (line.startsWith('```sql')) {
       inCodeBlock = true;
@@ -491,19 +845,12 @@ function parseExamples(section: string): CodeExample[] {
       currentExample.code = codeContent.join('\n').trim();
     } else if (inCodeBlock) {
       codeContent.push(line);
-    } else if (line.trim() && !currentExample.code && !currentExample.explanation) {
-      currentExample.explanation = line.trim();
-    } else if (line.trim() && currentExample.code) {
-      currentExample.explanation = (currentExample.explanation || '') + ' ' + line.trim();
+    } else if (line.trim()) {
+      explanationLines.push(line.trim());
     }
   }
   
-  if (currentExample.title) {
-    if (!currentExample.code && codeContent.length > 0) {
-      currentExample.code = codeContent.join('\n').trim();
-    }
-    examples.push(currentExample as CodeExample);
-  }
+  flushCurrentExample();
   
   return examples;
 }
@@ -590,7 +937,7 @@ function parseMistakes(section: string): Mistake[] {
     incorrect = incorrectLines.join('\n').trim();
     correct = correctLines.join('\n').trim();
     
-    if (title && (incorrect || correct)) {
+    if (title && (incorrect || correct || why)) {
       mistakes.push({ title, incorrect, correct, why });
     }
   }
@@ -622,6 +969,8 @@ export function isExplanationGarbled(text: string): boolean {
     /\x0c/,                                    // form-feed (pdftotext page break)
     /^(?:CHAPTER|FIGURE|TABLE|SECTION)\s+\d+/im, // structural labels
     /^\d+\s*$/m,                               // page-number-only lines
+    /\bcontinued from (?:next|previous) page\b/i, // wrapped-page extraction residue
+    /\bpage break\b/i,                         // explicit page-break prose leakage
   ];
   for (const pattern of artefactPatterns) {
     if (pattern.test(text)) return true;
@@ -782,22 +1131,37 @@ export function getConceptChunks(
   conceptId: string, 
   type?: 'definition' | 'examples' | 'commonMistakes'
 ): PdfIndexChunk[] | null {
-  const index = storage.getPdfIndex();
   const map = conceptMapCache;
-  
-  if (!index || !map) return null;
+  if (!map) return null;
   
   // Resolve concept ID using same logic as getConcept
   const resolvedId = resolveConceptId(conceptId, map.concepts);
   const concept = map.concepts[resolvedId];
   
   if (!concept) return null;
+
+  if (getTextbookCorpusMode() === 'remote') {
+    const remoteChunks = remoteConceptChunks[resolvedId] || remoteConceptChunks[concept.id];
+    if (remoteChunks && remoteChunks.length > 0) {
+      return remoteChunks;
+    }
+  }
+
+  const index = storage.getPdfIndex();
+  if (!index) return null;
   
   const chunkIds = type 
     ? concept.chunkIds[type]
     : [...concept.chunkIds.definition, ...concept.chunkIds.examples, ...concept.chunkIds.commonMistakes];
   
   return index.chunks.filter(c => chunkIds.includes(c.chunkId));
+}
+
+export function getRefinedHintsForConcept(conceptId: string): RefinedHintSet | null {
+  const map = conceptMapCache;
+  if (!map) return null;
+  const resolvedId = resolveConceptId(conceptId, map.concepts);
+  return remoteConceptRefinedHints[resolvedId] || remoteConceptRefinedHints[conceptId] || null;
 }
 
 /**

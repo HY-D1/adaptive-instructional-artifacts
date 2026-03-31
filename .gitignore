@@ -70,6 +70,8 @@ PROFILE_VALIDATION_TEST_REPORT.md
 !docs/README.md
 !docs/week1-status.md
 !docs/runbooks/*.md
+!docs/research/corpus-product-fit-audit.md
+!docs/research/embedding-bakeoff-dbms-ramakrishnan.md
 
 # Architecture diagrams (local only)
 diagrams/
@@ -78,6 +80,13 @@ diagrams/
 # Only keep README.md
 textbooks/*.pdf
 textbooks/*.PDF
+raw_pdf/
+
+# Local-only ingest worker artifacts
+tools/pdf_ingest/.venv/
+tools/pdf_ingest/.pytest_cache/
+tools/pdf_ingest/.mypy_cache/
+.local/ingest-runs/
 
 # Generated PDF index (rebuildable from source)
 dist/pdf-index/
@@ -117,3 +126,5 @@ apps/server/dist/
 .vercel
 .gstack/
 .env*.local
+.local/
+.env.pdf-local

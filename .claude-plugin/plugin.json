@@ -1,0 +1,62 @@
+{
+  "name": "quality-loop-deerflow",
+  "version": "1.0.0",
+  "description": "DeerFlow research sidecar integration for quality-loop v3. Provides explicit /research entrypoint for long-horizon research tasks with proper output isolation.",
+  "author": "",
+  "license": "MIT",
+  "min_claude_code_version": "1.0.0",
+  "entrypoints": {
+    "commands": [
+      {
+        "name": "research",
+        "path": "commands/research.md",
+        "description": "Execute DeerFlow-backed research tasks"
+      },
+      {
+        "name": "research-status",
+        "path": "commands/research-status.md",
+        "description": "Check status of ongoing research tasks"
+      }
+    ],
+    "agents": [
+      {
+        "name": "deerflow-runner",
+        "path": "agents/deerflow-runner.md",
+        "description": "Research-only sidecar agent for DeerFlow operations"
+      }
+    ],
+    "skills": [
+      {
+        "name": "deerflow-research",
+        "path": "skills/deerflow-research/SKILL.md",
+        "description": "Reusable DeerFlow research operations with output isolation"
+      }
+    ]
+  },
+  "dependencies": {
+    "quality-loop": ">=3.0.0"
+  },
+  "config": {
+    "routing_policy": "config/routing-policy.md",
+    "output_isolation": {
+      "base_path": ".claude/state/runs",
+      "research_subdir": "research",
+      "constraint": "DeerFlow outputs MUST NOT write to shared state files"
+    },
+    "state_boundary": {
+      "read": [".claude/state/capabilities.json"],
+      "write_forbidden": [
+        ".claude/state/quality-loop.json",
+        ".claude/state/evidence-manifest.json",
+        ".claude/state/activity.json"
+      ]
+    }
+  },
+  "integration": {
+    "with_quality_loop": {
+      "trigger": "task-profile.required_checks.deerflow_research == true",
+      "phase": "planning",
+      "agent_assignment": "deerflow-runner"
+    }
+  }
+}

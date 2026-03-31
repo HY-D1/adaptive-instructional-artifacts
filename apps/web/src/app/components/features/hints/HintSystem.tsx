@@ -84,6 +84,7 @@ export function HintSystem({
   const [isAddingToTextbook, setIsAddingToTextbook] = useState(false);
   const [saveToNotesError, setSaveToNotesError] = useState<string | null>(null);
   const [isProcessingHint, setIsProcessingHint] = useState(false);
+  const [hintRuntimeError, setHintRuntimeError] = useState<string | null>(null);
   const [autoEscalationInfo, setAutoEscalationInfo] = useState<{
     triggered: boolean;
     helpRequestCount: number;
@@ -140,6 +141,8 @@ export function HintSystem({
   const nextHelpRequestIndexRef = useRef(1);
   const emittedHelpEventKeysRef = useRef<Set<string>>(new Set());
   const helpEventSequenceRef = useRef(0);
+  const hintRequestVersionRef = useRef(0);
+  const pendingAutoEscalationTimeoutRef = useRef<number | null>(null);
   
   // Enhanced hint system hook
   const {
@@ -172,7 +175,16 @@ export function HintSystem({
   // Simplified: override is active when we have a valid canonical subtype from instructor mode
   const isCanonicalOverrideActive = Boolean(canonicalOverrideSubtype);
 
+  const clearPendingAutoEscalation = () => {
+    if (pendingAutoEscalationTimeoutRef.current !== null) {
+      window.clearTimeout(pendingAutoEscalationTimeoutRef.current);
+      pendingAutoEscalationTimeoutRef.current = null;
+    }
+  };
+
   const resetHintFlow = () => {
+    clearPendingAutoEscalation();
+    hintRequestVersionRef.current += 1;
     setHints([]);
     setHintPdfPassages([]);
     setExpandedHintIndex(null);
@@ -183,6 +195,7 @@ export function HintSystem({
     setShowSourceViewer(false);
     setAutoEscalationInfo({ triggered: false, helpRequestCount: 0 });
     setEnhancedHintInfo([]);
+    setHintRuntimeError(null);
     localStorage.removeItem(HINT_INFO_KEY);
     localStorage.removeItem(HINTS_KEY);
     // Reset refs to ensure clean state for new problem
@@ -391,6 +404,18 @@ export function HintSystem({
     syncHelpFlowIndex(getProblemTrace());
   }, [sessionId, learnerId, problemId, recentInteractions]);
 
+  useEffect(() => {
+    hintRequestVersionRef.current += 1;
+    clearPendingAutoEscalation();
+    setHintRuntimeError(null);
+  }, [sessionId, learnerId, problemId]);
+
+  useEffect(() => {
+    return () => {
+      clearPendingAutoEscalation();
+    };
+  }, []);
+
   // Reconstruct hints from interaction history when component mounts or problem changes
   // Use ref to track if reconstruction has already happened for this problem/session
   const hasReconstructedRef = useRef(false);
@@ -531,6 +556,11 @@ export function HintSystem({
     policyVersion: string;
     pdfPassages: RetrievalPdfPassage[];
     isEnhanced: boolean;
+    retrievalConfidence: number;
+    fallbackReason?: string | null;
+    safetyFilterApplied: boolean;
+    retrievedSourceIds: string[];
+    retrievedChunkIds: string[];
     llmFailed?: boolean;
     llmErrorMessage?: string;
   } | null> => {
@@ -570,6 +600,11 @@ export function HintSystem({
           policyVersion: enhancedHint.llmGenerated ? 'enhanced-llm-v1' : 'sql-engage-v1',
           pdfPassages,
           isEnhanced: enhancedHint.llmGenerated || enhancedHint.sources.textbook,
+          retrievalConfidence: enhancedHint.retrievalConfidence,
+          fallbackReason: enhancedHint.fallbackReason,
+          safetyFilterApplied: enhancedHint.safetyFilterApplied,
+          retrievedSourceIds: enhancedHint.retrievedSourceIds,
+          retrievedChunkIds: enhancedHint.retrievedChunkIds,
           llmFailed: enhancedHint.llmFailed,
           llmErrorMessage: enhancedHint.llmErrorMessage
         };
@@ -592,6 +627,11 @@ export function HintSystem({
       policyVersion: standardHint.policyVersion,
       pdfPassages,
       isEnhanced: false,
+      retrievalConfidence: 0.5,
+      fallbackReason: 'enhanced_hint_unavailable',
+      safetyFilterApplied: false,
+      retrievedSourceIds: [],
+      retrievedChunkIds: [],
       llmFailed: false
     };
   };
@@ -630,6 +670,8 @@ export function HintSystem({
     if (!profile || !sessionId) {
       return;
     }
+    clearPendingAutoEscalation();
+    setHintRuntimeError(null);
 
     // Week 3 D8: Log guidance request for explanation
     storage.logGuidanceRequest({
@@ -754,224 +796,285 @@ export function HintSystem({
       return;
     }
     setIsProcessingHint(true);
+    setHintRuntimeError(null);
+    clearPendingAutoEscalation();
 
-    // Week 3 D8: Log guidance request event
-    storage.logGuidanceRequest({
-      learnerId,
-      problemId,
-      requestType: 'hint',
-      currentRung: currentRung,
-      sessionId
-    });
+    const requestVersion = hintRequestVersionRef.current + 1;
+    hintRequestVersionRef.current = requestVersion;
+    const isStaleRequest = () => hintRequestVersionRef.current !== requestVersion;
 
-    // Check if we're already in escalation/explanation mode - don't increment counter
-    if (showExplanation || autoEscalationInfo.triggered) {
-      // Just re-trigger explanation without incrementing
-      const problemTrace = getProblemTrace();
-      await handleShowExplanation('manual', undefined, problemTrace);
-      setIsProcessingHint(false);
-      return;
-    }
-
-    const problemTrace = getProblemTrace();
-    const nextHelpRequestIndex = allocateNextHelpRequestIndex(problemTrace);
-
-    // --- Canonical orchestration decision (Week 6) ---
-    // When a session condition is assigned, use textbook-orchestrator as the single
-    // decision source for escalation (replaces immediateExplanationMode check and
-    // autoEscalationThreshold check).
-    if (sessionConfig) {
-      const retryCount = problemTrace.filter(i => i.eventType === 'error').length;
-      const hintCountForOrchestration = problemTrace.filter(i => i.eventType === 'hint_view').length;
-      const elapsedMs = problemTrace.length > 0 ? Date.now() - problemTrace[0].timestamp : 0;
-      // Use first available concept ID for corpus resolution; fall back to error subtype
-      const conceptId = conceptIds[0] || activeHintSubtype || errorSubtypeId || 'unknown';
-
-      const decision = orchestrate({
-        conceptId,
-        retryCount,
-        hintCount: hintCountForOrchestration,
-        elapsedMs,
-        sessionConfig: {
-          textbookDisabled: sessionConfig.textbookDisabled ?? false,
-          adaptiveLadderDisabled: sessionConfig.adaptiveLadderDisabled ?? false,
-          immediateExplanationMode: sessionConfig.immediateExplanationMode ?? false,
-          staticHintMode: sessionConfig.staticHintMode ?? false,
-        },
-      });
-
-      if (decision.action !== 'stay_hint') {
-        setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
-        await handleShowExplanation('auto', nextHelpRequestIndex, problemTrace, decision);
-        setIsProcessingHint(false);
-        return;
-      }
-    } else if (nextHelpRequestIndex >= autoEscalationThreshold) {
-      // Fallback when no session config: use legacy hint-count threshold
-      setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
-      await handleShowExplanation('auto', nextHelpRequestIndex, problemTrace);
-      setIsProcessingHint(false);
-      return;
-    }
-    
-    // Determine rung level for this hint
-    const levelForSelection = Math.max(1, Math.min(maxHintLevel, nextHelpRequestIndex)) as 1 | 2 | 3;
-    
-    // Try to generate enhanced hint (uses LLM/Textbook if available)
-    let hintSelection: {
-      hintText: string;
-      hintLevel: 1 | 2 | 3;
-      sqlEngageSubtype: string;
-      sqlEngageRowId: string;
-      policyVersion: string;
-      pdfPassages: RetrievalPdfPassage[];
-      isEnhanced: boolean;
-      llmFailed?: boolean;
-      llmErrorMessage?: string;
-    } | null = null;
-    
     try {
-      hintSelection = await generateEnhancedHintForRung(levelForSelection);
-    } catch {
-      // Enhanced hint failed - using fallback
-    }
-    
-    // Fallback to standard hint if enhanced generation failed
-    if (!hintSelection) {
-      const standardHint = getHelpSelectionForIndex(nextHelpRequestIndex);
-      if (!standardHint) {
-        setIsProcessingHint(false);
-        return;
-      }
-      const pdfPassages = retrievePdfPassagesForHint(standardHint.sqlEngageSubtype);
-      hintSelection = {
-        hintText: standardHint.hintText,
-        hintLevel: standardHint.hintLevel,
-        sqlEngageSubtype: standardHint.sqlEngageSubtype,
-        sqlEngageRowId: standardHint.sqlEngageRowId,
-        policyVersion: standardHint.policyVersion,
-        pdfPassages,
-        isEnhanced: false
-      };
-    }
-    
-    if (!registerHelpEvent('hint_view', nextHelpRequestIndex)) {
-      setIsProcessingHint(false);
-      return;
-    }
-
-    setHints((currentHints) => [...currentHints, hintSelection!.hintText]);
-    setHintPdfPassages((current) => [...current, hintSelection!.pdfPassages]);
-    setEnhancedHintInfo((current) => [...current, {
-      isEnhanced: hintSelection!.isEnhanced,
-      sources: hintSelection!.isEnhanced ? 
-        { sqlEngage: true, textbook: availableResources.textbook, llm: availableResources.llm, pdfPassages: hintSelection!.pdfPassages.length > 0 } :
-        { sqlEngage: true, textbook: false, llm: false, pdfPassages: false },
-      llmFailed: hintSelection!.llmFailed,
-      llmErrorMessage: hintSelection!.llmErrorMessage
-    }]);
-    setActiveHintSubtype(hintSelection!.sqlEngageSubtype);
-    const errorCount = problemTrace.filter((interaction) => interaction.eventType === 'error').length;
-    const hintCount = problemTrace.filter((interaction) => interaction.eventType === 'hint_view').length;
-    const timeSpent = problemTrace.length > 0
-      ? Date.now() - problemTrace[0].timestamp
-      : 0;
-
-    // Log interaction with escalation metadata
-    // will_escalate indicates that viewing this hint will trigger auto-escalation
-    // This happens at max hint level when no explanation has been shown yet
-    const willEscalate = hintSelection!.hintLevel === maxHintLevel && !showExplanation;
-    
-    const hintEvent: InteractionEvent = {
-      id: buildHelpEventId('hint', nextHelpRequestIndex),
-      sessionId,
-      learnerId,
-      timestamp: Date.now(),
-      eventType: 'hint_view',
-      problemId,
-      hintText: hintSelection!.hintText,
-      hintLevel: hintSelection!.hintLevel,
-      helpRequestIndex: nextHelpRequestIndex,
-      sqlEngageSubtype: hintSelection!.sqlEngageSubtype,
-      sqlEngageRowId: hintSelection!.sqlEngageRowId,
-      policyVersion: hintSelection!.policyVersion,
-      ruleFired: hintSelection!.isEnhanced ? 'enhanced-hint' : 'progressive-hint',
-      inputs: {
-        retry_count: Math.max(0, errorCount - 1),
-        hint_count: hintCount,
-        time_spent_ms: timeSpent
-      },
-      outputs: {
-        hint_level: hintSelection!.hintLevel,
-        help_request_index: nextHelpRequestIndex,
-        sql_engage_subtype: hintSelection!.sqlEngageSubtype,
-        sql_engage_row_id: hintSelection!.sqlEngageRowId,
-        will_escalate: willEscalate,
-        rule_fired: willEscalate ? 'progressive-hint-will-escalate' : (hintSelection!.isEnhanced ? 'enhanced-hint' : 'progressive-hint'),
-        is_enhanced: hintSelection!.isEnhanced,
-        llm_failed: hintSelection!.llmFailed || false,
-        llm_error_message: hintSelection!.llmErrorMessage || null
-      },
-      conditionId: sessionConfig?.conditionId
-    };
-    storage.saveInteraction(hintEvent);
-    onInteractionLogged?.(hintEvent);
-
-    // Week 3 D8: Log guidance view event for replay
-    storage.logGuidanceView({
-      learnerId,
-      problemId,
-      rung: hintSelection!.hintLevel as 1 | 2 | 3,
-      conceptIds: conceptIds.length > 0 ? conceptIds : [hintSelection!.sqlEngageSubtype],
-      sourceRefIds: hintSelection!.pdfPassages.map(p => p.chunkId),
-      grounded: hintSelection!.pdfPassages.length > 0,
-      contentLength: hintSelection!.hintText.length,
-      sessionId
-    });
-
-    setIsProcessingHint(false);
-
-    // Escalate automatically after max hint level reached.
-    if (hintSelection.hintLevel === maxHintLevel && !showExplanation) {
-      // Week 3 D8: Log escalation event before transitioning
-      storage.logGuidanceEscalate({
+      // Week 3 D8: Log guidance request event
+      storage.logGuidanceRequest({
         learnerId,
         problemId,
-        fromRung: 1,
-        toRung: 2,
-        trigger: 'auto_escalation_eligible',
-        evidence: {
-          errorCount,
-          retryCount: Math.max(0, errorCount - 1),
-          hintCount,
-          timeSpentMs: timeSpent
-        },
-        sourceInteractionIds: [hintEvent.id],
+        requestType: 'hint',
+        currentRung: currentRung,
         sessionId
       });
-      
-      // Delay auto-escalation slightly so user can see the L3 hint first
-      setTimeout(() => {
-        setShowExplanation(true);
-        setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
-        // Re-run canonical orchestrator with updated hint count for canonical RESEARCH-4 fields
-        const traceForDecision = [...problemTrace, hintEvent];
-        const rungExhaustedDecision = sessionConfig
-          ? orchestrate({
-              conceptId: conceptIds[0] || activeHintSubtype || errorSubtypeId || 'unknown',
-              retryCount: errorCount,
-              hintCount: hintCount + 1, // include the hint we just showed
-              elapsedMs: timeSpent,
-              sessionConfig: {
-                textbookDisabled: sessionConfig.textbookDisabled ?? false,
-                adaptiveLadderDisabled: sessionConfig.adaptiveLadderDisabled ?? false,
-                immediateExplanationMode: sessionConfig.immediateExplanationMode ?? false,
-                staticHintMode: sessionConfig.staticHintMode ?? false,
-              },
-            })
-          : undefined;
-        handleShowExplanation('auto', nextHelpRequestIndex + 1, traceForDecision, rungExhaustedDecision);
-      }, 500); // 500ms delay to show L3 hint before switching to explanation
+
+      // Check if we're already in escalation/explanation mode - don't increment counter
+      if (showExplanation || autoEscalationInfo.triggered) {
+        const problemTrace = getProblemTrace();
+        await handleShowExplanation('manual', undefined, problemTrace);
+        return;
+      }
+
+      const problemTrace = getProblemTrace();
+      const nextHelpRequestIndex = allocateNextHelpRequestIndex(problemTrace);
+
+      // --- Canonical orchestration decision (Week 6) ---
+      // When a session condition is assigned, use textbook-orchestrator as the single
+      // decision source for escalation (replaces immediateExplanationMode check and
+      // autoEscalationThreshold check).
+      if (sessionConfig) {
+        const retryCount = problemTrace.filter(i => i.eventType === 'error').length;
+        const hintCountForOrchestration = problemTrace.filter(i => i.eventType === 'hint_view').length;
+        const elapsedMs = problemTrace.length > 0 ? Date.now() - problemTrace[0].timestamp : 0;
+        // Use first available concept ID for corpus resolution; fall back to error subtype
+        const conceptId = conceptIds[0] || activeHintSubtype || errorSubtypeId || 'unknown';
+
+        const decision = orchestrate({
+          conceptId,
+          retryCount,
+          hintCount: hintCountForOrchestration,
+          elapsedMs,
+          sessionConfig: {
+            textbookDisabled: sessionConfig.textbookDisabled ?? false,
+            adaptiveLadderDisabled: sessionConfig.adaptiveLadderDisabled ?? false,
+            immediateExplanationMode: sessionConfig.immediateExplanationMode ?? false,
+            staticHintMode: sessionConfig.staticHintMode ?? false,
+          },
+        });
+
+        if (decision.action !== 'stay_hint') {
+          if (!isStaleRequest()) {
+            setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
+          }
+          await handleShowExplanation('auto', nextHelpRequestIndex, problemTrace, decision);
+          return;
+        }
+      } else if (nextHelpRequestIndex >= autoEscalationThreshold) {
+        // Fallback when no session config: use legacy hint-count threshold
+        if (!isStaleRequest()) {
+          setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
+        }
+        await handleShowExplanation('auto', nextHelpRequestIndex, problemTrace);
+        return;
+      }
+
+      // Determine rung level for this hint
+      const levelForSelection = Math.max(1, Math.min(maxHintLevel, nextHelpRequestIndex)) as 1 | 2 | 3;
+
+      // Try to generate enhanced hint (uses LLM/Textbook if available)
+      let hintSelection: {
+        hintText: string;
+        hintLevel: 1 | 2 | 3;
+        sqlEngageSubtype: string;
+        sqlEngageRowId: string;
+        policyVersion: string;
+        pdfPassages: RetrievalPdfPassage[];
+        isEnhanced: boolean;
+        retrievalConfidence: number;
+        fallbackReason?: string | null;
+        safetyFilterApplied: boolean;
+        retrievedSourceIds: string[];
+        retrievedChunkIds: string[];
+        llmFailed?: boolean;
+        llmErrorMessage?: string;
+      } | null = null;
+
+      try {
+        hintSelection = await generateEnhancedHintForRung(levelForSelection);
+      } catch {
+        // Enhanced hint failed - using fallback
+      }
+
+      if (isStaleRequest()) {
+        return;
+      }
+
+      // Fallback to standard hint if enhanced generation failed
+      if (!hintSelection) {
+        const standardHint = getHelpSelectionForIndex(nextHelpRequestIndex);
+        if (!standardHint) {
+          setHintRuntimeError('Hint generation returned no usable guidance. Please retry.');
+          return;
+        }
+        const pdfPassages = retrievePdfPassagesForHint(standardHint.sqlEngageSubtype);
+        hintSelection = {
+          hintText: standardHint.hintText,
+          hintLevel: standardHint.hintLevel,
+          sqlEngageSubtype: standardHint.sqlEngageSubtype,
+          sqlEngageRowId: standardHint.sqlEngageRowId,
+          policyVersion: standardHint.policyVersion,
+          pdfPassages,
+          isEnhanced: false,
+          retrievalConfidence: 0.5,
+          fallbackReason: 'standard_hint_fallback',
+          safetyFilterApplied: false,
+          retrievedSourceIds: [],
+          retrievedChunkIds: [],
+        };
+      }
+
+      if (!registerHelpEvent('hint_view', nextHelpRequestIndex)) {
+        return;
+      }
+
+      setHints((currentHints) => [...currentHints, hintSelection.hintText]);
+      setHintPdfPassages((current) => [...current, hintSelection.pdfPassages]);
+      setEnhancedHintInfo((current) => [...current, {
+        isEnhanced: hintSelection.isEnhanced,
+        sources: hintSelection.isEnhanced
+          ? { sqlEngage: true, textbook: availableResources.textbook, llm: availableResources.llm, pdfPassages: hintSelection.pdfPassages.length > 0 }
+          : { sqlEngage: true, textbook: false, llm: false, pdfPassages: false },
+        llmFailed: hintSelection.llmFailed,
+        llmErrorMessage: hintSelection.llmErrorMessage
+      }]);
+      setActiveHintSubtype(hintSelection.sqlEngageSubtype);
+      const errorCount = problemTrace.filter((interaction) => interaction.eventType === 'error').length;
+      const hintCount = problemTrace.filter((interaction) => interaction.eventType === 'hint_view').length;
+      const timeSpent = problemTrace.length > 0
+        ? Date.now() - problemTrace[0].timestamp
+        : 0;
+
+      // Log interaction with escalation metadata
+      // will_escalate indicates that viewing this hint will trigger auto-escalation
+      // This happens at max hint level when no explanation has been shown yet
+      const willEscalate = hintSelection.hintLevel === maxHintLevel && !showExplanation;
+      const retrievedChunkIds = Array.from(
+        new Set([
+          ...hintSelection.retrievedChunkIds,
+          ...hintSelection.pdfPassages.map((passage) => passage.chunkId).filter(Boolean),
+        ]),
+      );
+      const retrievedSourceIds = Array.from(
+        new Set([
+          ...hintSelection.retrievedSourceIds,
+          ...retrievedChunkIds,
+        ]),
+      );
+
+      const hintEvent: InteractionEvent = {
+        id: buildHelpEventId('hint', nextHelpRequestIndex),
+        sessionId,
+        learnerId,
+        timestamp: Date.now(),
+        eventType: 'hint_view',
+        problemId,
+        hintText: hintSelection.hintText,
+        hintLevel: hintSelection.hintLevel,
+        helpRequestIndex: nextHelpRequestIndex,
+        sqlEngageSubtype: hintSelection.sqlEngageSubtype,
+        sqlEngageRowId: hintSelection.sqlEngageRowId,
+        policyVersion: hintSelection.policyVersion,
+        ruleFired: hintSelection.isEnhanced ? 'enhanced-hint' : 'progressive-hint',
+        retrievedSourceIds,
+        retrievedChunks: hintSelection.pdfPassages.map((passage) => ({
+          docId: passage.docId,
+          page: passage.page,
+          chunkId: passage.chunkId,
+          score: passage.score,
+          snippet: passage.text.slice(0, 240),
+        })),
+        inputs: {
+          retry_count: Math.max(0, errorCount - 1),
+          hint_count: hintCount,
+          time_spent_ms: timeSpent
+        },
+        outputs: {
+          hint_level: hintSelection.hintLevel,
+          help_request_index: nextHelpRequestIndex,
+          sql_engage_subtype: hintSelection.sqlEngageSubtype,
+          sql_engage_row_id: hintSelection.sqlEngageRowId,
+          will_escalate: willEscalate,
+          rule_fired: willEscalate ? 'progressive-hint-will-escalate' : (hintSelection.isEnhanced ? 'enhanced-hint' : 'progressive-hint'),
+          is_enhanced: hintSelection.isEnhanced,
+          llm_failed: hintSelection.llmFailed || false,
+          llm_error_message: hintSelection.llmErrorMessage || null,
+          retrieval_confidence: Number(hintSelection.retrievalConfidence.toFixed(4)),
+          fallback_reason: hintSelection.fallbackReason || null,
+          safety_filter_applied: hintSelection.safetyFilterApplied,
+          retrieved_source_ids: retrievedSourceIds,
+          retrieved_chunk_ids: retrievedChunkIds,
+        },
+        conditionId: sessionConfig?.conditionId
+      };
+      storage.saveInteraction(hintEvent);
+      onInteractionLogged?.(hintEvent);
+
+      // Week 3 D8: Log guidance view event for replay
+      storage.logGuidanceView({
+        learnerId,
+        problemId,
+        rung: hintSelection.hintLevel as 1 | 2 | 3,
+        conceptIds: conceptIds.length > 0 ? conceptIds : [hintSelection.sqlEngageSubtype],
+        sourceRefIds: hintSelection.pdfPassages.map(p => p.chunkId),
+        grounded: hintSelection.pdfPassages.length > 0,
+        contentLength: hintSelection.hintText.length,
+        sessionId
+      });
+
+      // Escalate automatically after max hint level reached.
+      if (hintSelection.hintLevel === maxHintLevel && !showExplanation) {
+        // Week 3 D8: Log escalation event before transitioning
+        storage.logGuidanceEscalate({
+          learnerId,
+          problemId,
+          fromRung: 1,
+          toRung: 2,
+          trigger: 'auto_escalation_eligible',
+          evidence: {
+            errorCount,
+            retryCount: Math.max(0, errorCount - 1),
+            hintCount,
+            timeSpentMs: timeSpent
+          },
+          sourceInteractionIds: [hintEvent.id],
+          sessionId
+        });
+
+        // Delay auto-escalation slightly so user can see the L3 hint first
+        clearPendingAutoEscalation();
+        pendingAutoEscalationTimeoutRef.current = window.setTimeout(() => {
+          pendingAutoEscalationTimeoutRef.current = null;
+          if (isStaleRequest()) {
+            return;
+          }
+          setShowExplanation(true);
+          setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
+          // Re-run canonical orchestrator with updated hint count for canonical RESEARCH-4 fields
+          const traceForDecision = [...problemTrace, hintEvent];
+          const rungExhaustedDecision = sessionConfig
+            ? orchestrate({
+                conceptId: conceptIds[0] || activeHintSubtype || errorSubtypeId || 'unknown',
+                retryCount: errorCount,
+                hintCount: hintCount + 1, // include the hint we just showed
+                elapsedMs: timeSpent,
+                sessionConfig: {
+                  textbookDisabled: sessionConfig.textbookDisabled ?? false,
+                  adaptiveLadderDisabled: sessionConfig.adaptiveLadderDisabled ?? false,
+                  immediateExplanationMode: sessionConfig.immediateExplanationMode ?? false,
+                  staticHintMode: sessionConfig.staticHintMode ?? false,
+                },
+              })
+            : undefined;
+          void handleShowExplanation('auto', nextHelpRequestIndex + 1, traceForDecision, rungExhaustedDecision);
+        }, 500);
+      }
+    } catch (error) {
+      if (!isStaleRequest()) {
+        const message =
+          error instanceof Error && error.message.trim().length > 0
+            ? error.message
+            : 'Hint request failed. Please retry.';
+        setHintRuntimeError(message);
+      }
+    } finally {
+      if (!isStaleRequest()) {
+        setIsProcessingHint(false);
+      }
     }
   };
 
@@ -1351,6 +1454,18 @@ export function HintSystem({
         >
           <AlertCircle className="size-4 text-red-500 shrink-0 mt-0.5" />
           <p className="text-xs text-red-700">{saveToNotesError}</p>
+        </div>
+      )}
+
+      {hintRuntimeError && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="rounded-md bg-red-50 border border-red-200 px-3 py-2 flex items-start gap-2"
+          data-testid="hint-runtime-error"
+        >
+          <AlertCircle className="size-4 text-red-500 shrink-0 mt-0.5" />
+          <p className="text-xs text-red-700">{hintRuntimeError}</p>
         </div>
       )}
 

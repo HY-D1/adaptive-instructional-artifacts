@@ -92,6 +92,7 @@ These are **embedded at build time** and cannot be changed without redeploy:
 |----------|-----------------|----------------|---------|
 | `VITE_INSTRUCTOR_PASSCODE` | ✅ Yes | ⚠️ Dev fallback | Enables instructor role selection |
 | `VITE_API_BASE_URL` | ⚠️ Optional | ❌ No (frontend-only mode) | Backend API URL (set this in full-stack hosted deployments) |
+| `VITE_TEXTBOOK_CORPUS_MODE` | ⚠️ Optional | ⚠️ Optional | `remote` prefers `/api/corpus` from backend; `static` uses bundled textbook assets |
 | `VITE_ENABLE_LLM` | ❌ No | ❌ No | UI toggle (always false on hosted) |
 | `VITE_ENABLE_PDF_INDEX` | ❌ No | ❌ No | UI toggle (always false on hosted) |
 

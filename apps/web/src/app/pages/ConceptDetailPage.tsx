@@ -1,6 +1,6 @@
 import { useParams, Link } from 'react-router';
 import { useEffect, useState } from 'react';
-import { loadConceptContent, getProblemsForConcept, assessConceptQuality, filterSaneExamples, filterLearnerSafeExamples, type LoadedConcept, type CodeExample, type Mistake, type QualityMetadata } from '../lib/content/concept-loader';
+import { loadConceptContent, getProblemsForConcept, assessConceptQuality, filterSaneExamples, filterLearnerSafeExamples, normalizeMistakes, selectReadableExamples, toLearnerSafeParagraph, type LoadedConcept, type CodeExample, type Mistake, type QualityMetadata } from '../lib/content/concept-loader';
 import { ChevronLeft, BookOpen, Clock, Dumbbell, AlertCircle, CheckCircle, XCircle, Lightbulb, Play, Info } from 'lucide-react';
 
 export function ConceptDetailPage() {
@@ -123,7 +123,13 @@ export function ConceptDetailPage() {
             <div className="bg-white rounded-xl border shadow-sm">
               {activeTab === 'learn' && <LearnTab content={concept.content} quality={contentQuality} qualityMetadata={qualityMetadata} />}
               {activeTab === 'examples' && <ExamplesTab examples={concept.content.examples} quality={contentQuality} qualityMetadata={qualityMetadata} />}
-              {activeTab === 'mistakes' && <MistakesTab mistakes={concept.content.commonMistakes} />}
+              {activeTab === 'mistakes' && (
+                <MistakesTab
+                  mistakes={concept.content.commonMistakes}
+                  quality={contentQuality}
+                  qualityMetadata={qualityMetadata}
+                />
+              )}
             </div>
           </div>
           
@@ -217,20 +223,23 @@ function LearnTab({ content, quality = 'good', qualityMetadata }: {
   quality?: 'good' | 'fallback';
   qualityMetadata?: QualityMetadata;
 }) {
+  const definitionText = toLearnerSafeParagraph(content.definition, 320);
+  const explanationText = toLearnerSafeParagraph(content.explanation, 1800);
+
   return (
     <div className="p-6">
       {/* Definition Box — always shown, always safe */}
       <div className="bg-blue-50 border-l-4 border-blue-500 p-5 mb-6 rounded-r-lg">
         <h3 className="text-sm font-semibold text-blue-900 mb-1 uppercase tracking-wide">Definition</h3>
-        <p className="text-blue-900 text-lg leading-relaxed">{content.definition}</p>
+        <p className="text-blue-900 text-lg leading-relaxed">{definitionText || content.definition}</p>
       </div>
 
       {/* Explanation — hidden in fallback mode if garbled */}
-      {quality === 'good' && content.explanation && (
+      {quality === 'good' && explanationText && (
         <div className="prose max-w-none">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">Explanation</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">What To Learn</h3>
           <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-            {content.explanation}
+            {explanationText}
           </div>
         </div>
       )}
@@ -287,7 +296,7 @@ function ExamplesTab({ examples, quality = 'good', qualityMetadata }: { examples
             explanation: ex.explanation ?? '',
           }))
         : filterSaneExamples(examples))
-    : examples;
+    : selectReadableExamples(examples);
 
   if (visibleExamples.length === 0) {
     return (
@@ -317,7 +326,7 @@ function ExamplesTab({ examples, quality = 'good', qualityMetadata }: { examples
           )}
 
           {ex.explanation && (
-            <p className="text-gray-600 text-sm leading-relaxed">{ex.explanation}</p>
+            <p className="text-gray-600 text-sm leading-relaxed">{toLearnerSafeParagraph(ex.explanation, 280)}</p>
           )}
 
           {(ex as CodeExample).output && (
@@ -332,8 +341,43 @@ function ExamplesTab({ examples, quality = 'good', qualityMetadata }: { examples
   );
 }
 
-function MistakesTab({ mistakes }: { mistakes: Mistake[] }) {
-  if (mistakes.length === 0) {
+function MistakesTab({
+  mistakes,
+  quality = 'good',
+  qualityMetadata,
+}: {
+  mistakes: Mistake[];
+  quality?: 'good' | 'fallback';
+  qualityMetadata?: QualityMetadata;
+}) {
+  const normalizedMistakes = normalizeMistakes(mistakes).filter((mistake) => {
+    const hasSqlPair = Boolean(mistake.incorrect) || Boolean(mistake.correct);
+    const why = mistake.why.trim().toLowerCase();
+    const genericWhy =
+      why === 'review this pattern and retry with one clause at a time.' ||
+      why === 'compare the two sql statements and focus on the clause/order change.';
+    const hasSpecificWhy = why.length >= 50 && !genericWhy;
+    return hasSqlPair || hasSpecificWhy;
+  });
+
+  if (normalizedMistakes.length === 0) {
+    if (quality === 'fallback' && qualityMetadata?.learnerSafeKeyPoints && qualityMetadata.learnerSafeKeyPoints.length > 0) {
+      return (
+        <div className="p-6">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm font-semibold text-amber-900 mb-2">Focus Points</p>
+            <ul className="list-disc list-inside space-y-1">
+              {qualityMetadata.learnerSafeKeyPoints.slice(0, 6).map((point, idx) => (
+                <li key={idx} className="text-sm text-amber-800 leading-relaxed">
+                  {toLearnerSafeParagraph(point, 200)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="p-12 text-center text-gray-500">
         No common mistakes listed for this concept.
@@ -343,7 +387,7 @@ function MistakesTab({ mistakes }: { mistakes: Mistake[] }) {
   
   return (
     <div className="divide-y">
-      {mistakes.map((mistake, i) => (
+      {normalizedMistakes.map((mistake, i) => (
         <div key={i} className="p-6">
           <div className="flex items-center gap-2 mb-4">
             <AlertCircle className="w-5 h-5 text-red-600" />
@@ -359,7 +403,7 @@ function MistakesTab({ mistakes }: { mistakes: Mistake[] }) {
               </div>
               <div className="p-3 bg-red-50/50">
                 <pre className="text-red-700 font-mono text-sm overflow-x-auto">
-                  <code>{mistake.incorrect}</code>
+                  <code>{mistake.incorrect || 'No incorrect SQL captured.'}</code>
                 </pre>
               </div>
             </div>
@@ -372,7 +416,7 @@ function MistakesTab({ mistakes }: { mistakes: Mistake[] }) {
               </div>
               <div className="p-3 bg-green-50/50">
                 <pre className="text-green-700 font-mono text-sm overflow-x-auto">
-                  <code>{mistake.correct}</code>
+                  <code>{mistake.correct || 'No corrected SQL captured.'}</code>
                 </pre>
               </div>
             </div>
@@ -383,7 +427,7 @@ function MistakesTab({ mistakes }: { mistakes: Mistake[] }) {
             <Lightbulb className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-medium text-yellow-800 mb-1">Why this happens</p>
-              <p className="text-sm text-yellow-700">{mistake.why}</p>
+              <p className="text-sm text-yellow-700">{toLearnerSafeParagraph(mistake.why, 220)}</p>
             </div>
           </div>
         </div>

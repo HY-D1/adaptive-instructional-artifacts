@@ -84,6 +84,10 @@ export interface DeterministicGenerationResult {
  * Concept content cache to avoid repeated fetches
  */
 const conceptContentCache = new Map<string, string>();
+const conceptMarkdownModules = import.meta.glob('../../../public/textbook-static/concepts/*.md', {
+  query: '?raw',
+  import: 'default',
+});
 
 /**
  * Fetch concept markdown content from textbook-static
@@ -96,9 +100,12 @@ async function fetchConceptContent(conceptId: string): Promise<string | null> {
   }
   
   try {
-    // Try to load the markdown file
-    const module = await import(`../../../public/textbook-static/concepts/${conceptId}.md?raw`);
-    const content = module.default || module;
+    const modulePath = `../../../public/textbook-static/concepts/${conceptId}.md`;
+    const loader = conceptMarkdownModules[modulePath] as (() => Promise<string>) | undefined;
+    if (!loader) {
+      return null;
+    }
+    const content = await loader();
     
     if (content && typeof content === 'string') {
       conceptContentCache.set(conceptId, content);

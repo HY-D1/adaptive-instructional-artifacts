@@ -51,7 +51,7 @@ import { buildPdfIndexOutputFields } from '../lib/api/pdf-retrieval';
 import { createEventId } from '../lib/utils/event-id';
 import { startBackgroundAnalysis, stopBackgroundAnalysis, runAnalysisOnce, ANALYSIS_INTERVAL_MS } from '../lib/trace-analyzer';
 import type { AnalysisResult } from '../lib/trace-analyzer';
-import { getConcept } from '../lib/content/concept-loader';
+import { getConcept, getTextbookCorpusMode } from '../lib/content/concept-loader';
 import { banditManager, PROFILE_TO_ARM_ID, BANDIT_ARM_PROFILES } from '../lib/ml/learner-bandit-manager';
 import { calculateHDI, calculateHDIComponents } from '../lib/ml/hdi-calculator';
 import type { HDIComponents, HDILevel } from '../types';
@@ -297,6 +297,7 @@ export function LearningInterface() {
   const [currentProfileId, setCurrentProfileId] = useState<BanditArmId>('adaptive');
   const [currentEscalationProfile, setCurrentEscalationProfile] = useState<EscalationProfile | null>(null);
   const isDev = import.meta.env.DEV;
+  const textbookCorpusMode = useMemo(() => getTextbookCorpusMode(), []);
   
   // Week 5: HDI tracking state (unified 5-component calculator)
   const [currentHDI, setCurrentHDI] = useState<number>(0);
@@ -330,6 +331,10 @@ export function LearningInterface() {
     const previewMode = localStorage.getItem('sql-adapt-preview-mode') === 'true';
     setIsPreviewMode(previewMode);
   }, []);
+
+  useEffect(() => {
+    console.info('[corpus] LearningInterface corpus_mode=%s', textbookCorpusMode);
+  }, [textbookCorpusMode]);
   
   // State refresh trigger for debug profile/strategy cross-tab sync
   const [debugRefreshKey, setDebugRefreshKey] = useState(0);
@@ -373,6 +378,8 @@ export function LearningInterface() {
   const elapsedTimeRef = useRef(elapsedTime);
   // Track notification timeout IDs for cleanup on unmount
   const notificationTimeoutsRef = useRef<Set<number>>(new Set());
+  // Track if profile assignment has been logged for this session
+  const profileAssignedLoggedRef = useRef<boolean>(false);
   
   // Screen reader announcements for accessibility
   const { announcement: hintAnnouncement, announce: announceHint } = useScreenReaderAnnouncer();
@@ -391,13 +398,16 @@ export function LearningInterface() {
       const staticProfile = assignProfile({ learnerId }, 'static');
       setCurrentProfileId(getArmIdFromProfileId(staticProfile.id));
       setCurrentEscalationProfile(staticProfile);
-      storage.logProfileAssigned(
-        learnerId,
-        staticProfile.id,
-        'static',
-        currentProblem.id,
-        'experimental_static_hint_mode'
-      );
+      if (!profileAssignedLoggedRef.current) {
+        profileAssignedLoggedRef.current = true;
+        storage.logProfileAssigned(
+          learnerId,
+          staticProfile.id,
+          'static',
+          currentProblem.id,
+          'experimental_static_hint_mode'
+        );
+      }
       return;
     }
     
@@ -408,13 +418,16 @@ export function LearningInterface() {
       const diagnosticProfile = assignProfile({ learnerId, diagnosticResults }, 'diagnostic');
       setCurrentProfileId(getArmIdFromProfileId(diagnosticProfile.id));
       setCurrentEscalationProfile(diagnosticProfile);
-      storage.logProfileAssigned(
-        learnerId,
-        diagnosticProfile.id,
-        'diagnostic',
-        currentProblem.id,
-        'experimental_adaptive_disabled'
-      );
+      if (!profileAssignedLoggedRef.current) {
+        profileAssignedLoggedRef.current = true;
+        storage.logProfileAssigned(
+          learnerId,
+          diagnosticProfile.id,
+          'diagnostic',
+          currentProblem.id,
+          'experimental_adaptive_disabled'
+        );
+      }
       return;
     }
     
@@ -482,15 +495,18 @@ export function LearningInterface() {
     
     // Set the escalation profile for hint system thresholds
     setCurrentEscalationProfile(effectiveProfile);
-    
-    // Log profile assignment event
-    storage.logProfileAssigned(
-      learnerId,
-      effectiveProfile.id,
-      debugProfileOverride ? 'static' : assignmentStrategy,
-      currentProblem.id,
-      selectionReason
-    );
+
+    // Log profile assignment event (only once per session)
+    if (!profileAssignedLoggedRef.current) {
+      profileAssignedLoggedRef.current = true;
+      storage.logProfileAssigned(
+        learnerId,
+        effectiveProfile.id,
+        debugProfileOverride ? 'static' : assignmentStrategy,
+        currentProblem.id,
+        selectionReason
+      );
+    }
   }, [learnerId, currentProblem.id, sessionId, debugRefreshKey, sessionConfig]);
 
   // Week 5: Listen for HDI calculated events

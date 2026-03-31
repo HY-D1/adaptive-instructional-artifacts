@@ -264,4 +264,26 @@ test.describe('@weekly @no-external @textbook Textbook Content Rendering', () =>
     const inlineCodes = content.locator('code');
     await expect(inlineCodes).toHaveCount(2); // one in pre, one inline
   });
+
+  test('renders textbook shell when no stored units exist (fallback-safe)', async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.removeItem('sql-adapt-textbook');
+      localStorage.setItem(
+        'sql-adapt-profiles',
+        JSON.stringify([
+          {
+            id: 'learner-1',
+            name: 'Test User',
+            currentStrategy: 'adaptive-medium',
+            conceptMastery: {},
+            totalStudyTime: 0,
+            createdAt: Date.now()
+          }
+        ])
+      );
+    });
+
+    await page.goto('/textbook?learnerId=learner-1');
+    await expect(page.getByRole('heading', { name: 'My Textbook' })).toBeVisible();
+  });
 });

@@ -32,6 +32,7 @@ import {
 import { storage } from '../storage/storage';
 import { createEventId } from '../utils/event-id';
 import { buildRetrievalBundle, RetrievalBundle } from '../content/retrieval-bundle';
+import { getRefinedHintsForConcept, loadConceptMap } from '../content/concept-loader';
 import { getProblemById } from '../../data/problems';
 
 /**
@@ -47,6 +48,24 @@ export type AvailableResources = {
   /** PDF index is loaded */
   pdfIndex: boolean;
 };
+
+type RetrievalSignalMeta = {
+  retrievalConfidence: number;
+  retrievedSourceIds: string[];
+  retrievedChunkIds: string[];
+};
+
+type RefinedHintResolution = {
+  content: string;
+  sourceChunkIds: string[];
+  refinementModel?: string;
+  refinementConfidence?: number;
+} | {
+  content: null;
+  rejectReason?: string;
+};
+
+const MIN_RETRIEVAL_CONFIDENCE = 0.45;
 
 /**
  * Enhanced hint with metadata about sources used
@@ -73,6 +92,16 @@ export type EnhancedHint = {
   llmGenerated: boolean;
   /** Confidence score (0-1) based on source richness */
   confidence: number;
+  /** Retrieval confidence used for safety gating */
+  retrievalConfidence: number;
+  /** Why fallback mode was used (if applicable) */
+  fallbackReason?: string | null;
+  /** Whether safety filtering was applied to hint content */
+  safetyFilterApplied: boolean;
+  /** Source IDs used for retrieval traceability */
+  retrievedSourceIds: string[];
+  /** Chunk IDs used for retrieval traceability */
+  retrievedChunkIds: string[];
   /** Whether LLM was requested but failed (for UI feedback) */
   llmFailed?: boolean;
   /** Error message if LLM failed */
@@ -220,7 +249,11 @@ function findRelevantTextbookUnits(
  */
 function generateSqlEngageFallbackHint(
   errorSubtypeId: string,
-  rung: GuidanceRung
+  rung: GuidanceRung,
+  retrievalMeta?: Partial<RetrievalSignalMeta> & {
+    fallbackReason?: string | null;
+    safetyFilterApplied?: boolean;
+  }
 ): EnhancedHint {
   const canonicalSubtype = canonicalizeSqlEngageSubtype(errorSubtypeId);
   const records = getSqlEngageRowsBySubtype(canonicalSubtype);
@@ -236,9 +269,10 @@ function generateSqlEngageFallbackHint(
     // Ultimate fallback: generic hint based on rung
     content = getGenericFallbackHint(rung, errorSubtypeId);
   }
+  const safety = applyHintSafetyLayer(content, rung, errorSubtypeId);
   
   return {
-    content,
+    content: safety.content,
     rung,
     sources: {
       sqlEngage: true,
@@ -248,34 +282,204 @@ function generateSqlEngageFallbackHint(
     },
     conceptIds: [],
     llmGenerated: false,
-    confidence: 0.5 // Medium confidence for CSV-only hints
+    confidence: Math.max(0.5, retrievalMeta?.retrievalConfidence ?? 0.5),
+    retrievalConfidence: retrievalMeta?.retrievalConfidence ?? 0.5,
+    fallbackReason: retrievalMeta?.fallbackReason ?? safety.fallbackReason ?? null,
+    safetyFilterApplied: (retrievalMeta?.safetyFilterApplied ?? false) || safety.safetyFilterApplied,
+    retrievedSourceIds: retrievalMeta?.retrievedSourceIds ?? [],
+    retrievedChunkIds: retrievalMeta?.retrievedChunkIds ?? [],
   };
+}
+
+function mergeFallbackReasons(...reasons: Array<string | null | undefined>): string | null {
+  const normalized = reasons
+    .map((reason) => (reason || '').trim())
+    .filter((reason) => reason.length > 0);
+  if (normalized.length === 0) return null;
+  return Array.from(new Set(normalized)).join(',');
+}
+
+function scoreRefinedHintCandidate(
+  value: string,
+  rung: GuidanceRung,
+  errorSubtypeId: string,
+): {
+  accepted: boolean;
+  content: string;
+  fallbackReason: string | null;
+  safetyFilterApplied: boolean;
+} {
+  if (!value || value.trim().length === 0) {
+    return {
+      accepted: false,
+      content: '',
+      fallbackReason: 'refined_hint_missing',
+      safetyFilterApplied: false,
+    };
+  }
+
+  const safety = applyHintSafetyLayer(value, rung, errorSubtypeId);
+  if (!safety.content.trim()) {
+    return {
+      accepted: false,
+      content: '',
+      fallbackReason: mergeFallbackReasons('refined_hint_empty', safety.fallbackReason),
+      safetyFilterApplied: true,
+    };
+  }
+
+  if (rung >= 2 && safety.content.trim().length < 40) {
+    return {
+      accepted: false,
+      content: '',
+      fallbackReason: mergeFallbackReasons('refined_hint_too_short', safety.fallbackReason),
+      safetyFilterApplied: true,
+    };
+  }
+
+  return {
+    accepted: true,
+    content: safety.content,
+    fallbackReason: safety.fallbackReason,
+    safetyFilterApplied: safety.safetyFilterApplied,
+  };
+}
+
+async function resolveRefinedHintForProblem(
+  problemId: string,
+  rung: GuidanceRung,
+  errorSubtypeId: string,
+): Promise<RefinedHintResolution> {
+  await loadConceptMap();
+  const problem = getProblemById(problemId);
+  if (!problem) return { content: null, rejectReason: 'problem_not_found' };
+
+  for (const conceptId of problem.concepts) {
+    const refined = getRefinedHintsForConcept(conceptId);
+    if (!refined) continue;
+    const candidateText = rung === 1
+      ? refined.hintV1
+      : rung === 2
+      ? refined.hintV2
+      : refined.hintEscalation;
+    const scored = scoreRefinedHintCandidate(candidateText || '', rung, errorSubtypeId);
+    if (!scored.accepted) {
+      continue;
+    }
+
+    return {
+      content: scored.content,
+      sourceChunkIds: refined.refinementSourceChunkIds ?? [],
+      refinementModel: refined.refinementModel,
+      refinementConfidence: refined.refinementConfidence,
+    };
+  }
+
+  return { content: null, rejectReason: 'refined_hint_unavailable' };
 }
 
 /**
  * Get generic fallback hint when no SQL-Engage record exists
  */
 function getGenericFallbackHint(rung: GuidanceRung, errorSubtypeId: string): string {
-  const definitions = RUNG_DEFINITIONS[rung];
+  const normalizedSubtype = errorSubtypeId.replace(/-/g, ' ');
   
   if (rung === 1) {
-    return `Check your ${errorSubtypeId.replace(/-/g, ' ')}. ${definitions.examples[0] || 'Review the syntax carefully.'}`;
+    return `Focus on the ${normalizedSubtype} part of your query.`;
   }
   
   if (rung === 2) {
-    return `This error relates to ${errorSubtypeId.replace(/-/g, ' ')}. ` +
-           `Make sure you understand the concept before proceeding. ` +
-           `Refer to your course materials for examples.`;
+    return `Which step in ${normalizedSubtype} is missing? Use your notes to verify the needed clause.`;
   }
   
-  // Rung 3
-  return `## Summary\n\n` +
-         `This problem involves ${errorSubtypeId.replace(/-/g, ' ')}.\n\n` +
-         `## Common Mistakes\n\n` +
-         `- Syntax errors\n` +
-         `- Missing clauses\n\n` +
-         `## Key Takeaway\n\n` +
-         `Practice makes perfect!`;
+  return `Address the ${normalizedSubtype} issue first, then re-run. Use a blank pattern like "SELECT ___ FROM ___" to guide your fix.`;
+}
+
+export function extractRetrievalSignals(bundle: RetrievalBundle): RetrievalSignalMeta {
+  const retrievedChunkIds = Array.from(new Set([
+    ...bundle.pdfPassages.map((passage) => passage.chunkId).filter(Boolean),
+    ...bundle.sourcePassages.map((passage) => passage.chunkId).filter(Boolean),
+  ]));
+
+  const retrievedSourceIds = Array.from(new Set([
+    ...bundle.retrievedSourceIds,
+    ...retrievedChunkIds,
+  ]));
+
+  const pdfSignal = Math.min(bundle.pdfPassages.length, 3) / 3;
+  const sourceSignal = Math.min(bundle.sourcePassages.length, 3) / 3;
+  const conceptSignal = Math.min(bundle.conceptCandidates.length, 3) / 3;
+  const historySignal = Math.min(bundle.hintHistory.length, 3) / 3;
+  const retrievalConfidence = Math.max(
+    0,
+    Math.min(
+      1,
+      0.2 + (0.35 * pdfSignal) + (0.2 * sourceSignal) + (0.2 * conceptSignal) + (0.05 * historySignal),
+    ),
+  );
+
+  return {
+    retrievalConfidence: Number(retrievalConfidence.toFixed(4)),
+    retrievedSourceIds,
+    retrievedChunkIds,
+  };
+}
+
+export function applyHintSafetyLayer(content: string, rung: GuidanceRung, errorSubtypeId: string): {
+  content: string;
+  safetyFilterApplied: boolean;
+  fallbackReason: string | null;
+} {
+  let next = content.trim();
+  let safetyFilterApplied = false;
+  let fallbackReason: string | null = null;
+
+  const frontMatterRegex = /^(#{1,3}\s*(summary|common mistakes|key takeaway|answer)\b.*|(?:summary|common mistakes|key takeaway)\s*:.*)$/gim;
+  if (frontMatterRegex.test(next)) {
+    next = next.replace(frontMatterRegex, '').replace(/\n{3,}/g, '\n\n').trim();
+    safetyFilterApplied = true;
+    fallbackReason = fallbackReason ?? 'front_matter_suppressed';
+  }
+
+  const sqlKeywordRegex = /\b(select|from|where|join|group\s+by|order\s+by|having|insert|update|delete)\b/i;
+  if (rung === 1 && sqlKeywordRegex.test(next)) {
+    return {
+      content: getGenericFallbackHint(rung, errorSubtypeId),
+      safetyFilterApplied: true,
+      fallbackReason: 'rung1_sql_keyword_blocked',
+    };
+  }
+
+  const fullAnswerRegex = /\bselect\s+.+\s+from\s+.+/i;
+  if (fullAnswerRegex.test(next) && !next.includes('___')) {
+    return {
+      content: getGenericFallbackHint(rung, errorSubtypeId),
+      safetyFilterApplied: true,
+      fallbackReason: 'answer_leak_blocked',
+    };
+  }
+
+  const maxLengths: Record<GuidanceRung, number> = { 1: 100, 2: 220, 3: 420 };
+  const maxLength = maxLengths[rung];
+  if (next.length > maxLength) {
+    next = `${next.slice(0, maxLength).trimEnd()}...`;
+    safetyFilterApplied = true;
+    fallbackReason = fallbackReason ?? 'length_clamped';
+  }
+
+  if (!next) {
+    return {
+      content: getGenericFallbackHint(rung, errorSubtypeId),
+      safetyFilterApplied: true,
+      fallbackReason: 'empty_after_safety_filter',
+    };
+  }
+
+  return {
+    content: next,
+    safetyFilterApplied,
+    fallbackReason,
+  };
 }
 
 /**
@@ -334,7 +538,11 @@ export async function generateEnhancedHint(
   if (!retrievalBundle) {
     // Fallback to SQL-Engage hint if bundle creation fails
     if (errorSubtypeId) {
-      return generateSqlEngageFallbackHint(errorSubtypeId, rung);
+      return generateSqlEngageFallbackHint(errorSubtypeId, rung, {
+        retrievalConfidence: 0,
+        fallbackReason: 'retrieval_bundle_unavailable',
+        safetyFilterApplied: true,
+      });
     }
     return {
       content: getGenericFallbackHint(rung, 'unknown'),
@@ -342,7 +550,81 @@ export async function generateEnhancedHint(
       sources: { sqlEngage: true, textbook: false, llm: false, pdfPassages: false },
       conceptIds: [],
       llmGenerated: false,
-      confidence: 0.8
+      confidence: 0.2,
+      retrievalConfidence: 0,
+      fallbackReason: 'retrieval_bundle_unavailable',
+      safetyFilterApplied: true,
+      retrievedSourceIds: [],
+      retrievedChunkIds: [],
+    };
+  }
+
+  const retrievalSignals = extractRetrievalSignals(retrievalBundle);
+
+  const refinedHintResult = errorSubtypeId
+    ? await resolveRefinedHintForProblem(options.problemId, rung, errorSubtypeId)
+    : { content: null, rejectReason: 'missing_error_subtype' as const };
+
+  if (refinedHintResult.content) {
+    const refinedSourceIds = Array.from(
+      new Set([
+        ...retrievalSignals.retrievedSourceIds,
+        ...refinedHintResult.sourceChunkIds,
+      ]),
+    );
+    const refinedChunkIds = Array.from(
+      new Set([
+        ...retrievalSignals.retrievedChunkIds,
+        ...refinedHintResult.sourceChunkIds,
+      ]),
+    );
+    return {
+      content: refinedHintResult.content,
+      rung,
+      sources: {
+        sqlEngage: false,
+        textbook: true,
+        llm: false,
+        pdfPassages: false,
+      },
+      conceptIds: getProblemById(options.problemId)?.concepts ?? [],
+      sourceRefIds: refinedHintResult.sourceChunkIds,
+      llmGenerated: false,
+      confidence: Number(
+        Math.max(
+          retrievalSignals.retrievalConfidence,
+          Math.min(refinedHintResult.refinementConfidence ?? 0.75, 0.95),
+        ).toFixed(4),
+      ),
+      retrievalConfidence: retrievalSignals.retrievalConfidence,
+      fallbackReason: null,
+      safetyFilterApplied: false,
+      retrievedSourceIds: refinedSourceIds,
+      retrievedChunkIds: refinedChunkIds,
+    };
+  }
+
+  const refinedFallbackReason = refinedHintResult.rejectReason ?? null;
+  if (retrievalSignals.retrievalConfidence < MIN_RETRIEVAL_CONFIDENCE) {
+    if (errorSubtypeId) {
+      return generateSqlEngageFallbackHint(errorSubtypeId, rung, {
+        ...retrievalSignals,
+        fallbackReason: mergeFallbackReasons('low_retrieval_confidence', refinedFallbackReason),
+        safetyFilterApplied: true,
+      });
+    }
+    return {
+      content: getGenericFallbackHint(rung, 'unknown'),
+      rung,
+      sources: { sqlEngage: true, textbook: false, llm: false, pdfPassages: false },
+      conceptIds: [],
+      llmGenerated: false,
+      confidence: retrievalSignals.retrievalConfidence,
+      retrievalConfidence: retrievalSignals.retrievalConfidence,
+      fallbackReason: mergeFallbackReasons('low_retrieval_confidence', refinedFallbackReason),
+      safetyFilterApplied: true,
+      retrievedSourceIds: retrievalSignals.retrievedSourceIds,
+      retrievedChunkIds: retrievalSignals.retrievedChunkIds,
     };
   }
   
@@ -360,19 +642,22 @@ export async function generateEnhancedHint(
   // CASE 1: LLM available → Generate AI-powered hint
   if (canUseLLM) {
     // Using LLM-enhanced hint
-    return generateLLMEnhancedHint(options, retrievalBundle, resources);
+    return generateLLMEnhancedHint(options, retrievalBundle, resources, retrievalSignals);
   }
   
   // CASE 2: No LLM but Textbook available → Enhanced SQL-Engage with textbook refs
   if (hasTextbookContent && errorSubtypeId) {
     // Using textbook-enhanced hint
-    return generateTextbookEnhancedHint(options, retrievalBundle, resources);
+    return generateTextbookEnhancedHint(options, retrievalBundle, resources, retrievalSignals);
   }
   
   // CASE 3: Neither LLM nor Textbook → SQL-Engage CSV fallback
   if (errorSubtypeId) {
     // Using SQL-Engage fallback
-    return generateSqlEngageFallbackHint(errorSubtypeId, rung);
+    return generateSqlEngageFallbackHint(errorSubtypeId, rung, {
+      ...retrievalSignals,
+      fallbackReason: mergeFallbackReasons('no_llm_or_textbook', refinedFallbackReason),
+    });
   }
   
   // Ultimate fallback
@@ -387,7 +672,12 @@ export async function generateEnhancedHint(
     },
     conceptIds: [],
     llmGenerated: false,
-    confidence: 0.3
+    confidence: retrievalSignals.retrievalConfidence,
+    retrievalConfidence: retrievalSignals.retrievalConfidence,
+    fallbackReason: mergeFallbackReasons('no_llm_or_textbook', refinedFallbackReason),
+    safetyFilterApplied: false,
+    retrievedSourceIds: retrievalSignals.retrievedSourceIds,
+    retrievedChunkIds: retrievalSignals.retrievedChunkIds,
   };
 }
 
@@ -805,7 +1095,8 @@ function parseAdaptiveOutput(rawOutput: string, rung: 1 | 2 | 3): AdaptiveHintOu
 async function generateLLMEnhancedHint(
   options: HintGenerationOptions,
   retrievalBundle: RetrievalBundle & { textbookUnits?: InstructionalUnit[] },
-  resources: AvailableResources
+  resources: AvailableResources,
+  retrievalSignals: RetrievalSignalMeta
 ): Promise<EnhancedHint> {
   const { rung, errorSubtypeId } = options;
   
@@ -860,6 +1151,7 @@ async function generateLLMEnhancedHint(
 
     // Generate using adaptive hint algorithm
     const hintOutput = await generateAdaptiveHint(adaptiveContext, llmCall);
+    const safety = applyHintSafetyLayer(hintOutput.content, rung, errorSubtypeId);
     
     // Adaptive hint generated successfully
     
@@ -869,7 +1161,7 @@ async function generateLLMEnhancedHint(
         options.learnerId,
         options.problemId,
         rung,
-        hintOutput.content,
+        safety.content,
         errorSubtypeId,
         hintOutput.conceptIds,
         hintOutput.sourceRefIds
@@ -880,7 +1172,7 @@ async function generateLLMEnhancedHint(
     
     // Return LLM-generated hint
     return {
-      content: hintOutput.content,
+      content: safety.content,
       rung,
       sources: {
         sqlEngage: resources.sqlEngage,
@@ -892,7 +1184,12 @@ async function generateLLMEnhancedHint(
       sourceRefIds: hintOutput.sourceRefIds,
       textbookUnits: retrievalBundle.textbookUnits,
       llmGenerated: true,
-      confidence: 0.9 // High confidence for LLM-generated
+      confidence: Number(Math.max(0, Math.min(1, retrievalSignals.retrievalConfidence + 0.1)).toFixed(4)),
+      retrievalConfidence: retrievalSignals.retrievalConfidence,
+      fallbackReason: safety.fallbackReason,
+      safetyFilterApplied: safety.safetyFilterApplied,
+      retrievedSourceIds: retrievalSignals.retrievedSourceIds,
+      retrievedChunkIds: retrievalSignals.retrievedChunkIds,
     };
     
   } catch (error) {
@@ -900,7 +1197,11 @@ async function generateLLMEnhancedHint(
     console.warn('[EnhancedHint] Adaptive LLM generation failed:', errorMessage);
     
     // Fallback to SQL-Engage if adaptive hint generation fails
-    const fallbackHint = generateSqlEngageFallbackHint(errorSubtypeId, rung);
+    const fallbackHint = generateSqlEngageFallbackHint(errorSubtypeId, rung, {
+      ...retrievalSignals,
+      fallbackReason: 'llm_generation_failed',
+      safetyFilterApplied: true,
+    });
     
     // Mark that LLM was attempted but failed (for UI feedback)
     return {
@@ -917,7 +1218,8 @@ async function generateLLMEnhancedHint(
 function generateTextbookEnhancedHint(
   options: HintGenerationOptions,
   retrievalBundle: RetrievalBundle & { textbookUnits?: InstructionalUnit[] },
-  resources: AvailableResources
+  resources: AvailableResources,
+  retrievalSignals: RetrievalSignalMeta
 ): EnhancedHint {
   const { rung, errorSubtypeId } = options;
   const { textbookUnits = [] } = retrievalBundle;
@@ -927,7 +1229,10 @@ function generateTextbookEnhancedHint(
   }
   
   // Get base hint from SQL-Engage
-  const baseHint = generateSqlEngageFallbackHint(errorSubtypeId, rung);
+  const baseHint = generateSqlEngageFallbackHint(errorSubtypeId, rung, {
+    ...retrievalSignals,
+    fallbackReason: null,
+  });
   
   // Enhance with textbook references
   let enhancedContent = baseHint.content;
@@ -942,15 +1247,21 @@ function generateTextbookEnhancedHint(
     enhancedContent += `\n\n**Related from your Textbook:**\n${references}`;
   }
   
+  const safety = applyHintSafetyLayer(enhancedContent, rung, errorSubtypeId);
   return {
     ...baseHint,
-    content: enhancedContent,
+    content: safety.content,
     sources: {
       ...baseHint.sources,
       textbook: true
     },
     textbookUnits,
-    confidence: 0.7 // Higher confidence with textbook refs
+    confidence: Number(Math.max(0, Math.min(1, retrievalSignals.retrievalConfidence + 0.05)).toFixed(4)),
+    retrievalConfidence: retrievalSignals.retrievalConfidence,
+    fallbackReason: safety.fallbackReason,
+    safetyFilterApplied: safety.safetyFilterApplied,
+    retrievedSourceIds: retrievalSignals.retrievedSourceIds,
+    retrievedChunkIds: retrievalSignals.retrievedChunkIds,
   };
 }
 
