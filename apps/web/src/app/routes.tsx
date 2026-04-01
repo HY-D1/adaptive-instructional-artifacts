@@ -1,4 +1,5 @@
-import { createBrowserRouter, Navigate } from 'react-router';
+import * as React from 'react';
+import { createBrowserRouter, Navigate, useLocation } from 'react-router';
 
 import { RouteError } from './components/layout/RouteError';
 import { RootLayout } from './pages/RootLayout';
@@ -15,11 +16,13 @@ import { storage } from './lib/storage';
 import { useAuth } from './lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from './lib/api/auth-client';
 import { createProtectedLoader } from './lib/auth-route-loader';
-import { 
-  ROUTES, 
+import {
+  ROUTES,
   getDefaultRouteForRole,
-  isPreviewModeActive
+  isPreviewModeActive,
+  canAccessRoute
 } from './lib/auth-guard';
+import { useToast } from './components/ui/toast';
 
 /**
  * Start page loader - redirects authenticated users to their default route
@@ -36,51 +39,91 @@ function startPageLoader(): null {
 
 /**
  * Component wrapper that enforces role-based access
- * Redirects if not authorized
+ * Redirects if not authorized with toast notification
  * Note: Loader should handle redirects, this is a fallback
  * Preview mode allows instructors to access student routes
  */
-function ProtectedRoute({ 
-  children, 
-  requiredRole 
-}: { 
-  children: React.ReactNode; 
+function ProtectedRoute({
+  children,
+  requiredRole
+}: {
+  children: React.ReactNode;
   requiredRole?: 'student' | 'instructor';
 }) {
+  const location = useLocation();
+  const { addToast } = useToast();
   const { user, isLoading } = useAuth();
+
+  // Track if we've shown a redirect toast to avoid double-toasts
+  const [hasShownRedirectToast, setHasShownRedirectToast] = React.useState(false);
+
   if (AUTH_BACKEND_CONFIGURED) {
     if (isLoading) {
       return null;
     }
     if (!user) {
+      if (!hasShownRedirectToast) {
+        setHasShownRedirectToast(true);
+        addToast({
+          type: 'info',
+          title: 'Authentication Required',
+          message: 'Please sign in to access this page',
+        });
+      }
       return <Navigate to={ROUTES.HOME} replace />;
     }
     if (requiredRole === 'student' && user.role === 'instructor' && isPreviewModeActive()) {
       return <>{children}</>;
     }
     if (requiredRole && user.role !== requiredRole) {
+      if (!hasShownRedirectToast) {
+        setHasShownRedirectToast(true);
+        const roleLabel = requiredRole === 'student' ? 'student' : 'instructor';
+        addToast({
+          type: 'info',
+          title: 'Access Restricted',
+          message: `This area requires ${roleLabel} access. Redirecting to your dashboard.`,
+        });
+      }
       return <Navigate to={getDefaultRouteForRole(user.role)} replace />;
     }
     return <>{children}</>;
   }
 
   const profile = storage.getUserProfile();
-  
+
   // Not authenticated - redirect to home (start page)
   if (!profile) {
+    if (!hasShownRedirectToast) {
+      setHasShownRedirectToast(true);
+      addToast({
+        type: 'info',
+        title: 'Authentication Required',
+        message: 'Please sign in to access this page',
+      });
+    }
     return <Navigate to={ROUTES.HOME} replace />;
   }
-  
+
   // Preview mode: instructors can access student routes
   if (requiredRole === 'student' && profile.role === 'instructor' && isPreviewModeActive()) {
     return <>{children}</>; // Allow access
   }
-  
-  // Role check
+
+  // Role check with toast notification
   if (requiredRole && profile.role !== requiredRole) {
+    if (!hasShownRedirectToast) {
+      setHasShownRedirectToast(true);
+      const roleLabel = requiredRole === 'student' ? 'student' : 'instructor';
+      addToast({
+        type: 'info',
+        title: 'Access Restricted',
+        message: `This area requires ${roleLabel} access. Redirecting to your dashboard.`,
+      });
+    }
     return <Navigate to={getDefaultRouteForRole(profile.role)} replace />;
   }
-  
+
   return <>{children}</>;
 }
 
