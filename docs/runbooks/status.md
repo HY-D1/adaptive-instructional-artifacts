@@ -1395,3 +1395,66 @@ Evidence Summary:
 5. Code changes are minimal, reversible, and focused on beta readiness ✅
 
 Remaining non-blocking caveats do not materially affect the 50-student ramp and can be addressed post-beta.
+
+---
+
+## Checkpoint — 2026-04-01 (Real 5→15→50 Student Beta Execution and Evidence Closure)
+
+Status: **STAGED BETA INFRASTRUCTURE READY — AWAITING PRODUCTION DEPLOYMENT AND LIVE STUDENTS**
+
+Scope:
+- Execute real staged beta rollout with live students (5 → 15 → 50)
+- Collect and audit evidence from each stage
+- Enforce strict stop/continue gates between stages
+- Produce final evidence-backed verdict
+
+Pre-Stage Verification:
+| Check | Command | Status |
+|-------|---------|--------|
+| Frontend build | `npm run build` | ✅ PASS |
+| Server build | `npm run server:build` | ✅ PASS |
+| Integrity scan | `npm run integrity:scan` | ✅ PASS |
+| Git commit | `0d405bcdc45c101888f31f91570728ab1073b18e` | ✅ confirmed |
+| UX hardening | P1 fixes merged | ✅ verified |
+
+Stage Gate Criteria:
+| Stage | Students | Pass Criteria | Decision |
+|-------|----------|---------------|----------|
+| 1 | 5 | ≥ 4/5 Go/Caution, no P0/P1 | PENDING |
+| 2 | 15 | ≥ 13/15 successful, stable backend | BLOCKED on Stage 1 |
+| 3 | 50 | ≥ 47/50 successful, all signals OK | BLOCKED on Stage 2 |
+
+Artifacts Created:
+1. **Staged Audit Packet**: `docs/runbooks/beta-staged-audit-packet-2026-04-01.md`
+2. **Observation Forms**: `docs/runbooks/beta-observations/stage-1-student-{001-005}.md`
+3. **Telemetry Script**: `scripts/audit-beta-telemetry.mjs` (existing, verified)
+
+Required Before Stage 1:
+1. [ ] Deploy frontend to production Vercel project
+2. [ ] Deploy backend to production Vercel project
+3. [ ] Configure `DATABASE_URL` for telemetry audit
+4. [ ] Set active corpus run: `npm run corpus:set-winner-run`
+5. [ ] Verify `/health` endpoint returns 200
+6. [ ] Run `npm run corpus:verify-active-run` against production
+7. [ ] Assign supervisor and support owner
+8. [ ] Schedule Stage 1 session with 5 students
+
+Stop Conditions (Immediate Hold):
+- Data loss for any student
+- > 20% login failure rate
+- Backend /health non-200 for > 5 min
+- > 20% hint request failure
+- Active-run mismatch or corruption
+
+Observation Checklist Per Student:
+- [ ] Auth/login or resume works
+- [ ] Learning page opens (Learn/Examples/Common Mistakes)
+- [ ] Practice flow functional
+- [ ] Hint request and follow-up hint work
+- [ ] Answer-after-hint executes
+- [ ] Save-to-notes works
+- [ ] Refresh/resume preserves state
+
+Next Action:
+**Deploy to production and schedule Stage 1 supervised session with 5 students.**
+
