@@ -4,8 +4,8 @@ import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { Separator } from '../../ui/separator';
 import { Book, Trash2, ChevronRight, ChevronDown, Folder, FileText, Star, ArrowUpDown, Layers, Archive } from 'lucide-react';
+import { ConfirmDialog } from '../../ui/confirm-dialog';
 import DOMPurify from 'dompurify';
-import type { TextbookUnitStatus } from '../../../types';
 import { Link } from 'react-router';
 import { renderTextbookContent } from '../../../lib/content/textbook-renderer';
 import { InstructionalUnit, InteractionEvent } from '../../../types';
@@ -119,6 +119,7 @@ export function AdaptiveTextbook({
   const [expandedAlternatives, setExpandedAlternatives] = useState<Record<string, boolean>>({});
   const [legacyUnitsInfo, setLegacyUnitsInfo] = useState<{ hasLegacyUnits: boolean; count: number }>({ hasLegacyUnits: false, count: 0 });
   const [corpusUnitsMeta, setCorpusUnitsMeta] = useState<TextbookUnitsMetaIndex>({});
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const pendingUnitIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -284,15 +285,17 @@ export function AdaptiveTextbook({
   };
 
   const handleClear = () => {
-    if (confirm('Are you sure you want to clear your textbook?')) {
-      storage.clearTextbook(learnerId);
-      setTextbookUnits([]);
-      setSelectedUnit(null);
-      onSelectedUnitChange?.(undefined);
-    }
+    setShowClearConfirm(true);
   };
 
-  // Filter units based on showArchived state
+  const confirmClear = () => {
+    storage.clearTextbook(learnerId);
+    setTextbookUnits([]);
+    setSelectedUnit(null);
+    onSelectedUnitChange?.(undefined);
+    setShowClearConfirm(false);
+  };
+
   const filteredUnits = useMemo(() => {
     if (showArchived) {
       return orderedUnits;
@@ -866,6 +869,18 @@ export function AdaptiveTextbook({
             </div>
           </div>
         )}
+
+      {/* Clear Textbook Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showClearConfirm}
+        onClose={() => setShowClearConfirm(false)}
+        onConfirm={confirmClear}
+        title="Clear Textbook"
+        description="Are you sure you want to clear your textbook? This will remove all saved units and cannot be undone."
+        confirmText="Clear"
+        cancelText="Cancel"
+        variant="destructive"
+      />
       </Card>
     </div>
   );

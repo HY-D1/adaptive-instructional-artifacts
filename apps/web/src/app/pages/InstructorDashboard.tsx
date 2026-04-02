@@ -42,6 +42,7 @@ import {
   DialogTitle,
   DialogDescription
 } from '../components/ui/dialog';
+import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import { storage, broadcastSync, setDebugProfileWithSync, setDebugStrategyWithSync } from '../lib/storage';
 import { buildInstructorLearnerRows, filterInteractionsByLearners } from '../lib/counts/selectors';
 import { getUiState, setUiState } from '../lib/ui-state';
@@ -167,6 +168,7 @@ export function InstructorDashboard() {
   const [interactions, setInteractions] = useState<InteractionEvent[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [demoDataExists, setDemoDataExists] = useState(false);
   const [isBackendAvailable, setIsBackendAvailable] = useState(false);
 
@@ -613,17 +615,20 @@ export function InstructorDashboard() {
   };
 
   const handleResetDemo = () => {
-    if (confirm('Are you sure you want to reset demo data? This will remove all demo learners and their data.')) {
-      const result = resetDemoDataset();
-      if (result.success) {
-        setToastMessage('Demo data has been reset');
-        setProfiles([]);
-        setInteractions([]);
-        setDemoDataExists(false);
-      } else {
-        setToastMessage(`Failed to reset data: ${result.error}`);
-      }
+    setShowResetConfirm(true);
+  };
+
+  const confirmResetDemo = () => {
+    const result = resetDemoDataset();
+    if (result.success) {
+      setToastMessage('Demo data has been reset');
+      setProfiles([]);
+      setInteractions([]);
+      setDemoDataExists(false);
+    } else {
+      setToastMessage(`Failed to reset data: ${result.error}`);
     }
+    setShowResetConfirm(false);
   };
 
   if (isRoleLoading || isDataLoading || isProfilesLoading) {
@@ -1395,6 +1400,18 @@ export function InstructorDashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Reset Demo Data Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showResetConfirm}
+        onClose={() => setShowResetConfirm(false)}
+        onConfirm={confirmResetDemo}
+        title="Reset Demo Data"
+        description="Are you sure you want to reset demo data? This will remove all demo learners and their data."
+        confirmText="Reset"
+        cancelText="Cancel"
+        variant="destructive"
+      />
     </div>
   );
 }
