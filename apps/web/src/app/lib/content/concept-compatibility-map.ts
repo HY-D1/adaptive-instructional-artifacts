@@ -107,6 +107,7 @@ export const CONCEPT_COMPATIBILITY_MAP: Record<string, readonly string[]> = {
   ],
   'group-by-error': [
     // Non-aggregated columns in SELECT must appear in GROUP BY
+    // Mapped to general GROUP BY concepts as there's no dedicated error concept
     'dbms-ramakrishnan-3rd-edition/group-by',
     'murachs-mysql-3rd-edition/group-by-murach',
   ],
@@ -122,6 +123,11 @@ export const CONCEPT_COMPATIBILITY_MAP: Record<string, readonly string[]> = {
   ],
   'date-functions': [
     'murachs-mysql-3rd-edition/date-functions',
+    'murachs-mysql-3rd-edition/mysql-functions',
+  ],
+  'window-functions': [
+    // Window functions are part of advanced MySQL function coverage
+    // Using mysql-functions as the primary source
     'murachs-mysql-3rd-edition/mysql-functions',
   ],
   'case-expression': [
@@ -162,8 +168,24 @@ export const CONCEPT_COMPATIBILITY_MAP: Record<string, readonly string[]> = {
   ],
   'window-functions': [
     // Window functions are part of advanced MySQL function coverage
+    // Using mysql-functions as the primary source since functions-murach doesn't exist
     'murachs-mysql-3rd-edition/mysql-functions',
-    'murachs-mysql-3rd-edition/functions-murach',
+  ],
+  'exist-clause': [
+    // EXISTS is a subquery predicate; mapped to subqueries concept
+    'dbms-ramakrishnan-3rd-edition/subqueries',
+    'dbms-ramakrishnan-3rd-edition/correlated-subquery',
+    'murachs-mysql-3rd-edition/subqueries-murach',
+  ],
+  'cte': [
+    // Common Table Expressions - mapped to subqueries as closest equivalent
+    'dbms-ramakrishnan-3rd-edition/subqueries',
+    'murachs-mysql-3rd-edition/subqueries-murach',
+  ],
+  'limit-offset': [
+    // LIMIT/OFFSET - mapped to ORDER BY which typically includes pagination
+    'murachs-mysql-3rd-edition/order-by-murach',
+    'dbms-ramakrishnan-3rd-edition/select-basic',
   ],
 
   // ── Errors ────────────────────────────────────────────────────────────────

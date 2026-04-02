@@ -4,7 +4,7 @@ import { isHostedMode, getLLMUnavailableError } from '../runtime-config';
 
 export const OLLAMA_MODEL = 'qwen3:4b';
 export const OLLAMA_FALLBACK_MODEL = 'llama3.2:3b';
-export const GROQ_MODEL = 'gpt-oss-20b';
+export const GROQ_MODEL = 'openai/gpt-oss-20b';
 
 export type LLMProvider = 'ollama' | 'groq';
 
@@ -227,14 +227,19 @@ export async function generateWithOllama(prompt: string, options?: OllamaGenerat
   model: string;
   params: LLMGenerationParams;
 }> {
-  // In hosted mode, immediately throw a network error so fallback kicks in
-  if (isHostedMode()) {
-    throw buildClientError('NOT_ENABLED', getLLMUnavailableError());
-  }
-  
-  // In demo mode, immediately throw a network error so fallback kicks in
-  if (!shouldAttemptLLM()) {
-    throw buildClientError('NOT_ENABLED', 'Demo mode: LLM not available, using fallback hints.');
+  // Skip hosted/demo mode gates when a backend API is configured
+  const hasBackend = !!import.meta.env.VITE_API_BASE_URL;
+
+  if (!hasBackend) {
+    // In hosted mode without backend, immediately throw a network error so fallback kicks in
+    if (isHostedMode()) {
+      throw buildClientError('NOT_ENABLED', getLLMUnavailableError());
+    }
+
+    // In demo mode without backend, immediately throw a network error so fallback kicks in
+    if (!shouldAttemptLLM()) {
+      throw buildClientError('NOT_ENABLED', 'Demo mode: LLM not available, using fallback hints.');
+    }
   }
   
   // Check if LLM is enabled on backend

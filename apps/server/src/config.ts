@@ -43,7 +43,7 @@ export const OLLAMA_FALLBACK_MODEL = process.env.OLLAMA_FALLBACK_MODEL || 'llama
  * GROQ_API_KEY is required when LLM_PROVIDER=groq
  */
 export const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
-export const GROQ_MODEL = process.env.GROQ_MODEL || 'gpt-oss-20b';
+export const GROQ_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-20b';
 
 // ============================================================================
 // PDF Index Configuration

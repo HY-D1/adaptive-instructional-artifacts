@@ -378,7 +378,7 @@ export function AdaptiveTextbook({
   if (orderedUnits.length === 0) {
     return (
       <Card className="p-8 text-center">
-        <Book className="size-12 mx-auto text-gray-400 mb-4" />
+        <Book className="size-12 mx-auto text-gray-600 mb-4" />
         <h3 className="font-semibold text-lg mb-2">Your Textbook is Empty</h3>
         <p className="text-gray-600 mb-3">
           Notes will appear here when you save them from the practice page.
@@ -415,10 +415,7 @@ export function AdaptiveTextbook({
             </Button>
             <Button
               onClick={handleClear}
-              variant="ghost"
-              size="sm"
-            >
-              <Trash2 className="size-4" />
+              variant="ghost"\n              size="sm"\n              aria-label="Clear all notes"\n            \u003e\n              \u003cTrash2 className="size-4" />
             </Button>
           </div>
         </div>
@@ -481,7 +478,7 @@ export function AdaptiveTextbook({
                       <span className="font-medium text-sm">{conceptName}</span>
                       {corpusMeta?.sectionTitle && (
                         <span
-                          className="text-[10px] text-gray-400 leading-tight"
+                          className="text-[10px] text-gray-600 leading-tight"
                           data-testid="corpus-section-title"
                         >
                           {corpusMeta.sectionTitle}
@@ -493,9 +490,9 @@ export function AdaptiveTextbook({
                     </Badge>
                   </div>
                   {isConceptExpanded ? (
-                    <ChevronDown className="size-4 text-gray-400" />
+                    <ChevronDown className="size-4 text-gray-600" />
                   ) : (
-                    <ChevronRight className="size-4 text-gray-400" />
+                    <ChevronRight className="size-4 text-gray-600" />
                   )}
                 </button>
                 
@@ -527,12 +524,12 @@ export function AdaptiveTextbook({
                             <div className="flex items-center gap-2 min-w-0">
                               {hasMultipleUnits ? (
                                 isProblemExpanded ? (
-                                  <ChevronDown className="size-3.5 text-gray-400 shrink-0" />
+                                  <ChevronDown className="size-3.5 text-gray-600 shrink-0" />
                                 ) : (
-                                  <ChevronRight className="size-3.5 text-gray-400 shrink-0" />
+                                  <ChevronRight className="size-3.5 text-gray-600 shrink-0" />
                                 )
                               ) : (
-                                <FileText className="size-3.5 text-gray-400 shrink-0" />
+                                <FileText className="size-3.5 text-gray-600 shrink-0" />
                               )}
                               <span className="text-sm truncate">{problemTitle}</span>
                             </div>
@@ -569,7 +566,7 @@ export function AdaptiveTextbook({
                                     </div>
                                     <span className="block truncate mt-0.5">{unit.title}</span>
                                     {unit.qualityScore !== undefined && (
-                                      <span className="text-[10px] text-gray-400">
+                                      <span className="text-[10px] text-gray-600">
                                         Score: {((unit.qualityScore) * 100).toFixed(0)}%
                                       </span>
                                     )}
@@ -864,7 +861,7 @@ export function AdaptiveTextbook({
         ) : (
           <div className="flex items-center justify-center h-full text-gray-500">
             <div className="text-center">
-              <Book className="size-12 mx-auto mb-4 text-gray-400" />
+              <Book className="size-12 mx-auto mb-4 text-gray-600" />
               <p>Select a topic from the left to view content</p>
             </div>
           </div>

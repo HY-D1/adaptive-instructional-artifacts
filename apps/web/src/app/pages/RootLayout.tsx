@@ -206,9 +206,12 @@ export function RootLayout() {
 
   const finalizeLocalSignOut = useCallback(() => {
     // Clear all cached UI state on account switches to prevent stale role-scoped views.
+    // Also clear debug settings to prevent them from persisting across user switches.
     clearAllUiState();
     clearScopedUiState();
     clearProfile();
+    localStorage.removeItem('sql-adapt-debug-profile');
+    localStorage.removeItem('sql-adapt-debug-strategy');
   }, [clearScopedUiState, clearProfile]);
 
   const handleLogout = useCallback(async () => {
@@ -376,6 +379,7 @@ export function RootLayout() {
                         size="sm"
                         asChild
                         className="touch-manipulation"
+                        data-testid={`nav-${item.label.toLowerCase().replace(/ /g, '-')}`}
                       >
                         <Link to={item.to} className="flex items-center gap-2">
                           <item.icon className="size-4" />

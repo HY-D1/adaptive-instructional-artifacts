@@ -150,7 +150,7 @@ function EvidenceTooltip({ evidence }: { evidence: ConceptCoverageEvidence }) {
         </div>
       )}
       
-      <div className="text-[10px] text-gray-400 pt-1">
+      <div className="text-[10px] text-gray-600 pt-1">
         Last updated: {formatRelativeTime(evidence.lastUpdated)}
       </div>
     </div>
@@ -345,7 +345,7 @@ export function ConceptCoverage({ learnerId }: ConceptCoverageProps) {
                       </TooltipTrigger>
                       <TooltipContent>
                         <p className="font-medium">{concept?.name || conceptId}</p>
-                        <p className="text-xs text-gray-400">Score: {evidence?.score || 0}/100</p>
+                        <p className="text-xs text-gray-600">Score: {evidence?.score || 0}/100</p>
                       </TooltipContent>
                     </Tooltip>
                   );
@@ -392,7 +392,7 @@ export function ConceptCoverage({ learnerId }: ConceptCoverageProps) {
                             }}
                           >
                             <ConfidenceIcon className={`size-4 shrink-0 ${
-                              covered ? config.textColor : 'text-gray-400'
+                              covered ? config.textColor : 'text-gray-600'
                             }`} />
                             
                             <div className="flex-1 min-w-0">

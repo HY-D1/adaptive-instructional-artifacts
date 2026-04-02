@@ -29,13 +29,13 @@ export function ErrorTransitionView({ matrix, maxTransitions = 10 }: Props) {
           key={`${t.fromError}-${t.toError}-${i}`} 
           className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
         >
-          <span className="text-xs font-medium text-gray-400 w-6">#{i + 1}</span>
+          <span className="text-xs font-medium text-gray-600 w-6">#{i + 1}</span>
           
           <Badge variant="outline" className="text-red-600 border-red-200 bg-red-50 whitespace-nowrap">
             {t.fromError}
           </Badge>
           
-          <span className="text-gray-400">
+          <span className="text-gray-600">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
             </svg>

@@ -43,6 +43,12 @@ import {
   DialogDescription
 } from '../components/ui/dialog';
 import { ConfirmDialog } from '../components/ui/confirm-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '../components/ui/tooltip';
 import { storage, broadcastSync, setDebugProfileWithSync, setDebugStrategyWithSync } from '../lib/storage';
 import { buildInstructorLearnerRows, filterInteractionsByLearners } from '../lib/counts/selectors';
 import { getUiState, setUiState } from '../lib/ui-state';
@@ -708,7 +714,12 @@ export function InstructorDashboard() {
         {/* Quick Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {quickStats.map((stat) => (
-            <Card key={stat.label} className="hover:shadow-md transition-shadow">
+            <Card key={stat.label} className="hover:shadow-md transition-shadow relative overflow-hidden">
+                {showDemoData <Card key={stat.label} className="hover:shadow-md transition-shadow"><Card key={stat.label} className="hover:shadow-md transition-shadow"> (
+                  <div className="absolute top-0 right-0 bg-amber-100 text-amber-800 text-[10px] font-medium px-2 py-0.5 rounded-bl">
+                    Demo
+                  </div>
+                )}
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1008,7 +1019,15 @@ export function InstructorDashboard() {
                     <TableHead>Student</TableHead>
                     <TableHead>Profile</TableHead>
                     <TableHead>Strategy</TableHead>
-                    <TableHead>HDI Score</TableHead>
+                    <Tooltip>
+                    <TooltipTrigger asChild>
+                      <TableHead className="cursor-help">HDI Score ℹ️</TableHead>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Hint Dependency Index: Measures how much a student relies on hints.</p>
+                      <p className="text-xs text-gray-500 mt-1">Lower is better (less dependent)</p>
+                    </TooltipContent>
+                  </Tooltip>
                     <TableHead>Trend</TableHead>
                     <TableHead>Override</TableHead>
                   </TableRow>
@@ -1036,7 +1055,7 @@ export function InstructorDashboard() {
                       <TableCell>
                         {student.hdiTrend === 'up' && <TrendingUp className="size-5 text-green-500" />}
                         {student.hdiTrend === 'down' && <TrendingDown className="size-5 text-red-500" />}
-                        {student.hdiTrend === 'stable' && <span className="text-gray-400">—</span>}
+                        {student.hdiTrend === 'stable' && <span className="text-gray-600">—</span>}
                       </TableCell>
                       <TableCell>
                         <select aria-label="Override student profile" 
@@ -1075,6 +1094,7 @@ export function InstructorDashboard() {
                   ))}
                 </TableBody>
               </Table>
+            </TooltipProvider>
               {!showDemoData && normalizedProfiles.length === 0 && (
                 <div className="text-center py-8 text-gray-500">
                   <p>No adaptive data available yet. Students need to interact with the system.</p>
@@ -1197,60 +1217,59 @@ export function InstructorDashboard() {
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Student</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Status</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Concepts Covered</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Last Active</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-600">Action</th>
-                  </tr>
-                </thead>
-                <tbody data-testid="instructor-student-table-body">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Student</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Concepts Covered</TableHead>
+                    <TableHead>Last Active</TableHead>
+                    <TableHead>Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody data-testid="instructor-student-table-body">
                   {dashboardRows.map((student) => {
                     return (
-                      <tr
+                      <TableRow
                         key={student.id}
-                        className="border-b last:border-0 hover:bg-gray-50"
                         data-testid="instructor-student-row"
                       >
-                        <td className="py-3 px-4">
+                        <TableCell>
                           <div>
                             <p className="font-medium">{student.name}</p>
                             <p className="text-sm text-gray-500">{student.email || null}</p>
                           </div>
-                        </td>
-                        <td className="py-3 px-4">
+                        </TableCell>
+                        <TableCell>
                           <Badge variant={student.isActive ? 'default' : 'secondary'} className="text-xs">
                             {student.isActive ? 'Active' : 'Away'}
                           </Badge>
-                        </td>
-                        <td className="py-3 px-4">
+                        </TableCell>
+                        <TableCell>
                           <div className="flex items-center gap-2">
                             <Lightbulb className="size-4 text-yellow-500" />
                             <span className="font-medium">{student.conceptsCount}</span>
                             <span className="text-sm text-gray-500">/ 6 concepts</span>
                           </div>
-                        </td>
-                        <td className="py-3 px-4 text-sm text-gray-600">
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-600">
                           {formatLastActive(student.lastActive)}
-                        </td>
-                        <td className="py-3 px-4">
-                          <Button 
-                            variant="ghost" 
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
                             size="sm"
                             onClick={() => navigate(`/textbook?learnerId=${student.id}`)}
                           >
                             <FileText className="size-4 mr-1" />
                             View Textbook
                           </Button>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     );
                   })}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
               {dashboardRows.length === 0 && !showDemoData && (
                 <div className="text-center py-12 text-gray-500">
                   <Users className="size-12 mx-auto mb-4 text-gray-300" />
