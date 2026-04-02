@@ -318,7 +318,7 @@ function ExamplesTab({ examples, quality = 'good', qualityMetadata }: { examples
           </div>
 
           {ex.code && (
-            <div className="bg-gray-900 rounded-lg p-4 mb-3 overflow-x-auto">
+            <div className="bg-gray-900 rounded-lg p-4 mb-3 overflow-x-auto max-w-full text-xs sm:text-sm">
               <pre className="text-green-400 font-mono text-sm">
                 <code>{ex.code}</code>
               </pre>
@@ -402,7 +402,7 @@ function MistakesTab({
                 <span className="text-sm font-medium text-red-800">Incorrect</span>
               </div>
               <div className="p-3 bg-red-50/50">
-                <pre className="text-red-700 font-mono text-sm overflow-x-auto">
+                <pre className="text-red-700 font-mono text-sm overflow-x-auto max-w-full text-xs sm:text-sm">
                   <code>{mistake.incorrect || 'No incorrect SQL captured.'}</code>
                 </pre>
               </div>
@@ -415,7 +415,7 @@ function MistakesTab({
                 <span className="text-sm font-medium text-green-800">Correct</span>
               </div>
               <div className="p-3 bg-green-50/50">
-                <pre className="text-green-700 font-mono text-sm overflow-x-auto">
+                <pre className="text-green-700 font-mono text-sm overflow-x-auto max-w-full text-xs sm:text-sm">
                   <code>{mistake.correct || 'No corrected SQL captured.'}</code>
                 </pre>
               </div>

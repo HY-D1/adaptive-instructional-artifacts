@@ -1024,7 +1024,7 @@ export function InstructorDashboard() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Progress value={student.hdi * 100} className="w-20 h-2" />
+                          <Progress value={student.hdi * 100} className={`w-20 h-2 ${student.hdi < 0.4 ? "text-green-500" : student.hdi < 0.7 ? "text-yellow-500" : "text-red-500"}`} />
                           <span className="text-sm">{(student.hdi * 100).toFixed(0)}%</span>
                         </div>
                       </TableCell>
@@ -1034,7 +1034,7 @@ export function InstructorDashboard() {
                         {student.hdiTrend === 'stable' && <span className="text-gray-400">—</span>}
                       </TableCell>
                       <TableCell>
-                        <select 
+                        <select aria-label="Override student profile" 
                           className="text-sm border rounded px-2 py-1 bg-white"
                           onChange={(e) => {
                             if (e.target.value) {
@@ -1191,7 +1191,7 @@ export function InstructorDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
               <table className="w-full">
                 <thead>
                   <tr className="border-b">
@@ -1213,7 +1213,7 @@ export function InstructorDashboard() {
                         <td className="py-3 px-4">
                           <div>
                             <p className="font-medium">{student.name}</p>
-                            <p className="text-sm text-gray-500">{student.email || 'Email not available'}</p>
+                            <p className="text-sm text-gray-500">{student.email || null}</p>
                           </div>
                         </td>
                         <td className="py-3 px-4">

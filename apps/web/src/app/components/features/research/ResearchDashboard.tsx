@@ -2083,7 +2083,7 @@ export function ResearchDashboard() {
               </p>
 
               {replayDecisions.length > 0 ? (
-                <div className="overflow-x-auto rounded border">
+                <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 rounded border">
                   <Table data-testid="trace-events-table">
                     <TableHeader>
                       <TableRow>
@@ -2333,7 +2333,7 @@ export function ResearchDashboard() {
                 Profile Effectiveness Comparison
               </h3>
               {week5Analytics.profileEffectivenessData.length > 0 ? (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -2531,7 +2531,7 @@ export function ResearchDashboard() {
                 Experimental Condition Statistics
               </h3>
               {week5Analytics.conditionStats.length > 0 ? (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
                   <Table>
                     <TableHeader>
                       <TableRow>

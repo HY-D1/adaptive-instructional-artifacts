@@ -6,23 +6,57 @@ import { BookOpen, Clock, GraduationCap } from 'lucide-react';
 export function ConceptLibraryPage() {
   const [concepts, setConcepts] = useState<Array<{id: string; title: string; difficulty: string}>>([]);
   const [filter, setFilter] = useState<'all' | 'beginner' | 'intermediate' | 'advanced'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  
-  useEffect(() => {
-    listConcepts().then((data) => {
+  const [error, setError] = useState<string | null>(null);
+
+  const loadConcepts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await listConcepts();
       setConcepts(data);
+    } catch (e) {
+      setError('Failed to load concepts. Please try again.');
+    } finally {
       setLoading(false);
-    });
+    }
+  };
+
+  useEffect(() => {
+    loadConcepts();
   }, []);
-  
-  const filtered = filter === 'all' 
-    ? concepts 
-    : concepts.filter(c => c.difficulty === filter);
-  
+
+  const filtered = concepts.filter(c => {
+    const matchesFilter = filter === 'all' || c.difficulty === filter;
+    const matchesSearch = c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         c.id.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">Loading textbook...</div>
+        <div className="flex items-center gap-3 text-gray-600">
+          <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          Loading textbook...
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">{error}</p>
+          <button
+            onClick={loadConcepts}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -64,6 +98,17 @@ export function ConceptLibraryPage() {
           </div>
         </div>
         
+        {/* Search */}
+        <div className="mb-6">
+          <input
+            type="text"
+            placeholder="Search concepts..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full max-w-md px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+
         {/* Filters */}
         <div className="flex flex-wrap gap-2 mb-6">
           {(['all', 'beginner', 'intermediate', 'advanced'] as const).map(diff => (
@@ -116,7 +161,9 @@ export function ConceptLibraryPage() {
         
         {filtered.length === 0 && (
           <div className="text-center py-12 text-gray-500">
-            No concepts found for this filter.
+            {searchQuery
+              ? `No concepts found matching "${searchQuery}"`
+              : 'No concepts found for this filter.'}
           </div>
         )}
       </div>

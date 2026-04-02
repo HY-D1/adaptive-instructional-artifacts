@@ -45,6 +45,7 @@ export function StartPage() {
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
   const [passcode, setPasscode] = useState('');
   const [passcodeError, setPasscodeError] = useState<string | null>(null);
+  const [usernameError, setUsernameError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const showDiagnostic = import.meta.env.DEV || import.meta.env.MODE === 'test';
@@ -149,7 +150,17 @@ export function StartPage() {
     }
   };
 
-  const isFormValid = username.trim().length > 0 && selectedRole !== null && 
+  const validateUsername = (value: string): string | null => {
+    if (value.length > 50) return 'Username must be 50 characters or less';
+    if (value && !/^[a-zA-Z0-9_\-\s]+$/.test(value)) {
+      return 'Only letters, numbers, spaces, hyphens and underscores allowed';
+    }
+    return null;
+  };
+
+  const isFormValid = username.trim().length > 0 &&
+    !validateUsername(username) &&
+    selectedRole !== null &&
     (selectedRole !== 'instructor' || passcode.length > 0);
 
   // Show loading spinner while checking for existing profile
@@ -244,28 +255,65 @@ export function StartPage() {
                 type="text"
                 placeholder="Enter your username"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="h-12 text-lg"
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setUsername(value);
+                  if (usernameError) {
+                    setUsernameError(validateUsername(value));
+                  }
+                }}
+                onBlur={(e) => setUsernameError(validateUsername(e.target.value))}
+                className={cn(
+                  'h-12 text-lg',
+                  usernameError && 'border-red-500 focus-visible:ring-red-500'
+                )}
                 autoFocus
+                maxLength={50}
+                aria-describedby={usernameError ? 'username-error' : undefined}
+                aria-invalid={usernameError ? 'true' : undefined}
               />
+              {usernameError && (
+                <p
+                  id="username-error"
+                  className="text-sm text-red-600 font-medium"
+                  role="alert"
+                >
+                  {usernameError}
+                </p>
+              )}
             </div>
 
             {/* Role Selection */}
             <div className="space-y-3">
-              <Label className="text-base font-medium">I am a...</Label>
-              <div className={cn(
-                'grid gap-4',
-                isInstructorConfigured ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 max-w-md mx-auto'
-              )}>
+              <Label className="text-base font-medium" id="role-selection-label">I am a...</Label>
+              <div
+                className={cn(
+                  'grid gap-4',
+                  isInstructorConfigured ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 max-w-md mx-auto'
+                )}
+                role="radiogroup"
+                aria-labelledby="role-selection-label"
+              >
                 {/* Student Card */}
                 <Card
                   className={cn(
                     'cursor-pointer transition-all duration-200 border-2 hover:shadow-md',
+                    'focus-within:ring-2 focus-within:ring-blue-500 focus-within:ring-offset-2',
                     selectedRole === 'student'
                       ? 'border-blue-500 bg-blue-50/50'
                       : 'border-transparent hover:border-blue-200'
                   )}
                   onClick={() => setSelectedRole('student')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSelectedRole('student');
+                    }
+                  }}
+                  tabIndex={0}
+                  role="radio"
+                  aria-checked={selectedRole === 'student'}
+                  aria-label="Student role"
                 >
                   <CardHeader className="pb-3">
                     <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-3">
@@ -299,11 +347,22 @@ export function StartPage() {
                   <Card
                     className={cn(
                       'cursor-pointer transition-all duration-200 border-2 hover:shadow-md',
+                      'focus-within:ring-2 focus-within:ring-purple-500 focus-within:ring-offset-2',
                       selectedRole === 'instructor'
                         ? 'border-purple-500 bg-purple-50/50'
                         : 'border-transparent hover:border-purple-200'
                     )}
                     onClick={() => setSelectedRole('instructor')}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedRole('instructor');
+                      }
+                    }}
+                    tabIndex={0}
+                    role="radio"
+                    aria-checked={selectedRole === 'instructor'}
+                    aria-label="Instructor role"
                   >
                     <CardHeader className="pb-3">
                       <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-3">
@@ -348,8 +407,18 @@ export function StartPage() {
                   placeholder="Enter instructor passcode"
                   value={passcode}
                   onChange={(e) => {
-                    setPasscode(e.target.value);
-                    setPasscodeError(null);
+                    const value = e.target.value;
+                    setPasscode(value);
+                    // Only clear error when user has typed at least as many characters as before
+                    if (passcodeError && value.length >= passcode.length) {
+                      setPasscodeError(null);
+                    }
+                  }}
+                  onBlur={() => {
+                    // Clear error on blur if passcode is empty or meets minimum length
+                    if (passcodeError && (passcode.length === 0 || passcode.length >= 4)) {
+                      setPasscodeError(null);
+                    }
                   }}
                   className={cn(
                     'h-12 text-lg',
