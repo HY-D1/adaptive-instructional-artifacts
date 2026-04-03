@@ -216,8 +216,8 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     await page.getByRole('button', { name: 'Request Hint' }).click();
     await expect(page.getByTestId('hint-label-1')).toBeVisible();
 
-    // Wait for Next Hint button to be visible and enabled before clicking
-    const nextHintButton = page.getByRole('button', { name: 'Next Hint' });
+    // Wait for hint action button to be visible and enabled before clicking
+    const nextHintButton = page.getByTestId('hint-action-button');
     await expect(nextHintButton).toBeVisible({ timeout: 5000 });
     await expect(nextHintButton).toBeEnabled({ timeout: 5000 });
     await nextHintButton.click();
