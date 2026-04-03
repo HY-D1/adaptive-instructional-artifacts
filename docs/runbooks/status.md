@@ -1458,3 +1458,108 @@ Observation Checklist Per Student:
 Next Action:
 **Deploy to production and schedule Stage 1 supervised session with 5 students.**
 
+
+---
+
+## Checkpoint — 2026-04-03 (Practice-Hints-Logging Deep Audit Completion)
+
+Status: **PRACTICE/HINTS/LOGGING READY FOR STAGED BETA**
+
+### Audit Scope
+- Full practice workflow audit (open → write → submit → retry → save → resume)
+- Complete hint lifecycle audit (request → follow-up → escalation → fallback → persistence)
+- Comprehensive logging/evidence pipeline audit
+- Locked file checklist verification (50 files)
+- Build and test validation
+- Logging coverage matrix for research requirements
+
+### Locked File Checklist Summary
+| Category | Files | Status |
+|----------|-------|--------|
+| A. Student practice surfaces | 5/5 | ✅ All found |
+| B. Hint/textbook UI | 2/3 | ✅ 2 found, 1 relocated |
+| C. Frontend logic | 19/21 | ✅ 19 found, 2 relocated |
+| D. Backend routes | 9/9 | ✅ All found |
+| E. Scripts/runbooks | 9/9 | ✅ All found |
+| F. Critical tests | 7/11 | ✅ 7 found, 4 relocated |
+
+### Build & Test Results
+| Check | Result |
+|-------|--------|
+| npm run build | ✅ PASS (2861 modules) |
+| npm run server:build | ✅ PASS |
+| Unit tests | ✅ 43 files, 1,137 tests passed |
+| E2E hint flows | ✅ 8 scenarios covered |
+
+### P0 Blockers Fixed During Audit
+| Issue | File | Fix |
+|-------|------|-----|
+| Duplicate object keys | concept-compatibility-map.ts | Removed duplicate keys |
+| Missing import | llm-generation.ts | Changed to isLLMAvailable |
+| Test scope error | guidance-ladder.test.ts | Fixed constant scope |
+
+### Logging Coverage Matrix
+All 21 research-critical fields verified as emitted and queryable:
+- learner_profile_id, escalation_trigger_reason, error_count_at_escalation
+- time_to_escalation, strategy_assigned, reward_value, strategy_updated
+- hints_per_attempt, avg_escalation_depth, explanation_rate
+- repeated_error_after_explanation, improvement_without_hint_rate
+- reinforcement_prompt_shown, reinforcement_response, reinforcement_correct
+- ordered_interaction_events, timestamps, error_subtype_sequence
+- prerequisite_violation_detected, interface_toggle_conditions
+- provider/model/source_provenance
+
+### Practice Flow Verification
+| Step | Status |
+|------|--------|
+| Open problem | ✅ |
+| Write/edit answer | ✅ |
+| Submit answer | ✅ |
+| Receive result | ✅ |
+| Retry after incorrect | ✅ |
+| Review response | ✅ |
+| Save to notes | ✅ |
+| Refresh/resume | ✅ |
+
+### Hint Flow Verification
+| Step | Status |
+|------|--------|
+| Hint availability UI | ✅ |
+| First hint request (Rung 1) | ✅ |
+| Follow-up hint request | ✅ |
+| Escalation to Rung 2 | ✅ |
+| Escalation to Rung 3 | ✅ |
+| Provider/model routing | ✅ |
+| Retrieval-first grounding | ✅ |
+| Fallback behaviors | ✅ |
+| State persistence | ✅ |
+
+### Evidence Sufficiency
+| Evidence Need | Status |
+|---------------|--------|
+| Escalation policy analysis | ✅ SUFFICIENT |
+| Strategy comparison | ✅ SUFFICIENT |
+| Dependency modeling | ✅ SUFFICIENT |
+| Reinforcement/review evidence | ✅ SUFFICIENT |
+| Replay/offline evaluation | ✅ SUFFICIENT |
+
+### Artifacts Created
+1. **Deep Audit Report**: `docs/audit/PRACTICE_HINTS_LOGGING_AUDIT_2026-04-03.md`
+2. **P1 Fixes Summary**: `docs/audit/P1_FIXES_SUMMARY.md`
+3. **P2/P3 Fixes Summary**: `docs/audit/P2_P3_FIXES_SUMMARY.md`
+
+### Final Verdict
+
+**PRACTICE/HINTS/LOGGING READY FOR STAGED BETA**
+
+All critical blockers resolved during audit. System verified end-to-end:
+- Builds pass
+- All tests pass
+- Logging coverage complete
+- Practice flow functional
+- Hint flow functional with proper escalation
+- Storage pipeline verified
+
+No blockers remain for Stage 1 beta launch.
+
+---

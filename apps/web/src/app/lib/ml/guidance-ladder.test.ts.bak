@@ -23,10 +23,9 @@ import {
   determineNextAction,
 } from './guidance-ladder';
 
-const TEST_LEARNER_ID = 'test-learner-1';
-const TEST_PROBLEM_ID = 'test-problem-1';
-
 describe('guidance-ladder', () => {
+  const TEST_LEARNER_ID = 'test-learner-1';
+  const TEST_PROBLEM_ID = 'test-problem-1';
 
   describe('constants', () => {
     it('should have correct version', () => {
@@ -331,7 +330,6 @@ describe('guidance-ladder', () => {
     it('should preserve escalation history', () => {
       const state: GuidanceLadderState = {
         ...createInitialLadderState(TEST_LEARNER_ID, TEST_PROBLEM_ID),
-        currentRung: 2,
         escalationHistory: [
           {
             fromRung: 1,

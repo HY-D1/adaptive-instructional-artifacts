@@ -4,7 +4,7 @@
  * LLM-based adaptive hint generation for rung 3+ explanations.
  */
 
-import { generateWithOllama, isOllamaAvailable } from '../../api/llm-client';
+import { generateWithOllama, isLLMAvailable } from '../../api/llm-client';
 import type { GuidanceRung } from '../guidance-ladder';
 import type { AdaptiveHintContext, AdaptiveHintOutput, EnhancedHint, RetrievalSignalMeta } from './types';
 import type { AvailableResources } from './types';
@@ -32,7 +32,7 @@ export async function generateLLMEnhancedHint(
   const { rung, errorSubtypeId } = options;
 
   // Check if LLM is actually available
-  const llmAvailable = await isOllamaAvailable();
+  const llmAvailable = await isLLMAvailable();
   if (!llmAvailable) {
     // Fall back to textbook-enhanced or SQL-Engage
     if (resources.textbook && retrievalBundle.textbookUnits?.length) {
