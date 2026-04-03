@@ -306,16 +306,9 @@ export async function initializeSchema(): Promise<void> {
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_timestamp ON interaction_events(timestamp)`;
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_problem_id ON interaction_events(problem_id)`;
 
-  // RESEARCH-4: Add canonical study columns (idempotent — safe to re-run on existing schema)
-  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS learner_profile_id TEXT`;
-  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS escalation_trigger_reason TEXT`;
-  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS error_count_at_escalation INTEGER`;
-  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS time_to_escalation BIGINT`;
-  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_assigned TEXT`;
-  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_updated TEXT`;
-  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS reward_value NUMERIC`;
-  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL`;
-  await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_section_id ON interaction_events(section_id)`;
+  // Schema canonical column definitions are in migrate-neon.sql.
+  // RESEARCH-4 columns (learner_profile_id, escalation_trigger_reason, etc.)
+  // and section_id are defined there and do not need runtime ALTER TABLE blocks.
 
   // Textbook units (My Textbook)
   await db`
@@ -601,11 +594,11 @@ export async function saveSession(
       condition_id = EXCLUDED.condition_id,
       section_id = EXCLUDED.section_id,
       current_problem_id = COALESCE(EXCLUDED.current_problem_id, learner_sessions.current_problem_id),
-      textbook_disabled = EXCLUDED.textbook_disabled,
-      adaptive_ladder_disabled = EXCLUDED.adaptive_ladder_disabled,
-      immediate_explanation_mode = EXCLUDED.immediate_explanation_mode,
-      static_hint_mode = EXCLUDED.static_hint_mode,
-      escalation_policy = EXCLUDED.escalation_policy,
+      textbook_disabled = COALESCE(EXCLUDED.textbook_disabled, learner_sessions.textbook_disabled),
+      adaptive_ladder_disabled = COALESCE(EXCLUDED.adaptive_ladder_disabled, learner_sessions.adaptive_ladder_disabled),
+      immediate_explanation_mode = COALESCE(EXCLUDED.immediate_explanation_mode, learner_sessions.immediate_explanation_mode),
+      static_hint_mode = COALESCE(EXCLUDED.static_hint_mode, learner_sessions.static_hint_mode),
+      escalation_policy = COALESCE(EXCLUDED.escalation_policy, learner_sessions.escalation_policy),
       current_code = EXCLUDED.current_code,
       guidance_state = EXCLUDED.guidance_state,
       hdi_state = EXCLUDED.hdi_state,

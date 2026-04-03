@@ -140,11 +140,11 @@ router.post('/:learnerId/active', async (req: Request, res: Response) => {
 
     await db.saveSession(req.params.learnerId, actualSessionId, actualConditionId, {
       currentProblemId: actualCurrentProblemId,
-      textbookDisabled: textbookDisabled ?? false,
-      adaptiveLadderDisabled: adaptiveLadderDisabled ?? false,
-      immediateExplanationMode: immediateExplanationMode ?? false,
-      staticHintMode: staticHintMode ?? false,
-      escalationPolicy: escalationPolicy ?? 'adaptive',
+      textbookDisabled,
+      adaptiveLadderDisabled,
+      immediateExplanationMode,
+      staticHintMode,
+      escalationPolicy,
       currentCode,
       guidanceState,
       hdiState,
@@ -248,11 +248,11 @@ router.put('/:learnerId/active', async (req: Request, res: Response) => {
 
     await db.saveSession(req.params.learnerId, actualSessionId, actualConditionId, {
       currentProblemId: actualCurrentProblemId,
-      textbookDisabled: textbookDisabled ?? false,
-      adaptiveLadderDisabled: adaptiveLadderDisabled ?? false,
-      immediateExplanationMode: immediateExplanationMode ?? false,
-      staticHintMode: staticHintMode ?? false,
-      escalationPolicy: escalationPolicy ?? 'adaptive',
+      textbookDisabled,
+      adaptiveLadderDisabled,
+      immediateExplanationMode,
+      staticHintMode,
+      escalationPolicy,
       currentCode,
       guidanceState,
       hdiState,

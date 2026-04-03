@@ -3020,7 +3020,8 @@ class StorageManager {
       policyVersion
     };
 
-    // Week 2 gate requires hint_view events to omit hintId.
+    // hint_view intentionally omits hintId — it is a runtime observation, not a template reference.
+    // See docs/research/LOGGING_SPECIFICATION.md: "hint_view and the absence of hintId".
     delete normalizedHintView.hintId;
     return normalizedHintView;
   }
