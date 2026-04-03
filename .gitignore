@@ -10,6 +10,7 @@ build/
 playwright-report/
 playwright-report-*/
 playwright-report */
+.mcp.json
 test-results/
 # Playwright auth state — captured cookies/localStorage, never commit
 playwright/.auth/*.json
@@ -26,13 +27,6 @@ __pycache__/
 .venv/
 
 # Documentation - keep structure, ignore local progress files
-!docs/
-!docs/README.md
-!docs/DEPLOYMENT.md
-!docs/DEPLOYMENT_MODES.md
-!docs/demo-script.md
-!docs/runbooks/
-!docs/research/
 docs/progress.md
 docs/weekly-progress.md
 docs/weekly-demo.md
@@ -70,12 +64,6 @@ PROFILE_VALIDATION_TEST_REPORT.md
 *.md
 
 # But keep these documentation files
-!docs/demo-script.md
-!docs/DEPLOYMENT.md
-!docs/DEPLOYMENT_MODES.md
-!docs/README.md
-!docs/week1-status.md
-!docs/runbooks/*.md
 !docs/research/corpus-product-fit-audit.md
 !docs/research/embedding-bakeoff-dbms-ramakrishnan.md
 

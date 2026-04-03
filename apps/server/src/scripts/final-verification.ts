@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
-import { getDb } from './src/db/neon.js';
+import { getDb } from '../db/neon.js';
 
 async function main() {
   const db = getDb();
