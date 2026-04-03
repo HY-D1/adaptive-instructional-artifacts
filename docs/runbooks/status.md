@@ -1643,3 +1643,34 @@ This blocked JavaScript chunks from loading due to cross-origin isolation requir
 - Full fix details: `docs/audit/VERCEL_PREVIEW_FIX_2026-04-03.md`
 
 ---
+
+---
+
+## Checkpoint — 2026-04-03 (Repository Structure Cleanup and README Rewrite)
+
+Status: **COMPLETED**
+
+### Summary
+Non-functional repository structure cleanup and mature product README rewrite. No runtime behavior was changed.
+
+### Changes Made
+
+| Category | Change |
+|----------|--------|
+| **Scripts organization** | Grouped 13 operational scripts into `scripts/audit/`, `scripts/beta/`, `scripts/deploy/`, `scripts/export/`, `scripts/verification/` |
+| **Backend scripts** | Moved `apps/server/final-verification.ts`, `verify-flow-a2.ts`, `verify-interactions.ts`, `verify-neon.ts` → `apps/server/src/scripts/` with corrected imports |
+| **Documentation** | Created `docs/ENVIRONMENT.md` and `scripts/README.md`; updated `.gitignore` to track them |
+| **README rewrite** | Rewrote root `README.md` with clearer product positioning, repository layout, corrected env wording, and dated status |
+| **package.json** | Updated npm script paths to match new script subdirectory locations |
+
+### Behavioral Freeze
+No changes were made to:
+- LLM/AI runtime logic
+- Replay scripts (`scripts/replay-*`)
+- Corpus evaluation scripts
+- Prompt templates or model configuration
+
+### Verification
+- ✅ `npm run build` passes
+- ✅ `npm run server:build` passes
+- ✅ `npm run test:unit` passes (1,137 passed / 2 skipped)

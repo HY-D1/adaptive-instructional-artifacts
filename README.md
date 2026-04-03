@@ -4,6 +4,8 @@ An adaptive learning environment for SQL that personalizes hints, explanations, 
 
 SQL-Adapt combines structured SQL practice with an intelligent orchestration layer. As students work through problems, the system observes their errors, help-seeking behavior, and concept coverage, then adapts the level and type of support it provides — from concise micro-hints to full textbook-style explanations with source citations.
 
+**Built for:** students learning SQL, instructors running supervised cohorts, and researchers analyzing learning traces.
+
 ---
 
 ## For Students
@@ -99,72 +101,38 @@ cp apps/web/.env.example apps/web/.env.local
 cp apps/server/.env.example apps/server/.env.local
 ```
 
-See `docs/ENVIRONMENT.md` for a full variable reference.
+See [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) for a full variable reference.
 
 ---
 
-## Remote Deployment
+## Repository Layout
+
+| Directory | Purpose |
+|-----------|---------|
+| `apps/web` | Vite + React frontend |
+| `apps/server` | Express backend |
+| `docs/runbooks` | Operations and launch runbooks |
+| `scripts` | Verification, audit, and research scripts (see [`scripts/README.md`](scripts/README.md)) |
+| `tools/pdf_ingest` | Corpus ingestion tooling |
+
+---
+
+## Deployment
 
 SQL-Adapt deploys as two Vercel projects:
 
 1. **Frontend** — built from repo root with Vite (`npm run build`), output to `dist/app`
 2. **Backend** — Express server in `apps/server/` (`npm run server:build`)
 
-Key configuration:
+For step-by-step instructions, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). For the capability matrix across local, hosted, and full-stack modes, see [`docs/DEPLOYMENT_MODES.md`](docs/DEPLOYMENT_MODES.md).
 
-| Setting | Value |
-|---------|-------|
-| Framework preset | Vite |
-| Build command | `npm run build` |
-| Output directory | `dist/app` |
-| Root directory | repo root (`./`) |
+### Environment Variables
 
-> **Important:** `VITE_INSTRUCTOR_PASSCODE` is embedded at build time. It must be set in Vercel before deploying the frontend.
-
-See `docs/DEPLOYMENT.md` for step-by-step instructions and `docs/DEPLOYMENT_MODES.md` for the capability matrix (what works in local vs hosted vs full-stack mode).
+Production deployments require both frontend build-time variables (`VITE_*`) and backend runtime configuration (database URL, CORS origins, auth codes). See [`apps/web/.env.example`](apps/web/.env.example), [`apps/server/.env.example`](apps/server/.env.example), and [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) for details.
 
 ---
 
-## Environment Variables
-
-Three environment templates are provided:
-
-- `.env.example` — root reference
-- `apps/web/.env.example` — frontend (`VITE_*` build-time variables)
-- `apps/server/.env.example` — backend (runtime database, auth, CORS)
-
-The only variable **required for production** is `VITE_INSTRUCTOR_PASSCODE`.
-
-See `docs/ENVIRONMENT.md` for the complete reference.
-
----
-
-## Repository Guide
-
-### Where to find things
-
-| What | Where |
-|------|-------|
-| Product code (frontend) | `apps/web/src/` |
-| Product code (backend) | `apps/server/src/` |
-| Tests | `tests/e2e/`, `tests/unit/`, `apps/web/src/app/lib/**/*.test.ts` |
-| Runbooks & operations | `docs/runbooks/` |
-| Beta launch docs | `docs/runbooks/beta-*.md` |
-| Deployment docs | `docs/DEPLOYMENT.md`, `docs/DEPLOYMENT_MODES.md` |
-| Research docs | `docs/research/` |
-| Operational scripts | `scripts/` (see `scripts/README.md`) |
-| PDF ingest tool | `tools/pdf_ingest/` |
-
-### Running verification
-
-```bash
-npm run build          # Frontend production build
-npm run server:build   # Backend production build
-npm run test:unit      # 800+ unit tests
-npm run test:e2e       # Full E2E suite
-```
-
-### Contributing
+## Contributing
 
 - Keep changes minimal and reversible.
 - Do not modify LLM/AI runtime logic without explicit approval.
@@ -173,17 +141,15 @@ npm run test:e2e       # Full E2E suite
 
 ---
 
-## Product Status
+## Current Verified Status
 
-**Current Status:** Ready for controlled 50-student beta.
+> **Last verified: 2026-04-03** — Ready for controlled staged beta. See [`docs/runbooks/status.md`](docs/runbooks/status.md) for the latest detailed checkpoint.
 
 - **Build:** Verified
 - **Tests:** 1,100+ passing (unit + E2E)
 - **Production deployment:** Live on Vercel
 - **Telemetry:** 31 event types instrumented
 - **Beta docs:** Complete runbook suite in `docs/runbooks/`
-
-See `docs/runbooks/status.md` for the latest readiness checkpoint and staged rollout plan.
 
 ---
 
