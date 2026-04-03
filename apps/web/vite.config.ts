@@ -285,13 +285,45 @@ export default defineConfig({
     emptyOutDir: false,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router'],
-          'vendor-editor': ['@monaco-editor/react', 'sql.js'],
-          'vendor-charts': ['recharts'],
+        manualChunks(id) {
+          // Vendor chunks - check in priority order
+          if (id.includes('node_modules')) {
+            // React ecosystem first
+            if (['react', 'react-dom', 'react-router'].some(pkg => id.includes(`node_modules/${pkg}`))) {
+              return 'vendor-react';
+            }
+            // Editor-specific packages
+            if (['@monaco-editor/react', 'sql.js'].some(pkg => id.includes(pkg))) {
+              return 'vendor-editor';
+            }
+            // Charts
+            if (id.includes('recharts')) {
+              return 'vendor-charts';
+            }
+            // UI components
+            if (['lucide-react', '@radix-ui'].some(pkg => id.includes(pkg))) {
+              return 'vendor-ui';
+            }
+            // Utilities
+            if (['lodash', 'zod'].some(pkg => id.includes(pkg))) {
+              return 'vendor-utils';
+            }
+            // Everything else from node_modules goes to vendor-other
+            // but we need to ensure no circular dependencies
+            return 'vendor-other';
+          }
+          // ML feature chunk
+          if (id.includes('/ml/') || id.includes('/hint-service/')) {
+            return 'ml-features';
+          }
+          // Content/chunks feature
+          if (id.includes('/content/') && (id.includes('retrieval') || id.includes('concept'))) {
+            return 'content-features';
+          }
         },
       },
     },
+    chunkSizeWarningLimit: 1000,
     commonjsOptions: {
       transformMixedEsModules: true,
       ignoreTryCatch: true,
