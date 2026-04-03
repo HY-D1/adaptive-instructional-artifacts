@@ -9,8 +9,15 @@
     </head>
 
     <body>
-      <div id="root"></div>
+      <div id="root">
+        <div id="initial-loading" style="display:flex;justify-content:center;align-items:center;height:100vh;font-family:system-ui,sans-serif;background:#f9fafb;">
+          <div style="text-align:center;">
+            <div style="width:40px;height:40px;border:3px solid #e5e7eb;border-top-color:#3b82f6;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 1rem;"></div>
+            <p style="color:#6b7280;font-size:14px;">Loading Adaptive SQL...</p>
+          </div>
+        </div>
+        <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+      </div>
       <script type="module" src="/src/main.tsx"></script>
     </body>
   </html>
-  

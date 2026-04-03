@@ -1600,3 +1600,46 @@ Status: **ALL P3 ITEMS VERIFIED AND ADDRESSED**
 - ✅ All test files verified present
 
 ---
+
+---
+
+## Checkpoint — 2026-04-03 (Vercel Preview Blank Page - CRITICAL FIX)
+
+Status: **RESOLVED**
+
+### Issue
+Vercel preview deployment showing blank page after repo update.
+
+### Root Cause
+`vercel.json` had overly restrictive Cross-Origin headers:
+```json
+{
+  "source": "/(.*)",
+  "headers": [
+    { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+    { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }
+  ]
+}
+```
+
+This blocked JavaScript chunks from loading due to cross-origin isolation requirements.
+
+### Fixes Applied
+
+| Fix | File | Description |
+|-----|------|-------------|
+| 1 | `vercel.json` | Removed COEP/COOP headers from global routes |
+| 2 | `apps/web/index.html` | Added loading spinner while app loads |
+| 3 | `apps/web/src/main.tsx` | Added diagnostic logging |
+| 4 | `apps/web/vite.config.ts` | Simplified chunk configuration |
+
+### Verification
+- ✅ Build passes
+- ✅ All 1,137 tests pass
+- ✅ No circular chunk warnings
+- ✅ Loading state in HTML
+
+### Documentation
+- Full fix details: `docs/audit/VERCEL_PREVIEW_FIX_2026-04-03.md`
+
+---

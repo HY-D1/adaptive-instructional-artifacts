@@ -1,3 +1,12 @@
+// Add diagnostic logging for production debugging
+if (typeof window !== 'undefined') {
+  console.log('[App] Starting up...', {
+    env: import.meta.env.MODE,
+    apiBaseUrl: import.meta.env.VITE_API_BASE_URL || '(not set)',
+    userAgent: navigator.userAgent.slice(0, 50) + '...'
+  });
+}
+
 import { createRoot } from "react-dom/client";
 import App from "./app/App";
 import "./styles/index.css";
@@ -18,7 +27,9 @@ if (!rootElement) {
 }
 
 try {
+  console.log('[App] Mounting React application...');
   createRoot(rootElement).render(<App />);
+  console.log('[App] React application mounted successfully');
 } catch (error) {
   console.error("[Main] Fatal error rendering application:", error);
   rootElement.innerHTML = `
