@@ -23,16 +23,18 @@ export function isDemoMode(): boolean {
   }
   
   // Auto-detect: if we're on HTTPS (production), we're likely in demo mode
-  // unless a hosted Ollama URL is configured
+  // unless a backend API with LLM is configured or a hosted Ollama URL is set
   if (typeof window !== 'undefined') {
     const isHttps = window.location.protocol === 'https:';
     const hasHostedOllama = Boolean(import.meta.env.VITE_OLLAMA_URL);
-    
-    if (isHttps && !hasHostedOllama) {
+    const hasBackend = Boolean(import.meta.env.VITE_API_BASE_URL);
+    const enableLLM = import.meta.env.VITE_ENABLE_LLM === 'true';
+
+    if (isHttps && !hasHostedOllama && !(hasBackend && enableLLM)) {
       return true;
     }
   }
-  
+
   return false;
 }
 

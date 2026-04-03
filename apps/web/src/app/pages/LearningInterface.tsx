@@ -2271,7 +2271,7 @@ export function LearningInterface() {
                         </Badge>
                       </div>
                     </SelectTrigger>
-                    <SelectContent className="max-h-[400px] w-[calc(100vw-2rem)] sm:w-auto max-w-[400px]">
+                    <SelectContent className="max-h-[400px] w-[calc(100vw-2rem)] sm:w-auto max-w-[90vw] sm:max-w-[400px]">
                       {difficultyOrder.map(difficulty => {
                         const problems = problemsByDifficulty[difficulty];
                         if (!problems?.length) return null;
@@ -2411,7 +2411,7 @@ export function LearningInterface() {
                 </div>
               </Card>
 
-              <div className="h-[350px] sm:h-[450px] lg:h-[550px]">
+              <div className="h-[300px] sm:h-[350px] md:h-[450px] lg:h-[550px] max-h-[60vh]">
                 <SQLEditor
                   key={currentProblem.id}
                   problem={currentProblem}
@@ -2592,7 +2592,7 @@ export function LearningInterface() {
 
               <Card className="p-4">
                 <h3 className="font-semibold mb-3">Session Stats</h3>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 text-sm">
                   <div className="text-gray-600">Total attempts:</div>
                   <div className="font-medium text-right">{totalAttempts}</div>
                   <div className="text-gray-600">Hints viewed:</div>

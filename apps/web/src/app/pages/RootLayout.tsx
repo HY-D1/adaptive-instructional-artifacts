@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation, Navigate, useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
-import { Compass, BookOpen, BarChart3, FlaskConical, Code, HelpCircle, Menu, X, Keyboard, GraduationCap, LogOut, RefreshCw, AlertCircle, Users, Settings } from 'lucide-react';
+import { Compass, BookOpen, BarChart3, FlaskConical, Code, HelpCircle, Menu, X, Keyboard, GraduationCap, LogOut, RefreshCw, AlertCircle, Users, Settings, Eye } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { WelcomeModal } from '../components/shared/WelcomeModal';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
@@ -12,6 +12,7 @@ import { isPreviewModeActive } from '../lib/auth-guard';
 import { clearAllUiState, clearUiStateForActor } from '../lib/ui-state';
 import { useAuth } from '../lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
+import { useToast } from '../components/ui/toast';
 
 /**
  * Sync toast notification component
@@ -47,6 +48,30 @@ function SyncToast({ onClose, profileName }: SyncToastProps) {
         >
           <X className="w-4 h-4" />
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Preview mode banner component
+ * Shown when instructor is viewing student routes in preview mode
+ */
+interface PreviewModeBannerProps {
+  onExit: () => void;
+}
+
+function PreviewModeBanner({ onExit }: PreviewModeBannerProps) {
+  return (
+    <div className="bg-blue-100 border-b border-blue-200 px-4 py-2" data-testid="preview-mode-banner">
+      <div className="container mx-auto flex items-center justify-center gap-3">
+        <Eye className="size-4 text-blue-600" />
+        <span className="text-sm text-blue-800">
+          <strong>Preview Mode:</strong> You are viewing as a student
+        </span>
+        <Button variant="link" size="sm" onClick={onExit} className="text-blue-700 h-auto py-0">
+          Exit Preview
+        </Button>
       </div>
     </div>
   );
@@ -93,9 +118,11 @@ export function RootLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout } = useAuth();
+  const { addToast } = useToast();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const postLogoutPath = AUTH_BACKEND_CONFIGURED ? '/login' : '/';
+  const [showPreviewBanner, setShowPreviewBanner] = useState(false);
   
   // Session persistence hook for cross-tab sync (must come before useUserRole)
   const {
@@ -179,9 +206,12 @@ export function RootLayout() {
 
   const finalizeLocalSignOut = useCallback(() => {
     // Clear all cached UI state on account switches to prevent stale role-scoped views.
+    // Also clear debug settings to prevent them from persisting across user switches.
     clearAllUiState();
     clearScopedUiState();
     clearProfile();
+    localStorage.removeItem('sql-adapt-debug-profile');
+    localStorage.removeItem('sql-adapt-debug-strategy');
   }, [clearScopedUiState, clearProfile]);
 
   const handleLogout = useCallback(async () => {
@@ -208,6 +238,51 @@ export function RootLayout() {
     finalizeLocalSignOut();
     navigate(postLogoutPath, { replace: true });
   };
+
+  // Track preview mode state for banner visibility
+  useEffect(() => {
+    const checkPreviewMode = () => {
+      const isPreview = isPreviewModeActive();
+      setShowPreviewBanner(isInstructor && isPreview);
+    };
+
+    checkPreviewMode();
+
+    // Listen for storage changes (cross-tab sync)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'sql-adapt-preview-mode') {
+        checkPreviewMode();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [isInstructor]);
+
+  // Exit preview mode handler
+  const handleExitPreview = useCallback(() => {
+    localStorage.setItem('sql-adapt-preview-mode', 'false');
+    // Broadcast to other tabs
+    try {
+      const event = new StorageEvent('storage', {
+        key: 'sql-adapt-preview-mode',
+        newValue: 'false',
+        oldValue: 'true',
+        storageArea: localStorage,
+      });
+      window.dispatchEvent(event);
+    } catch {
+      // Ignore broadcast errors
+    }
+    setShowPreviewBanner(false);
+    addToast({
+      type: 'success',
+      title: 'Preview Mode Disabled',
+      message: 'Returned to instructor view',
+    });
+    // Redirect to instructor dashboard
+    navigate('/instructor-dashboard', { replace: true });
+  }, [navigate, addToast]);
 
   // Handle switch user - clear profile and go to start page
   const handleSwitchUser = useCallback(() => {
@@ -245,22 +320,34 @@ export function RootLayout() {
 
   return (
     <TooltipProvider delayDuration={100}>
+      {/* Skip navigation for accessibility - first focusable element */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[60] focus:px-4 focus:py-2 focus:bg-white focus:text-blue-600 focus:rounded-lg focus:shadow-lg focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+      >
+        Skip to main content
+      </a>
       <div className="flex flex-col h-screen">
         {showWelcome && <WelcomeModal onClose={handleCloseWelcome} />}
-        
+
+        {/* Preview Mode Banner */}
+        {showPreviewBanner && (
+          <PreviewModeBanner onExit={handleExitPreview} />
+        )}
+
         {/* Session Expired Modal */}
         {isSessionExpired && (
           <SessionExpired onRedirect={handleSessionExpiredRedirect} />
         )}
-        
+
         {/* Cross-Tab Sync Toast */}
         {showSyncToast && !isSessionExpired && (
-          <SyncToast 
-            onClose={dismissToast} 
+          <SyncToast
+            onClose={dismissToast}
             profileName={syncedProfile?.name}
           />
         )}
-        
+
         <nav className="border-b bg-white sticky top-0 z-40">
           <div className="container mx-auto px-4">
             <div className="flex items-center justify-between h-16">
@@ -292,6 +379,7 @@ export function RootLayout() {
                         size="sm"
                         asChild
                         className="touch-manipulation"
+                        data-testid={`nav-${item.label.toLowerCase().replace(/ /g, '-')}`}
                       >
                         <Link to={item.to} className="flex items-center gap-2">
                           <item.icon className="size-4" />
@@ -472,9 +560,13 @@ export function RootLayout() {
           )}
         </nav>
 
-        <div className="flex-1 overflow-auto relative h-full">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex-1 overflow-auto relative h-full outline-none"
+        >
           <Outlet />
-        </div>
+        </main>
       </div>
     </TooltipProvider>
   );

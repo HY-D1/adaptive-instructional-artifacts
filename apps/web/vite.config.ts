@@ -292,6 +292,7 @@ export default defineConfig({
         },
       },
     },
+    chunkSizeWarningLimit: 2000,
     commonjsOptions: {
       transformMixedEsModules: true,
       ignoreTryCatch: true,

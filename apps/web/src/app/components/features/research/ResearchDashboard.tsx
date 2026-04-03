@@ -1485,7 +1485,7 @@ export function ResearchDashboard() {
               
               {/* Time range selector */}
               <div className="flex items-center gap-2">
-                <Calendar className="size-4 text-gray-400" />
+                <Calendar className="size-4 text-gray-600" />
                 <Select value={timeRange} onValueChange={setTimeRange}>
                   <SelectTrigger className="w-[180px]">
                     <SelectValue />
@@ -1672,7 +1672,7 @@ export function ResearchDashboard() {
             <div className="flex items-center gap-2">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Clock className="size-4 text-gray-400" />
+                  <Clock className="size-4 text-gray-600" />
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Time range filter applied to all analytics</p>
@@ -1814,7 +1814,7 @@ export function ResearchDashboard() {
                 </ResponsiveContainer>
               ) : (
                 <div className="text-center py-12 text-gray-500">
-                  <AlertCircle className="size-12 mx-auto mb-3 text-gray-300" />
+                  <AlertCircle className="size-12 mx-auto mb-3 text-gray-500" />
                   <p>No error data available for the selected time range</p>
                 </div>
               )}
@@ -1913,7 +1913,7 @@ export function ResearchDashboard() {
                 </div>
               ) : (
                 <div className="text-center py-12 text-gray-500">
-                  <PieChartIcon className="size-12 mx-auto mb-3 text-gray-300" />
+                  <PieChartIcon className="size-12 mx-auto mb-3 text-gray-500" />
                   <p>No distribution data available</p>
                 </div>
               )}
@@ -1947,7 +1947,7 @@ export function ResearchDashboard() {
                 </ResponsiveContainer>
               ) : (
                 <div className="text-center py-12 text-gray-500">
-                  <Clock className="size-12 mx-auto mb-3 text-gray-300" />
+                  <Clock className="size-12 mx-auto mb-3 text-gray-500" />
                   <p>No timeline data available for the selected time range</p>
                 </div>
               )}
@@ -2083,7 +2083,7 @@ export function ResearchDashboard() {
               </p>
 
               {replayDecisions.length > 0 ? (
-                <div className="overflow-x-auto rounded border">
+                <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 rounded border">
                   <Table data-testid="trace-events-table">
                     <TableHeader>
                       <TableRow>
@@ -2185,9 +2185,9 @@ export function ResearchDashboard() {
                   </div>
                 ) : (
                   <div className="text-center py-12 text-gray-500">
-                    <Target className="size-12 mx-auto mb-3 text-gray-300" />
+                    <Target className="size-12 mx-auto mb-3 text-gray-500" />
                     <p>No profile assignment data available</p>
-                    <p className="text-sm text-gray-400 mt-1">Complete learning sessions to see profile distribution</p>
+                    <p className="text-sm text-gray-600 mt-1">Complete learning sessions to see profile distribution</p>
                   </div>
                 )}
               </Card>
@@ -2247,9 +2247,9 @@ export function ResearchDashboard() {
                   </div>
                 ) : (
                   <div className="text-center py-12 text-gray-500">
-                    <BrainCircuit className="size-12 mx-auto mb-3 text-gray-300" />
+                    <BrainCircuit className="size-12 mx-auto mb-3 text-gray-500" />
                     <p>No bandit data available</p>
-                    <p className="text-sm text-gray-400 mt-1">Bandit selections will appear as learners interact</p>
+                    <p className="text-sm text-gray-600 mt-1">Bandit selections will appear as learners interact</p>
                   </div>
                 )}
               </Card>
@@ -2333,7 +2333,7 @@ export function ResearchDashboard() {
                 Profile Effectiveness Comparison
               </h3>
               {week5Analytics.profileEffectivenessData.length > 0 ? (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -2388,9 +2388,9 @@ export function ResearchDashboard() {
                 </div>
               ) : (
                 <div className="text-center py-12 text-gray-500">
-                  <TrendingUp className="size-12 mx-auto mb-3 text-gray-300" />
+                  <TrendingUp className="size-12 mx-auto mb-3 text-gray-500" />
                   <p>No profile effectiveness data available</p>
-                  <p className="text-sm text-gray-400 mt-1">Assign profiles to learners to see comparison</p>
+                  <p className="text-sm text-gray-600 mt-1">Assign profiles to learners to see comparison</p>
                 </div>
               )}
             </Card>
@@ -2515,9 +2515,9 @@ export function ResearchDashboard() {
                 </div>
               ) : (
                 <div className="text-center py-12 text-gray-500">
-                  <AlertCircle className="size-12 mx-auto mb-3 text-gray-300" />
+                  <AlertCircle className="size-12 mx-auto mb-3 text-gray-500" />
                   <p>No prerequisite violations detected</p>
-                  <p className="text-sm text-gray-400 mt-1">
+                  <p className="text-sm text-gray-600 mt-1">
                     Violations are logged when learners attempt concepts without prerequisites
                   </p>
                 </div>
@@ -2531,7 +2531,7 @@ export function ResearchDashboard() {
                 Experimental Condition Statistics
               </h3>
               {week5Analytics.conditionStats.length > 0 ? (
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -2578,9 +2578,9 @@ export function ResearchDashboard() {
                 </div>
               ) : (
                 <div className="text-center py-12 text-gray-500">
-                  <Target className="size-12 mx-auto mb-3 text-gray-300" />
+                  <Target className="size-12 mx-auto mb-3 text-gray-500" />
                   <p>No condition statistics available</p>
-                  <p className="text-sm text-gray-400 mt-1">Create sessions to see experimental condition comparison</p>
+                  <p className="text-sm text-gray-600 mt-1">Create sessions to see experimental condition comparison</p>
                 </div>
               )}
             </Card>
@@ -2662,9 +2662,9 @@ export function ResearchDashboard() {
                 </div>
               ) : (
                 <div className="text-center py-12 text-gray-500">
-                  <BrainCircuit className="size-12 mx-auto mb-3 text-gray-300" />
+                  <BrainCircuit className="size-12 mx-auto mb-3 text-gray-500" />
                   <p>No quality data available</p>
-                  <p className="text-sm text-gray-400 mt-1">Learners need to save notes with reflections to see quality scores</p>
+                  <p className="text-sm text-gray-600 mt-1">Learners need to save notes with reflections to see quality scores</p>
                 </div>
               )}
             </Card>
@@ -2762,9 +2762,9 @@ export function ResearchDashboard() {
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
-                    <BookOpen className="size-12 mx-auto mb-3 text-gray-300" />
+                    <BookOpen className="size-12 mx-auto mb-3 text-gray-500" />
                     <p>No reinforcement data available</p>
-                    <p className="text-sm text-gray-400 mt-1">Reinforcement prompts will appear as learners save notes</p>
+                    <p className="text-sm text-gray-600 mt-1">Reinforcement prompts will appear as learners save notes</p>
                   </div>
                 )}
               </Card>
@@ -2816,9 +2816,9 @@ export function ResearchDashboard() {
                 </div>
               ) : (
                 <div className="text-center py-8 text-gray-500">
-                  <Clock className="size-12 mx-auto mb-3 text-gray-300" />
+                  <Clock className="size-12 mx-auto mb-3 text-gray-500" />
                   <p>No reinforcement activity yet</p>
-                  <p className="text-sm text-gray-400 mt-1">Schedule reinforcement by saving textbook units</p>
+                  <p className="text-sm text-gray-600 mt-1">Schedule reinforcement by saving textbook units</p>
                 </div>
               )}
             </Card>
@@ -2875,9 +2875,9 @@ export function ResearchDashboard() {
                 </div>
               ) : (
                 <div className="text-center py-12 text-gray-500">
-                  <Users className="size-12 mx-auto mb-3 text-gray-300" />
+                  <Users className="size-12 mx-auto mb-3 text-gray-500" />
                   <p>No clustering data available</p>
-                  <p className="text-sm text-gray-400 mt-1">Add learner profiles to see behavior clusters</p>
+                  <p className="text-sm text-gray-600 mt-1">Add learner profiles to see behavior clusters</p>
                 </div>
               )}
             </Card>
@@ -2975,7 +2975,7 @@ export function ResearchDashboard() {
                 />
               ) : (
                 <div className="text-center py-12 text-gray-500">
-                  <Target className="size-12 mx-auto mb-3 text-gray-300" />
+                  <Target className="size-12 mx-auto mb-3 text-gray-500" />
                   <p>Select a learner to view their mastery timeline</p>
                 </div>
               )}

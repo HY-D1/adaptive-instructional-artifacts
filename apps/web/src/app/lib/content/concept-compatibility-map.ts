@@ -107,6 +107,7 @@ export const CONCEPT_COMPATIBILITY_MAP: Record<string, readonly string[]> = {
   ],
   'group-by-error': [
     // Non-aggregated columns in SELECT must appear in GROUP BY
+    // Mapped to general GROUP BY concepts as there's no dedicated error concept
     'dbms-ramakrishnan-3rd-edition/group-by',
     'murachs-mysql-3rd-edition/group-by-murach',
   ],
@@ -122,6 +123,11 @@ export const CONCEPT_COMPATIBILITY_MAP: Record<string, readonly string[]> = {
   ],
   'date-functions': [
     'murachs-mysql-3rd-edition/date-functions',
+    'murachs-mysql-3rd-edition/mysql-functions',
+  ],
+  'window-functions': [
+    // Window functions are part of advanced MySQL function coverage
+    // Using mysql-functions as the primary source
     'murachs-mysql-3rd-edition/mysql-functions',
   ],
   'case-expression': [
@@ -159,11 +165,6 @@ export const CONCEPT_COMPATIBILITY_MAP: Record<string, readonly string[]> = {
     // CTEs are a named subquery variant
     'dbms-ramakrishnan-3rd-edition/subqueries',
     'murachs-mysql-3rd-edition/subqueries-murach',
-  ],
-  'window-functions': [
-    // Window functions are part of advanced MySQL function coverage
-    'murachs-mysql-3rd-edition/mysql-functions',
-    'murachs-mysql-3rd-edition/functions-murach',
   ],
 
   // ── Errors ────────────────────────────────────────────────────────────────

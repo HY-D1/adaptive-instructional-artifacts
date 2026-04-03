@@ -513,7 +513,7 @@ const chatInteractions = useMemo(
                         {units.slice(0, 3).map(unit => (
                           <div key={unit.id} className="text-sm" data-testid="textbook-problem-note-item">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                              <span className={`text-xs px-1.5 py-0.5 rounded ${
                                 unit.type === 'hint' ? 'bg-amber-100 text-amber-700' :
                                 unit.type === 'explanation' ? 'bg-blue-100 text-blue-700' :
                                 'bg-gray-100 text-gray-700'
@@ -561,7 +561,7 @@ const chatInteractions = useMemo(
                                   {new Date(chat.timestamp).toLocaleString()}
                                 </span>
                                 {chat.chatQuickChip && (
-                                  <Badge variant="outline" className="text-[10px]">
+                                  <Badge variant="outline" className="text-xs">
                                     {chat.chatQuickChip}
                                   </Badge>
                                 )}
@@ -750,11 +750,11 @@ const chatInteractions = useMemo(
                         <div className="flex items-center gap-2 mt-2 text-xs text-gray-600">
                           <span className="font-medium">{interaction.problemId}</span>
                           <span className="text-gray-400">•</span>
-                          <Badge variant="secondary" className="text-[10px]">
+                          <Badge variant="secondary" className="text-xs">
                             {interaction.eventType.replace(new RegExp('_', 'g'), ' ')}
                           </Badge>
                           {interaction.successful && (
-                            <Badge variant="outline" className="text-[10px] text-green-600 border-green-200">
+                            <Badge variant="outline" className="text-xs text-green-600 border-green-200">
                               Success
                             </Badge>
                           )}

@@ -42,6 +42,13 @@ export function generateSessionId(): string {
 }
 
 /**
+ * Generation mode for LLM quality control
+ * - cheap_mode: Low reasoning effort, shorter outputs, faster/cheaper
+ * - quality_mode: Medium reasoning effort, richer outputs, higher quality
+ */
+export type GenerationMode = 'cheap_mode' | 'quality_mode';
+
+/**
  * Configuration options for condition assignment
  */
 export interface AssignmentOptions {
@@ -53,6 +60,10 @@ export interface AssignmentOptions {
   timestamp?: number;
   /** Random seed for reproducibility */
   seed?: number;
+  /** Generation mode for LLM quality control */
+  generationMode?: GenerationMode;
+  /** Force specific generation mode (for testing) */
+  forceGenerationMode?: GenerationMode;
 }
 
 /**
@@ -89,12 +100,14 @@ export function assignCondition(
     availableConditions = ['aggressive', 'conservative', 'adaptive'],
     forceCondition,
     timestamp = Date.now(),
-    seed = 0
+    seed = 0,
+    generationMode,
+    forceGenerationMode
   } = options;
-  
+
   // Determine condition
   let conditionId: string;
-  
+
   if (forceCondition) {
     // Force specific condition (for testing) - bypasses available conditions check
     conditionId = forceCondition;
@@ -104,19 +117,32 @@ export function assignCondition(
     const index = hash % availableConditions.length;
     conditionId = availableConditions[index];
   }
-  
+
+  // Determine generation mode
+  let assignedGenerationMode: GenerationMode;
+  if (forceGenerationMode) {
+    assignedGenerationMode = forceGenerationMode;
+  } else if (generationMode) {
+    assignedGenerationMode = generationMode;
+  } else {
+    // Deterministic assignment based on hash (separate from condition assignment)
+    const hash = hashString(learnerId + '-generation') + seed;
+    assignedGenerationMode = hash % 2 === 0 ? 'cheap_mode' : 'quality_mode';
+  }
+
   // Get policy to determine toggle settings
   const policy = getPolicyById(conditionId);
-  
+
   // Determine toggle settings based on condition
   const toggles = calculateToggles(conditionId, policy?.hintsEnabled ?? true);
-  
+
   return {
     sessionId: generateSessionId(),
     learnerId,
     escalationPolicy: conditionId as SessionConfig['escalationPolicy'],
     ...toggles,
     conditionId,
+    generationMode: assignedGenerationMode,
     createdAt: timestamp
   };
 }

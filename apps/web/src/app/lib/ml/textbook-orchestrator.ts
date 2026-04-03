@@ -68,6 +68,20 @@ export interface OrchestrationContext {
    * Omit (or pass undefined) in unit tests that don't load the real corpus.
    */
   availableConcepts?: Record<string, unknown>;
+  /**
+   * Learner history signals (Workstream 9)
+   * Historical data used for personalization
+   */
+  learnerHistory?: {
+    /** Prior successful recoveries without explanation */
+    priorRecoveryWithoutExplanation: number;
+    /** Prior dependence on high rungs */
+    priorHighRungDependence: number;
+    /** Repeated error subtype persistence count */
+    repeatedErrorPersistence: number;
+    /** Average time to recovery (ms) */
+    avgTimeToRecovery: number;
+  };
 }
 
 /** The decision returned by orchestrate() */
@@ -103,6 +117,40 @@ const STATIC_LADDER = {
   showExplanation: { hintCount: 2, retryCount: 2 },
   upsertTextbookUnit: { hintCount: 4, retryCount: 4 },
 } as const;
+
+/**
+ * Calculate history-aware threshold adjustments (Workstream 9)
+ * Uses learner history to personalize escalation thresholds
+ */
+function calculateHistoryAdjustments(
+  history: OrchestrationContext['learnerHistory']
+): {
+  hintCountAdjustment: number;
+  retryCountAdjustment: number;
+  elapsedMsAdjustment: number;
+} {
+  if (!history) {
+    return { hintCountAdjustment: 0, retryCountAdjustment: 0, elapsedMsAdjustment: 0 };
+  }
+
+  // Learners with prior recovery without explanation get slightly higher thresholds
+  // (they've shown they can figure things out)
+  const recoveryAdjustment = Math.min(history.priorRecoveryWithoutExplanation * 0.5, 1);
+
+  // Learners with high rung dependence get lower thresholds
+  // (they need more support)
+  const dependenceAdjustment = Math.min(history.priorHighRungDependence * 0.5, 1);
+
+  // Repeated error persistence increases threshold slightly
+  // (learner is struggling with this specific error type)
+  const persistenceAdjustment = Math.min(history.repeatedErrorPersistence * 0.3, 1);
+
+  return {
+    hintCountAdjustment: recoveryAdjustment - dependenceAdjustment + persistenceAdjustment,
+    retryCountAdjustment: recoveryAdjustment - dependenceAdjustment + persistenceAdjustment,
+    elapsedMsAdjustment: 0, // Time-based thresholds stay consistent
+  };
+}
 
 // ── Corpus resolution ─────────────────────────────────────────────────────────
 
@@ -152,8 +200,28 @@ export function resolveCorpusConceptId(
  * // → { action: 'show_explanation', reason: 'adaptive: hint_plus_retry threshold met', ... }
  */
 export function orchestrate(ctx: OrchestrationContext): OrchestrationDecision {
-  const { conceptId, retryCount, hintCount, elapsedMs, sessionConfig, availableConcepts } = ctx;
+  const { conceptId, retryCount, hintCount, elapsedMs, sessionConfig, availableConcepts, learnerHistory } = ctx;
   const corpusConceptId = resolveCorpusConceptId(conceptId, availableConcepts);
+
+  // Calculate history-aware threshold adjustments (Workstream 9)
+  const adjustments = calculateHistoryAdjustments(learnerHistory);
+
+  // Apply adjustments to thresholds (ensure they don't go below minimums)
+  const adjustedAdaptive = {
+    showExplanation: {
+      hintCount: Math.max(1, ADAPTIVE.showExplanation.hintCount + adjustments.hintCountAdjustment),
+      retryCount: Math.max(2, ADAPTIVE.showExplanation.retryCount + adjustments.retryCountAdjustment),
+    },
+    upsertTextbookUnit: {
+      hintCount: Math.max(2, ADAPTIVE.upsertTextbookUnit.hintCount + adjustments.hintCountAdjustment),
+      retryCount: Math.max(3, ADAPTIVE.upsertTextbookUnit.retryCount + adjustments.retryCountAdjustment),
+      elapsedMs: ADAPTIVE.upsertTextbookUnit.elapsedMs,
+    },
+    promptReflectiveNote: {
+      hintCount: Math.max(4, ADAPTIVE.promptReflectiveNote.hintCount + adjustments.hintCountAdjustment),
+      elapsedMs: ADAPTIVE.promptReflectiveNote.elapsedMs,
+    },
+  };
 
   const base = {
     corpusConceptId,
@@ -239,39 +307,39 @@ export function orchestrate(ctx: OrchestrationContext): OrchestrationDecision {
   // ── 5. Fully adaptive mode ────────────────────────────────────────────────
 
   // Reflective note: high hint count or long elapsed time
-  if (hintCount >= ADAPTIVE.promptReflectiveNote.hintCount ||
-      elapsedMs >= ADAPTIVE.promptReflectiveNote.elapsedMs) {
+  if (hintCount >= adjustedAdaptive.promptReflectiveNote.hintCount ||
+      elapsedMs >= adjustedAdaptive.promptReflectiveNote.elapsedMs) {
     return {
       ...base,
       action: 'prompt_reflective_note',
       reason: 'adaptive: high hint count or extended struggle — reflective synthesis',
       escalationTriggerReason:
-        hintCount >= ADAPTIVE.promptReflectiveNote.hintCount
+        hintCount >= adjustedAdaptive.promptReflectiveNote.hintCount
           ? 'high_hint_count'
           : 'time_stuck',
     };
   }
 
   // Textbook unit: moderate struggle signals
-  if (hintCount >= ADAPTIVE.upsertTextbookUnit.hintCount ||
-      retryCount >= ADAPTIVE.upsertTextbookUnit.retryCount ||
-      elapsedMs >= ADAPTIVE.upsertTextbookUnit.elapsedMs) {
+  if (hintCount >= adjustedAdaptive.upsertTextbookUnit.hintCount ||
+      retryCount >= adjustedAdaptive.upsertTextbookUnit.retryCount ||
+      elapsedMs >= adjustedAdaptive.upsertTextbookUnit.elapsedMs) {
     return {
       ...base,
       action: 'upsert_textbook_unit',
       reason: 'adaptive: moderate struggle — escalate to textbook unit',
       escalationTriggerReason:
-        hintCount >= ADAPTIVE.upsertTextbookUnit.hintCount
+        hintCount >= adjustedAdaptive.upsertTextbookUnit.hintCount
           ? 'hint_count_threshold'
-          : retryCount >= ADAPTIVE.upsertTextbookUnit.retryCount
+          : retryCount >= adjustedAdaptive.upsertTextbookUnit.retryCount
           ? 'retry_count_threshold'
           : 'elapsed_time_threshold',
     };
   }
 
   // Explanation: hint seen + multiple retries
-  if (hintCount >= ADAPTIVE.showExplanation.hintCount &&
-      retryCount >= ADAPTIVE.showExplanation.retryCount) {
+  if (hintCount >= adjustedAdaptive.showExplanation.hintCount &&
+      retryCount >= adjustedAdaptive.showExplanation.retryCount) {
     return {
       ...base,
       action: 'show_explanation',

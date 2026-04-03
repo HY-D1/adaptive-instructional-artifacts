@@ -390,7 +390,7 @@ export function SettingsPage() {
                         handleProfileOverrideChange(value as ProfileOverrideId)
                       }
                     >
-                      <SelectTrigger className="w-[250px]">
+                      <SelectTrigger className="w-full sm:w-[250px]">
                         <SelectValue placeholder="Select profile" />
                       </SelectTrigger>
                       <SelectContent>
@@ -575,7 +575,7 @@ export function SettingsPage() {
                       value={selectedArm}
                       onValueChange={(value) => setSelectedArm(value as BanditArmId)}
                     >
-                      <SelectTrigger className="w-[200px]">
+                      <SelectTrigger className="w-full sm:w-[200px]">
                         <SelectValue placeholder="Select arm" />
                       </SelectTrigger>
                       <SelectContent>

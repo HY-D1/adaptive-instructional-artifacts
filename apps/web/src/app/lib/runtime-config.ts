@@ -25,20 +25,23 @@ export function isInstructorModeAvailable(): boolean {
  * Note: Ollama is only available in local development, not on Vercel
  */
 export function isLLMAvailable(): boolean {
-  // In hosted mode, LLM is never available (no hosted Ollama)
+  const enableLLM = import.meta.env.VITE_ENABLE_LLM;
+
+  // If explicitly disabled, respect that
+  if (enableLLM === 'false') return false;
+
+  // Available if a backend API is configured (uses backend LLM proxy)
+  if (isBackendConfigured()) {
+    return true;
+  }
+
+  // In hosted mode without backend, LLM is not available
   if (isHostedMode()) {
     return false;
   }
-  
-  // LLM requires a backend proxy or local Ollama instance
-  // On Vercel static hosting, this is not available
+
+  // Legacy: available if Ollama URL is configured (local dev only)
   const ollamaUrl = import.meta.env.VITE_OLLAMA_URL;
-  const enableLLM = import.meta.env.VITE_ENABLE_LLM;
-  
-  // If explicitly disabled, respect that
-  if (enableLLM === 'false') return false;
-  
-  // Available if Ollama URL is configured (typically local dev only)
   return !!ollamaUrl;
 }
 
@@ -47,11 +50,16 @@ export function isLLMAvailable(): boolean {
  * Note: PDF index requires backend support, not available on static hosting
  */
 export function isPDFIndexAvailable(): boolean {
-  // In hosted mode, PDF index features are unavailable
+  // Available when a backend API is configured (PDF index is backend-driven)
+  if (isBackendConfigured()) {
+    return true;
+  }
+
+  // In hosted mode without backend, PDF index features are unavailable
   if (isHostedMode()) {
     return false;
   }
-  
+
   const enablePDF = import.meta.env.VITE_ENABLE_PDF_INDEX;
   return enablePDF === 'true';
 }
@@ -61,16 +69,19 @@ export function isPDFIndexAvailable(): boolean {
  * This affects feature availability for backend-dependent features
  */
 export function isHostedMode(): boolean {
-  // Detect common hosting platforms
+  // If a backend API is configured, we are NOT in restricted hosted mode
+  if (isBackendConfigured()) {
+    return false;
+  }
+
+  // Detect common hosting platforms without backend
   const isVercel = !!import.meta.env.VERCEL;
   const isNetlify = !!import.meta.env.NETLIFY;
-  
+
   // Also check if we're in production without backend API configured
   const isProd = import.meta.env.PROD;
-  const apiUrl = import.meta.env.VITE_API_BASE_URL;
-  const hasBackend = !!apiUrl && apiUrl.length > 0;
-  
-  return isVercel || isNetlify || (isProd && !hasBackend);
+
+  return isVercel || isNetlify || isProd;
 }
 
 /**

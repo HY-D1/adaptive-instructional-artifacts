@@ -1,4 +1,5 @@
 .DS_Store
+__MACOSX/
 node_modules/
 dist/
 build/
@@ -9,6 +10,7 @@ build/
 playwright-report/
 playwright-report-*/
 playwright-report */
+.mcp.json
 test-results/
 # Playwright auth state — captured cookies/localStorage, never commit
 playwright/.auth/*.json
@@ -25,13 +27,6 @@ __pycache__/
 .venv/
 
 # Documentation - keep structure, ignore local progress files
-!docs/
-!docs/README.md
-!docs/DEPLOYMENT.md
-!docs/DEPLOYMENT_MODES.md
-!docs/demo-script.md
-!docs/runbooks/
-!docs/research/
 docs/progress.md
 docs/weekly-progress.md
 docs/weekly-demo.md
@@ -50,7 +45,12 @@ BANDIT_TEST_REPORT.md
 *.llm-context.md
 *.agent-session.md
 chat-history/
+
+# Claude Code configuration - do not track
 .claude/
+.claude-plugin/
+
+# But KEEP the production-grade quality-loop system
 .kimi/
 .cursor/
 .aider*
@@ -64,12 +64,6 @@ PROFILE_VALIDATION_TEST_REPORT.md
 *.md
 
 # But keep these documentation files
-!docs/demo-script.md
-!docs/DEPLOYMENT.md
-!docs/DEPLOYMENT_MODES.md
-!docs/README.md
-!docs/week1-status.md
-!docs/runbooks/*.md
 !docs/research/corpus-product-fit-audit.md
 !docs/research/embedding-bakeoff-dbms-ramakrishnan.md
 
@@ -112,6 +106,22 @@ TEXTBOOK_INTEGRATION_PLAN.md
 
 # Test output logs
 test-output.log
+
+# Launch proof artifacts (temporary validation files)
+artifacts/
+
+# UX audit evidence (temporary screenshots)
+ux-audit-evidence/
+
+# Debug artifacts - ad hoc scripts and local testing
+debug/
+
+# Historical reports and audits (archived)
+.claude/archived/
+
+# Debug artifacts
+cookies.txt
+*.cookies.txt
 
 # Root-level test screenshots
 /concept-*.png

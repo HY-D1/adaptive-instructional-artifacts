@@ -37,6 +37,7 @@ import { buildRetrievalBundle } from '../../../lib/content/retrieval-bundle';
 import { getProblemById } from '../../../data/problems';
 import { checkAvailableResources, type AvailableResources } from '../../../lib/ml/enhanced-hint-service';
 import { Sparkles } from 'lucide-react';
+import { ConfirmDialog } from '../../ui/confirm-dialog';
 
 export type ChatMessage = {
   id: string;
@@ -296,6 +297,7 @@ export function AskMyTextbookChat({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   // Track toast timeout IDs for cleanup on unmount
@@ -1290,11 +1292,7 @@ export function AskMyTextbookChat({
         {messages.length > 0 && (
           <button 
             type="button"
-            onClick={() => {
-              if (confirm('Clear chat history for this problem?')) {
-                handleClear();
-              }
-            }}
+            onClick={() => setShowClearConfirm(true)}
             className="text-xs text-gray-400 hover:text-gray-600"
             title="Clear chat history"
           >
@@ -1366,6 +1364,21 @@ export function AskMyTextbookChat({
           </Button>
         </form>
       </div>
+
+      {/* Clear Chat Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showClearConfirm}
+        onClose={() => setShowClearConfirm(false)}
+        onConfirm={() => {
+          handleClear();
+          setShowClearConfirm(false);
+        }}
+        title="Clear Chat History"
+        description="Are you sure you want to clear the chat history for this problem?"
+        confirmText="Clear"
+        cancelText="Cancel"
+        variant="destructive"
+      />
     </Card>
   );
 }

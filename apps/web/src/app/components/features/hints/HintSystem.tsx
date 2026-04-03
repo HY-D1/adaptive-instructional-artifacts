@@ -4,7 +4,7 @@ import { Button } from '../../ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
 import DOMPurify from 'dompurify';
 
-import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen, Loader2, HelpCircle, Sparkles, AlertCircle } from 'lucide-react';
+import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen, Loader2, HelpCircle, Sparkles, AlertCircle, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { HelpEventType, InteractionEvent } from '../../../types';
 import { orchestrator } from '../../../lib/adaptive-orchestrator';
 import { storage } from '../../../lib/storage';
@@ -96,6 +96,8 @@ export function HintSystem({
     llmFailed?: boolean;
     llmErrorMessage?: string;
   }>>([]);
+  // WS12: Track helpfulness ratings for each hint
+  const [hintRatings, setHintRatings] = useState<Record<number, 'helpful' | 'not_helpful' | null>>({});
   const MAX_DEDUPE_KEYS = 1000; // Prevent unbounded set growth
   
   // Persist enhanced hint info to localStorage
@@ -659,6 +661,26 @@ export function HintSystem({
     } catch {
       return [];
     }
+  };
+
+  // WS12: Log hint helpfulness feedback
+  const logHintHelpfulness = (hintIndex: number, rating: 'helpful' | 'not_helpful') => {
+    if (!sessionId) return;
+
+    const helpfulnessEvent: InteractionEvent = {
+      id: createEventId(),
+      learnerId,
+      sessionId,
+      timestamp: Date.now(),
+      eventType: 'hint_helpfulness_rating',
+      problemId,
+      hintIndex,
+      helpfulnessRating: rating,
+      rung: (hintIndex + 1) as 1 | 2 | 3,
+    };
+
+    storage.logInteraction(helpfulnessEvent);
+    onInteractionLogged?.(helpfulnessEvent);
   };
 
   const handleShowExplanation = async (
@@ -1325,6 +1347,45 @@ export function HintSystem({
                     )}
                   </div>
                   
+                  {/* WS12: Hint helpfulness feedback */}
+                  <div className="mt-4 pt-3 border-t border-gray-100">
+                    <p className="text-[11px] text-gray-500 mb-2">Was this hint helpful?</p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setHintRatings(prev => ({ ...prev, [idx]: 'helpful' }));
+                          logHintHelpfulness(idx, 'helpful');
+                        }}
+                        className={cn(
+                          "flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-colors",
+                          hintRatings[idx] === 'helpful'
+                            ? "bg-green-100 text-green-700"
+                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        )}
+                        aria-label="This hint was helpful"
+                      >
+                        <ThumbsUp className="size-3" />
+                        Yes
+                      </button>
+                      <button
+                        onClick={() => {
+                          setHintRatings(prev => ({ ...prev, [idx]: 'not_helpful' }));
+                          logHintHelpfulness(idx, 'not_helpful');
+                        }}
+                        className={cn(
+                          "flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-colors",
+                          hintRatings[idx] === 'not_helpful'
+                            ? "bg-red-100 text-red-700"
+                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        )}
+                        aria-label="This hint was not helpful"
+                      >
+                        <ThumbsDown className="size-3" />
+                        No
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Collapsible sources - only shown when expanded */}
                   {isExpanded && hasPdfSources && (
                     <div id={`hint-sources-${idx}`} className="mt-4 pt-3 border-t border-gray-100">

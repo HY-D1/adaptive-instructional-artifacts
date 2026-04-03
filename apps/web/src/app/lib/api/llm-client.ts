@@ -4,6 +4,10 @@ import { isHostedMode, getLLMUnavailableError } from '../runtime-config';
 
 export const OLLAMA_MODEL = 'qwen3:4b';
 export const OLLAMA_FALLBACK_MODEL = 'llama3.2:3b';
+export const GROQ_MODEL = 'openai/gpt-oss-20b';
+
+export type LLMProvider = 'ollama' | 'groq';
+
 const HEALTHCHECK_TIMEOUT_MS = 8000;
 const PROBE_PROMPT = 'Reply with exactly: OLLAMA_OK';
 const PROBE_TIMEOUT_MS = 12000;
@@ -190,7 +194,15 @@ function validateLLMParams(params: LLMGenerationParams): LLMGenerationParams {
 }
 
 /**
- * Get the selected model from localStorage or use default
+ * Get the default model for a provider
+ */
+export function getDefaultModelForProvider(provider: LLMProvider): string {
+  return provider === 'groq' ? GROQ_MODEL : OLLAMA_MODEL;
+}
+
+/**
+ * Get the selected model from localStorage or use provider-appropriate default
+ * This function ensures the model matches the backend provider configuration
  */
 function getSelectedModel(): string {
   // Guard for SSR - localStorage is not available on server
@@ -212,6 +224,25 @@ function getSelectedModel(): string {
 }
 
 /**
+ * Get the appropriate model based on backend provider
+ * This should be used when the provider is known from backend status
+ */
+export function getModelForProvider(provider: LLMProvider): string {
+  const savedModel = getSelectedModel();
+
+  // If the saved model is appropriate for the provider, use it
+  if (provider === 'groq' && savedModel === GROQ_MODEL) {
+    return savedModel;
+  }
+  if (provider === 'ollama' && savedModel !== GROQ_MODEL) {
+    return savedModel;
+  }
+
+  // Otherwise return the provider-appropriate default
+  return getDefaultModelForProvider(provider);
+}
+
+/**
  * Generate text using Ollama LLM service via backend proxy
  * @param prompt - Prompt text to send
  * @param options - Generation options
@@ -223,14 +254,19 @@ export async function generateWithOllama(prompt: string, options?: OllamaGenerat
   model: string;
   params: LLMGenerationParams;
 }> {
-  // In hosted mode, immediately throw a network error so fallback kicks in
-  if (isHostedMode()) {
-    throw buildClientError('NOT_ENABLED', getLLMUnavailableError());
-  }
-  
-  // In demo mode, immediately throw a network error so fallback kicks in
-  if (!shouldAttemptLLM()) {
-    throw buildClientError('NOT_ENABLED', 'Demo mode: LLM not available, using fallback hints.');
+  // Skip hosted/demo mode gates when a backend API is configured
+  const hasBackend = !!import.meta.env.VITE_API_BASE_URL;
+
+  if (!hasBackend) {
+    // In hosted mode without backend, immediately throw a network error so fallback kicks in
+    if (isHostedMode()) {
+      throw buildClientError('NOT_ENABLED', getLLMUnavailableError());
+    }
+
+    // In demo mode without backend, immediately throw a network error so fallback kicks in
+    if (!shouldAttemptLLM()) {
+      throw buildClientError('NOT_ENABLED', 'Demo mode: LLM not available, using fallback hints.');
+    }
   }
   
   // Check if LLM is enabled on backend
@@ -238,16 +274,24 @@ export async function generateWithOllama(prompt: string, options?: OllamaGenerat
   if (!isEnabled) {
     throw buildClientError('NOT_ENABLED', 'LLM is not enabled on the backend. Set ENABLE_LLM=true to enable.');
   }
-  
-  const model = options?.model || getSelectedModel();
+
+  // Get backend provider and use appropriate model
+  const backendProvider = await getProvider();
+  const defaultModel = getDefaultModelForProvider(backendProvider);
+  const model = options?.model || defaultModel;
+
   const rawParams: LLMGenerationParams = {
     ...DEFAULT_PARAMS,
     ...(options?.params || {})
   };
   const params = validateLLMParams(rawParams);
-  const candidateModels = model === OLLAMA_FALLBACK_MODEL
+
+  // Only use Ollama fallback for Ollama provider
+  const candidateModels = backendProvider === 'groq'
     ? [model]
-    : [model, OLLAMA_FALLBACK_MODEL];
+    : (model === OLLAMA_FALLBACK_MODEL
+        ? [model]
+        : [model, OLLAMA_FALLBACK_MODEL]);
 
   let lastError: OllamaClientError | null = null;
 
@@ -515,23 +559,98 @@ export function isLLMFeatureEnabled(): boolean {
 }
 
 /**
- * Get available models from the backend
- * @returns Promise with list of available models
+ * Provider-agnostic LLM health status
  */
-export async function getAvailableModels(): Promise<string[]> {
+export interface LLMHealthStatus {
+  ok: boolean;
+  provider: LLMProvider;
+  message: string;
+  details?: string;
+  availableModels: string[];
+  enabled: boolean;
+}
+
+/**
+ * Get provider from backend status
+ */
+export async function getProvider(): Promise<LLMProvider> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/llm/models`, {
+    const response = await fetch(`${API_BASE_URL}/api/llm/status`, {
       method: 'GET',
       signal: AbortSignal.timeout(5000),
     });
-    
+
     if (!response.ok) {
-      return [];
+      return 'ollama';
     }
-    
+
     const data = await response.json();
-    return data.data?.models || [];
+    return data.data?.provider || 'ollama';
   } catch {
-    return [];
+    return 'ollama';
+  }
+}
+
+/**
+ * Check LLM health (provider-agnostic)
+ * @returns Health status with provider info
+ */
+export async function checkLLMHealth(): Promise<LLMHealthStatus> {
+  // In hosted mode
+  if (isHostedMode()) {
+    return {
+      ok: true,
+      provider: 'groq',
+      message: '🌐 Hosted Mode: AI features use deterministic content. Run locally for LLM.',
+      availableModels: [],
+      enabled: false,
+    };
+  }
+
+  // In demo mode
+  if (isDemoMode()) {
+    return {
+      ok: true,
+      provider: 'ollama',
+      message: '🎓 Demo Mode: AI features use pre-built content. No local setup needed!',
+      availableModels: [OLLAMA_MODEL],
+      enabled: false,
+    };
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/llm/status`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(HEALTHCHECK_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        provider: 'ollama',
+        message: 'Failed to check LLM status',
+        availableModels: [],
+        enabled: false,
+      };
+    }
+
+    const payload = await response.json();
+    const status = payload.data;
+
+    return {
+      ok: status.available,
+      provider: status.provider || 'ollama',
+      message: payload.message || status.message,
+      availableModels: status.models || [],
+      enabled: status.enabled,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      provider: 'ollama',
+      message: `LLM health check failed: ${(error as Error).message}`,
+      availableModels: [],
+      enabled: false,
+    };
   }
 }

@@ -52,7 +52,7 @@ test.describe('@weekly Enhanced Hint System', () => {
     await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
     
     // Verify hint content is not empty
-    const hintText = await page.locator('[data-testid="hint-card-0"] p').textContent();
+    const hintText = await page.locator('[data-testid="hint-card-0"] p').first().textContent();
     expect(hintText?.length).toBeGreaterThan(10);
   });
 

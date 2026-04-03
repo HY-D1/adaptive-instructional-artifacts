@@ -13,9 +13,23 @@ function normalizeScope(scope: Partial<UiScope>): UiScope {
   return { role, actorId };
 }
 
+/**
+ * Check if preview mode is active
+ * Used to isolate UI state between instructor and preview modes
+ */
+function isPreviewModeActive(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return localStorage.getItem('sql-adapt-preview-mode') === 'true';
+  } catch {
+    return false;
+  }
+}
+
 function buildKey(pageKey: string, scope: Partial<UiScope>): string {
   const normalized = normalizeScope(scope);
-  return `${UI_STATE_PREFIX}:${normalized.role}:${normalized.actorId}:${pageKey}`;
+  const previewSuffix = isPreviewModeActive() ? ':preview' : '';
+  return `${UI_STATE_PREFIX}:${normalized.role}:${normalized.actorId}${previewSuffix}:${pageKey}`;
 }
 
 export function getUiState<T>(pageKey: string, scope: Partial<UiScope>): T | null {

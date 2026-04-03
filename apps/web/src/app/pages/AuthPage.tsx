@@ -48,6 +48,7 @@ export function AuthPage() {
   const [signupError, setSignupError] = useState<string | null>(null);
   const [signupLoading, setSignupLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState<'weak' | 'medium' | 'strong' | null>(null);
   const showDiagnostic = import.meta.env.DEV || import.meta.env.MODE === 'test';
   const apiBaseUrl = getApiBaseUrl() || 'not-configured';
 
@@ -119,6 +120,18 @@ export function AuthPage() {
       return;
     }
     // Navigation handled by useEffect above
+  };
+
+  const checkPasswordStrength = (password: string): 'weak' | 'medium' | 'strong' | null => {
+    if (password.length < 8) return null;
+    const hasUpper = /[A-Z]/.test(password);
+    const hasLower = /[a-z]/.test(password);
+    const hasNumber = /\d/.test(password);
+    const hasSpecial = /[!@#$%^&*]/.test(password);
+    const score = [hasUpper, hasLower, hasNumber, hasSpecial].filter(Boolean).length;
+    if (score <= 2) return 'weak';
+    if (score === 3) return 'medium';
+    return 'strong';
   };
 
   const isSignupValid =
@@ -216,6 +229,8 @@ export function AuthPage() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -294,7 +309,11 @@ export function AuthPage() {
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Min. 8 characters"
                     value={signupPassword}
-                    onChange={(e) => setSignupPassword(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSignupPassword(value);
+                      setPasswordStrength(checkPasswordStrength(value));
+                    }}
                     className="pl-10 pr-10"
                     required
                   />
@@ -302,10 +321,26 @@ export function AuthPage() {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
+                {/* Password strength indicator */}
+                {signupPassword.length >= 8 && passwordStrength && (
+                  <div className="flex items-center gap-2 text-xs mt-1">
+                    <span className="text-gray-500">Strength:</span>
+                    <span className={cn(
+                      "font-medium",
+                      passwordStrength === 'weak' && "text-red-500",
+                      passwordStrength === 'medium' && "text-yellow-600",
+                      passwordStrength === 'strong' && "text-green-600"
+                    )}>
+                      {passwordStrength.charAt(0).toUpperCase() + passwordStrength.slice(1)}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Role selection */}

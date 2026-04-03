@@ -91,6 +91,9 @@ git checkout fc143c6 && git push -f origin HEAD:main  # DANGER: force push
 | `PORT` | No | HTTP port (default 3001) |
 | `OLLAMA_DEFAULT_MODEL` | Optional (LLM) | Primary local generation model used when client request omits model (default `qwen3:4b`) |
 | `OLLAMA_FALLBACK_MODEL` | Optional (LLM) | Fallback local generation model when primary Ollama model fails (default `llama3.2:3b`) |
+| `LLM_PROVIDER` | Optional (LLM) | LLM provider: `ollama` (local) or `groq` (hosted). Defaults to `ollama` |
+| `GROQ_API_KEY` | Required (Groq) | API key for Groq hosted LLM. Get from https://console.groq.com/keys |
+| `GROQ_MODEL` | Optional (Groq) | Groq model for generation (default `openai/gpt-oss-20b`) |
 
 > **Auth setup**: Set `JWT_SECRET` to a strong random value (e.g. `openssl rand -base64 32`). Set both `STUDENT_SIGNUP_CODE` and `INSTRUCTOR_SIGNUP_CODE` to protect account creation. After adding these vars, redeploy the backend and run `npm run db:init:neon` to create the `auth_accounts` table.
 >
@@ -617,10 +620,17 @@ When PDF index is disabled:
 
 #### LLM Feature
 
-**Requirements:**
+For Ollama (local):
 - `ENABLE_LLM=true` on backend
 - Ollama server accessible from backend
 - `VITE_ENABLE_LLM=true` on frontend (optional, for UI)
+
+For Groq (hosted):
+- `ENABLE_LLM=true` on backend
+- `LLM_PROVIDER=groq` on backend
+- `GROQ_API_KEY=<your-api-key>` on backend (get from https://console.groq.com/keys)
+- `GROQ_MODEL=openai/gpt-oss-20b` (optional, defaults to this)
+- Frontend will auto-detect Groq mode from backend status
 
 **API Endpoints:**
 - `GET /api/llm/status` - Check status
