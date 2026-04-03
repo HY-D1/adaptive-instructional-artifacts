@@ -194,7 +194,15 @@ function validateLLMParams(params: LLMGenerationParams): LLMGenerationParams {
 }
 
 /**
- * Get the selected model from localStorage or use default
+ * Get the default model for a provider
+ */
+export function getDefaultModelForProvider(provider: LLMProvider): string {
+  return provider === 'groq' ? GROQ_MODEL : OLLAMA_MODEL;
+}
+
+/**
+ * Get the selected model from localStorage or use provider-appropriate default
+ * This function ensures the model matches the backend provider configuration
  */
 function getSelectedModel(): string {
   // Guard for SSR - localStorage is not available on server
@@ -213,6 +221,25 @@ function getSelectedModel(): string {
     // Ignore parse errors, fall back to default
   }
   return OLLAMA_MODEL;
+}
+
+/**
+ * Get the appropriate model based on backend provider
+ * This should be used when the provider is known from backend status
+ */
+export function getModelForProvider(provider: LLMProvider): string {
+  const savedModel = getSelectedModel();
+
+  // If the saved model is appropriate for the provider, use it
+  if (provider === 'groq' && savedModel === GROQ_MODEL) {
+    return savedModel;
+  }
+  if (provider === 'ollama' && savedModel !== GROQ_MODEL) {
+    return savedModel;
+  }
+
+  // Otherwise return the provider-appropriate default
+  return getDefaultModelForProvider(provider);
 }
 
 /**
@@ -247,16 +274,24 @@ export async function generateWithOllama(prompt: string, options?: OllamaGenerat
   if (!isEnabled) {
     throw buildClientError('NOT_ENABLED', 'LLM is not enabled on the backend. Set ENABLE_LLM=true to enable.');
   }
-  
-  const model = options?.model || getSelectedModel();
+
+  // Get backend provider and use appropriate model
+  const backendProvider = await getProvider();
+  const defaultModel = getDefaultModelForProvider(backendProvider);
+  const model = options?.model || defaultModel;
+
   const rawParams: LLMGenerationParams = {
     ...DEFAULT_PARAMS,
     ...(options?.params || {})
   };
   const params = validateLLMParams(rawParams);
-  const candidateModels = model === OLLAMA_FALLBACK_MODEL
+
+  // Only use Ollama fallback for Ollama provider
+  const candidateModels = backendProvider === 'groq'
     ? [model]
-    : [model, OLLAMA_FALLBACK_MODEL];
+    : (model === OLLAMA_FALLBACK_MODEL
+        ? [model]
+        : [model, OLLAMA_FALLBACK_MODEL]);
 
   let lastError: OllamaClientError | null = null;
 

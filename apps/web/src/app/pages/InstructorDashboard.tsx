@@ -715,7 +715,7 @@ export function InstructorDashboard() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {quickStats.map((stat) => (
             <Card key={stat.label} className="hover:shadow-md transition-shadow relative overflow-hidden">
-                {showDemoData <Card key={stat.label} className="hover:shadow-md transition-shadow"><Card key={stat.label} className="hover:shadow-md transition-shadow"> (
+                {showDemoData && (
                   <div className="absolute top-0 right-0 bg-amber-100 text-amber-800 text-[10px] font-medium px-2 py-0.5 rounded-bl">
                     Demo
                   </div>
@@ -1094,7 +1094,7 @@ export function InstructorDashboard() {
                   ))}
                 </TableBody>
               </Table>
-            </TooltipProvider>
+            
               {!showDemoData && normalizedProfiles.length === 0 && (
                 <div className="text-center py-8 text-gray-500">
                   <p>No adaptive data available yet. Students need to interact with the system.</p>

@@ -30,6 +30,7 @@ import {
   LLMProvider,
   OLLAMA_MODEL,
   GROQ_MODEL,
+  getProvider,
 } from '../../lib/api/llm-client';
 
 interface LLMSettings {
@@ -76,17 +77,45 @@ export function LLMSettingsHelper() {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
   const [availableModels, setAvailableModels] = useState<string[]>([]);
 
-  // Load saved settings on mount
+  // Load saved settings on mount and sync with backend provider
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setSettings(prev => ({ ...prev, ...parsed }));
+    const loadAndSyncSettings = async () => {
+      try {
+        // First, fetch backend provider
+        const backendProvider = await getProvider();
+
+        // Then load saved settings
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          // If backend provider differs from saved, sync to backend
+          if (parsed.provider && parsed.provider !== backendProvider) {
+            const syncedSettings = {
+              ...DEFAULT_SETTINGS,
+              ...parsed,
+              provider: backendProvider,
+              model: PROVIDER_DEFAULTS[backendProvider],
+            };
+            setSettings(syncedSettings);
+            // Save synced settings back to localStorage
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(syncedSettings));
+          } else {
+            setSettings(prev => ({ ...prev, ...parsed }));
+          }
+        } else {
+          // No saved settings - use backend provider as default
+          setSettings({
+            ...DEFAULT_SETTINGS,
+            provider: backendProvider,
+            model: PROVIDER_DEFAULTS[backendProvider],
+          });
+        }
+      } catch {
+        // Ignore parse errors, use defaults
       }
-    } catch {
-      // Ignore parse errors
-    }
+    };
+
+    loadAndSyncSettings();
   }, []);
 
   // Check LLM health on mount

@@ -415,7 +415,11 @@ export function AdaptiveTextbook({
             </Button>
             <Button
               onClick={handleClear}
-              variant="ghost"\n              size="sm"\n              aria-label="Clear all notes"\n            \u003e\n              \u003cTrash2 className="size-4" />
+              variant="ghost"
+              size="sm"
+              aria-label="Clear all notes"
+            >
+              <Trash2 className="size-4" />
             </Button>
           </div>
         </div>
