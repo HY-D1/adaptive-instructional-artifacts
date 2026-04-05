@@ -297,6 +297,13 @@ export async function initializeSchema(): Promise<void> {
       is_correct BOOLEAN,
       scheduled_time BIGINT,
       shown_time BIGINT,
+      learner_profile_id TEXT,
+      escalation_trigger_reason TEXT,
+      error_count_at_escalation INTEGER,
+      time_to_escalation INTEGER,
+      strategy_assigned TEXT,
+      strategy_updated TEXT,
+      reward_value NUMERIC,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
@@ -307,9 +314,15 @@ export async function initializeSchema(): Promise<void> {
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_timestamp ON interaction_events(timestamp)`;
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_problem_id ON interaction_events(problem_id)`;
 
-  // Schema canonical column definitions are in migrate-neon.sql.
-  // RESEARCH-4 columns (learner_profile_id, escalation_trigger_reason, etc.)
-  // and section_id are defined there and do not need runtime ALTER TABLE blocks.
+  // Keep RESEARCH-4 columns in lockstep with migrate-neon.sql.
+  // Fresh Neon init uses this runtime initializer, while SQL migration paths use the .sql file.
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS learner_profile_id TEXT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS escalation_trigger_reason TEXT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS error_count_at_escalation INTEGER`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS time_to_escalation INTEGER`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_assigned TEXT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_updated TEXT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS reward_value NUMERIC`;
 
   // Textbook units (My Textbook)
   await db`

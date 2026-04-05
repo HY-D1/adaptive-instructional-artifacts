@@ -187,6 +187,13 @@ CREATE TABLE IF NOT EXISTS interaction_events (
   is_correct BOOLEAN,
   scheduled_time BIGINT,
   shown_time BIGINT,
+  learner_profile_id TEXT,
+  escalation_trigger_reason TEXT,
+  error_count_at_escalation INTEGER,
+  time_to_escalation INTEGER,
+  strategy_assigned TEXT,
+  strategy_updated TEXT,
+  reward_value NUMERIC,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -196,6 +203,13 @@ CREATE INDEX IF NOT EXISTS idx_interaction_events_event_type ON interaction_even
 CREATE INDEX IF NOT EXISTS idx_interaction_events_timestamp ON interaction_events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_interaction_events_problem_id ON interaction_events(problem_id);
 ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS learner_profile_id TEXT;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS escalation_trigger_reason TEXT;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS error_count_at_escalation INTEGER;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS time_to_escalation INTEGER;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_assigned TEXT;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_updated TEXT;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS reward_value NUMERIC;
 CREATE INDEX IF NOT EXISTS idx_interaction_events_section_id ON interaction_events(section_id);
 
 -- ============================================================================
