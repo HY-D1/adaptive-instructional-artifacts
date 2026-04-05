@@ -32,6 +32,7 @@ export {
   generateEnhancedHint,
   preloadHintContext,
   checkAvailableResources,
+  checkAvailableResourcesAsync,
   findRelevantTextbookUnits,
   getHintStrategyDescription,
   applyHintSafetyLayer,

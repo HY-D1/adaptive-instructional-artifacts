@@ -13,6 +13,8 @@
 |-------|--------|
 | **Stage** | 1 / 2 / 3 |
 | **Date** | YYYY-MM-DD |
+| **Stage Window Start (UTC)** | YYYY-MM-DDTHH:MM:SSZ |
+| **Stage Window End (UTC)** | YYYY-MM-DDTHH:MM:SSZ |
 | **Observer Name** | |
 | **Student ID / Pseudonym** | |
 | **Class Code Used** | |
@@ -30,7 +32,10 @@ For each checkpoint, record the time (or `N/A`) and mark Pass / Fail / Partial. 
 | Checkpoint | Time | Status | Notes |
 |------------|------|--------|-------|
 | Student opens frontend URL | | P / F / Partial | |
-| Login or resume succeeds (no white screen) | | P / F / Partial | |
+| Hosted auth gate visible (Sign In / Create Account) | | P / F / Partial | |
+| Student opens Sign In or Create Account successfully | | P / F / Partial | |
+| Login or account creation succeeds (no white screen) | | P / F / Partial | |
+| Class code accepted (student) | | P / F / Partial | |
 | Student reaches practice page | | P / F / Partial | |
 
 ### A2. Learning Page Usability
@@ -84,14 +89,14 @@ For each checkpoint, record the time (or `N/A`) and mark Pass / Fail / Partial. 
 
 Check any observed. If Critical or High is checked, notify support owner immediately.
 
-- [ ] **Critical**: Unable to log in or resume
+- [ ] **Critical**: Unable to create account, log in, or resume
 - [ ] **Critical**: White screen / page crash
 - [ ] **Critical**: Data loss on refresh
 - [ ] **High**: Hint system fails to load (> 20% of attempts in session)
 - [ ] **High**: Save-to-notes completely broken for this student
 - [ ] **High**: Query execution fails for all attempts
 - [ ] **Medium**: Hint content irrelevant or misleading
-- [ ] **Medium": Error messages confusing or missing
+- [ ] **Medium**: Error messages confusing or missing
 - [ ] **Medium**: Navigation / tabs confusing
 - [ ] **Low**: Layout glitches or minor visual issues
 
@@ -149,4 +154,4 @@ After the stage is complete, transfer the following counts to the **Staged Beta 
 - Save-to-notes failures: ___
 - Refresh/resume failures: ___
 
-*Last Updated: 2026-03-30*
+*Last Updated: 2026-04-05*

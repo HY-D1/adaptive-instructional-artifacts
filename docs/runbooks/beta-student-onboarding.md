@@ -31,23 +31,28 @@ SQL-Adapt is an adaptive learning system that helps you learn SQL through practi
 ### 1.1 Open the Application
 
 1. Go to: **https://adaptive-instructional-artifacts.vercel.app**
-2. You should see the SQL-Adapt welcome page
+2. You should see the SQL-Adapt welcome page with a **"Sign in required"** card
+3. Click **"Create Account"**
 
 ### 1.2 Create Your Account
 
-1. Enter your **full name** in the username field
-2. Select **"I am a Student"**
-3. Click **"Get Started"**
-
-### 1.3 Enter Class Code
-
-When prompted, enter the class code provided by your instructor:
-- Type the code exactly as given (case-sensitive)
-- Click **"Join Class"**
+1. Enter your **full name**
+2. Enter your **email address**
+3. Create a **password**
+4. Select **"Student"**
+5. Enter the **class code** provided by your instructor
+6. Click **"Create Account"**
 
 **If you see "Invalid class code":**
 - Double-check the spelling with your instructor
 - Make sure there are no extra spaces
+
+### 1.3 Returning Students
+
+If you already created an account in an earlier session:
+- Click **"Sign In"** instead of **"Create Account"**
+- Use the same **email + password** from your first session
+- Do **not** create a second account unless your instructor tells you to
 
 ---
 
@@ -149,7 +154,7 @@ Your textbook automatically builds a personalized study guide from every struggl
 ### Between Sessions
 
 - Your progress is automatically saved
-- Log in again with the same name to continue
+- Log in again with the same **email + password** to continue
 - Review your textbook before starting new problems
 
 ### Navigation Tips
@@ -185,8 +190,8 @@ Your textbook automatically builds a personalized study guide from every struggl
 - Try the hint system for guidance
 
 ### "Lost my progress"
-- Make sure you're using the same name to log in
-- Progress is tied to your username
+- Make sure you're using the same email + password you used when creating your account
+- Progress is tied to your account, not just your display name
 - Contact your instructor if issues persist
 
 ---
@@ -211,10 +216,10 @@ After your session, your instructor may ask:
 
 ### Beta Limitations
 
-Some features are disabled for the beta:
-- AI-generated explanations (using pre-written hints instead)
+Some beta limitations to be aware of:
 - PDF search functionality
-- Advanced instructor features
+- Some instructor/research features remain supervisor-only
+- Account creation requires a valid class code from your instructor
 
 ---
 
@@ -224,10 +229,11 @@ Some features are disabled for the beta:
 SQL-ADAPT QUICK START
 
 1. Go to: adaptive-instructional-artifacts.vercel.app
-2. Enter your name
-3. Select "I am a Student"
-4. Enter class code from instructor
-5. Start practicing!
+2. Click "Create Account"
+3. Enter your name, email, and password
+4. Select "Student"
+5. Enter class code from instructor
+6. Start practicing!
 
 NEED HELP?
 - Run a query with an error
@@ -252,5 +258,5 @@ During your supervised beta session:
 
 ---
 
-*Last Updated: 2026-03-30*
+*Last Updated: 2026-04-05*
 *For Beta Version: v1.0.0-beta*

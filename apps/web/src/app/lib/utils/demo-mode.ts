@@ -1,14 +1,14 @@
 /**
  * Demo Mode Configuration
  * 
- * When deployed to Vercel (or any hosting without localhost Ollama):
+ * When deployed without a backend API:
  * - LLM features gracefully degrade to SQL-Engage hints
  * - PDF features work with pre-built index
  * - All other features work normally
  */
 
 /**
- * Check if we're running in demo mode (no localhost Ollama available)
+ * Check if we're running in demo mode (frontend-only hosted deployment)
  * This is true for Vercel deployments or when explicitly enabled
  */
 export function isDemoMode(): boolean {
@@ -23,14 +23,14 @@ export function isDemoMode(): boolean {
   }
   
   // Auto-detect: if we're on HTTPS (production), we're likely in demo mode
-  // unless a backend API with LLM is configured or a hosted Ollama URL is set
+  // unless a backend API or explicit local Ollama URL is configured.
   if (typeof window !== 'undefined') {
     const isHttps = window.location.protocol === 'https:';
     const hasHostedOllama = Boolean(import.meta.env.VITE_OLLAMA_URL);
     const hasBackend = Boolean(import.meta.env.VITE_API_BASE_URL);
-    const enableLLM = import.meta.env.VITE_ENABLE_LLM === 'true';
+    const isHostedPlatform = Boolean(import.meta.env.VERCEL || import.meta.env.NETLIFY || import.meta.env.PROD);
 
-    if (isHttps && !hasHostedOllama && !(hasBackend && enableLLM)) {
+    if ((isHostedPlatform || isHttps) && !hasHostedOllama && !hasBackend) {
       return true;
     }
   }
@@ -42,12 +42,12 @@ export function isDemoMode(): boolean {
  * Get the demo mode status message for UI display
  */
 export function getDemoModeMessage(): string {
-  return '🎓 Demo Mode: AI hints use pre-built content. All core features work!';
+  return '🎓 Demo Mode: AI hints use pre-built content because no backend LLM service is connected. All core features still work.';
 }
 
 /**
  * Check if LLM should be attempted
- * Returns false in demo mode to avoid unnecessary network errors
+ * Returns false in frontend-only demo mode to avoid unnecessary network errors
  */
 export function shouldAttemptLLM(): boolean {
   // In demo mode, skip LLM calls entirely
@@ -79,7 +79,7 @@ This is a **hosted demo** of the SQL-Adapt learning system.
 ### Demo Mode Notes:
 - 📝 AI-powered explanations use pre-generated content
 - 📝 PDF search works with embedded index
-- 📝 No local Ollama installation required
+- 📝 No backend API or local Ollama installation required
 
 **Instructor Passcode:** \`TeachSQL2024\`
 `;

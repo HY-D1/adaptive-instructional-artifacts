@@ -2,7 +2,7 @@
 
 **Version**: 1.0.0
 **Status**: TEMPLATE — Fill after each live stage
-**Purpose**: Central evidence record for the 5 → 15 → 50 supervised beta ramp
+**Purpose**: Central evidence record for the 5 → 15 → 40 supervised beta ramp
 
 ---
 
@@ -40,12 +40,27 @@
 | Field | Value |
 |-------|-------|
 | **Date** | YYYY-MM-DD |
+| **Stage Window Start (UTC)** | YYYY-MM-DDTHH:MM:SSZ |
+| **Stage Window End (UTC)** | YYYY-MM-DDTHH:MM:SSZ |
 | **Location / Room** | |
 | **Supervisor Name** | |
 | **Support Owner Name** | |
 | **Students Planned** | 5 |
 | **Students Observed** | |
 | **Session Duration** | ___ minutes |
+
+### Evidence Packet Checklist
+
+| Artifact | Path / Link |
+|----------|-------------|
+| Observation forms | |
+| Telemetry audit JSON | |
+| Active-run verification output | |
+| Public load baseline JSON | |
+| Hosted smoke Playwright result | |
+| Research export | |
+| Vercel error review / screenshot | |
+| Supervisor debrief | |
 
 ### Observation Summary
 
@@ -64,7 +79,7 @@
 
 Run:
 ```bash
-node scripts/audit-beta-telemetry.mjs --since <stage-start-iso> --stage 1
+npm run audit:beta-telemetry -- --since <stage-start-iso> --until <stage-end-iso> --stage 1
 ```
 
 | Metric | Value |
@@ -116,12 +131,27 @@ npm run corpus:verify-active-run -- --api-base-url https://adaptive-instructiona
 | Field | Value |
 |-------|-------|
 | **Date** | YYYY-MM-DD |
+| **Stage Window Start (UTC)** | YYYY-MM-DDTHH:MM:SSZ |
+| **Stage Window End (UTC)** | YYYY-MM-DDTHH:MM:SSZ |
 | **Location / Room** | |
 | **Supervisor Name** | |
 | **Support Owner Name** | |
 | **Students Planned** | 15 |
 | **Students Observed** | |
 | **Session Duration** | ___ minutes |
+
+### Evidence Packet Checklist
+
+| Artifact | Path / Link |
+|----------|-------------|
+| Observation forms | |
+| Telemetry audit JSON | |
+| Active-run verification output | |
+| Public load baseline JSON | |
+| Hosted smoke / auth smoke Playwright result | |
+| Research export | |
+| Vercel error review / screenshot | |
+| Supervisor debrief | |
 
 ### Observation Summary
 
@@ -140,7 +170,7 @@ npm run corpus:verify-active-run -- --api-base-url https://adaptive-instructiona
 
 Run:
 ```bash
-node scripts/audit-beta-telemetry.mjs --since <stage-start-iso> --stage 2
+npm run audit:beta-telemetry -- --since <stage-start-iso> --until <stage-end-iso> --stage 2
 ```
 
 | Metric | Value |
@@ -174,7 +204,7 @@ node scripts/audit-beta-telemetry.mjs --since <stage-start-iso> --stage 2
 
 ---
 
-## Stage 3 — 50 Students
+## Stage 3 — 40 Students
 
 ### Entry Criteria (Check before stage)
 
@@ -187,20 +217,35 @@ node scripts/audit-beta-telemetry.mjs --since <stage-start-iso> --stage 2
 | Field | Value |
 |-------|-------|
 | **Date** | YYYY-MM-DD |
+| **Stage Window Start (UTC)** | YYYY-MM-DDTHH:MM:SSZ |
+| **Stage Window End (UTC)** | YYYY-MM-DDTHH:MM:SSZ |
 | **Location / Room** | |
 | **Supervisor Name** | |
 | **Support Owner Name** | |
-| **Students Planned** | 50 |
+| **Students Planned** | 40 |
 | **Students Observed** | |
 | **Session Duration** | ___ minutes |
+
+### Evidence Packet Checklist
+
+| Artifact | Path / Link |
+|----------|-------------|
+| Observation forms | |
+| Telemetry audit JSON | |
+| Active-run verification output | |
+| Public load baseline JSON | |
+| Hosted smoke / auth smoke Playwright result | |
+| Research export | |
+| Vercel error review / screenshot | |
+| Supervisor debrief | |
 
 ### Observation Summary
 
 | Metric | Count |
 |--------|-------|
-| Students with Go verdict | ___ / 50 |
-| Students with Caution verdict | ___ / 50 |
-| Students with No-Go verdict | ___ / 50 |
+| Students with Go verdict | ___ / 40 |
+| Students with Caution verdict | ___ / 40 |
+| Students with No-Go verdict | ___ / 40 |
 | Critical issues observed | |
 | High issues observed | |
 | Hint system failures | |
@@ -211,7 +256,7 @@ node scripts/audit-beta-telemetry.mjs --since <stage-start-iso> --stage 2
 
 Run:
 ```bash
-node scripts/audit-beta-telemetry.mjs --since <stage-start-iso> --stage 3
+npm run audit:beta-telemetry -- --since <stage-start-iso> --until <stage-end-iso> --stage 3
 ```
 
 | Metric | Value |
@@ -232,15 +277,15 @@ node scripts/audit-beta-telemetry.mjs --since <stage-start-iso> --stage 3
 
 ### Stage 3 Verdict
 
-- [ ] **PASS**: >= 47/50 successful, stable backend, all telemetry OK
-- [ ] **HOLD**: P1 issue or < 47/50 successful completions
+- [ ] **PASS**: >= 38/40 successful, stable backend, all telemetry OK
+- [ ] **HOLD**: P1 issue or < 38/40 successful completions
 - [ ] **ROLLBACK**: P0 incident or critical systemic failure
 
 **Decision Owner**: _______________  **Date/Time**: _______________
 
 ---
 
-## Final 50-Student Beta Readiness Verdict
+## Final 40-Student Live-Test Verdict
 
 Fill this section only after Stage 3 is complete and all evidence has been reviewed.
 
@@ -250,7 +295,7 @@ Fill this section only after Stage 3 is complete and all evidence has been revie
 |-------|----------|----|---------|-------|----------|
 | 1 | 5 | | | | |
 | 2 | 15 | | | | |
-| 3 | 50 | | | | |
+| 3 | 40 | | | | |
 
 ### Critical Signal Verification
 
@@ -274,16 +319,14 @@ Link: `./beta-live-findings-TODO.md`
 |----------|----------|--------|
 | | | |
 
-### Verdict
-
 **Select exactly one:**
 
-- [ ] **READY FOR CONTROLLED 50-STUDENT BETA**
+- [ ] **READY FOR CONTROLLED 40-STUDENT LIVE TEST**
   - All stages passed
   - No unresolved P0/P1 blockers
   - Real-session evidence supports the verdict
 
-- [ ] **BLOCKED FOR 50-STUDENT BETA**
+- [ ] **BLOCKED FOR 40-STUDENT LIVE TEST**
   - One or more stages failed
   - Unresolved P0/P1 blockers remain
   - See blocker packet: `./beta-blocker-packet-TODO.md`
@@ -297,9 +340,10 @@ Link: `./beta-live-findings-TODO.md`
 ### A. How to Run Telemetry Audit
 
 ```bash
-# Example: Stage 1 session started at 09:00 UTC on 2026-04-01
-node scripts/audit-beta-telemetry.mjs \
+# Example: Stage 1 session started at 09:00 UTC and ended at 10:00 UTC on 2026-04-01
+npm run audit:beta-telemetry -- \
   --since 2026-04-01T09:00:00Z \
+  --until 2026-04-01T10:00:00Z \
   --stage 1
 ```
 
@@ -321,4 +365,4 @@ Store completed forms in a shared location (e.g., `docs/runbooks/beta-observatio
 ---
 
 *Template Version: 1.0.0*
-*Last Updated: 2026-03-30*
+*Last Updated: 2026-04-05*

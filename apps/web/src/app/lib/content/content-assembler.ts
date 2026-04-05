@@ -27,6 +27,7 @@ import {
   getConceptIdsForSqlEngageSubtype,
   getDeterministicSqlEngageAnchor
 } from '../../data/sql-engage';
+import { isLLMAvailable as isRuntimeLLMAvailable } from '../runtime-config';
 
 /**
  * Parameters for assembling a textbook unit
@@ -67,13 +68,12 @@ export interface AssemblyResult {
 }
 
 /**
- * Check if LLM generation should be attempted
- * Returns false if VITE_LLM_URL is not configured
+ * Check if LLM generation should be attempted.
+ * This is a coarse runtime gate; live availability is still confirmed through
+ * the backend LLM status endpoint by the caller.
  */
 export function shouldAttemptLLM(): boolean {
-  // Check if LLM URL is configured
-  const llmUrl = import.meta.env.VITE_LLM_URL;
-  return Boolean(llmUrl && llmUrl !== '');
+  return isRuntimeLLMAvailable();
 }
 
 /**

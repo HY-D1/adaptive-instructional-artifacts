@@ -129,6 +129,7 @@ export default defineConfig({
       testMatch: [
         '**/deployed-auth-smoke.spec.ts',
         '**/student-multi-device-persistence.spec.ts',
+        '**/student-script-production.spec.ts',
         '**/instructor-section-scope.spec.ts',
         '**/api-authz.spec.ts',
         '**/hint-stability-beta.spec.ts',

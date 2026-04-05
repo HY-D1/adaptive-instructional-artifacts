@@ -31,6 +31,8 @@
 | Field | Record |
 |-------|--------|
 | **Date** | |
+| **Stage Window Start (UTC)** | YYYY-MM-DDTHH:MM:SSZ |
+| **Stage Window End (UTC)** | YYYY-MM-DDTHH:MM:SSZ |
 | **Observer Name** | |
 | **Student Name** | |
 | **Student ID/Email** | |
@@ -43,7 +45,7 @@
 
 ## Observation Checklist
 
-### Phase 1: Signup & Onboarding (5-7 minutes)
+### Phase 1: Account Creation & Onboarding (5-7 minutes)
 
 **Timing**: Start timer when student opens URL
 
@@ -51,15 +53,18 @@
 |------------|------|--------|-------|
 | Student opens URL successfully | ___:___ | ✅ ❌ | |
 | Welcome page loads without errors | ___:___ | ✅ ❌ | |
-| Student enters name | ___:___ | ✅ ❌ | |
-| Student selects "I am a Student" | ___:___ | ✅ ❌ | |
+| "Sign in required" card visible | ___:___ | ✅ ❌ | |
+| Student opens "Create Account" | ___:___ | ✅ ❌ | |
+| Student enters name/email/password | ___:___ | ✅ ❌ | |
+| Student selects "Student" role | ___:___ | ✅ ❌ | |
 | Student enters class code | ___:___ | ✅ ❌ | |
-| Class code accepted | ___:___ | ✅ ❌ | |
+| Class code accepted / account created | ___:___ | ✅ ❌ | |
 | **Onboarding complete** | ___:___ | ✅ ❌ | |
 
 **Issues to watch for:**
 - [ ] Class code rejection
 - [ ] Page load errors
+- [ ] Confusion about Sign In vs Create Account
 - [ ] Confusion about role selection
 - [ ] Browser compatibility issues
 
@@ -327,5 +332,5 @@ After 3-10 sessions, summarize findings:
 
 ---
 
-*Last Updated: 2026-03-30*
+*Last Updated: 2026-04-05*
 *For Beta Version: v1.0.0-beta*

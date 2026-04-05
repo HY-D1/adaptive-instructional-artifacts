@@ -157,7 +157,7 @@ import { storage } from '../../../lib/storage';
 import { InteractionEvent, LearnerProfile, ExperimentCondition, PdfIndexDocument } from '../../../types';
 import { type ReflectionQualityScore } from '../../../lib/content/self-explanation-scorer';
 import { orchestrator, ReplayDecisionPoint, AutoEscalationMode } from '../../../lib/adaptive-orchestrator';
-import { checkOllamaHealth, OLLAMA_MODEL } from '../../../lib/api/llm-client';
+import { checkLLMHealth, getDefaultModelForProvider } from '../../../lib/api/llm-client';
 import { loadOrBuildPdfIndex, uploadPdfAndBuildIndex } from '../../../lib/pdf-index-loader';
 import { isDemoMode, getDemoModeMessage, DEMO_MODE_VERSION } from '../../../lib/utils/demo-mode';
 import { isHostedMode, getHostedModeMessage } from '../../../lib/runtime-config';
@@ -261,8 +261,10 @@ export function ResearchDashboard() {
   const [replayNonce, setReplayNonce] = useState(0);
   const [exportAllHistory, setExportAllHistory] = useState(false);
   const [isCheckingLLM, setIsCheckingLLM] = useState(false);
-  const [llmHealthMessage, setLlmHealthMessage] = useState('Not checked. Click "Test LLM" to verify local Ollama.');
+  const [llmHealthMessage, setLlmHealthMessage] = useState('Not checked. Click "Test LLM" to verify backend LLM status.');
   const [llmHealthOk, setLlmHealthOk] = useState<boolean | null>(null);
+  const [llmProviderLabel, setLlmProviderLabel] = useState<string>('backend');
+  const [llmTargetModel, setLlmTargetModel] = useState<string | null>(null);
   const [policyReplayMode, setPolicyReplayMode] = useState(storage.getPolicyReplayMode());
   const [pdfIndexSummary, setPdfIndexSummary] = useState<string>('No PDF index loaded');
   const [pdfIndexStatus, setPdfIndexStatus] = useState<'idle' | 'loading' | 'ready' | 'error' | 'warning'>('idle');
@@ -470,11 +472,16 @@ export function ResearchDashboard() {
 
   const handleLLMHealthCheck = async () => {
     setIsCheckingLLM(true);
-    setLlmHealthMessage('Checking local Ollama...');
+    setLlmHealthMessage('Checking backend LLM...');
     try {
-      const status = await checkOllamaHealth();
+      const status = await checkLLMHealth();
       setLlmHealthMessage(status.message);
       setLlmHealthOk(status.ok);
+      setLlmProviderLabel(status.provider || 'backend');
+      setLlmTargetModel(
+        status.availableModels[0]
+          || (status.provider ? getDefaultModelForProvider(status.provider) : null),
+      );
     } catch (error) {
       setLlmHealthOk(false);
       setLlmHealthMessage(`LLM health check failed unexpectedly: ${(error as Error).message}`);
@@ -1536,7 +1543,13 @@ export function ResearchDashboard() {
                     {hostedMode ? '🌐 Hosted Mode' : isDemoMode() ? '🎓 Demo Mode' : 'LLM Health Check'}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {hostedMode ? 'Deterministic fallback active' : isDemoMode() ? DEMO_MODE_VERSION : `Target model: ${OLLAMA_MODEL}`}
+                    {hostedMode
+                      ? 'Frontend-only deterministic mode active'
+                      : isDemoMode()
+                        ? DEMO_MODE_VERSION
+                        : llmTargetModel
+                          ? `Provider: ${llmProviderLabel} · Model: ${llmTargetModel}`
+                          : 'Backend provider status not checked yet'}
                   </p>
                   <p className={`text-xs ${llmHealthOk === null ? 'text-gray-600' : llmHealthOk ? 'text-emerald-700' : 'text-red-700'}`}>
                     {hostedMode ? getHostedModeMessage() : isDemoMode() ? getDemoModeMessage() : llmHealthMessage}

@@ -35,7 +35,7 @@ export { MIN_RETRIEVAL_CONFIDENCE, ENHANCED_HINT_SERVICE_VERSION } from './types
 
 // Core functions
 export { generateEnhancedHint, preloadHintContext } from './generator';
-export { checkAvailableResources, findRelevantTextbookUnits, getHintStrategyDescription } from './resources';
+export { checkAvailableResources, checkAvailableResourcesAsync, findRelevantTextbookUnits, getHintStrategyDescription } from './resources';
 export { applyHintSafetyLayer, scoreRefinedHintCandidate, getGenericFallbackHint } from './safety';
 export { buildEnhancedRetrievalBundle, extractRetrievalSignals } from './retrieval';
 export { generateSqlEngageFallbackHint } from './fallback';

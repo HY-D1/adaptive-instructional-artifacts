@@ -145,6 +145,7 @@ export function HintSystem({
   const helpEventSequenceRef = useRef(0);
   const hintRequestVersionRef = useRef(0);
   const pendingAutoEscalationTimeoutRef = useRef<number | null>(null);
+  const visibleHintCountRef = useRef(0);
   
   // Enhanced hint system hook
   const {
@@ -187,6 +188,7 @@ export function HintSystem({
   const resetHintFlow = () => {
     clearPendingAutoEscalation();
     hintRequestVersionRef.current += 1;
+    visibleHintCountRef.current = 0;
     setHints([]);
     setHintPdfPassages([]);
     setExpandedHintIndex(null);
@@ -340,12 +342,12 @@ export function HintSystem({
   const getProblemTrace = () => scopedInteractions.filter((interaction) => interaction.problemId === problemId);
   const getHelpFlowKey = () => `${sessionId || 'no-session'}|${learnerId}|${problemId}`;
   
-  // BUG FIX #4: Consolidated help request index calculation into single function
-  const calculateHelpRequestIndex = (problemTrace: InteractionEvent[]) =>
-    problemTrace.filter(
-      (interaction) =>
-        interaction.eventType === 'hint_view' || interaction.eventType === 'explanation_view'
-    ).length + 1;
+  // BUG FIX #4: Consolidated help request index calculation into single function.
+  // Prefer the furthest visible hint count when interaction persistence lags a rerender.
+  const calculateHelpRequestIndex = (problemTrace: InteractionEvent[]) => {
+    const persistedHintCount = problemTrace.filter((interaction) => interaction.eventType === 'hint_view').length;
+    return Math.max(persistedHintCount, visibleHintCountRef.current) + 1;
+  };
   const syncHelpFlowIndex = (problemTrace: InteractionEvent[]) => {
     const flowKey = getHelpFlowKey();
     const persistedNextHelpRequestIndex = calculateHelpRequestIndex(problemTrace);
@@ -436,6 +438,7 @@ export function HintSystem({
     hasReconstructedRef.current = true;
     
     // Clear existing state first to prevent duplication
+    visibleHintCountRef.current = 0;
     setHints([]);
     setHintPdfPassages([]);
     setEnhancedHintInfo([]);
@@ -443,27 +446,37 @@ export function HintSystem({
     // Try to get problem trace from recentInteractions first
     let problemTrace = getProblemTrace();
     
-    // If empty, load from storage
+    // If empty, load from storage for the same learner/session/problem only.
+    // Never mix cross-session history into current ladder reconstruction.
     if (problemTrace.length === 0) {
       const allInteractions = storage.getInteractionsByLearner(learnerId);
       problemTrace = allInteractions.filter(
-        (i) => i.problemId === problemId && i.learnerId === learnerId
+        (i) =>
+          i.problemId === problemId &&
+          i.learnerId === learnerId &&
+          (!sessionId || i.sessionId === sessionId)
       );
     }
     
     const hintEvents = problemTrace.filter(
       (interaction) => interaction.eventType === 'hint_view'
     );
+    const explanationEvents = problemTrace.filter(
+      (interaction) => interaction.eventType === 'explanation_view'
+    );
+    const latestHelpEvent = [...hintEvents, ...explanationEvents]
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .at(-1);
     
     if (hintEvents.length > 0) {
       // Reconstruct hints from saved hint events
       const reconstructedHints = hintEvents.map(event => event.hintText || '');
+      visibleHintCountRef.current = reconstructedHints.length;
       setHints(reconstructedHints);
       
-      // Restore active hint subtype from last hint
-      const lastHint = hintEvents[hintEvents.length - 1];
-      if (lastHint.sqlEngageSubtype) {
-        setActiveHintSubtype(lastHint.sqlEngageSubtype);
+      // Restore active subtype from latest help event
+      if (latestHelpEvent?.sqlEngageSubtype) {
+        setActiveHintSubtype(latestHelpEvent.sqlEngageSubtype);
       }
       
       // Reconstruct PDF passages for each hint
@@ -489,13 +502,21 @@ export function HintSystem({
       }));
       setEnhancedHintInfo(reconstructedEnhancedInfo);
       
-      // Check if explanation was shown
-      const hasExplanation = problemTrace.some(
-        (interaction) => interaction.eventType === 'explanation_view'
-      );
-      if (hasExplanation) {
-        setShowExplanation(true);
-      }
+    } else if (latestHelpEvent?.sqlEngageSubtype) {
+      setActiveHintSubtype(latestHelpEvent.sqlEngageSubtype);
+    }
+
+    // Reconstruct explanation state even when there are no visible hints.
+    const hasExplanation = explanationEvents.length > 0;
+    if (hasExplanation) {
+      const latestExplanation = explanationEvents[explanationEvents.length - 1];
+      const helpRequestCount = latestExplanation?.helpRequestIndex ?? explanationEvents.length;
+      setShowExplanation(true);
+      setCurrentRung(2);
+      setAutoEscalationInfo({
+        triggered: true,
+        helpRequestCount
+      });
     }
   }, [problemId, learnerId, sessionId]);
   // Note: recentInteractions is intentionally omitted from deps to prevent infinite loops.
@@ -835,15 +856,43 @@ export function HintSystem({
         sessionId
       });
 
-      // Check if we're already in escalation/explanation mode - don't increment counter
-      if (showExplanation || autoEscalationInfo.triggered) {
-        const problemTrace = getProblemTrace();
+      const problemTrace = getProblemTrace();
+      const hasExplanationHistory = problemTrace.some(
+        (interaction) => interaction.eventType === 'explanation_view'
+      );
+      const shouldResetToHintL1 =
+        hints.length === 0 && (showExplanation || autoEscalationInfo.triggered || hasExplanationHistory);
+
+      // If we are in explanation mode with no visible hints, reset ladder state
+      // and restart at L1 for this problem.
+      if (shouldResetToHintL1) {
+        clearPendingAutoEscalation();
+        visibleHintCountRef.current = 0;
+        setHints([]);
+        setHintPdfPassages([]);
+        setExpandedHintIndex(null);
+        setShowExplanation(false);
+        setCurrentRung(1);
+        setConceptIds([]);
+        setShowSourceViewer(false);
+        setAutoEscalationInfo({ triggered: false, helpRequestCount: 0 });
+        setEnhancedHintInfo([]);
+        setHintRuntimeError(null);
+        localStorage.removeItem(HINT_INFO_KEY);
+        localStorage.removeItem(HINTS_KEY);
+        nextHelpRequestIndexRef.current = 1;
+        emittedHelpEventKeysRef.current = new Set();
+        helpEventSequenceRef.current = 0;
+      }
+
+      // If explanations are already active and we are not in reset mode, stay in explanation path.
+      if (!shouldResetToHintL1 && (showExplanation || autoEscalationInfo.triggered)) {
         await handleShowExplanation('manual', undefined, problemTrace);
         return;
       }
 
-      const problemTrace = getProblemTrace();
       const nextHelpRequestIndex = allocateNextHelpRequestIndex(problemTrace);
+      let orchestrationDecisionForHint: OrchestrationDecision | undefined;
 
       // --- Canonical orchestration decision (Week 6) ---
       // When a session condition is assigned, use textbook-orchestrator as the single
@@ -869,12 +918,15 @@ export function HintSystem({
           },
         });
 
-        if (decision.action !== 'stay_hint') {
+        if (decision.action === 'show_explanation') {
           if (!isStaleRequest()) {
             setAutoEscalationInfo({ triggered: true, helpRequestCount: nextHelpRequestIndex });
           }
           await handleShowExplanation('auto', nextHelpRequestIndex, problemTrace, decision);
           return;
+        }
+        if (decision.action !== 'stay_hint') {
+          orchestrationDecisionForHint = decision;
         }
       } else if (nextHelpRequestIndex >= autoEscalationThreshold) {
         // Fallback when no session config: use legacy hint-count threshold
@@ -944,7 +996,11 @@ export function HintSystem({
         return;
       }
 
-      setHints((currentHints) => [...currentHints, hintSelection.hintText]);
+      setHints((currentHints) => {
+        const nextHints = [...currentHints, hintSelection.hintText];
+        visibleHintCountRef.current = nextHints.length;
+        return nextHints;
+      });
       setHintPdfPassages((current) => [...current, hintSelection.pdfPassages]);
       setEnhancedHintInfo((current) => [...current, {
         isEnhanced: hintSelection.isEnhanced,
@@ -1020,6 +1076,9 @@ export function HintSystem({
           safety_filter_applied: hintSelection.safetyFilterApplied,
           retrieved_source_ids: retrievedSourceIds,
           retrieved_chunk_ids: retrievedChunkIds,
+          orchestration_action: orchestrationDecisionForHint?.action ?? 'stay_hint',
+          orchestration_reason: orchestrationDecisionForHint?.reason ?? null,
+          orchestration_trigger_reason: orchestrationDecisionForHint?.escalationTriggerReason ?? null,
         },
         conditionId: sessionConfig?.conditionId
       };
@@ -1117,15 +1176,23 @@ export function HintSystem({
       </Card>
     );
   }
+  const helpHistoryTrace = getProblemTrace();
   const nextHelpRequestIndex = Math.max(
-    calculateHelpRequestIndex(getProblemTrace()),
+    calculateHelpRequestIndex(helpHistoryTrace),
     nextHelpRequestIndexRef.current
   );
-  const primaryActionLabel = nextHelpRequestIndex >= autoEscalationThreshold
-    ? 'Get More Help'
-    : hints.length === 0
-      ? 'Request Hint'
-      : 'Next Hint';
+  const hasExplanationHistory = helpHistoryTrace.some(
+    (interaction) => interaction.eventType === 'explanation_view'
+  );
+  const shouldOfferHintReset =
+    hints.length === 0 && (showExplanation || autoEscalationInfo.triggered || hasExplanationHistory);
+  const primaryActionLabel = shouldOfferHintReset
+    ? 'Request Hint'
+    : nextHelpRequestIndex >= autoEscalationThreshold
+      ? 'Get More Help'
+      : hints.length === 0
+        ? 'Request Hint'
+        : 'Next Hint';
   // Count hints that have been actually viewed - use hints.length directly to ensure sync
   const hintProgress = showExplanation 
     ? Math.min(hints.length + 1, 4)  // Hints + explanation mode

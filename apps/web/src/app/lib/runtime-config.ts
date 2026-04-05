@@ -21,8 +21,8 @@ export function isInstructorModeAvailable(): boolean {
 }
 
 /**
- * Check if LLM features are available (Ollama)
- * Note: Ollama is only available in local development, not on Vercel
+ * Check if LLM features are available.
+ * Backend-configured deployments can use Groq or Ollama via the server proxy.
  */
 export function isLLMAvailable(): boolean {
   const enableLLM = import.meta.env.VITE_ENABLE_LLM;
@@ -40,7 +40,7 @@ export function isLLMAvailable(): boolean {
     return false;
   }
 
-  // Legacy: available if Ollama URL is configured (local dev only)
+  // Legacy local-dev support: available if an explicit Ollama URL is configured
   const ollamaUrl = import.meta.env.VITE_OLLAMA_URL;
   return !!ollamaUrl;
 }
@@ -113,7 +113,7 @@ export function getOllamaUrl(): string {
 export interface RuntimeConfig {
   /** Instructor mode requires VITE_INSTRUCTOR_PASSCODE */
   instructorModeAvailable: boolean;
-  /** LLM features (Ollama) - local dev only */
+  /** LLM features via backend proxy or local Ollama */
   llmAvailable: boolean;
   /** PDF index features - requires backend */
   pdfIndexAvailable: boolean;
@@ -161,7 +161,7 @@ export function logRuntimeConfig(): void {
   // eslint-disable-next-line no-console
   console.log('Instructor Mode:', config.instructorModeAvailable ? '✅ Available' : '❌ Not configured');
   // eslint-disable-next-line no-console
-  console.log('LLM Features:', config.llmAvailable ? '✅ Available' : '❌ Not available (local dev only)');
+  console.log('LLM Features:', config.llmAvailable ? '✅ Available' : '❌ Not available');
   // eslint-disable-next-line no-console
   console.log('PDF Index:', config.pdfIndexAvailable ? '✅ Enabled' : '❌ Disabled');
   // eslint-disable-next-line no-console
@@ -180,7 +180,7 @@ export function logRuntimeConfig(): void {
  * Get a user-friendly message explaining hosted mode limitations
  */
 export function getHostedModeMessage(): string {
-  return 'Research features use deterministic mode. PDF indexing and LLM require local deployment.';
+  return 'Research features use deterministic mode in frontend-only hosted deployments. Connect the backend API to enable live LLM-backed features.';
 }
 
 /**
@@ -194,5 +194,8 @@ export function getPDFUnavailableError(): string {
  * Get error message when LLM features are unavailable
  */
 export function getLLMUnavailableError(): string {
-  return 'LLM features are not available in hosted mode. Run the app locally with Ollama installed to use AI-powered explanations.';
+  if (isBackendConfigured()) {
+    return 'AI features are temporarily unavailable because the backend LLM service is unreachable or disabled.';
+  }
+  return 'AI features are not available in this frontend-only hosted deployment. Connect the backend API or use a local Ollama-backed development setup to enable live explanations.';
 }

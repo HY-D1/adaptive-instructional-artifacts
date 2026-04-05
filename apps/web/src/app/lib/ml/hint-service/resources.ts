@@ -5,6 +5,8 @@
  */
 
 import { storage } from '../../storage/storage';
+import { isBackendConfigured } from '../../runtime-config';
+import { isLLMAvailable } from '../../api/llm-client';
 import type { AvailableResources } from './types';
 
 /**
@@ -28,14 +30,42 @@ export function checkAvailableResources(learnerId: string): AvailableResources {
 }
 
 /**
+ * Check resource availability and refine LLM support from live backend status.
+ */
+export async function checkAvailableResourcesAsync(learnerId: string): Promise<AvailableResources> {
+  const resources = checkAvailableResources(learnerId);
+
+  if (!resources.llm) {
+    return resources;
+  }
+
+  try {
+    return {
+      ...resources,
+      llm: await isLLMAvailable(),
+    };
+  } catch {
+    return {
+      ...resources,
+      llm: false,
+    };
+  }
+}
+
+/**
  * Check if LLM service is available
  */
 function checkLLMAvailability(): boolean {
-  // Check if Ollama URL is configured and reachable
-  const ollamaUrl = import.meta.env.VITE_OLLAMA_URL || 'http://localhost:11434';
-  // Note: Actual check would require an async ping, this is a sync check
-  // The service will handle failures gracefully
-  return Boolean(ollamaUrl);
+  if (isBackendConfigured()) {
+    return true;
+  }
+
+  const ollamaUrl = import.meta.env.VITE_OLLAMA_URL;
+  if (ollamaUrl && ollamaUrl.length > 0) {
+    return true;
+  }
+
+  return false;
 }
 
 /**

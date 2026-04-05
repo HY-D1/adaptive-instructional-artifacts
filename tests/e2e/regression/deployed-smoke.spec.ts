@@ -1,17 +1,17 @@
 /**
- * @deployed-smoke Deployment-grade real-user flow
+ * @deployed-smoke Deployment-grade public hosted smoke
  *
- * Verifies the complete learner journey on a live deployment:
- *   sign in → wrong query → request help → save note →
- *   navigate to /textbook → note visible →
- *   hard reload → note persists →
- *   open known-bad concept → producer quality metadata shown
+ * Verifies the unauthenticated hosted contract on a live deployment:
+ *   root page shows the auth gate →
+ *   Create Account routes to hosted signup →
+ *   signup page exposes role-specific access-code fields →
+ *   public corpus JSON files are valid →
+ *   known-bad concept corpus entries expose learner-safe fallback metadata
  *
- * This spec runs against a real deployed URL and therefore:
- *   - Does NOT use addInitScript to seed localStorage (real browser behaviour)
- *   - Uses the StartPage sign-in flow (name entry + role selection)
- *   - Verifies localStorage persistence across hard reloads
- *   - Verifies concept-quality.json producer metadata is consumed correctly
+ * This spec intentionally avoids authenticated flows. Those are covered by the
+ * auth-backed production suite (`deployed-auth-smoke.spec.ts`,
+ * `student-script-production.spec.ts`, etc.) once deterministic E2E credentials
+ * are available.
  *
  * Tags:
  *   @deployed-smoke  — run against the deployed app (PLAYWRIGHT_BASE_URL required)
@@ -32,225 +32,76 @@
  *     npx playwright test -c playwright.config.ts --grep "@ux-bugs|@deployed-smoke"
  */
 
-import { expect, test } from '@playwright/test';
-import { replaceEditorText, getTextbookUnits } from '../../helpers/test-helpers';
+import { expect, test, type Page } from '@playwright/test';
 
-// ─── Shared learner identity ────────────────────────────────────────────────
-// Uses a timestamp suffix so parallel runs or re-runs don't collide in
-// localStorage from a previous session.
-const LEARNER_NAME = `SmokeTester-${Date.now()}`;
-
-/**
- * Sign in via the StartPage flow.
- * Handles both cases:
- *   a) StartPage is shown (first visit, no profile in localStorage)
- *   b) Direct redirect to /practice (if localStorage already has a profile)
- */
-async function signInViaStartPage(page: Parameters<typeof test>[1]['page'], name: string) {
-  await page.goto('/');
-
-  // If already on practice (localStorage had a profile), we're done
-  const isOnPractice = await page.getByRole('button', { name: 'Run Query' }).isVisible({ timeout: 3_000 }).catch(() => false);
-  if (isOnPractice) return;
-
-  // Wait for StartPage heading
-  await expect(
-    page.getByRole('heading', { name: /SQL-Adapt/i })
-  ).toBeVisible({ timeout: 15_000 });
-
-  // Clear any stale profile so we get a deterministic fresh session
-  await page.evaluate(() => {
-    window.localStorage.removeItem('sql-adapt-user-profile');
-    window.localStorage.removeItem('sql-adapt-welcome-seen');
-    window.sessionStorage.clear();
-  });
-  await page.reload();
-
-  // Welcome / onboarding modal — dismiss if present
-  const gotItBtn = page.getByRole('button', { name: /Got it|Get Started|Continue/i }).first();
-  if (await gotItBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await gotItBtn.click();
+async function dismissWelcomeModalIfPresent(page: Page) {
+  const closeButton = page.getByRole('button', { name: /Close welcome dialog/i }).first();
+  if (await closeButton.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await closeButton.click();
+    await expect(closeButton).not.toBeVisible({ timeout: 5_000 }).catch(() => {});
   }
-
-  // Wait for StartPage
-  await expect(
-    page.getByRole('heading', { name: /SQL-Adapt/i })
-  ).toBeVisible({ timeout: 15_000 });
-
-  // Enter name
-  const nameInput = page.getByPlaceholder(/Enter your.*name|Username/i).first();
-  if (await nameInput.isVisible({ timeout: 5_000 }).catch(() => false)) {
-    await nameInput.fill(name);
-  }
-
-  // Select Student role
-  const studentCard = page
-    .locator('.cursor-pointer, [role="button"], button')
-    .filter({ hasText: /^Student$/i })
-    .first();
-  if (await studentCard.isVisible({ timeout: 5_000 }).catch(() => false)) {
-    await studentCard.click();
-  }
-
-  // Click Get Started
-  await page.getByRole('button', { name: /Get Started/i }).click();
-
-  // Wait for redirect to practice
-  await expect(page).toHaveURL(/\/(practice)?$/, { timeout: 15_000 });
 }
 
-// ─── Test suite ──────────────────────────────────────────────────────────────
+test.describe('@deployed-smoke @ux-bugs Public hosted deployment smoke', () => {
+  test('root page routes to hosted signup and shows role-specific access codes', async ({ page }) => {
+    await page.goto('/');
+    await dismissWelcomeModalIfPresent(page);
 
-test.describe('@deployed-smoke @ux-bugs Real-user deployment smoke', () => {
-  /**
-   * Full end-to-end learner journey:
-   *
-   *  1. Sign in via StartPage
-   *  2. Submit a wrong SQL query → error appears
-   *  3. Request a hint ("Get Help" / "Request Hint")
-   *  4. Click "Save to Notes" → success feedback visible
-   *  5. Navigate to /textbook via SPA link → note visible without reload
-   *  6. Hard-reload /textbook → note still visible (localStorage persistence)
-   *  7. Open a known-bad concept page → producer quality banner shown
-   *  8. learnerSafeSummary visible (concept-quality.json consumed correctly)
-   */
-  test('auth → practice → help → save note → textbook persists → concept quality fallback', async ({ page }) => {
-    // ── Step 1: Sign in ───────────────────────────────────────────────────────
-    await signInViaStartPage(page, LEARNER_NAME);
-
-    await expect.poll(async () =>
-      page.getByRole('button', { name: 'Run Query' }).isEnabled().catch(() => false),
-    { timeout: 30_000, intervals: [500] }).toBe(true);
-
-    // ── Step 2: Submit a wrong SQL query ──────────────────────────────────────
-    await replaceEditorText(
-      page,
-      "SELECT name FROM employees WHERE department = Engineering"
-    );
-    await page.getByRole('button', { name: 'Run Query' }).click();
-
-    // Wait for error feedback
+    await expect(page.getByText(/Sign in required/i)).toBeVisible({ timeout: 15_000 });
     await expect(
-      page.locator('[class*="text-red"], .text-red-600, [class*="error"]').first()
+      page.getByText(/Students: use your instructor's class code/i),
     ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('button', { name: /^Sign In$/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Create Account$/i })).toBeVisible();
 
-    // ── Step 3: Request a hint ────────────────────────────────────────────────
-    const helpBtn = page.getByRole('button', { name: /Get Help|Request Hint/i }).first();
-    if (await helpBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await helpBtn.click();
-      // Wait for hint panel / Save to Notes to become enabled
-      await expect(
-        page.getByRole('button', { name: /Save to Notes/i }).first()
-      ).toBeEnabled({ timeout: 10_000 }).catch(() => {});
-    }
+    await page.getByRole('button', { name: /^Create Account$/i }).click();
+    await expect(page).toHaveURL(/\/login(\?tab=signup)?$/, { timeout: 10_000 });
+    await expect(page.getByRole('heading', { name: /Create your account/i })).toBeVisible();
 
-    // ── Step 4: Save to Notes ─────────────────────────────────────────────────
-    const saveBtn = page.getByRole('button', { name: /Save to Notes/i }).first();
-    await expect(saveBtn).toBeEnabled({ timeout: 10_000 });
-    await saveBtn.click();
+    await page.getByRole('button', { name: /Student\s+Practice SQL/i }).click();
+    await expect(page.getByLabel(/Class code/i)).toBeVisible();
+    await expect(page.getByPlaceholder(/Enter the class code/i)).toBeVisible();
 
-    // Success confirmation must appear
-    await expect(
-      page.locator('text=/Saved.*My Textbook|Updated.*My Textbook/i').first()
-    ).toBeVisible({ timeout: 20_000 });
-
-    // No silent failure / "no concept context" error
-    const noContextAlert = page
-      .locator('[role="alert"], .text-amber-700, .text-red-700')
-      .filter({ hasText: /no concept context|Could not save/i });
-    await expect(noContextAlert).not.toBeVisible();
-
-    // ── Step 5: Navigate to /textbook (SPA link) ──────────────────────────────
-    await page.getByRole('link', { name: 'My Textbook' }).first().click();
-    await expect(page).toHaveURL(/\/textbook/, { timeout: 10_000 });
-
-    // Unit title must appear without a manual refresh
-    const learnerId = await page.evaluate(() => {
-      try {
-        const raw = window.localStorage.getItem('sql-adapt-user-profile');
-        return raw ? JSON.parse(raw).id : null;
-      } catch { return null; }
-    });
-
-    if (learnerId) {
-      const units = await getTextbookUnits(page, learnerId);
-      expect(units.length).toBeGreaterThan(0);
-      const firstTitle = (units[0].title as string | undefined) || '';
-      if (firstTitle.length > 0) {
-        await expect(
-          page.getByText(firstTitle, { exact: false }).first()
-        ).toBeVisible({ timeout: 10_000 });
-      }
-    }
-
-    // ── Step 6: Hard-reload → note still visible (localStorage persistence) ───
-    await page.reload();
-    await expect(page).toHaveURL(/\/textbook/, { timeout: 10_000 });
-    await expect(
-      page.locator('h1, h2').first()
-    ).toBeVisible({ timeout: 10_000 });
-
-    if (learnerId) {
-      const unitsAfterReload = await getTextbookUnits(page, learnerId);
-      expect(unitsAfterReload.length).toBeGreaterThan(0);
-    }
-
-    await page.screenshot({
-      path: 'test-results/deployed-smoke-textbook.png',
-      fullPage: true,
-    });
-
-    // ── Step 7 & 8: Open known-bad concept → producer quality metadata shown ──
-    await page.goto('/concepts/murachs-mysql-3rd-edition/mysql-intro');
-
-    await expect(
-      page.locator('h1').filter({ hasText: /Introduction to MySQL/i })
-    ).toBeVisible({ timeout: 30_000 });
-
-    // Quality-limited banner (populated from concept-quality.json via concept-loader)
-    const banner = page.locator('[role="note"][aria-label*="quality"]');
-    await expect(banner).toBeVisible({ timeout: 10_000 });
-    await expect(banner).toContainText(/Source quality limited/i);
-
-    // learnerSafeSummary (from concept-quality.json / concept-map.json qualityMetadata)
-    const overviewBox = page.getByTestId('learner-safe-summary');
-    await expect(overviewBox).toBeVisible({ timeout: 10_000 });
-    await expect(overviewBox).toContainText(/MySQL/i);
-
-    await page.screenshot({
-      path: 'test-results/deployed-smoke-concept-quality.png',
-      fullPage: true,
-    });
+    await page.getByRole('button', { name: /Instructor\s+View analytics/i }).click();
+    await expect(page.getByLabel(/Instructor code/i)).toBeVisible();
+    await expect(page.getByPlaceholder(/Enter the instructor code/i)).toBeVisible();
   });
 
-  /**
-   * Verify concept-quality.json is served from the deployed static corpus.
-   *
-   * Accepts both on-disk schemas:
-   *   Legacy placeholder  — { version, quality: Record<id, ...> }
-   *   Helper v1           — { schemaVersion: "concept-quality-v1", qualityByConcept: Record<id, ...> }
-   *
-   * This is a lightweight network check that confirms the file exists and
-   * returns valid JSON with the expected structure — independent of the
-   * full learner journey.
-   */
+  test('known bad concept corpus entry exposes learner-safe fallback metadata', async ({ page }) => {
+    const conceptRes = await page.goto('/textbook-static/concepts/murachs-mysql-3rd-edition/mysql-intro.md');
+    expect(conceptRes?.status()).toBe(200);
+    await expect(page.locator('body')).toContainText(/title:\s*Introduction to MySQL/i);
+
+    const qualityBody = await page.evaluate(() =>
+      fetch('/textbook-static/concept-quality.json').then(r => r.json()),
+    );
+
+    const qualityStore =
+      qualityBody.schemaVersion === 'concept-quality-v1'
+        ? qualityBody.qualityByConcept
+        : qualityBody.quality;
+
+    const mysqlIntro = qualityStore?.['murachs-mysql-3rd-edition/mysql-intro'];
+    expect(mysqlIntro).toBeDefined();
+    expect(['garbled', 'fallback_only']).toContain(mysqlIntro?.readabilityStatus);
+    expect(typeof mysqlIntro?.learnerSafeSummary).toBe('string');
+    expect((mysqlIntro?.learnerSafeSummary as string).length).toBeGreaterThan(20);
+  });
+
   test('concept-quality.json is present and valid in deployed corpus', async ({ page }) => {
     const res = await page.goto('/textbook-static/concept-quality.json');
     expect(res?.status()).toBe(200);
 
     const body = await page.evaluate(() => fetch('/textbook-static/concept-quality.json').then(r => r.json()));
 
-    // Accept either schema — at least one quality store must be present
     const isV1 = body.schemaVersion === 'concept-quality-v1';
     const qualityStore = isV1 ? body.qualityByConcept : body.quality;
     expect(qualityStore).toBeDefined();
     expect(typeof qualityStore).toBe('object');
 
-    // Known-bad concept must be present with a learner-safe summary
     const mysqlIntro = qualityStore?.['murachs-mysql-3rd-edition/mysql-intro'];
     expect(mysqlIntro).toBeDefined();
 
-    // readabilityStatus: legacy uses "garbled", v1 uses "fallback_only" — both indicate bad content
     const status = mysqlIntro?.readabilityStatus as string;
     expect(['garbled', 'fallback_only']).toContain(status);
 
@@ -258,9 +109,6 @@ test.describe('@deployed-smoke @ux-bugs Real-user deployment smoke', () => {
     expect((mysqlIntro?.learnerSafeSummary as string).length).toBeGreaterThan(20);
   });
 
-  /**
-   * Verify textbook-units.json is served from the deployed static corpus.
-   */
   test('textbook-units.json is present and valid in deployed corpus', async ({ page }) => {
     const res = await page.goto('/textbook-static/textbook-units.json');
     expect(res?.status()).toBe(200);
@@ -270,10 +118,10 @@ test.describe('@deployed-smoke @ux-bugs Real-user deployment smoke', () => {
     expect(Array.isArray(body.units)).toBe(true);
     expect(body.units.length).toBeGreaterThan(0);
 
-    // Every unit must have a string id and sourceDocId
     for (const unit of body.units.slice(0, 5)) {
-      expect(typeof unit.id).toBe('string');
-      expect(unit.id.length).toBeGreaterThan(0);
+      const unitIdentifier = unit.unitId ?? unit.id;
+      expect(typeof unitIdentifier).toBe('string');
+      expect(unitIdentifier.length).toBeGreaterThan(0);
     }
   });
 });

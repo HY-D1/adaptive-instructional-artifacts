@@ -101,6 +101,20 @@ async function getActiveSessionId(page: Page): Promise<string | null> {
   });
 }
 
+async function waitForLearnerSessionReady(page: Page, learnerId = 'test-user') {
+  await expect.poll(
+    async () =>
+      page.evaluate((id) => {
+        const sessionId = window.localStorage.getItem('sql-learning-active-session');
+        const rawProfiles = window.localStorage.getItem('sql-learning-profiles');
+        const profiles = rawProfiles ? JSON.parse(rawProfiles) : [];
+        const hasProfile = Array.isArray(profiles) && profiles.some((profile: { id?: string }) => profile?.id === id);
+        return Boolean(sessionId && sessionId !== 'session-unknown' && hasProfile);
+      }, learnerId).catch(() => false),
+    { timeout: 10_000, intervals: [250, 500, 1_000] },
+  ).toBe(true);
+}
+
 // =============================================================================
 // TEST SETUP
 // =============================================================================
@@ -172,6 +186,7 @@ test.beforeEach(async ({ page }) => {
       role: 'student',
       createdAt: Date.now()
     }));
+    localStorage.setItem('sql-adapt-debug-profile', 'adaptive-escalator');
     
     localStorage.setItem(FLAG, '1');
   });
@@ -205,6 +220,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
       }));
     });
     await page.goto('/');
+    await waitForLearnerSessionReady(page);
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
@@ -268,6 +284,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
       }));
     });
     await page.goto('/');
+    await waitForLearnerSessionReady(page);
 
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
 
@@ -299,6 +316,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
       }));
     });
     await page.goto('/');
+    await waitForLearnerSessionReady(page);
 
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
 
@@ -384,6 +402,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
       }));
     });
     await page.goto('/');
+    await waitForLearnerSessionReady(page);
     
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
     
@@ -521,6 +540,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
       }));
     });
     await page.goto('/');
+    await waitForLearnerSessionReady(page);
 
     const runQueryButton = page.getByRole('button', { name: 'Run Query' });
 

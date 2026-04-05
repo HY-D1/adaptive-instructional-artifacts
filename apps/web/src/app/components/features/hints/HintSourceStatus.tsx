@@ -20,7 +20,7 @@ import {
   Info
 } from 'lucide-react';
 import { cn } from '../../ui/utils';
-import { checkAvailableResources, type AvailableResources } from '../../../lib/ml/enhanced-hint-service';
+import { checkAvailableResources, checkAvailableResourcesAsync, type AvailableResources } from '../../../lib/ml/enhanced-hint-service';
 
 interface HintSourceStatusProps {
   learnerId: string;
@@ -103,15 +103,26 @@ export function HintSourceStatus({
   const SOURCES = studentMode ? STUDENT_SOURCES : ALL_SOURCES;
   
   useEffect(() => {
+    let cancelled = false;
     const check = () => {
       const res = checkAvailableResources(learnerId);
-      setResources(res);
+      if (!cancelled) {
+        setResources(res);
+      }
+      void checkAvailableResourcesAsync(learnerId).then((resolved) => {
+        if (!cancelled) {
+          setResources(resolved);
+        }
+      });
     };
     
     check();
     // Re-check every 30 seconds in case resources change
     const interval = setInterval(check, 30000);
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [learnerId]);
   
   if (!resources) {
@@ -232,5 +243,4 @@ export function HintSourceStatus({
     </div>
   );
 }
-
 
