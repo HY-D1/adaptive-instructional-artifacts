@@ -37,6 +37,8 @@ function parseArgs(argv) {
     since: '',
     until: new Date().toISOString(),
     sectionId: '',
+    learnerId: '',
+    sessionId: '',
     stage: '',
     outputDir: 'dist/beta/telemetry-audit',
   };
@@ -56,6 +58,16 @@ function parseArgs(argv) {
     }
     if (token === '--section-id' && next) {
       out.sectionId = next.trim();
+      i += 1;
+      continue;
+    }
+    if (token === '--learner-id' && next) {
+      out.learnerId = next.trim();
+      i += 1;
+      continue;
+    }
+    if (token === '--session-id' && next) {
+      out.sessionId = next.trim();
       i += 1;
       continue;
     }
@@ -90,6 +102,12 @@ async function runAudit(sql, args) {
   const sectionFilter = args.sectionId
     ? sql`AND section_id = ${args.sectionId}`
     : sql``;
+  const learnerFilter = args.learnerId
+    ? sql`AND user_id = ${args.learnerId}`
+    : sql``;
+  const sessionFilter = args.sessionId
+    ? sql`AND session_id = ${args.sessionId}`
+    : sql``;
 
   // 1. Event counts by type
   const eventCounts = await sql`
@@ -98,6 +116,8 @@ async function runAudit(sql, args) {
     WHERE created_at >= ${since}
       AND created_at <= ${until}
       ${sectionFilter}
+      ${learnerFilter}
+      ${sessionFilter}
     GROUP BY event_type
     ORDER BY count DESC
   `;
@@ -109,10 +129,15 @@ async function runAudit(sql, args) {
     WHERE created_at >= ${since}
       AND created_at <= ${until}
       ${sectionFilter}
+      ${learnerFilter}
+      ${sessionFilter}
   `;
 
   // 3. Hint metrics
-  const [{ hintRequests, followUpHints }] = await sql`
+  const [{
+    hint_requests: hintRequests,
+    follow_up_hints: followUpHints,
+  }] = await sql`
     SELECT
       COUNT(*)::int AS hint_requests,
       COUNT(*) FILTER (WHERE help_request_index > 0)::int AS follow_up_hints
@@ -121,48 +146,109 @@ async function runAudit(sql, args) {
       AND created_at >= ${since}
       AND created_at <= ${until}
       ${sectionFilter}
+      ${learnerFilter}
+      ${sessionFilter}
   `;
 
-  // 4. Save-to-notes metrics
-  const [{ textbookAdds, textbookUpdates }] = await sql`
+  const [{
+    hint_level_one_views: hintLevelOneViews,
+    hint_level_two_plus_views: hintLevelTwoPlusViews,
+  }] = await sql`
     SELECT
-      COUNT(*)::int FILTER (WHERE event_type = 'textbook_add') AS textbook_adds,
-      COUNT(*)::int FILTER (WHERE event_type = 'textbook_update') AS textbook_updates
+      COUNT(*) FILTER (WHERE COALESCE(help_request_index, 1) = 1)::int AS hint_level_one_views,
+      COUNT(*) FILTER (WHERE COALESCE(help_request_index, 0) >= 2)::int AS hint_level_two_plus_views
     FROM interaction_events
-    WHERE event_type IN ('textbook_add', 'textbook_update')
+    WHERE event_type = 'hint_view'
       AND created_at >= ${since}
       AND created_at <= ${until}
       ${sectionFilter}
+      ${learnerFilter}
+      ${sessionFilter}
+  `;
+
+  // 4. Save-to-notes metrics
+  const [{
+    textbook_adds: textbookAdds,
+    textbook_updates: textbookUpdates,
+    textbook_unit_upserts: textbookUnitUpserts,
+  }] = await sql`
+    SELECT
+      COUNT(*) FILTER (WHERE event_type = 'textbook_add')::int AS textbook_adds,
+      COUNT(*) FILTER (WHERE event_type = 'textbook_update')::int AS textbook_updates,
+      COUNT(*) FILTER (WHERE event_type = 'textbook_unit_upsert')::int AS textbook_unit_upserts
+    FROM interaction_events
+    WHERE event_type IN ('textbook_add', 'textbook_update', 'textbook_unit_upsert')
+      AND created_at >= ${since}
+      AND created_at <= ${until}
+      ${sectionFilter}
+      ${learnerFilter}
+      ${sessionFilter}
+  `;
+
+  const [{ guidance_requests: guidanceRequests }] = await sql`
+    SELECT COUNT(*)::int AS guidance_requests
+    FROM interaction_events
+    WHERE event_type = 'guidance_request'
+      AND created_at >= ${since}
+      AND created_at <= ${until}
+      ${sectionFilter}
+      ${learnerFilter}
+      ${sessionFilter}
   `;
 
   // 5. Error metrics
-  const [{ errorEvents }] = await sql`
+  const [{ error_events: errorEvents }] = await sql`
     SELECT COUNT(*)::int AS error_events
     FROM interaction_events
     WHERE event_type = 'error'
       AND created_at >= ${since}
       AND created_at <= ${until}
       ${sectionFilter}
+      ${learnerFilter}
+      ${sessionFilter}
   `;
 
-  const [{ executionEvents }] = await sql`
+  const [{ execution_events: executionEvents }] = await sql`
     SELECT COUNT(*)::int AS execution_events
     FROM interaction_events
     WHERE event_type = 'execution'
       AND created_at >= ${since}
       AND created_at <= ${until}
       ${sectionFilter}
+      ${learnerFilter}
+      ${sessionFilter}
   `;
 
   // 6. Answer-after-hint correlation
   // Count executions/errors that occur within 5 minutes after a hint_view for the same session+problem
+  const sectionFilterE = args.sectionId
+    ? sql`AND e.section_id = ${args.sectionId}`
+    : sql``;
+  const learnerFilterE = args.learnerId
+    ? sql`AND e.user_id = ${args.learnerId}`
+    : sql``;
+  const sessionFilterE = args.sessionId
+    ? sql`AND e.session_id = ${args.sessionId}`
+    : sql``;
+  const sectionFilterH = args.sectionId
+    ? sql`AND h.section_id = ${args.sectionId}`
+    : sql``;
+  const learnerFilterH = args.learnerId
+    ? sql`AND h.user_id = ${args.learnerId}`
+    : sql``;
+  const sessionFilterH = args.sessionId
+    ? sql`AND h.session_id = ${args.sessionId}`
+    : sql``;
+
   const answerAfterHint = await sql`
     SELECT COUNT(*)::int AS count
     FROM interaction_events e
     WHERE e.event_type IN ('execution', 'error')
       AND e.created_at >= ${since}
       AND e.created_at <= ${until}
-      ${sectionFilter}
+      ${sectionFilterE}
+      ${learnerFilterE}
+      ${sessionFilterE}
       AND EXISTS (
         SELECT 1
         FROM interaction_events h
@@ -171,7 +257,9 @@ async function runAudit(sql, args) {
           AND h.problem_id = e.problem_id
           AND h.created_at < e.created_at
           AND h.created_at >= e.created_at - INTERVAL '5 minutes'
-          ${sectionFilter}
+          ${sectionFilterH}
+          ${learnerFilterH}
+          ${sessionFilterH}
       )
   `;
 
@@ -183,6 +271,8 @@ async function runAudit(sql, args) {
       AND created_at >= ${since}
       AND created_at <= ${until}
       ${sectionFilter}
+      ${learnerFilter}
+      ${sessionFilter}
     GROUP BY problem_id
     ORDER BY count DESC
     LIMIT 10
@@ -198,15 +288,80 @@ async function runAudit(sql, args) {
     WHERE created_at >= ${since}
       AND created_at <= ${until}
       ${sectionFilter}
+      ${learnerFilter}
+      ${sessionFilter}
     GROUP BY hour, event_type
     ORDER BY hour, count DESC
   `;
+
+  const textbookWrites =
+    Number(textbookAdds) + Number(textbookUpdates) + Number(textbookUnitUpserts);
+  const answerAfterHintCount = Number(answerAfterHint[0]?.count ?? 0);
+  const stepToEventCoverage = [
+    {
+      stepId: 'wrong_attempt_feedback',
+      step: 'Submit wrong attempt and show error feedback',
+      requiredEvents: ['error'],
+      observed: { error: Number(errorEvents) },
+      passed: Number(errorEvents) > 0,
+    },
+    {
+      stepId: 'need_help_first',
+      step: 'First help request returns hint L1',
+      requiredEvents: ['guidance_request', 'hint_view(help_request_index=1)'],
+      observed: {
+        guidance_request: Number(guidanceRequests),
+        hint_view_level_1: Number(hintLevelOneViews),
+      },
+      passed: Number(guidanceRequests) > 0 && Number(hintLevelOneViews) > 0,
+    },
+    {
+      stepId: 'need_help_second',
+      step: 'Second help request returns next-level hint',
+      requiredEvents: ['guidance_request', 'hint_view(help_request_index>=2)'],
+      observed: {
+        guidance_request: Number(guidanceRequests),
+        hint_view_level_2_plus: Number(hintLevelTwoPlusViews),
+      },
+      passed: Number(guidanceRequests) >= 2 && Number(hintLevelTwoPlusViews) > 0,
+    },
+    {
+      stepId: 'save_to_notes',
+      step: 'Save to Notes writes textbook events',
+      requiredEvents: ['textbook_add|textbook_update|textbook_unit_upsert'],
+      observed: {
+        textbook_add: Number(textbookAdds),
+        textbook_update: Number(textbookUpdates),
+        textbook_unit_upsert: Number(textbookUnitUpserts),
+      },
+      passed: textbookWrites > 0,
+    },
+    {
+      stepId: 'answer_after_hint',
+      step: 'Learner attempts again after requesting hints',
+      requiredEvents: ['execution|error within 5m after hint_view'],
+      observed: { answer_after_hint: answerAfterHintCount },
+      passed: answerAfterHintCount > 0,
+    },
+    {
+      stepId: 'post_refresh_continuity',
+      step: 'Refresh continuity (editor/session state) requires client-side E2E assertion',
+      requiredEvents: ['client state assertion in E2E'],
+      observed: {
+        trackable_server_events: ['code_change', 'execution', 'error'],
+        explicit_refresh_event_logged: false,
+      },
+      passed: null,
+    },
+  ];
 
   return {
     meta: {
       since,
       until,
       sectionId: args.sectionId || null,
+      learnerId: args.learnerId || null,
+      sessionId: args.sessionId || null,
       stage: args.stage || null,
       generatedAt: new Date().toISOString(),
     },
@@ -229,11 +384,16 @@ async function runAudit(sql, args) {
     textbook: {
       adds: Number(textbookAdds),
       updates: Number(textbookUpdates),
+      unitUpserts: Number(textbookUnitUpserts),
+      totalWrites: textbookWrites,
     },
     execution: {
       executionEvents: Number(executionEvents),
       errorEvents: Number(errorEvents),
-      answerAfterHint: Number(answerAfterHint[0]?.count ?? 0),
+      answerAfterHint: answerAfterHintCount,
+    },
+    coverage: {
+      stepToEventCoverage,
     },
   };
 }
@@ -242,7 +402,7 @@ async function main() {
   const args = parseArgs(process.argv);
 
   if (!args.since) {
-    console.error('Usage: node scripts/audit-beta-telemetry.mjs --since <ISO8601> [--until <ISO8601>] [--section-id <id>] [--stage <1|2|3>] [--output-dir <dir>]');
+    console.error('Usage: node scripts/audit-beta-telemetry.mjs --since <ISO8601> [--until <ISO8601>] [--section-id <id>] [--learner-id <id>] [--session-id <id>] [--stage <1|2|3>] [--output-dir <dir>]');
     process.exit(1);
   }
 
@@ -266,11 +426,17 @@ async function main() {
   console.log(`Telemetry audit complete.`);
   console.log(`  DB source : ${source}`);
   console.log(`  Window    : ${report.meta.since} → ${report.meta.until}`);
+  if (report.meta.sectionId) console.log(`  Section   : ${report.meta.sectionId}`);
+  if (report.meta.learnerId) console.log(`  Learner   : ${report.meta.learnerId}`);
+  if (report.meta.sessionId) console.log(`  Session   : ${report.meta.sessionId}`);
   console.log(`  Students  : ${report.engagement.uniqueStudents}`);
   console.log(`  Hints     : ${report.hints.hintRequests}`);
-  console.log(`  Textbook  : ${report.textbook.adds} adds, ${report.textbook.updates} updates`);
+  console.log(`  Textbook  : ${report.textbook.adds} adds, ${report.textbook.updates} updates, ${report.textbook.unitUpserts} upserts`);
   console.log(`  Execution : ${report.execution.executionEvents} runs, ${report.execution.errorEvents} errors`);
   console.log(`  AfterHint : ${report.execution.answerAfterHint}`);
+  const passedCoverageRows = report.coverage.stepToEventCoverage.filter((row) => row.passed === true).length;
+  const totalCoverageRows = report.coverage.stepToEventCoverage.filter((row) => row.passed !== null).length;
+  console.log(`  Coverage  : ${passedCoverageRows}/${totalCoverageRows} server-trackable walkthrough steps passed`);
   console.log(`  Output    : ${outPath}`);
 }
 
