@@ -57,24 +57,16 @@ test('Debug: Trace data flow from storage to UI', async ({ page }) => {
     return await page.getByRole('button', { name: 'Run Query' }).isEnabled().catch(() => false);
   }, { timeout: 30_000, intervals: [500] }).toBe(true);
 
-  // Submit a wrong query
-  await replaceEditorText(
-    page,
-    "SELECT first_name FROM employees WHERE department = Engineering"
-  );
+  // Submit an incorrect-but-runnable query
+  await replaceEditorText(page, 'SELECT name FROM users WHERE age > 100');
   await page.getByRole('button', { name: 'Run Query' }).click();
-  await expect(
-    page.locator('[class*="text-red"], .text-red-600, [class*="error"]').first()
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/Results differ/i).first()).toBeVisible({ timeout: 10_000 });
 
-  // Get Help
-  const helpButton = page.getByRole('button', { name: /Get Help/i }).first();
-  if (await helpButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
-    await helpButton.click();
-    await expect(
-      page.getByRole('button', { name: /Save to Notes/i }).first()
-    ).toBeEnabled({ timeout: 8_000 }).catch(() => {});
-  }
+  // Request Hint
+  const helpButton = page.getByTestId('hint-action-button');
+  await expect(helpButton).toBeEnabled({ timeout: 10_000 });
+  await helpButton.click();
+  await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 15_000 });
 
   // Save to Notes
   const saveBtn = page.getByRole('button', { name: /Save to Notes/i }).first();

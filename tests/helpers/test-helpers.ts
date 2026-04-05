@@ -29,6 +29,29 @@ export async function waitForEditorReady(page: Page, timeout = 30000) {
 export async function replaceEditorText(page: Page, text: string) {
   // Wait for editor to be ready first
   await waitForEditorReady(page);
+
+  // Prefer setting the Monaco model directly. This is more reliable than
+  // keyboard-only replacement and avoids preserving the default comment prefix.
+  const setViaMonaco = await page.evaluate((nextText) => {
+    const maybeMonaco = (window as {
+      monaco?: {
+        editor?: {
+          getModels?: () => Array<{ setValue: (value: string) => void }>;
+        };
+      };
+    }).monaco;
+    const model = maybeMonaco?.editor?.getModels?.()?.[0];
+    if (!model) {
+      return false;
+    }
+    model.setValue(nextText);
+    return true;
+  }, text).catch(() => false);
+
+  if (setViaMonaco) {
+    return;
+  }
+
   const editorSurface = page.locator('.monaco-editor .view-lines').first();
   await editorSurface.click({ position: { x: 8, y: 8 } });
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A');

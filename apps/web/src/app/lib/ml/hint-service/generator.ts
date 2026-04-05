@@ -12,6 +12,7 @@ import { generateSqlEngageFallbackHint, createUltimateFallbackHint, mergeFallbac
 import { generateTextbookEnhancedHint } from './textbook-generation';
 import { generateLLMEnhancedHint } from './llm-generation';
 import { resolveRefinedHintForProblem } from './refined-hints';
+import { loadConceptMap } from '../../content/concept-loader';
 import { getProblemById } from '../../../data/problems';
 
 /**
@@ -160,7 +161,6 @@ export async function preloadHintContext(learnerId: string, errorSubtypeId: stri
 
   // Preload concept map if available
   try {
-    const { loadConceptMap } = await import('../../content/concept-loader');
     await loadConceptMap();
   } catch {
     // Concept map loading is optional

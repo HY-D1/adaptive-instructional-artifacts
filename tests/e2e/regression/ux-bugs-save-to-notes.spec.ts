@@ -4,13 +4,9 @@
  * Covers the exact learner journey that was broken:
  *   learner requests hints → clicks "Save to Notes" → unit appears in /textbook
  *
- * The bug: HintSystem did not pass the active hint subtype to LearningInterface,
- * causing handleEscalate to silently return when no prior SQL error existed.
- *
- * The fix: HintSystem now passes the subtype explicitly; LearningInterface
- * broadcasts a sync event on success so /textbook reflects the new unit without
- * a manual refresh; a visible error is shown instead of a silent no-op when
- * no context is available.
+ * The regression risk: this spec drifted to a legacy "Get Help" button label
+ * and could silently skip the hint click. Save-to-notes only succeeds once
+ * HintSystem has supplied subtype context to LearningInterface.
  *
  * Tags:
  *   @regression  — must pass on every merge to main
@@ -21,10 +17,11 @@
  *   npx playwright test -c playwright.config.ts tests/e2e/regression/ux-bugs-save-to-notes.spec.ts
  */
 
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { replaceEditorText, getTextbookUnits } from '../../helpers/test-helpers';
 
 const LEARNER_ID = 'save-notes-e2e';
+const INCORRECT_QUERY = "SELECT name FROM users WHERE age > 100";
 
 test.beforeEach(async ({ page }) => {
   await page.addInitScript((id: string) => {
@@ -61,15 +58,35 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe('@regression @ux-bugs @no-external Save-to-Notes learner journey', () => {
+  async function requestFirstHint(page: Page) {
+    const hintActionButton = page.getByTestId('hint-action-button');
+    await expect(hintActionButton).toBeVisible({ timeout: 10_000 });
+    await expect(hintActionButton).toBeEnabled({ timeout: 10_000 });
+    await hintActionButton.click();
+
+    await expect.poll(
+      async () => {
+        const firstHintVisible = await page.getByTestId('hint-label-1').isVisible().catch(() => false);
+        const explanationVisible = await page
+          .locator('text=/Full Explanation Unlocked|Explanation has been generated/i')
+          .first()
+          .isVisible()
+          .catch(() => false);
+        return firstHintVisible || explanationVisible;
+      },
+      { timeout: 15_000, intervals: [300, 700, 1200] },
+    ).toBe(true);
+  }
+
   /**
-   * Primary regression: the full "request hints → save to notes → view in
+   * Primary regression: the full "request hint → save to notes → view in
    * textbook" flow must work end-to-end.
    *
    * Click/navigation steps covered:
    *  1. Navigate to /
    *  2. Wait for Run Query button enabled
-   *  3. Type + submit a wrong SQL query → error feedback visible
-   *  4. Click "Get Help" → L1 hint shown (sets activeHintSubtype)
+   *  3. Type + submit an incorrect-but-runnable SQL query → result mismatch visible
+   *  4. Click "Request Hint" → L1 hint shown (sets activeHintSubtype)
    *  5. Click "Save to Notes" (purple button in HintSystem panel)
    *  6. Assert: green success toast "Saved … to My Textbook" visible
    *  7. Assert: no "no concept context" error shown
@@ -77,7 +94,7 @@ test.describe('@regression @ux-bugs @no-external Save-to-Notes learner journey',
    *  9. Assert: URL is /textbook
    * 10. Assert: at least one unit in localStorage AND its title visible on page
    */
-  test('Full flow: wrong query → Get Help → Save to Notes → unit visible in /textbook', async ({ page }) => {
+  test('Full flow: wrong query → Request Hint → Save to Notes → unit visible in /textbook', async ({ page }) => {
     // Step 1: Navigate to practice
     await page.goto('/');
     await expect(page).toHaveURL(/\/practice/, { timeout: 30_000 });
@@ -87,27 +104,13 @@ test.describe('@regression @ux-bugs @no-external Save-to-Notes learner journey',
       return await page.getByRole('button', { name: 'Run Query' }).isEnabled().catch(() => false);
     }, { timeout: 30_000, intervals: [500] }).toBe(true);
 
-    // Step 3: Submit a wrong query → error must appear, setting lastError subtype
-    await replaceEditorText(
-      page,
-      "SELECT first_name FROM employees WHERE department = Engineering"
-    );
+    // Step 3: Submit an incorrect-but-runnable query → results mismatch feedback appears
+    await replaceEditorText(page, INCORRECT_QUERY);
     await page.getByRole('button', { name: 'Run Query' }).click();
-    // Wait for error result to appear (red text or error box)
-    await expect(
-      page.locator('[class*="text-red"], .text-red-600, [class*="error"]').first()
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Results differ/i).first()).toBeVisible({ timeout: 10_000 });
 
     // Step 4: Request a hint → sets activeHintSubtype in HintSystem
-    const helpButton = page.getByRole('button', { name: /Get Help/i }).first();
-    const helpVisible = await helpButton.isVisible({ timeout: 5_000 }).catch(() => false);
-    if (helpVisible) {
-      await helpButton.click();
-      // Wait for hint panel to render — Save to Notes button becomes enabled
-      await expect(
-        page.getByRole('button', { name: /Save to Notes/i }).first()
-      ).toBeEnabled({ timeout: 8_000 }).catch(() => {});
-    }
+    await requestFirstHint(page);
 
     // Step 5: Click "Save to Notes" (purple button)
     const saveBtn = page.getByRole('button', { name: /Save to Notes/i }).first();
@@ -178,7 +181,7 @@ test.describe('@regression @ux-bugs @no-external Save-to-Notes learner journey',
       page.getByRole('button', { name: 'Run Query' }).isEnabled().catch(() => false),
     { timeout: 30_000, intervals: [500] }).toBe(true);
 
-    // Submit a correct query so it's a clean session (no new lastError)
+    // Submit a correct query so the active hint subtype must beat the stale error.
     await replaceEditorText(
       page,
       "SELECT first_name, last_name, salary FROM employees WHERE department = 'Engineering' AND salary > 80000"
@@ -187,25 +190,16 @@ test.describe('@regression @ux-bugs @no-external Save-to-Notes learner journey',
     // Wait for query execution to settle before checking hints
     await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
 
-    // Get Help to set activeHintSubtype (the current problem's subtype, not 'group-by')
-    const helpButton = page.getByRole('button', { name: /Get Help/i }).first();
-    if (await helpButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await helpButton.click();
-      // Wait for hint panel to render
-      await expect(
-        page.getByRole('button', { name: /Save to Notes/i }).first()
-      ).toBeEnabled({ timeout: 8_000 }).catch(() => {});
-    }
+    // Request Hint to set activeHintSubtype (the current problem's subtype, not 'group-by')
+    await requestFirstHint(page);
 
     // Save to Notes — must NOT show "no concept context"
     const saveBtn = page.getByRole('button', { name: /Save to Notes/i }).first();
-    if (await saveBtn.isEnabled({ timeout: 5_000 }).catch(() => false)) {
-      await saveBtn.click();
-      // Wait for any feedback (success or error) before asserting
-      await expect(
-        page.locator('text=/Saved|Updated|no concept/i').first()
-      ).toBeVisible({ timeout: 8_000 }).catch(() => {});
-    }
+    await expect(saveBtn).toBeEnabled({ timeout: 10_000 });
+    await saveBtn.click();
+    await expect(
+      page.locator('text=/Saved.*My Textbook|Updated.*My Textbook/i').first(),
+    ).toBeVisible({ timeout: 20_000 });
 
     // Assert: no "no concept context" error
     const noContextAlert = page
@@ -280,32 +274,19 @@ test.describe('@regression @ux-bugs @no-external Save-to-Notes learner journey',
       page.getByRole('button', { name: 'Run Query' }).isEnabled().catch(() => false),
     { timeout: 30_000, intervals: [500] }).toBe(true);
 
-    // Submit error → get help → save
-    await replaceEditorText(
-      page,
-      "SELECT name FROM employees WHERE dept = Engineering"
-    );
+    // Submit an incorrect-but-runnable query → request hint → save
+    await replaceEditorText(page, INCORRECT_QUERY);
     await page.getByRole('button', { name: 'Run Query' }).click();
-    // Wait for query execution to settle before checking hints
-    await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
+    await expect(page.getByText(/Results differ/i).first()).toBeVisible({ timeout: 10_000 });
 
-    const helpButton = page.getByRole('button', { name: /Get Help/i }).first();
-    if (await helpButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
-      await helpButton.click();
-      // Wait for hint panel to render
-      await expect(
-        page.getByRole('button', { name: /Save to Notes/i }).first()
-      ).toBeEnabled({ timeout: 8_000 }).catch(() => {});
-    }
+    await requestFirstHint(page);
 
     const saveBtn = page.getByRole('button', { name: /Save to Notes/i }).first();
-    if (await saveBtn.isEnabled({ timeout: 5_000 }).catch(() => false)) {
-      await saveBtn.click();
-      // Wait for success confirmation
-      await expect(
-        page.locator('text=/Saved.*My Textbook|Updated.*My Textbook/i').first()
-      ).toBeVisible({ timeout: 20_000 });
-    }
+    await expect(saveBtn).toBeEnabled({ timeout: 10_000 });
+    await saveBtn.click();
+    await expect(
+      page.locator('text=/Saved.*My Textbook|Updated.*My Textbook/i').first(),
+    ).toBeVisible({ timeout: 20_000 });
 
     // Navigate to /textbook via SPA link — preserves localStorage (no init script re-run)
     await page.getByRole('link', { name: 'My Textbook' }).first().click();

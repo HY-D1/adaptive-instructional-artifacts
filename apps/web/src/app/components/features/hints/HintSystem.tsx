@@ -145,6 +145,7 @@ export function HintSystem({
   const helpEventSequenceRef = useRef(0);
   const hintRequestVersionRef = useRef(0);
   const pendingAutoEscalationTimeoutRef = useRef<number | null>(null);
+  const visibleHintCountRef = useRef(0);
   
   // Enhanced hint system hook
   const {
@@ -187,6 +188,7 @@ export function HintSystem({
   const resetHintFlow = () => {
     clearPendingAutoEscalation();
     hintRequestVersionRef.current += 1;
+    visibleHintCountRef.current = 0;
     setHints([]);
     setHintPdfPassages([]);
     setExpandedHintIndex(null);
@@ -340,9 +342,12 @@ export function HintSystem({
   const getProblemTrace = () => scopedInteractions.filter((interaction) => interaction.problemId === problemId);
   const getHelpFlowKey = () => `${sessionId || 'no-session'}|${learnerId}|${problemId}`;
   
-  // BUG FIX #4: Consolidated help request index calculation into single function
-  const calculateHelpRequestIndex = (problemTrace: InteractionEvent[]) =>
-    problemTrace.filter((interaction) => interaction.eventType === 'hint_view').length + 1;
+  // BUG FIX #4: Consolidated help request index calculation into single function.
+  // Prefer the furthest visible hint count when interaction persistence lags a rerender.
+  const calculateHelpRequestIndex = (problemTrace: InteractionEvent[]) => {
+    const persistedHintCount = problemTrace.filter((interaction) => interaction.eventType === 'hint_view').length;
+    return Math.max(persistedHintCount, visibleHintCountRef.current) + 1;
+  };
   const syncHelpFlowIndex = (problemTrace: InteractionEvent[]) => {
     const flowKey = getHelpFlowKey();
     const persistedNextHelpRequestIndex = calculateHelpRequestIndex(problemTrace);
@@ -433,6 +438,7 @@ export function HintSystem({
     hasReconstructedRef.current = true;
     
     // Clear existing state first to prevent duplication
+    visibleHintCountRef.current = 0;
     setHints([]);
     setHintPdfPassages([]);
     setEnhancedHintInfo([]);
@@ -465,6 +471,7 @@ export function HintSystem({
     if (hintEvents.length > 0) {
       // Reconstruct hints from saved hint events
       const reconstructedHints = hintEvents.map(event => event.hintText || '');
+      visibleHintCountRef.current = reconstructedHints.length;
       setHints(reconstructedHints);
       
       // Restore active subtype from latest help event
@@ -860,6 +867,7 @@ export function HintSystem({
       // and restart at L1 for this problem.
       if (shouldResetToHintL1) {
         clearPendingAutoEscalation();
+        visibleHintCountRef.current = 0;
         setHints([]);
         setHintPdfPassages([]);
         setExpandedHintIndex(null);
@@ -988,7 +996,11 @@ export function HintSystem({
         return;
       }
 
-      setHints((currentHints) => [...currentHints, hintSelection.hintText]);
+      setHints((currentHints) => {
+        const nextHints = [...currentHints, hintSelection.hintText];
+        visibleHintCountRef.current = nextHints.length;
+        return nextHints;
+      });
       setHintPdfPassages((current) => [...current, hintSelection.pdfPassages]);
       setEnhancedHintInfo((current) => [...current, {
         isEnhanced: hintSelection.isEnhanced,
