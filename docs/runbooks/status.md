@@ -1,15 +1,15 @@
 # Project Status — SQL-Adapt
 
-**Last Updated**: 2026-03-31 (UX Audit Complete)
+**Last Updated**: 2026-04-05 (40-Student Launch Refresh)
 **Purpose**: Single durable status file for implementation and deployment readiness.
 
 ---
 
 ## Controlled Student Beta Launch Readiness
 
-**Status**: READY FOR CONTROLLED 50-STUDENT BETA
+**Status**: READY FOR CONTROLLED 40-STUDENT LIVE TEST
 
-**Final Verdict**: **READY FOR STAGED BETA EXECUTION**. The production deployment is the single supported release candidate for a supervised 50-student beta. All critical infrastructure verified, telemetry operational, staged rollout controls documented, and operational runbooks complete. The mandatory staged ramp (5 → 15 → 50) de-risks authenticated concurrent-use validation by proving real student behavior at each stage before scale-up. **Final 50-student approval requires real live-session evidence from all three stages.**
+**Final Verdict**: **READY FOR STAGED BETA EXECUTION**. The production deployment is the single supported release candidate for a supervised 40-student live test on the existing `v1.1.0-beta-50` release line. All critical infrastructure verified, telemetry operational, staged rollout controls documented, and operational runbooks refreshed to the current hosted auth-first contract. The mandatory staged ramp (5 → 15 → 40) de-risks authenticated concurrent-use validation by proving real student behavior at each stage before scale-up. **Final 40-student approval requires real live-session evidence from all three stages.**
 
 ### Evidence Summary
 
@@ -18,21 +18,21 @@
 | WS1 - Production Deployment Verification | PASSED | All production URLs accessible, health checks passing, corpus active-run verified |
 | WS2 - Build Verification | PASSED | Frontend and server builds successful, no errors |
 | WS3 - Telemetry Audit | PASSED | All critical beta signals implemented, 31 event types cataloged |
-| WS4 - Beta Launch Packet | COMPLETED | 50-student launch packet with staged ramp, rollback triggers, and support owner checklist |
+| WS4 - Beta Launch Packet | COMPLETED | 40-student launch packet with staged ramp, rollback triggers, and support owner checklist |
 | WS5 - Production Acceptance Tests | PASSED | Core supervised-beta flows covered by regression tests (auth/resume, learning page, hints, save-to-notes, refresh/resume, active-run integrity) |
 | WS5b - Public Edge Concurrent Load Test | PASSED | 300 concurrent requests against production public endpoints, 100% success, 0 errors, p95 < 2400ms |
-| WS6 - Beta Operations Documentation | COMPLETED | 50-student operations runbook with stop conditions, escalation path, and incident runbook |
+| WS6 - Beta Operations Documentation | COMPLETED | 40-student operations runbook with stop conditions, escalation path, and incident runbook |
 | WS7 - Live Staged Beta Audit | PENDING | Requires real student sessions: observation forms, telemetry audit, and stage-gate evidence |
 
 ### Live Beta Evidence Requirement
 
 **Status**: PENDING
 
-Final approval for the controlled 50-student beta is gated on real supervised session evidence from the staged ramp (5 → 15 → 50). Synthetic load tests and regression tests have passed, but the go/no-go verdict requires:
+Final approval for the controlled 40-student live test is gated on real supervised session evidence from the staged ramp (5 → 15 → 40). Synthetic load tests and regression tests have passed, but the go/no-go verdict requires:
 
 - **Stage 1 (5 students)**: Completed observation forms, telemetry audit artifact, and active-run verification.
 - **Stage 2 (15 students)**: Same evidence suite, plus supervisor debrief and no unresolved P1 issues.
-- **Stage 3 (50 students)**: Same evidence suite, cumulative findings document, and explicit final verdict.
+- **Stage 3 (40 students)**: Same evidence suite, cumulative findings document, and explicit final verdict.
 
 **Audit Framework** (created 2026-03-30):
 
@@ -49,6 +49,7 @@ Final approval for the controlled 50-student beta is gated on real supervised se
 - **Git Commit**: `12a9c5faae4983c2c4d4cf753c1f59afb2a5e151`
 - **Branch**: `codex/beta-stabilization-preview-first`
 - **Release Tag**: `v1.1.0-beta-50`
+- **Operational Run Shape**: `5 → 15 → 40`
 - **Active Corpus Run**: `run-1774671570-b1353117` (dbms-ramakrishnan-3rd-edition, 43 units, 101 chunks)
 
 ### Production URLs
@@ -62,7 +63,7 @@ Final approval for the controlled 50-student beta is gated on real supervised se
 ### Known Caveats (Non-Blocking)
 
 1. **PDF Index**: Disabled in production (set `ENABLE_PDF_INDEX=true` to enable)
-2. **LLM Features**: Disabled in production - fallback mechanisms active
+2. **LLM Features**: `/health` reported Groq-connected LLM availability on 2026-04-05; staged support should still assume fallback-safe behavior if provider availability changes
 3. **Build Warnings**: 4 non-blocking warnings (dynamic imports, chunk size)
 4. **Telemetry Gaps**: Concept view inferred (not explicit event), auth events in server logs only
 5. **Automated Test Gap**: WS5-BLOCKER-001 (production E2E auth credentials) is a test infrastructure limitation, not a production defect
@@ -70,12 +71,12 @@ Final approval for the controlled 50-student beta is gated on real supervised se
 
 ### Blocker: WS5-BLOCKER-001 (Test Infrastructure, Non-Blocking)
 
-**Issue**: Production auth setup requires `E2E_INSTRUCTOR_CODE` which is the production `INSTRUCTOR_SIGNUP_CODE` environment variable.
+**Issue**: Production auth-backed proof requires deterministic deployed E2E credentials: `PLAYWRIGHT_BASE_URL`, `PLAYWRIGHT_API_BASE_URL`, `E2E_INSTRUCTOR_EMAIL`, `E2E_INSTRUCTOR_PASSWORD`, `E2E_STUDENT_EMAIL`, `E2E_STUDENT_PASSWORD`, and `E2E_STUDENT_CLASS_CODE`. `E2E_INSTRUCTOR_CODE` is only required if the proof creates a fresh instructor instead of reusing a real account.
 
-**Impact**: Automated E2E that create accounts on production cannot run in this environment.
+**Impact**: Automated auth-backed E2E cannot run against production from this environment until those values are supplied.
 
-**Mitigation for 50-Student Beta**:
-- Staged ramp (5 → 15 → 50) uses supervised real-student sessions as live concurrent-use validation
+**Mitigation for 40-Student Live Test**:
+- Staged ramp (5 → 15 → 40) uses supervised real-student sessions as live concurrent-use validation
 - Local regression tests cover authenticated flows and continue to pass
 - Support owner observes onboarding in real time and can stop immediately if issues arise
 
@@ -85,7 +86,7 @@ Final approval for the controlled 50-student beta is gated on real supervised se
 |-------|--------|---------|----------|
 | 1 | 5 students | Baseline concurrent onboarding, hint flow, save-to-notes, refresh/resume | Support Owner |
 | 2 | 15 students | Prove stability under moderate concurrent load | Support Owner + Supervisor |
-| 3 | 50 students | Full supervised beta cohort | Support Owner + no unresolved P1s |
+| 3 | 40 students | Full supervised live-test cohort | Support Owner + no unresolved P1s |
 
 ### Stop Conditions (Immediate Hold)
 
@@ -110,7 +111,7 @@ Rollback to `fc143c6` immediately on:
 
 | Document | Purpose |
 |----------|---------|
-| [Supervised Beta Launch Packet](./beta-supervised-launch-packet.md) | 50-student launch details, URLs, staged ramp, rollback procedures |
+| [Supervised Beta Launch Packet](./beta-supervised-launch-packet.md) | 40-student launch details, URLs, staged ramp, rollback procedures |
 | [Beta 50-Student Operations Runbook](./beta-50-student-operations.md) | Stop conditions, incident runbook, support owner checklist, telemetry monitoring |
 | [Beta Telemetry Readiness](./beta-telemetry-readiness.md) | Telemetry audit, 31 event types, monitoring plan |
 | [Student Onboarding](./beta-student-onboarding.md) | Step-by-step student first-session guide |
@@ -135,9 +136,9 @@ Full details in [Beta Supervised Launch Packet](./beta-supervised-launch-packet.
 
 ### Recommended Action
 
-**✅ APPROVED: Proceed with controlled 50-student beta launch**
+**✅ APPROVED: Proceed with controlled 40-student live test**
 
-- Execute the mandatory staged ramp: 5 → 15 → 50 students
+- Execute the mandatory staged ramp: 5 → 15 → 40 students
 - Maintain instructor supervision during each stage
 - Use [Beta 50-Student Operations Runbook](./beta-50-student-operations.md) for stop/rollback decisions
 - Use the new audit framework (observation forms, telemetry script, audit packet template) to collect and evaluate live-session evidence at each stage
@@ -165,7 +166,7 @@ A comprehensive cross-role UX audit was conducted using 4 parallel agents with b
 |----------|-------|--------|
 | P0 - Blockers | 0 | None found in product (1 test infrastructure issue identified) |
 | P1 - Major | 5 | Must fix before 15-student ramp |
-| P2 - Minor | 8 | Should fix before 50-student ramp |
+| P2 - Minor | 8 | Should fix before 40-student ramp |
 | P3 - Polish | 6 | Can fix post-beta |
 
 ### P0 Blocker Resolution
@@ -214,7 +215,7 @@ The "Week 5 Testing Controls" section contains research/debug features that shou
 - Debug controls must be hidden
 - Preview mode indicator must be added
 
-**Stage 3 (50 students)**: ⚠️ **CONDITIONAL**
+**Stage 3 (40 students)**: ⚠️ **CONDITIONAL**
 - All P1 issues resolved
 - P2 loading states recommended
 - No unresolved usability blockers

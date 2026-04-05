@@ -2,8 +2,8 @@
 
 **Version**: 1.1.0-beta-50
 **Release Date**: 2026-03-30
-**Phase**: Controlled 50-Student Beta Scale Readiness
-**Status**: READY FOR CONTROLLED 50-STUDENT BETA (with staged ramp)
+**Phase**: Controlled 40-Student Live Test (using 50-student readiness baseline)
+**Status**: READY FOR CONTROLLED 40-STUDENT LIVE TEST (with staged ramp)
 
 ---
 
@@ -23,9 +23,9 @@
 
 | Service | URL | Status | Last Verified |
 |---------|-----|--------|---------------|
-| **Frontend** | https://adaptive-instructional-artifacts.vercel.app | Verified (HTTP 200) | 2026-03-30 |
-| **Backend** | https://adaptive-instructional-artifacts-ap.vercel.app | Verified (HTTP 200) | 2026-03-30 |
-| **Health Check** | /health | OK - Neon DB connected | 2026-03-30 |
+| **Frontend** | https://adaptive-instructional-artifacts.vercel.app | Verified (HTTP 200) | 2026-04-05 |
+| **Backend** | https://adaptive-instructional-artifacts-ap.vercel.app | Verified (HTTP 200) | 2026-04-05 |
+| **Health Check** | /health | OK - Neon DB connected | 2026-04-05 |
 
 ### API Endpoints
 
@@ -60,12 +60,13 @@ npm run corpus:verify-active-run -- --api-base-url https://adaptive-instructiona
 
 ## Known Caveats
 
-### Disabled Features
+### Operational Caveats
 
 | Feature | Status | Reason | Impact |
 |---------|--------|--------|--------|
 | PDF Index | Disabled | Set `ENABLE_PDF_INDEX=true` to enable | PDF-based search not available |
-| LLM | Disabled | Set `ENABLE_LLM=true` to enable | AI features use fallback mechanisms |
+| Hosted entry flow | Auth-first | Production root page routes learners into Sign In / Create Account | Student onboarding uses account creation with class code, not legacy local "Get Started" |
+| LLM | Enabled on current `/health` | `/health` reported Groq-connected LLM availability on 2026-04-05 | Staged beta can still proceed if fallback mechanisms are needed later |
 
 ### Build Warnings (Non-Blocking)
 
@@ -86,7 +87,20 @@ npm run corpus:verify-active-run -- --api-base-url https://adaptive-instructiona
 
 | Limitation | Impact | Mitigation |
 |------------|--------|------------|
-| WS5-BLOCKER-001: Production E2E auth credentials not available in this environment | Cannot run automated E2E against production for auth-dependent flows | Manual supervised onboarding; staged rollout validates real concurrent use with human observers. Local regression tests pass. |
+| WS5-BLOCKER-001: Deterministic production E2E auth credentials not available in this environment | Cannot run automated E2E against production for auth-dependent flows until stable credentials are supplied | Manual supervised onboarding for Stage 1; staged rollout validates real concurrent use with human observers. Local regression tests pass. |
+
+### Auth-Backed Launch-Proof Environment Contract
+
+Hosted auth proof requires deterministic values for:
+
+- `PLAYWRIGHT_BASE_URL`
+- `PLAYWRIGHT_API_BASE_URL`
+- `E2E_INSTRUCTOR_EMAIL`
+- `E2E_INSTRUCTOR_PASSWORD`
+- `E2E_STUDENT_EMAIL`
+- `E2E_STUDENT_PASSWORD`
+- `E2E_STUDENT_CLASS_CODE`
+- `E2E_INSTRUCTOR_CODE` only when creating a fresh instructor account instead of reusing a real one
 
 ---
 
@@ -94,8 +108,8 @@ npm run corpus:verify-active-run -- --api-base-url https://adaptive-instructiona
 
 ### Participant Criteria
 
-- **Target Cohort**: Up to 50 students
-- **Staged Ramp**: 5 students → 15 students → 50 students
+- **Target Cohort**: Up to 40 students
+- **Staged Ramp**: 5 students → 15 students → 40 students
 - **Environment**: Supervised setting (instructor present) for each stage
 - **Duration**: Single session per stage initially, expand based on results
 - **Prerequisites**: Basic SQL familiarity, instructor-provided class code
@@ -103,7 +117,7 @@ npm run corpus:verify-active-run -- --api-base-url https://adaptive-instructiona
 ### Scope Boundaries
 
 **In Scope**:
-- Student signup with class code
+- Student account creation with email, password, and class code
 - SQL practice with 43 problems
 - Progressive hint system (3-rung ladder)
 - Automatic textbook note generation
@@ -112,7 +126,6 @@ npm run corpus:verify-active-run -- --api-base-url https://adaptive-instructiona
 
 **Out of Scope**:
 - Instructor dashboard features (monitor only)
-- LLM-enhanced explanations (fallback only)
 - PDF content search
 - Public/unrestricted access
 - Unsupervised mass rollout
@@ -171,9 +184,9 @@ npm run corpus:verify-active-run -- --api-base-url https://adaptive-instructiona
 - [ ] Backend /health remains 200 throughout session
 - [ ] No new P0/P1 issues introduced
 
-### Stage 3 — 50 Students (Full Cohort)
+### Stage 3 — 40 Students (Full Cohort)
 
-**Goal**: Operate the full supervised beta cohort.
+**Goal**: Operate the full supervised live-test cohort.
 
 **Duration**: 1-3 supervised sessions.
 
@@ -183,9 +196,9 @@ npm run corpus:verify-active-run -- --api-base-url https://adaptive-instructiona
 - [ ] Telemetry signals verified for Stages 1-2
 
 **Exit Criteria**:
-- [ ] >= 47/50 students complete login without critical errors
-- [ ] >= 40/50 students receive hints successfully
-- [ ] >= 45/50 students save at least one note
+- [ ] >= 38/40 students complete login without critical errors
+- [ ] >= 32/40 students receive hints successfully
+- [ ] >= 36/40 students save at least one note
 - [ ] Refresh/resume success rate >= 95%
 - [ ] Backend health stable
 
@@ -224,7 +237,7 @@ Revert to `fc143c6` immediately if ANY of the following occur:
 - [x] Frontend build verification passed
 - [x] Server build verification passed
 - [x] Telemetry audit - critical signals verified
-- [x] 50-student public edge load test passed
+- [x] 50-student public edge load test passed (baseline above 40-student live ramp)
 - [x] Staged rollout plan documented
 - [x] Rollback triggers documented
 - [x] Support owner checklist documented
@@ -274,6 +287,7 @@ If critical issues occur during beta:
 - [ ] Verify active-run: `npm run corpus:verify-active-run`
 - [ ] Check backend /health returns 200
 - [ ] Confirm instructor class codes are valid and available
+- [ ] Record exact stage window start time in UTC
 - [ ] Print or open the [First-Session Observation Checklist](./beta-first-session-observation.md)
 
 **During Each Stage**:
@@ -282,8 +296,11 @@ If critical issues occur during beta:
 - [ ] Collect supervisor feedback forms immediately after session
 
 **After Each Stage**:
+- [ ] Record exact stage window end time in UTC
 - [ ] Run `npm run corpus:verify-active-run`
+- [ ] Run `npm run audit:beta-telemetry -- --since <stage-start-iso> --until <stage-end-iso> --stage <1|2|3>`
 - [ ] Query `interaction_events` for error rate and hint success rate
+- [ ] Pull research export and attach it to the stage packet
 - [ ] Review Vercel Analytics for frontend errors
 - [ ] Decide Go / Hold / Rollback for next stage
 
@@ -306,17 +323,19 @@ If critical issues occur during beta:
 ### Load/Concurrency Evidence
 
 - **Script**: `scripts/beta-50-student-readiness.mjs`
-- **Run date**: 2026-03-30
+- **Run date**: 2026-04-05
 - **Target**: Production backend public endpoints
 - **Result**: 300 requests, 100% success, 0 errors, p95 < 2400ms
-- **Artifact**: `dist/beta/50-student-readiness/1774916721743-public-edge.json`
+- **Artifact**: `dist/beta/50-student-readiness/1775413580250-public-edge.json`
 
 ### Core Flow Evidence
 
+- **Hosted public smoke**: `tests/e2e/regression/deployed-smoke.spec.ts` now covers auth gate, hosted signup routing, public corpus JSON, and concept-quality fallback
 - **Local regression tests**: `npm run test:e2e:hint-stability` passes (30 cases, scores 1.0)
 - **Save-to-notes tests**: `tests/e2e/regression/ux-bugs-save-to-notes.spec.ts` passes
 - **Multi-device persistence**: `tests/e2e/regression/student-multi-device-persistence.spec.ts` passes (local/deployed)
 - **Auth smoke**: `tests/e2e/regression/deployed-auth-smoke.spec.ts` passes when credentials are available
+- **Runtime logs**: No production backend error entries returned by Vercel runtime logs for the 24 hours ending 2026-04-05
 
 ---
 
@@ -331,5 +350,5 @@ If critical issues occur during beta:
 
 ---
 
-*Last Updated: 2026-03-30*
+*Last Updated: 2026-04-05*
 *Packet ID: beta-launch-run-1774916721*
