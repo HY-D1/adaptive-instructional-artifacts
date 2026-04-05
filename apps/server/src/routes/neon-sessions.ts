@@ -6,6 +6,7 @@
 import { Router, Request, Response } from 'express';
 import * as db from '../db/neon.js';
 import { requireOwnership } from '../middleware/auth.js';
+import type { SessionData } from '../types.js';
 
 const router = Router();
 
@@ -21,6 +22,86 @@ function logSessionWrite(req: Request, learnerId: string, sectionId: string | nu
     targetLearnerId: learnerId,
     targetSectionId: sectionId,
   });
+}
+
+type PersistedSession = Awaited<ReturnType<typeof db.getActiveSession>>;
+type SessionWriteBody = SessionData;
+
+function toIsoString(value: number | string | null | undefined): string | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+function buildSessionResponse(session: PersistedSession) {
+  return {
+    currentProblemId: session?.currentProblemId ?? session?.sessionId,
+    sectionId: session?.sectionId ?? null,
+    currentCode: session?.lastCode,
+    guidanceState: session?.guidanceState,
+    hdiState: session?.hdiState,
+    banditState: session?.banditState,
+    startTime: toIsoString(session?.createdAt),
+    lastActivity: toIsoString(session?.lastActivity) ?? toIsoString(session?.updatedAt),
+    sessionId: session?.sessionId,
+    conditionId: session?.conditionId,
+    textbookDisabled: session?.textbookDisabled,
+    adaptiveLadderDisabled: session?.adaptiveLadderDisabled,
+    immediateExplanationMode: session?.immediateExplanationMode,
+    staticHintMode: session?.staticHintMode,
+    escalationPolicy: session?.escalationPolicy,
+  };
+}
+
+function hasSessionMutationPayload(body: SessionWriteBody): boolean {
+  return (
+    body.currentProblemId !== undefined ||
+    body.currentCode !== undefined ||
+    body.guidanceState !== undefined ||
+    body.hdiState !== undefined ||
+    body.banditState !== undefined ||
+    body.conditionId !== undefined ||
+    body.textbookDisabled !== undefined ||
+    body.adaptiveLadderDisabled !== undefined ||
+    body.immediateExplanationMode !== undefined ||
+    body.staticHintMode !== undefined ||
+    body.escalationPolicy !== undefined
+  );
+}
+
+function resolveSessionWriteBody(
+  learnerId: string,
+  body: SessionWriteBody,
+  activeSession: PersistedSession,
+) {
+  return {
+    actualSessionId:
+      body.sessionId ||
+      activeSession?.sessionId ||
+      `session-${learnerId}-${Date.now()}`,
+    actualConditionId:
+      body.conditionId ??
+      activeSession?.conditionId ??
+      'default',
+    mergedSessionData: {
+      sectionId: body.sectionId ?? activeSession?.sectionId ?? null,
+      currentProblemId: body.currentProblemId ?? activeSession?.currentProblemId ?? null,
+      textbookDisabled: body.textbookDisabled ?? activeSession?.textbookDisabled,
+      adaptiveLadderDisabled:
+        body.adaptiveLadderDisabled ?? activeSession?.adaptiveLadderDisabled,
+      immediateExplanationMode:
+        body.immediateExplanationMode ?? activeSession?.immediateExplanationMode,
+      staticHintMode: body.staticHintMode ?? activeSession?.staticHintMode,
+      escalationPolicy: body.escalationPolicy ?? activeSession?.escalationPolicy,
+      currentCode: body.currentCode ?? activeSession?.lastCode,
+      guidanceState: body.guidanceState ?? activeSession?.guidanceState,
+      hdiState: body.hdiState ?? activeSession?.hdiState,
+      banditState: body.banditState ?? activeSession?.banditState,
+      lastActivity: body.lastActivity,
+    } satisfies SessionData,
+  };
 }
 
 // Verify ownership for all :learnerId routes
@@ -43,24 +124,7 @@ router.get('/:learnerId/active', async (req: Request, res: Response) => {
     // Return in the format expected by frontend
     res.json({
       success: true,
-      data: {
-        currentProblemId: session.currentProblemId ?? session.sessionId,
-        sectionId: session.sectionId ?? null,
-        currentCode: session.lastCode,
-        guidanceState: session.guidanceState,
-        hdiState: session.hdiState,
-        banditState: session.banditState,
-        startTime: session.createdAt ? new Date(session.createdAt).toISOString() : undefined,
-        lastActivity: session.updatedAt ? new Date(session.updatedAt).toISOString() : undefined,
-        // Include raw session data for compatibility
-        sessionId: session.sessionId,
-        conditionId: session.conditionId,
-        textbookDisabled: session.textbookDisabled,
-        adaptiveLadderDisabled: session.adaptiveLadderDisabled,
-        immediateExplanationMode: session.immediateExplanationMode,
-        staticHintMode: session.staticHintMode,
-        escalationPolicy: session.escalationPolicy,
-      }
+      data: buildSessionResponse(session),
     });
   } catch (error) {
     console.error('Error fetching session:', error);
@@ -71,108 +135,38 @@ router.get('/:learnerId/active', async (req: Request, res: Response) => {
 // POST /api/sessions/:learnerId/active - Save active session
 router.post('/:learnerId/active', async (req: Request, res: Response) => {
   try {
-    const {
-      currentProblemId,
-      currentCode,
-      guidanceState,
-      hdiState,
-      banditState,
-      startTime,
-      lastActivity,
-      // Also accept direct session fields
-      sessionId,
-      conditionId,
-      textbookDisabled,
-      adaptiveLadderDisabled,
-      immediateExplanationMode,
-      staticHintMode,
-      escalationPolicy,
-    } = req.body;
-
-    const hasExplicitProblemContext = Boolean(currentProblemId);
-    const hasSessionStatePayload =
-      currentCode !== undefined ||
-      guidanceState !== undefined ||
-      hdiState !== undefined ||
-      banditState !== undefined;
+    const body = req.body as SessionWriteBody;
 
     // Treat heartbeat-only writes as read-through when an active session exists.
     // This prevents session bootstrapping calls from replacing resumable state
     // with an empty session that has null currentCode.
-    if (!hasExplicitProblemContext && !hasSessionStatePayload) {
+    if (!hasSessionMutationPayload(body)) {
       const activeSession = await db.getActiveSession(req.params.learnerId);
       if (activeSession) {
         res.json({
           success: true,
-          data: {
-            currentProblemId: activeSession.currentProblemId ?? activeSession.sessionId,
-            sectionId: activeSession.sectionId ?? null,
-            currentCode: activeSession.lastCode,
-            guidanceState: activeSession.guidanceState,
-            hdiState: activeSession.hdiState,
-            banditState: activeSession.banditState,
-            startTime: activeSession.createdAt ? new Date(activeSession.createdAt).toISOString() : undefined,
-            lastActivity:
-              activeSession.lastActivity
-                ? new Date(activeSession.lastActivity).toISOString()
-                : activeSession.updatedAt
-                  ? new Date(activeSession.updatedAt).toISOString()
-                  : undefined,
-            sessionId: activeSession.sessionId,
-          }
+          data: buildSessionResponse(activeSession),
         });
         return;
       }
     }
 
     const activeSession = await db.getActiveSession(req.params.learnerId);
-
-    // Map frontend format to backend format
-    const actualSessionId =
-      sessionId ||
-      activeSession?.sessionId ||
-      `session-${req.params.learnerId}-${Date.now()}`;
-    const actualCurrentProblemId =
-      currentProblemId ||
-      activeSession?.currentProblemId ||
-      null;
-    const actualConditionId = conditionId || 'default';
+    const { actualSessionId, actualConditionId, mergedSessionData } = resolveSessionWriteBody(
+      req.params.learnerId,
+      body,
+      activeSession,
+    );
 
     await db.saveSession(req.params.learnerId, actualSessionId, actualConditionId, {
-      currentProblemId: actualCurrentProblemId,
-      textbookDisabled,
-      adaptiveLadderDisabled,
-      immediateExplanationMode,
-      staticHintMode,
-      escalationPolicy,
-      currentCode,
-      guidanceState,
-      hdiState,
-      banditState,
-      lastActivity,
+      ...mergedSessionData,
     });
 
     const session = await db.getSession(req.params.learnerId, actualSessionId);
 
     res.json({
       success: true,
-      data: {
-        currentProblemId: session?.currentProblemId ?? actualCurrentProblemId ?? session?.sessionId,
-        sectionId: session?.sectionId ?? null,
-        currentCode: session?.lastCode ?? currentCode,
-        guidanceState: session?.guidanceState ?? guidanceState,
-        hdiState: session?.hdiState ?? hdiState,
-        banditState: session?.banditState ?? banditState,
-        sessionId: session?.sessionId ?? actualSessionId,
-        startTime: startTime || (session?.createdAt ? new Date(session.createdAt).toISOString() : undefined),
-        lastActivity:
-          lastActivity ||
-          (session?.lastActivity
-            ? new Date(session.lastActivity).toISOString()
-            : session?.updatedAt
-              ? new Date(session.updatedAt).toISOString()
-              : undefined),
-      }
+      data: buildSessionResponse(session),
     });
     logSessionWrite(req, req.params.learnerId, session?.sectionId ?? null);
   } catch (error) {
@@ -185,102 +179,35 @@ router.post('/:learnerId/active', async (req: Request, res: Response) => {
 router.put('/:learnerId/active', async (req: Request, res: Response) => {
   // Delegate to POST handler logic
   try {
-    const {
-      currentProblemId,
-      currentCode,
-      guidanceState,
-      hdiState,
-      banditState,
-      startTime,
-      lastActivity,
-      sessionId,
-      conditionId,
-      textbookDisabled,
-      adaptiveLadderDisabled,
-      immediateExplanationMode,
-      staticHintMode,
-      escalationPolicy,
-    } = req.body;
+    const body = req.body as SessionWriteBody;
 
-    const hasExplicitProblemContext = Boolean(currentProblemId);
-    const hasSessionStatePayload =
-      currentCode !== undefined ||
-      guidanceState !== undefined ||
-      hdiState !== undefined ||
-      banditState !== undefined;
-
-    if (!hasExplicitProblemContext && !hasSessionStatePayload) {
+    if (!hasSessionMutationPayload(body)) {
       const activeSession = await db.getActiveSession(req.params.learnerId);
       if (activeSession) {
         res.json({
           success: true,
-          data: {
-            currentProblemId: activeSession.currentProblemId ?? activeSession.sessionId,
-            sectionId: activeSession.sectionId ?? null,
-            currentCode: activeSession.lastCode,
-            guidanceState: activeSession.guidanceState,
-            hdiState: activeSession.hdiState,
-            banditState: activeSession.banditState,
-            startTime: activeSession.createdAt ? new Date(activeSession.createdAt).toISOString() : undefined,
-            lastActivity:
-              activeSession.lastActivity
-                ? new Date(activeSession.lastActivity).toISOString()
-                : activeSession.updatedAt
-                  ? new Date(activeSession.updatedAt).toISOString()
-                  : undefined,
-            sessionId: activeSession.sessionId,
-          }
+          data: buildSessionResponse(activeSession),
         });
         return;
       }
     }
 
     const activeSession = await db.getActiveSession(req.params.learnerId);
-    const actualSessionId =
-      sessionId ||
-      activeSession?.sessionId ||
-      `session-${req.params.learnerId}-${Date.now()}`;
-    const actualCurrentProblemId =
-      currentProblemId ||
-      activeSession?.currentProblemId ||
-      null;
-    const actualConditionId = conditionId || 'default';
+    const { actualSessionId, actualConditionId, mergedSessionData } = resolveSessionWriteBody(
+      req.params.learnerId,
+      body,
+      activeSession,
+    );
 
     await db.saveSession(req.params.learnerId, actualSessionId, actualConditionId, {
-      currentProblemId: actualCurrentProblemId,
-      textbookDisabled,
-      adaptiveLadderDisabled,
-      immediateExplanationMode,
-      staticHintMode,
-      escalationPolicy,
-      currentCode,
-      guidanceState,
-      hdiState,
-      banditState,
-      lastActivity,
+      ...mergedSessionData,
     });
 
     const session = await db.getSession(req.params.learnerId, actualSessionId);
 
     res.json({
       success: true,
-      data: {
-        currentProblemId: session?.currentProblemId ?? actualCurrentProblemId ?? session?.sessionId,
-        sectionId: session?.sectionId ?? null,
-        currentCode: session?.lastCode ?? currentCode,
-        guidanceState: session?.guidanceState ?? guidanceState,
-        hdiState: session?.hdiState ?? hdiState,
-        banditState: session?.banditState ?? banditState,
-        sessionId: session?.sessionId ?? actualSessionId,
-        startTime: startTime || (session?.createdAt ? new Date(session.createdAt).toISOString() : undefined),
-        lastActivity:
-          lastActivity ||
-          (session?.lastActivity
-            ? new Date(session.lastActivity).toISOString()
-            : session?.updatedAt
-              ? new Date(session.updatedAt).toISOString()
-              : undefined),
-      }
+      data: buildSessionResponse(session),
     });
     logSessionWrite(req, req.params.learnerId, session?.sectionId ?? null);
   } catch (error) {

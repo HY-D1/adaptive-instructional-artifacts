@@ -229,6 +229,12 @@ interface SessionData {
   sessionId?: string;
   currentProblemId?: string;
   sectionId?: string | null;
+  conditionId?: string;
+  textbookDisabled?: boolean;
+  adaptiveLadderDisabled?: boolean;
+  immediateExplanationMode?: boolean;
+  staticHintMode?: boolean;
+  escalationPolicy?: 'aggressive' | 'conservative' | 'explanation_first' | 'adaptive' | 'no_hints';
   currentCode?: string;
   guidanceState?: Record<string, unknown>;
   hdiState?: Record<string, unknown>;

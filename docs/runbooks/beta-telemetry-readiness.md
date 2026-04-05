@@ -5,10 +5,11 @@ Last audited: 2026-03-29 (Workstream 3 - Beta Telemetry Readiness Audit)
 Finalized: 2026-03-30 (Workstream 6 - Documentation Updates)
 
 **Status**: READY FOR CONTROLLED STUDENT BETA LAUNCH
-**Release**: v1.0.0-beta (commit: a799561a13791771f4e30097af15021e4c7c2415)
+**Release**: `v1.1.0-beta-50` on `main` (`91e7696c044e6c65b9c348609d79dd8de612d0d4`, merged PR `#17`)
 
 Purpose:
 - Confirm first-user supervised beta observability is sufficient without schema redesign.
+- Session persistence hardening is tracked separately from telemetry scope; partial session writes now preserve stored condition flags and policy values.
 
 ## Required Signals and Current Coverage
 
@@ -130,6 +131,8 @@ Research-relevant event types defined in `apps/server/src/types.ts`:
 | No explicit concept_view event | Cannot directly measure concept page engagement | Concept engagement inferred from conceptIds in hint/textbook events |
 | Auth events not in research DB | Cannot correlate auth issues with learning outcomes | Server logs available for operational debugging |
 | No explicit page_view telemetry | Page-level analytics limited | Vercel Analytics provides operational metrics |
+
+`hint_view` continuing to omit `hintId` is intentional in the current research/export contract and is not a telemetry bug for this beta-hardening pass.
 
 ### Event Types Catalog: 31 Total
 

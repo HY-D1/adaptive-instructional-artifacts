@@ -191,6 +191,12 @@ test.describe('@authz @multi-device student persistence without storageState clo
     const sessionSeed = {
       currentProblemId: 'problem-2',
       currentCode: 'SELECT * FROM employees WHERE salary > 70000',
+      conditionId: 'adaptive-bandit',
+      textbookDisabled: true,
+      adaptiveLadderDisabled: true,
+      immediateExplanationMode: true,
+      staticHintMode: false,
+      escalationPolicy: 'explanation_first',
       guidanceState: { rung: 2, source: 'e2e-session-seed' },
       hdiState: { hdi: 0.42, level: 'medium' },
       banditState: { selectedArm: 'adaptive-low' },
@@ -221,6 +227,37 @@ test.describe('@authz @multi-device student persistence without storageState clo
     );
     expect(sessionWrite.ok).toBeTruthy();
 
+    const partialSessionWrite = await page.evaluate(
+      async ({ seededLearnerId, payload, apiBaseUrl }) => {
+        const meResponse = await fetch(`${apiBaseUrl}/api/auth/me`, {
+          credentials: 'include',
+        });
+        const meBody = await meResponse.json().catch(() => null);
+        const csrfToken = (meBody?.csrfToken as string | undefined) ?? '';
+
+        const response = await fetch(`${apiBaseUrl}/api/sessions/${seededLearnerId}/active`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-csrf-token': csrfToken,
+          },
+          body: JSON.stringify(payload),
+        });
+        const body = await response.json().catch(() => null);
+        return { ok: response.ok, status: response.status, body };
+      },
+      {
+        seededLearnerId: learnerId!,
+        payload: {
+          currentCode: 'SELECT employee_id, name FROM employees WHERE salary > 70000',
+          lastActivity: new Date().toISOString(),
+        },
+        apiBaseUrl: API_BASE_URL,
+      }
+    );
+    expect(partialSessionWrite.ok).toBeTruthy();
+
     const clean = await browser.newContext();
     const second = await clean.newPage();
     try {
@@ -249,8 +286,14 @@ test.describe('@authz @multi-device student persistence without storageState clo
         return { ok: response.ok, body };
       }, { hydratedLearnerId: secondLearnerId!, apiBaseUrl: API_BASE_URL });
       expect(resumedSession.ok).toBeTruthy();
-      expect(resumedSession.body?.data?.currentCode).toBe(sessionSeed.currentCode);
+      expect(resumedSession.body?.data?.currentCode).toBe('SELECT employee_id, name FROM employees WHERE salary > 70000');
       expect(resumedSession.body?.data?.guidanceState?.source).toBe('e2e-session-seed');
+      expect(resumedSession.body?.data?.conditionId).toBe(sessionSeed.conditionId);
+      expect(resumedSession.body?.data?.textbookDisabled).toBe(sessionSeed.textbookDisabled);
+      expect(resumedSession.body?.data?.adaptiveLadderDisabled).toBe(sessionSeed.adaptiveLadderDisabled);
+      expect(resumedSession.body?.data?.immediateExplanationMode).toBe(sessionSeed.immediateExplanationMode);
+      expect(resumedSession.body?.data?.staticHintMode).toBe(sessionSeed.staticHintMode);
+      expect(resumedSession.body?.data?.escalationPolicy).toBe(sessionSeed.escalationPolicy);
 
       const interactionRead = await second.evaluate(async ({ hydratedLearnerId, apiBaseUrl }) => {
         const response = await fetch(`${apiBaseUrl}/api/interactions?learnerId=${hydratedLearnerId}`, {

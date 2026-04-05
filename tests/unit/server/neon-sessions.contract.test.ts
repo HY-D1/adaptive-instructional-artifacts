@@ -157,4 +157,89 @@ describe('neon-sessions contract', () => {
       }),
     );
   });
+
+  it('preserves existing condition flags when partial updates omit them', async () => {
+    const { neonSessionsRouter } = await import('../../../apps/server/src/routes/neon-sessions');
+    const postActive = getRouteHandler(
+      neonSessionsRouter as unknown as { stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }> },
+      'post',
+      '/:learnerId/active',
+    );
+
+    getActiveSessionMock.mockResolvedValue({
+      sessionId: 'session-existing',
+      currentProblemId: 'problem-2',
+      sectionId: 'section-1',
+      conditionId: 'adaptive-bandit',
+      textbookDisabled: true,
+      adaptiveLadderDisabled: true,
+      immediateExplanationMode: true,
+      staticHintMode: false,
+      escalationPolicy: 'explanation_first',
+      lastCode: 'SELECT 1',
+      guidanceState: { source: 'existing' },
+      hdiState: { hdi: 0.8 },
+      banditState: { selectedArm: 'arm-a' },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      lastActivity: Date.now(),
+    });
+    saveSessionMock.mockResolvedValue(undefined);
+    getSessionMock.mockResolvedValue({
+      sessionId: 'session-existing',
+      currentProblemId: 'problem-2',
+      sectionId: 'section-1',
+      conditionId: 'adaptive-bandit',
+      textbookDisabled: true,
+      adaptiveLadderDisabled: true,
+      immediateExplanationMode: true,
+      staticHintMode: false,
+      escalationPolicy: 'explanation_first',
+      lastCode: 'SELECT updated_value FROM employees',
+      guidanceState: { source: 'existing' },
+      hdiState: { hdi: 0.8 },
+      banditState: { selectedArm: 'arm-a' },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      lastActivity: Date.now(),
+    });
+
+    const result = await invokeJsonHandler(postActive, {
+      params: { learnerId: 'learner-1' },
+      body: {
+        currentCode: 'SELECT updated_value FROM employees',
+        lastActivity: new Date().toISOString(),
+      },
+    });
+
+    expect(result.status).toBe(200);
+    expect(saveSessionMock).toHaveBeenCalledWith(
+      'learner-1',
+      'session-existing',
+      'adaptive-bandit',
+      expect.objectContaining({
+        currentProblemId: 'problem-2',
+        textbookDisabled: true,
+        adaptiveLadderDisabled: true,
+        immediateExplanationMode: true,
+        staticHintMode: false,
+        escalationPolicy: 'explanation_first',
+        currentCode: 'SELECT updated_value FROM employees',
+        guidanceState: { source: 'existing' },
+        hdiState: { hdi: 0.8 },
+        banditState: { selectedArm: 'arm-a' },
+      }),
+    );
+    expect((result.json as { data?: Record<string, unknown> }).data).toEqual(
+      expect.objectContaining({
+        sessionId: 'session-existing',
+        conditionId: 'adaptive-bandit',
+        textbookDisabled: true,
+        adaptiveLadderDisabled: true,
+        immediateExplanationMode: true,
+        staticHintMode: false,
+        escalationPolicy: 'explanation_first',
+      }),
+    );
+  });
 });

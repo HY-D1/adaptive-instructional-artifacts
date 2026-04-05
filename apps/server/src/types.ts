@@ -549,8 +549,23 @@ export interface Session {
   updatedAt: string;
 }
 
+export type SessionEscalationPolicy =
+  | 'aggressive'
+  | 'conservative'
+  | 'explanation_first'
+  | 'adaptive'
+  | 'no_hints';
+
 export interface SessionData {
+  sessionId?: string;
   currentProblemId?: string;
+  sectionId?: string | null;
+  conditionId?: string;
+  textbookDisabled?: boolean;
+  adaptiveLadderDisabled?: boolean;
+  immediateExplanationMode?: boolean;
+  staticHintMode?: boolean;
+  escalationPolicy?: SessionEscalationPolicy;
   currentCode?: string;
   guidanceState?: Record<string, unknown>;
   hdiState?: Record<string, unknown>;

@@ -21,6 +21,7 @@ import type {
   InstructionalUnit,
   CreateUnitRequest,
   LearnerProfile,
+  SessionData,
 } from '../types.js';
 
 export interface CorpusManifestDocumentRow {
@@ -553,26 +554,37 @@ async function resolveSectionIdForLearner(userId: string): Promise<string | null
 export async function saveSession(
   userId: string,
   sessionId: string,
-  conditionId: string,
-  config: {
-    sectionId?: string | null;
-    currentProblemId?: string | null;
-    textbookDisabled?: boolean;
-    adaptiveLadderDisabled?: boolean;
-    immediateExplanationMode?: boolean;
-    staticHintMode?: boolean;
-    escalationPolicy?: string;
-    currentCode?: string;
-    guidanceState?: Record<string, unknown>;
-    hdiState?: Record<string, unknown>;
-    banditState?: Record<string, unknown>;
-    lastActivity?: string;
-  }
+  conditionId: string | undefined,
+  config: SessionData
 ): Promise<void> {
   const db = getDb();
   const id = `${userId}-${sessionId}`;
   const now = new Date().toISOString();
-  const resolvedSectionId = config.sectionId ?? await resolveSectionIdForLearner(userId);
+  const existingSession = await getSession(userId, sessionId);
+  const resolvedSectionId =
+    config.sectionId ?? existingSession?.sectionId ?? await resolveSectionIdForLearner(userId);
+  const resolvedConditionId = conditionId ?? existingSession?.conditionId ?? 'default';
+  const resolvedTextbookDisabled =
+    config.textbookDisabled ?? existingSession?.textbookDisabled ?? false;
+  const resolvedAdaptiveLadderDisabled =
+    config.adaptiveLadderDisabled ?? existingSession?.adaptiveLadderDisabled ?? false;
+  const resolvedImmediateExplanationMode =
+    config.immediateExplanationMode ?? existingSession?.immediateExplanationMode ?? false;
+  const resolvedStaticHintMode =
+    config.staticHintMode ?? existingSession?.staticHintMode ?? false;
+  const resolvedEscalationPolicy =
+    config.escalationPolicy ?? existingSession?.escalationPolicy ?? 'adaptive';
+  const resolvedCurrentProblemId =
+    config.currentProblemId ?? existingSession?.currentProblemId ?? null;
+  const resolvedCurrentCode = config.currentCode ?? existingSession?.lastCode ?? null;
+  const resolvedGuidanceState = config.guidanceState ?? existingSession?.guidanceState ?? null;
+  const resolvedHdiState = config.hdiState ?? existingSession?.hdiState ?? null;
+  const resolvedBanditState = config.banditState ?? existingSession?.banditState ?? null;
+  const existingLastActivity =
+    typeof existingSession?.lastActivity === 'number'
+      ? new Date(existingSession.lastActivity).toISOString()
+      : null;
+  const resolvedLastActivity = config.lastActivity ?? existingLastActivity ?? now;
 
   await db`
     INSERT INTO learner_sessions (
@@ -581,14 +593,14 @@ export async function saveSession(
       static_hint_mode, escalation_policy, current_code, guidance_state,
       hdi_state, bandit_state, last_activity, created_at, updated_at
     ) VALUES (
-      ${id}, ${userId}, ${resolvedSectionId}, ${sessionId}, ${config.currentProblemId ?? null}, ${conditionId},
-      ${config.textbookDisabled ?? false}, ${config.adaptiveLadderDisabled ?? false},
-      ${config.immediateExplanationMode ?? false}, ${config.staticHintMode ?? false},
-      ${config.escalationPolicy ?? 'adaptive'}, ${config.currentCode ?? null},
-      ${JSON.stringify(config.guidanceState ?? null)},
-      ${JSON.stringify(config.hdiState ?? null)},
-      ${JSON.stringify(config.banditState ?? null)},
-      ${config.lastActivity ?? now}, ${now}, ${now}
+      ${id}, ${userId}, ${resolvedSectionId}, ${sessionId}, ${resolvedCurrentProblemId}, ${resolvedConditionId},
+      ${resolvedTextbookDisabled}, ${resolvedAdaptiveLadderDisabled},
+      ${resolvedImmediateExplanationMode}, ${resolvedStaticHintMode},
+      ${resolvedEscalationPolicy}, ${resolvedCurrentCode},
+      ${JSON.stringify(resolvedGuidanceState)},
+      ${JSON.stringify(resolvedHdiState)},
+      ${JSON.stringify(resolvedBanditState)},
+      ${resolvedLastActivity}, ${now}, ${now}
     )
     ON CONFLICT (user_id, session_id) DO UPDATE SET
       condition_id = EXCLUDED.condition_id,
@@ -599,10 +611,10 @@ export async function saveSession(
       immediate_explanation_mode = COALESCE(EXCLUDED.immediate_explanation_mode, learner_sessions.immediate_explanation_mode),
       static_hint_mode = COALESCE(EXCLUDED.static_hint_mode, learner_sessions.static_hint_mode),
       escalation_policy = COALESCE(EXCLUDED.escalation_policy, learner_sessions.escalation_policy),
-      current_code = EXCLUDED.current_code,
-      guidance_state = EXCLUDED.guidance_state,
-      hdi_state = EXCLUDED.hdi_state,
-      bandit_state = EXCLUDED.bandit_state,
+      current_code = COALESCE(EXCLUDED.current_code, learner_sessions.current_code),
+      guidance_state = COALESCE(EXCLUDED.guidance_state, learner_sessions.guidance_state),
+      hdi_state = COALESCE(EXCLUDED.hdi_state, learner_sessions.hdi_state),
+      bandit_state = COALESCE(EXCLUDED.bandit_state, learner_sessions.bandit_state),
       last_activity = EXCLUDED.last_activity,
       updated_at = EXCLUDED.updated_at
   `;
