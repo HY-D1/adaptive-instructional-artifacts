@@ -4,7 +4,7 @@
  * LLM-based adaptive hint generation for rung 3+ explanations.
  */
 
-import { generateWithOllama, isLLMAvailable } from '../../api/llm-client';
+import { generateWithLLM, isLLMAvailable } from '../../api/llm-client';
 import type { GuidanceRung } from '../guidance-ladder';
 import type { AdaptiveHintContext, AdaptiveHintOutput, EnhancedHint, RetrievalSignalMeta } from './types';
 import type { AvailableResources } from './types';
@@ -61,10 +61,11 @@ export async function generateLLMEnhancedHint(
   try {
     // Generate adaptive hint using LLM
     const adaptiveOutput = await generateAdaptiveHint(context, async (prompt) => {
-      const response = await generateWithOllama({
-        prompt,
-        temperature: 0.7,
-        max_tokens: 500,
+      const response = await generateWithLLM(prompt, {
+        params: {
+          temperature: 0.7,
+          max_tokens: 500,
+        },
       });
       return response.text;
     });

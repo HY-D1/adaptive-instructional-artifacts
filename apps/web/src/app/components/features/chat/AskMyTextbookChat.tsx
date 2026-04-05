@@ -34,9 +34,9 @@ import { storage } from '../../../lib/storage';
 import { createEventId } from '../../../lib/utils/event-id';
 import type { InteractionEvent, InstructionalUnit } from '../../../types';
 import { buildRetrievalBundle } from '../../../lib/content/retrieval-bundle';
-import { generateWithOllama } from '../../../lib/api/llm-client';
+import { generateWithLLM, getLLMStatus } from '../../../lib/api/llm-client';
 import { getProblemById } from '../../../data/problems';
-import { checkAvailableResources, type AvailableResources } from '../../../lib/ml/enhanced-hint-service';
+import { checkAvailableResources, checkAvailableResourcesAsync, type AvailableResources } from '../../../lib/ml/enhanced-hint-service';
 import { Sparkles } from 'lucide-react';
 import { ConfirmDialog } from '../../ui/confirm-dialog';
 
@@ -358,8 +358,18 @@ export function AskMyTextbookChat({
   
   // Check resources on mount
   useEffect(() => {
+    let cancelled = false;
     const resources = checkAvailableResources(learnerId);
     setAvailableResources(resources);
+    void checkAvailableResourcesAsync(learnerId).then((resolvedResources) => {
+      if (!cancelled) {
+        setAvailableResources(resolvedResources);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [learnerId]);
 
   // Get textbook units for grounding
@@ -850,8 +860,11 @@ export function AskMyTextbookChat({
     quickChip: string | undefined,
     groundingPayload: ReturnType<typeof buildGroundingPayload>
   ): Promise<string | null> => {
-    if (!availableResources.llm) return null;
-    
+    const llmStatus = await getLLMStatus();
+    if (!llmStatus.available) {
+      return null;
+    }
+
     const { relevantUnits, pdfPassages, errorSubtype, problemConceptIds } = groundingPayload;
     const problem = getProblemById(problemId);
     
@@ -905,7 +918,7 @@ export function AskMyTextbookChat({
       
       // Call LLM
       const llmCall = async (prompt: string): Promise<string> => {
-        const result = await generateWithOllama(prompt, { 
+        const result = await generateWithLLM(prompt, { 
           params: { temperature: 0.3, max_tokens: 200 }
         });
         return result.text;
@@ -918,7 +931,7 @@ export function AskMyTextbookChat({
       // LLM generation failed - fallback will be used
       return null;
     }
-  }, [availableResources.llm, problemId]);
+  }, [problemId]);
 
   // Generate grounded response using retrieved sources - FOCUSED & ACTIONABLE
   const generateResponse = useCallback(async (query: string, quickChip?: string): Promise<{ 
@@ -964,20 +977,18 @@ export function AskMyTextbookChat({
     let response = '';
     let llmGenerated = false;
     
-    if (availableResources.llm) {
-      const groundingPayload = {
-        relevantUnits,
-        bundleSources,
-        pdfPassages,
-        allSourceIds,
-        problemConceptIds,
-        errorSubtype
-      };
-      const llmResponse = await generateLLMResponse(query, quickChip, groundingPayload);
-      if (llmResponse) {
-        response = llmResponse;
-        llmGenerated = true;
-      }
+    const groundingPayload = {
+      relevantUnits,
+      bundleSources,
+      pdfPassages,
+      allSourceIds,
+      problemConceptIds,
+      errorSubtype
+    };
+    const llmResponse = await generateLLMResponse(query, quickChip, groundingPayload);
+    if (llmResponse) {
+      response = llmResponse;
+      llmGenerated = true;
     }
     
     // Fall back to template-based if LLM not available or failed
@@ -1119,7 +1130,7 @@ export function AskMyTextbookChat({
       problemConceptIds,
       llmGenerated
     };
-  }, [buildGroundingPayload, recentInteractions, problemId, cleanText, extractSqlExample, getActionableFix, availableResources.llm, generateLLMResponse]);
+  }, [buildGroundingPayload, recentInteractions, problemId, cleanText, extractSqlExample, getActionableFix, generateLLMResponse]);
 
   // Log chat interaction
   const logChatInteraction = useCallback((

@@ -3,27 +3,27 @@
 **Version**: 1.0.0  
 **Last Updated**: 2026-03-24
 
-This document provides a clear reference for which features work in **local development** and **hosted frontend-only demo mode**.
+This document provides a clear reference for which features work in **local development**, **hosted full-stack deployments**, and **hosted frontend-only demo mode**.
 
-> For **hosted full-stack mode** (frontend + backend API + Neon), use [DEPLOYMENT.md](./DEPLOYMENT.md). This matrix intentionally describes the frontend-only hosted demo path.
+> For deployment procedures, use [DEPLOYMENT.md](./DEPLOYMENT.md). This matrix distinguishes backend-connected hosted deployments from frontend-only demo deployments.
 
 ---
 
 ## Quick Reference
 
-| Capability | Local Dev (`npm run dev`) | Hosted Frontend-Only Demo (Vercel) |
-|------------|---------------------------|----------------------|
-| **SQL Practice (32 problems)** | ✅ Full | ✅ Full |
-| **Progressive Hints (3-rung ladder)** | ✅ Full | ✅ Full |
-| **SQL-Engage Dataset Hints** | ✅ Full | ✅ Full |
-| **Automatic Textbook** | ✅ Full | ✅ Full |
-| **Student/Instructor Roles** | ✅ Full | ✅ Full* |
-| **Research Dashboard** | ✅ Full | ✅ Deterministic |
-| **Replay & Strategy Comparison** | ✅ Full | ✅ Deterministic |
-| **AI-Powered Explanations (LLM)** | ✅ With Ollama | ❌ Unavailable |
-| **PDF Search & Chat** | ✅ With backend | ❌ Unavailable |
-| **PDF Upload & Index Building** | ✅ Local only | ❌ Unavailable |
-| **Backend API Persistence** | ✅ Optional | ❌ localStorage only |
+| Capability | Local Dev (`npm run dev`) | Hosted Full-Stack (Vercel + backend) | Hosted Frontend-Only Demo |
+|------------|---------------------------|--------------------------------------|---------------------------|
+| **SQL Practice (32 problems)** | ✅ Full | ✅ Full | ✅ Full |
+| **Progressive Hints (3-rung ladder)** | ✅ Full | ✅ Full | ✅ Full |
+| **SQL-Engage Dataset Hints** | ✅ Full | ✅ Full | ✅ Full |
+| **Automatic Textbook** | ✅ Full | ✅ Full | ✅ Full |
+| **Student/Instructor Roles** | ✅ Full | ✅ Full* | ✅ Full* |
+| **Research Dashboard** | ✅ Full | ✅ Full | ✅ Deterministic |
+| **Replay & Strategy Comparison** | ✅ Full | ✅ Full | ✅ Deterministic |
+| **AI-Powered Explanations (LLM)** | ✅ With Ollama | ✅ With backend provider (Groq or Ollama) | ❌ Unavailable |
+| **PDF Search & Chat** | ✅ With backend | ✅ If backend PDF index is enabled | ❌ Unavailable |
+| **PDF Upload & Index Building** | ✅ Local only | ⚠️ Backend feature flag dependent | ❌ Unavailable |
+| **Backend API Persistence** | ✅ Optional | ✅ Required | ❌ localStorage only |
 
 \* Instructor mode requires `VITE_INSTRUCTOR_PASSCODE` at build time on Vercel
 
@@ -60,15 +60,15 @@ This document provides a clear reference for which features work in **local deve
 | Learner Clustering | ✅ | ✅ | Client-side algorithms |
 | Export Session Data | ✅ | ✅ | JSON download |
 
-### AI-Powered Features (Local Only)
+### AI-Powered Features
 
-| Feature | Local | Hosted | Notes |
-|---------|-------|--------|-------|
-| LLM-Generated Explanations | ✅ With Ollama | ❌ | Requires local Ollama instance |
-| AI Textbook Units | ✅ With Ollama | ❌ | Falls back to deterministic templates |
-| Context-Aware Hints | ✅ With Ollama | ❌ | Falls back to SQL-Engage dataset |
-| "Ask My Textbook" Chat | ✅ With backend | ❌ | Requires PDF index + LLM |
-| Source Grounding (PDF) | ✅ With PDF index | ❌ | Citation links show but don't resolve |
+| Feature | Local | Hosted Full-Stack | Frontend-Only Demo | Notes |
+|---------|-------|-------------------|--------------------|-------|
+| LLM-Generated Explanations | ✅ With Ollama | ✅ With backend provider | ❌ | Backend provider comes from `/api/llm/status` |
+| AI Textbook Units | ✅ With Ollama | ✅ With backend provider | ❌ | Frontend-only demo falls back to deterministic templates |
+| Context-Aware Hints | ✅ With Ollama | ✅ With backend provider | ❌ | Frontend-only demo falls back to SQL-Engage dataset |
+| "Ask My Textbook" Chat | ✅ With backend | ✅ If PDF index + LLM are enabled | ❌ | Requires backend corpus/LLM support |
+| Source Grounding (PDF) | ✅ With PDF index | ✅ If PDF index is enabled | ❌ | Frontend-only demo cannot resolve live citations |
 
 ### Infrastructure Features (Local Only)
 
@@ -93,7 +93,7 @@ These are **embedded at build time** and cannot be changed without redeploy:
 | `VITE_INSTRUCTOR_PASSCODE` | ✅ Yes | ⚠️ Dev fallback | Enables instructor role selection |
 | `VITE_API_BASE_URL` | ⚠️ Optional | ❌ No (frontend-only mode) | Backend API URL (set this in full-stack hosted deployments) |
 | `VITE_TEXTBOOK_CORPUS_MODE` | ⚠️ Optional | ⚠️ Optional | `remote` prefers `/api/corpus` from backend; `static` uses bundled textbook assets |
-| `VITE_ENABLE_LLM` | ❌ No | ❌ No | UI toggle (always false on hosted) |
+| `VITE_ENABLE_LLM` | ❌ No | ❌ No | Legacy client hint only; backend `/api/llm/status` is the source of truth |
 | `VITE_ENABLE_PDF_INDEX` | ❌ No | ❌ No | UI toggle (always false on hosted) |
 
 ### Runtime Detection
@@ -107,8 +107,8 @@ isHostedMode() // returns true on Vercel
 // Checks if instructor mode should be shown
 isInstructorModeAvailable() // requires VITE_INSTRUCTOR_PASSCODE on hosted
 
-// Always returns false on hosted
-isLLMAvailable() // local Ollama only
+// Returns true when a backend API is configured or local Ollama URL is set
+isLLMAvailable()
 isPDFIndexAvailable() // local backend only
 ```
 
@@ -140,9 +140,9 @@ isPDFIndexAvailable() // local backend only
 
 Hosted mode shows appropriate messages when features are unavailable:
 
-- **Research Dashboard**: "Research features use deterministic mode. PDF indexing and LLM require local deployment."
+- **Research Dashboard**: "Research features use deterministic mode in frontend-only hosted deployments. Connect the backend API to enable live LLM-backed features."
 - **PDF Features**: "PDF upload and index building are not available in hosted mode."
-- **LLM Features**: "LLM features are not available in hosted mode. Run locally with Ollama."
+- **LLM Features**: "AI features are not available in this frontend-only hosted deployment. Connect the backend API or use a local Ollama-backed development setup to enable live explanations."
 
 ---
 
@@ -180,7 +180,7 @@ grep -r "isHostedMode" dist/app/assets/*.js | head -5
 # 4. Deploy dist/app to Vercel/Netlify
 ```
 
-**Features available**: Deterministic hints, textbook, research dashboard (no LLM/PDF)
+**Features available**: Deterministic hints, textbook, research dashboard (no live LLM/PDF)
 
 ---
 
@@ -196,7 +196,7 @@ Expected output on **hosted**:
 ```
 🔧 Runtime Configuration
   Instructor Mode: ✅ Available
-  LLM Features: ❌ Not available (local dev only)
+  LLM Features: ❌ Not available
   PDF Index: ❌ Disabled
   Backend API: ❌ Not configured
   Hosted Mode: ☁️ Yes (Vercel/Netlify)

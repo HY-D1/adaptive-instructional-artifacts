@@ -7,7 +7,7 @@ import {
   PdfCitation
 } from '../types';
 import { createInputHash, stableStringify } from './utils/hash';
-import { generateWithOllama, OLLAMA_MODEL } from './llm-client';
+import { generateWithLLM } from './llm-client';
 import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
 import { renderPrompt, TemplateId } from '../prompts/templates';
 import { storage } from './storage';
@@ -119,7 +119,7 @@ const DEFAULT_PARAMS: LLMGenerationParams = {
  */
 export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise<GenerateUnitResult> {
   const startTime = performance.now();
-  const model = options.model || OLLAMA_MODEL;
+  const requestedModel = options.model || 'provider-default';
   const params: LLMGenerationParams = {
     ...DEFAULT_PARAMS,
     ...(options.params || {})
@@ -127,7 +127,7 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
 
   const payloadForHash = {
     templateId: options.templateId,
-    model,
+    model: requestedModel,
     params,
     bundle: {
       learnerId: options.bundle.learnerId,
@@ -174,7 +174,7 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
       fromCache: true,
       usedFallback: cachedFallbackReason !== 'none',
       fallbackReason: cachedFallbackReason,
-      model,
+      model: cached.unit.provenance?.model || requestedModel,
       params,
       parseTelemetry: {
         ...cachedParseTelemetry,
@@ -188,7 +188,10 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
   const prompt = renderPrompt(options.templateId, stableStringify(options.bundle));
 
   try {
-    const response = await generateWithOllama(prompt, { model, params });
+    const response = await generateWithLLM(prompt, {
+      ...(options.model ? { model: options.model } : {}),
+      params,
+    });
     const llmTimeMs = Math.round(performance.now() - startTime);
     const parsed = parseTemplateJson(response.text);
     
@@ -288,7 +291,7 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
       }
     };
     const fallbackReason: FallbackReason = 'llm_error';
-    const fallback = buildFallbackUnit(options, model, params, inputHash, fallbackReason, parseTelemetry);
+    const fallback = buildFallbackUnit(options, requestedModel, params, inputHash, fallbackReason, parseTelemetry);
     saveCache({
       cacheKey,
       learnerId: options.learnerId,
@@ -305,7 +308,7 @@ export async function generateUnitFromLLM(options: GenerateUnitOptions): Promise
       fromCache: false,
       usedFallback: true,
       fallbackReason,
-      model,
+      model: requestedModel,
       params,
       parseTelemetry
     };

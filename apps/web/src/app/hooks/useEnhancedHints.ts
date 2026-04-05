@@ -11,6 +11,7 @@ import type { GuidanceRung } from '../lib/ml/guidance-ladder';
 import {
   generateEnhancedHint,
   checkAvailableResources,
+  checkAvailableResourcesAsync,
   getHintStrategyDescription,
   preloadHintContext,
   type EnhancedHint,
@@ -66,9 +67,20 @@ export function useEnhancedHints(options: UseEnhancedHintsOptions): UseEnhancedH
   
   // Check resources on mount
   useEffect(() => {
+    let cancelled = false;
     const resources = checkAvailableResources(learnerId);
     resourcesRef.current = resources;
     setAvailableResources(resources);
+
+    void checkAvailableResourcesAsync(learnerId).then((resolvedResources) => {
+      if (cancelled) return;
+      resourcesRef.current = resolvedResources;
+      setAvailableResources(resolvedResources);
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [learnerId]);
   
   /**
@@ -111,6 +123,10 @@ export function useEnhancedHints(options: UseEnhancedHintsOptions): UseEnhancedH
     const resources = checkAvailableResources(learnerId);
     resourcesRef.current = resources;
     setAvailableResources(resources);
+    void checkAvailableResourcesAsync(learnerId).then((resolvedResources) => {
+      resourcesRef.current = resolvedResources;
+      setAvailableResources(resolvedResources);
+    });
     return resources;
   }, [learnerId]);
   

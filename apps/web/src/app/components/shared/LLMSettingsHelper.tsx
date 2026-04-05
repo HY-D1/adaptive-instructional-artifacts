@@ -30,8 +30,10 @@ import {
   LLMProvider,
   OLLAMA_MODEL,
   GROQ_MODEL,
-  getProvider,
+  getLLMStatus,
 } from '../../lib/api/llm-client';
+
+const INITIAL_PROVIDER: LLMProvider = import.meta.env.VITE_API_BASE_URL ? 'groq' : 'ollama';
 
 interface LLMSettings {
   provider: LLMProvider;
@@ -42,11 +44,11 @@ interface LLMSettings {
 }
 
 const DEFAULT_SETTINGS: LLMSettings = {
-  provider: 'ollama',
+  provider: INITIAL_PROVIDER,
   temperature: 0,
   topP: 1,
   timeoutMs: 25000,
-  model: OLLAMA_MODEL
+  model: INITIAL_PROVIDER === 'groq' ? GROQ_MODEL : OLLAMA_MODEL
 };
 
 const STORAGE_KEY = 'sql-adapt-llm-settings';
@@ -81,15 +83,18 @@ export function LLMSettingsHelper() {
   useEffect(() => {
     const loadAndSyncSettings = async () => {
       try {
-        // First, fetch backend provider
-        const backendProvider = await getProvider();
+        const backendStatus = await getLLMStatus();
+        const backendProvider = backendStatus.provider;
+        if (backendStatus.models.length > 0) {
+          setAvailableModels(backendStatus.models);
+        }
 
         // Then load saved settings
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
           const parsed = JSON.parse(saved);
           // If backend provider differs from saved, sync to backend
-          if (parsed.provider && parsed.provider !== backendProvider) {
+          if (backendProvider && parsed.provider && parsed.provider !== backendProvider) {
             const syncedSettings = {
               ...DEFAULT_SETTINGS,
               ...parsed,
@@ -100,14 +105,20 @@ export function LLMSettingsHelper() {
             // Save synced settings back to localStorage
             localStorage.setItem(STORAGE_KEY, JSON.stringify(syncedSettings));
           } else {
-            setSettings(prev => ({ ...prev, ...parsed }));
+            setSettings(prev => ({
+              ...prev,
+              ...parsed,
+              ...(backendProvider ? { provider: backendProvider, model: PROVIDER_DEFAULTS[backendProvider] } : {}),
+            }));
           }
         } else {
           // No saved settings - use backend provider as default
           setSettings({
             ...DEFAULT_SETTINGS,
-            provider: backendProvider,
-            model: PROVIDER_DEFAULTS[backendProvider],
+            ...(backendProvider ? {
+              provider: backendProvider,
+              model: PROVIDER_DEFAULTS[backendProvider],
+            } : {}),
           });
         }
       } catch {
@@ -271,7 +282,9 @@ export function LLMSettingsHelper() {
         )}>
           <div className="flex items-center gap-1.5 mb-1">
             <ProviderIcon className="size-3" />
-            <span className="font-medium capitalize">{healthStatus.provider}</span>
+            <span className="font-medium capitalize">
+              {healthStatus.provider ? PROVIDER_NAMES[healthStatus.provider] : 'Backend'}
+            </span>
           </div>
           {healthStatus.message}
           {healthStatus.availableModels && healthStatus.availableModels.length > 0 && (
