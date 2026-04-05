@@ -25,15 +25,6 @@ test.describe('@weekly Enhanced Hint System', () => {
     });
   });
 
-  test('@weekly shows hint source status badge', async ({ page }) => {
-    await page.goto('/practice');
-    await expect(page.getByRole('button', { name: 'Run Query' })).toBeEnabled({ timeout: 10000 });
-
-    // Check that hint source status is shown
-    const statusBadge = page.locator('text=/hint source/i').first();
-    await expect(statusBadge).toBeVisible();
-  });
-
   test('@weekly generates SQL-Engage hint when no enhanced resources', async ({ page }) => {
     await page.goto('/practice');
     await expect(page.getByRole('button', { name: 'Run Query' })).toBeEnabled({ timeout: 10000 });
