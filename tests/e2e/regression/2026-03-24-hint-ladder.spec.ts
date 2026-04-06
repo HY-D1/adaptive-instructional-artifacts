@@ -265,7 +265,9 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
       expect(event.sessionId).toBeDefined();
       expect(event.learnerId).toBeDefined();
       expect(event.timestamp).toBeDefined();
-      expect(Object.prototype.hasOwnProperty.call(event, 'hintId')).toBeFalsy();
+      expect(event.hintId).toBeDefined();
+      expect(typeof event.hintId).toBe('string');
+      expect(event.hintId.length).toBeGreaterThan(0);
       expect(event.hintText).toBeDefined();
     }
   });
@@ -332,8 +334,10 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     // Verify all required fields exist
     expect(hintEvent.eventType).toBe('hint_view');
 
-    // hintId is intentionally omitted in Week 2 exports/events.
-    expect(Object.prototype.hasOwnProperty.call(hintEvent, 'hintId')).toBeFalsy();
+    // hintId is retained for per-hint tracing in local exports/events.
+    expect(hintEvent.hintId).toBeDefined();
+    expect(typeof hintEvent.hintId).toBe('string');
+    expect(hintEvent.hintId.length).toBeGreaterThan(0);
 
     // hintLevel: 1, 2, or 3
     expect(hintEvent.hintLevel).toBeDefined();

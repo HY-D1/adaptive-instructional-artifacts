@@ -21,6 +21,27 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 
 -- ============================================================================
+-- Auth telemetry (research-safe login outcome audit)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS auth_events (
+  id TEXT PRIMARY KEY,
+  timestamp TIMESTAMPTZ NOT NULL,
+  email_hash TEXT NOT NULL,
+  account_id TEXT,
+  learner_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  role TEXT CHECK (role IN ('student', 'instructor')),
+  outcome TEXT NOT NULL CHECK (outcome IN ('success', 'failure')),
+  failure_reason TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_events_timestamp ON auth_events(timestamp);
+CREATE INDEX IF NOT EXISTS idx_auth_events_outcome ON auth_events(outcome);
+CREATE INDEX IF NOT EXISTS idx_auth_events_learner_id ON auth_events(learner_id);
+CREATE INDEX IF NOT EXISTS idx_auth_events_account_id ON auth_events(account_id);
+
+-- ============================================================================
 -- Course sections + enrollments (durable instructor ownership model)
 -- ============================================================================
 
@@ -187,6 +208,13 @@ CREATE TABLE IF NOT EXISTS interaction_events (
   is_correct BOOLEAN,
   scheduled_time BIGINT,
   shown_time BIGINT,
+  learner_profile_id TEXT,
+  escalation_trigger_reason TEXT,
+  error_count_at_escalation INTEGER,
+  time_to_escalation INTEGER,
+  strategy_assigned TEXT,
+  strategy_updated TEXT,
+  reward_value NUMERIC,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -196,6 +224,13 @@ CREATE INDEX IF NOT EXISTS idx_interaction_events_event_type ON interaction_even
 CREATE INDEX IF NOT EXISTS idx_interaction_events_timestamp ON interaction_events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_interaction_events_problem_id ON interaction_events(problem_id);
 ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS learner_profile_id TEXT;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS escalation_trigger_reason TEXT;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS error_count_at_escalation INTEGER;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS time_to_escalation INTEGER;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_assigned TEXT;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_updated TEXT;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS reward_value NUMERIC;
 CREATE INDEX IF NOT EXISTS idx_interaction_events_section_id ON interaction_events(section_id);
 
 -- ============================================================================

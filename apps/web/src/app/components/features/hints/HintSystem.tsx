@@ -404,6 +404,15 @@ export function HintSystem({
     const rowId = selection.sqlEngageRowId.trim() || 'sql-engage:fallback-synthetic';
     return `sql-engage:${subtype}:explain:${rowId}`;
   };
+  const buildStableHintId = (selection: {
+    sqlEngageSubtype: string;
+    sqlEngageRowId: string;
+    hintLevel: 1 | 2 | 3;
+  }) => {
+    const subtype = selection.sqlEngageSubtype.trim() || 'incomplete query';
+    const rowId = selection.sqlEngageRowId.trim() || 'sql-engage:fallback-synthetic';
+    return `sql-engage:${subtype}:hint:${rowId}:L${selection.hintLevel}`;
+  };
   useEffect(() => {
     syncHelpFlowIndex(getProblemTrace());
   }, [sessionId, learnerId, problemId, recentInteractions]);
@@ -1041,6 +1050,7 @@ export function HintSystem({
         timestamp: Date.now(),
         eventType: 'hint_view',
         problemId,
+        hintId: buildStableHintId(hintSelection),
         hintText: hintSelection.hintText,
         hintLevel: hintSelection.hintLevel,
         helpRequestIndex: nextHelpRequestIndex,

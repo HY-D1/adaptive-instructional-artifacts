@@ -10,6 +10,7 @@ import { neon } from '@neondatabase/serverless';
 import type { NeonQueryFunction } from '@neondatabase/serverless';
 import * as fs from 'fs';
 import * as path from 'path';
+import { pathToFileURL } from 'url';
 
 // ============================================================================
 // Configuration
@@ -30,6 +31,7 @@ interface ExportManifest {
     users: number;
     sessions: number;
     events: number;
+    authEvents: number;
     textbookUnits: number;
     problemProgress: number;
   };
@@ -46,6 +48,20 @@ interface ExportManifest {
 // ============================================================================
 
 type DbClient = NeonQueryFunction<false, false>;
+
+export const RESEARCH_EXPORT_FILES = [
+  'users.csv', 'users.json',
+  'learner_sessions.csv', 'learner_sessions.json',
+  'interaction_events.csv', 'interaction_events.json',
+  'auth_events.csv', 'auth_events.json',
+  'textbook_units.csv', 'textbook_units.json',
+  'problem_progress.csv', 'problem_progress.json',
+  'bandit_events.csv', 'bandit_events.json',
+  'escalation_events.csv', 'escalation_events.json',
+  'session_events_joined.csv', 'session_events_joined.json',
+  'event_type_summary.json',
+  'manifest.json',
+] as const;
 
 function getDb(): DbClient {
   if (!DATABASE_URL) {
@@ -118,6 +134,7 @@ async function exportEvents(db: DbClient): Promise<void> {
       timestamp,
       event_type,
       problem_id,
+      hint_id,
       problem_set_id,
       problem_number,
       code,
@@ -162,46 +179,7 @@ async function exportEvents(db: DbClient): Promise<void> {
   const csvPath = path.join(OUTPUT_DIR, 'interaction_events.csv');
   const jsonPath = path.join(OUTPUT_DIR, 'interaction_events.json');
 
-  // CSV Export - research-focused columns (legacy + canonical study fields)
-  const csvHeader = 'id,user_id,session_id,timestamp,event_type,problem_id,successful,time_spent,' +
-    'profile_id,assignment_strategy,selected_arm,selection_method,reward_total,new_alpha,new_beta,' +
-    'from_rung,to_rung,trigger_reason,intervention_type,concept_ids,' +
-    'learner_profile_id,escalation_trigger_reason,error_count_at_escalation,time_to_escalation,' +
-    'strategy_assigned,strategy_updated,reward_value,created_at\n';
-  const csvRows = events.map(e => {
-    const conceptIds = parseJsonSafe(e.concept_ids)?.join(';') || '';
-    return [
-      e.id,
-      e.user_id,
-      e.session_id || '',
-      e.timestamp,
-      e.event_type,
-      e.problem_id,
-      e.successful ?? '',
-      e.time_spent ?? '',
-      e.profile_id || '',
-      e.assignment_strategy || '',
-      e.selected_arm || '',
-      e.selection_method || '',
-      e.reward_total ?? '',
-      e.new_alpha ?? '',
-      e.new_beta ?? '',
-      e.from_rung ?? '',
-      e.to_rung ?? '',
-      escapeCsv(e.trigger_reason || ''),
-      e.intervention_type || '',
-      conceptIds,
-      e.learner_profile_id || '',
-      escapeCsv(e.escalation_trigger_reason || ''),
-      e.error_count_at_escalation ?? '',
-      e.time_to_escalation ?? '',
-      e.strategy_assigned || '',
-      e.strategy_updated || '',
-      e.reward_value ?? '',
-      e.created_at
-    ].join(',');
-  }).join('\n');
-  fs.writeFileSync(csvPath, csvHeader + csvRows);
+  fs.writeFileSync(csvPath, buildInteractionEventsCsv(events));
 
   // JSON Export with parsed fields
   const parsedEvents = events.map(e => ({
@@ -231,6 +209,33 @@ async function exportEvents(db: DbClient): Promise<void> {
   const summaryPath = path.join(OUTPUT_DIR, 'event_type_summary.json');
   fs.writeFileSync(summaryPath, JSON.stringify(eventSummary, null, 2));
   console.log(`   ✓ Event type summary exported (${eventSummary.length} types)`);
+}
+
+async function exportAuthEvents(db: DbClient): Promise<void> {
+  console.log('📊 Exporting auth events...');
+  const result = await db`
+    SELECT
+      id,
+      timestamp,
+      email_hash,
+      account_id,
+      learner_id,
+      role,
+      outcome,
+      failure_reason,
+      created_at
+    FROM auth_events
+    ORDER BY timestamp DESC
+  `;
+  const authEvents = Array.isArray(result) ? result as QueryResult[] : [];
+
+  const csvPath = path.join(OUTPUT_DIR, 'auth_events.csv');
+  const jsonPath = path.join(OUTPUT_DIR, 'auth_events.json');
+
+  fs.writeFileSync(csvPath, buildAuthEventsCsv(authEvents));
+  fs.writeFileSync(jsonPath, JSON.stringify(authEvents, null, 2));
+
+  console.log(`   ✓ ${authEvents.length} auth events exported`);
 }
 
 async function exportTextbookUnits(db: DbClient): Promise<void> {
@@ -513,12 +518,14 @@ async function createManifest(db: DbClient): Promise<ExportManifest> {
   const userResult = await db`SELECT COUNT(*) as count FROM users`;
   const sessionResult = await db`SELECT COUNT(*) as count FROM learner_sessions`;
   const eventResult = await db`SELECT COUNT(*) as count FROM interaction_events`;
+  const authEventResult = await db`SELECT COUNT(*) as count FROM auth_events`;
   const unitResult = await db`SELECT COUNT(*) as count FROM textbook_units`;
   const progressResult = await db`SELECT COUNT(*) as count FROM problem_progress`;
 
   const [userCount] = Array.isArray(userResult) ? userResult as QueryResult[] : [{ count: 0 }];
   const [sessionCount] = Array.isArray(sessionResult) ? sessionResult as QueryResult[] : [{ count: 0 }];
   const [eventCount] = Array.isArray(eventResult) ? eventResult as QueryResult[] : [{ count: 0 }];
+  const [authEventCount] = Array.isArray(authEventResult) ? authEventResult as QueryResult[] : [{ count: 0 }];
   const [unitCount] = Array.isArray(unitResult) ? unitResult as QueryResult[] : [{ count: 0 }];
   const [progressCount] = Array.isArray(progressResult) ? progressResult as QueryResult[] : [{ count: 0 }];
 
@@ -530,21 +537,11 @@ async function createManifest(db: DbClient): Promise<ExportManifest> {
       users: parseInt(userCount?.count ?? 0, 10),
       sessions: parseInt(sessionCount?.count ?? 0, 10),
       events: parseInt(eventCount?.count ?? 0, 10),
+      authEvents: parseInt(authEventCount?.count ?? 0, 10),
       textbookUnits: parseInt(unitCount?.count ?? 0, 10),
       problemProgress: parseInt(progressCount?.count ?? 0, 10),
     },
-    files: [
-      'users.csv', 'users.json',
-      'learner_sessions.csv', 'learner_sessions.json',
-      'interaction_events.csv', 'interaction_events.json',
-      'textbook_units.csv', 'textbook_units.json',
-      'problem_progress.csv', 'problem_progress.json',
-      'bandit_events.csv', 'bandit_events.json',
-      'escalation_events.csv', 'escalation_events.json',
-      'session_events_joined.csv', 'session_events_joined.json',
-      'event_type_summary.json',
-      'manifest.json',
-    ],
+    files: [...RESEARCH_EXPORT_FILES],
   };
 
   fs.writeFileSync(
@@ -567,6 +564,65 @@ function escapeCsv(value: string): string {
     return `"${escaped}"`;
   }
   return escaped;
+}
+
+export function buildInteractionEventsCsv(events: QueryResult[]): string {
+  const csvHeader = 'id,user_id,session_id,timestamp,event_type,problem_id,hint_id,successful,time_spent,' +
+    'profile_id,assignment_strategy,selected_arm,selection_method,reward_total,new_alpha,new_beta,' +
+    'from_rung,to_rung,trigger_reason,intervention_type,concept_ids,' +
+    'learner_profile_id,escalation_trigger_reason,error_count_at_escalation,time_to_escalation,' +
+    'strategy_assigned,strategy_updated,reward_value,created_at\n';
+  const csvRows = events.map((event) => {
+    const conceptIds = parseJsonSafe(event.concept_ids)?.join(';') || '';
+    return [
+      event.id,
+      event.user_id,
+      event.session_id || '',
+      event.timestamp,
+      event.event_type,
+      event.problem_id,
+      event.hint_id || '',
+      event.successful ?? '',
+      event.time_spent ?? '',
+      event.profile_id || '',
+      event.assignment_strategy || '',
+      event.selected_arm || '',
+      event.selection_method || '',
+      event.reward_total ?? '',
+      event.new_alpha ?? '',
+      event.new_beta ?? '',
+      event.from_rung ?? '',
+      event.to_rung ?? '',
+      escapeCsv(event.trigger_reason || ''),
+      event.intervention_type || '',
+      conceptIds,
+      event.learner_profile_id || '',
+      escapeCsv(event.escalation_trigger_reason || ''),
+      event.error_count_at_escalation ?? '',
+      event.time_to_escalation ?? '',
+      event.strategy_assigned || '',
+      event.strategy_updated || '',
+      event.reward_value ?? '',
+      event.created_at,
+    ].join(',');
+  }).join('\n');
+  return csvHeader + csvRows;
+}
+
+export function buildAuthEventsCsv(events: QueryResult[]): string {
+  const csvHeader = 'id,timestamp,email_hash,account_id,learner_id,role,outcome,failure_reason,created_at\n';
+  const csvRows = events.map((event) => [
+    event.id,
+    event.timestamp,
+    event.email_hash,
+    event.account_id || '',
+    event.learner_id || '',
+    event.role || '',
+    event.outcome,
+    escapeCsv(event.failure_reason || ''),
+    event.created_at,
+  ].join(',')).join('\n');
+  return csvHeader + csvRows;
 }
 
 function parseJsonSafe(value: string | null): any {
@@ -612,6 +668,7 @@ async function main() {
     await exportUsers(db);
     await exportSessions(db);
     await exportEvents(db);
+    await exportAuthEvents(db);
     await exportTextbookUnits(db);
     await exportProblemProgress(db);
 
@@ -630,6 +687,7 @@ async function main() {
     console.log(`   • Users: ${manifest.recordCounts.users}`);
     console.log(`   • Sessions: ${manifest.recordCounts.sessions}`);
     console.log(`   • Events: ${manifest.recordCounts.events}`);
+    console.log(`   • Auth Events: ${manifest.recordCounts.authEvents}`);
     console.log(`   • Textbook Units: ${manifest.recordCounts.textbookUnits}`);
     console.log(`   • Problem Progress: ${manifest.recordCounts.problemProgress}`);
     console.log();
@@ -648,4 +706,6 @@ async function main() {
   }
 }
 
-main();
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+  main();
+}

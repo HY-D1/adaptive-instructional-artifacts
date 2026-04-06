@@ -85,21 +85,8 @@ export async function deleteUser(id: string): Promise<boolean> {
 export async function saveSession(
   userId: string,
   sessionId: string,
-  conditionId: string,
-  config: {
-    sectionId?: string | null;
-    currentProblemId?: string | null;
-    textbookDisabled?: boolean;
-    adaptiveLadderDisabled?: boolean;
-    immediateExplanationMode?: boolean;
-    staticHintMode?: boolean;
-    escalationPolicy?: string;
-    currentCode?: string;
-    guidanceState?: Record<string, unknown>;
-    hdiState?: Record<string, unknown>;
-    banditState?: Record<string, unknown>;
-    lastActivity?: string;
-  }
+  conditionId: string | undefined,
+  config: import('../types.js').SessionData
 ): Promise<void> {
   if (isUsingNeon()) {
     await neonDb.saveSession(userId, sessionId, conditionId, config);

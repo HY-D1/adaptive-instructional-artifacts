@@ -229,6 +229,12 @@ interface SessionData {
   sessionId?: string;
   currentProblemId?: string;
   sectionId?: string | null;
+  conditionId?: string;
+  textbookDisabled?: boolean;
+  adaptiveLadderDisabled?: boolean;
+  immediateExplanationMode?: boolean;
+  staticHintMode?: boolean;
+  escalationPolicy?: 'aggressive' | 'conservative' | 'explanation_first' | 'adaptive' | 'no_hints';
   currentCode?: string;
   guidanceState?: Record<string, unknown>;
   hdiState?: Record<string, unknown>;
@@ -605,7 +611,7 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
     executionTimeMs: event.executionTimeMs,
     
     // Hint/Explanation fields
-    hintId: event.eventType === 'hint_view' ? undefined : event.hintId,
+    hintId: event.hintId,
     explanationId: event.explanationId,
     hintText: event.hintText,
     hintLevel: event.hintLevel,
@@ -770,7 +776,7 @@ function convertToFrontendEvent(i: BackendInteraction): InteractionEvent {
     executionTimeMs: i.executionTimeMs,
     
     // Hint/Explanation fields
-    hintId: i.eventType === 'hint_view' ? undefined : i.hintId,
+    hintId: i.hintId,
     explanationId: i.explanationId,
     hintText: i.hintText,
     hintLevel: i.hintLevel as 1 | 2 | 3 | undefined,

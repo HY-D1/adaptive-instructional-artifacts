@@ -9,6 +9,8 @@
  * - Foreign key constraints with CASCADE delete
  */
 
+import { createHash } from 'node:crypto';
+
 import { neon, neonConfig, NeonQueryFunction } from '@neondatabase/serverless';
 import { resolveDbEnv } from './env-resolver.js';
 import { initAuthSchema } from './auth.js';
@@ -21,6 +23,7 @@ import type {
   InstructionalUnit,
   CreateUnitRequest,
   LearnerProfile,
+  SessionData,
 } from '../types.js';
 
 export interface CorpusManifestDocumentRow {
@@ -71,6 +74,27 @@ export interface CorpusActiveRunRow {
   runId: string;
   updatedAt: string;
   updatedBy: string | null;
+}
+
+export interface AuthEventRow {
+  id: string;
+  timestamp: string;
+  emailHash: string;
+  accountId: string | null;
+  learnerId: string | null;
+  role: 'student' | 'instructor' | null;
+  outcome: 'success' | 'failure';
+  failureReason: string | null;
+  createdAt: string;
+}
+
+export interface CreateAuthEventRequest {
+  email: string;
+  accountId?: string | null;
+  learnerId?: string | null;
+  role?: 'student' | 'instructor' | null;
+  outcome: 'success' | 'failure';
+  failureReason?: string | null;
 }
 
 export const DEFAULT_ACTIVE_CORPUS_DOC_ID = 'dbms-ramakrishnan-3rd-edition';
@@ -130,6 +154,25 @@ export async function initializeSchema(): Promise<void> {
 
   // Auth accounts (real email/password authentication)
   await initAuthSchema(db);
+
+  await db`
+    CREATE TABLE IF NOT EXISTS auth_events (
+      id TEXT PRIMARY KEY,
+      timestamp TIMESTAMPTZ NOT NULL,
+      email_hash TEXT NOT NULL,
+      account_id TEXT,
+      learner_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      role TEXT CHECK (role IN ('student', 'instructor')),
+      outcome TEXT NOT NULL CHECK (outcome IN ('success', 'failure')),
+      failure_reason TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+
+  await db`CREATE INDEX IF NOT EXISTS idx_auth_events_timestamp ON auth_events(timestamp)`;
+  await db`CREATE INDEX IF NOT EXISTS idx_auth_events_outcome ON auth_events(outcome)`;
+  await db`CREATE INDEX IF NOT EXISTS idx_auth_events_learner_id ON auth_events(learner_id)`;
+  await db`CREATE INDEX IF NOT EXISTS idx_auth_events_account_id ON auth_events(account_id)`;
 
   // Course sections (durable instructor ownership model)
   await db`
@@ -296,6 +339,13 @@ export async function initializeSchema(): Promise<void> {
       is_correct BOOLEAN,
       scheduled_time BIGINT,
       shown_time BIGINT,
+      learner_profile_id TEXT,
+      escalation_trigger_reason TEXT,
+      error_count_at_escalation INTEGER,
+      time_to_escalation INTEGER,
+      strategy_assigned TEXT,
+      strategy_updated TEXT,
+      reward_value NUMERIC,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
@@ -306,9 +356,15 @@ export async function initializeSchema(): Promise<void> {
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_timestamp ON interaction_events(timestamp)`;
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_problem_id ON interaction_events(problem_id)`;
 
-  // Schema canonical column definitions are in migrate-neon.sql.
-  // RESEARCH-4 columns (learner_profile_id, escalation_trigger_reason, etc.)
-  // and section_id are defined there and do not need runtime ALTER TABLE blocks.
+  // Keep RESEARCH-4 columns in lockstep with migrate-neon.sql.
+  // Fresh Neon init uses this runtime initializer, while SQL migration paths use the .sql file.
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS learner_profile_id TEXT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS escalation_trigger_reason TEXT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS error_count_at_escalation INTEGER`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS time_to_escalation INTEGER`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_assigned TEXT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_updated TEXT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS reward_value NUMERIC`;
 
   // Textbook units (My Textbook)
   await db`
@@ -553,26 +609,37 @@ async function resolveSectionIdForLearner(userId: string): Promise<string | null
 export async function saveSession(
   userId: string,
   sessionId: string,
-  conditionId: string,
-  config: {
-    sectionId?: string | null;
-    currentProblemId?: string | null;
-    textbookDisabled?: boolean;
-    adaptiveLadderDisabled?: boolean;
-    immediateExplanationMode?: boolean;
-    staticHintMode?: boolean;
-    escalationPolicy?: string;
-    currentCode?: string;
-    guidanceState?: Record<string, unknown>;
-    hdiState?: Record<string, unknown>;
-    banditState?: Record<string, unknown>;
-    lastActivity?: string;
-  }
+  conditionId: string | undefined,
+  config: SessionData
 ): Promise<void> {
   const db = getDb();
   const id = `${userId}-${sessionId}`;
   const now = new Date().toISOString();
-  const resolvedSectionId = config.sectionId ?? await resolveSectionIdForLearner(userId);
+  const existingSession = await getSession(userId, sessionId);
+  const resolvedSectionId =
+    config.sectionId ?? existingSession?.sectionId ?? await resolveSectionIdForLearner(userId);
+  const resolvedConditionId = conditionId ?? existingSession?.conditionId ?? 'default';
+  const resolvedTextbookDisabled =
+    config.textbookDisabled ?? existingSession?.textbookDisabled ?? false;
+  const resolvedAdaptiveLadderDisabled =
+    config.adaptiveLadderDisabled ?? existingSession?.adaptiveLadderDisabled ?? false;
+  const resolvedImmediateExplanationMode =
+    config.immediateExplanationMode ?? existingSession?.immediateExplanationMode ?? false;
+  const resolvedStaticHintMode =
+    config.staticHintMode ?? existingSession?.staticHintMode ?? false;
+  const resolvedEscalationPolicy =
+    config.escalationPolicy ?? existingSession?.escalationPolicy ?? 'adaptive';
+  const resolvedCurrentProblemId =
+    config.currentProblemId ?? existingSession?.currentProblemId ?? null;
+  const resolvedCurrentCode = config.currentCode ?? existingSession?.lastCode ?? null;
+  const resolvedGuidanceState = config.guidanceState ?? existingSession?.guidanceState ?? null;
+  const resolvedHdiState = config.hdiState ?? existingSession?.hdiState ?? null;
+  const resolvedBanditState = config.banditState ?? existingSession?.banditState ?? null;
+  const existingLastActivity =
+    typeof existingSession?.lastActivity === 'number'
+      ? new Date(existingSession.lastActivity).toISOString()
+      : null;
+  const resolvedLastActivity = config.lastActivity ?? existingLastActivity ?? now;
 
   await db`
     INSERT INTO learner_sessions (
@@ -581,14 +648,14 @@ export async function saveSession(
       static_hint_mode, escalation_policy, current_code, guidance_state,
       hdi_state, bandit_state, last_activity, created_at, updated_at
     ) VALUES (
-      ${id}, ${userId}, ${resolvedSectionId}, ${sessionId}, ${config.currentProblemId ?? null}, ${conditionId},
-      ${config.textbookDisabled ?? false}, ${config.adaptiveLadderDisabled ?? false},
-      ${config.immediateExplanationMode ?? false}, ${config.staticHintMode ?? false},
-      ${config.escalationPolicy ?? 'adaptive'}, ${config.currentCode ?? null},
-      ${JSON.stringify(config.guidanceState ?? null)},
-      ${JSON.stringify(config.hdiState ?? null)},
-      ${JSON.stringify(config.banditState ?? null)},
-      ${config.lastActivity ?? now}, ${now}, ${now}
+      ${id}, ${userId}, ${resolvedSectionId}, ${sessionId}, ${resolvedCurrentProblemId}, ${resolvedConditionId},
+      ${resolvedTextbookDisabled}, ${resolvedAdaptiveLadderDisabled},
+      ${resolvedImmediateExplanationMode}, ${resolvedStaticHintMode},
+      ${resolvedEscalationPolicy}, ${resolvedCurrentCode},
+      ${JSON.stringify(resolvedGuidanceState)},
+      ${JSON.stringify(resolvedHdiState)},
+      ${JSON.stringify(resolvedBanditState)},
+      ${resolvedLastActivity}, ${now}, ${now}
     )
     ON CONFLICT (user_id, session_id) DO UPDATE SET
       condition_id = EXCLUDED.condition_id,
@@ -599,10 +666,10 @@ export async function saveSession(
       immediate_explanation_mode = COALESCE(EXCLUDED.immediate_explanation_mode, learner_sessions.immediate_explanation_mode),
       static_hint_mode = COALESCE(EXCLUDED.static_hint_mode, learner_sessions.static_hint_mode),
       escalation_policy = COALESCE(EXCLUDED.escalation_policy, learner_sessions.escalation_policy),
-      current_code = EXCLUDED.current_code,
-      guidance_state = EXCLUDED.guidance_state,
-      hdi_state = EXCLUDED.hdi_state,
-      bandit_state = EXCLUDED.bandit_state,
+      current_code = COALESCE(EXCLUDED.current_code, learner_sessions.current_code),
+      guidance_state = COALESCE(EXCLUDED.guidance_state, learner_sessions.guidance_state),
+      hdi_state = COALESCE(EXCLUDED.hdi_state, learner_sessions.hdi_state),
+      bandit_state = COALESCE(EXCLUDED.bandit_state, learner_sessions.bandit_state),
       last_activity = EXCLUDED.last_activity,
       updated_at = EXCLUDED.updated_at
   `;
@@ -770,7 +837,7 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
   const now = new Date().toISOString();
 
   const payload = data.payload || {};
-  const storedHintId = data.eventType === 'hint_view' ? null : (payload.hintId || null);
+  const storedHintId = payload.hintId || null;
   const resolvedSectionId = data.sectionId ?? await resolveSectionIdForLearner(data.learnerId);
 
   await db`
@@ -887,6 +954,7 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
     )
   `;
 
+  const { sectionId: _ignoredSectionId, ...topLevelPayload } = payload as Record<string, unknown>;
   return {
     id: data.id,
     learnerId: data.learnerId,
@@ -895,6 +963,7 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
     timestamp: data.timestamp,
     eventType: data.eventType,
     problemId: data.problemId,
+    ...topLevelPayload,
     payload,
     createdAt: now,
   };
@@ -1048,7 +1117,93 @@ function rowToLearner(row: any): Learner {
 }
 
 function rowToInteraction(row: any): Interaction {
-  const hintId = row.event_type === 'hint_view' ? undefined : row.hint_id;
+  const payload = {
+    sectionId: row.section_id ?? null,
+    problemSetId: row.problem_set_id,
+    problemNumber: row.problem_number,
+    code: row.code,
+    error: row.error,
+    errorSubtypeId: row.error_subtype_id,
+    hintId: row.hint_id,
+    explanationId: row.explanation_id,
+    hintText: row.hint_text,
+    hintLevel: row.hint_level,
+    helpRequestIndex: row.help_request_index,
+    sqlEngageSubtype: row.sql_engage_subtype,
+    sqlEngageRowId: row.sql_engage_row_id,
+    policyVersion: row.policy_version,
+    timeSpent: row.time_spent,
+    successful: row.successful,
+    ruleFired: row.rule_fired,
+    templateId: row.template_id,
+    inputHash: row.input_hash,
+    model: row.model,
+    noteId: row.note_id,
+    noteTitle: row.note_title,
+    noteContent: row.note_content,
+    retrievedSourceIds: parseJson(row.retrieved_source_ids),
+    retrievedChunks: parseJson(row.retrieved_chunks),
+    triggerInteractionIds: parseJson(row.trigger_interaction_ids),
+    evidenceInteractionIds: parseJson(row.evidence_interaction_ids),
+    sourceInteractionIds: parseJson(row.source_interaction_ids),
+    inputs: parseJson(row.inputs),
+    outputs: parseJson(row.outputs),
+    conceptIds: parseJson(row.concept_ids),
+    requestType: row.request_type,
+    currentRung: row.current_rung,
+    rung: row.rung,
+    grounded: row.grounded,
+    contentLength: row.content_length,
+    fromRung: row.from_rung,
+    toRung: row.to_rung,
+    trigger: row.trigger_reason,
+    unitId: row.unit_id,
+    action: row.action,
+    dedupeKey: row.dedupe_key,
+    revisionCount: row.revision_count,
+    passageCount: row.passage_count,
+    expanded: row.expanded,
+    chatMessage: row.chat_message,
+    chatResponse: row.chat_response,
+    chatQuickChip: row.chat_quick_chip,
+    savedToNotes: row.saved_to_notes,
+    textbookUnitsRetrieved: parseJson(row.textbook_units_retrieved),
+    profileId: row.profile_id,
+    assignmentStrategy: row.assignment_strategy,
+    previousThresholds: parseJson(row.previous_thresholds),
+    newThresholds: parseJson(row.new_thresholds),
+    selectedArm: row.selected_arm,
+    selectionMethod: row.selection_method,
+    armStatsAtSelection: parseJson(row.arm_stats_at_selection),
+    reward: row.reward_total !== null ? {
+      total: row.reward_total,
+      components: parseJson(row.reward_components),
+    } : undefined,
+    newAlpha: row.new_alpha,
+    newBeta: row.new_beta,
+    hdi: row.hdi,
+    hdiLevel: row.hdi_level,
+    hdiComponents: parseJson(row.hdi_components),
+    trend: row.trend,
+    slope: row.slope,
+    interventionType: row.intervention_type,
+    scheduleId: row.schedule_id,
+    promptId: row.prompt_id,
+    promptType: row.prompt_type,
+    response: row.response,
+    isCorrect: row.is_correct,
+    scheduledTime: row.scheduled_time,
+    shownTime: row.shown_time,
+    learnerProfileId: row.learner_profile_id,
+    escalationTriggerReason: row.escalation_trigger_reason,
+    errorCountAtEscalation: row.error_count_at_escalation,
+    timeToEscalation: row.time_to_escalation,
+    strategyAssigned: row.strategy_assigned,
+    strategyUpdated: row.strategy_updated,
+    rewardValue: row.reward_value,
+  };
+  const { sectionId: _ignoredSectionId, ...topLevelPayload } = payload;
+
   return {
     id: row.id,
     learnerId: row.user_id,
@@ -1057,92 +1212,8 @@ function rowToInteraction(row: any): Interaction {
     timestamp: new Date(row.timestamp).toISOString(),
     eventType: row.event_type,
     problemId: row.problem_id,
-    payload: {
-      sectionId: row.section_id ?? null,
-      problemSetId: row.problem_set_id,
-      problemNumber: row.problem_number,
-      code: row.code,
-      error: row.error,
-      errorSubtypeId: row.error_subtype_id,
-      hintId,
-      explanationId: row.explanation_id,
-      hintText: row.hint_text,
-      hintLevel: row.hint_level,
-      helpRequestIndex: row.help_request_index,
-      sqlEngageSubtype: row.sql_engage_subtype,
-      sqlEngageRowId: row.sql_engage_row_id,
-      policyVersion: row.policy_version,
-      timeSpent: row.time_spent,
-      successful: row.successful,
-      ruleFired: row.rule_fired,
-      templateId: row.template_id,
-      inputHash: row.input_hash,
-      model: row.model,
-      noteId: row.note_id,
-      noteTitle: row.note_title,
-      noteContent: row.note_content,
-      retrievedSourceIds: parseJson(row.retrieved_source_ids),
-      retrievedChunks: parseJson(row.retrieved_chunks),
-      triggerInteractionIds: parseJson(row.trigger_interaction_ids),
-      evidenceInteractionIds: parseJson(row.evidence_interaction_ids),
-      sourceInteractionIds: parseJson(row.source_interaction_ids),
-      inputs: parseJson(row.inputs),
-      outputs: parseJson(row.outputs),
-      conceptIds: parseJson(row.concept_ids),
-      requestType: row.request_type,
-      currentRung: row.current_rung,
-      rung: row.rung,
-      grounded: row.grounded,
-      contentLength: row.content_length,
-      fromRung: row.from_rung,
-      toRung: row.to_rung,
-      trigger: row.trigger_reason,
-      unitId: row.unit_id,
-      action: row.action,
-      dedupeKey: row.dedupe_key,
-      revisionCount: row.revision_count,
-      passageCount: row.passage_count,
-      expanded: row.expanded,
-      chatMessage: row.chat_message,
-      chatResponse: row.chat_response,
-      chatQuickChip: row.chat_quick_chip,
-      savedToNotes: row.saved_to_notes,
-      textbookUnitsRetrieved: parseJson(row.textbook_units_retrieved),
-      profileId: row.profile_id,
-      assignmentStrategy: row.assignment_strategy,
-      previousThresholds: parseJson(row.previous_thresholds),
-      newThresholds: parseJson(row.new_thresholds),
-      selectedArm: row.selected_arm,
-      selectionMethod: row.selection_method,
-      armStatsAtSelection: parseJson(row.arm_stats_at_selection),
-      reward: row.reward_total !== null ? {
-        total: row.reward_total,
-        components: parseJson(row.reward_components),
-      } : undefined,
-      newAlpha: row.new_alpha,
-      newBeta: row.new_beta,
-      hdi: row.hdi,
-      hdiLevel: row.hdi_level,
-      hdiComponents: parseJson(row.hdi_components),
-      trend: row.trend,
-      slope: row.slope,
-      interventionType: row.intervention_type,
-      scheduleId: row.schedule_id,
-      promptId: row.prompt_id,
-      promptType: row.prompt_type,
-      response: row.response,
-      isCorrect: row.is_correct,
-      scheduledTime: row.scheduled_time,
-      shownTime: row.shown_time,
-      // RESEARCH-4: canonical study fields in payload for backward compatibility
-      learnerProfileId: row.learner_profile_id,
-      escalationTriggerReason: row.escalation_trigger_reason,
-      errorCountAtEscalation: row.error_count_at_escalation,
-      timeToEscalation: row.time_to_escalation,
-      strategyAssigned: row.strategy_assigned,
-      strategyUpdated: row.strategy_updated,
-      rewardValue: row.reward_value,
-    },
+    ...topLevelPayload,
+    payload,
     // RESEARCH-4: canonical study fields also at top-level for typed access
     learnerProfileId: row.learner_profile_id,
     escalationTriggerReason: row.escalation_trigger_reason,
@@ -1153,6 +1224,57 @@ function rowToInteraction(row: any): Interaction {
     rewardValue: row.reward_value,
     createdAt: row.created_at,
   };
+}
+
+function normalizeAuthEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function hashAuthEmail(email: string): string {
+  return createHash('sha256').update(normalizeAuthEmail(email)).digest('hex');
+}
+
+function rowToAuthEvent(row: Record<string, unknown>): AuthEventRow {
+  return {
+    id: String(row.id),
+    timestamp: new Date(String(row.timestamp)).toISOString(),
+    emailHash: String(row.email_hash),
+    accountId: row.account_id ? String(row.account_id) : null,
+    learnerId: row.learner_id ? String(row.learner_id) : null,
+    role: row.role ? (String(row.role) as 'student' | 'instructor') : null,
+    outcome: String(row.outcome) as 'success' | 'failure',
+    failureReason: row.failure_reason ? String(row.failure_reason) : null,
+    createdAt: new Date(String(row.created_at)).toISOString(),
+  };
+}
+
+export async function createAuthEvent(data: CreateAuthEventRequest): Promise<AuthEventRow> {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const id = `auth-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const [result] = await db`
+    INSERT INTO auth_events (
+      id, timestamp, email_hash, account_id, learner_id, role, outcome, failure_reason, created_at
+    ) VALUES (
+      ${id},
+      ${now},
+      ${hashAuthEmail(data.email)},
+      ${data.accountId || null},
+      ${data.learnerId || null},
+      ${data.role || null},
+      ${data.outcome},
+      ${data.failureReason || null},
+      ${now}
+    )
+    RETURNING *
+  `;
+  return rowToAuthEvent(result as Record<string, unknown>);
+}
+
+export async function getAuthEvents(): Promise<AuthEventRow[]> {
+  const db = getDb();
+  const results = await db`SELECT * FROM auth_events ORDER BY timestamp DESC`;
+  return results.map((row) => rowToAuthEvent(row as Record<string, unknown>));
 }
 
 function rowToInstructionalUnit(row: any): InstructionalUnit {

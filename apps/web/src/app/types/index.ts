@@ -84,6 +84,7 @@ export type InteractionEvent = {
     | 'guidance_view'
     | 'guidance_escalate'
     | 'textbook_unit_upsert'
+    | 'concept_view'
     | 'textbook_unit_shown'
     | 'source_view'
     // Week 3 Feature: Ask My Textbook chat

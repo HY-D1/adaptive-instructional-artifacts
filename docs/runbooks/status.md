@@ -1,6 +1,6 @@
 # Project Status — SQL-Adapt
 
-**Last Updated**: 2026-04-05 (40-Student Launch Refresh)
+**Last Updated**: 2026-04-05 (40-Student Launch Refresh, main@91e7696)
 **Purpose**: Single durable status file for implementation and deployment readiness.
 
 ---
@@ -46,11 +46,15 @@ Final approval for the controlled 40-student live test is gated on real supervis
 
 ### Release Identification
 
-- **Git Commit**: `12a9c5faae4983c2c4d4cf753c1f59afb2a5e151`
-- **Branch**: `codex/beta-stabilization-preview-first`
+- **Git Commit**: `91e7696c044e6c65b9c348609d79dd8de612d0d4`
+- **Branch**: `main`
+- **Merged PR**: `#17` (`Codex/launch readiness 40 students`)
 - **Release Tag**: `v1.1.0-beta-50`
+- **Production Deployment**: `dpl_96ZHK72Qcfpr5415amLZgtNax7R9`
 - **Operational Run Shape**: `5 → 15 → 40`
 - **Active Corpus Run**: `run-1774671570-b1353117` (dbms-ramakrishnan-3rd-edition, 43 units, 101 chunks)
+
+The release identifiers above are the current source of truth for launch decisions. Historical workstream sections later in this file may still quote older branch names or intermediate commits from archived checkpoints.
 
 ### Production URLs
 
@@ -65,9 +69,10 @@ Final approval for the controlled 40-student live test is gated on real supervis
 1. **PDF Index**: Disabled in production (set `ENABLE_PDF_INDEX=true` to enable)
 2. **LLM Features**: `/health` reported Groq-connected LLM availability on 2026-04-05; staged support should still assume fallback-safe behavior if provider availability changes
 3. **Build Warnings**: 4 non-blocking warnings (dynamic imports, chunk size)
-4. **Telemetry Gaps**: Concept view inferred (not explicit event), auth events in server logs only
-5. **Automated Test Gap**: WS5-BLOCKER-001 (production E2E auth credentials) is a test infrastructure limitation, not a production defect
-6. **Preview Deployment 401**: Backend preview deployments require additional Vercel access configuration; does not affect production
+4. **Telemetry Coverage**: `concept_view` is now logged explicitly, `hint_view` preserves `hintId` for per-hint tracing, and login outcomes are exported via `auth_events`
+5. **Session Persistence**: Partial session writes now preserve stored condition flags and policy values instead of falling back to defaults
+6. **Automated Test Gap**: WS5-BLOCKER-001 (production E2E auth credentials) is a test infrastructure limitation, not a production defect
+7. **Preview Deployment 401**: Backend preview deployments require additional Vercel access configuration; does not affect production
 
 ### Blocker: WS5-BLOCKER-001 (Test Infrastructure, Non-Blocking)
 
