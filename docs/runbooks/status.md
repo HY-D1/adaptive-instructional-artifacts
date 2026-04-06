@@ -69,11 +69,10 @@ The release identifiers above are the current source of truth for launch decisio
 1. **PDF Index**: Disabled in production (set `ENABLE_PDF_INDEX=true` to enable)
 2. **LLM Features**: `/health` reported Groq-connected LLM availability on 2026-04-05; staged support should still assume fallback-safe behavior if provider availability changes
 3. **Build Warnings**: 4 non-blocking warnings (dynamic imports, chunk size)
-4. **Telemetry Gaps**: Concept view remains inferred (no explicit `concept_view` event) and auth success/failure remains operational-only in server logs
-5. **Hint View Contract**: `hint_view` intentionally omits `hintId`; changing that would be a research/export contract change, not a beta-hardening fix
-6. **Session Persistence**: Partial session writes now preserve stored condition flags and policy values instead of falling back to defaults
-7. **Automated Test Gap**: WS5-BLOCKER-001 (production E2E auth credentials) is a test infrastructure limitation, not a production defect
-8. **Preview Deployment 401**: Backend preview deployments require additional Vercel access configuration; does not affect production
+4. **Telemetry Coverage**: `concept_view` is now logged explicitly, `hint_view` preserves `hintId` for per-hint tracing, and login outcomes are exported via `auth_events`
+5. **Session Persistence**: Partial session writes now preserve stored condition flags and policy values instead of falling back to defaults
+6. **Automated Test Gap**: WS5-BLOCKER-001 (production E2E auth credentials) is a test infrastructure limitation, not a production defect
+7. **Preview Deployment 401**: Backend preview deployments require additional Vercel access configuration; does not affect production
 
 ### Blocker: WS5-BLOCKER-001 (Test Infrastructure, Non-Blocking)
 

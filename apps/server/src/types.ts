@@ -168,6 +168,7 @@ export type EventType =
   | 'guidance_view'
   | 'guidance_escalate'
   | 'textbook_unit_upsert'
+  | 'concept_view'
   | 'source_view'
   | 'chat_interaction'
   | 'profile_assigned'

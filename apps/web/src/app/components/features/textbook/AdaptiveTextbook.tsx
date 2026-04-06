@@ -281,6 +281,13 @@ export function AdaptiveTextbook({
   const handleUnitSelect = (unit: InstructionalUnit) => {
     pendingUnitIdRef.current = unit.id;
     setSelectedUnit(unit);
+    storage.logConceptView({
+      learnerId,
+      sessionId: unit.sessionId,
+      unitId: unit.id,
+      conceptId: unit.conceptId,
+      problemId: unit.problemId || `textbook:${unit.conceptId}`,
+    });
     onSelectedUnitChange?.(unit.id);
   };
 

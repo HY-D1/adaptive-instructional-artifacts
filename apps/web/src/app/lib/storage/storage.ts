@@ -1184,6 +1184,26 @@ class StorageManager {
     return this.saveInteraction(event);
   }
 
+  logConceptView(params: {
+    learnerId: string;
+    problemId: string;
+    conceptId: string;
+    unitId: string;
+    sessionId?: string;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const event: InteractionEvent = {
+      id: this.generateEventId('concept-view'),
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      learnerId: params.learnerId,
+      timestamp: Date.now(),
+      eventType: 'concept_view',
+      problemId: params.problemId,
+      unitId: params.unitId,
+      conceptIds: [params.conceptId],
+    };
+    return this.saveInteraction(event);
+  }
+
   /**
    * Generate a unique event ID for Guidance Ladder events.
    */
@@ -2974,7 +2994,7 @@ class StorageManager {
       'textbook_add', 'textbook_update', 'coverage_change',
       // Week 3 D8: Guidance Ladder events
       'guidance_request', 'guidance_view', 'guidance_escalate',
-      'textbook_unit_upsert', 'source_view'
+      'textbook_unit_upsert', 'concept_view', 'source_view'
     ];
     const normalizedEventType = validEventTypes.includes(interaction.eventType)
       ? interaction.eventType
@@ -3010,19 +3030,19 @@ class StorageManager {
     const fallbackAnchor = getDeterministicSqlEngageAnchor(canonicalSubtype, rowSeed);
     const sqlEngageRowId = interaction.sqlEngageRowId?.trim() || fallbackAnchor.rowId;
     const policyVersion = interaction.policyVersion?.trim() || getSqlEngagePolicyVersion();
+    const hintId =
+      interaction.hintId?.trim() ||
+      `sql-engage:${canonicalSubtype}:hint:${sqlEngageRowId}:L${hintLevel}`;
 
     const normalizedHintView: InteractionEvent = {
       ...interaction,
       eventType: 'hint_view',
+      hintId,
       hintLevel,
       sqlEngageSubtype: canonicalSubtype,
       sqlEngageRowId,
       policyVersion
     };
-
-    // hint_view intentionally omits hintId — it is a runtime observation, not a template reference.
-    // See docs/research/LOGGING_SPECIFICATION.md: "hint_view and the absence of hintId".
-    delete normalizedHintView.hintId;
     return normalizedHintView;
   }
 

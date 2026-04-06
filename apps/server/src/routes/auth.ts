@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 
 import { isUsingNeon, createUser } from '../db/index.js';
-import { getDb } from '../db/neon.js';
+import { createAuthEvent, getDb } from '../db/neon.js';
 import {
   createAuthAccount,
   getAuthAccountByEmail,
@@ -95,6 +95,32 @@ function getOrCreateCsrfToken(req: Request, res: Response): string {
   const csrfToken = createCsrfToken();
   setCsrfCookie(res, csrfToken);
   return csrfToken;
+}
+
+async function logAuthEvent(params: {
+  email?: string;
+  accountId?: string | null;
+  learnerId?: string | null;
+  role?: 'student' | 'instructor' | null;
+  outcome: 'success' | 'failure';
+  failureReason?: string | null;
+}): Promise<void> {
+  if (!params.email?.trim()) {
+    return;
+  }
+
+  try {
+    await createAuthEvent({
+      email: params.email,
+      accountId: params.accountId,
+      learnerId: params.learnerId,
+      role: params.role,
+      outcome: params.outcome,
+      failureReason: params.failureReason,
+    });
+  } catch (error) {
+    console.warn('[auth/telemetry]', error);
+  }
 }
 
 // ============================================================================
@@ -240,8 +266,17 @@ router.post('/login', async (req: Request, res: Response) => {
     return;
   }
 
+  const telemetryEmail =
+    typeof req.body?.email === 'string' && z.string().email().safeParse(req.body.email).success
+      ? req.body.email.trim().toLowerCase()
+      : undefined;
   const parsed = LoginSchema.safeParse(req.body);
   if (!parsed.success) {
+    await logAuthEvent({
+      email: telemetryEmail,
+      outcome: 'failure',
+      failureReason: 'validation_error',
+    });
     res.status(400).json({
       success: false,
       error: 'Validation error',
@@ -261,6 +296,11 @@ router.post('/login', async (req: Request, res: Response) => {
     const passwordMatch = await bcrypt.compare(password, hashToCompare);
 
     if (!account || !passwordMatch) {
+      await logAuthEvent({
+        email,
+        outcome: 'failure',
+        failureReason: 'invalid_credentials',
+      });
       res.status(401).json({
         success: false,
         error: 'Invalid email or password',
@@ -278,6 +318,13 @@ router.post('/login', async (req: Request, res: Response) => {
     setAuthCookie(res, token);
     const csrfToken = createCsrfToken();
     setCsrfCookie(res, csrfToken);
+    await logAuthEvent({
+      email,
+      accountId: account.id,
+      learnerId: account.learnerId,
+      role: account.role,
+      outcome: 'success',
+    });
 
     res.json({
       success: true,
@@ -285,6 +332,11 @@ router.post('/login', async (req: Request, res: Response) => {
       csrfToken,
     });
   } catch (err) {
+    await logAuthEvent({
+      email: telemetryEmail,
+      outcome: 'failure',
+      failureReason: 'internal_error',
+    });
     console.error('[auth/login]', err);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }

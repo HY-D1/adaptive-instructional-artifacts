@@ -6,6 +6,7 @@
 
 import { Router } from 'express';
 import {
+  getAuthEvents,
   getUserById,
   getInteractionsByUser,
   getTextbookUnitsByUser,
@@ -235,6 +236,9 @@ router.get('/export', async (req, res) => {
     const banditEvents = filteredInteractions.filter(i => 
       ['bandit_arm_selected', 'bandit_reward_observed', 'bandit_updated'].includes(i.eventType)
     );
+    const authEvents = (await getAuthEvents()).filter((event) =>
+      event.learnerId !== null && scopedLearnerIds.has(event.learnerId)
+    );
 
     const exportData = {
       exportedAt: new Date().toISOString(),
@@ -253,13 +257,14 @@ router.get('/export', async (req, res) => {
       summary: {
         learnerCount: learners.length,
         interactionCount: filteredInteractions.length,
+        authEventCount: authEvents.length,
         textbookUnitCount: allTextbookUnits.reduce((sum, l) => sum + l.units.length, 0),
         escalationEventCount: escalationEvents.length,
         hdiReadingCount: hdiEvents.length,
         banditEventCount: banditEvents.length,
         fieldsPreserved: [
           'id', 'learnerId', 'sectionId', 'sessionId', 'timestamp', 'eventType', 'problemId',
-          'problemSetId', 'problemNumber', 'code', 'error', 'errorSubtypeId',
+          'problemSetId', 'problemNumber', 'code', 'error', 'errorSubtypeId', 'hintId',
           'executionTimeMs', 'rung', 'fromRung', 'toRung', 'trigger', 'conceptIds',
           'hdi', 'hdiLevel', 'hdiComponents', 'scheduleId', 'promptId', 'response',
           'isCorrect', 'unitId', 'action', 'sourceInteractionIds', 'retrievedSourceIds',
@@ -267,6 +272,7 @@ router.get('/export', async (req, res) => {
         ],
       },
       learners,
+      authEvents,
       interactions: filteredInteractions, // Full events preserved
       textbookUnits: allTextbookUnits,
     };
@@ -359,6 +365,7 @@ function convertInteractionsToCsv(interactions: Interaction[]): string {
     'timestamp',
     'eventType',
     'problemId',
+    'hintId',
     'problemSetId',
     'problemNumber',
     'code',
@@ -400,6 +407,7 @@ function convertInteractionsToCsv(interactions: Interaction[]): string {
     i.timestamp,
     i.eventType,
     i.problemId,
+    i.hintId || '',
     i.problemSetId || '',
     i.problemNumber?.toString() || '',
     escapeCsv(i.code || ''),

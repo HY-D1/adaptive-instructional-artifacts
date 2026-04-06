@@ -26,7 +26,7 @@
     "beta:acceptance": "npm run server:build && npm run build && npm run corpus:verify-active-run && npm run test:e2e:hint-stability && npx playwright test -c playwright.config.ts --project=chromium:auth tests/e2e/regression/student-multi-device-persistence.spec.ts tests/e2e/regression/deployed-auth-smoke.spec.ts --reporter=line",
     "beta:50-student-readiness": "node scripts/beta/beta-50-student-readiness.mjs",
     "audit:beta-telemetry": "node scripts/audit/audit-beta-telemetry.mjs",
-    "integrity:scan": "bash scripts/verification/check-token-corruption.sh && node scripts/verification/check-auth-storage-imports.mjs && node scripts/verification/check-neon-interaction-schema-contract.mjs",
+    "integrity:scan": "bash scripts/verification/check-token-corruption.sh && node scripts/verification/check-auth-storage-imports.mjs && node scripts/verification/check-neon-interaction-schema-contract.mjs && node scripts/verification/check-neon-auth-events-schema-contract.mjs",
     "check:auth-storage-imports": "node scripts/verification/check-auth-storage-imports.mjs",
     "check:e2e:deployed-env": "node scripts/deploy/check-deployed-e2e-env.mjs",
     "test:install-browsers": "npx playwright install chromium",
