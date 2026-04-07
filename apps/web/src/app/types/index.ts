@@ -12,6 +12,7 @@ export interface UserProfile {
   createdAt: number;
 }
 export type HelpEventType = 'hint_view' | 'explanation_view';
+export type ConceptViewSource = 'problem' | 'hint' | 'textbook';
 
 // Week 3 D8: Guidance Ladder event types for replay reconstruction
 export type GuidanceRequestType = 'hint' | 'explanation' | 'textbook';
@@ -85,6 +86,7 @@ export type InteractionEvent = {
     | 'guidance_escalate'
     | 'textbook_unit_upsert'
     | 'concept_view'
+    | 'session_end'
     | 'textbook_unit_shown'
     | 'source_view'
     // Week 3 Feature: Ask My Textbook chat
@@ -148,6 +150,11 @@ export type InteractionEvent = {
   inputs?: Record<string, string | number | boolean | null>;
   outputs?: Record<string, string | number | boolean | null | string[]>;
   conceptIds?: string[];
+  conceptId?: string;
+  source?: ConceptViewSource;
+  totalTime?: number;
+  problemsAttempted?: number;
+  problemsSolved?: number;
   // Week 3 D8: Guidance Ladder event metadata fields
   // guidance_request fields
   requestType?: GuidanceRequestType;

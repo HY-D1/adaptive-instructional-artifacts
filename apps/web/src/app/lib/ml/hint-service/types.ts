@@ -85,6 +85,25 @@ export type HintGenerationOptions = {
 };
 
 /**
+ * Derived learner state for adaptive generation.
+ * Internal-only context used to keep hints tied to recent errors/retries.
+ */
+export type LearningSignalSummary = {
+  /** Most recent error or incorrect-result signal */
+  latestIssue: string;
+  /** Count of failed executions/errors for this problem/session */
+  failedRunCount: number;
+  /** Retry count inferred from failures and retrieval trace */
+  retryCount: number;
+  /** Hints already viewed for this problem/session */
+  hintCount: number;
+  /** Recent interaction event types in order */
+  lastInteractionTypes: string[];
+  /** Why the learner may be stuck */
+  stuckReason?: string;
+};
+
+/**
  * Context for adaptive hint generation
  * Passed to generateAdaptiveHint for creating pedagogically progressive hints
  */
@@ -103,6 +122,8 @@ export type AdaptiveHintContext = {
   pdfPassages: RetrievedChunkInfo[];
   /** SQL-Engage records for this error subtype */
   sqlEngageRecords: SqlEngageRecord[];
+  /** Derived learner state from recent interactions and retrieval trace */
+  learningSignals: LearningSignalSummary;
 };
 
 /**

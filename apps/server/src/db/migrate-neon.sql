@@ -164,7 +164,12 @@ CREATE TABLE IF NOT EXISTS interaction_events (
   source_interaction_ids TEXT,
   inputs TEXT,
   outputs TEXT,
+  concept_id TEXT,
   concept_ids TEXT,
+  source TEXT,
+  total_time INTEGER,
+  problems_attempted INTEGER,
+  problems_solved INTEGER,
   request_type TEXT,
   current_rung INTEGER,
   rung INTEGER,
@@ -231,6 +236,11 @@ ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS time_to_escalation INTEG
 ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_assigned TEXT;
 ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_updated TEXT;
 ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS reward_value NUMERIC;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS concept_id TEXT;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS source TEXT;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS total_time INTEGER;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS problems_attempted INTEGER;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS problems_solved INTEGER;
 CREATE INDEX IF NOT EXISTS idx_interaction_events_section_id ON interaction_events(section_id);
 
 -- ============================================================================

@@ -175,6 +175,11 @@ router.post('/', async (req: Request, res: Response) => {
     // This ensures they reach the DB columns regardless of whether event.payload was set.
     const payload = {
       ...basePayload,
+      conceptId: event.conceptId ?? basePayload.conceptId,
+      source: event.source ?? basePayload.source,
+      totalTime: event.totalTime ?? basePayload.totalTime,
+      problemsAttempted: event.problemsAttempted ?? basePayload.problemsAttempted,
+      problemsSolved: event.problemsSolved ?? basePayload.problemsSolved,
       selectedArm: event.selectedArm ?? basePayload.selectedArm,
       learnerProfileId: event.learnerProfileId ?? basePayload.learnerProfileId,
       escalationTriggerReason: event.escalationTriggerReason ?? basePayload.escalationTriggerReason,
@@ -263,6 +268,11 @@ router.post('/batch', async (req: Request, res: Response) => {
       // RESEARCH-4: Always merge canonical study fields
       const payload = {
         ...basePayload,
+        conceptId: event.conceptId ?? basePayload.conceptId,
+        source: event.source ?? basePayload.source,
+        totalTime: event.totalTime ?? basePayload.totalTime,
+        problemsAttempted: event.problemsAttempted ?? basePayload.problemsAttempted,
+        problemsSolved: event.problemsSolved ?? basePayload.problemsSolved,
         selectedArm: event.selectedArm ?? basePayload.selectedArm,
         learnerProfileId: event.learnerProfileId ?? basePayload.learnerProfileId,
         escalationTriggerReason: event.escalationTriggerReason ?? basePayload.escalationTriggerReason,

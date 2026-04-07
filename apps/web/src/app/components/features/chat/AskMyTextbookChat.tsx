@@ -101,6 +101,67 @@ interface Toast {
   type: 'success' | 'info';
 }
 
+type ChatLearningSignals = {
+  latestIssue: string;
+  failedRunCount: number;
+  retryCount: number;
+  hintCount: number;
+  lastInteractionTypes: string[];
+  stuckReason?: string;
+};
+
+type ChatLLMResult = {
+  text: string | null;
+  provider?: string;
+  fallbackReason?: string;
+  learningSignals: ChatLearningSignals;
+};
+
+export function deriveChatLearningSignals(
+  interactions: InteractionEvent[],
+  problemId: string,
+  sessionId?: string,
+  errorSubtype?: string
+): ChatLearningSignals {
+  const relevantInteractions = interactions.filter((interaction) => {
+    if (interaction.problemId !== problemId) return false;
+    if (sessionId && interaction.sessionId && interaction.sessionId !== sessionId) return false;
+    return true;
+  });
+  const failedInteractions = relevantInteractions.filter((interaction) =>
+    interaction.eventType === 'error' || (interaction.eventType === 'execution' && interaction.successful === false)
+  );
+  const latestFailure = failedInteractions.at(-1);
+  const failedRunCount = failedInteractions.length;
+  const retryCount = Math.max(0, failedRunCount - 1);
+  const hintCount = relevantInteractions.filter((interaction) =>
+    interaction.eventType === 'hint_request' || interaction.eventType === 'guidance_view'
+  ).length;
+  let stuckReason: string | undefined;
+  if (retryCount >= 2) {
+    stuckReason = 'multiple_failed_retries';
+  } else if (hintCount >= 2 && failedRunCount > 0) {
+    stuckReason = 'hints_used_still_incorrect';
+  } else if (latestFailure) {
+    stuckReason = 'latest_execution_incorrect';
+  }
+
+  return {
+    latestIssue:
+      latestFailure?.error ||
+      latestFailure?.errorSubtypeId ||
+      latestFailure?.sqlEngageSubtype ||
+      (latestFailure?.successful === false ? 'incorrect_results' : undefined) ||
+      errorSubtype ||
+      'current_query_issue',
+    failedRunCount,
+    retryCount,
+    hintCount,
+    lastInteractionTypes: relevantInteractions.slice(-5).map((interaction) => interaction.eventType),
+    stuckReason
+  };
+}
+
 /**
  * Convert markdown to HTML
  * Handles bold, italic, inline code, code blocks, and lists
@@ -422,6 +483,7 @@ export function AskMyTextbookChat({
     const errorSubtype = lastError?.sqlEngageSubtype || 
                         lastError?.errorSubtypeId ||
                         (lastError?.successful === false ? 'incorrect_results' : undefined);
+    const learningSignals = deriveChatLearningSignals(allInteractions, problemId, sessionId, errorSubtype);
     
     // Filter units by problem concepts FIRST (most relevant)
     let relevantUnits = textbookUnits.filter(unit => 
@@ -510,9 +572,10 @@ export function AskMyTextbookChat({
       pdfPassages,
       allSourceIds: curatedSourceIds, // Only return curated list
       problemConceptIds,
-      errorSubtype
+      errorSubtype,
+      learningSignals
     };
-  }, [learnerId, problemId, recentInteractions, getTextbookUnits, getStoredInteractions]);
+  }, [learnerId, problemId, sessionId, recentInteractions, getTextbookUnits, getStoredInteractions]);
 
   // cleanText moved above buildGroundingPayload to fix temporal dead zone
   
@@ -859,10 +922,16 @@ export function AskMyTextbookChat({
     query: string, 
     quickChip: string | undefined,
     groundingPayload: ReturnType<typeof buildGroundingPayload>
-  ): Promise<string | null> => {
+  ): Promise<ChatLLMResult> => {
+    const { learningSignals } = groundingPayload;
     const llmStatus = await getLLMStatus();
     if (!llmStatus.available) {
-      return null;
+      return {
+        text: null,
+        provider: llmStatus.provider,
+        fallbackReason: 'llm_unavailable',
+        learningSignals
+      };
     }
 
     const { relevantUnits, pdfPassages, errorSubtype, problemConceptIds } = groundingPayload;
@@ -897,6 +966,16 @@ export function AskMyTextbookChat({
         contextParts.push(`\n=== Current Error ===`);
         contextParts.push(`Type: ${errorSubtype}`);
       }
+
+      contextParts.push('\n=== Learner State ===');
+      contextParts.push(`Latest issue: ${learningSignals.latestIssue}`);
+      contextParts.push(`Failed runs: ${learningSignals.failedRunCount}`);
+      contextParts.push(`Retry count: ${learningSignals.retryCount}`);
+      contextParts.push(`Hints viewed: ${learningSignals.hintCount}`);
+      contextParts.push(`Recent events: ${learningSignals.lastInteractionTypes.join(', ') || 'none'}`);
+      if (learningSignals.stuckReason) {
+        contextParts.push(`Stuck signal: ${learningSignals.stuckReason}`);
+      }
       
       const contextText = contextParts.join('\n');
       
@@ -914,7 +993,7 @@ export function AskMyTextbookChat({
         userPrompt = `Student question: "${query}"\n\nProblem: ${problem?.title}\nError: ${errorSubtype || 'None'}\n\nUsing this context:\n${contextText}\n\nProvide a helpful response (2-4 sentences). Guide their thinking with questions. DO NOT give them the SQL solution.`;
       }
       
-      const systemPrompt = `You are a Socratic SQL tutor. NEVER give working SQL code. NEVER give the solution. NEVER write "Example: SELECT..." with real code. Help students discover answers through guidance and questions. Be concise (under 300 chars). Cite sources like "(from your notes)".`;
+      const systemPrompt = `You are a Socratic SQL tutor. Use the learner's latest error, retry count, hints viewed, and stuck signal to choose the next helpful nudge. NEVER give working SQL code. NEVER give the solution. NEVER write "Example: SELECT..." with real code. Help students discover answers through guidance and questions. Be concise (under 300 chars). Cite sources like "(from your notes)".`;
       
       // Call LLM
       const llmCall = async (prompt: string): Promise<string> => {
@@ -926,10 +1005,19 @@ export function AskMyTextbookChat({
       
       const response = await llmCall(systemPrompt + '\n\n' + userPrompt);
       
-      return response.trim();
+      return {
+        text: response.trim(),
+        provider: llmStatus.provider,
+        learningSignals
+      };
     } catch {
       // LLM generation failed - fallback will be used
-      return null;
+      return {
+        text: null,
+        provider: llmStatus.provider,
+        fallbackReason: 'llm_error',
+        learningSignals
+      };
     }
   }, [problemId]);
 
@@ -941,6 +1029,11 @@ export function AskMyTextbookChat({
     sources: Array<{id: string; title: string; type: 'unit' | 'pdf'}>;
     problemConceptIds: string[];
     llmGenerated?: boolean;
+    llmProvider?: string;
+    llmFallbackReason?: string;
+    errorSubtype?: string;
+    retryCount?: number;
+    stuckReason?: string;
   }> => {
     const { 
       relevantUnits, 
@@ -948,7 +1041,8 @@ export function AskMyTextbookChat({
       pdfPassages,
       allSourceIds,
       problemConceptIds,
-      errorSubtype
+      errorSubtype,
+      learningSignals
     } = buildGroundingPayload(query, quickChip);
     
     // Build source list for display - DEDUPLICATE by normalized title
@@ -976,6 +1070,8 @@ export function AskMyTextbookChat({
     // Try LLM first if available
     let response = '';
     let llmGenerated = false;
+    let llmProvider: string | undefined;
+    let llmFallbackReason: string | undefined;
     
     const groundingPayload = {
       relevantUnits,
@@ -983,11 +1079,14 @@ export function AskMyTextbookChat({
       pdfPassages,
       allSourceIds,
       problemConceptIds,
-      errorSubtype
+      errorSubtype,
+      learningSignals
     };
-    const llmResponse = await generateLLMResponse(query, quickChip, groundingPayload);
-    if (llmResponse) {
-      response = llmResponse;
+    const llmResult = await generateLLMResponse(query, quickChip, groundingPayload);
+    llmProvider = llmResult.provider;
+    llmFallbackReason = llmResult.fallbackReason;
+    if (llmResult.text) {
+      response = llmResult.text;
       llmGenerated = true;
     }
     
@@ -1128,7 +1227,12 @@ export function AskMyTextbookChat({
       unitIds: relevantUnits.map(u => u.id),
       sources,
       problemConceptIds,
-      llmGenerated
+      llmGenerated,
+      llmProvider,
+      llmFallbackReason,
+      errorSubtype,
+      retryCount: learningSignals.retryCount,
+      stuckReason: learningSignals.stuckReason
     };
   }, [buildGroundingPayload, recentInteractions, problemId, cleanText, extractSqlExample, getActionableFix, generateLLMResponse]);
 
@@ -1138,9 +1242,21 @@ export function AskMyTextbookChat({
     response: string,
     sourceIds: string[],
     quickChip?: string,
-    savedToNotes?: boolean
+    savedToNotes?: boolean,
+    metadata?: {
+      llmGenerated?: boolean;
+      llmProvider?: string;
+      llmFallbackReason?: string;
+      errorSubtype?: string;
+      retryCount?: number;
+      stuckReason?: string;
+    }
   ) => {
     if (!sessionId) return;
+    const normalizedProvider =
+      metadata?.llmProvider === 'groq' || metadata?.llmProvider === 'ollama'
+        ? metadata.llmProvider
+        : undefined;
 
     const event: InteractionEvent = {
       id: createEventId('chat'),
@@ -1154,7 +1270,20 @@ export function AskMyTextbookChat({
       chatQuickChip: quickChip,
       savedToNotes,
       retrievedSourceIds: sourceIds,
-      textbookUnitsRetrieved: sourceIds.filter(id => id.startsWith('unit-') || !id.includes(':'))
+      textbookUnitsRetrieved: sourceIds.filter(id => id.startsWith('unit-') || !id.includes(':')),
+      llmProvider: normalizedProvider,
+      llmPurpose: 'ask_my_textbook',
+      llmFallbackReason: metadata?.llmFallbackReason,
+      inputs: {
+        error_subtype: metadata?.errorSubtype ?? null,
+        retry_count: metadata?.retryCount ?? 0,
+        stuck_reason: metadata?.stuckReason ?? null
+      },
+      outputs: {
+        llm_generated: Boolean(metadata?.llmGenerated),
+        llm_provider: metadata?.llmProvider ?? null,
+        fallback_reason: metadata?.llmFallbackReason ?? null
+      }
     };
 
     storage.saveInteraction(event);
@@ -1187,7 +1316,19 @@ export function AskMyTextbookChat({
     setIsLoading(true);
 
     // Generate grounded response (with LLM if available)
-    const { response, sourceIds, unitIds, sources, problemConceptIds, llmGenerated } = await generateResponse(messageText, quickChip);
+    const {
+      response,
+      sourceIds,
+      unitIds,
+      sources,
+      problemConceptIds,
+      llmGenerated,
+      llmProvider,
+      llmFallbackReason,
+      errorSubtype,
+      retryCount,
+      stuckReason
+    } = await generateResponse(messageText, quickChip);
 
     // Add assistant response
     const assistantMessage: ChatMessage = {
@@ -1216,7 +1357,14 @@ export function AskMyTextbookChat({
     );
 
     // Log interaction
-    logChatInteraction(messageText, response, sourceIds, quickChip, false);
+    logChatInteraction(messageText, response, sourceIds, quickChip, false, {
+      llmGenerated,
+      llmProvider,
+      llmFallbackReason,
+      errorSubtype,
+      retryCount,
+      stuckReason
+    });
 
     // Auto-save if quality threshold met (boost quality for LLM-generated)
     setTimeout(() => {

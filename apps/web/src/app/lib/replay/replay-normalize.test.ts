@@ -27,6 +27,7 @@ const ALLOWED_EVENT_TYPES = new Set([
   'textbook_add',
   'textbook_update',
   'textbook_unit_upsert',
+  'concept_view',
   // Reinforcement events
   'reinforcement_response',
   'reinforcement_shown',
@@ -49,6 +50,7 @@ const ALLOWED_EVENT_TYPES = new Set([
   'pdf_index_uploaded',
   // Session events
   'session_started',
+  'session_end',
   'session_ended',
   // Concept events
   'concept_extraction',
@@ -106,6 +108,7 @@ describe('Replay Event Type Coverage', () => {
 
   it('should include all session events', () => {
     expect(ALLOWED_EVENT_TYPES.has('session_started')).toBe(true);
+    expect(ALLOWED_EVENT_TYPES.has('session_end')).toBe(true);
     expect(ALLOWED_EVENT_TYPES.has('session_ended')).toBe(true);
   });
 

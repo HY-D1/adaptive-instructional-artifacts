@@ -26,9 +26,16 @@ export const ENABLE_LLM = process.env.ENABLE_LLM === 'true';
 
 /**
  * LLM Provider selection: 'ollama' or 'groq'
- * Defaults to 'ollama' for local development
+ * Defaults to Groq when GROQ_API_KEY is present, otherwise Ollama for local development
  */
-export const LLM_PROVIDER = (process.env.LLM_PROVIDER || 'ollama') as 'ollama' | 'groq';
+function resolveLLMProvider(): 'ollama' | 'groq' {
+  if (process.env.LLM_PROVIDER === 'ollama' || process.env.LLM_PROVIDER === 'groq') {
+    return process.env.LLM_PROVIDER;
+  }
+  return process.env.GROQ_API_KEY ? 'groq' : 'ollama';
+}
+
+export const LLM_PROVIDER = resolveLLMProvider();
 
 /**
  * Ollama base URL for LLM proxy

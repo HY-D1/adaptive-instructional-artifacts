@@ -142,6 +142,11 @@ async function exportEvents(db: DbClient): Promise<void> {
       error_subtype_id,
       successful,
       time_spent,
+      total_time,
+      problems_attempted,
+      problems_solved,
+      source,
+      concept_id,
       concept_ids,
       policy_version,
       hint_level,
@@ -568,6 +573,7 @@ function escapeCsv(value: string): string {
 
 export function buildInteractionEventsCsv(events: QueryResult[]): string {
   const csvHeader = 'id,user_id,session_id,timestamp,event_type,problem_id,hint_id,successful,time_spent,' +
+    'total_time,problems_attempted,problems_solved,source,concept_id,' +
     'profile_id,assignment_strategy,selected_arm,selection_method,reward_total,new_alpha,new_beta,' +
     'from_rung,to_rung,trigger_reason,intervention_type,concept_ids,' +
     'learner_profile_id,escalation_trigger_reason,error_count_at_escalation,time_to_escalation,' +
@@ -584,6 +590,11 @@ export function buildInteractionEventsCsv(events: QueryResult[]): string {
       event.hint_id || '',
       event.successful ?? '',
       event.time_spent ?? '',
+      event.total_time ?? '',
+      event.problems_attempted ?? '',
+      event.problems_solved ?? '',
+      event.source || '',
+      event.concept_id || '',
       event.profile_id || '',
       event.assignment_strategy || '',
       event.selected_arm || '',

@@ -286,6 +286,7 @@ export function AdaptiveTextbook({
       sessionId: unit.sessionId,
       unitId: unit.id,
       conceptId: unit.conceptId,
+      source: 'textbook',
       problemId: unit.problemId || `textbook:${unit.conceptId}`,
     });
     onSelectedUnitChange?.(unit.id);
