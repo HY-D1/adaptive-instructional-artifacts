@@ -380,6 +380,9 @@ export function LearningInterface() {
   const notificationTimeoutsRef = useRef<Set<number>>(new Set());
   // Track if profile assignment has been logged for this session
   const profileAssignedLoggedRef = useRef<boolean>(false);
+  const currentProblemIdRef = useRef(currentProblem.id);
+  const finalizedSessionIdsRef = useRef<Set<string>>(new Set());
+  const sessionConditionIdRef = useRef<string | undefined>(sessionConfig?.conditionId);
   
   // Screen reader announcements for accessibility
   const { announcement: hintAnnouncement, announce: announceHint } = useScreenReaderAnnouncer();
@@ -744,6 +747,14 @@ export function LearningInterface() {
   useEffect(() => {
     elapsedTimeRef.current = elapsedTime;
   }, [elapsedTime]);
+
+  useEffect(() => {
+    currentProblemIdRef.current = currentProblem.id;
+  }, [currentProblem.id]);
+
+  useEffect(() => {
+    sessionConditionIdRef.current = sessionConfig?.conditionId;
+  }, [sessionConfig?.conditionId]);
 
   // Timer effect with tab visibility handling - uses refs to avoid stale closures
   useEffect(() => {
@@ -1799,6 +1810,59 @@ export function LearningInterface() {
     };
   }, [learnerId, sessionId]);
 
+  useEffect(() => {
+    if (!learnerId || !sessionId) {
+      return;
+    }
+
+    return () => {
+      if (finalizedSessionIdsRef.current.has(sessionId)) {
+        return;
+      }
+      finalizedSessionIdsRef.current.add(sessionId);
+
+      const sessionInteractions = storage
+        .getInteractionsByLearner(learnerId)
+        .filter((interaction) => interaction.sessionId === sessionId);
+      const firstInteractionTimestamp = sessionInteractions.length > 0
+        ? Math.min(...sessionInteractions.map((interaction) => interaction.timestamp))
+        : startTimeRef.current;
+      const totalTime = Math.max(0, Date.now() - firstInteractionTimestamp);
+      const problemsAttempted = new Set(
+        sessionInteractions
+          .filter((interaction) => interaction.eventType === 'execution' || interaction.eventType === 'error')
+          .map((interaction) => interaction.problemId)
+      ).size;
+      const problemsSolved = new Set(
+        sessionInteractions
+          .filter((interaction) => interaction.eventType === 'execution' && interaction.successful)
+          .map((interaction) => interaction.problemId)
+      ).size;
+
+      const sessionEndEvent: InteractionEvent = {
+        id: createEventId('session', 'end'),
+        learnerId,
+        sessionId,
+        timestamp: Date.now(),
+        eventType: 'session_end',
+        problemId: currentProblemIdRef.current || 'session-summary',
+        totalTime,
+        timeSpent: totalTime,
+        problemsAttempted,
+        problemsSolved,
+        conditionId: sessionConditionIdRef.current,
+      };
+
+      void storage.emitSessionEnd(sessionEndEvent).then((status) => {
+        if (!status.backendConfirmed) {
+          console.warn('[LearningInterface] session_end blocked pending backend sync:', status.error);
+        }
+      }).catch((error) => {
+        console.warn('[LearningInterface] session_end emission failed:', error);
+      });
+    };
+  }, [learnerId, sessionId]);
+
   const timeSpent = Date.now() - startTime;
 
   // Memoized problem grouping by difficulty
@@ -1830,6 +1894,21 @@ export function LearningInterface() {
     learnerSessionInteractions.filter(i => i.problemId === currentProblem.id),
     [learnerSessionInteractions, currentProblem.id]
   );
+
+  useEffect(() => {
+    if (!learnerId || !sessionId) {
+      return;
+    }
+    for (const conceptId of currentProblem.concepts) {
+      storage.logConceptView({
+        learnerId,
+        sessionId,
+        problemId: currentProblem.id,
+        conceptId,
+        source: 'problem',
+      });
+    }
+  }, [learnerId, sessionId, currentProblem.id]);
 
   // Cross-session problem interactions for truthful progress indicators
   // This ensures "successful runs" agrees with "Solved" badge across sessions

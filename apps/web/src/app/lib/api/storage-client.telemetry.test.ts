@@ -94,4 +94,40 @@ describe('storage-client telemetry contract', () => {
       hintId: 'sql-engage:joins:hint:sql-engage:joins:1:L2',
     });
   });
+
+  it('posts concept_view with conceptId and source', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { id: 'concept-1' },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    const { logInteraction } = await import('./storage-client');
+
+    await logInteraction({
+      id: 'concept-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      timestamp: 1_700_000_100_000,
+      eventType: 'concept_view',
+      problemId: 'problem-1',
+      conceptId: 'joins',
+      conceptIds: ['joins'],
+      source: 'hint',
+    });
+
+    const [, request] = fetchMock.mock.calls[0];
+    expect(JSON.parse(String(request?.body))).toMatchObject({
+      eventType: 'concept_view',
+      conceptId: 'joins',
+      source: 'hint',
+    });
+  });
 });

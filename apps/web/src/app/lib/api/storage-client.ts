@@ -103,6 +103,10 @@ interface BackendInteraction {
   // Concept fields
   conceptId?: string;
   conceptIds?: string[];
+  source?: 'problem' | 'hint' | 'textbook';
+  totalTime?: number;
+  problemsAttempted?: number;
+  problemsSolved?: number;
   
   // Guidance Ladder fields
   requestType?: 'hint' | 'explanation' | 'textbook';
@@ -591,12 +595,37 @@ export async function updateProfileFromEvent(
  * Convert frontend InteractionEvent to backend format
  * Preserves ALL fields for research replay - LOSSLESS
  */
+function normalizeInteractionTimestampToIso(timestamp: string | number): string {
+  const fallback = new Date().toISOString();
+
+  if (typeof timestamp === 'number' && Number.isFinite(timestamp)) {
+    const millis = timestamp > 1e12 ? timestamp : timestamp * 1000;
+    const iso = new Date(millis).toISOString();
+    return Number.isNaN(Date.parse(iso)) ? fallback : iso;
+  }
+
+  const numeric = Number(timestamp);
+  if (Number.isFinite(numeric)) {
+    const millis = numeric > 1e12 ? numeric : numeric * 1000;
+    const iso = new Date(millis).toISOString();
+    return Number.isNaN(Date.parse(iso)) ? fallback : iso;
+  }
+
+  const parsed = Date.parse(String(timestamp));
+  if (Number.isFinite(parsed)) {
+    return new Date(parsed).toISOString();
+  }
+
+  return fallback;
+}
+
 function convertToBackendInteraction(event: InteractionEvent): Partial<BackendInteraction> {
+  const timestampIso = normalizeInteractionTimestampToIso(event.timestamp);
   return {
     // Required fields
     learnerId: event.learnerId,
     sessionId: event.sessionId,
-    timestamp: new Date(event.timestamp).toISOString(),
+    timestamp: timestampIso,
     eventType: event.eventType,
     problemId: event.problemId,
     
@@ -645,8 +674,12 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
     outputs: event.outputs,
     
     // Concept fields (both single and array forms)
-    conceptId: event.conceptIds?.[0], // Primary concept
+    conceptId: event.conceptId || event.conceptIds?.[0], // Primary concept
     conceptIds: event.conceptIds,
+    source: event.source,
+    totalTime: event.totalTime,
+    problemsAttempted: event.problemsAttempted,
+    problemsSolved: event.problemsSolved,
     
     // Guidance Ladder fields
     requestType: event.requestType,
@@ -810,7 +843,12 @@ function convertToFrontendEvent(i: BackendInteraction): InteractionEvent {
     outputs: i.outputs,
     
     // Concept fields
+    conceptId: i.conceptId,
     conceptIds: i.conceptIds || (i.conceptId ? [i.conceptId] : undefined),
+    source: i.source,
+    totalTime: i.totalTime,
+    problemsAttempted: i.problemsAttempted,
+    problemsSolved: i.problemsSolved,
     
     // Guidance Ladder fields
     requestType: i.requestType,
@@ -884,6 +922,9 @@ export async function getInteractions(
   options?: {
     start?: Date;
     end?: Date;
+    sessionId?: string;
+    eventType?: string;
+    problemId?: string;
     limit?: number;
     offset?: number;
   }
@@ -892,6 +933,9 @@ export async function getInteractions(
   if (learnerId) params.set('learnerId', learnerId);
   if (options?.start) params.set('start', options.start.toISOString());
   if (options?.end) params.set('end', options.end.toISOString());
+  if (options?.sessionId) params.set('sessionId', options.sessionId);
+  if (options?.eventType) params.set('eventType', options.eventType);
+  if (options?.problemId) params.set('problemId', options.problemId);
   if (options?.limit) params.set('limit', options.limit.toString());
   if (options?.offset) params.set('offset', options.offset.toString());
 

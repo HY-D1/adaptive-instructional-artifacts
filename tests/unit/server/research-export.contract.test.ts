@@ -9,7 +9,7 @@ import {
 } from '../../../apps/server/src/scripts/export-research-data';
 
 describe('research export contract', () => {
-  it('includes hint_id and concept_view in interaction event csv exports', () => {
+  it('includes hint_id, concept_view metadata, and session_end metrics in interaction event csv exports', () => {
     const csv = buildInteractionEventsCsv([
       {
         id: 'evt-1',
@@ -21,6 +21,11 @@ describe('research export contract', () => {
         hint_id: 'sql-engage:joins:hint:sql-engage:joins:1:L2',
         successful: null,
         time_spent: null,
+        total_time: null,
+        problems_attempted: null,
+        problems_solved: null,
+        source: 'textbook',
+        concept_id: 'joins',
         concept_ids: '["joins"]',
         learner_profile_id: null,
         escalation_trigger_reason: null,
@@ -35,7 +40,12 @@ describe('research export contract', () => {
 
     const [header, row] = csv.trim().split('\n');
     expect(header).toContain('hint_id');
+    expect(header).toContain('concept_id');
+    expect(header).toContain('source');
+    expect(header).toContain('total_time');
     expect(row).toContain('concept_view');
+    expect(row).toContain('textbook');
+    expect(row).toContain('joins');
     expect(row).toContain('sql-engage:joins:hint:sql-engage:joins:1:L2');
   });
 

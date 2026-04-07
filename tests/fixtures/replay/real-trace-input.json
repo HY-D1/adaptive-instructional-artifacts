@@ -18,6 +18,16 @@
       "code": "SELECT * FROM users"
     },
     {
+      "id": "evt-002a",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p1-select-basics",
+      "timestamp": 1700000001500,
+      "eventType": "concept_view",
+      "conceptId": "select-basics",
+      "source": "problem"
+    },
+    {
       "id": "evt-003",
       "learnerId": "learner-1",
       "sessionId": "sess-001",
@@ -56,6 +66,16 @@
       "sqlEngageSubtype": "incomplete query",
       "sqlEngageRowId": "sql-engage:15",
       "policyVersion": "sql-engage-v3"
+    },
+    {
+      "id": "evt-006a",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p1-select-basics",
+      "timestamp": 1700000005500,
+      "eventType": "concept_view",
+      "conceptId": "sql-syntax",
+      "source": "hint"
     },
     {
       "id": "evt-007",
@@ -236,6 +256,16 @@
       "evidenceInteractionIds": ["evt-011", "evt-016"]
     },
     {
+      "id": "evt-025a",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p2-where-clause",
+      "timestamp": 1700000026500,
+      "eventType": "concept_view",
+      "conceptId": "where-clause",
+      "source": "textbook"
+    },
+    {
       "id": "evt-026",
       "learnerId": "learner-1",
       "sessionId": "sess-001",
@@ -309,6 +339,18 @@
       "eventType": "session_ended"
     },
     {
+      "id": "evt-033a",
+      "learnerId": "learner-1",
+      "sessionId": "sess-001",
+      "problemId": "p3-joins",
+      "timestamp": 1700000040500,
+      "eventType": "session_end",
+      "totalTime": 40500,
+      "timeSpent": 40500,
+      "problemsAttempted": 3,
+      "problemsSolved": 3
+    },
+    {
       "id": "evt-034",
       "learnerId": "learner-1",
       "sessionId": "sess-001",
@@ -346,8 +388,8 @@
   "exportScope": "learner-1-session",
   "_fixtureInfo": {
     "description": "Synthetic replay fixture for milestone verification",
-    "eventTypes": 16,
-    "totalEvents": 36,
+    "eventTypes": 18,
+    "totalEvents": 40,
     "problems": ["p1-select-basics", "p2-where-clause", "p3-joins"],
     "generatedFor": "replay-experiment-v2"
   }

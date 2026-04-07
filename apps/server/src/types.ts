@@ -169,6 +169,7 @@ export type EventType =
   | 'guidance_escalate'
   | 'textbook_unit_upsert'
   | 'concept_view'
+  | 'session_end'
   | 'source_view'
   | 'chat_interaction'
   | 'profile_assigned'
@@ -275,6 +276,10 @@ export interface Interaction {
   // Concept fields
   conceptId?: string;
   conceptIds?: string[];
+  source?: 'problem' | 'hint' | 'textbook';
+  totalTime?: number;
+  problemsAttempted?: number;
+  problemsSolved?: number;
   
   // Escalation fields (CRITICAL for replay)
   requestType?: 'hint' | 'explanation' | 'textbook';
@@ -407,6 +412,10 @@ export interface CreateInteractionRequest {
   // Concept fields
   conceptId?: string;
   conceptIds?: string[];
+  source?: 'problem' | 'hint' | 'textbook';
+  totalTime?: number;
+  problemsAttempted?: number;
+  problemsSolved?: number;
   
   // Escalation fields (CRITICAL for replay)
   requestType?: 'hint' | 'explanation' | 'textbook';

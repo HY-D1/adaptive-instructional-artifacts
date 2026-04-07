@@ -295,7 +295,12 @@ export async function initializeSchema(): Promise<void> {
       source_interaction_ids TEXT,
       inputs TEXT,
       outputs TEXT,
+      concept_id TEXT,
       concept_ids TEXT,
+      source TEXT,
+      total_time INTEGER,
+      problems_attempted INTEGER,
+      problems_solved INTEGER,
       request_type TEXT,
       current_rung INTEGER,
       rung INTEGER,
@@ -365,6 +370,11 @@ export async function initializeSchema(): Promise<void> {
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_assigned TEXT`;
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS strategy_updated TEXT`;
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS reward_value NUMERIC`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS concept_id TEXT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS source TEXT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS total_time INTEGER`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS problems_attempted INTEGER`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS problems_solved INTEGER`;
 
   // Textbook units (My Textbook)
   await db`
@@ -832,12 +842,27 @@ export async function getAllProblemProgress(userId: string): Promise<any[]> {
 // Interaction Event Operations
 // ============================================================================
 
+function normalizeInteractionTimestamp(timestamp: string, fallbackIso: string): string {
+  const numeric = Number(timestamp);
+  if (Number.isFinite(numeric)) {
+    const millis = numeric > 1e12 ? numeric : numeric * 1000;
+    return new Date(millis).toISOString();
+  }
+  const parsed = Date.parse(timestamp);
+  if (Number.isFinite(parsed)) {
+    return new Date(parsed).toISOString();
+  }
+  return fallbackIso;
+}
+
 export async function createInteraction(data: CreateInteractionRequest & { id: string }): Promise<Interaction> {
   const db = getDb();
   const now = new Date().toISOString();
 
   const payload = data.payload || {};
   const storedHintId = payload.hintId || null;
+  const timestampIso = normalizeInteractionTimestamp(data.timestamp, now);
+  const storedConceptId = payload.conceptId || (Array.isArray(payload.conceptIds) ? payload.conceptIds[0] : null);
   const resolvedSectionId = data.sectionId ?? await resolveSectionIdForLearner(data.learnerId);
 
   await db`
@@ -849,7 +874,8 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
       successful, rule_fired, template_id, input_hash, model,
       note_id, note_title, note_content,
       retrieved_source_ids, retrieved_chunks, trigger_interaction_ids,
-      evidence_interaction_ids, source_interaction_ids, inputs, outputs, concept_ids,
+      evidence_interaction_ids, source_interaction_ids, inputs, outputs, concept_id, concept_ids,
+      source, total_time, problems_attempted, problems_solved,
       request_type, current_rung, rung, grounded, content_length,
       from_rung, to_rung, trigger_reason, unit_id, action, dedupe_key,
       revision_count, passage_count, expanded, chat_message, chat_response,
@@ -867,7 +893,7 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
       ${data.learnerId},
       ${resolvedSectionId},
       ${payload.sessionId || null},
-      ${new Date(data.timestamp).toISOString()},
+      ${timestampIso},
       ${data.eventType},
       ${data.problemId},
       ${payload.problemSetId || null},
@@ -899,7 +925,12 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
       ${JSON.stringify(payload.sourceInteractionIds || null)},
       ${JSON.stringify(payload.inputs || null)},
       ${JSON.stringify(payload.outputs || null)},
+      ${storedConceptId},
       ${JSON.stringify(payload.conceptIds || null)},
+      ${payload.source || null},
+      ${payload.totalTime ?? payload.timeSpent ?? null},
+      ${payload.problemsAttempted ?? null},
+      ${payload.problemsSolved ?? null},
       ${payload.requestType || null},
       ${payload.currentRung || null},
       ${payload.rung || null},
@@ -960,7 +991,7 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
     learnerId: data.learnerId,
     sectionId: resolvedSectionId,
     sessionId: (payload as { sessionId?: string }).sessionId || null,
-    timestamp: data.timestamp,
+    timestamp: timestampIso,
     eventType: data.eventType,
     problemId: data.problemId,
     ...topLevelPayload,
@@ -980,37 +1011,27 @@ export async function getInteractionsByUser(
   }
 ): Promise<{ interactions: Interaction[]; total: number }> {
   const db = getDb();
+  const results = await db`
+    SELECT * FROM interaction_events
+    WHERE user_id = ${userId}
+    ORDER BY timestamp DESC
+  `;
 
-  let query = db`SELECT * FROM interaction_events WHERE user_id = ${userId}`;
-  let countQuery = db`SELECT COUNT(*) as count FROM interaction_events WHERE user_id = ${userId}`;
-
-  if (options?.sessionId) {
-    query = db`SELECT * FROM interaction_events WHERE user_id = ${userId} AND session_id = ${options.sessionId}`;
-    countQuery = db`SELECT COUNT(*) as count FROM interaction_events WHERE user_id = ${userId} AND session_id = ${options.sessionId}`;
-  }
-
-  if (options?.eventType) {
-    query = db`SELECT * FROM interaction_events WHERE user_id = ${userId} AND event_type = ${options.eventType}`;
-    countQuery = db`SELECT COUNT(*) as count FROM interaction_events WHERE user_id = ${userId} AND event_type = ${options.eventType}`;
-  }
-
-  if (options?.problemId) {
-    query = db`SELECT * FROM interaction_events WHERE user_id = ${userId} AND problem_id = ${options.problemId}`;
-    countQuery = db`SELECT COUNT(*) as count FROM interaction_events WHERE user_id = ${userId} AND problem_id = ${options.problemId}`;
-  }
-
-  query = db`SELECT * FROM interaction_events WHERE user_id = ${userId} ORDER BY timestamp DESC`;
-
-  if (options?.limit) {
-    const offset = options.offset || 0;
-    query = db`SELECT * FROM interaction_events WHERE user_id = ${userId} ORDER BY timestamp DESC LIMIT ${options.limit} OFFSET ${offset}`;
-  }
-
-  const [results, countResult] = await Promise.all([query, countQuery]);
+  const filtered = results.filter((row) => {
+    if (options?.sessionId && row.session_id !== options.sessionId) return false;
+    if (options?.eventType && row.event_type !== options.eventType) return false;
+    if (options?.problemId && row.problem_id !== options.problemId) return false;
+    return true;
+  });
+  const total = filtered.length;
+  const offset = options?.offset || 0;
+  const paged = options?.limit
+    ? filtered.slice(offset, offset + options.limit)
+    : filtered;
 
   return {
-    interactions: results.map(rowToInteraction),
-    total: parseInt((countResult[0]?.count ?? 0).toString(), 10),
+    interactions: paged.map(rowToInteraction),
+    total,
   };
 }
 
@@ -1148,7 +1169,12 @@ function rowToInteraction(row: any): Interaction {
     sourceInteractionIds: parseJson(row.source_interaction_ids),
     inputs: parseJson(row.inputs),
     outputs: parseJson(row.outputs),
+    conceptId: row.concept_id,
     conceptIds: parseJson(row.concept_ids),
+    source: row.source,
+    totalTime: row.total_time,
+    problemsAttempted: row.problems_attempted,
+    problemsSolved: row.problems_solved,
     requestType: row.request_type,
     currentRung: row.current_rung,
     rung: row.rung,

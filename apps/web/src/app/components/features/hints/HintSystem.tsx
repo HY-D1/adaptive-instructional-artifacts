@@ -1094,6 +1094,15 @@ export function HintSystem({
       };
       storage.saveInteraction(hintEvent);
       onInteractionLogged?.(hintEvent);
+      for (const conceptId of conceptIds.filter(Boolean)) {
+        storage.logConceptView({
+          learnerId,
+          sessionId,
+          problemId,
+          conceptId,
+          source: 'hint',
+        });
+      }
 
       // Week 3 D8: Log guidance view event for replay
       storage.logGuidanceView({

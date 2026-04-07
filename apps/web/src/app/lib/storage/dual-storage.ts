@@ -359,6 +359,145 @@ class DualStorageManager {
     return localStorageManager.saveInteraction(event);
   }
 
+  logInteraction(event: InteractionEvent): { success: boolean; quotaExceeded?: boolean } {
+    return this.saveInteraction(event);
+  }
+
+  logConceptView(params: {
+    learnerId: string;
+    problemId: string;
+    conceptId: string;
+    source: 'problem' | 'hint' | 'textbook';
+    unitId?: string;
+    sessionId?: string;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const resolvedSessionId = params.sessionId || localStorageManager.getActiveSessionId();
+    const beforeCount = localStorageManager.getInteractionsByLearner(params.learnerId).length;
+    const result = localStorageManager.logConceptView(params);
+    if (!result.success) {
+      return result;
+    }
+
+    const interactions = localStorageManager.getInteractionsByLearner(params.learnerId);
+    if (interactions.length <= beforeCount) {
+      return result;
+    }
+
+    const createdEvent = [...interactions]
+      .reverse()
+      .find((interaction) => {
+        if (interaction.eventType !== 'concept_view') return false;
+        if (interaction.problemId !== params.problemId) return false;
+        if ((interaction.sessionId || '') !== (resolvedSessionId || '')) return false;
+        const interactionConceptId = interaction.conceptId || interaction.conceptIds?.[0];
+        return interactionConceptId === params.conceptId && interaction.source === params.source;
+      });
+
+    if (!createdEvent || !this.shouldUseBackend()) {
+      return result;
+    }
+
+    storageClient.logInteraction(createdEvent).catch((error) => {
+      console.warn('[DualStorage] Backend logConceptView failed, queuing for retry:', error);
+      this.offlineQueue.add({
+        id: createdEvent.id,
+        type: 'interaction',
+        data: createdEvent,
+      });
+    });
+
+    return result;
+  }
+
+  logSessionEnd(params: {
+    learnerId: string;
+    sessionId: string;
+    problemId: string;
+    totalTime: number;
+    problemsAttempted: number;
+    problemsSolved: number;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const result = localStorageManager.logSessionEnd(params);
+    if (!result.success) {
+      return result;
+    }
+    const interactions = localStorageManager
+      .getInteractionsByLearner(params.learnerId)
+      .filter((interaction) => interaction.sessionId === params.sessionId && interaction.eventType === 'session_end');
+    const sessionEndEvent = interactions[interactions.length - 1];
+    if (sessionEndEvent && this.shouldUseBackend()) {
+      storageClient.logInteraction(sessionEndEvent).catch((error) => {
+        console.warn('[DualStorage] Backend logSessionEnd failed, queuing for retry:', error);
+        this.offlineQueue.add({
+          id: sessionEndEvent.id,
+          type: 'interaction',
+          data: sessionEndEvent,
+        });
+      });
+    }
+    return result;
+  }
+
+  async saveInteractionCritical(event: InteractionEvent): Promise<CriticalWriteStatus> {
+    const localResult = localStorageManager.saveInteraction(event);
+    if (localResult.success === false) {
+      return {
+        backendConfirmed: false,
+        pendingSync: false,
+        error: localResult.quotaExceeded
+          ? 'Failed to save locally: browser storage quota exceeded.'
+          : 'Failed to save locally.',
+      };
+    }
+
+    if (!this.config.useBackend) {
+      return { backendConfirmed: true, pendingSync: false };
+    }
+
+    const healthy = await this.checkHealth();
+    if (!healthy) {
+      this.offlineQueue.add({
+        id: event.id,
+        type: 'interaction',
+        data: event,
+      });
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Saved locally. Backend unavailable; queued for sync.',
+      };
+    }
+
+    try {
+      const backendSuccess = await storageClient.logInteraction(event);
+      if (backendSuccess) {
+        return { backendConfirmed: true, pendingSync: false };
+      }
+      this.offlineQueue.add({
+        id: event.id,
+        type: 'interaction',
+        data: event,
+      });
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Saved locally. Backend did not confirm; queued for retry.',
+      };
+    } catch (error) {
+      console.warn('[DualStorage] saveInteractionCritical backend failure, queued:', error);
+      this.offlineQueue.add({
+        id: event.id,
+        type: 'interaction',
+        data: event,
+      });
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Saved locally. Backend request failed; queued for retry.',
+      };
+    }
+  }
+
   getAllInteractions(): InteractionEvent[] {
     const learnerId = this.getCurrentLearnerId();
     if (learnerId && this.shouldUseBackend()) {
@@ -653,6 +792,169 @@ class DualStorageManager {
         backendConfirmed: false,
         pendingSync: true,
         error: 'Session saved locally. Backend request failed; queued for retry.',
+      };
+    }
+  }
+
+  async ensureSessionInteractionsPersisted(
+    learnerId: string,
+    sessionId: string,
+  ): Promise<CriticalWriteStatus & { missingInteractionIds?: string[] }> {
+    if (!this.config.useBackend) {
+      return { backendConfirmed: true, pendingSync: false, missingInteractionIds: [] };
+    }
+
+    const healthy = await this.checkHealth();
+    if (!healthy) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Backend unavailable. Cannot confirm session interaction sync.',
+      };
+    }
+
+    await this.offlineQueue.processQueue();
+
+    const localSessionInteractions = localStorageManager
+      .getInteractionsByLearner(learnerId)
+      .filter((interaction) => interaction.sessionId === sessionId);
+    if (localSessionInteractions.length === 0) {
+      return { backendConfirmed: true, pendingSync: false, missingInteractionIds: [] };
+    }
+
+    const backendSnapshot = await storageClient.getInteractions(learnerId, { sessionId, limit: 5000 });
+    const backendIds = new Set(backendSnapshot.events.map((interaction) => interaction.id));
+    const missingInteractions = localSessionInteractions.filter((interaction) => !backendIds.has(interaction.id));
+
+    if (missingInteractions.length === 0) {
+      return { backendConfirmed: true, pendingSync: false, missingInteractionIds: [] };
+    }
+
+    try {
+      const batchSuccess = await storageClient.logInteractionsBatch(missingInteractions);
+      if (!batchSuccess) {
+        for (const interaction of missingInteractions) {
+          this.offlineQueue.add({
+            id: interaction.id,
+            type: 'interaction',
+            data: interaction,
+          });
+        }
+        return {
+          backendConfirmed: false,
+          pendingSync: true,
+          error: 'Some interactions are still pending backend sync.',
+          missingInteractionIds: missingInteractions.map((interaction) => interaction.id),
+        };
+      }
+    } catch (error) {
+      console.warn('[DualStorage] ensureSessionInteractionsPersisted batch sync failed:', error);
+      for (const interaction of missingInteractions) {
+        this.offlineQueue.add({
+          id: interaction.id,
+          type: 'interaction',
+          data: interaction,
+        });
+      }
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Interaction sync request failed; queued for retry.',
+        missingInteractionIds: missingInteractions.map((interaction) => interaction.id),
+      };
+    }
+
+    const verification = await storageClient.getInteractions(learnerId, { sessionId, limit: 5000 });
+    const verifiedIds = new Set(verification.events.map((interaction) => interaction.id));
+    const stillMissing = localSessionInteractions
+      .filter((interaction) => !verifiedIds.has(interaction.id))
+      .map((interaction) => interaction.id);
+
+    if (stillMissing.length > 0) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Backend verification failed for some interactions.',
+        missingInteractionIds: stillMissing,
+      };
+    }
+
+    return { backendConfirmed: true, pendingSync: false, missingInteractionIds: [] };
+  }
+
+  async emitSessionEnd(event: InteractionEvent): Promise<CriticalWriteStatus> {
+    if (!event.sessionId) {
+      return {
+        backendConfirmed: false,
+        pendingSync: false,
+        error: 'Missing sessionId for session_end event.',
+      };
+    }
+
+    const syncStatus = await this.ensureSessionInteractionsPersisted(event.learnerId, event.sessionId);
+    if (!syncStatus.backendConfirmed) {
+      return {
+        backendConfirmed: false,
+        pendingSync: syncStatus.pendingSync,
+        error: syncStatus.error || 'Session interactions are not fully synced to backend.',
+      };
+    }
+
+    if (!this.config.useBackend) {
+      const localResult = localStorageManager.saveInteraction(event);
+      if (!localResult.success) {
+        return {
+          backendConfirmed: false,
+          pendingSync: false,
+          error: localResult.quotaExceeded
+            ? 'Failed to save session_end locally: browser storage quota exceeded.'
+            : 'Failed to save session_end locally.',
+        };
+      }
+      return { backendConfirmed: true, pendingSync: false };
+    }
+
+    const healthy = await this.checkHealth();
+    if (!healthy) {
+      this.offlineQueue.add({
+        id: event.id,
+        type: 'interaction',
+        data: event,
+      });
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Session interactions synced, but backend became unavailable before session_end.',
+      };
+    }
+
+    try {
+      const backendSuccess = await storageClient.logInteraction(event);
+      if (!backendSuccess) {
+        this.offlineQueue.add({
+          id: event.id,
+          type: 'interaction',
+          data: event,
+        });
+        return {
+          backendConfirmed: false,
+          pendingSync: true,
+          error: 'Backend did not confirm session_end; queued for retry.',
+        };
+      }
+      localStorageManager.saveInteraction(event);
+      return { backendConfirmed: true, pendingSync: false };
+    } catch (error) {
+      console.warn('[DualStorage] emitSessionEnd backend failure, queued:', error);
+      this.offlineQueue.add({
+        id: event.id,
+        type: 'interaction',
+        data: event,
+      });
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Session_end request failed; queued for retry.',
       };
     }
   }

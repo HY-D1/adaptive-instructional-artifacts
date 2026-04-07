@@ -8,9 +8,10 @@ const saveSessionMock = vi.fn<(learnerId: string, data: Record<string, unknown>)
 const saveTextbookUnitMock = vi.fn<(learnerId: string, unit: Record<string, unknown>) => Promise<boolean>>();
 const getProfileMock = vi.fn<(learnerId: string) => Promise<null>>();
 const getSessionMock = vi.fn<(learnerId: string) => Promise<Record<string, unknown> | null>>();
-const getInteractionsMock = vi.fn<(learnerId: string) => Promise<{ events: unknown[]; total: number }>>();
+const getInteractionsMock = vi.fn<(learnerId: string, options?: Record<string, unknown>) => Promise<{ events: unknown[]; total: number }>>();
 const getTextbookMock = vi.fn<(learnerId: string) => Promise<unknown[]>>();
 const logInteractionMock = vi.fn<(event: unknown) => Promise<boolean>>();
+const logInteractionsBatchMock = vi.fn<(events: unknown[]) => Promise<boolean>>();
 const saveProfileMock = vi.fn<(profile: unknown) => Promise<boolean>>();
 
 let dualStorageModule: DualStorageModule;
@@ -28,6 +29,7 @@ beforeAll(async () => {
       getInteractions: getInteractionsMock,
       getTextbook: getTextbookMock,
       logInteraction: logInteractionMock,
+      logInteractionsBatch: logInteractionsBatchMock,
       saveProfile: saveProfileMock,
     },
   }));
@@ -52,6 +54,7 @@ beforeEach(() => {
   getInteractionsMock.mockReset().mockResolvedValue({ events: [], total: 0 });
   getTextbookMock.mockReset().mockResolvedValue([]);
   logInteractionMock.mockReset().mockResolvedValue(true);
+  logInteractionsBatchMock.mockReset().mockResolvedValue(true);
   saveProfileMock.mockReset().mockResolvedValue(true);
 });
 
@@ -94,6 +97,96 @@ describe('dual-storage critical write semantics', () => {
     expect(result.status.backendConfirmed).toBe(false);
     expect(result.status.pendingSync).toBe(true);
     expect(result.status.error).toMatch(/queued/i);
+  });
+
+  it('verifies session interactions are synced before session_end emit', async () => {
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'exec-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-verify-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-1',
+      successful: true,
+    });
+    logInteractionMock.mockClear();
+    logInteractionsBatchMock.mockClear();
+
+    getInteractionsMock
+      .mockResolvedValueOnce({ events: [], total: 0 })
+      .mockResolvedValueOnce({
+        events: [
+          {
+            id: 'exec-1',
+            learnerId: 'learner-1',
+            sessionId: 'session-verify-1',
+            timestamp: 1_700_000_000_000,
+            eventType: 'execution',
+            problemId: 'problem-1',
+            successful: true,
+          },
+        ],
+        total: 1,
+      });
+
+    const status = await dualStorageModule.dualStorage.ensureSessionInteractionsPersisted(
+      'learner-1',
+      'session-verify-1',
+    );
+
+    expect(status.backendConfirmed).toBe(true);
+    expect(status.pendingSync).toBe(false);
+    expect(logInteractionsBatchMock).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ id: 'exec-1' })]),
+    );
+  });
+
+  it('emits session_end only after backend sync confirmation', async () => {
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'exec-2',
+      learnerId: 'learner-1',
+      sessionId: 'session-verify-2',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-1',
+      successful: true,
+    });
+    logInteractionMock.mockClear();
+
+    getInteractionsMock
+      .mockResolvedValueOnce({
+        events: [
+          {
+            id: 'exec-2',
+            learnerId: 'learner-1',
+            sessionId: 'session-verify-2',
+            timestamp: 1_700_000_000_000,
+            eventType: 'execution',
+            problemId: 'problem-1',
+            successful: true,
+          },
+        ],
+        total: 1,
+      });
+
+    const status = await dualStorageModule.dualStorage.emitSessionEnd({
+      id: 'session-end-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-verify-2',
+      timestamp: 1_700_000_010_000,
+      eventType: 'session_end',
+      problemId: 'problem-1',
+      totalTime: 10_000,
+      timeSpent: 10_000,
+      problemsAttempted: 1,
+      problemsSolved: 1,
+    });
+
+    expect(status.backendConfirmed).toBe(true);
+    expect(status.pendingSync).toBe(false);
+    expect(logInteractionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'session-end-1', eventType: 'session_end' }),
+    );
   });
 });
 

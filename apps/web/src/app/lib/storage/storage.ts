@@ -631,7 +631,19 @@ class StorageManager {
    */
   saveInteraction(event: InteractionEvent): { success: boolean; quotaExceeded?: boolean } {
     const sessionId = event.sessionId || this.getActiveSessionId();
-    const normalizedEvent = { ...event, sessionId };
+    let normalizedEvent: InteractionEvent = { ...event, sessionId };
+    if (normalizedEvent.eventType === 'hint_view') {
+      normalizedEvent = this.normalizeHintViewForExport(normalizedEvent);
+    }
+    if (normalizedEvent.eventType === 'concept_view') {
+      const conceptId = normalizedEvent.conceptId || normalizedEvent.conceptIds?.[0];
+      normalizedEvent = {
+        ...normalizedEvent,
+        conceptId,
+        conceptIds: conceptId ? [conceptId] : normalizedEvent.conceptIds,
+        source: normalizedEvent.source || (normalizedEvent.unitId ? 'textbook' : 'problem'),
+      };
+    }
     const interactions = this.getAllInteractions();
     interactions.push(normalizedEvent);
     
@@ -644,6 +656,10 @@ class StorageManager {
     }
     
     return result;
+  }
+
+  logInteraction(event: InteractionEvent): { success: boolean; quotaExceeded?: boolean } {
+    return this.saveInteraction(event);
   }
 
   /**
@@ -1188,18 +1204,59 @@ class StorageManager {
     learnerId: string;
     problemId: string;
     conceptId: string;
-    unitId: string;
+    source: 'problem' | 'hint' | 'textbook';
+    unitId?: string;
     sessionId?: string;
   }): { success: boolean; quotaExceeded?: boolean } {
+    const resolvedSessionId = params.sessionId || this.getActiveSessionId();
+    const alreadyLogged = this
+      .getInteractionsByLearner(params.learnerId)
+      .some((interaction) => {
+        if (interaction.eventType !== 'concept_view') return false;
+        if ((interaction.sessionId || '') !== (resolvedSessionId || '')) return false;
+        if (interaction.problemId !== params.problemId) return false;
+        const interactionConceptId = interaction.conceptId || interaction.conceptIds?.[0];
+        return interactionConceptId === params.conceptId && interaction.source === params.source;
+      });
+
+    if (alreadyLogged) {
+      return { success: true };
+    }
+
     const event: InteractionEvent = {
       id: this.generateEventId('concept-view'),
-      sessionId: params.sessionId || this.getActiveSessionId(),
+      sessionId: resolvedSessionId,
       learnerId: params.learnerId,
       timestamp: Date.now(),
       eventType: 'concept_view',
       problemId: params.problemId,
       unitId: params.unitId,
+      conceptId: params.conceptId,
       conceptIds: [params.conceptId],
+      source: params.source,
+    };
+    return this.saveInteraction(event);
+  }
+
+  logSessionEnd(params: {
+    learnerId: string;
+    sessionId: string;
+    problemId: string;
+    totalTime: number;
+    problemsAttempted: number;
+    problemsSolved: number;
+  }): { success: boolean; quotaExceeded?: boolean } {
+    const event: InteractionEvent = {
+      id: this.generateEventId('session-end'),
+      sessionId: params.sessionId,
+      learnerId: params.learnerId,
+      timestamp: Date.now(),
+      eventType: 'session_end',
+      problemId: params.problemId,
+      totalTime: params.totalTime,
+      timeSpent: params.totalTime,
+      problemsAttempted: params.problemsAttempted,
+      problemsSolved: params.problemsSolved,
     };
     return this.saveInteraction(event);
   }
@@ -2716,7 +2773,8 @@ class StorageManager {
         'hdi_trajectory_updated',
         'dependency_intervention_triggered',
         'escalation_triggered',
-        'profile_adjusted'
+        'profile_adjusted',
+        'session_end'
       ]);
       
       const conceptIds = this.extractConceptIdsFromEvent(event);
@@ -2994,7 +3052,7 @@ class StorageManager {
       'textbook_add', 'textbook_update', 'coverage_change',
       // Week 3 D8: Guidance Ladder events
       'guidance_request', 'guidance_view', 'guidance_escalate',
-      'textbook_unit_upsert', 'concept_view', 'source_view'
+      'textbook_unit_upsert', 'concept_view', 'session_end', 'source_view'
     ];
     const normalizedEventType = validEventTypes.includes(interaction.eventType)
       ? interaction.eventType

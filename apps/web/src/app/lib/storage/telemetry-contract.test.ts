@@ -36,6 +36,7 @@ describe('telemetry export contract', () => {
       sessionId: 'session-1',
       unitId: 'unit-1',
       conceptId: 'joins',
+      source: 'textbook',
       problemId: 'problem-joins-1',
     });
 
@@ -48,7 +49,9 @@ describe('telemetry export contract', () => {
       sessionId: 'session-1',
       unitId: 'unit-1',
       problemId: 'problem-joins-1',
+      conceptId: 'joins',
       conceptIds: ['joins'],
+      source: 'textbook',
     });
   });
 });

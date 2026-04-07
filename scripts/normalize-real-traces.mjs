@@ -37,7 +37,12 @@ const EVENT_TYPE_ALIASES = {
   textbook_add: 'textbook_add',
   textbookadd: 'textbook_add',
   textbook_update: 'textbook_update',
-  textbookupdate: 'textbook_update'
+  textbookupdate: 'textbook_update',
+  conceptview: 'concept_view',
+  sessionend: 'session_end',
+  session_end: 'session_end',
+  sessionended: 'session_ended',
+  session_ended: 'session_ended'
 };
 
 const SUBTYPE_ALIASES = {
@@ -88,8 +93,10 @@ const ALLOWED_EVENT_TYPES = new Set([
   'pdf_index_uploaded',
   // Session events
   'session_started',
+  'session_end',
   'session_ended',
   // Concept events
+  'concept_view',
   'concept_extraction',
   'prerequisite_violation_detected'
 ]);
@@ -158,6 +165,44 @@ function readFirstNumber(...values) {
     }
   }
   return undefined;
+}
+
+function parseConceptIds(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+      .filter(Boolean);
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const trimmed = value.trim();
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+            .filter(Boolean);
+        }
+      } catch {
+        // Fall through to treat as single value
+      }
+    }
+    return [trimmed];
+  }
+
+  return [];
+}
+
+function normalizeConceptSource(source) {
+  if (typeof source !== 'string' || !source.trim()) {
+    return '';
+  }
+  const normalized = source.trim().toLowerCase();
+  if (normalized === 'problem' || normalized === 'hint' || normalized === 'textbook') {
+    return normalized;
+  }
+  return '';
 }
 
 function normalizeTimestamp(value, fallback) {
@@ -401,6 +446,11 @@ function normalizeRawRecord(record, index, subtypeIndex) {
     event.hintLevel = Math.max(1, Math.min(3, Math.round(hintLevel)));
   }
 
+  const hintId = readFirstString(record.hintId, record.hint_id);
+  if (eventType === 'hint_view' && hintId) {
+    event.hintId = hintId;
+  }
+
   const helpRequestIndex = readFirstNumber(record.helpRequestIndex, record.help_request_index, record.requestIndex, record.request_index);
   if ((eventType === 'hint_view' || eventType === 'explanation_view') && Number.isFinite(helpRequestIndex)) {
     event.helpRequestIndex = Math.max(1, Math.round(helpRequestIndex));
@@ -419,6 +469,39 @@ function normalizeRawRecord(record, index, subtypeIndex) {
   const policyVersion = readFirstString(record.policyVersion, record.policy_version);
   if ((eventType === 'hint_view' || eventType === 'explanation_view') && policyVersion) {
     event.policyVersion = policyVersion;
+  }
+
+  if (eventType === 'concept_view') {
+    const conceptId = readFirstString(record.conceptId, record.concept_id);
+    const conceptIds = parseConceptIds(readFirstValue(record.conceptIds, record.concept_ids));
+    const primaryConceptId = conceptId || conceptIds[0];
+    if (primaryConceptId) {
+      event.conceptId = primaryConceptId;
+      event.conceptIds = [primaryConceptId];
+    }
+
+    const source = normalizeConceptSource(readFirstString(record.source));
+    if (source) {
+      event.source = source;
+    }
+  }
+
+  if (eventType === 'session_end' || eventType === 'session_ended') {
+    const totalTime = readFirstNumber(record.totalTime, record.total_time, record.timeSpent, record.time_spent);
+    if (Number.isFinite(totalTime)) {
+      event.totalTime = Math.max(0, Math.round(totalTime));
+      event.timeSpent = event.totalTime;
+    }
+
+    const problemsAttempted = readFirstNumber(record.problemsAttempted, record.problems_attempted);
+    if (Number.isFinite(problemsAttempted)) {
+      event.problemsAttempted = Math.max(0, Math.round(problemsAttempted));
+    }
+
+    const problemsSolved = readFirstNumber(record.problemsSolved, record.problems_solved);
+    if (Number.isFinite(problemsSolved)) {
+      event.problemsSolved = Math.max(0, Math.round(problemsSolved));
+    }
   }
 
   // Backward compat: promote profile_assigned → condition_assigned fields
@@ -487,8 +570,8 @@ function assignSessionAndHelpMetadata(events, sqlEngagePolicyVersion, subtypeInd
       event.policyVersion = sqlEngagePolicyVersion;
     }
 
-    if (event.eventType === 'hint_view') {
-      delete event.hintId;
+    if (event.eventType === 'hint_view' && (!event.hintId || !String(event.hintId).trim())) {
+      event.hintId = `sql-engage:${event.sqlEngageSubtype}:hint:${event.sqlEngageRowId}:L${event.hintLevel}`;
     }
   }
 
