@@ -1209,19 +1209,8 @@ class StorageManager {
     sessionId?: string;
   }): { success: boolean; quotaExceeded?: boolean } {
     const resolvedSessionId = params.sessionId || this.getActiveSessionId();
-    const alreadyLogged = this
-      .getInteractionsByLearner(params.learnerId)
-      .some((interaction) => {
-        if (interaction.eventType !== 'concept_view') return false;
-        if ((interaction.sessionId || '') !== (resolvedSessionId || '')) return false;
-        if (interaction.problemId !== params.problemId) return false;
-        const interactionConceptId = interaction.conceptId || interaction.conceptIds?.[0];
-        return interactionConceptId === params.conceptId && interaction.source === params.source;
-      });
-
-    if (alreadyLogged) {
-      return { success: true };
-    }
+    // NOTE: Research requires lossless logging - each concept surfacing creates a distinct event.
+    // Timestamps and unique IDs allow sequence reconstruction for exposure analysis.
 
     const event: InteractionEvent = {
       id: this.generateEventId('concept-view'),

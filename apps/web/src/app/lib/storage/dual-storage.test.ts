@@ -329,6 +329,104 @@ describe('dual-storage critical write semantics', () => {
       totalTime: 12_000,
     });
   });
+
+  // RESEARCH-4: Flush verification requires exact ID matching
+  // This test verifies that ensureSessionInteractionsPersisted compares local and backend IDs exactly
+  it('verifies session persistence using exact id equality', async () => {
+    // Save multiple interactions locally with known IDs
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'exact-id-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-exact-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'hint_view',
+      problemId: 'problem-1',
+      hintId: 'hint-1',
+    });
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'exact-id-2',
+      learnerId: 'learner-1',
+      sessionId: 'session-exact-1',
+      timestamp: 1_700_000_001_000,
+      eventType: 'concept_view',
+      problemId: 'problem-1',
+      conceptId: 'joins',
+      source: 'hint',
+    });
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'exact-id-3',
+      learnerId: 'learner-1',
+      sessionId: 'session-exact-1',
+      timestamp: 1_700_000_002_000,
+      eventType: 'execution',
+      problemId: 'problem-1',
+      successful: true,
+    });
+
+    logInteractionsBatchMock.mockClear();
+
+    // Backend returns interactions with EXACT same IDs
+    getInteractionsMock.mockResolvedValueOnce({
+      events: [
+        { id: 'exact-id-1', learnerId: 'learner-1', sessionId: 'session-exact-1', eventType: 'hint_view' },
+        { id: 'exact-id-2', learnerId: 'learner-1', sessionId: 'session-exact-1', eventType: 'concept_view' },
+        { id: 'exact-id-3', learnerId: 'learner-1', sessionId: 'session-exact-1', eventType: 'execution' },
+      ],
+      total: 3,
+    });
+
+    const status = await dualStorageModule.dualStorage.ensureSessionInteractionsPersisted(
+      'learner-1',
+      'session-exact-1',
+    );
+
+    // Should confirm all interactions are persisted since IDs match exactly
+    expect(status.backendConfirmed).toBe(true);
+    expect(status.pendingSync).toBe(false);
+    expect(status.missingInteractionIds).toHaveLength(0);
+  });
+
+  it('detects missing interactions when backend returns different ids', async () => {
+    // Save interaction locally with known ID
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'local-id-abc',
+      learnerId: 'learner-1',
+      sessionId: 'session-missing-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'hint_view',
+      problemId: 'problem-1',
+      hintId: 'hint-1',
+    });
+
+    logInteractionsBatchMock.mockClear();
+
+    // Backend returns same interaction data but with DIFFERENT ID (this was the bug)
+    getInteractionsMock.mockResolvedValueOnce({
+      events: [
+        {
+          id: 'backend-generated-different-id',
+          learnerId: 'learner-1',
+          sessionId: 'session-missing-1',
+          eventType: 'hint_view',
+          hintId: 'hint-1',
+        },
+      ],
+      total: 1,
+    });
+
+    logInteractionsBatchMock.mockResolvedValueOnce(true);
+
+    const status = await dualStorageModule.dualStorage.ensureSessionInteractionsPersisted(
+      'learner-1',
+      'session-missing-1',
+    );
+
+    // Should detect that local-id-abc is missing from backend
+    // With ID preservation fix, backend should return same ID; without it, this syncs the missing event
+    expect(logInteractionsBatchMock).toHaveBeenCalledWith(
+      expect.arrayContaining([expect.objectContaining({ id: 'local-id-abc' })]),
+    );
+  });
 });
 
 describe('dual-storage restore hydration', () => {

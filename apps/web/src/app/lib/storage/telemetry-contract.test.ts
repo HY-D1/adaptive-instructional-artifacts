@@ -54,4 +54,96 @@ describe('telemetry export contract', () => {
       source: 'textbook',
     });
   });
+
+  // RESEARCH-4: Concept exposure analysis requires lossless logging
+  // Each concept surfacing must create a distinct event for time-based analysis
+  it('creates distinct concept_view events for repeated surfacing (no dedupe)', () => {
+    // First surfacing
+    storage.logConceptView({
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      problemId: 'problem-1',
+      conceptId: 'joins',
+      source: 'hint',
+    });
+
+    // Same concept surfaced again in same session/problem/source
+    storage.logConceptView({
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      problemId: 'problem-1',
+      conceptId: 'joins',
+      source: 'hint',
+    });
+
+    // Third surfacing
+    storage.logConceptView({
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      problemId: 'problem-1',
+      conceptId: 'joins',
+      source: 'hint',
+    });
+
+    const exported = storage.exportData({ allHistory: true });
+
+    // Should have 3 distinct events, not 1
+    expect(exported.interactions).toHaveLength(3);
+
+    // All should be concept_view with correct conceptId and source
+    exported.interactions.forEach((interaction) => {
+      expect(interaction).toMatchObject({
+        eventType: 'concept_view',
+        conceptId: 'joins',
+        source: 'hint',
+      });
+    });
+
+    // Each event should have unique id
+    const ids = exported.interactions.map((i) => i.id);
+    expect(new Set(ids).size).toBe(3); // All unique
+
+    // Timestamps should be non-decreasing
+    const timestamps = exported.interactions.map((i) => i.timestamp);
+    expect(timestamps[0]).toBeLessThanOrEqual(timestamps[1]);
+    expect(timestamps[1]).toBeLessThanOrEqual(timestamps[2]);
+  });
+
+  it('creates distinct concept_view events across different sources', () => {
+    // Same concept from problem source
+    storage.logConceptView({
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      problemId: 'problem-1',
+      conceptId: 'joins',
+      source: 'problem',
+    });
+
+    // Same concept from hint source
+    storage.logConceptView({
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      problemId: 'problem-1',
+      conceptId: 'joins',
+      source: 'hint',
+    });
+
+    // Same concept from textbook source
+    storage.logConceptView({
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      problemId: 'problem-1',
+      conceptId: 'joins',
+      source: 'textbook',
+    });
+
+    const exported = storage.exportData({ allHistory: true });
+
+    expect(exported.interactions).toHaveLength(3);
+
+    const sources = exported.interactions.map((i) => i.source);
+    expect(sources).toContain('problem');
+    expect(sources).toContain('hint');
+    expect(sources).toContain('textbook');
+  });
 });

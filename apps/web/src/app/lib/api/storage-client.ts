@@ -622,6 +622,8 @@ function normalizeInteractionTimestampToIso(timestamp: string | number): string 
 function convertToBackendInteraction(event: InteractionEvent): Partial<BackendInteraction> {
   const timestampIso = normalizeInteractionTimestampToIso(event.timestamp);
   return {
+    // Identity preservation for research analysis and flush verification
+    id: event.id,
     // Required fields
     learnerId: event.learnerId,
     sessionId: event.sessionId,

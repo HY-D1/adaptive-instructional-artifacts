@@ -130,4 +130,165 @@ describe('storage-client telemetry contract', () => {
       source: 'hint',
     });
   });
+
+  // RESEARCH-4: ID preservation for flush verification and cross-event references
+  it('preserves client event id in convertToBackendInteraction for single events', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { id: 'client-event-id-123' },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    const { logInteraction } = await import('./storage-client');
+
+    await logInteraction({
+      id: 'client-event-id-123',
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'hint_view',
+      problemId: 'problem-1',
+      hintId: 'hint-1',
+    });
+
+    const [, request] = fetchMock.mock.calls[0];
+    const body = JSON.parse(String(request?.body));
+    expect(body.id).toBe('client-event-id-123');
+  });
+
+  it('preserves client event ids in batch logging', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { count: 2 },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    const { logInteractionsBatch } = await import('./storage-client');
+
+    await logInteractionsBatch([
+      {
+        id: 'event-1',
+        learnerId: 'learner-1',
+        sessionId: 'session-1',
+        timestamp: 1_700_000_000_000,
+        eventType: 'hint_view',
+        problemId: 'problem-1',
+        hintId: 'hint-1',
+      },
+      {
+        id: 'event-2',
+        learnerId: 'learner-1',
+        sessionId: 'session-1',
+        timestamp: 1_700_000_001_000,
+        eventType: 'concept_view',
+        problemId: 'problem-1',
+        conceptId: 'joins',
+        source: 'hint',
+      },
+    ]);
+
+    const [, request] = fetchMock.mock.calls[0];
+    const body = JSON.parse(String(request?.body));
+    expect(body.events).toHaveLength(2);
+    expect(body.events[0].id).toBe('event-1');
+    expect(body.events[1].id).toBe('event-2');
+  });
+
+  it('preserves hintId in batch logging', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { count: 2 },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    const { logInteractionsBatch } = await import('./storage-client');
+
+    await logInteractionsBatch([
+      {
+        id: 'hint-1',
+        learnerId: 'learner-1',
+        sessionId: 'session-1',
+        timestamp: 1_700_000_000_000,
+        eventType: 'hint_view',
+        problemId: 'problem-1',
+        hintId: 'sql-engage:joins:hint:1:L2',
+        hintLevel: 2,
+      },
+      {
+        id: 'hint-2',
+        learnerId: 'learner-1',
+        sessionId: 'session-1',
+        timestamp: 1_700_000_001_000,
+        eventType: 'hint_view',
+        problemId: 'problem-1',
+        hintId: 'sql-engage:joins:hint:1:L3',
+        hintLevel: 3,
+      },
+    ]);
+
+    const [, request] = fetchMock.mock.calls[0];
+    const body = JSON.parse(String(request?.body));
+    expect(body.events[0].hintId).toBe('sql-engage:joins:hint:1:L2');
+    expect(body.events[1].hintId).toBe('sql-engage:joins:hint:1:L3');
+  });
+
+  it('preserves session_end summary fields', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { id: 'session-end-1' },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    const { logInteraction } = await import('./storage-client');
+
+    await logInteraction({
+      id: 'session-end-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'session_end',
+      problemId: 'problem-1',
+      totalTime: 3600000,
+      problemsAttempted: 5,
+      problemsSolved: 3,
+    });
+
+    const [, request] = fetchMock.mock.calls[0];
+    const body = JSON.parse(String(request?.body));
+    expect(body).toMatchObject({
+      id: 'session-end-1',
+      eventType: 'session_end',
+      totalTime: 3600000,
+      problemsAttempted: 5,
+      problemsSolved: 3,
+    });
+  });
 });
