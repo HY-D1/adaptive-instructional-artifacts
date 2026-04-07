@@ -11,6 +11,12 @@ const DEFAULT_RUNTIME_PATH = join(repoRoot, 'apps/server/src/db/neon.ts');
 const DEFAULT_MIGRATION_PATH = join(repoRoot, 'apps/server/src/db/migrate-neon.sql');
 
 export const REQUIRED_RESEARCH_COLUMNS = [
+  ['hint_id', 'TEXT'],
+  ['concept_id', 'TEXT'],
+  ['source', 'TEXT'],
+  ['total_time', 'INTEGER'],
+  ['problems_attempted', 'INTEGER'],
+  ['problems_solved', 'INTEGER'],
   ['learner_profile_id', 'TEXT'],
   ['escalation_trigger_reason', 'TEXT'],
   ['error_count_at_escalation', 'INTEGER'],

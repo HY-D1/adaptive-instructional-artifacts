@@ -54,7 +54,7 @@ const retrievedChunkSchema = z.object({
   snippet: z.string().optional(),
 });
 
-const createInteractionSchema = z.object({
+export const createInteractionSchema = z.object({
   // Required fields
   learnerId: z.string().min(1),
   sessionId: z.string().optional(),
@@ -109,6 +109,10 @@ const createInteractionSchema = z.object({
   // Concept fields
   conceptId: z.string().optional(),
   conceptIds: z.array(z.string()).optional(),
+  source: z.enum(['problem', 'hint', 'textbook']).optional(),
+  totalTime: z.number().optional(),
+  problemsAttempted: z.number().optional(),
+  problemsSolved: z.number().optional(),
   
   // Guidance Ladder fields
   requestType: z.enum(['hint', 'explanation', 'textbook']).optional(),

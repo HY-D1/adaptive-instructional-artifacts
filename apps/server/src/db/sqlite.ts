@@ -346,6 +346,7 @@ export async function getActiveSession(learnerId: string): Promise<Session | nul
 export async function createInteraction(data: CreateInteractionRequest & { id: string }): Promise<Interaction> {
   const db = getDb();
   const now = new Date().toISOString();
+  const payload = buildSqliteInteractionPayload(data);
 
   const interaction: Interaction = {
     id: data.id,
@@ -354,7 +355,8 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
     timestamp: data.timestamp,
     eventType: data.eventType,
     problemId: data.problemId,
-    payload: data.payload || {},
+    ...payload,
+    payload,
     createdAt: now,
   };
 
@@ -373,6 +375,29 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
   ]);
 
   return interaction;
+}
+
+export function buildSqliteInteractionPayload(
+  data: CreateInteractionRequest & { id?: string }
+): Record<string, unknown> {
+  const {
+    id: _id,
+    learnerId: _learnerId,
+    sectionId: _sectionId,
+    sessionId: _sessionId,
+    timestamp: _timestamp,
+    eventType: _eventType,
+    problemId: _problemId,
+    payload,
+    ...fields
+  } = data;
+
+  return Object.fromEntries(
+    Object.entries({
+      ...(payload || {}),
+      ...fields,
+    }).filter(([, value]) => value !== undefined)
+  );
 }
 
 export async function getInteractionsByLearner(
@@ -646,14 +671,16 @@ function rowToLearner(row: LearnerRow): Learner {
 
 function rowToInteraction(row: InteractionRow): Interaction {
   try {
+    const payload = JSON.parse(row.payload);
     return {
+      ...payload,
       id: row.id,
       learnerId: row.learner_id,
       sessionId: row.session_id,
       timestamp: row.timestamp,
       eventType: row.event_type as EventType,
       problemId: row.problem_id,
-      payload: JSON.parse(row.payload),
+      payload,
       createdAt: row.created_at,
     };
   } catch {

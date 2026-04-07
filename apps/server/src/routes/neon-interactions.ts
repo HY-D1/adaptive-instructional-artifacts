@@ -11,6 +11,8 @@ import {
 
 const router = Router();
 
+type NeonInteractionEventInput = Record<string, any>;
+
 // ============================================================================
 // Auth helpers
 // ============================================================================
@@ -67,6 +69,61 @@ function logInteractionWrite(req: Request, target: ScopedTarget): void {
     targetLearnerId: target.learnerId,
     targetSectionId: target.sectionId,
   });
+}
+
+export function buildNeonInteractionPayload(event: NeonInteractionEventInput): Record<string, unknown> {
+  // Extract payload - frontend sends nested payload, direct API calls send flat structure
+  // RESEARCH-3B: Explicitly extract bandit/escalation fields for proper column mapping
+  const basePayload = event.payload || {
+    sessionId: event.sessionId,
+    code: event.code,
+    error: event.error,
+    successful: event.successful,
+    hintText: event.hintText,
+    hintLevel: event.hintLevel,
+    // Escalation Profile fields (RESEARCH-3B)
+    profileId: event.profileId,
+    assignmentStrategy: event.assignmentStrategy,
+    previousThresholds: event.previousThresholds,
+    newThresholds: event.newThresholds,
+    // Bandit fields (RESEARCH-3B)
+    selectedArm: event.selectedArm,
+    selectionMethod: event.selectionMethod,
+    armStatsAtSelection: event.armStatsAtSelection,
+    reward: event.reward,
+    newAlpha: event.newAlpha,
+    newBeta: event.newBeta,
+    // HDI fields (RESEARCH-3B)
+    hdi: event.hdi,
+    hdiLevel: event.hdiLevel,
+    hdiComponents: event.hdiComponents,
+    trend: event.trend,
+    slope: event.slope,
+    interventionType: event.interventionType,
+    // Trigger reason for escalation
+    trigger: event.trigger,
+    // Include other common fields
+    ...event,
+  };
+  // RESEARCH-4: Always merge canonical study fields from event top-level into payload.
+  // This ensures they reach the DB columns regardless of whether event.payload was set.
+  return {
+    ...basePayload,
+    hintId: event.hintId ?? basePayload.hintId,
+    conceptId: event.conceptId ?? basePayload.conceptId,
+    source: event.source ?? basePayload.source,
+    totalTime: event.totalTime ?? basePayload.totalTime,
+    problemsAttempted: event.problemsAttempted ?? basePayload.problemsAttempted,
+    problemsSolved: event.problemsSolved ?? basePayload.problemsSolved,
+    selectedArm: event.selectedArm ?? basePayload.selectedArm,
+    learnerProfileId: event.learnerProfileId ?? basePayload.learnerProfileId,
+    escalationTriggerReason: event.escalationTriggerReason ?? basePayload.escalationTriggerReason,
+    errorCountAtEscalation: event.errorCountAtEscalation ?? basePayload.errorCountAtEscalation,
+    timeToEscalation: event.timeToEscalation ?? basePayload.timeToEscalation,
+    strategyAssigned: event.strategyAssigned ?? basePayload.strategyAssigned,
+    strategyUpdated: event.strategyUpdated ?? basePayload.strategyUpdated,
+    rewardValue: event.rewardValue ?? basePayload.rewardValue,
+  };
 }
 
 async function resolveScopedTarget(
@@ -138,57 +195,7 @@ router.post('/', async (req: Request, res: Response) => {
 
     const id = event.id || `${event.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
 
-    // Extract payload - frontend sends nested payload, direct API calls send flat structure
-    // RESEARCH-3B: Explicitly extract bandit/escalation fields for proper column mapping
-    const basePayload = event.payload || {
-      sessionId: event.sessionId,
-      code: event.code,
-      error: event.error,
-      successful: event.successful,
-      hintText: event.hintText,
-      hintLevel: event.hintLevel,
-      // Escalation Profile fields (RESEARCH-3B)
-      profileId: event.profileId,
-      assignmentStrategy: event.assignmentStrategy,
-      previousThresholds: event.previousThresholds,
-      newThresholds: event.newThresholds,
-      // Bandit fields (RESEARCH-3B)
-      selectedArm: event.selectedArm,
-      selectionMethod: event.selectionMethod,
-      armStatsAtSelection: event.armStatsAtSelection,
-      reward: event.reward,
-      newAlpha: event.newAlpha,
-      newBeta: event.newBeta,
-      // HDI fields (RESEARCH-3B)
-      hdi: event.hdi,
-      hdiLevel: event.hdiLevel,
-      hdiComponents: event.hdiComponents,
-      trend: event.trend,
-      slope: event.slope,
-      interventionType: event.interventionType,
-      // Trigger reason for escalation
-      trigger: event.trigger,
-      // Include other common fields
-      ...event,
-    };
-    // RESEARCH-4: Always merge canonical study fields from event top-level into payload.
-    // This ensures they reach the DB columns regardless of whether event.payload was set.
-    const payload = {
-      ...basePayload,
-      conceptId: event.conceptId ?? basePayload.conceptId,
-      source: event.source ?? basePayload.source,
-      totalTime: event.totalTime ?? basePayload.totalTime,
-      problemsAttempted: event.problemsAttempted ?? basePayload.problemsAttempted,
-      problemsSolved: event.problemsSolved ?? basePayload.problemsSolved,
-      selectedArm: event.selectedArm ?? basePayload.selectedArm,
-      learnerProfileId: event.learnerProfileId ?? basePayload.learnerProfileId,
-      escalationTriggerReason: event.escalationTriggerReason ?? basePayload.escalationTriggerReason,
-      errorCountAtEscalation: event.errorCountAtEscalation ?? basePayload.errorCountAtEscalation,
-      timeToEscalation: event.timeToEscalation ?? basePayload.timeToEscalation,
-      strategyAssigned: event.strategyAssigned ?? basePayload.strategyAssigned,
-      strategyUpdated: event.strategyUpdated ?? basePayload.strategyUpdated,
-      rewardValue: event.rewardValue ?? basePayload.rewardValue,
-    };
+    const payload = buildNeonInteractionPayload(event);
 
     const interaction = await db.createInteraction({
       id,
@@ -232,56 +239,7 @@ router.post('/batch', async (req: Request, res: Response) => {
       event.learnerId = scopedTarget.learnerId;
       event.sectionId = scopedTarget.sectionId;
       const id = event.id || `${event.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
-      // Extract payload - frontend sends nested payload, direct API calls send flat structure
-      // RESEARCH-3B: Explicitly extract bandit/escalation fields for proper column mapping
-      const basePayload = event.payload || {
-        sessionId: event.sessionId,
-        code: event.code,
-        error: event.error,
-        successful: event.successful,
-        hintText: event.hintText,
-        hintLevel: event.hintLevel,
-        // Escalation Profile fields (RESEARCH-3B)
-        profileId: event.profileId,
-        assignmentStrategy: event.assignmentStrategy,
-        previousThresholds: event.previousThresholds,
-        newThresholds: event.newThresholds,
-        // Bandit fields (RESEARCH-3B)
-        selectedArm: event.selectedArm,
-        selectionMethod: event.selectionMethod,
-        armStatsAtSelection: event.armStatsAtSelection,
-        reward: event.reward,
-        newAlpha: event.newAlpha,
-        newBeta: event.newBeta,
-        // HDI fields (RESEARCH-3B)
-        hdi: event.hdi,
-        hdiLevel: event.hdiLevel,
-        hdiComponents: event.hdiComponents,
-        trend: event.trend,
-        slope: event.slope,
-        interventionType: event.interventionType,
-        // Trigger reason for escalation
-        trigger: event.trigger,
-        // Include other common fields
-        ...event,
-      };
-      // RESEARCH-4: Always merge canonical study fields
-      const payload = {
-        ...basePayload,
-        conceptId: event.conceptId ?? basePayload.conceptId,
-        source: event.source ?? basePayload.source,
-        totalTime: event.totalTime ?? basePayload.totalTime,
-        problemsAttempted: event.problemsAttempted ?? basePayload.problemsAttempted,
-        problemsSolved: event.problemsSolved ?? basePayload.problemsSolved,
-        selectedArm: event.selectedArm ?? basePayload.selectedArm,
-        learnerProfileId: event.learnerProfileId ?? basePayload.learnerProfileId,
-        escalationTriggerReason: event.escalationTriggerReason ?? basePayload.escalationTriggerReason,
-        errorCountAtEscalation: event.errorCountAtEscalation ?? basePayload.errorCountAtEscalation,
-        timeToEscalation: event.timeToEscalation ?? basePayload.timeToEscalation,
-        strategyAssigned: event.strategyAssigned ?? basePayload.strategyAssigned,
-        strategyUpdated: event.strategyUpdated ?? basePayload.strategyUpdated,
-        rewardValue: event.rewardValue ?? basePayload.rewardValue,
-      };
+      const payload = buildNeonInteractionPayload(event);
       const interaction = await db.createInteraction({
         id,
         learnerId: scopedTarget.learnerId,

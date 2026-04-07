@@ -23,6 +23,16 @@ import { getInstructorScopedLearnerIds, getOwnedSectionsByInstructor } from '../
 
 const router = Router();
 
+export const RESEARCH_EXPORT_FIELDS_PRESERVED = [
+  'id', 'learnerId', 'sectionId', 'sessionId', 'timestamp', 'eventType', 'problemId',
+  'problemSetId', 'problemNumber', 'code', 'error', 'errorSubtypeId', 'hintId',
+  'executionTimeMs', 'rung', 'fromRung', 'toRung', 'trigger', 'conceptId',
+  'conceptIds', 'source', 'totalTime', 'problemsAttempted', 'problemsSolved',
+  'hdi', 'hdiLevel', 'hdiComponents', 'scheduleId', 'promptId', 'response',
+  'isCorrect', 'unitId', 'action', 'sourceInteractionIds', 'retrievedSourceIds',
+  'payload', 'metadata', 'createdAt'
+];
+
 async function getScopedLearnerIdsForInstructor(instructorUserId: string): Promise<Set<string>> {
   const ids = await getInstructorScopedLearnerIds(instructorUserId);
   return new Set(ids);
@@ -262,14 +272,7 @@ router.get('/export', async (req, res) => {
         escalationEventCount: escalationEvents.length,
         hdiReadingCount: hdiEvents.length,
         banditEventCount: banditEvents.length,
-        fieldsPreserved: [
-          'id', 'learnerId', 'sectionId', 'sessionId', 'timestamp', 'eventType', 'problemId',
-          'problemSetId', 'problemNumber', 'code', 'error', 'errorSubtypeId', 'hintId',
-          'executionTimeMs', 'rung', 'fromRung', 'toRung', 'trigger', 'conceptIds',
-          'hdi', 'hdiLevel', 'hdiComponents', 'scheduleId', 'promptId', 'response',
-          'isCorrect', 'unitId', 'action', 'sourceInteractionIds', 'retrievedSourceIds',
-          'payload', 'metadata', 'createdAt'
-        ],
+        fieldsPreserved: RESEARCH_EXPORT_FIELDS_PRESERVED,
       },
       learners,
       authEvents,
@@ -357,7 +360,7 @@ router.get('/learners', async (req, res) => {
 // Helper Functions
 // ============================================================================
 
-function convertInteractionsToCsv(interactions: Interaction[]): string {
+export function convertInteractionsToCsv(interactions: Interaction[]): string {
   const headers = [
     'id',
     'learnerId',
@@ -376,7 +379,12 @@ function convertInteractionsToCsv(interactions: Interaction[]): string {
     'fromRung',
     'toRung',
     'trigger',
+    'conceptId',
     'conceptIds',
+    'source',
+    'totalTime',
+    'problemsAttempted',
+    'problemsSolved',
     'hdi',
     'hdiLevel',
     'hdiComponents',
@@ -418,7 +426,12 @@ function convertInteractionsToCsv(interactions: Interaction[]): string {
     i.fromRung?.toString() || '',
     i.toRung?.toString() || '',
     i.trigger || '',
+    i.conceptId || '',
     escapeCsv(JSON.stringify(i.conceptIds || [])),
+    i.source || '',
+    i.totalTime?.toString() || '',
+    i.problemsAttempted?.toString() || '',
+    i.problemsSolved?.toString() || '',
     i.hdi?.toString() || '',
     i.hdiLevel || '',
     escapeCsv(JSON.stringify(i.hdiComponents || {})),
