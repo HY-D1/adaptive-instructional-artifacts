@@ -188,6 +188,147 @@ describe('dual-storage critical write semantics', () => {
       expect.objectContaining({ id: 'session-end-1', eventType: 'session_end' }),
     );
   });
+
+  it('keeps session_end pending when pre-end interaction sync fails', async () => {
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'exec-pending-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-pending-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-1',
+      successful: true,
+    });
+    logInteractionMock.mockClear();
+    logInteractionsBatchMock.mockClear();
+    getInteractionsMock.mockResolvedValueOnce({ events: [], total: 0 });
+    logInteractionsBatchMock.mockResolvedValueOnce(false);
+
+    const status = await dualStorageModule.dualStorage.emitSessionEnd({
+      id: 'session-end-pending-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-pending-1',
+      timestamp: 1_700_000_010_000,
+      eventType: 'session_end',
+      problemId: 'problem-1',
+      totalTime: 10_000,
+      timeSpent: 10_000,
+      problemsAttempted: 1,
+      problemsSolved: 1,
+    });
+
+    expect(status.backendConfirmed).toBe(false);
+    expect(status.pendingSync).toBe(true);
+    expect(logInteractionMock).not.toHaveBeenCalled();
+    expect(localStorage.getItem('sql-adapt-pending-session-ends') ?? '').toContain('session-end-pending-1');
+  });
+
+  it('flushes pending session_end after interactions verify', async () => {
+    const storageWithPendingFlush = dualStorageModule.dualStorage as typeof dualStorageModule.dualStorage & {
+      flushPendingSessionEnds?: () => Promise<unknown>;
+    };
+    expect(storageWithPendingFlush.flushPendingSessionEnds).toBeTypeOf('function');
+    if (!storageWithPendingFlush.flushPendingSessionEnds) return;
+
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'exec-pending-2',
+      learnerId: 'learner-1',
+      sessionId: 'session-pending-2',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-1',
+      successful: true,
+    });
+    logInteractionMock.mockClear();
+    logInteractionsBatchMock.mockClear();
+    getInteractionsMock.mockResolvedValueOnce({ events: [], total: 0 });
+    logInteractionsBatchMock.mockResolvedValueOnce(false);
+
+    await dualStorageModule.dualStorage.emitSessionEnd({
+      id: 'session-end-pending-2',
+      learnerId: 'learner-1',
+      sessionId: 'session-pending-2',
+      timestamp: 1_700_000_010_000,
+      eventType: 'session_end',
+      problemId: 'problem-1',
+      totalTime: 10_000,
+      timeSpent: 10_000,
+      problemsAttempted: 1,
+      problemsSolved: 1,
+    });
+
+    logInteractionMock.mockClear();
+    getInteractionsMock
+      .mockResolvedValueOnce({ events: [], total: 0 })
+      .mockResolvedValueOnce({
+        events: [
+          {
+            id: 'exec-pending-2',
+            learnerId: 'learner-1',
+            sessionId: 'session-pending-2',
+            timestamp: 1_700_000_000_000,
+            eventType: 'execution',
+            problemId: 'problem-1',
+            successful: true,
+          },
+        ],
+        total: 1,
+      });
+    logInteractionsBatchMock.mockResolvedValueOnce(true);
+
+    const flushStatus = await storageWithPendingFlush.flushPendingSessionEnds();
+
+    expect(flushStatus).toMatchObject({ backendConfirmed: true, pendingSync: false });
+    expect(logInteractionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'session-end-pending-2', eventType: 'session_end' }),
+    );
+    expect(localStorage.getItem('sql-adapt-pending-session-ends')).not.toContain('session-end-pending-2');
+  });
+
+  it('deduplicates pending session_end finalizations by session id', async () => {
+    const storageWithPendingFlush = dualStorageModule.dualStorage as typeof dualStorageModule.dualStorage & {
+      flushPendingSessionEnds?: () => Promise<unknown>;
+    };
+    expect(storageWithPendingFlush.flushPendingSessionEnds).toBeTypeOf('function');
+    if (!storageWithPendingFlush.flushPendingSessionEnds) return;
+
+    checkBackendHealthMock.mockResolvedValue(false);
+
+    const firstStatus = await dualStorageModule.dualStorage.emitSessionEnd({
+      id: 'session-end-duplicate-first',
+      learnerId: 'learner-1',
+      sessionId: 'session-duplicate-1',
+      timestamp: 1_700_000_010_000,
+      eventType: 'session_end',
+      problemId: 'problem-1',
+      totalTime: 10_000,
+      timeSpent: 10_000,
+      problemsAttempted: 1,
+      problemsSolved: 1,
+    });
+    const secondStatus = await dualStorageModule.dualStorage.emitSessionEnd({
+      id: 'session-end-duplicate-second',
+      learnerId: 'learner-1',
+      sessionId: 'session-duplicate-1',
+      timestamp: 1_700_000_012_000,
+      eventType: 'session_end',
+      problemId: 'problem-1',
+      totalTime: 12_000,
+      timeSpent: 12_000,
+      problemsAttempted: 1,
+      problemsSolved: 1,
+    });
+
+    expect(firstStatus.pendingSync).toBe(true);
+    expect(secondStatus.pendingSync).toBe(true);
+    const pending = JSON.parse(localStorage.getItem('sql-adapt-pending-session-ends') ?? '[]');
+    expect(pending).toHaveLength(1);
+    expect(pending[0].event).toMatchObject({
+      id: 'session-end-duplicate-second',
+      sessionId: 'session-duplicate-1',
+      totalTime: 12_000,
+    });
+  });
 });
 
 describe('dual-storage restore hydration', () => {

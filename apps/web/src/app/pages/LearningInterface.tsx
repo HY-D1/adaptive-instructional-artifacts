@@ -1775,6 +1775,87 @@ export function LearningInterface() {
     }
   };
 
+  const buildSessionEndEvent = useCallback((): InteractionEvent | null => {
+    if (!learnerId || !sessionId) {
+      return null;
+    }
+
+    const sessionInteractions = storage
+      .getInteractionsByLearner(learnerId)
+      .filter((interaction) => interaction.sessionId === sessionId);
+    const firstInteractionTimestamp = sessionInteractions.length > 0
+      ? Math.min(...sessionInteractions.map((interaction) => interaction.timestamp))
+      : startTimeRef.current;
+    const totalTime = Math.max(0, Date.now() - firstInteractionTimestamp);
+    const problemsAttempted = new Set(
+      sessionInteractions
+        .filter((interaction) => interaction.eventType === 'execution' || interaction.eventType === 'error')
+        .map((interaction) => interaction.problemId)
+    ).size;
+    const problemsSolved = new Set(
+      sessionInteractions
+        .filter((interaction) => interaction.eventType === 'execution' && interaction.successful)
+        .map((interaction) => interaction.problemId)
+    ).size;
+
+    return {
+      id: `session-end-${sessionId}`,
+      learnerId,
+      sessionId,
+      timestamp: Date.now(),
+      eventType: 'session_end',
+      problemId: currentProblemIdRef.current || 'session-summary',
+      totalTime,
+      timeSpent: totalTime,
+      problemsAttempted,
+      problemsSolved,
+      conditionId: sessionConditionIdRef.current,
+    };
+  }, [learnerId, sessionId]);
+
+  const finalizeSessionEnd = useCallback((reason: 'cleanup' | 'pagehide') => {
+    if (!sessionId || finalizedSessionIdsRef.current.has(sessionId)) {
+      return;
+    }
+
+    const sessionEndEvent = buildSessionEndEvent();
+    if (!sessionEndEvent) {
+      return;
+    }
+    finalizedSessionIdsRef.current.add(sessionId);
+
+    if (reason === 'pagehide') {
+      if (!AUTH_BACKEND_CONFIGURED) {
+        void storage.emitSessionEnd(sessionEndEvent).catch((error) => {
+          console.warn('[LearningInterface] local session_end pagehide emission failed:', error);
+        });
+        return;
+      }
+
+      const queued = storage.queueSessionEnd(sessionEndEvent);
+      if (!queued.success) {
+        console.warn('[LearningInterface] session_end queue failed before pagehide');
+        return;
+      }
+      void storage.flushPendingSessionEnds().then((status) => {
+        if (!status.backendConfirmed) {
+          console.warn('[LearningInterface] session_end pending after pagehide:', status.error);
+        }
+      }).catch((error) => {
+        console.warn('[LearningInterface] session_end pagehide flush failed:', error);
+      });
+      return;
+    }
+
+    void storage.emitSessionEnd(sessionEndEvent).then((status) => {
+      if (!status.backendConfirmed) {
+        console.warn('[LearningInterface] session_end blocked pending backend sync:', status.error);
+      }
+    }).catch((error) => {
+      console.warn('[LearningInterface] session_end emission failed:', error);
+    });
+  }, [buildSessionEndEvent, sessionId]);
+
   useEffect(() => {
     if (!learnerId || !sessionId) {
       return;
@@ -1804,6 +1885,9 @@ export function LearningInterface() {
       setSessionSyncStatus('failed');
       setSessionSyncError(status.error ?? 'Session is currently only saved locally.');
     });
+    void storage.flushPendingSessionEnds().catch((error) => {
+      console.warn('[LearningInterface] pending session_end flush failed during session setup:', error);
+    });
 
     return () => {
       cancelled = true;
@@ -1816,52 +1900,27 @@ export function LearningInterface() {
     }
 
     return () => {
-      if (finalizedSessionIdsRef.current.has(sessionId)) {
+      finalizeSessionEnd('cleanup');
+    };
+  }, [finalizeSessionEnd, learnerId, sessionId]);
+
+  useEffect(() => {
+    if (!learnerId || !sessionId) {
+      return;
+    }
+
+    const handlePageHide = (event: PageTransitionEvent) => {
+      if (event.persisted) {
         return;
       }
-      finalizedSessionIdsRef.current.add(sessionId);
-
-      const sessionInteractions = storage
-        .getInteractionsByLearner(learnerId)
-        .filter((interaction) => interaction.sessionId === sessionId);
-      const firstInteractionTimestamp = sessionInteractions.length > 0
-        ? Math.min(...sessionInteractions.map((interaction) => interaction.timestamp))
-        : startTimeRef.current;
-      const totalTime = Math.max(0, Date.now() - firstInteractionTimestamp);
-      const problemsAttempted = new Set(
-        sessionInteractions
-          .filter((interaction) => interaction.eventType === 'execution' || interaction.eventType === 'error')
-          .map((interaction) => interaction.problemId)
-      ).size;
-      const problemsSolved = new Set(
-        sessionInteractions
-          .filter((interaction) => interaction.eventType === 'execution' && interaction.successful)
-          .map((interaction) => interaction.problemId)
-      ).size;
-
-      const sessionEndEvent: InteractionEvent = {
-        id: createEventId('session', 'end'),
-        learnerId,
-        sessionId,
-        timestamp: Date.now(),
-        eventType: 'session_end',
-        problemId: currentProblemIdRef.current || 'session-summary',
-        totalTime,
-        timeSpent: totalTime,
-        problemsAttempted,
-        problemsSolved,
-        conditionId: sessionConditionIdRef.current,
-      };
-
-      void storage.emitSessionEnd(sessionEndEvent).then((status) => {
-        if (!status.backendConfirmed) {
-          console.warn('[LearningInterface] session_end blocked pending backend sync:', status.error);
-        }
-      }).catch((error) => {
-        console.warn('[LearningInterface] session_end emission failed:', error);
-      });
+      finalizeSessionEnd('pagehide');
     };
-  }, [learnerId, sessionId]);
+
+    window.addEventListener('pagehide', handlePageHide);
+    return () => {
+      window.removeEventListener('pagehide', handlePageHide);
+    };
+  }, [finalizeSessionEnd, learnerId, sessionId]);
 
   const timeSpent = Date.now() - startTime;
 
