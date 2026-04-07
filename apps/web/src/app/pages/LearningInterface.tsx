@@ -1250,6 +1250,9 @@ export function LearningInterface() {
     }
   };
 
+  // RESEARCH-4: Track which concept_view events have been emitted to prevent spam
+  const emittedConceptViewsRef = useRef<Set<string>>(new Set());
+
   const handleProblemChange = useCallback((id: string) => {
     const problem = sqlProblems.find(p => p.id === id);
     if (!problem) {
@@ -1257,7 +1260,23 @@ export function LearningInterface() {
       return;
     }
     setCurrentProblem(problem);
-    
+
+    // RESEARCH-4: Emit concept_view for each concept surfaced by this problem
+    // Deduplicate by session/problem/concept/source to prevent rerender spam
+    problem.concepts.forEach(conceptId => {
+      const dedupeKey = `${sessionId}:${problem.id}:${conceptId}:problem`;
+      if (!emittedConceptViewsRef.current.has(dedupeKey)) {
+        emittedConceptViewsRef.current.add(dedupeKey);
+        storage.logConceptView({
+          learnerId,
+          sessionId,
+          problemId: problem.id,
+          conceptId,
+          source: 'problem',
+        });
+      }
+    });
+
     // Log problem change with condition context
     if (sessionConfig?.conditionId) {
       const event: InteractionEvent = {

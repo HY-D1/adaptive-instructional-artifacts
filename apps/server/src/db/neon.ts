@@ -860,7 +860,8 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
   const now = new Date().toISOString();
 
   const payload = data.payload || {};
-  const storedHintId = payload.hintId || null;
+  // RESEARCH-4: hintId can be at top level (from convertToBackendInteraction) or in payload
+  const storedHintId = data.hintId ?? payload.hintId ?? null;
   const timestampIso = normalizeInteractionTimestamp(data.timestamp, now);
   const storedConceptId = payload.conceptId || (Array.isArray(payload.conceptIds) ? payload.conceptIds[0] : null);
   const resolvedSectionId = data.sectionId ?? await resolveSectionIdForLearner(data.learnerId);
