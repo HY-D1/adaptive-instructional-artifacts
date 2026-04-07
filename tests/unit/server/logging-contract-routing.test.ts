@@ -152,4 +152,56 @@ describe('logging contract routing', () => {
     expect(spec).toContain('`hint_view` events preserve `hintId`');
     expect(spec).not.toContain('`hint_view` events **intentionally omit** the `hintId` field');
   });
+
+  // RESEARCH-4: Backend ID preservation contract
+  it('preserves client-provided event id in buildNeonInteractionPayload', () => {
+    const payload = buildNeonInteractionPayload({
+      id: 'client-event-id-abc123',
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      timestamp: '2026-04-07T00:00:00.000Z',
+      eventType: 'hint_view',
+      problemId: 'problem-1',
+      hintId: 'hint-1',
+    });
+
+    // The payload should include the client-provided id
+    expect(payload.id).toBe('client-event-id-abc123');
+  });
+
+  it('preserves client-provided id for concept_view events', () => {
+    const payload = buildNeonInteractionPayload({
+      id: 'concept-view-event-xyz789',
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      timestamp: '2026-04-07T00:00:00.000Z',
+      eventType: 'concept_view',
+      problemId: 'problem-1',
+      conceptId: 'joins',
+      source: 'hint',
+    });
+
+    expect(payload.id).toBe('concept-view-event-xyz789');
+    expect(payload.conceptId).toBe('joins');
+    expect(payload.source).toBe('hint');
+  });
+
+  it('preserves client-provided id for session_end events with summary fields', () => {
+    const payload = buildNeonInteractionPayload({
+      id: 'session-end-event-999',
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      timestamp: '2026-04-07T00:00:00.000Z',
+      eventType: 'session_end',
+      problemId: 'problem-1',
+      totalTime: 3600000,
+      problemsAttempted: 5,
+      problemsSolved: 3,
+    });
+
+    expect(payload.id).toBe('session-end-event-999');
+    expect(payload.totalTime).toBe(3600000);
+    expect(payload.problemsAttempted).toBe(5);
+    expect(payload.problemsSolved).toBe(3);
+  });
 });
