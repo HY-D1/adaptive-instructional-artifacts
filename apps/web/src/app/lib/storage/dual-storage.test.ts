@@ -427,6 +427,17 @@ describe('dual-storage critical write semantics', () => {
       expect.arrayContaining([expect.objectContaining({ id: 'local-id-abc' })]),
     );
   });
+
+  // RESEARCH-4: Logout session finalization barrier tests
+  it('returns confirmed when no active session exists', async () => {
+    // Ensure no active session
+    localStorage.removeItem('sql-adapt-session-id');
+
+    const status = await dualStorageModule.dualStorage.finalizeActiveSessionBeforeLogout('learner-1');
+
+    expect(status.backendConfirmed).toBe(true);
+    expect(status.pendingSync).toBe(false);
+  });
 });
 
 describe('dual-storage restore hydration', () => {

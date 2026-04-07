@@ -1034,6 +1034,93 @@ class DualStorageManager {
     }
   }
 
+  /**
+   * RESEARCH-4: Finalize active session before logout with backend confirmation barrier.
+   * Computes session_end from local evidence, ensures all interactions are synced,
+   * then writes session_end through the verified barrier. Blocks logout if confirmation fails.
+   */
+  async finalizeActiveSessionBeforeLogout(learnerId: string): Promise<CriticalWriteStatus> {
+    // 1. Resolve active session ID
+    const sessionId = localStorageManager.getActiveSessionId();
+    if (!sessionId || sessionId === 'session-unknown') {
+      return { backendConfirmed: true, pendingSync: false };
+    }
+
+    // 2. Read local interactions for this session
+    const allInteractions = localStorageManager.getInteractionsByLearner(learnerId);
+    const sessionInteractions = allInteractions.filter(i => i.sessionId === sessionId);
+
+    // 3. If no interactions exist, nothing to finalize
+    if (sessionInteractions.length === 0) {
+      return { backendConfirmed: true, pendingSync: false };
+    }
+
+    // 4. Compute canonical session_end summary from local evidence
+    const sortedInteractions = [...sessionInteractions].sort((a, b) => a.timestamp - b.timestamp);
+    const firstInteraction = sortedInteractions[0];
+    const lastInteraction = sortedInteractions[sortedInteractions.length - 1];
+
+    // totalTime: now - first interaction timestamp (use session start if available)
+    const sessionStartTime = firstInteraction.timestamp;
+    const totalTime = Math.max(0, Date.now() - sessionStartTime);
+
+    // problemsAttempted: unique problem IDs with execution/error/hint_view/explanation_view/guidance_view
+    const attemptedProblemIds = new Set(
+      sessionInteractions
+        .filter(i => ['execution', 'error', 'hint_view', 'explanation_view', 'guidance_view'].includes(i.eventType))
+        .map(i => i.problemId)
+    );
+    const problemsAttempted = attemptedProblemIds.size;
+
+    // problemsSolved: unique problem IDs with successful execution
+    const solvedProblemIds = new Set(
+      sessionInteractions
+        .filter(i => i.eventType === 'execution' && i.successful === true)
+        .map(i => i.problemId)
+    );
+    const problemsSolved = solvedProblemIds.size;
+
+    // problemId: use latest session interaction problem ID, fallback 'session-summary'
+    const problemId = lastInteraction?.problemId || 'session-summary';
+
+    // 5. Build deterministic session_end event ID (prevents duplicates on retry)
+    const eventId = `session-end:${sessionId}`;
+
+    // Check if session_end already exists for this session
+    const existingSessionEnd = sessionInteractions.find(i => i.eventType === 'session_end');
+    if (existingSessionEnd) {
+      // Already finalized, just ensure it's synced
+      if (this.config.useBackend) {
+        const syncStatus = await this.ensureSessionInteractionsPersisted(learnerId, sessionId);
+        if (!syncStatus.backendConfirmed) {
+          return {
+            backendConfirmed: false,
+            pendingSync: true,
+            error: 'Session already finalized locally, but not fully synced to backend.',
+          };
+        }
+      }
+      return { backendConfirmed: true, pendingSync: false };
+    }
+
+    // 6. Build session_end event
+    const sessionEndEvent: InteractionEvent = {
+      id: eventId,
+      sessionId,
+      learnerId,
+      timestamp: Date.now(),
+      eventType: 'session_end',
+      problemId,
+      totalTime,
+      timeSpent: totalTime,
+      problemsAttempted,
+      problemsSolved,
+    };
+
+    // 7. Call emitSessionEnd for the backend verification barrier
+    return this.emitSessionEnd(sessionEndEvent);
+  }
+
   private pendingSessionEndKey(event: InteractionEvent): string {
     return event.sessionId ? `${event.learnerId}:${event.sessionId}` : event.id;
   }

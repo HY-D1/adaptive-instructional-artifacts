@@ -1253,6 +1253,11 @@ export function LearningInterface() {
   // RESEARCH-4: Track which concept_view events have been emitted to prevent spam
   const emittedConceptViewsRef = useRef<Set<string>>(new Set());
 
+  // Reset dedupe when session truly changes (new learner or new session)
+  useEffect(() => {
+    emittedConceptViewsRef.current.clear();
+  }, [learnerId, sessionId]);
+
   const handleProblemChange = useCallback((id: string) => {
     const problem = sqlProblems.find(p => p.id === id);
     if (!problem) {
@@ -1260,22 +1265,6 @@ export function LearningInterface() {
       return;
     }
     setCurrentProblem(problem);
-
-    // RESEARCH-4: Emit concept_view for each concept surfaced by this problem
-    // Deduplicate by session/problem/concept/source to prevent rerender spam
-    problem.concepts.forEach(conceptId => {
-      const dedupeKey = `${sessionId}:${problem.id}:${conceptId}:problem`;
-      if (!emittedConceptViewsRef.current.has(dedupeKey)) {
-        emittedConceptViewsRef.current.add(dedupeKey);
-        storage.logConceptView({
-          learnerId,
-          sessionId,
-          problemId: problem.id,
-          conceptId,
-          source: 'problem',
-        });
-      }
-    });
 
     // Log problem change with condition context
     if (sessionConfig?.conditionId) {
@@ -1973,18 +1962,24 @@ export function LearningInterface() {
     [learnerSessionInteractions, currentProblem.id]
   );
 
+  // RESEARCH-4: Emit concept_view for problem source exactly once per (session, problem, concept)
+  // This useEffect handles initial mount and problem switches; dedupe prevents duplicate emissions
   useEffect(() => {
     if (!learnerId || !sessionId) {
       return;
     }
     for (const conceptId of currentProblem.concepts) {
-      storage.logConceptView({
-        learnerId,
-        sessionId,
-        problemId: currentProblem.id,
-        conceptId,
-        source: 'problem',
-      });
+      const dedupeKey = `${learnerId}:${sessionId}:${currentProblem.id}:${conceptId}:problem`;
+      if (!emittedConceptViewsRef.current.has(dedupeKey)) {
+        emittedConceptViewsRef.current.add(dedupeKey);
+        storage.logConceptView({
+          learnerId,
+          sessionId,
+          problemId: currentProblem.id,
+          conceptId,
+          source: 'problem',
+        });
+      }
     }
   }, [learnerId, sessionId, currentProblem.id]);
 

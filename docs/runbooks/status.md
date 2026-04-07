@@ -1,6 +1,6 @@
 # Project Status — SQL-Adapt
 
-**Last Updated**: 2026-04-05 (40-Student Launch Refresh, main@91e7696)
+**Last Updated**: 2026-04-07 (Telemetry Hardening: Logout Barrier + Concept View Dedupe)
 **Purpose**: Single durable status file for implementation and deployment readiness.
 
 ---
@@ -69,8 +69,8 @@ The release identifiers above are the current source of truth for launch decisio
 1. **PDF Index**: Disabled in production (set `ENABLE_PDF_INDEX=true` to enable)
 2. **LLM Features**: `/health` reported Groq-connected LLM availability on 2026-04-05; staged support should still assume fallback-safe behavior if provider availability changes
 3. **Build Warnings**: 4 non-blocking warnings (dynamic imports, chunk size)
-4. **Telemetry Coverage**: `concept_view` is now logged explicitly, `hint_view` preserves `hintId` for per-hint tracing, and login outcomes are exported via `auth_events`
-5. **Session Persistence**: Partial session writes now preserve stored condition flags and policy values instead of falling back to defaults
+4. **Telemetry Coverage**: `concept_view` is now logged explicitly with dedupe to one event per `(session, problem, concept, source='problem')`, `hint_view` preserves `hintId` for per-hint tracing, `session_end` uses backend-confirmed flush barrier before explicit logout, and login outcomes are exported via `auth_events`
+5. **Session Persistence**: Partial session writes now preserve stored condition flags and policy values instead of falling back to defaults. Explicit logout now waits for backend-confirmed session finalization before auth invalidation
 6. **Automated Test Gap**: WS5-BLOCKER-001 (production E2E auth credentials) is a test infrastructure limitation, not a production defect
 7. **Preview Deployment 401**: Backend preview deployments require additional Vercel access configuration; does not affect production
 

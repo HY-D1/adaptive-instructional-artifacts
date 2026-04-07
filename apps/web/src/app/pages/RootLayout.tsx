@@ -220,6 +220,22 @@ export function RootLayout() {
     }
     setLogoutError(null);
     setIsLoggingOut(true);
+
+    // RESEARCH-4: Finalize active session before logout with backend confirmation barrier
+    // This ensures all interactions are synced and session_end is written before auth is invalidated
+    const learnerId = syncedProfile?.id;
+    if (learnerId && AUTH_BACKEND_CONFIGURED) {
+      const finalizeStatus = await storage.finalizeActiveSessionBeforeLogout(learnerId);
+      if (!finalizeStatus.backendConfirmed) {
+        setLogoutError(
+          finalizeStatus.error ??
+            'We could not confirm your work was saved yet. Please retry logout in a moment.',
+        );
+        setIsLoggingOut(false);
+        return;
+      }
+    }
+
     const result = await logout();
     if (!result.success) {
       setLogoutError(result.error ?? 'Sign out failed. Please try again.');
@@ -231,7 +247,7 @@ export function RootLayout() {
     setMobileMenuOpen(false);
     navigate(postLogoutPath, { replace: true });
     setIsLoggingOut(false);
-  }, [isLoggingOut, logout, finalizeLocalSignOut, navigate, postLogoutPath]);
+  }, [isLoggingOut, logout, finalizeLocalSignOut, navigate, postLogoutPath, syncedProfile]);
 
   // Handle session expired redirect
   const handleSessionExpiredRedirect = () => {
