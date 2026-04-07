@@ -1,12 +1,12 @@
 /**
  * Hint Service LLM Generation
  *
- * LLM-based adaptive hint generation for rung 3+ explanations.
+ * LLM-based adaptive hint generation for all guidance rungs.
  */
 
 import { generateWithLLM, isLLMAvailable } from '../../api/llm-client';
 import type { GuidanceRung } from '../guidance-ladder';
-import type { AdaptiveHintContext, AdaptiveHintOutput, EnhancedHint, RetrievalSignalMeta } from './types';
+import type { AdaptiveHintContext, AdaptiveHintOutput, EnhancedHint, LearningSignalSummary, RetrievalSignalMeta } from './types';
 import type { AvailableResources } from './types';
 import type { EnhancedRetrievalBundle, HintGenerationOptions } from './types';
 import { applyHintSafetyLayer } from './safety';
@@ -15,7 +15,7 @@ import { generateTextbookEnhancedHint } from './textbook-generation';
 import { MIN_RETRIEVAL_CONFIDENCE } from './types';
 
 /**
- * Generate hint using LLM (for rung 3+ or forced LLM mode)
+ * Generate hint using LLM.
  *
  * DECISION MATRIX:
  * - LLM available + Textbook available: Full LLM with textbook context
@@ -56,11 +56,12 @@ export async function generateLLMEnhancedHint(
     textbookUnits: retrievalBundle.textbookUnits || [],
     pdfPassages: retrievalBundle.pdfPassages,
     sqlEngageRecords: [], // Populated from retrieval bundle if needed
+    learningSignals: buildLearningSignals(options, retrievalBundle),
   };
 
   try {
     // Generate adaptive hint using LLM
-    const adaptiveOutput = await generateAdaptiveHint(context, async (prompt) => {
+    const llmCall = async (prompt: string) => {
       const response = await generateWithLLM(prompt, {
         params: {
           temperature: 0.7,
@@ -68,9 +69,17 @@ export async function generateLLMEnhancedHint(
         },
       });
       return response.text;
-    });
+    };
 
-    const safety = applyHintSafetyLayer(adaptiveOutput.content, rung, errorSubtypeId || 'unknown');
+    let adaptiveOutput = await generateAdaptiveHint(context, llmCall);
+    let safety = applyHintSafetyLayer(adaptiveOutput.content, rung, errorSubtypeId || 'unknown');
+
+    if (shouldRetryForSafety(safety.fallbackReason)) {
+      const retryOutput = await generateAdaptiveHint(context, llmCall, true);
+      const retrySafety = applyHintSafetyLayer(retryOutput.content, rung, errorSubtypeId || 'unknown');
+      adaptiveOutput = retryOutput;
+      safety = retrySafety;
+    }
 
     return {
       content: safety.content,
@@ -127,9 +136,10 @@ export async function generateLLMEnhancedHint(
  */
 async function generateAdaptiveHint(
   context: AdaptiveHintContext,
-  llmCall: (prompt: string) => Promise<string>
+  llmCall: (prompt: string) => Promise<string>,
+  strictMode = false
 ): Promise<AdaptiveHintOutput> {
-  const prompt = buildAdaptivePrompt(context);
+  const prompt = buildAdaptivePrompt(context, strictMode);
 
   try {
     const rawOutput = await llmCall(prompt);
@@ -143,17 +153,28 @@ async function generateAdaptiveHint(
 /**
  * Build rung-specific adaptive prompt
  */
-function buildAdaptivePrompt(context: AdaptiveHintContext): string {
-  const { rung, errorSubtype, problem, previousHints, textbookUnits } = context;
+function buildAdaptivePrompt(context: AdaptiveHintContext, strictMode = false): string {
+  const { rung, errorSubtype, problem, previousHints, textbookUnits, learningSignals } = context;
 
   const rungPrompts: Record<number, string> = {
     1: `Provide a brief, subtle nudge (max 100 characters) to help the learner identify the issue with "${errorSubtype}". Do NOT include SQL keywords or code. Be vague but helpful.`,
-    2: `Ask a guiding question (max 250 characters) about "${errorSubtype}" that leads the learner to discover the solution. Cite relevant concepts but don't give the answer.`,
-    3: `Provide clear explanation (max 500 characters) about "${errorSubtype}". You may use partial SQL patterns with placeholders (___) but never complete solutions.`,
+    2: `Ask a guiding question (max 250 characters) about "${errorSubtype}" that leads the learner to discover the solution. Cite relevant concepts but do not give the answer or runnable SQL.`,
+    3: `Provide clear explanation (max 500 characters) about "${errorSubtype}". You may use partial patterns with ___ placeholders, but never complete SQL or the final solution.`,
   };
 
   let prompt = `You are an adaptive SQL tutor helping a learner with: "${problem.title}"\n\n`;
+  prompt += `Never give the final answer. Never provide runnable SQL for the learner's exact problem. Do not include a complete query.\n`;
   prompt += `Current error/issue: ${errorSubtype}\n\n`;
+  prompt += `Learner state:\n`;
+  prompt += `- Latest issue: ${learningSignals.latestIssue}\n`;
+  prompt += `- Failed runs: ${learningSignals.failedRunCount}\n`;
+  prompt += `- Retry count: ${learningSignals.retryCount}\n`;
+  prompt += `- Hints viewed: ${learningSignals.hintCount}\n`;
+  prompt += `- Recent events: ${learningSignals.lastInteractionTypes.join(', ') || 'none'}\n`;
+  if (learningSignals.stuckReason) {
+    prompt += `- Stuck signal: ${learningSignals.stuckReason}\n`;
+  }
+  prompt += '\n';
 
   if (previousHints.length > 0) {
     prompt += `Previous hints given:\n${previousHints.map((h) => `- ${h}`).join('\n')}\n\n`;
@@ -164,9 +185,65 @@ function buildAdaptivePrompt(context: AdaptiveHintContext): string {
   }
 
   prompt += `Instruction: ${rungPrompts[rung]}\n\n`;
+  if (strictMode) {
+    prompt += `STRICT RETRY: The prior response leaked runnable SQL or direct SQL keywords. Return only conceptual guidance. For rung 1, use no SQL keywords. For rung 2 or 3, use placeholders only if necessary and never produce a complete SELECT...FROM pattern.\n\n`;
+  }
   prompt += `Format your response as:\nContent: [your hint here]\nConcepts: [comma-separated concept IDs]\nSources: [comma-separated source references]`;
 
   return prompt;
+}
+
+function shouldRetryForSafety(fallbackReason: string | null): boolean {
+  return fallbackReason === 'answer_leak_blocked' || fallbackReason === 'rung1_sql_keyword_blocked';
+}
+
+function buildLearningSignals(
+  options: HintGenerationOptions,
+  retrievalBundle: EnhancedRetrievalBundle
+): LearningSignalSummary {
+  const trace = retrievalBundle.whyRetrieved?.traceEvidence;
+  const relevantInteractions = options.recentInteractions.filter((interaction) => {
+    if (interaction.problemId !== options.problemId) return false;
+    if (options.sessionId && interaction.sessionId && interaction.sessionId !== options.sessionId) return false;
+    return true;
+  });
+
+  const failedInteractions = relevantInteractions.filter((interaction) =>
+    interaction.eventType === 'error' || (interaction.eventType === 'execution' && interaction.successful === false)
+  );
+  const hintCount = Math.max(
+    relevantInteractions.filter((interaction) => interaction.eventType === 'hint_request' || interaction.eventType === 'guidance_view').length,
+    trace?.hintCount ?? 0
+  );
+  const failedRunCount = Math.max(failedInteractions.length, trace?.errorCount ?? 0);
+  const retryCount = Math.max(Math.max(0, failedRunCount - 1), trace?.retryCount ?? 0);
+  const latestFailedInteraction = failedInteractions.at(-1);
+  const latestIssue =
+    latestFailedInteraction?.error ||
+    latestFailedInteraction?.errorSubtypeId ||
+    latestFailedInteraction?.sqlEngageSubtype ||
+    (latestFailedInteraction?.successful === false ? 'incorrect_results' : undefined) ||
+    options.errorSubtypeId ||
+    retrievalBundle.lastErrorSubtypeId ||
+    'current_query_issue';
+
+  let stuckReason: string | undefined;
+  if (retryCount >= 2) {
+    stuckReason = 'multiple_failed_retries';
+  } else if (hintCount >= 2 && failedRunCount > 0) {
+    stuckReason = 'hints_used_still_incorrect';
+  } else if (latestFailedInteraction) {
+    stuckReason = 'latest_execution_incorrect';
+  }
+
+  return {
+    latestIssue,
+    failedRunCount,
+    retryCount,
+    hintCount,
+    lastInteractionTypes: trace?.lastInteractionTypes ?? relevantInteractions.slice(-5).map((interaction) => interaction.eventType),
+    stuckReason,
+  };
 }
 
 /**

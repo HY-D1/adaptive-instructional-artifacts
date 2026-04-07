@@ -19,9 +19,9 @@ import { getProblemById } from '../../../data/problems';
  * Generate enhanced hint using available resources
  *
  * DECISION MATRIX:
- * 1. Try refined hints first (if available for problem/concept)
- * 2. Check retrieval confidence - fallback if too low
- * 3. LLM available + rung >= 3: Use LLM generation
+ * 1. LLM available: use Groq/backend LLM for every rung
+ * 2. Refined hints (cached, high-quality) after LLM failure/unavailable
+ * 3. Check retrieval confidence - fallback if too low
  * 4. Textbook available: Use textbook-enhanced
  * 5. Default: SQL-Engage CSV fallback
  *
@@ -50,7 +50,24 @@ export async function generateEnhancedHint(options: HintGenerationOptions): Prom
 
   const retrievalSignals = extractRetrievalSignals(retrievalBundle);
 
-  // Try refined hints first (cached, high-quality hints)
+  // Groq/backend LLM is the first-choice generator for all guidance rungs.
+  // Retrieval still builds context first, but low confidence/refined hints are fallback paths.
+  const canUseLLM = resources.llm || Boolean(forceLLM);
+  let llmFallbackReason: string | null = null;
+  if (canUseLLM) {
+    try {
+      const llmHint = await generateLLMEnhancedHint(options, retrievalBundle, resources, retrievalSignals);
+      if (llmHint.llmGenerated || !llmHint.fallbackReason?.includes('llm')) {
+        return llmHint;
+      }
+      llmFallbackReason = llmHint.fallbackReason;
+    } catch (error) {
+      llmFallbackReason = 'llm_error';
+      console.warn('[HintService] LLM hint failed; falling back to grounded static paths:', error);
+    }
+  }
+
+  // Try refined hints after LLM fails/unavailable (cached, high-quality hints)
   const refinedHintResult = errorSubtypeId
     ? await resolveRefinedHintForProblem(options.problemId, rung, errorSubtypeId)
     : { content: null, rejectReason: 'missing_error_subtype' as const };
@@ -59,7 +76,7 @@ export async function generateEnhancedHint(options: HintGenerationOptions): Prom
     return buildRefinedHint(rung, refinedHintResult, retrievalSignals, retrievalBundle);
   }
 
-  const refinedFallbackReason = refinedHintResult.rejectReason ?? null;
+  const refinedFallbackReason = mergeFallbackReasons(llmFallbackReason, refinedHintResult.rejectReason);
 
   // Check retrieval confidence - if too low, use fallback
   if (retrievalSignals.retrievalConfidence < MIN_RETRIEVAL_CONFIDENCE) {
@@ -73,25 +90,18 @@ export async function generateEnhancedHint(options: HintGenerationOptions): Prom
     return createUltimateFallbackHint(rung, retrievalSignals.retrievalConfidence);
   }
 
-  // Decision: Can we use LLM?
-  // Retrieval-first design: LLM reserved for rung 3+ (explanations/textbook units)
-  // L1/L2 use templates/retrieval-first for cost efficiency and grounding
-  const canUseLLM = resources.llm && (forceLLM || rung >= 3);
-
   // Decision: Do we have textbook content?
   const hasTextbookContent = retrievalBundle.textbookUnits && retrievalBundle.textbookUnits.length > 0;
 
-  // CASE 1: LLM available → Generate AI-powered hint
-  if (canUseLLM) {
-    return generateLLMEnhancedHint(options, retrievalBundle, resources, retrievalSignals);
-  }
-
-  // CASE 2: No LLM but Textbook available → Enhanced SQL-Engage with textbook refs
+  // CASE 1: No usable LLM but Textbook available → Enhanced SQL-Engage with textbook refs
   if (hasTextbookContent && errorSubtypeId) {
-    return generateTextbookEnhancedHint(options, retrievalBundle, resources, retrievalSignals);
+    return generateTextbookEnhancedHint(options, retrievalBundle, resources, {
+      ...retrievalSignals,
+      fallbackReason: refinedFallbackReason,
+    });
   }
 
-  // CASE 3: Neither LLM nor Textbook → SQL-Engage CSV fallback
+  // CASE 2: Neither LLM nor Textbook → SQL-Engage CSV fallback
   if (errorSubtypeId) {
     return generateSqlEngageFallbackHint(errorSubtypeId, rung, {
       ...retrievalSignals,
