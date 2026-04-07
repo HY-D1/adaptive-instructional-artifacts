@@ -66,6 +66,7 @@ PROFILE_VALIDATION_TEST_REPORT.md
 # But keep these documentation files
 !docs/research/corpus-product-fit-audit.md
 !docs/research/embedding-bakeoff-dbms-ramakrishnan.md
+!docs/research/LOGGING_SPECIFICATION.md
 
 # Architecture diagrams (local only)
 diagrams/
