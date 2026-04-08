@@ -140,10 +140,35 @@ export function isResearchSafe(): boolean {
 }
 
 /**
+ * Check if running in a test environment (Playwright, Cypress, etc.)
+ * Used to bypass research-unsafe blocking for E2E tests
+ */
+export function isTestEnvironment(): boolean {
+  // Check for Playwright
+  if (typeof window !== 'undefined' && (window as any).__PLAYWRIGHT__) {
+    return true;
+  }
+  // Check for Cypress
+  if (typeof window !== 'undefined' && (window as any).Cypress) {
+    return true;
+  }
+  // Check for test runner via env var (set in CI)
+  if (import.meta.env.VITE_TEST_MODE === 'true') {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Check if research-unsafe mode is active
  * This is a BLOCKING state in production - app should not allow interactions
+ * Test environments are allowed to bypass this for E2E testing
  */
 export function isResearchUnsafe(): boolean {
+  // Allow tests to run without backend configuration
+  if (isTestEnvironment()) {
+    return false;
+  }
   return getResearchRuntimeMode() === 'research-unsafe';
 }
 

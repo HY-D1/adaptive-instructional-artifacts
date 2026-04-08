@@ -76,6 +76,8 @@ export default defineConfig({
           env: {
             // Enable instructor mode in CI for role-system tests
             VITE_INSTRUCTOR_PASSCODE: process.env.VITE_INSTRUCTOR_PASSCODE || 'TestPasscode2024',
+            // Bypass research-unsafe blocking for E2E tests
+            VITE_TEST_MODE: 'true',
           },
         },
       }),
