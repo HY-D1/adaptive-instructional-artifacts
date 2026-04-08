@@ -172,7 +172,10 @@ function ResearchUnsafeBlocker() {
 /**
  * Research Readiness Blocker component
  * RESEARCH-4: Shown when startup readiness check fails
- * Blocks all learner interactions with detailed diagnostics
+ * Blocks all learner interactions with student-friendly messaging
+ * 
+ * UX Improvement: Shows student-friendly message by default,
+ * technical diagnostics hidden behind "Show Details" toggle
  */
 interface ResearchReadinessBlockerProps {
   reason?: string;
@@ -193,6 +196,25 @@ interface ResearchReadinessBlockerProps {
 }
 
 function ResearchReadinessBlocker({ reason, diagnostics }: ResearchReadinessBlockerProps) {
+  const [showDetails, setShowDetails] = useState(false);
+  
+  // Student-friendly error message based on error type
+  const getStudentFriendlyMessage = (): string => {
+    if (!diagnostics.envConfigured) {
+      return 'The learning system is not fully set up yet. Please contact your instructor or check back later.';
+    }
+    if (!diagnostics.backendReachable) {
+      return 'Cannot connect to the learning server. Please check your internet connection and try refreshing the page.';
+    }
+    if (!diagnostics.isNeon) {
+      return 'The system is in maintenance mode. Please try again in a few minutes.';
+    }
+    if (!diagnostics.persistenceEnabled) {
+      return 'Data saving is temporarily unavailable. Please try again later.';
+    }
+    return 'The learning system is temporarily unavailable. Please try again later or contact your instructor.';
+  };
+  
   return (
     <div 
       className="fixed inset-0 z-[100] bg-red-950/90 flex items-center justify-center p-4"
@@ -201,84 +223,89 @@ function ResearchReadinessBlocker({ reason, diagnostics }: ResearchReadinessBloc
       aria-labelledby="research-readiness-title"
       data-testid="research-readiness-modal"
     >
-      <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full p-6 border-4 border-red-600">
+      <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6 border-4 border-red-600">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
             <AlertCircle className="w-6 h-6 text-red-600" />
           </div>
           <div>
             <h2 id="research-readiness-title" className="text-xl font-bold text-red-900">
-              Research Safety Block
+              System Unavailable
             </h2>
-            <p className="text-sm text-red-600 font-mono">Backend Readiness Check Failed</p>
+            <p className="text-sm text-red-600">Learning mode cannot start</p>
           </div>
         </div>
+        
         <div className="space-y-4 text-gray-700">
-          <p className="font-medium">
-            The application cannot start in research-safe mode.
+          {/* Student-friendly primary message */}
+          <p className="font-medium text-base">
+            {getStudentFriendlyMessage()}
           </p>
           
-          {reason && (
-            <div className="bg-red-50 p-3 rounded border border-red-200">
-              <p className="text-sm text-red-800">{reason}</p>
-            </div>
-          )}
-          
-          <div className="bg-gray-50 p-4 rounded-lg text-sm font-mono space-y-2">
-            <p className="font-semibold text-gray-900">Diagnostics:</p>
-            <div className="grid grid-cols-2 gap-2">
-              <span>Backend configured:</span>
-              <span className={diagnostics.envConfigured ? 'text-green-600' : 'text-red-600'}>
-                {diagnostics.envConfigured ? '✓' : '✗'}
-              </span>
-              <span>Backend reachable:</span>
-              <span className={diagnostics.backendReachable ? 'text-green-600' : 'text-red-600'}>
-                {diagnostics.backendReachable ? '✓' : '✗'}
-              </span>
-              <span>Database mode:</span>
-              <span>{diagnostics.dbMode || 'unknown'}</span>
-              <span>Persistence enabled:</span>
-              <span className={diagnostics.persistenceEnabled ? 'text-green-600' : 'text-red-600'}>
-                {diagnostics.persistenceEnabled ? '✓' : '✗'}
-              </span>
-            </div>
-          </div>
-
-          {/* Extended diagnostics for troubleshooting */}
-          {diagnostics.apiBaseUrl && (
-            <div className="bg-blue-50 p-4 rounded-lg text-sm font-mono space-y-1">
-              <p className="font-semibold text-blue-900">Configuration:</p>
-              <p className="break-all">API Base: {diagnostics.apiBaseUrl}</p>
-              {diagnostics.healthEndpoint && (
-                <p className="break-all">Health: {diagnostics.healthEndpoint}</p>
-              )}
-              {diagnostics.persistenceEndpoint && (
-                <p className="break-all">Persistence: {diagnostics.persistenceEndpoint}</p>
-              )}
-            </div>
-          )}
-
-          {(diagnostics.healthError || diagnostics.persistenceError) && (
-            <div className="bg-amber-50 p-4 rounded-lg text-sm font-mono space-y-1 border border-amber-200">
-              <p className="font-semibold text-amber-900">Error Details:</p>
-              {diagnostics.healthError && (
-                <p className="text-amber-800 break-all">Health: {diagnostics.healthError}</p>
-              )}
-              {diagnostics.persistenceError && (
-                <p className="text-amber-800 break-all">Persistence: {diagnostics.persistenceError}</p>
-              )}
-            </div>
-          )}
-          
-          <div className="bg-gray-50 p-4 rounded-lg text-sm font-mono space-y-1">
-            <p>Contract Version: {RESEARCH_CONTRACT_VERSION}</p>
-            <p>Backend Contract: {diagnostics.backendContractVersion || 'unknown'}</p>
-            <p>Environment: Production</p>
+          {/* Action buttons */}
+          <div className="flex flex-col gap-3">
+            <Button 
+              onClick={() => window.location.reload()}
+              className="w-full"
+              variant="default"
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh Page
+            </Button>
+            
+            <Button
+              onClick={() => setShowDetails(!showDetails)}
+              variant="ghost"
+              size="sm"
+              className="text-gray-500"
+            >
+              {showDetails ? 'Hide Technical Details' : 'Show Technical Details'}
+            </Button>
           </div>
           
-          <p className="text-sm text-gray-500">
-            This deployment cannot collect research data. Please contact the research team or check the backend configuration.
-          </p>
+          {/* Technical diagnostics (collapsible) */}
+          {showDetails && (
+            <div className="space-y-3 pt-2 border-t">
+              {reason && (
+                <div className="bg-red-50 p-3 rounded border border-red-200">
+                  <p className="text-xs font-semibold text-red-900 uppercase tracking-wide">Reason</p>
+                  <p className="text-sm text-red-800 font-mono mt-1">{reason}</p>
+                </div>
+              )}
+              
+              <div className="bg-gray-50 p-3 rounded-lg text-xs font-mono space-y-1">
+                <p className="font-semibold text-gray-900">Status:</p>
+                <div className="grid grid-cols-2 gap-1">
+                  <span>Backend:</span>
+                  <span className={diagnostics.backendReachable ? 'text-green-600' : 'text-red-600'}>
+                    {diagnostics.backendReachable ? 'Connected' : 'Unreachable'}
+                  </span>
+                  <span>Database:</span>
+                  <span>{diagnostics.isNeon ? 'Ready' : 'Not Ready'}</span>
+                  <span>Data Save:</span>
+                  <span className={diagnostics.persistenceEnabled ? 'text-green-600' : 'text-red-600'}>
+                    {diagnostics.persistenceEnabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                </div>
+              </div>
+              
+              {(diagnostics.healthError || diagnostics.persistenceError) && (
+                <div className="bg-amber-50 p-3 rounded text-xs font-mono border border-amber-200">
+                  <p className="font-semibold text-amber-900">Error:</p>
+                  {diagnostics.healthError && (
+                    <p className="text-amber-800 break-all">{diagnostics.healthError}</p>
+                  )}
+                  {diagnostics.persistenceError && (
+                    <p className="text-amber-800 break-all">{diagnostics.persistenceError}</p>
+                  )}
+                </div>
+              )}
+              
+              <p className="text-xs text-gray-400">
+                Contract: {RESEARCH_CONTRACT_VERSION}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -412,20 +439,38 @@ export function RootLayout() {
 
     // RESEARCH-4: Finalize active session before logout with backend confirmation barrier
     // This ensures all interactions are synced and session_end is written before auth is invalidated
+    // UX FIX: Added 8-second timeout to prevent indefinite blocking if backend stalls
     const learnerId = resolveLogoutLearnerId({
       syncedProfileId: syncedProfile?.id,
       authLearnerId: authUser?.learnerId,
       cachedProfileId: storage.getUserProfile()?.id,
     });
     if (learnerId && AUTH_BACKEND_CONFIGURED) {
-      const finalizeStatus = await storage.finalizeActiveSessionBeforeLogout(learnerId);
+      const FINALIZE_TIMEOUT_MS = 8000; // 8 seconds max wait
+      
+      const finalizeWithTimeout = Promise.race([
+        storage.finalizeActiveSessionBeforeLogout(learnerId),
+        new Promise<{backendConfirmed: false; error: string}>((resolve) =>
+          setTimeout(() => resolve({
+            backendConfirmed: false, 
+            error: 'Save confirmation timed out. Your data may not be fully synced.'
+          }), FINALIZE_TIMEOUT_MS)
+        )
+      ]);
+      
+      const finalizeStatus = await finalizeWithTimeout;
+      
+      // Even if finalize fails/times out, proceed with logout after showing warning
+      // This prevents users from being trapped in a broken logout state
       if (!finalizeStatus.backendConfirmed) {
-        setLogoutError(
-          finalizeStatus.error ??
-            'We could not confirm your work was saved yet. Please retry logout in a moment.',
-        );
-        setIsLoggingOut(false);
-        return;
+        console.warn('[logout] Session finalize failed or timed out:', finalizeStatus.error);
+        // Show warning toast but proceed with logout - don't trap the user
+        addToast({
+          type: 'warning',
+          title: 'Data Sync Warning',
+          message: 'Your recent progress may not have been saved. Please check your textbook when you log back in.',
+        });
+        // Continue with logout instead of returning early
       }
     }
 
