@@ -34,7 +34,7 @@ export function EscalationHeatmap({
 }: Props) {
   const heatmapData = useMemo<HeatmapData>(() => {
     const learners = [...new Set(interactions.map(i => i.learnerId))];
-    const problems = [...new Set(interactions.map(i => i.problemId))];
+    const problems = [...new Set(interactions.map(i => i.problemId).filter((p): p is string => !!p))];
     
     const data: Record<string, Record<string, number>> = {};
     
@@ -97,7 +97,7 @@ export function EscalationHeatmap({
                     whiteSpace: 'nowrap'
                   }}
                 >
-                  {p.length > 12 ? `${p.slice(0, 12)}...` : p}
+                  {p && p.length > 12 ? `${p.slice(0, 12)}...` : p}
                 </th>
               ))}
             </tr>
