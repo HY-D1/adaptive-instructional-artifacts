@@ -183,6 +183,12 @@ interface ResearchReadinessBlockerProps {
     isNeon: boolean;
     persistenceEnabled: boolean;
     backendContractVersion?: string;
+    // Extended diagnostics
+    apiBaseUrl?: string;
+    healthEndpoint?: string;
+    persistenceEndpoint?: string;
+    healthError?: string;
+    persistenceError?: string;
   };
 }
 
@@ -237,6 +243,32 @@ function ResearchReadinessBlocker({ reason, diagnostics }: ResearchReadinessBloc
               </span>
             </div>
           </div>
+
+          {/* Extended diagnostics for troubleshooting */}
+          {diagnostics.apiBaseUrl && (
+            <div className="bg-blue-50 p-4 rounded-lg text-sm font-mono space-y-1">
+              <p className="font-semibold text-blue-900">Configuration:</p>
+              <p className="break-all">API Base: {diagnostics.apiBaseUrl}</p>
+              {diagnostics.healthEndpoint && (
+                <p className="break-all">Health: {diagnostics.healthEndpoint}</p>
+              )}
+              {diagnostics.persistenceEndpoint && (
+                <p className="break-all">Persistence: {diagnostics.persistenceEndpoint}</p>
+              )}
+            </div>
+          )}
+
+          {(diagnostics.healthError || diagnostics.persistenceError) && (
+            <div className="bg-amber-50 p-4 rounded-lg text-sm font-mono space-y-1 border border-amber-200">
+              <p className="font-semibold text-amber-900">Error Details:</p>
+              {diagnostics.healthError && (
+                <p className="text-amber-800 break-all">Health: {diagnostics.healthError}</p>
+              )}
+              {diagnostics.persistenceError && (
+                <p className="text-amber-800 break-all">Persistence: {diagnostics.persistenceError}</p>
+              )}
+            </div>
+          )}
           
           <div className="bg-gray-50 p-4 rounded-lg text-sm font-mono space-y-1">
             <p>Contract Version: {RESEARCH_CONTRACT_VERSION}</p>

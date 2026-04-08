@@ -187,6 +187,12 @@ export interface ResearchReadiness {
     isNeon: boolean;
     persistenceEnabled: boolean;
     backendContractVersion?: string;
+    // Extended diagnostics for troubleshooting
+    apiBaseUrl?: string;
+    healthEndpoint?: string;
+    persistenceEndpoint?: string;
+    healthError?: string;
+    persistenceError?: string;
   };
 }
 
@@ -212,20 +218,26 @@ export interface BackendHealth {
  * Check backend persistence status
  * RESEARCH-4: Used for startup readiness verification
  */
-async function checkPersistenceStatus(apiUrl: string): Promise<PersistenceStatus | null> {
+async function checkPersistenceStatus(apiUrl: string): Promise<{ status: PersistenceStatus | null; error?: string }> {
+  const endpoint = `${apiUrl}/system/persistence-status`;
   try {
-    const response = await fetch(`${apiUrl}/system/persistence-status`, {
+    const response = await fetch(endpoint, {
       method: 'GET',
       credentials: 'include',
     });
     
     if (!response.ok) {
-      return null;
+      return { 
+        status: null, 
+        error: `HTTP ${response.status} ${response.statusText}` 
+      };
     }
     
-    return await response.json();
-  } catch {
-    return null;
+    const data = await response.json();
+    return { status: data };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { status: null, error: errorMessage };
   }
 }
 
@@ -233,19 +245,25 @@ async function checkPersistenceStatus(apiUrl: string): Promise<PersistenceStatus
  * Fetch detailed backend health
  * RESEARCH-4: Used for startup readiness verification
  */
-async function fetchBackendHealth(apiBase: string): Promise<BackendHealth | null> {
+async function fetchBackendHealth(apiBase: string): Promise<{ health: BackendHealth | null; error?: string }> {
+  const endpoint = `${apiBase}/health`;
   try {
-    const response = await fetch(`${apiBase}/health`, {
+    const response = await fetch(endpoint, {
       method: 'GET',
     });
     
     if (!response.ok) {
-      return null;
+      return { 
+        health: null, 
+        error: `HTTP ${response.status} ${response.statusText}` 
+      };
     }
     
-    return await response.json();
-  } catch {
-    return null;
+    const data = await response.json();
+    return { health: data };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    return { health: null, error: errorMessage };
   }
 }
 
@@ -255,9 +273,19 @@ async function fetchBackendHealth(apiBase: string): Promise<BackendHealth | null
  * This is more robust than just checking if VITE_API_BASE_URL exists
  */
 export async function checkResearchReadiness(): Promise<ResearchReadiness> {
+  const startTime = performance.now();
   const envConfigured = isBackendConfigured();
   const apiBase = getApiBaseUrl();
   const apiUrl = apiBase ? `${apiBase}/api` : undefined;
+
+  // Log startup API base URL in production (non-secret diagnostic)
+  if (import.meta.env.PROD) {
+    // eslint-disable-next-line no-console
+    console.info('[ResearchReadiness] Starting check', {
+      apiBaseUrl: apiBase ?? 'NOT_CONFIGURED',
+      envConfigured,
+    });
+  }
 
   if (isTestEnvironment()) {
     return {
@@ -284,24 +312,71 @@ export async function checkResearchReadiness(): Promise<ResearchReadiness> {
     };
   }
   
-  const [health, persistence] = await Promise.all([
+  const healthEndpoint = `${apiBase}/health`;
+  const persistenceEndpoint = `${apiUrl}/system/persistence-status`;
+  
+  const [healthResult, persistenceResult] = await Promise.all([
     fetchBackendHealth(apiBase),
     checkPersistenceStatus(apiUrl),
   ]);
   
-  const backendReachable = !!health;
-  const isNeon = persistence?.dbMode === 'neon';
-  const persistenceEnabled = persistence?.persistenceRoutesEnabled ?? false;
+  const backendReachable = !!healthResult.health;
+  const persistenceStatus = persistenceResult.status;
+  const isNeon = persistenceStatus?.dbMode === 'neon';
+  const persistenceEnabled = persistenceStatus?.persistenceRoutesEnabled ?? false;
+  
+  const duration = Math.round(performance.now() - startTime);
+  
+  // Log readiness outcome in production
+  if (import.meta.env.PROD) {
+    // eslint-disable-next-line no-console
+    console.info('[ResearchReadiness] Check complete', {
+      duration: `${duration}ms`,
+      backendReachable,
+      dbMode: persistenceStatus?.dbMode ?? 'unknown',
+      isNeon,
+      persistenceEnabled,
+      healthError: healthResult.error,
+      persistenceError: persistenceResult.error,
+    });
+  }
   
   if (!backendReachable) {
+    const reason = healthResult.error 
+      ? `Health endpoint unreachable: ${healthResult.error}` 
+      : 'Backend unreachable';
     return {
       ready: false,
-      reason: 'Backend unreachable',
+      reason,
       diagnostics: {
         envConfigured: true,
         backendReachable: false,
         isNeon: false,
         persistenceEnabled: false,
+        apiBaseUrl: apiBase,
+        healthEndpoint,
+        persistenceEndpoint,
+        healthError: healthResult.error,
+        persistenceError: persistenceResult.error,
+      }
+    };
+  }
+  
+  if (!persistenceStatus) {
+    return {
+      ready: false,
+      reason: persistenceResult.error 
+        ? `Persistence status endpoint failed: ${persistenceResult.error}` 
+        : 'Persistence status unavailable',
+      diagnostics: {
+        envConfigured: true,
+        backendReachable: true,
+        isNeon: false,
+        persistenceEnabled: false,
+        apiBaseUrl: apiBase,
+        healthEndpoint,
+        persistenceEndpoint,
+        persistenceError: persistenceResult.error,
       }
     };
   }
@@ -309,14 +384,17 @@ export async function checkResearchReadiness(): Promise<ResearchReadiness> {
   if (!isNeon) {
     return {
       ready: false,
-      reason: `Database mode is ${persistence?.dbMode}, expected neon for research-safe mode`,
+      reason: `Database mode is ${persistenceStatus.dbMode}, expected neon for research-safe mode`,
       diagnostics: {
         envConfigured: true,
         backendReachable: true,
-        dbMode: persistence?.dbMode,
+        dbMode: persistenceStatus.dbMode,
         isNeon: false,
         persistenceEnabled,
-        backendContractVersion: persistence?.researchContractVersion,
+        backendContractVersion: persistenceStatus.researchContractVersion,
+        apiBaseUrl: apiBase,
+        healthEndpoint,
+        persistenceEndpoint,
       }
     };
   }
@@ -328,10 +406,13 @@ export async function checkResearchReadiness(): Promise<ResearchReadiness> {
       diagnostics: {
         envConfigured: true,
         backendReachable: true,
-        dbMode: persistence?.dbMode,
+        dbMode: persistenceStatus.dbMode,
         isNeon: true,
         persistenceEnabled: false,
-        backendContractVersion: persistence?.researchContractVersion,
+        backendContractVersion: persistenceStatus.researchContractVersion,
+        apiBaseUrl: apiBase,
+        healthEndpoint,
+        persistenceEndpoint,
       }
     };
   }
@@ -344,7 +425,10 @@ export async function checkResearchReadiness(): Promise<ResearchReadiness> {
       dbMode: 'neon',
       isNeon: true,
       persistenceEnabled: true,
-      backendContractVersion: persistence?.researchContractVersion,
+      backendContractVersion: persistenceStatus.researchContractVersion,
+      apiBaseUrl: apiBase,
+      healthEndpoint,
+      persistenceEndpoint,
     }
   };
 }
