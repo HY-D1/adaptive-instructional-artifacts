@@ -47,6 +47,10 @@ function colorize(color, text) {
   return `${colors[color]}${text}${colors.reset}`;
 }
 
+async function runQuery(db, query, params = []) {
+  return db.query(query, params);
+}
+
 /**
  * Main gate execution
  */
@@ -132,7 +136,7 @@ async function checkHintViewCompleteness(db, results) {
     WHERE event_type = 'hint_view'
   `;
 
-  const [row] = await db(query);
+  const [row] = await runQuery(db, query);
   const total = parseInt(row.total_hint_views, 10);
 
   if (total === 0) {
@@ -193,7 +197,7 @@ async function checkConceptViewCompleteness(db, results) {
     WHERE event_type = 'concept_view'
   `;
 
-  const [row] = await db(query);
+  const [row] = await runQuery(db, query);
   const total = parseInt(row.total_concept_views, 10);
 
   if (total === 0) {
@@ -253,7 +257,7 @@ async function checkSessionEndCompleteness(db, results) {
     WHERE event_type = 'session_end'
   `;
 
-  const [row] = await db(query);
+  const [row] = await runQuery(db, query);
   const total = parseInt(row.total_session_ends, 10);
 
   if (total === 0) {
@@ -311,7 +315,7 @@ async function checkEditorBurstMetrics(db, results) {
     FROM code_changes
   `;
 
-  const [burstRow] = await db(burstQuery);
+  const [burstRow] = await runQuery(db, burstQuery);
   const totalChanges = parseInt(burstRow.total_code_changes, 10);
   const under1s = parseInt(burstRow.under_1s, 10);
 
@@ -355,7 +359,7 @@ async function checkTemplateIdCoverage(db, results) {
     WHERE event_type = 'hint_view'
   `;
 
-  const [row] = await db(query);
+  const [row] = await runQuery(db, query);
   const total = parseInt(row.total_hint_views, 10);
 
   if (total === 0) {

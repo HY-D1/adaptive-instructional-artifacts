@@ -25,10 +25,8 @@ export const RESEARCH_EXPORT_FILES = [
 
 type ProvenanceStatus =
   | 'native_complete'        // All fields present at creation
-  | 'backfilled_hint_id'     // hint_id recovered from other fields
-  | 'backfilled_retrieval'   // retrieval links backfilled
-  | 'unverifiable_template'  // template_id missing, not recoverable
-  | 'legacy_partial';        // Multiple backfills applied
+  | 'backfilled_partial'     // At least one recoverable legacy field/link was backfilled
+  | 'unverifiable_template'; // template_id missing, not recoverable
 
 interface ExportRow {
   id: string;
@@ -40,6 +38,7 @@ interface ExportRow {
   hintId: string | null;
   templateId: string | null;
   sqlEngageSubtype: string | null;
+  sqlEngageRowId: string | null;
   hasRetrievalLinks: boolean;
   // RESEARCH-5: Provenance tracking
   provenanceStatus: ProvenanceStatus;
@@ -108,32 +107,41 @@ function determineProvenanceStatus(row: any): ProvenanceStatus {
   const hasRetrievalLinks = row.has_retrieval_links;
   const hasRecoveryData = row.sql_engage_subtype && row.sql_engage_row_id;
 
-  // Native complete: all fields present at creation
-  if (hasHintId && hasTemplateId && !hasRetrievalLinks) {
-    return 'native_complete';
-  }
-
-  // Check for backfilled hint_id (no hint_id but has recovery data)
-  const backfilledHintId = !hasHintId && hasRecoveryData;
-
-  // Determine final status
-  if (backfilledHintId && hasRetrievalLinks) {
-    return 'legacy_partial';
-  }
-  if (backfilledHintId) {
-    return 'backfilled_hint_id';
-  }
-  if (hasRetrievalLinks && !hasHintId) {
-    return 'backfilled_retrieval';
-  }
-  if (!hasTemplateId && hasHintId) {
+  if (row.event_type === 'hint_view' && !hasTemplateId) {
     return 'unverifiable_template';
   }
-  if (hasRetrievalLinks) {
-    return 'backfilled_retrieval';
+
+  if ((!hasHintId && hasRecoveryData) || hasRetrievalLinks) {
+    return 'backfilled_partial';
   }
 
   return 'native_complete';
+}
+
+export function buildResearchExportRows(rows: any[]): ExportRow[] {
+  return rows.map((row: any) => {
+    const provenanceStatus = determineProvenanceStatus(row);
+    const hasTemplateId = row.template_id && row.template_id.trim() !== '';
+    
+    return {
+      id: row.id,
+      eventType: row.event_type,
+      timestamp: row.timestamp,
+      learnerId: row.learner_id,
+      sessionId: row.session_id,
+      problemId: row.problem_id,
+      hintId: row.hint_id,
+      templateId: row.template_id,
+      sqlEngageSubtype: row.sql_engage_subtype,
+      sqlEngageRowId: row.sql_engage_row_id,
+      hasRetrievalLinks: row.has_retrieval_links,
+      // RESEARCH-5: Provenance tracking
+      provenanceStatus,
+      telemetryProvenanceStatus: provenanceStatus,
+      legacyBackfillApplied: provenanceStatus !== 'native_complete',
+      templateIdUnverifiable: !hasTemplateId && row.event_type === 'hint_view',
+    };
+  });
 }
 
 async function main() {
@@ -192,37 +200,13 @@ async function main() {
       console.log(`   Filtered to ${filteredRows.length} native_complete events`);
     }
 
-    const exportRows: ExportRow[] = filteredRows.map((row: any) => {
-      const provenanceStatus = determineProvenanceStatus(row);
-      const hasTemplateId = row.template_id && row.template_id.trim() !== '';
-      
-      return {
-        id: row.id,
-        eventType: row.event_type,
-        timestamp: row.timestamp,
-        learnerId: row.learner_id,
-        sessionId: row.session_id,
-        problemId: row.problem_id,
-        hintId: row.hint_id,
-        templateId: row.template_id,
-        sqlEngageSubtype: row.sql_engage_subtype,
-        sqlEngageRowId: row.sql_engage_row_id,
-        hasRetrievalLinks: row.has_retrieval_links,
-        // RESEARCH-5: Provenance tracking
-        provenanceStatus,
-        telemetryProvenanceStatus: provenanceStatus,
-        legacyBackfillApplied: provenanceStatus !== 'native_complete',
-        templateIdUnverifiable: !hasTemplateId && row.event_type === 'hint_view',
-      };
-    });
+    const exportRows = buildResearchExportRows(filteredRows);
 
     // Calculate provenance distribution
     const provenanceCounts: Record<ProvenanceStatus, number> = {
       native_complete: 0,
-      backfilled_hint_id: 0,
-      backfilled_retrieval: 0,
+      backfilled_partial: 0,
       unverifiable_template: 0,
-      legacy_partial: 0,
     };
     
     for (const row of exportRows) {
@@ -237,7 +221,7 @@ async function main() {
     // Generate output
     let output: string;
     if (FORMAT === 'csv') {
-      output = buildInteractionEventsCsv(rows);
+      output = buildInteractionEventsCsv(exportRows);
     } else {
       output = JSON.stringify({
         exportedAt: new Date().toISOString(),

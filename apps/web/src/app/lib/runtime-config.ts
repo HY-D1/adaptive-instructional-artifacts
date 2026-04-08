@@ -10,8 +10,8 @@
  */
 
 // RESEARCH CONTRACT VERSION - Bump when deployment semantics change
-// v2.1.0: Added CSRF+keepalive fix, concept_view durable path, chat telemetry unification, startup readiness check
-export const RESEARCH_CONTRACT_VERSION = 'v2.1.0';
+// v2.2.0: Exact backend confirmation, durable pagehide/session_end barriers, bounded hint cache, production batch validation
+export const RESEARCH_CONTRACT_VERSION = 'v2.2.0';
 
 /**
  * Research Runtime Mode
@@ -186,6 +186,7 @@ export interface ResearchReadiness {
     dbMode?: string;
     isNeon: boolean;
     persistenceEnabled: boolean;
+    backendContractVersion?: string;
   };
 }
 
@@ -194,6 +195,7 @@ export interface PersistenceStatus {
   dbMode: 'neon' | 'sqlite';
   resolvedEnvSource: string;
   persistenceRoutesEnabled: boolean;
+  researchContractVersion?: string;
 }
 
 export interface BackendHealth {
@@ -314,6 +316,7 @@ export async function checkResearchReadiness(): Promise<ResearchReadiness> {
         dbMode: persistence?.dbMode,
         isNeon: false,
         persistenceEnabled,
+        backendContractVersion: persistence?.researchContractVersion,
       }
     };
   }
@@ -328,6 +331,7 @@ export async function checkResearchReadiness(): Promise<ResearchReadiness> {
         dbMode: persistence?.dbMode,
         isNeon: true,
         persistenceEnabled: false,
+        backendContractVersion: persistence?.researchContractVersion,
       }
     };
   }
@@ -340,6 +344,7 @@ export async function checkResearchReadiness(): Promise<ResearchReadiness> {
       dbMode: 'neon',
       isNeon: true,
       persistenceEnabled: true,
+      backendContractVersion: persistence?.researchContractVersion,
     }
   };
 }

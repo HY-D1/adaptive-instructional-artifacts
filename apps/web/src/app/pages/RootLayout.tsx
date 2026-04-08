@@ -182,6 +182,7 @@ interface ResearchReadinessBlockerProps {
     dbMode?: string;
     isNeon: boolean;
     persistenceEnabled: boolean;
+    backendContractVersion?: string;
   };
 }
 
@@ -239,6 +240,7 @@ function ResearchReadinessBlocker({ reason, diagnostics }: ResearchReadinessBloc
           
           <div className="bg-gray-50 p-4 rounded-lg text-sm font-mono space-y-1">
             <p>Contract Version: {RESEARCH_CONTRACT_VERSION}</p>
+            <p>Backend Contract: {diagnostics.backendContractVersion || 'unknown'}</p>
             <p>Environment: Production</p>
           </div>
           

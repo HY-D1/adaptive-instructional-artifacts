@@ -44,6 +44,18 @@ const RESEARCH_VALIDATION_RULES: ValidationRule[] = [
       'problemsSolved',
     ],
   },
+  {
+    eventType: 'textbook_add',
+    requiredFields: ['noteId', 'noteContent', 'templateId', 'policyVersion'],
+  },
+  {
+    eventType: 'textbook_update',
+    requiredFields: ['noteId', 'noteContent', 'templateId', 'policyVersion'],
+  },
+  {
+    eventType: 'chat_interaction',
+    requiredFields: ['chatMessage', 'chatResponse', 'retrievedSourceIdsWhenTextbookUnitsRetrieved'],
+  },
 ];
 
 interface ValidationReport {
@@ -57,6 +69,21 @@ interface ValidationReport {
     invalid: number;
     missingFields: Record<string, number>;
   }[];
+}
+
+function hasText(value: unknown): boolean {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+function hasJsonArrayItems(value: unknown): boolean {
+  if (!hasText(value)) return false;
+
+  try {
+    const parsed = JSON.parse(value as string);
+    return Array.isArray(parsed) && parsed.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 function validateEvent(event: any, rule: ValidationRule): { valid: boolean; missing: string[] } {
@@ -76,28 +103,28 @@ function validateEvent(event: any, rule: ValidationRule): { valid: boolean; miss
         hasField = event.hint_level !== null && [1, 2, 3].includes(event.hint_level);
         break;
       case 'templateId':
-        hasField = event.template_id && event.template_id.trim() !== '';
+        hasField = hasText(event.template_id);
         break;
       case 'sqlEngageSubtype':
-        hasField = event.sql_engage_subtype && event.sql_engage_subtype.trim() !== '';
+        hasField = hasText(event.sql_engage_subtype);
         break;
       case 'sqlEngageRowId':
-        hasField = event.sql_engage_row_id && event.sql_engage_row_id.trim() !== '';
+        hasField = hasText(event.sql_engage_row_id);
         break;
       case 'policyVersion':
-        hasField = event.policy_version && event.policy_version.trim() !== '';
+        hasField = hasText(event.policy_version);
         break;
       case 'helpRequestIndex':
         hasField = event.help_request_index !== null && event.help_request_index >= 1;
         break;
       case 'conceptId':
-        hasField = event.concept_id && event.concept_id.trim() !== '';
+        hasField = hasText(event.concept_id);
         break;
       case 'source':
-        hasField = event.source && event.source.trim() !== '';
+        hasField = hasText(event.source);
         break;
       case 'sessionId':
-        hasField = event.session_id && event.session_id.trim() !== '';
+        hasField = hasText(event.session_id);
         break;
       case 'totalTime':
         hasField = event.total_time !== null && event.total_time >= 0;
@@ -107,6 +134,21 @@ function validateEvent(event: any, rule: ValidationRule): { valid: boolean; miss
         break;
       case 'problemsSolved':
         hasField = event.problems_solved !== null && event.problems_solved >= 0;
+        break;
+      case 'noteId':
+        hasField = hasText(event.note_id);
+        break;
+      case 'noteContent':
+        hasField = hasText(event.note_content);
+        break;
+      case 'chatMessage':
+        hasField = hasText(event.chat_message);
+        break;
+      case 'chatResponse':
+        hasField = hasText(event.chat_response);
+        break;
+      case 'retrievedSourceIdsWhenTextbookUnitsRetrieved':
+        hasField = !hasJsonArrayItems(event.textbook_units_retrieved) || hasJsonArrayItems(event.retrieved_source_ids);
         break;
     }
 

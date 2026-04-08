@@ -119,6 +119,14 @@ interface ApiResponse<T> {
   data?: T;
   error?: string;
   message?: string;
+  failedIds?: string[];
+  errors?: Array<{ eventId?: string; eventType?: string; missingFields?: string[] }>;
+}
+
+interface BatchConfirmationResponse {
+  count?: number;
+  confirmedIds?: string[];
+  failedIds?: string[];
 }
 
 interface BackendLearner {
@@ -469,6 +477,7 @@ async function fetchApi<T>(
 
     if (!response.ok) {
       return {
+        ...errorData,
         success: false,
         error: errorData.error || `HTTP ${response.status}: ${response.statusText}`,
         message: errorData.message,
@@ -907,9 +916,10 @@ export async function logInteraction(event: InteractionEvent): Promise<{ success
     body: JSON.stringify(backendEvent),
   });
   
+  const confirmed = response.success && response.data?.id === event.id;
   return {
     success: response.success,
-    confirmed: response.success,  // Single event: success means confirmed
+    confirmed,
   };
 }
 
@@ -935,23 +945,26 @@ export async function logInteractionsBatch(events: InteractionEvent[]): Promise<
  */
 export async function logInteractionsBatchVerified(
   events: InteractionEvent[]
-): Promise<{ confirmed: string[]; failed: string[] }> {
+): Promise<{ confirmed: string[]; failed: string[]; invalid?: string[] }> {
   if (events.length === 0) return { confirmed: [], failed: [] };
   
   const backendEvents = events.map(convertToBackendInteraction);
   const eventIds = events.map(e => e.id);
   
-  const response = await fetchApi<{ count: number; confirmedIds?: string[] }>('/interactions/batch', {
+  const response = await fetchApi<BatchConfirmationResponse>('/interactions/batch', {
     method: 'POST',
     body: JSON.stringify({ events: backendEvents }),
   });
   
   if (!response.success) {
-    return { confirmed: [], failed: eventIds };
+    const invalidIds = response.error?.toLowerCase().includes('invalid')
+      ? response.failedIds?.filter((id): id is string => eventIds.includes(id)) ?? []
+      : [];
+    return { confirmed: [], failed: eventIds, invalid: invalidIds };
   }
   
-  // Use confirmed IDs from response if available, otherwise assume all confirmed
-  const confirmedIds = response.data?.confirmedIds ?? eventIds;
+  // Exact confirmation only. Missing confirmedIds means "unverified", not success.
+  const confirmedIds = response.data?.confirmedIds ?? [];
   const confirmedSet = new Set(confirmedIds);
   const failed = eventIds.filter(id => !confirmedSet.has(id));
   
@@ -991,9 +1004,9 @@ export async function logInteractionsBatchKeepalive(
       return { success: false };
     }
     
-    // Parse confirmed IDs if backend returns them
+    // Parse confirmed IDs if backend returns them. Missing IDs are not assumed.
     const data = await response.json().catch(() => null);
-    const confirmedIds = data?.confirmedIds || events.map(e => e.id);
+    const confirmedIds = data?.data?.confirmedIds ?? data?.confirmedIds ?? [];
     
     return { success: true, confirmedIds };
   } catch (error) {

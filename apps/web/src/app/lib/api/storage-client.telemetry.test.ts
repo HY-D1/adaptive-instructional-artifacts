@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./csrf-client', () => ({
   withCsrfHeader: (options: RequestInit) => options,
+  getCsrfHeaders: () => ({}),
   isMutatingMethod: (method?: string) => method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE',
   refreshCsrfTokenFromAuthMe: vi.fn(async () => true),
 }));
@@ -325,6 +326,157 @@ describe('storage-client telemetry contract', () => {
       problemsAttempted: 5,
       problemsSolved: 3,
     });
+  });
+
+  it('does not confirm a single interaction when backend returns a different id', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { id: 'backend-generated-id' },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    const { logInteraction } = await import('./storage-client');
+
+    const result = await logInteraction({
+      id: 'client-event-id',
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-1',
+      successful: true,
+    });
+
+    expect(result).toEqual({ success: true, confirmed: false });
+  });
+
+  it('does not assume batch confirmation when backend omits confirmed ids', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { count: 2 },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    const { logInteractionsBatchVerified } = await import('./storage-client');
+
+    const result = await logInteractionsBatchVerified([
+      {
+        id: 'batch-unconfirmed-1',
+        learnerId: 'learner-1',
+        sessionId: 'session-1',
+        timestamp: 1_700_000_000_000,
+        eventType: 'execution',
+        problemId: 'problem-1',
+      },
+      {
+        id: 'batch-unconfirmed-2',
+        learnerId: 'learner-1',
+        sessionId: 'session-1',
+        timestamp: 1_700_000_001_000,
+        eventType: 'concept_view',
+        problemId: 'problem-1',
+        conceptId: 'joins',
+        source: 'problem',
+      },
+    ]);
+
+    expect(result).toEqual({
+      confirmed: [],
+      failed: ['batch-unconfirmed-1', 'batch-unconfirmed-2'],
+    });
+  });
+
+  it('surfaces server-reported invalid batch ids separately from transient failures', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Invalid research-critical event batch',
+          failedIds: ['invalid-hint-1'],
+          errors: [
+            {
+              eventId: 'invalid-hint-1',
+              eventType: 'hint_view',
+              missingFields: ['templateId'],
+            },
+          ],
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    const { logInteractionsBatchVerified } = await import('./storage-client');
+
+    const result = await logInteractionsBatchVerified([
+      {
+        id: 'invalid-hint-1',
+        learnerId: 'learner-1',
+        sessionId: 'session-1',
+        timestamp: 1_700_000_000_000,
+        eventType: 'hint_view',
+        problemId: 'problem-1',
+        hintId: 'hint-1',
+        hintText: 'Check the join.',
+        hintLevel: 2,
+        sqlEngageSubtype: 'joins',
+        sqlEngageRowId: 'sql-engage:joins:1',
+        policyVersion: 'policy-definitions-v1',
+        helpRequestIndex: 1,
+      },
+    ]);
+
+    expect(result).toEqual({
+      confirmed: [],
+      failed: ['invalid-hint-1'],
+      invalid: ['invalid-hint-1'],
+    });
+  });
+
+  it('does not assume keepalive batch confirmation when backend omits confirmed ids', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { count: 1 },
+        }),
+        {
+          status: 201,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    const { logInteractionsBatchKeepalive } = await import('./storage-client');
+
+    const result = await logInteractionsBatchKeepalive([
+      {
+        id: 'keepalive-unconfirmed-1',
+        learnerId: 'learner-1',
+        sessionId: 'session-1',
+        timestamp: 1_700_000_000_000,
+        eventType: 'execution',
+        problemId: 'problem-1',
+      },
+    ]);
+
+    expect(result).toEqual({ success: true, confirmedIds: [] });
   });
 
   it('serializes queued profiles when Set and Map fields are missing', async () => {

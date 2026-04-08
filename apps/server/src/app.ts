@@ -47,6 +47,8 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
+export const RESEARCH_CONTRACT_VERSION = 'v2.2.0';
+
 let schemaInitPromise: Promise<void> | null = null;
 
 export function ensureSchemaInitialized(): Promise<void> {
@@ -196,6 +198,7 @@ app.get('/api/system/persistence-status', (_req: Request, res: Response) => {
     dbMode: neon ? 'neon' : 'sqlite',
     resolvedEnvSource: source,
     persistenceRoutesEnabled: true,
+    researchContractVersion: RESEARCH_CONTRACT_VERSION,
   });
 });
 

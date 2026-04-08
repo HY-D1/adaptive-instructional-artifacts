@@ -6,6 +6,7 @@ import {
   RESEARCH_EXPORT_FILES,
   buildAuthEventsCsv,
   buildInteractionEventsCsv,
+  buildResearchExportRows,
 } from '../../../apps/server/src/scripts/export-research-data';
 
 describe('research export contract', () => {
@@ -81,6 +82,83 @@ describe('research export contract', () => {
     expect(row).toContain('Check the join predicate.');
     expect(row).toContain('hint_template_v1');
     expect(row).toContain('sql-engage-v1');
+  });
+
+  it('includes truthful provenance labels in interaction event csv exports', () => {
+    const csv = buildInteractionEventsCsv([
+      {
+        id: 'hint-missing-template',
+        eventType: 'hint_view',
+        timestamp: '2026-04-05T00:00:00.000Z',
+        learnerId: 'learner-1',
+        sessionId: 'session-1',
+        problemId: 'problem-1',
+        hintId: 'sql-engage:joins:hint:sql-engage:joins:1:L2',
+        templateId: null,
+        sqlEngageSubtype: 'joins',
+        sqlEngageRowId: 'sql-engage:joins:1',
+        hasRetrievalLinks: false,
+        provenanceStatus: 'unverifiable_template',
+        telemetryProvenanceStatus: 'unverifiable_template',
+        legacyBackfillApplied: true,
+        templateIdUnverifiable: true,
+      },
+    ]);
+
+    const [header, row] = csv.trim().split('\n');
+    expect(header).toContain('provenanceStatus');
+    expect(header).toContain('telemetryProvenanceStatus');
+    expect(header).toContain('legacyBackfillApplied');
+    expect(header).toContain('templateIdUnverifiable');
+    expect(row).toContain('unverifiable_template');
+  });
+
+  it('labels raw interaction rows before paper export serialization', () => {
+    const exportRows = buildResearchExportRows([
+      {
+        id: 'hint-missing-template',
+        event_type: 'hint_view',
+        timestamp: '2026-04-05T00:00:00.000Z',
+        learner_id: 'learner-1',
+        session_id: 'session-1',
+        problem_id: 'problem-1',
+        hint_id: 'sql-engage:joins:hint:sql-engage:joins:1:L2',
+        template_id: null,
+        sql_engage_subtype: 'joins',
+        sql_engage_row_id: 'sql-engage:joins:1',
+        has_retrieval_links: false,
+      },
+      {
+        id: 'chat-backfilled-retrieval',
+        event_type: 'chat_interaction',
+        timestamp: '2026-04-05T00:00:01.000Z',
+        learner_id: 'learner-1',
+        session_id: 'session-1',
+        problem_id: 'problem-1',
+        hint_id: null,
+        template_id: null,
+        sql_engage_subtype: null,
+        sql_engage_row_id: null,
+        has_retrieval_links: true,
+      },
+    ]);
+
+    expect(exportRows).toEqual([
+      expect.objectContaining({
+        id: 'hint-missing-template',
+        provenanceStatus: 'unverifiable_template',
+        telemetryProvenanceStatus: 'unverifiable_template',
+        legacyBackfillApplied: true,
+        templateIdUnverifiable: true,
+      }),
+      expect.objectContaining({
+        id: 'chat-backfilled-retrieval',
+        provenanceStatus: 'backfilled_partial',
+        telemetryProvenanceStatus: 'backfilled_partial',
+        legacyBackfillApplied: true,
+        templateIdUnverifiable: false,
+      }),
+    ]);
   });
 
   it('includes auth_events artifacts and hashed email fields in auth csv exports', () => {

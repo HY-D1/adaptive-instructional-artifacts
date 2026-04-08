@@ -10,8 +10,10 @@ const getProfileMock = vi.fn<(learnerId: string) => Promise<null>>();
 const getSessionMock = vi.fn<(learnerId: string) => Promise<Record<string, unknown> | null>>();
 const getInteractionsMock = vi.fn<(learnerId: string, options?: Record<string, unknown>) => Promise<{ events: unknown[]; total: number }>>();
 const getTextbookMock = vi.fn<(learnerId: string) => Promise<unknown[]>>();
-const logInteractionMock = vi.fn<(event: unknown) => Promise<boolean>>();
+const logInteractionMock = vi.fn<(event: unknown) => Promise<{ success: boolean; confirmed?: boolean }>>();
 const logInteractionsBatchMock = vi.fn<(events: unknown[]) => Promise<boolean>>();
+const logInteractionsBatchVerifiedMock = vi.fn<(events: unknown[]) => Promise<{ confirmed: string[]; failed: string[] }>>();
+const logInteractionsBatchKeepaliveMock = vi.fn<(events: unknown[]) => Promise<{ success: boolean; confirmedIds?: string[] }>>();
 const saveProfileMock = vi.fn<(profile: unknown) => Promise<boolean>>();
 
 let dualStorageModule: DualStorageModule;
@@ -30,6 +32,8 @@ beforeAll(async () => {
       getTextbook: getTextbookMock,
       logInteraction: logInteractionMock,
       logInteractionsBatch: logInteractionsBatchMock,
+      logInteractionsBatchVerified: logInteractionsBatchVerifiedMock,
+      logInteractionsBatchKeepalive: logInteractionsBatchKeepaliveMock,
       saveProfile: saveProfileMock,
     },
   }));
@@ -53,8 +57,20 @@ beforeEach(() => {
   getSessionMock.mockReset().mockResolvedValue(null);
   getInteractionsMock.mockReset().mockResolvedValue({ events: [], total: 0 });
   getTextbookMock.mockReset().mockResolvedValue([]);
-  logInteractionMock.mockReset().mockResolvedValue(true);
+  logInteractionMock.mockReset().mockResolvedValue({ success: true, confirmed: true });
   logInteractionsBatchMock.mockReset().mockResolvedValue(true);
+  logInteractionsBatchVerifiedMock.mockReset().mockImplementation(async (events: unknown[]) => {
+    const ids = events
+      .map((event) => (event as { id?: unknown }).id)
+      .filter((id): id is string => typeof id === 'string');
+    return { confirmed: ids, failed: [] };
+  });
+  logInteractionsBatchKeepaliveMock.mockReset().mockImplementation(async (events: unknown[]) => {
+    const confirmedIds = events
+      .map((event) => (event as { id?: unknown }).id)
+      .filter((id): id is string => typeof id === 'string');
+    return { success: true, confirmedIds };
+  });
   saveProfileMock.mockReset().mockResolvedValue(true);
 });
 
@@ -248,6 +264,31 @@ describe('dual-storage critical write semantics', () => {
     );
   });
 
+  it('keeps critical interactions in the durable pending store until backend confirms by id', async () => {
+    localStorage.setItem('sql-learning-active-session', 'session-critical-pending');
+    logInteractionMock.mockResolvedValueOnce({ success: true, confirmed: false });
+
+    const status = await dualStorageModule.dualStorage.saveInteractionCritical({
+      id: 'critical-unconfirmed-1',
+      learnerId: 'learner-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-1',
+      error: 'syntax error',
+    });
+
+    expect(status.backendConfirmed).toBe(false);
+    expect(status.pendingSync).toBe(true);
+    expect(dualStorageModule.dualStorage.getPendingInteractionsForSession('session-critical-pending')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'critical-unconfirmed-1',
+          sessionId: 'session-critical-pending',
+        }),
+      ]),
+    );
+  });
+
   it('returns backend-confirmed status for persisted session writes', async () => {
     const status = await dualStorageModule.dualStorage.ensureSessionPersisted('learner-1', 'session-1');
 
@@ -410,6 +451,85 @@ describe('dual-storage critical write semantics', () => {
     expect(status.pendingSync).toBe(true);
     expect(logInteractionMock).not.toHaveBeenCalled();
     expect(localStorage.getItem('sql-adapt-pending-session-ends') ?? '').toContain('session-end-pending-1');
+  });
+
+  it('only confirms exact ids during pagehide flush and leaves missing ids pending', async () => {
+    logInteractionMock.mockResolvedValue({ success: true, confirmed: false });
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'pagehide-exact-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-pagehide-partial',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-1',
+      successful: true,
+    });
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'pagehide-exact-2',
+      learnerId: 'learner-1',
+      sessionId: 'session-pagehide-partial',
+      timestamp: 1_700_000_001_000,
+      eventType: 'concept_view',
+      problemId: 'problem-1',
+      conceptId: 'joins',
+      source: 'problem',
+    });
+
+    await vi.waitFor(() => {
+      expect(logInteractionMock).toHaveBeenCalledTimes(2);
+    });
+    logInteractionsBatchKeepaliveMock.mockResolvedValueOnce({
+      success: true,
+      confirmedIds: ['pagehide-exact-1'],
+    });
+
+    const status = await dualStorageModule.dualStorage.flushWithKeepalive('session-pagehide-partial');
+
+    expect(status.backendConfirmed).toBe(false);
+    expect(status.pendingSync).toBe(true);
+    expect(dualStorageModule.dualStorage.getPendingInteractionsForSession('session-pagehide-partial')).toEqual([
+      expect.objectContaining({ id: 'pagehide-exact-2' }),
+    ]);
+  });
+
+  it('does not send queued session_end until all same-session interactions are confirmed', async () => {
+    logInteractionMock.mockResolvedValue({ success: true, confirmed: false });
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'pagehide-before-end-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-end-barrier-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-1',
+      successful: true,
+    });
+    const queued = dualStorageModule.dualStorage.queueSessionEnd({
+      id: 'session-end-barrier-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-end-barrier-1',
+      timestamp: 1_700_000_010_000,
+      eventType: 'session_end',
+      problemId: 'problem-1',
+      totalTime: 10_000,
+      timeSpent: 10_000,
+      problemsAttempted: 1,
+      problemsSolved: 1,
+    });
+    expect(queued.success).toBe(true);
+
+    await vi.waitFor(() => {
+      expect(logInteractionMock).toHaveBeenCalledTimes(1);
+    });
+    logInteractionsBatchKeepaliveMock.mockResolvedValueOnce({
+      success: true,
+      confirmedIds: [],
+    });
+
+    const status = await dualStorageModule.dualStorage.flushWithKeepalive('session-end-barrier-1');
+
+    expect(status.backendConfirmed).toBe(false);
+    expect(logInteractionsBatchKeepaliveMock).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem('sql-adapt-pending-session-ends') ?? '').toContain('session-end-barrier-1');
   });
 
   it('flushes pending session_end after interactions verify', async () => {

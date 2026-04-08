@@ -22,7 +22,27 @@ interface ValidationResult {
   missing: string[];
 }
 
-function validateResearchEvent(event: NeonInteractionEventInput): ValidationResult {
+function hasText(value: unknown): boolean {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+function hasItems(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0;
+}
+
+export interface BatchValidationError {
+  eventId: string;
+  eventType: string;
+  missingFields: string[];
+}
+
+export interface BatchValidationResult {
+  valid: boolean;
+  failedIds: string[];
+  errors: BatchValidationError[];
+}
+
+export function validateResearchEvent(event: NeonInteractionEventInput): ValidationResult {
   const missing: string[] = [];
   
   switch (event.eventType) {
@@ -45,14 +65,51 @@ function validateResearchEvent(event: NeonInteractionEventInput): ValidationResu
       break;
       
     case 'session_end':
-      if (!event.sessionId?.trim()) missing.push('sessionId');
+      if (!hasText(event.sessionId)) missing.push('sessionId');
       if (typeof event.totalTime !== 'number') missing.push('totalTime');
       if (typeof event.problemsAttempted !== 'number') missing.push('problemsAttempted');
       if (typeof event.problemsSolved !== 'number') missing.push('problemsSolved');
       break;
+
+    case 'textbook_add':
+    case 'textbook_update':
+      if (!hasText(event.noteId)) missing.push('noteId');
+      if (!hasText(event.noteContent)) missing.push('noteContent');
+      if (!hasText(event.templateId)) missing.push('templateId');
+      if (!hasText(event.policyVersion)) missing.push('policyVersion');
+      break;
+
+    case 'chat_interaction':
+      if (!hasText(event.chatMessage)) missing.push('chatMessage');
+      if (!hasText(event.chatResponse)) missing.push('chatResponse');
+      if (hasItems(event.textbookUnitsRetrieved) && !hasItems(event.retrievedSourceIds)) {
+        missing.push('retrievedSourceIds');
+      }
+      break;
   }
   
   return { valid: missing.length === 0, missing };
+}
+
+export function validateResearchBatchForWrite(events: NeonInteractionEventInput[]): BatchValidationResult {
+  const errors: BatchValidationError[] = [];
+
+  for (const event of events) {
+    const validation = validateResearchEvent(event);
+    if (!validation.valid) {
+      errors.push({
+        eventId: typeof event.id === 'string' ? event.id : '',
+        eventType: typeof event.eventType === 'string' ? event.eventType : 'unknown',
+        missingFields: validation.missing,
+      });
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    failedIds: errors.map((error) => error.eventId).filter(Boolean),
+    errors,
+  };
 }
 
 // ============================================================================
@@ -308,6 +365,24 @@ router.post('/batch', async (req: Request, res: Response) => {
       return;
     }
 
+    if (process.env.NODE_ENV === 'production') {
+      const batchValidation = validateResearchBatchForWrite(events);
+      if (!batchValidation.valid) {
+        console.warn('[telemetry_validation_error]', {
+          route: 'batch',
+          failedIds: batchValidation.failedIds,
+          errors: batchValidation.errors,
+        });
+        res.status(400).json({
+          success: false,
+          error: 'Invalid research-critical event batch',
+          failedIds: batchValidation.failedIds,
+          errors: batchValidation.errors,
+        });
+        return;
+      }
+    }
+
     const results = [];
     const confirmedIds: string[] = [];
     
@@ -316,20 +391,6 @@ router.post('/batch', async (req: Request, res: Response) => {
       event.learnerId = scopedTarget.learnerId;
       event.sectionId = scopedTarget.sectionId;
       const id = event.id || `${event.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
-      
-      // RESEARCH-4: Validate research-critical events server-side
-      if (process.env.NODE_ENV === 'production') {
-        const validation = validateResearchEvent(event);
-        if (!validation.valid) {
-          console.warn('[telemetry_validation_error]', {
-            eventType: event.eventType,
-            missingFields: validation.missing,
-            eventId: id,
-          });
-          // Continue to next event - don't store invalid research events
-          continue;
-        }
-      }
       
       const payload = buildNeonInteractionPayload(event);
       const interaction = await db.createInteraction({

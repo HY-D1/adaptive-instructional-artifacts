@@ -396,10 +396,12 @@ class OfflineQueueManager {
   private durableStore: DurablePendingStore;
   private deadLetter: DeadLetterItem[] = [];
   private onConfirmedCallback?: (ids: string[]) => void;
+  private onDeadLetterCallback?: (ids: string[], reason: string) => void;
 
-  constructor(onConfirmed?: (ids: string[]) => void) {
+  constructor(onConfirmed?: (ids: string[]) => void, onDeadLetter?: (ids: string[], reason: string) => void) {
     this.durableStore = new DurablePendingStore();
     this.onConfirmedCallback = onConfirmed;
+    this.onDeadLetterCallback = onDeadLetter;
     this.loadQueue();
     this.loadDeadLetter();
     // Start background processing
@@ -564,7 +566,12 @@ class OfflineQueueManager {
       });
       
       // Remove from main queue
-      this.remove(id);
+      this.queue = this.queue.filter(item => item.id !== id);
+      this.saveQueue();
+
+      if (this.onDeadLetterCallback) {
+        this.onDeadLetterCallback([id], reason);
+      }
     }
   }
 
@@ -617,9 +624,18 @@ class OfflineQueueManager {
         if (result.confirmed.length > 0) {
           this.removeBatch(result.confirmed);
         }
+
+        if (result.invalid && result.invalid.length > 0) {
+          for (const id of result.invalid) {
+            this.moveToDeadLetter(id, 'server_schema_validation_failed');
+          }
+        }
         
         // Mark sent but not confirmed for retry
         for (const id of result.failed) {
+          if (result.invalid?.includes(id)) {
+            continue;
+          }
           this.incrementRetry(id);
         }
       } catch (error) {
@@ -695,6 +711,10 @@ class DualStorageManager {
       // RESEARCH-1: When offline queue confirms items, also mark in pending store
       for (const id of ids) {
         this.pendingStore.markConfirmedInteraction(id);
+      }
+    }, (ids, reason) => {
+      for (const id of ids) {
+        this.pendingStore.markDeadLetter(id, reason);
       }
     });
     
@@ -935,8 +955,8 @@ class DualStorageManager {
     }
 
     const eventForWrite = this.withActiveSessionFallback(event);
-    storageClient.logInteraction(eventForWrite).then(backendSuccess => {
-      if (!backendSuccess) {
+    storageClient.logInteraction(eventForWrite).then(result => {
+      if (!result.success || !result.confirmed) {
         this.queueInteractionForRetry(eventForWrite);
       }
     }).catch(error => {
@@ -1087,10 +1107,13 @@ class DualStorageManager {
         error: localResult.quotaExceeded
           ? 'Failed to save locally: browser storage quota exceeded.'
           : 'Failed to save locally.',
-      };
-    }
+        };
+      }
+
+    this.pendingStore.add(eventForWrite);
 
     if (!this.config.useBackend) {
+      this.pendingStore.markConfirmedInteraction(eventForWrite.id);
       return { backendConfirmed: true, pendingSync: false };
     }
 
@@ -1109,8 +1132,11 @@ class DualStorageManager {
     }
 
     try {
+      this.pendingStore.markSent(eventForWrite.id);
       const backendSuccess = await storageClient.logInteraction(eventForWrite);
-      if (backendSuccess) {
+      if (backendSuccess.success && backendSuccess.confirmed) {
+        this.pendingStore.markConfirmedInteraction(eventForWrite.id);
+        this.trackBackendAck();
         return { backendConfirmed: true, pendingSync: false };
       }
       this.offlineQueue.add({
@@ -1640,7 +1666,7 @@ class DualStorageManager {
     const allEvents = Array.from(eventMap.values());
 
     // Send batch with keepalive and track confirmed IDs
-    let flushResult: { success: boolean; confirmedIds?: string[] } = { success: false };
+    let flushResult: { success: boolean; confirmedIds?: string[] } = { success: allEvents.length === 0, confirmedIds: [] };
     if (allEvents.length > 0) {
       flushResult = await storageClient.logInteractionsBatchKeepalive(allEvents);
       
@@ -1657,17 +1683,28 @@ class DualStorageManager {
       item => item.event.sessionId === sessionId
     );
 
-    if (flushResult.success) {
+    const confirmedInteractionIds = new Set(flushResult.confirmedIds ?? []);
+    const interactionsConfirmed = allEvents.length === 0 || (
+      flushResult.success && allEvents.every(event => confirmedInteractionIds.has(event.id))
+    );
+    const confirmedSessionEndIds: string[] = [];
+    let sessionEndFlushComplete = true;
+
+    if (interactionsConfirmed) {
       for (const item of pendingSessionEnds) {
         const sessionEndResult = await storageClient.logInteractionsBatchKeepalive([item.event]);
-        if (sessionEndResult.success) {
+        if (sessionEndResult.success && sessionEndResult.confirmedIds?.includes(item.event.id)) {
           this.removePendingSessionEnd(item.event);
+          confirmedSessionEndIds.push(item.event.id);
+        } else {
+          sessionEndFlushComplete = false;
         }
       }
+    } else if (pendingSessionEnds.length > 0) {
+      sessionEndFlushComplete = false;
     }
 
-    const allConfirmed = flushResult.success && 
-      (flushResult.confirmedIds?.length === allEvents.length);
+    const allConfirmed = interactionsConfirmed && sessionEndFlushComplete;
 
     const result: CriticalWriteStatus = allConfirmed
       ? { backendConfirmed: true, pendingSync: false }
@@ -1681,6 +1718,7 @@ class DualStorageManager {
         sessionId, 
         eventCount: allEvents.length,
         confirmedCount: flushResult.confirmedIds?.length || 0,
+        pendingSessionEndCount: Math.max(0, pendingSessionEnds.length - confirmedSessionEndIds.length),
         reason: allConfirmed ? undefined : 'partial_confirmation'
       }
     );
@@ -1720,12 +1758,18 @@ class DualStorageManager {
       // Step 2: Send via keepalive batch
       const keepaliveSuccess = await storageClient.logInteractionsBatchKeepalive(events);
       
-      if (keepaliveSuccess) {
-        // Mark all as confirmed
+      if (keepaliveSuccess.success) {
+        const confirmed = new Set(keepaliveSuccess.confirmedIds ?? []);
         for (const event of events) {
-          this.pendingStore.markConfirmedInteraction(event.id);
+          if (confirmed.has(event.id)) {
+            this.pendingStore.markConfirmedInteraction(event.id);
+          }
         }
-        result.interactionsConfirmed = events.length;
+        result.interactionsConfirmed = events.filter(event => confirmed.has(event.id)).length;
+        if (result.interactionsConfirmed < events.length) {
+          result.error = 'Keepalive flush returned partial confirmation; events remain pending';
+          return result;
+        }
       } else {
         // Keepalive failed - events remain in pending store for retry
         result.error = 'Keepalive flush failed, events remain pending';
@@ -1742,9 +1786,12 @@ class DualStorageManager {
       const retryEvents = retryQueueItems.map(item => item.data as InteractionEvent);
       const retrySuccess = await storageClient.logInteractionsBatchKeepalive(retryEvents);
       
-      if (retrySuccess) {
+      if (retrySuccess.success) {
+        const confirmed = new Set(retrySuccess.confirmedIds ?? []);
         for (const item of retryQueueItems) {
-          this.pendingStore.markConfirmedInteraction(item.id);
+          if (confirmed.has(item.id)) {
+            this.pendingStore.markConfirmedInteraction(item.id);
+          }
         }
       }
     }
@@ -1791,7 +1838,7 @@ class DualStorageManager {
 
     try {
       const backendSuccess = await storageClient.logInteraction(event);
-      if (!backendSuccess) {
+      if (!backendSuccess.success || !backendSuccess.confirmed) {
         return {
           backendConfirmed: false,
           pendingSync: true,
