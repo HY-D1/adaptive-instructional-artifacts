@@ -1365,12 +1365,15 @@ export async function getLearnerProfile(learnerId: string): Promise<LearnerProfi
 
   if (!result) return null;
 
+  const solvedProblemIds = await getSolvedProblemIdsForLearner(learnerId);
+
   return {
     id: result.learner_id,
     name: result.name,
     conceptsCovered: parseJson(result.concept_coverage) || [],
     conceptCoverageEvidence: parseJson(result.concept_evidence) || {},
     errorHistory: parseJson(result.error_history) || {},
+    solvedProblemIds,
     interactionCount: result.interaction_count || 0,
     currentStrategy: result.strategy || 'default',
     preferences: parseJson(result.preferences) || {
@@ -1392,6 +1395,7 @@ export async function saveLearnerProfile(
 ): Promise<LearnerProfile | null> {
   const db = getDb();
   const now = new Date().toISOString();
+  const solvedProblemIds = await getSolvedProblemIdsForLearner(learnerId);
 
   // Get existing profile or create new
   const existing = await getLearnerProfile(learnerId);
@@ -1402,6 +1406,7 @@ export async function saveLearnerProfile(
     conceptsCovered: profile.conceptsCovered || existing?.conceptsCovered || [],
     conceptCoverageEvidence: profile.conceptCoverageEvidence || existing?.conceptCoverageEvidence || {},
     errorHistory: profile.errorHistory || existing?.errorHistory || {},
+    solvedProblemIds,
     interactionCount: profile.interactionCount ?? existing?.interactionCount ?? 0,
     currentStrategy: profile.currentStrategy || existing?.currentStrategy || 'default',
     preferences: profile.preferences || existing?.preferences || {
@@ -1449,6 +1454,9 @@ export async function saveLearnerProfile(
 export async function getAllLearnerProfiles(): Promise<LearnerProfile[]> {
   const db = getDb();
   const results = await db`SELECT * FROM learner_profiles ORDER BY updated_at DESC`;
+  const solvedProblemIdsByLearner = await getSolvedProblemIdsByLearner(
+    results.map((row) => row.learner_id),
+  );
 
   return results.map(row => ({
     id: row.learner_id,
@@ -1456,6 +1464,7 @@ export async function getAllLearnerProfiles(): Promise<LearnerProfile[]> {
     conceptsCovered: parseJson(row.concept_coverage) || [],
     conceptCoverageEvidence: parseJson(row.concept_evidence) || {},
     errorHistory: parseJson(row.error_history) || {},
+    solvedProblemIds: solvedProblemIdsByLearner.get(row.learner_id) || [],
     interactionCount: row.interaction_count || 0,
     currentStrategy: row.strategy || 'default',
     preferences: parseJson(row.preferences) || {
@@ -1480,6 +1489,7 @@ export async function updateLearnerProfileFromEvent(
       conceptsCovered: [],
       conceptCoverageEvidence: {},
       errorHistory: {},
+      solvedProblemIds: [],
       interactionCount: 0,
       currentStrategy: 'default',
       preferences: {
@@ -1546,6 +1556,40 @@ export async function updateLearnerProfileFromEvent(
 
   // Save updated profile
   return saveLearnerProfile(learnerId, currentProfile);
+}
+
+async function getSolvedProblemIdsForLearner(learnerId: string): Promise<string[]> {
+  const solvedProblemIdsByLearner = await getSolvedProblemIdsByLearner([learnerId]);
+  return solvedProblemIdsByLearner.get(learnerId) || [];
+}
+
+async function getSolvedProblemIdsByLearner(learnerIds: string[]): Promise<Map<string, string[]>> {
+  const ids = Array.from(new Set(learnerIds.filter(Boolean)));
+  if (ids.length === 0) {
+    return new Map();
+  }
+
+  const db = getDb();
+  const rows = await db`
+    SELECT user_id, problem_id
+    FROM problem_progress
+    WHERE solved = TRUE
+      AND user_id = ANY(${ids})
+    ORDER BY solved_at DESC NULLS LAST, updated_at DESC
+  `;
+
+  const solvedProblemIdsByLearner = new Map<string, string[]>();
+  for (const learnerId of ids) {
+    solvedProblemIdsByLearner.set(learnerId, []);
+  }
+
+  for (const row of rows) {
+    const solvedProblemIds = solvedProblemIdsByLearner.get(row.user_id) || [];
+    solvedProblemIds.push(row.problem_id);
+    solvedProblemIdsByLearner.set(row.user_id, solvedProblemIds);
+  }
+
+  return solvedProblemIdsByLearner;
 }
 
 // ============================================================================

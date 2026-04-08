@@ -352,4 +352,38 @@ router.post('/:id/profile/events', async (req: Request, res: Response) => {
   }
 });
 
+// POST /api/learners/:id/profile/events/batch - Update profile from events
+router.post('/:id/profile/events/batch', async (req: Request, res: Response) => {
+  try {
+    const { events } = req.body;
+
+    if (!Array.isArray(events)) {
+      res.status(400).json({
+        success: false,
+        error: 'Missing required field: events',
+      });
+      return;
+    }
+
+    let profile = await db.getLearnerProfile(req.params.id);
+    for (const event of events) {
+      if (!event) continue;
+      profile = await db.updateLearnerProfileFromEvent(req.params.id, {
+        ...event,
+        learnerId: req.params.id,
+      });
+    }
+
+    if (!profile) {
+      res.status(500).json({ success: false, error: 'Failed to update profile from events' });
+      return;
+    }
+
+    res.json({ success: true, data: profile });
+  } catch (error) {
+    console.error('Error updating profile from events:', error);
+    res.status(500).json({ success: false, error: 'Failed to update profile from events' });
+  }
+});
+
 export { router as neonLearnersRouter };
