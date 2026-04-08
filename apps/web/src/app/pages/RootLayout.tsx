@@ -12,6 +12,7 @@ import { isPreviewModeActive } from '../lib/auth-guard';
 import { clearAllUiState, clearUiStateForActor } from '../lib/ui-state';
 import { useAuth } from '../lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
+import { resolveLogoutLearnerId } from '../lib/auth/logout-learner';
 import { useToast } from '../components/ui/toast';
 
 /**
@@ -117,7 +118,7 @@ function SessionExpired({ onRedirect }: SessionExpiredProps) {
 export function RootLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user: authUser } = useAuth();
   const { addToast } = useToast();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -223,7 +224,11 @@ export function RootLayout() {
 
     // RESEARCH-4: Finalize active session before logout with backend confirmation barrier
     // This ensures all interactions are synced and session_end is written before auth is invalidated
-    const learnerId = syncedProfile?.id;
+    const learnerId = resolveLogoutLearnerId({
+      syncedProfileId: syncedProfile?.id,
+      authLearnerId: authUser?.learnerId,
+      cachedProfileId: storage.getUserProfile()?.id,
+    });
     if (learnerId && AUTH_BACKEND_CONFIGURED) {
       const finalizeStatus = await storage.finalizeActiveSessionBeforeLogout(learnerId);
       if (!finalizeStatus.backendConfirmed) {
@@ -247,7 +252,7 @@ export function RootLayout() {
     setMobileMenuOpen(false);
     navigate(postLogoutPath, { replace: true });
     setIsLoggingOut(false);
-  }, [isLoggingOut, logout, finalizeLocalSignOut, navigate, postLogoutPath, syncedProfile]);
+  }, [isLoggingOut, logout, finalizeLocalSignOut, navigate, postLogoutPath, syncedProfile?.id, authUser?.learnerId]);
 
   // Handle session expired redirect
   const handleSessionExpiredRedirect = () => {
