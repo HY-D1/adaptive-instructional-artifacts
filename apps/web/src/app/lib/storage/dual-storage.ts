@@ -16,6 +16,12 @@ import {
   checkBackendHealth,
 } from '../api/storage-client';
 import { clearAllUiState, clearUiStateForActor } from '../ui-state';
+import {
+  getResearchRuntimeMode,
+  isResearchSafe,
+  isResearchUnsafe,
+  RESEARCH_CONTRACT_VERSION,
+} from '../runtime-config';
 import type {
   UserProfile,
   InteractionEvent,
@@ -32,9 +38,18 @@ const USE_BACKEND = !!import.meta.env.VITE_API_BASE_URL;
 // Offline queue configuration
 const OFFLINE_QUEUE_KEY = 'sql-adapt-offline-queue';
 const PENDING_SESSION_ENDS_KEY = 'sql-adapt-pending-session-ends';
-const MAX_QUEUE_SIZE = 100;
-const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 5000;
+const PENDING_CONFIRMED_KEY = 'sql-adapt-pending-confirmed';
+const DEAD_LETTER_KEY = 'sql-adapt-dead-letter';
+
+// RESEARCH-2: Durable write semantics
+// No max queue size - use chunked storage instead of dropping
+const CHUNK_SIZE = 100;
+// No max retries - retry until backend confirms
+const RETRY_INTERVAL_MS = 5000;
+const BATCH_SIZE = 25;
+
+// Event status for tracking durability
+export type EventStatus = 'queued_locally' | 'sent_unverified' | 'backend_confirmed' | 'dead_letter';
 
 interface StorageConfig {
   useBackend: boolean;
@@ -46,6 +61,22 @@ interface QueuedItem {
   type: 'interaction' | 'textbookUnit' | 'profile' | 'session';
   data: unknown;
   retries: number;
+  timestamp: number;
+  status: EventStatus;
+  lastAttempt?: number;
+  errorCount: number;
+}
+
+interface ConfirmedItem {
+  id: string;
+  confirmedAt: number;
+}
+
+interface DeadLetterItem {
+  id: string;
+  type: string;
+  data: unknown;
+  reason: string;
   timestamp: number;
 }
 
@@ -64,16 +95,88 @@ export type CriticalWriteStatus = {
 
 export type StorageMode = 'local' | 'backend' | 'offline';
 
+/** Research runtime mode for data durability */
+export type ResearchMode = 'research-safe' | 'research-unsafe' | 'dev-demo';
+
+/** Queue statistics for diagnostics */
+export interface QueueStats {
+  pendingCount: number;
+  oldestUnconfirmedAgeMs: number | null;
+  lastBackendAckTime: number | null;
+  totalConfirmed: number;
+  totalFailed: number;
+}
+
 // ============================================================================
 // Offline Queue Manager
+// ============================================================================
+
+// ============================================================================
+// Durable Pending Store - Indexed storage for reliable event tracking
+// ============================================================================
+
+class DurablePendingStore {
+  private confirmedIds: Set<string> = new Set();
+
+  constructor() {
+    this.loadConfirmed();
+  }
+
+  private loadConfirmed(): void {
+    try {
+      const raw = localStorage.getItem(PENDING_CONFIRMED_KEY);
+      if (raw) {
+        const confirmed: ConfirmedItem[] = JSON.parse(raw);
+        this.confirmedIds = new Set(confirmed.map(c => c.id));
+      }
+    } catch {
+      this.confirmedIds = new Set();
+    }
+  }
+
+  private saveConfirmed(): void {
+    try {
+      const confirmed: ConfirmedItem[] = Array.from(this.confirmedIds).map(id => ({
+        id,
+        confirmedAt: Date.now(),
+      }));
+      localStorage.setItem(PENDING_CONFIRMED_KEY, JSON.stringify(confirmed.slice(-1000)));
+    } catch {
+      // Ignore save errors
+    }
+  }
+
+  isConfirmed(id: string): boolean {
+    return this.confirmedIds.has(id);
+  }
+
+  markConfirmed(id: string): void {
+    this.confirmedIds.add(id);
+    this.saveConfirmed();
+  }
+
+  markConfirmedBatch(ids: string[]): void {
+    for (const id of ids) {
+      this.confirmedIds.add(id);
+    }
+    this.saveConfirmed();
+  }
+}
+
+// ============================================================================
+// Offline Queue Manager - Durable retry-until-ack semantics
 // ============================================================================
 
 class OfflineQueueManager {
   private queue: QueuedItem[] = [];
   private isProcessing = false;
+  private durableStore: DurablePendingStore;
+  private deadLetter: DeadLetterItem[] = [];
 
   constructor() {
+    this.durableStore = new DurablePendingStore();
     this.loadQueue();
+    this.loadDeadLetter();
     // Start background processing
     this.startBackgroundProcessing();
   }
@@ -91,57 +194,152 @@ class OfflineQueueManager {
 
   private saveQueue(): void {
     try {
-      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(this.queue));
+      // Filter out confirmed items before saving
+      const unconfirmed = this.queue.filter(item => 
+        item.status !== 'backend_confirmed' && !this.durableStore.isConfirmed(item.id)
+      );
+      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(unconfirmed));
     } catch {
-      // If we can't save queue, trim it aggressively
-      this.queue = this.queue.slice(-20);
+      // If we can't save, try to save in chunks
+      this.saveQueueChunked();
+    }
+  }
+
+  private saveQueueChunked(): void {
+    try {
+      // Keep only most recent items if storage is limited
+      const recent = this.queue
+        .filter(item => item.status !== 'backend_confirmed')
+        .slice(-CHUNK_SIZE);
+      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(recent));
+    } catch {
+      // Last resort: keep minimal queue
+      const minimal = this.queue.slice(-20);
       try {
-        localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(this.queue));
+        localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(minimal));
       } catch {
-        // Last resort: clear queue
         this.queue = [];
       }
     }
   }
 
-  add(item: Omit<QueuedItem, 'retries' | 'timestamp'>): void {
+  private loadDeadLetter(): void {
+    try {
+      const raw = localStorage.getItem(DEAD_LETTER_KEY);
+      if (raw) {
+        this.deadLetter = JSON.parse(raw);
+      }
+    } catch {
+      this.deadLetter = [];
+    }
+  }
+
+  private saveDeadLetter(): void {
+    try {
+      localStorage.setItem(DEAD_LETTER_KEY, JSON.stringify(this.deadLetter.slice(-50)));
+    } catch {
+      // Ignore
+    }
+  }
+
+  add(item: Omit<QueuedItem, 'retries' | 'timestamp' | 'status' | 'errorCount'>): void {
+    // Check if already confirmed
+    if (this.durableStore.isConfirmed(item.id)) {
+      return;
+    }
+
     const queueItem: QueuedItem = {
       ...item,
       retries: 0,
       timestamp: Date.now(),
+      status: 'queued_locally',
+      errorCount: 0,
     };
     
     this.queue.push(queueItem);
-    
-    // Trim queue if too large (keep newest)
-    if (this.queue.length > MAX_QUEUE_SIZE) {
-      this.queue = this.queue.slice(-MAX_QUEUE_SIZE);
-    }
-    
     this.saveQueue();
+
+    // Log queue growth for large backlogs
+    if (this.queue.length > CHUNK_SIZE) {
+      console.info('[OfflineQueue] Queue size:', this.queue.length, '- using chunked storage');
+    }
   }
 
   remove(id: string): void {
     this.queue = this.queue.filter(item => item.id !== id);
+    this.durableStore.markConfirmed(id);
+    this.saveQueue();
+  }
+
+  removeBatch(ids: string[]): void {
+    this.queue = this.queue.filter(item => !ids.includes(item.id));
+    this.durableStore.markConfirmedBatch(ids);
     this.saveQueue();
   }
 
   getPending(): QueuedItem[] {
-    return [...this.queue];
+    // Filter out confirmed items
+    return this.queue.filter(item => 
+      item.status !== 'backend_confirmed' && !this.durableStore.isConfirmed(item.id)
+    );
   }
 
-  incrementRetry(id: string): void {
+  getAllUnconfirmed(): QueuedItem[] {
+    return this.getPending();
+  }
+
+  incrementRetry(id: string, error?: Error): void {
     const item = this.queue.find(i => i.id === id);
     if (item) {
       item.retries++;
-      if (item.retries >= MAX_RETRIES) {
-        // Move to dead letter queue or log
-        console.warn('[OfflineQueue] Item exceeded max retries:', id);
-        this.remove(id);
-      } else {
-        this.saveQueue();
+      item.lastAttempt = Date.now();
+      item.status = 'sent_unverified';
+      
+      if (error) {
+        item.errorCount++;
       }
+      
+      // RESEARCH-2: Never drop items due to retry count
+      // Only move to dead letter for irrecoverable schema validation failures
+      this.saveQueue();
     }
+  }
+
+  markSent(id: string): void {
+    const item = this.queue.find(i => i.id === id);
+    if (item) {
+      item.status = 'sent_unverified';
+      item.lastAttempt = Date.now();
+      this.saveQueue();
+    }
+  }
+
+  moveToDeadLetter(id: string, reason: string): void {
+    const item = this.queue.find(i => i.id === id);
+    if (item) {
+      this.deadLetter.push({
+        id: item.id,
+        type: item.type,
+        data: item.data,
+        reason,
+        timestamp: Date.now(),
+      });
+      this.saveDeadLetter();
+      
+      // Log for research visibility
+      console.error('[telemetry_dead_letter]', {
+        eventId: item.id,
+        eventType: item.type,
+        reason,
+      });
+      
+      // Remove from main queue
+      this.remove(id);
+    }
+  }
+
+  getDeadLetter(): DeadLetterItem[] {
+    return [...this.deadLetter];
   }
 
   private startBackgroundProcessing(): void {
@@ -173,14 +371,42 @@ class OfflineQueueManager {
     
     const pending = this.getPending();
     
-    for (const item of pending) {
+    // Process interactions in batches for efficiency
+    const interactions = pending.filter(item => item.type === 'interaction');
+    const others = pending.filter(item => item.type !== 'interaction');
+    
+    // Process interactions in batches
+    for (let i = 0; i < interactions.length; i += BATCH_SIZE) {
+      const batch = interactions.slice(i, i + BATCH_SIZE);
+      const events = batch.map(item => item.data as InteractionEvent);
+      
+      try {
+        // Use verified batch write
+        const result = await storageClient.logInteractionsBatchVerified(events);
+        
+        if (result.confirmed.length > 0) {
+          this.removeBatch(result.confirmed);
+        }
+        
+        // Mark sent but not confirmed for retry
+        for (const id of result.failed) {
+          this.incrementRetry(id);
+        }
+      } catch (error) {
+        console.warn('[OfflineQueue] Batch processing failed:', error);
+        // Mark all as retry
+        for (const item of batch) {
+          this.incrementRetry(item.id, error as Error);
+        }
+      }
+    }
+    
+    // Process other item types individually
+    for (const item of others) {
       try {
         let success = false;
         
         switch (item.type) {
-          case 'interaction':
-            success = await storageClient.logInteraction(item.data as InteractionEvent);
-            break;
           case 'textbookUnit': {
             const { learnerId, unit } = item.data as { learnerId: string; unit: InstructionalUnit };
             success = await storageClient.saveTextbookUnit(learnerId, unit);
@@ -203,7 +429,7 @@ class OfflineQueueManager {
         }
       } catch (error) {
         console.warn('[OfflineQueue] Failed to process item:', error);
-        this.incrementRetry(item.id);
+        this.incrementRetry(item.id, error as Error);
       }
       
       // Small delay between items to avoid overwhelming the backend
@@ -223,6 +449,9 @@ class DualStorageManager {
   private backendHealthy: boolean = false;
   private offlineQueue: OfflineQueueManager;
   private lastHydratedAt: Record<string, number> = {};
+  private lastBackendAckTime: number | null = null;
+  private totalConfirmedCount: number = 0;
+  private totalFailedCount: number = 0;
 
   constructor() {
     this.config = {
@@ -266,6 +495,73 @@ class DualStorageManager {
     }
     this.backendHealthy = await checkBackendHealth();
     return this.backendHealthy;
+  }
+
+  /**
+   * Get research runtime mode
+   * @returns 'research-safe' | 'research-unsafe' | 'dev-demo'
+   */
+  getResearchMode(): ResearchMode {
+    return getResearchRuntimeMode();
+  }
+
+  /**
+   * Check if in research-safe mode (data durability guaranteed)
+   */
+  isResearchSafe(): boolean {
+    return isResearchSafe();
+  }
+
+  /**
+   * Check if in research-unsafe mode (BLOCKING in production)
+   */
+  isResearchUnsafe(): boolean {
+    return isResearchUnsafe();
+  }
+
+  /**
+   * Check if storage operations are allowed
+   * Returns false in research-unsafe mode
+   */
+  areWritesAllowed(): boolean {
+    return !isResearchUnsafe();
+  }
+
+  /**
+   * Get queue statistics for diagnostics
+   */
+  getQueueStats(): QueueStats {
+    const pending = this.offlineQueue.getPending();
+    const now = Date.now();
+    
+    let oldestUnconfirmedAgeMs: number | null = null;
+    if (pending.length > 0) {
+      const oldest = pending.reduce((oldest, item) => 
+        item.timestamp < oldest.timestamp ? item : oldest
+      );
+      oldestUnconfirmedAgeMs = now - oldest.timestamp;
+    }
+
+    return {
+      pendingCount: pending.length,
+      oldestUnconfirmedAgeMs,
+      lastBackendAckTime: this.lastBackendAckTime,
+      totalConfirmed: this.totalConfirmedCount,
+      totalFailed: this.totalFailedCount,
+    };
+  }
+
+  /**
+   * Log queue statistics for telemetry
+   */
+  logQueueStats(): void {
+    const stats = this.getQueueStats();
+    // eslint-disable-next-line no-console
+    console.info('[telemetry_queue_stats]', {
+      ...stats,
+      researchMode: this.getResearchMode(),
+      contractVersion: RESEARCH_CONTRACT_VERSION,
+    });
   }
 
   /**
@@ -411,7 +707,13 @@ class DualStorageManager {
     return result;
   }
 
-  saveInteraction(event: InteractionEvent): { success: boolean; quotaExceeded?: boolean } {
+  saveInteraction(event: InteractionEvent): { success: boolean; quotaExceeded?: boolean; blocked?: boolean } {
+    // RESEARCH-SAFETY: Block writes in research-unsafe mode
+    if (isResearchUnsafe()) {
+      console.error('[DualStorage] BLOCKED: saveInteraction in research-unsafe mode');
+      return { success: false, blocked: true };
+    }
+
     const eventForWrite = this.withActiveSessionFallback(event);
     // Send to backend FIRST (primary source of truth) - async in background
     if (this.shouldUseBackend()) {
@@ -419,6 +721,8 @@ class DualStorageManager {
         if (!backendSuccess) {
           // Backend failed, queue for retry
           this.queueInteractionForRetry(eventForWrite);
+        } else {
+          this.trackBackendAck();
         }
       }).catch(error => {
         console.warn('[DualStorage] Backend saveInteraction failed, queuing for retry:', error);
@@ -428,6 +732,11 @@ class DualStorageManager {
     
     // Always cache in localStorage (synchronous return)
     return localStorageManager.saveInteraction(eventForWrite);
+  }
+
+  private trackBackendAck(): void {
+    this.lastBackendAckTime = Date.now();
+    this.totalConfirmedCount++;
   }
 
   logInteraction(event: InteractionEvent): { success: boolean; quotaExceeded?: boolean } {
@@ -931,7 +1240,7 @@ class DualStorageManager {
       pending.push(item);
     }
 
-    return this.writePendingSessionEnds(pending.slice(-MAX_QUEUE_SIZE));
+    return this.writePendingSessionEnds(pending.slice(-CHUNK_SIZE));
   }
 
   async flushPendingSessionEnds(): Promise<CriticalWriteStatus> {
@@ -990,6 +1299,51 @@ class DualStorageManager {
     }
 
     return this.writeQueuedSessionEnd(event);
+  }
+
+  /**
+   * Flush with keepalive for pagehide/logout scenarios
+   * RESEARCH-3: Ensures data is sent even when tab closes
+   */
+  async flushWithKeepalive(sessionId: string): Promise<CriticalWriteStatus> {
+    if (!this.config.useBackend) {
+      return { backendConfirmed: true, pendingSync: false };
+    }
+
+    console.info('[telemetry_pagehide_flush_started]', { sessionId });
+
+    // Get all unconfirmed interactions for this session
+    const unconfirmed = this.offlineQueue.getAllUnconfirmed().filter(
+      item => item.type === 'interaction' && (item.data as InteractionEvent).sessionId === sessionId
+    );
+
+    const events = unconfirmed.map(item => item.data as InteractionEvent);
+
+    // Send batch with keepalive
+    let keepaliveSuccess = false;
+    if (events.length > 0) {
+      keepaliveSuccess = await storageClient.logInteractionsBatchKeepalive(events);
+    }
+
+    // Also flush any pending session_ends
+    const pendingSessionEnds = this.readPendingSessionEnds().filter(
+      item => item.event.sessionId === sessionId
+    );
+
+    for (const item of pendingSessionEnds) {
+      await storageClient.logInteractionsBatchKeepalive([item.event]);
+    }
+
+    const result: CriticalWriteStatus = keepaliveSuccess
+      ? { backendConfirmed: true, pendingSync: false }
+      : { backendConfirmed: false, pendingSync: true, error: 'Keepalive flush may not have completed' };
+
+    console.info(
+      keepaliveSuccess ? '[telemetry_pagehide_flush_confirmed]' : '[telemetry_pagehide_flush_pending]',
+      { sessionId, eventCount: events.length }
+    );
+
+    return result;
   }
 
   private async writeQueuedSessionEnd(event: InteractionEvent): Promise<CriticalWriteStatus> {

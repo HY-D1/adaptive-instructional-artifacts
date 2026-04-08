@@ -9,6 +9,17 @@
  * a rebuild after environment variable changes.
  */
 
+// RESEARCH CONTRACT VERSION - Bump when deployment semantics change
+export const RESEARCH_CONTRACT_VERSION = 'v2.0.0';
+
+/**
+ * Research Runtime Mode
+ * - 'research-safe': Backend configured and healthy, data durability guaranteed
+ * - 'research-unsafe': Production without backend, data loss risk (BLOCKED)
+ * - 'dev-demo': Explicit dev/demo mode allowed for local development
+ */
+export type ResearchRuntimeMode = 'research-safe' | 'research-unsafe' | 'dev-demo';
+
 /**
  * Check if instructor mode is available
  * Requires VITE_INSTRUCTOR_PASSCODE to be set at build time
@@ -93,6 +104,50 @@ export function isBackendConfigured(): boolean {
 }
 
 /**
+ * Check if explicit dev/demo mode is enabled
+ * This allows local-only mode for development/testing
+ */
+export function isDevDemoModeEnabled(): boolean {
+  return import.meta.env.VITE_ALLOW_DEV_DEMO_MODE === 'true' || import.meta.env.DEV;
+}
+
+/**
+ * Get the research runtime mode
+ * In production, requires VITE_API_BASE_URL or explicit dev/demo flag
+ */
+export function getResearchRuntimeMode(): ResearchRuntimeMode {
+  const backendConfigured = isBackendConfigured();
+  const devDemoEnabled = isDevDemoModeEnabled();
+  const isProd = import.meta.env.PROD;
+
+  if (backendConfigured) {
+    return 'research-safe';
+  }
+
+  if (isProd && !devDemoEnabled) {
+    return 'research-unsafe';
+  }
+
+  return 'dev-demo';
+}
+
+/**
+ * Check if research-safe mode is active
+ * Data durability is guaranteed in this mode
+ */
+export function isResearchSafe(): boolean {
+  return getResearchRuntimeMode() === 'research-safe';
+}
+
+/**
+ * Check if research-unsafe mode is active
+ * This is a BLOCKING state in production - app should not allow interactions
+ */
+export function isResearchUnsafe(): boolean {
+  return getResearchRuntimeMode() === 'research-unsafe';
+}
+
+/**
  * Get the backend API base URL
  */
 export function getApiBaseUrl(): string | undefined {
@@ -123,6 +178,10 @@ export interface RuntimeConfig {
   backendConfigured: boolean;
   /** API base URL if configured */
   apiBaseUrl: string | undefined;
+  /** Research runtime mode for data durability guarantees */
+  researchRuntimeMode: ResearchRuntimeMode;
+  /** Research contract version */
+  researchContractVersion: string;
   /** Build mode info */
   mode: {
     isDev: boolean;
@@ -141,6 +200,8 @@ export function getRuntimeConfig(): RuntimeConfig {
     isHostedMode: isHostedMode(),
     backendConfigured: isBackendConfigured(),
     apiBaseUrl: getApiBaseUrl(),
+    researchRuntimeMode: getResearchRuntimeMode(),
+    researchContractVersion: RESEARCH_CONTRACT_VERSION,
     mode: {
       isDev: import.meta.env.DEV,
       isProd: import.meta.env.PROD,
@@ -150,12 +211,12 @@ export function getRuntimeConfig(): RuntimeConfig {
 
 /**
  * Log runtime configuration to console (for debugging)
- * Only logs in development mode
+ * Logs in both dev and production for research tracking
  */
 export function logRuntimeConfig(): void {
-  if (!import.meta.env.DEV) return;
-  
   const config = getRuntimeConfig();
+  const isResearchUnsafe = config.researchRuntimeMode === 'research-unsafe';
+  
   // eslint-disable-next-line no-console
   console.group('🔧 Runtime Configuration');
   // eslint-disable-next-line no-console
@@ -169,7 +230,29 @@ export function logRuntimeConfig(): void {
   // eslint-disable-next-line no-console
   console.log('Hosted Mode:', config.isHostedMode ? '☁️ Yes (Vercel/Netlify)' : '🖥️ No (full-stack)');
   // eslint-disable-next-line no-console
+  console.log('Research Mode:', isResearchUnsafe ? '🔴 UNSAFE - BLOCKING' : `🟢 ${config.researchRuntimeMode}`);
+  // eslint-disable-next-line no-console
+  console.log('Contract Version:', config.researchContractVersion);
+  // eslint-disable-next-line no-console
   console.groupEnd();
+
+  // Log research mode for telemetry (always in production)
+  if (import.meta.env.PROD || isResearchUnsafe) {
+    // eslint-disable-next-line no-console
+    console.info('[telemetry_research_runtime_mode]', {
+      mode: config.researchRuntimeMode,
+      contractVersion: config.researchContractVersion,
+      backendConfigured: config.backendConfigured,
+      isProd: config.mode.isProd,
+    });
+  }
+}
+
+/**
+ * Get error message for research-unsafe mode
+ */
+export function getResearchUnsafeError(): string {
+  return 'This deployment is not configured for research data collection. Please contact the research team or use the demo mode flag for local development.';
 }
 
 // ============================================================================

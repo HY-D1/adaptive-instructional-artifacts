@@ -20,7 +20,7 @@ import { Label } from '../components/ui/label';
 import { cn } from '../components/ui/utils';
 import { useAuth } from '../lib/auth-context';
 import { AUTH_ENABLED } from '../lib/api/auth-client';
-import { getApiBaseUrl } from '../lib/runtime-config';
+import { getApiBaseUrl, isResearchUnsafe, getResearchRuntimeMode, RESEARCH_CONTRACT_VERSION } from '../lib/runtime-config';
 import type { UserRole } from '../types';
 
 type Tab = 'login' | 'signup';
@@ -58,6 +58,43 @@ export function AuthPage() {
       navigate(user.role === 'instructor' ? '/instructor-dashboard' : '/practice', { replace: true });
     }
   }, [isLoading, isAuthenticated, user, navigate]);
+
+  // Research safety check
+  const isResearchUnsafeMode = isResearchUnsafe();
+  const researchMode = getResearchRuntimeMode();
+
+  if (isResearchUnsafeMode) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-red-50 p-4">
+        <Card className="w-full max-w-md border-red-300">
+          <CardHeader>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                <Database className="w-4 h-4 text-red-600" />
+              </div>
+              <CardTitle className="text-red-900">Research Data Collection Unavailable</CardTitle>
+            </div>
+            <CardDescription className="text-red-700">
+              This deployment is not configured for research data collection.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="bg-red-50 p-3 rounded text-sm font-mono text-red-800 space-y-1">
+              <p>Mode: {researchMode}</p>
+              <p>Contract: {RESEARCH_CONTRACT_VERSION}</p>
+              <p>Backend: Not configured</p>
+            </div>
+            <p className="text-sm text-gray-600">
+              Please contact the research team or use the demo mode flag for local development.
+            </p>
+            <Button variant="outline" className="w-full" onClick={() => navigate('/')}>
+              Back to start
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (!AUTH_ENABLED) {
     return (

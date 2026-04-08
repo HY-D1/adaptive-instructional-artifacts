@@ -1886,3 +1886,92 @@ export async function searchCorpus(
     termHits: Number(row.term_hits ?? 0),
   }));
 }
+
+
+// ============================================================================
+// Textbook Retrieval Linking (RESEARCH-5)
+// ============================================================================
+
+interface RetrievalLinkInput {
+  unitId: string;
+  rank?: number;
+  sourceKind?: string;
+  score?: number;
+}
+
+/**
+ * Link textbook unit retrievals to an interaction event
+ * RESEARCH-5: Normalized retrieval provenance for paper analysis
+ */
+export async function linkTextbookRetrievals(
+  eventId: string,
+  retrievals: string[] | RetrievalLinkInput[]
+): Promise<void> {
+  const db = getDb();
+  
+  for (let i = 0; i < retrievals.length; i++) {
+    const retrieval = retrievals[i];
+    
+    let unitId: string;
+    let rank: number | null = null;
+    let sourceKind: string | null = null;
+    let score: number | null = null;
+    
+    if (typeof retrieval === 'string') {
+      unitId = retrieval;
+      rank = i + 1;
+    } else {
+      unitId = retrieval.unitId;
+      rank = retrieval.rank ?? i + 1;
+      sourceKind = retrieval.sourceKind ?? null;
+      score = retrieval.score ?? null;
+    }
+    
+    await db`
+      INSERT INTO interaction_textbook_unit_retrievals
+        (event_id, unit_id, rank, source_kind, score)
+      VALUES
+        (${eventId}, ${unitId}, ${rank}, ${sourceKind}, ${score})
+      ON CONFLICT (event_id, unit_id) DO UPDATE SET
+        rank = EXCLUDED.rank,
+        source_kind = EXCLUDED.source_kind,
+        score = EXCLUDED.score
+    `;
+  }
+}
+
+/**
+ * Get textbook retrievals for an event
+ */
+export async function getTextbookRetrievalsForEvent(
+  eventId: string
+): Promise<Array<{
+  unitId: string;
+  rank: number | null;
+  sourceKind: string | null;
+  score: number | null;
+  createdAt: string;
+}>> {
+  const db = getDb();
+  
+  const rows = await db`
+    SELECT unit_id, rank, source_kind, score, created_at
+    FROM interaction_textbook_unit_retrievals
+    WHERE event_id = ${eventId}
+    ORDER BY rank ASC NULLS LAST
+  `;
+  
+  return rows.map(row => ({
+    unitId: row.unit_id,
+    rank: row.rank,
+    sourceKind: row.source_kind,
+    score: row.score,
+    createdAt: new Date(row.created_at).toISOString(),
+  }));
+}
+
+// ============================================================================
+// Schema Version
+// ============================================================================
+
+export const DB_SCHEMA_VERSION = 'v1.1.0';

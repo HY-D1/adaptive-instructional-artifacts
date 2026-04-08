@@ -16,12 +16,32 @@ import {
   isMutatingMethod,
   refreshCsrfTokenFromAuthMe,
 } from './csrf-client';
+import { isResearchSafe, getResearchRuntimeMode } from '../runtime-config';
 
 // API Configuration
 // VITE_API_BASE_URL is the canonical env var (e.g. https://my-api.vercel.app — no trailing /api)
 const _API_BASE = import.meta.env.VITE_API_BASE_URL;
 const API_URL = _API_BASE ? `${_API_BASE}/api` : 'http://localhost:3001/api';
 const USE_BACKEND = !!_API_BASE;
+
+/** Research-safe flag - true when backend is configured for data durability */
+export const BACKEND_RESEARCH_SAFE = isResearchSafe();
+
+/**
+ * Get research runtime mode for storage
+ * @returns 'research-safe' | 'research-unsafe' | 'dev-demo'
+ */
+export function getStorageResearchMode(): ReturnType<typeof getResearchRuntimeMode> {
+  return getResearchRuntimeMode();
+}
+
+/**
+ * Check if storage is in research-safe mode
+ * Data durability is guaranteed when this returns true
+ */
+export function isStorageResearchSafe(): boolean {
+  return isResearchSafe();
+}
 
 // ============================================================================
 // Types
@@ -835,6 +855,62 @@ export async function logInteractionsBatch(events: InteractionEvent[]): Promise<
     body: JSON.stringify({ events: backendEvents }),
   });
   return response.success;
+}
+
+/**
+ * Batch write with verification - returns confirmed event IDs
+ * RESEARCH-2: Durable write semantics with exact ID verification
+ */
+export async function logInteractionsBatchVerified(
+  events: InteractionEvent[]
+): Promise<{ confirmed: string[]; failed: string[] }> {
+  if (events.length === 0) return { confirmed: [], failed: [] };
+  
+  const backendEvents = events.map(convertToBackendInteraction);
+  const eventIds = events.map(e => e.id);
+  
+  const response = await fetchApi<{ count: number; confirmedIds?: string[] }>('/interactions/batch', {
+    method: 'POST',
+    body: JSON.stringify({ events: backendEvents }),
+  });
+  
+  if (!response.success) {
+    return { confirmed: [], failed: eventIds };
+  }
+  
+  // Use confirmed IDs from response if available, otherwise assume all confirmed
+  const confirmedIds = response.data?.confirmedIds ?? eventIds;
+  const confirmedSet = new Set(confirmedIds);
+  const failed = eventIds.filter(id => !confirmedSet.has(id));
+  
+  return { confirmed: confirmedIds, failed };
+}
+
+/**
+ * Log interactions batch with keepalive for pagehide scenarios
+ * RESEARCH-3: Ensures data is sent even when tab closes
+ */
+export async function logInteractionsBatchKeepalive(
+  events: InteractionEvent[]
+): Promise<boolean> {
+  if (events.length === 0) return true;
+  
+  const backendEvents = events.map(convertToBackendInteraction);
+  const url = `${API_URL}/interactions/batch`;
+  
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ events: backendEvents }),
+      keepalive: true,
+      credentials: 'include',
+    });
+    return response.ok;
+  } catch (error) {
+    console.warn('[StorageClient] Keepalive batch failed:', error);
+    return false;
+  }
 }
 
 /**

@@ -1855,21 +1855,26 @@ export function LearningInterface() {
         return;
       }
 
+      // RESEARCH-3: Use keepalive flush for pagehide durability
+      // First queue the session_end
       const queued = storage.queueSessionEnd(sessionEndEvent);
       if (!queued.success) {
         console.warn('[LearningInterface] session_end queue failed before pagehide');
         return;
       }
-      void storage.flushPendingSessionEnds().then((status) => {
+
+      // Use keepalive flush for immediate send attempt
+      void storage.flushWithKeepalive(sessionId).then((status) => {
         if (!status.backendConfirmed) {
-          console.warn('[LearningInterface] session_end pending after pagehide:', status.error);
+          console.warn('[LearningInterface] session_end keepalive flush pending:', status.error);
         }
       }).catch((error) => {
-        console.warn('[LearningInterface] session_end pagehide flush failed:', error);
+        console.warn('[LearningInterface] session_end keepalive flush failed:', error);
       });
       return;
     }
 
+    // Normal cleanup - use full verification path
     void storage.emitSessionEnd(sessionEndEvent).then((status) => {
       if (!status.backendConfirmed) {
         console.warn('[LearningInterface] session_end blocked pending backend sync:', status.error);

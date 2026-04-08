@@ -14,6 +14,7 @@ import { useAuth } from '../lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
 import { resolveLogoutLearnerId } from '../lib/auth/logout-learner';
 import { useToast } from '../components/ui/toast';
+import { isResearchUnsafe, getResearchRuntimeMode, RESEARCH_CONTRACT_VERSION, getResearchUnsafeError } from '../lib/runtime-config';
 
 /**
  * Sync toast notification component
@@ -110,6 +111,52 @@ function SessionExpired({ onRedirect }: SessionExpiredProps) {
         <Button onClick={onRedirect} className="w-full">
           Return to Start Page
         </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Research Unsafe Blocker component
+ * Shown when app is in research-unsafe mode (production without backend)
+ * Blocks all learner interactions
+ */
+function ResearchUnsafeBlocker() {
+  const researchMode = getResearchRuntimeMode();
+  
+  return (
+    <div 
+      className="fixed inset-0 z-[100] bg-red-950/90 flex items-center justify-center p-4"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="research-unsafe-title"
+      data-testid="research-unsafe-modal"
+    >
+      <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full p-6 border-4 border-red-600">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+            <AlertCircle className="w-6 h-6 text-red-600" />
+          </div>
+          <div>
+            <h2 id="research-unsafe-title" className="text-xl font-bold text-red-900">
+              Research Data Collection Unavailable
+            </h2>
+            <p className="text-sm text-red-600 font-mono">Mode: {researchMode}</p>
+          </div>
+        </div>
+        <div className="space-y-4 text-gray-700">
+          <p className="font-medium">
+            {getResearchUnsafeError()}
+          </p>
+          <div className="bg-gray-50 p-4 rounded-lg text-sm font-mono space-y-1">
+            <p>Contract Version: {RESEARCH_CONTRACT_VERSION}</p>
+            <p>Backend Configured: {String(false)}</p>
+            <p>Environment: Production</p>
+          </div>
+          <p className="text-sm text-gray-500">
+            This deployment cannot collect research data. Please contact the research team or use the demo mode flag for local development.
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -339,6 +386,9 @@ export function RootLayout() {
         { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },
       ];
 
+  // Research safety check
+  const isResearchUnsafeMode = isResearchUnsafe();
+
   return (
     <TooltipProvider delayDuration={100}>
       {/* Skip navigation for accessibility - first focusable element */}
@@ -349,6 +399,9 @@ export function RootLayout() {
         Skip to main content
       </a>
       <div className="flex flex-col h-screen">
+        {/* Research Unsafe Blocker - BLOCKS ALL INTERACTIONS */}
+        {isResearchUnsafeMode && <ResearchUnsafeBlocker />}
+
         {showWelcome && <WelcomeModal onClose={handleCloseWelcome} />}
 
         {/* Preview Mode Banner */}

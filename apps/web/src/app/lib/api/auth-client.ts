@@ -9,6 +9,7 @@
  */
 
 import { withCsrfHeader, setCsrfToken, clearCsrfToken } from './csrf-client';
+import { isResearchSafe, getResearchRuntimeMode } from '../runtime-config';
 
 const _API_BASE = import.meta.env.VITE_API_BASE_URL;
 const AUTH_BASE = _API_BASE ? `${_API_BASE}/api/auth` : 'http://localhost:3001/api/auth';
@@ -16,6 +17,25 @@ const AUTH_BASE = _API_BASE ? `${_API_BASE}/api/auth` : 'http://localhost:3001/a
 /** True only when a backend API is configured */
 export const AUTH_BACKEND_CONFIGURED = !!_API_BASE;
 export const AUTH_ENABLED = AUTH_BACKEND_CONFIGURED || import.meta.env.DEV;
+
+/** Research-safe flag - true when backend is configured for data durability */
+export const AUTH_RESEARCH_SAFE = isResearchSafe();
+
+/**
+ * Get research runtime mode for auth
+ * @returns 'research-safe' | 'research-unsafe' | 'dev-demo'
+ */
+export function getAuthResearchMode(): ReturnType<typeof getResearchRuntimeMode> {
+  return getResearchRuntimeMode();
+}
+
+/**
+ * Check if auth is in research-safe mode
+ * Data durability is guaranteed when this returns true
+ */
+export function isAuthResearchSafe(): boolean {
+  return isResearchSafe();
+}
 
 function formatNetworkError(error: Error): string {
   const base = error.message || 'Network request failed';

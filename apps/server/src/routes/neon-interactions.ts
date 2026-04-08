@@ -14,6 +14,48 @@ const router = Router();
 type NeonInteractionEventInput = Record<string, any>;
 
 // ============================================================================
+// Research Event Validation (RESEARCH-4)
+// ============================================================================
+
+interface ValidationResult {
+  valid: boolean;
+  missing: string[];
+}
+
+function validateResearchEvent(event: NeonInteractionEventInput): ValidationResult {
+  const missing: string[] = [];
+  
+  switch (event.eventType) {
+    case 'hint_view':
+      if (!event.hintId?.trim()) missing.push('hintId');
+      if (!event.hintText?.trim()) missing.push('hintText');
+      if (![1, 2, 3].includes(event.hintLevel)) missing.push('hintLevel');
+      if (!event.templateId?.trim()) missing.push('templateId');
+      if (!event.sqlEngageSubtype?.trim()) missing.push('sqlEngageSubtype');
+      if (!event.sqlEngageRowId?.trim()) missing.push('sqlEngageRowId');
+      if (!event.policyVersion?.trim()) missing.push('policyVersion');
+      if (typeof event.helpRequestIndex !== 'number' || event.helpRequestIndex < 1) {
+        missing.push('helpRequestIndex');
+      }
+      break;
+      
+    case 'concept_view':
+      if (!event.conceptId?.trim()) missing.push('conceptId');
+      if (!event.source?.trim()) missing.push('source');
+      break;
+      
+    case 'session_end':
+      if (!event.sessionId?.trim()) missing.push('sessionId');
+      if (typeof event.totalTime !== 'number') missing.push('totalTime');
+      if (typeof event.problemsAttempted !== 'number') missing.push('problemsAttempted');
+      if (typeof event.problemsSolved !== 'number') missing.push('problemsSolved');
+      break;
+  }
+  
+  return { valid: missing.length === 0, missing };
+}
+
+// ============================================================================
 // Auth helpers
 // ============================================================================
 
@@ -236,11 +278,28 @@ router.post('/batch', async (req: Request, res: Response) => {
     }
 
     const results = [];
+    const confirmedIds: string[] = [];
+    
     for (const event of events) {
       const scopedTarget = await resolveScopedTarget(req, event.learnerId, 'write');
       event.learnerId = scopedTarget.learnerId;
       event.sectionId = scopedTarget.sectionId;
       const id = event.id || `${event.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
+      
+      // RESEARCH-4: Validate research-critical events server-side
+      if (process.env.NODE_ENV === 'production') {
+        const validation = validateResearchEvent(event);
+        if (!validation.valid) {
+          console.warn('[telemetry_validation_error]', {
+            eventType: event.eventType,
+            missingFields: validation.missing,
+            eventId: id,
+          });
+          // Continue to next event - don't store invalid research events
+          continue;
+        }
+      }
+      
       const payload = buildNeonInteractionPayload(event);
       const interaction = await db.createInteraction({
         id,
@@ -251,11 +310,30 @@ router.post('/batch', async (req: Request, res: Response) => {
         problemId: event.problemId,
         payload,
       });
+      
+      // RESEARCH-5: Link textbook retrievals if present
+      if (event.textbookUnitsRetrieved && Array.isArray(event.textbookUnitsRetrieved)) {
+        try {
+          await db.linkTextbookRetrievals(id, event.textbookUnitsRetrieved);
+        } catch (err) {
+          console.warn('[neon-interactions] Failed to link retrievals:', err);
+          // Don't fail the entire request for retrieval linking issues
+        }
+      }
+      
       logInteractionWrite(req, scopedTarget);
       results.push(interaction);
+      confirmedIds.push(id);
     }
 
-    res.status(201).json({ success: true, data: { count: results.length } });
+    // RESEARCH-2: Return confirmed IDs for client-side verification
+    res.status(201).json({ 
+      success: true, 
+      data: { 
+        count: results.length,
+        confirmedIds,
+      } 
+    });
   } catch (error) {
     if (error instanceof AccessError) {
       logAuthzFailure(req, error);
