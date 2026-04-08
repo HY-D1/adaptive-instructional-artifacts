@@ -312,4 +312,91 @@ test.describe('@authz @multi-device student persistence without storageState clo
       await clean.close();
     }
   });
+
+  test('backend session beats stale local practice UI state on a new device', async ({ page, browser }) => {
+    const classCode = process.env.E2E_STUDENT_CLASS_CODE;
+    let email = process.env.E2E_STUDENT_EMAIL ?? `multi-device-precedence-${Date.now()}@sql-adapt.test`;
+    const password = process.env.E2E_STUDENT_PASSWORD ?? 'E2eMultiDevice!123';
+
+    await page.goto('/practice');
+    const alreadyAuthed = await page.getByRole('button', { name: 'Run Query' }).isVisible({ timeout: 10000 }).catch(() => false);
+    if (!alreadyAuthed) {
+      if (!classCode) {
+        test.skip();
+        return;
+      }
+      await signupOrLoginStudent(page, {
+        name: 'Multi Device Student',
+        email,
+        password,
+        classCode,
+      });
+      await page.goto('/practice');
+    }
+
+    await expect(page.getByRole('button', { name: 'Run Query' })).toBeVisible({ timeout: 15000 });
+    const identity = await getAuthIdentity(page);
+    if (identity.email) email = identity.email;
+    const learnerId = identity.learnerId;
+    expect(learnerId).toBeTruthy();
+
+    const sessionSeed = {
+      currentProblemId: 'problem-2',
+      currentCode: 'SELECT employee_id FROM employees WHERE salary > 70000',
+      lastActivity: new Date().toISOString(),
+    };
+
+    const sessionWrite = await page.evaluate(
+      async ({ seededLearnerId, payload, apiBaseUrl }) => {
+        const meResponse = await fetch(`${apiBaseUrl}/api/auth/me`, {
+          credentials: 'include',
+        });
+        const meBody = await meResponse.json().catch(() => null);
+        const csrfToken = (meBody?.csrfToken as string | undefined) ?? '';
+
+        const response = await fetch(`${apiBaseUrl}/api/sessions/${seededLearnerId}/active`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-csrf-token': csrfToken,
+          },
+          body: JSON.stringify(payload),
+        });
+        return response.ok;
+      },
+      { seededLearnerId: learnerId!, payload: sessionSeed, apiBaseUrl: API_BASE_URL },
+    );
+    expect(sessionWrite).toBeTruthy();
+
+    const clean = await browser.newContext();
+    const second = await clean.newPage();
+    try {
+      await login(second, email, password);
+
+      await second.addInitScript(({ hydratedLearnerId }) => {
+        window.localStorage.setItem(
+          `sql-adapt-ui-state-v1:student:${hydratedLearnerId}:practice`,
+          JSON.stringify({ currentProblemId: 'problem-1' }),
+        );
+      }, { hydratedLearnerId: learnerId! });
+
+      await second.goto('/practice');
+      await expect(second.getByRole('button', { name: 'Run Query' })).toBeVisible({ timeout: 15000 });
+      await expect.poll(async () => getEditorText(second), { timeout: 15000 }).toContain(sessionSeed.currentCode);
+
+      await expect.poll(
+        async () =>
+          second.evaluate(({ hydratedLearnerId: activeLearnerId }) => {
+            const raw = window.localStorage.getItem(
+              `sql-adapt-ui-state-v1:student:${activeLearnerId}:practice`,
+            );
+            return raw ? JSON.parse(raw)?.currentProblemId ?? null : null;
+          }, { hydratedLearnerId: learnerId! }),
+        { timeout: 15000 },
+      ).toBe('problem-2');
+    } finally {
+      await clean.close();
+    }
+  });
 });
