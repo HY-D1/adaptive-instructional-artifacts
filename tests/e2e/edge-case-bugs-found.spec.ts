@@ -502,6 +502,10 @@ test.describe('@edge-case @weekly Console Error Monitoring', () => {
       // Skip static resource 404s (common in test environment)
       if (e.includes('Failed to load resource') && e.includes('404')) return false;
 
+      // Skip research-unsafe mode blocking messages (test environment specific)
+      if (e.includes('BLOCKED: saveInteraction in research-unsafe mode')) return false;
+      if (e.includes('[DualStorage] BLOCKED:')) return false;
+
       return true;
     });
     

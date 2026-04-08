@@ -69,6 +69,7 @@ jobs:
         env:
           CI: true
           NODE_ENV: production
+          VITE_TEST_MODE: 'true'
       
       - name: Run @weekly E2E tests
         id: test-run
@@ -273,6 +274,7 @@ jobs:
         env:
           CI: true
           NODE_ENV: production
+          VITE_TEST_MODE: 'true'
       
       - name: Verify build output
         run: |
