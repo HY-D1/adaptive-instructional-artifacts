@@ -49,6 +49,40 @@ describe('research export contract', () => {
     expect(row).toContain('sql-engage:joins:hint:sql-engage:joins:1:L2');
   });
 
+  it('includes paper-critical hint identity fields in interaction event csv exports', () => {
+    const csv = buildInteractionEventsCsv([
+      {
+        id: 'hint-1',
+        user_id: 'learner-1',
+        session_id: 'session-1',
+        timestamp: '2026-04-05T00:00:00.000Z',
+        event_type: 'hint_view',
+        problem_id: 'problem-1',
+        hint_id: 'sql-engage:joins:hint:sql-engage:joins:1:L2',
+        hint_text: 'Check the join predicate.',
+        hint_level: 2,
+        help_request_index: 1,
+        sql_engage_subtype: 'joins',
+        sql_engage_row_id: 'sql-engage:joins:1',
+        template_id: 'hint_template_v1',
+        policy_version: 'sql-engage-v1',
+        created_at: '2026-04-05T00:00:00.000Z',
+      },
+    ]);
+
+    const [header, row] = csv.trim().split('\n');
+    expect(header).toContain('hint_text');
+    expect(header).toContain('hint_level');
+    expect(header).toContain('help_request_index');
+    expect(header).toContain('sql_engage_subtype');
+    expect(header).toContain('sql_engage_row_id');
+    expect(header).toContain('template_id');
+    expect(header).toContain('policy_version');
+    expect(row).toContain('Check the join predicate.');
+    expect(row).toContain('hint_template_v1');
+    expect(row).toContain('sql-engage-v1');
+  });
+
   it('includes auth_events artifacts and hashed email fields in auth csv exports', () => {
     const csv = buildAuthEventsCsv([
       {

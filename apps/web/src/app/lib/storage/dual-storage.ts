@@ -364,6 +364,53 @@ class DualStorageManager {
     };
   }
 
+  private queueInteractionForRetry(event: InteractionEvent): void {
+    this.offlineQueue.add({
+      id: event.id,
+      type: 'interaction',
+      data: event,
+    });
+  }
+
+  private sendInteractionToBackend(event: InteractionEvent, source: string): void {
+    if (!this.shouldUseBackend()) {
+      return;
+    }
+
+    const eventForWrite = this.withActiveSessionFallback(event);
+    storageClient.logInteraction(eventForWrite).then(backendSuccess => {
+      if (!backendSuccess) {
+        this.queueInteractionForRetry(eventForWrite);
+      }
+    }).catch(error => {
+      console.warn(`[DualStorage] Backend ${source} failed, queuing for retry:`, error);
+      this.queueInteractionForRetry(eventForWrite);
+    });
+  }
+
+  private syncLatestLocalInteraction<T>(learnerId: string, source: string, write: () => T): T {
+    const beforeCount = localStorageManager.getInteractionsByLearner(learnerId).length;
+    const result = write();
+    const writeFailed =
+      typeof result === 'object' &&
+      result !== null &&
+      'success' in result &&
+      (result as { success?: unknown }).success === false;
+    if (writeFailed) {
+      return result;
+    }
+
+    const interactions = localStorageManager.getInteractionsByLearner(learnerId);
+    if (interactions.length <= beforeCount) {
+      return result;
+    }
+
+    for (const createdEvent of interactions.slice(beforeCount)) {
+      this.sendInteractionToBackend(createdEvent, source);
+    }
+    return result;
+  }
+
   saveInteraction(event: InteractionEvent): { success: boolean; quotaExceeded?: boolean } {
     const eventForWrite = this.withActiveSessionFallback(event);
     // Send to backend FIRST (primary source of truth) - async in background
@@ -371,19 +418,11 @@ class DualStorageManager {
       storageClient.logInteraction(eventForWrite).then(backendSuccess => {
         if (!backendSuccess) {
           // Backend failed, queue for retry
-          this.offlineQueue.add({
-            id: eventForWrite.id,
-            type: 'interaction',
-            data: eventForWrite,
-          });
+          this.queueInteractionForRetry(eventForWrite);
         }
       }).catch(error => {
         console.warn('[DualStorage] Backend saveInteraction failed, queuing for retry:', error);
-        this.offlineQueue.add({
-          id: eventForWrite.id,
-          type: 'interaction',
-          data: eventForWrite,
-        });
+        this.queueInteractionForRetry(eventForWrite);
       });
     }
     
@@ -403,42 +442,11 @@ class DualStorageManager {
     unitId?: string;
     sessionId?: string;
   }): { success: boolean; quotaExceeded?: boolean } {
-    const resolvedSessionId = params.sessionId || localStorageManager.getActiveSessionId();
-    const beforeCount = localStorageManager.getInteractionsByLearner(params.learnerId).length;
-    const result = localStorageManager.logConceptView(params);
-    if (!result.success) {
-      return result;
-    }
-
-    const interactions = localStorageManager.getInteractionsByLearner(params.learnerId);
-    if (interactions.length <= beforeCount) {
-      return result;
-    }
-
-    const createdEvent = [...interactions]
-      .reverse()
-      .find((interaction) => {
-        if (interaction.eventType !== 'concept_view') return false;
-        if (interaction.problemId !== params.problemId) return false;
-        if ((interaction.sessionId || '') !== (resolvedSessionId || '')) return false;
-        const interactionConceptId = interaction.conceptId || interaction.conceptIds?.[0];
-        return interactionConceptId === params.conceptId && interaction.source === params.source;
-      });
-
-    if (!createdEvent || !this.shouldUseBackend()) {
-      return result;
-    }
-
-    storageClient.logInteraction(createdEvent).catch((error) => {
-      console.warn('[DualStorage] Backend logConceptView failed, queuing for retry:', error);
-      this.offlineQueue.add({
-        id: createdEvent.id,
-        type: 'interaction',
-        data: createdEvent,
-      });
-    });
-
-    return result;
+    return this.syncLatestLocalInteraction(
+      params.learnerId,
+      'logConceptView',
+      () => localStorageManager.logConceptView(params),
+    );
   }
 
   logSessionEnd(params: {
@@ -449,25 +457,11 @@ class DualStorageManager {
     problemsAttempted: number;
     problemsSolved: number;
   }): { success: boolean; quotaExceeded?: boolean } {
-    const result = localStorageManager.logSessionEnd(params);
-    if (!result.success) {
-      return result;
-    }
-    const interactions = localStorageManager
-      .getInteractionsByLearner(params.learnerId)
-      .filter((interaction) => interaction.sessionId === params.sessionId && interaction.eventType === 'session_end');
-    const sessionEndEvent = interactions[interactions.length - 1];
-    if (sessionEndEvent && this.shouldUseBackend()) {
-      storageClient.logInteraction(sessionEndEvent).catch((error) => {
-        console.warn('[DualStorage] Backend logSessionEnd failed, queuing for retry:', error);
-        this.offlineQueue.add({
-          id: sessionEndEvent.id,
-          type: 'interaction',
-          data: sessionEndEvent,
-        });
-      });
-    }
-    return result;
+    return this.syncLatestLocalInteraction(
+      params.learnerId,
+      'logSessionEnd',
+      () => localStorageManager.logSessionEnd(params),
+    );
   }
 
   async saveInteractionCritical(event: InteractionEvent): Promise<CriticalWriteStatus> {
@@ -1527,7 +1521,11 @@ class DualStorageManager {
     problemId: string,
     reason?: string
   ): void {
-    localStorageManager.logProfileAssigned(learnerId, profileId, strategy, problemId, reason);
+    this.syncLatestLocalInteraction(
+      learnerId,
+      'logProfileAssigned',
+      () => localStorageManager.logProfileAssigned(learnerId, profileId, strategy, problemId, reason),
+    );
   }
 
   logEscalationTriggered(
@@ -1538,7 +1536,18 @@ class DualStorageManager {
     reason: string = 'threshold_met',
     timeToEscalationMs?: number
   ): void {
-    localStorageManager.logEscalationTriggered(learnerId, profileId, errorCount, problemId, reason, timeToEscalationMs);
+    this.syncLatestLocalInteraction(
+      learnerId,
+      'logEscalationTriggered',
+      () => localStorageManager.logEscalationTriggered(
+        learnerId,
+        profileId,
+        errorCount,
+        problemId,
+        reason,
+        timeToEscalationMs,
+      ),
+    );
   }
 
   logBanditArmSelected(params: {
@@ -1549,7 +1558,11 @@ class DualStorageManager {
     armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
     sessionId?: string;
   }): void {
-    localStorageManager.logBanditArmSelected(params);
+    this.syncLatestLocalInteraction(
+      params.learnerId,
+      'logBanditArmSelected',
+      () => localStorageManager.logBanditArmSelected(params),
+    );
   }
 
   logBanditRewardObserved(
@@ -1564,7 +1577,11 @@ class DualStorageManager {
       timeEfficiency: number;
     }
   ): void {
-    localStorageManager.logBanditRewardObserved(learnerId, armId, reward, components);
+    this.syncLatestLocalInteraction(
+      learnerId,
+      'logBanditRewardObserved',
+      () => localStorageManager.logBanditRewardObserved(learnerId, armId, reward, components),
+    );
   }
 
   logHDICalculated(
@@ -1573,7 +1590,151 @@ class DualStorageManager {
     components: { hpa: number; aed: number; er: number; reae: number; iwh: number },
     problemId: string
   ): void {
-    localStorageManager.logHDICalculated(learnerId, hdi, components, problemId);
+    this.syncLatestLocalInteraction(
+      learnerId,
+      'logHDICalculated',
+      () => localStorageManager.logHDICalculated(learnerId, hdi, components, problemId),
+    );
+  }
+
+  saveCoverageChangeEvent(
+    params: Parameters<typeof localStorageManager.saveCoverageChangeEvent>[0],
+  ): ReturnType<typeof localStorageManager.saveCoverageChangeEvent> {
+    return this.syncLatestLocalInteraction(
+      params.learnerId,
+      'saveCoverageChangeEvent',
+      () => localStorageManager.saveCoverageChangeEvent(params),
+    );
+  }
+
+  logReinforcementScheduled(
+    ...args: Parameters<typeof localStorageManager.logReinforcementScheduled>
+  ): ReturnType<typeof localStorageManager.logReinforcementScheduled> {
+    return this.syncLatestLocalInteraction(
+      args[0],
+      'logReinforcementScheduled',
+      () => localStorageManager.logReinforcementScheduled(...args),
+    );
+  }
+
+  logReinforcementPromptShown(
+    ...args: Parameters<typeof localStorageManager.logReinforcementPromptShown>
+  ): ReturnType<typeof localStorageManager.logReinforcementPromptShown> {
+    return this.syncLatestLocalInteraction(
+      args[0],
+      'logReinforcementPromptShown',
+      () => localStorageManager.logReinforcementPromptShown(...args),
+    );
+  }
+
+  logReinforcementResponse(
+    ...args: Parameters<typeof localStorageManager.logReinforcementResponse>
+  ): ReturnType<typeof localStorageManager.logReinforcementResponse> {
+    return this.syncLatestLocalInteraction(
+      args[0],
+      'logReinforcementResponse',
+      () => localStorageManager.logReinforcementResponse(...args),
+    );
+  }
+
+  logGuidanceRequest(
+    params: Parameters<typeof localStorageManager.logGuidanceRequest>[0],
+  ): ReturnType<typeof localStorageManager.logGuidanceRequest> {
+    return this.syncLatestLocalInteraction(
+      params.learnerId,
+      'logGuidanceRequest',
+      () => localStorageManager.logGuidanceRequest(params),
+    );
+  }
+
+  logGuidanceView(
+    params: Parameters<typeof localStorageManager.logGuidanceView>[0],
+  ): ReturnType<typeof localStorageManager.logGuidanceView> {
+    return this.syncLatestLocalInteraction(
+      params.learnerId,
+      'logGuidanceView',
+      () => localStorageManager.logGuidanceView(params),
+    );
+  }
+
+  logGuidanceEscalate(
+    params: Parameters<typeof localStorageManager.logGuidanceEscalate>[0],
+  ): ReturnType<typeof localStorageManager.logGuidanceEscalate> {
+    return this.syncLatestLocalInteraction(
+      params.learnerId,
+      'logGuidanceEscalate',
+      () => localStorageManager.logGuidanceEscalate(params),
+    );
+  }
+
+  logTextbookUnitUpsert(
+    params: Parameters<typeof localStorageManager.logTextbookUnitUpsert>[0],
+  ): ReturnType<typeof localStorageManager.logTextbookUnitUpsert> {
+    return this.syncLatestLocalInteraction(
+      params.learnerId,
+      'logTextbookUnitUpsert',
+      () => localStorageManager.logTextbookUnitUpsert(params),
+    );
+  }
+
+  logSourceView(
+    params: Parameters<typeof localStorageManager.logSourceView>[0],
+  ): ReturnType<typeof localStorageManager.logSourceView> {
+    return this.syncLatestLocalInteraction(
+      params.learnerId,
+      'logSourceView',
+      () => localStorageManager.logSourceView(params),
+    );
+  }
+
+  logConditionAssigned(
+    ...args: Parameters<typeof localStorageManager.logConditionAssigned>
+  ): ReturnType<typeof localStorageManager.logConditionAssigned> {
+    return this.syncLatestLocalInteraction(
+      args[0],
+      'logConditionAssigned',
+      () => localStorageManager.logConditionAssigned(...args),
+    );
+  }
+
+  logBanditUpdated(
+    ...args: Parameters<typeof localStorageManager.logBanditUpdated>
+  ): ReturnType<typeof localStorageManager.logBanditUpdated> {
+    return this.syncLatestLocalInteraction(
+      args[0],
+      'logBanditUpdated',
+      () => localStorageManager.logBanditUpdated(...args),
+    );
+  }
+
+  logHDITrajectoryUpdated(
+    ...args: Parameters<typeof localStorageManager.logHDITrajectoryUpdated>
+  ): ReturnType<typeof localStorageManager.logHDITrajectoryUpdated> {
+    return this.syncLatestLocalInteraction(
+      args[0],
+      'logHDITrajectoryUpdated',
+      () => localStorageManager.logHDITrajectoryUpdated(...args),
+    );
+  }
+
+  logDependencyInterventionTriggered(
+    ...args: Parameters<typeof localStorageManager.logDependencyInterventionTriggered>
+  ): ReturnType<typeof localStorageManager.logDependencyInterventionTriggered> {
+    return this.syncLatestLocalInteraction(
+      args[0],
+      'logDependencyInterventionTriggered',
+      () => localStorageManager.logDependencyInterventionTriggered(...args),
+    );
+  }
+
+  logProfileAdjusted(
+    ...args: Parameters<typeof localStorageManager.logProfileAdjusted>
+  ): ReturnType<typeof localStorageManager.logProfileAdjusted> {
+    return this.syncLatestLocalInteraction(
+      args[0],
+      'logProfileAdjusted',
+      () => localStorageManager.logProfileAdjusted(...args),
+    );
   }
 
   // ============================================================================
@@ -1651,7 +1812,6 @@ class DualStorageManager {
   getInteractionsByIds = localStorageManager.getInteractionsByIds.bind(localStorageManager);
   clearInteractions = localStorageManager.clearInteractions.bind(localStorageManager);
   getInteractionsByProblem = localStorageManager.getInteractionsByProblem.bind(localStorageManager);
-  saveCoverageChangeEvent = localStorageManager.saveCoverageChangeEvent.bind(localStorageManager);
   
   // Textbook helpers
   createDefaultProfile = localStorageManager.createDefaultProfile.bind(localStorageManager);
@@ -1661,26 +1821,6 @@ class DualStorageManager {
   // Reinforcement
   updatePromptStatus = localStorageManager.updatePromptStatus.bind(localStorageManager);
   getDuePrompts = localStorageManager.getDuePrompts.bind(localStorageManager);
-  logReinforcementScheduled = localStorageManager.logReinforcementScheduled.bind(localStorageManager);
-  logReinforcementPromptShown = localStorageManager.logReinforcementPromptShown.bind(localStorageManager);
-  logReinforcementResponse = localStorageManager.logReinforcementResponse.bind(localStorageManager);
-  
-  // Guidance ladder
-  logGuidanceRequest = localStorageManager.logGuidanceRequest.bind(localStorageManager);
-  logGuidanceView = localStorageManager.logGuidanceView.bind(localStorageManager);
-  logGuidanceEscalate = localStorageManager.logGuidanceEscalate.bind(localStorageManager);
-  logTextbookUnitUpsert = localStorageManager.logTextbookUnitUpsert.bind(localStorageManager);
-  logSourceView = localStorageManager.logSourceView.bind(localStorageManager);
-  
-  // Bandit
-  logBanditUpdated = localStorageManager.logBanditUpdated.bind(localStorageManager);
-  
-  // HDI
-  logHDITrajectoryUpdated = localStorageManager.logHDITrajectoryUpdated.bind(localStorageManager);
-  logDependencyInterventionTriggered = localStorageManager.logDependencyInterventionTriggered.bind(localStorageManager);
-  
-  // Profile adjustment
-  logProfileAdjusted = localStorageManager.logProfileAdjusted.bind(localStorageManager);
   
   // Import/Export
   importData = localStorageManager.importData.bind(localStorageManager);

@@ -59,6 +59,149 @@ beforeEach(() => {
 });
 
 describe('dual-storage critical write semantics', () => {
+  it('forwards helper-created research interactions to the backend with core identifiers', async () => {
+    localStorage.setItem('sql-learning-active-session', 'session-research-helper');
+    await dualStorageModule.dualStorage.checkHealth();
+
+    const rewardComponents = {
+      independentSuccess: 1,
+      errorReduction: 0.5,
+      delayedRetention: 0,
+      dependencyPenalty: 0,
+      timeEfficiency: 0.25,
+    };
+
+    dualStorageModule.dualStorage.saveCoverageChangeEvent({
+      learnerId: 'learner-1',
+      problemId: 'problem-1',
+      conceptId: 'joins',
+      score: 80,
+      previousScore: 40,
+      confidence: 'high',
+      evidenceCounts: {
+        successfulExecution: 2,
+        notesAdded: 0,
+        explanationViewed: 1,
+        hintViewed: 1,
+        errorEncountered: 0,
+      },
+      triggerEventId: 'execution-1',
+      triggerEventType: 'execution',
+    });
+    dualStorageModule.dualStorage.logGuidanceRequest({
+      learnerId: 'learner-1',
+      problemId: 'problem-1',
+      requestType: 'hint',
+      currentRung: 1,
+    });
+    dualStorageModule.dualStorage.logGuidanceView({
+      learnerId: 'learner-1',
+      problemId: 'problem-1',
+      rung: 2,
+      conceptIds: ['joins'],
+      sourceRefIds: ['doc:chunk:1'],
+      grounded: true,
+      contentLength: 120,
+    });
+    dualStorageModule.dualStorage.logGuidanceEscalate({
+      learnerId: 'learner-1',
+      problemId: 'problem-1',
+      fromRung: 1,
+      toRung: 2,
+      trigger: 'error',
+      evidence: {
+        errorCount: 2,
+        retryCount: 1,
+        hintCount: 1,
+        timeSpentMs: 10_000,
+      },
+      sourceInteractionIds: ['hint-1'],
+    });
+    dualStorageModule.dualStorage.logTextbookUnitUpsert({
+      learnerId: 'learner-1',
+      problemId: 'problem-1',
+      unitId: 'unit-1',
+      conceptIds: ['joins'],
+      action: 'created',
+      dedupeKey: 'unit-key',
+      revisionCount: 1,
+      sourceRefIds: ['doc:chunk:1'],
+      sourceInteractionIds: ['hint-1'],
+    });
+    dualStorageModule.dualStorage.logSourceView({
+      learnerId: 'learner-1',
+      problemId: 'problem-1',
+      passageCount: 2,
+      conceptIds: ['joins'],
+      expanded: true,
+    });
+    dualStorageModule.dualStorage.logConditionAssigned(
+      'learner-1',
+      'adaptive',
+      'session-research-helper',
+      'problem-1',
+      'bandit_selected',
+    );
+    dualStorageModule.dualStorage.logProfileAssigned('learner-1', 'adaptive-medium', 'bandit', 'problem-1');
+    dualStorageModule.dualStorage.logEscalationTriggered('learner-1', 'adaptive-medium', 3, 'problem-1');
+    dualStorageModule.dualStorage.logBanditArmSelected({
+      learnerId: 'learner-1',
+      problemId: 'problem-1',
+      armId: 'adaptive-medium',
+      selectionMethod: 'thompson_sampling',
+    });
+    dualStorageModule.dualStorage.logBanditRewardObserved('learner-1', 'adaptive-medium', 0.8, rewardComponents);
+    dualStorageModule.dualStorage.logBanditUpdated('learner-1', 'adaptive-medium', 2, 1, 3);
+    dualStorageModule.dualStorage.logHDICalculated(
+      'learner-1',
+      0.42,
+      { hpa: 0.3, aed: 0.2, er: 0.4, reae: 0.5, iwh: 0.7 },
+      'problem-1',
+    );
+    dualStorageModule.dualStorage.logHDITrajectoryUpdated('learner-1', 0.5, 'stable', 0.01);
+    dualStorageModule.dualStorage.logDependencyInterventionTriggered('learner-1', 0.8, 'reflective_prompt');
+    dualStorageModule.dualStorage.logProfileAdjusted('learner-1', 'adaptive-low', 'adaptive-medium', 'bandit_update');
+    dualStorageModule.dualStorage.logReinforcementScheduled('learner-1', 'unit-1', 'joins', 'schedule-1');
+    dualStorageModule.dualStorage.logReinforcementPromptShown('learner-1', 'schedule-1', 'prompt-1', 'mcq');
+    dualStorageModule.dualStorage.logReinforcementResponse('learner-1', 'schedule-1', 'prompt-1', 'SELECT *', true);
+
+    await vi.waitFor(() => {
+      expect(logInteractionMock).toHaveBeenCalledTimes(19);
+    });
+
+    const backendEvents = logInteractionMock.mock.calls.map(([event]) => event as Record<string, unknown>);
+    expect(backendEvents.map((event) => event.eventType)).toEqual(
+      expect.arrayContaining([
+        'coverage_change',
+        'guidance_request',
+        'guidance_view',
+        'guidance_escalate',
+        'textbook_unit_upsert',
+        'source_view',
+        'condition_assigned',
+        'profile_assigned',
+        'escalation_triggered',
+        'bandit_arm_selected',
+        'bandit_reward_observed',
+        'bandit_updated',
+        'hdi_calculated',
+        'hdi_trajectory_updated',
+        'dependency_intervention_triggered',
+        'profile_adjusted',
+        'reinforcement_scheduled',
+        'reinforcement_prompt_shown',
+        'reinforcement_response',
+      ]),
+    );
+    for (const event of backendEvents) {
+      for (const requiredField of ['id', 'learnerId', 'sessionId', 'eventType', 'problemId']) {
+        expect(event[requiredField], `${String(event.eventType)}.${requiredField}`).toEqual(expect.any(String));
+        expect(String(event[requiredField]).trim(), `${String(event.eventType)}.${requiredField}`).not.toBe('');
+      }
+      expect(Object.values(event), `${String(event.eventType)} null payload`).not.toContain(null);
+    }
+  });
+
   it('sends the active session fallback to backend for background interaction writes', async () => {
     localStorage.setItem('sql-learning-active-session', 'session-learner-1-active');
     await dualStorageModule.dualStorage.checkHealth();

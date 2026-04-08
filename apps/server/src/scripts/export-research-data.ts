@@ -18,6 +18,7 @@ import { pathToFileURL } from 'url';
 
 const OUTPUT_DIR = process.env.RESEARCH_OUTPUT_DIR || './dist/research-4';
 const DATABASE_URL = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
+export const PAPER_DATA_CONTRACT_VERSION = 'paper-data-contract-v1';
 
 // ============================================================================
 // Type Definitions
@@ -25,6 +26,7 @@ const DATABASE_URL = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
 
 interface ExportManifest {
   exportId: string;
+  paperDataContractVersion: string;
   timestamp: string;
   databaseUrl: string;
   recordCounts: {
@@ -135,6 +137,12 @@ async function exportEvents(db: DbClient): Promise<void> {
       event_type,
       problem_id,
       hint_id,
+      hint_text,
+      hint_level,
+      help_request_index,
+      sql_engage_subtype,
+      sql_engage_row_id,
+      template_id,
       problem_set_id,
       problem_number,
       code,
@@ -149,7 +157,6 @@ async function exportEvents(db: DbClient): Promise<void> {
       concept_id,
       concept_ids,
       policy_version,
-      hint_level,
       current_rung,
       from_rung,
       to_rung,
@@ -536,6 +543,7 @@ async function createManifest(db: DbClient): Promise<ExportManifest> {
 
   const manifest: ExportManifest = {
     exportId: `research-4-${Date.now()}`,
+    paperDataContractVersion: PAPER_DATA_CONTRACT_VERSION,
     timestamp: new Date().toISOString(),
     databaseUrl: DATABASE_URL ? DATABASE_URL.replace(/:[^:@]+@/, ':****@') : '',
     recordCounts: {
@@ -572,7 +580,9 @@ function escapeCsv(value: string): string {
 }
 
 export function buildInteractionEventsCsv(events: QueryResult[]): string {
-  const csvHeader = 'id,user_id,session_id,timestamp,event_type,problem_id,hint_id,successful,time_spent,' +
+  const csvHeader = 'id,user_id,session_id,timestamp,event_type,problem_id,' +
+    'hint_id,hint_text,hint_level,help_request_index,sql_engage_subtype,sql_engage_row_id,template_id,policy_version,' +
+    'successful,time_spent,' +
     'total_time,problems_attempted,problems_solved,source,concept_id,' +
     'profile_id,assignment_strategy,selected_arm,selection_method,reward_total,new_alpha,new_beta,' +
     'from_rung,to_rung,trigger_reason,intervention_type,concept_ids,' +
@@ -588,6 +598,13 @@ export function buildInteractionEventsCsv(events: QueryResult[]): string {
       event.event_type,
       event.problem_id,
       event.hint_id || '',
+      escapeCsv(event.hint_text || ''),
+      event.hint_level ?? '',
+      event.help_request_index ?? '',
+      event.sql_engage_subtype || '',
+      event.sql_engage_row_id || '',
+      event.template_id || '',
+      event.policy_version || '',
       event.successful ?? '',
       event.time_spent ?? '',
       event.total_time ?? '',
