@@ -660,6 +660,7 @@ export function HintSystem({
       sqlEngageSubtype: standardHint.sqlEngageSubtype,
       sqlEngageRowId: standardHint.sqlEngageRowId,
       policyVersion: standardHint.policyVersion,
+      templateId: standardHint.templateId,
       pdfPassages,
       isEnhanced: false,
       retrievalConfidence: 0.5,
@@ -701,7 +702,7 @@ export function HintSystem({
     if (!sessionId) return;
 
     const helpfulnessEvent: InteractionEvent = {
-      id: createEventId(),
+      id: createEventId('hint-helpfulness', problemId, hintIndex),
       learnerId,
       sessionId,
       timestamp: Date.now(),
@@ -1055,10 +1056,9 @@ export function HintSystem({
         learnerId,
         problemId,
         hintId: buildStableHintId({
-          subtype: hintSelection.sqlEngageSubtype,
-          rowId: hintSelection.sqlEngageRowId,
-          level: hintSelection.hintLevel,
-          templateId: hintSelection.templateId,
+          sqlEngageSubtype: hintSelection.sqlEngageSubtype,
+          sqlEngageRowId: hintSelection.sqlEngageRowId,
+          hintLevel: hintSelection.hintLevel,
         }),
         hintText: hintSelection.hintText,
         hintLevel: hintSelection.hintLevel,
