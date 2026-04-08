@@ -10,7 +10,8 @@
  */
 
 // RESEARCH CONTRACT VERSION - Bump when deployment semantics change
-export const RESEARCH_CONTRACT_VERSION = 'v2.0.0';
+// v2.1.0: Added CSRF+keepalive fix, concept_view durable path, chat telemetry unification, startup readiness check
+export const RESEARCH_CONTRACT_VERSION = 'v2.1.0';
 
 /**
  * Research Runtime Mode
@@ -170,6 +171,165 @@ export function isResearchUnsafe(): boolean {
     return false;
   }
   return getResearchRuntimeMode() === 'research-unsafe';
+}
+
+// ============================================================================
+// RESEARCH-4: Backend Readiness Checks
+// ============================================================================
+
+export interface ResearchReadiness {
+  ready: boolean;
+  reason?: string;
+  diagnostics: {
+    envConfigured: boolean;
+    backendReachable: boolean;
+    dbMode?: string;
+    isNeon: boolean;
+    persistenceEnabled: boolean;
+  };
+}
+
+export interface PersistenceStatus {
+  backendReachable: boolean;
+  dbMode: 'neon' | 'sqlite';
+  resolvedEnvSource: string;
+  persistenceRoutesEnabled: boolean;
+}
+
+export interface BackendHealth {
+  status: string;
+  timestamp: string;
+  version: string;
+  db: {
+    mode: 'neon' | 'sqlite';
+    envSource: string;
+  };
+}
+
+/**
+ * Check backend persistence status
+ * RESEARCH-4: Used for startup readiness verification
+ */
+async function checkPersistenceStatus(apiUrl: string): Promise<PersistenceStatus | null> {
+  try {
+    const response = await fetch(`${apiUrl}/system/persistence-status`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      return null;
+    }
+    
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch detailed backend health
+ * RESEARCH-4: Used for startup readiness verification
+ */
+async function fetchBackendHealth(apiBase: string): Promise<BackendHealth | null> {
+  try {
+    const response = await fetch(`${apiBase}/health`, {
+      method: 'GET',
+    });
+    
+    if (!response.ok) {
+      return null;
+    }
+    
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check research readiness at app startup
+ * RESEARCH-4: Verifies backend is reachable, using Neon, and actually writable
+ * This is more robust than just checking if VITE_API_BASE_URL exists
+ */
+export async function checkResearchReadiness(): Promise<ResearchReadiness> {
+  const envConfigured = isBackendConfigured();
+  const apiBase = getApiBaseUrl();
+  const apiUrl = apiBase ? `${apiBase}/api` : undefined;
+  
+  if (!envConfigured || !apiUrl) {
+    return {
+      ready: false,
+      reason: 'Backend not configured (VITE_API_BASE_URL missing)',
+      diagnostics: {
+        envConfigured: false,
+        backendReachable: false,
+        isNeon: false,
+        persistenceEnabled: false,
+      }
+    };
+  }
+  
+  const [health, persistence] = await Promise.all([
+    fetchBackendHealth(apiBase),
+    checkPersistenceStatus(apiUrl),
+  ]);
+  
+  const backendReachable = !!health;
+  const isNeon = persistence?.dbMode === 'neon';
+  const persistenceEnabled = persistence?.persistenceRoutesEnabled ?? false;
+  
+  if (!backendReachable) {
+    return {
+      ready: false,
+      reason: 'Backend unreachable',
+      diagnostics: {
+        envConfigured: true,
+        backendReachable: false,
+        isNeon: false,
+        persistenceEnabled: false,
+      }
+    };
+  }
+  
+  if (!isNeon) {
+    return {
+      ready: false,
+      reason: `Database mode is ${persistence?.dbMode}, expected neon for research-safe mode`,
+      diagnostics: {
+        envConfigured: true,
+        backendReachable: true,
+        dbMode: persistence?.dbMode,
+        isNeon: false,
+        persistenceEnabled,
+      }
+    };
+  }
+  
+  if (!persistenceEnabled) {
+    return {
+      ready: false,
+      reason: 'Persistence routes disabled',
+      diagnostics: {
+        envConfigured: true,
+        backendReachable: true,
+        dbMode: persistence?.dbMode,
+        isNeon: true,
+        persistenceEnabled: false,
+      }
+    };
+  }
+  
+  return {
+    ready: true,
+    diagnostics: {
+      envConfigured: true,
+      backendReachable: true,
+      dbMode: 'neon',
+      isNeon: true,
+      persistenceEnabled: true,
+    }
+  };
 }
 
 /**

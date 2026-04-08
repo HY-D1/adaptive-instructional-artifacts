@@ -382,6 +382,25 @@ function printSummary(report: BackfillReport) {
   }
   console.log();
   console.log('═══════════════════════════════════════════════════════════════════');
+  
+  // RESEARCH-5: Print CI-friendly summary
+  printCiSummary(report);
+}
+
+/**
+ * RESEARCH-5: Print CI-friendly summary for automation
+ */
+function printCiSummary(report: BackfillReport) {
+  console.log();
+  console.log('=== CI SUMMARY ===');
+  console.log(`hint_views_total=${report.hintIdBackfill.totalHintViews}`);
+  console.log(`hint_views_missing_hint_id=${report.hintIdBackfill.missingHintIds}`);
+  console.log(`hint_views_backfilled=${report.hintIdBackfill.recoverable}`);
+  console.log(`template_ids_unverifiable=${report.templateIdReport.markedUnverifiable}`);
+  console.log(`retrieval_links_created=${report.retrievalLinks.linksCreated}`);
+  console.log(`native_complete=${report.provenanceSummary.nativeComplete}`);
+  console.log(`legacy_partial=${report.provenanceSummary.legacyPartial}`);
+  console.log('==================');
 }
 
 main();

@@ -15,6 +15,7 @@ import {
   withCsrfHeader,
   isMutatingMethod,
   refreshCsrfTokenFromAuthMe,
+  getCsrfHeaders,
 } from './csrf-client';
 import { isResearchSafe, getResearchRuntimeMode } from '../runtime-config';
 
@@ -41,6 +42,72 @@ export function getStorageResearchMode(): ReturnType<typeof getResearchRuntimeMo
  */
 export function isStorageResearchSafe(): boolean {
   return isResearchSafe();
+}
+
+// ============================================================================
+// RESEARCH-4: Backend Readiness Checks
+// ============================================================================
+
+export interface PersistenceStatus {
+  backendReachable: boolean;
+  dbMode: 'neon' | 'sqlite';
+  resolvedEnvSource: string;
+  persistenceRoutesEnabled: boolean;
+}
+
+export interface BackendHealth {
+  status: string;
+  timestamp: string;
+  version: string;
+  db: {
+    mode: 'neon' | 'sqlite';
+    envSource: string;
+  };
+}
+
+/**
+ * Check backend persistence status
+ * RESEARCH-4: Used for startup readiness verification
+ */
+export async function checkPersistenceStatus(): Promise<PersistenceStatus | null> {
+  if (!_API_BASE) return null;
+  
+  try {
+    const response = await fetch(`${API_URL}/system/persistence-status`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      return null;
+    }
+    
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch detailed backend health
+ * RESEARCH-4: Used for startup readiness verification
+ */
+export async function fetchBackendHealth(): Promise<BackendHealth | null> {
+  if (!_API_BASE) return null;
+  
+  try {
+    const response = await fetch(`${_API_BASE}/health`, {
+      method: 'GET',
+    });
+    
+    if (!response.ok) {
+      return null;
+    }
+    
+    return await response.json();
+  } catch {
+    return null;
+  }
 }
 
 // ============================================================================
@@ -894,27 +961,44 @@ export async function logInteractionsBatchVerified(
 /**
  * Log interactions batch with keepalive for pagehide scenarios
  * RESEARCH-3: Ensures data is sent even when tab closes
+ * RESEARCH-1: Includes CSRF token for Neon auth+CSRF routes
  */
 export async function logInteractionsBatchKeepalive(
   events: InteractionEvent[]
-): Promise<boolean> {
-  if (events.length === 0) return true;
+): Promise<{ success: boolean; confirmedIds?: string[] }> {
+  if (events.length === 0) return { success: true, confirmedIds: [] };
   
   const backendEvents = events.map(convertToBackendInteraction);
   const url = `${API_URL}/interactions/batch`;
   
+  // Include CSRF token for Neon auth+CSRF routes
+  const csrfHeaders = getCsrfHeaders();
+  
   try {
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...csrfHeaders,
+      },
       body: JSON.stringify({ events: backendEvents }),
       keepalive: true,
       credentials: 'include',
     });
-    return response.ok;
+    
+    if (!response.ok) {
+      console.warn('[StorageClient] Keepalive batch failed:', response.status);
+      return { success: false };
+    }
+    
+    // Parse confirmed IDs if backend returns them
+    const data = await response.json().catch(() => null);
+    const confirmedIds = data?.confirmedIds || events.map(e => e.id);
+    
+    return { success: true, confirmedIds };
   } catch (error) {
     console.warn('[StorageClient] Keepalive batch failed:', error);
-    return false;
+    return { success: false };
   }
 }
 

@@ -14,7 +14,14 @@ import { useAuth } from '../lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
 import { resolveLogoutLearnerId } from '../lib/auth/logout-learner';
 import { useToast } from '../components/ui/toast';
-import { isResearchUnsafe, getResearchRuntimeMode, RESEARCH_CONTRACT_VERSION, getResearchUnsafeError } from '../lib/runtime-config';
+import { 
+  isResearchUnsafe, 
+  getResearchRuntimeMode, 
+  RESEARCH_CONTRACT_VERSION, 
+  getResearchUnsafeError,
+  checkResearchReadiness,
+  type ResearchReadiness 
+} from '../lib/runtime-config';
 
 /**
  * Sync toast notification component
@@ -162,6 +169,88 @@ function ResearchUnsafeBlocker() {
   );
 }
 
+/**
+ * Research Readiness Blocker component
+ * RESEARCH-4: Shown when startup readiness check fails
+ * Blocks all learner interactions with detailed diagnostics
+ */
+interface ResearchReadinessBlockerProps {
+  reason?: string;
+  diagnostics: {
+    envConfigured: boolean;
+    backendReachable: boolean;
+    dbMode?: string;
+    isNeon: boolean;
+    persistenceEnabled: boolean;
+  };
+}
+
+function ResearchReadinessBlocker({ reason, diagnostics }: ResearchReadinessBlockerProps) {
+  return (
+    <div 
+      className="fixed inset-0 z-[100] bg-red-950/90 flex items-center justify-center p-4"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="research-readiness-title"
+      data-testid="research-readiness-modal"
+    >
+      <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full p-6 border-4 border-red-600">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+            <AlertCircle className="w-6 h-6 text-red-600" />
+          </div>
+          <div>
+            <h2 id="research-readiness-title" className="text-xl font-bold text-red-900">
+              Research Safety Block
+            </h2>
+            <p className="text-sm text-red-600 font-mono">Backend Readiness Check Failed</p>
+          </div>
+        </div>
+        <div className="space-y-4 text-gray-700">
+          <p className="font-medium">
+            The application cannot start in research-safe mode.
+          </p>
+          
+          {reason && (
+            <div className="bg-red-50 p-3 rounded border border-red-200">
+              <p className="text-sm text-red-800">{reason}</p>
+            </div>
+          )}
+          
+          <div className="bg-gray-50 p-4 rounded-lg text-sm font-mono space-y-2">
+            <p className="font-semibold text-gray-900">Diagnostics:</p>
+            <div className="grid grid-cols-2 gap-2">
+              <span>Backend configured:</span>
+              <span className={diagnostics.envConfigured ? 'text-green-600' : 'text-red-600'}>
+                {diagnostics.envConfigured ? '✓' : '✗'}
+              </span>
+              <span>Backend reachable:</span>
+              <span className={diagnostics.backendReachable ? 'text-green-600' : 'text-red-600'}>
+                {diagnostics.backendReachable ? '✓' : '✗'}
+              </span>
+              <span>Database mode:</span>
+              <span>{diagnostics.dbMode || 'unknown'}</span>
+              <span>Persistence enabled:</span>
+              <span className={diagnostics.persistenceEnabled ? 'text-green-600' : 'text-red-600'}>
+                {diagnostics.persistenceEnabled ? '✓' : '✗'}
+              </span>
+            </div>
+          </div>
+          
+          <div className="bg-gray-50 p-4 rounded-lg text-sm font-mono space-y-1">
+            <p>Contract Version: {RESEARCH_CONTRACT_VERSION}</p>
+            <p>Environment: Production</p>
+          </div>
+          
+          <p className="text-sm text-gray-500">
+            This deployment cannot collect research data. Please contact the research team or check the backend configuration.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function RootLayout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -190,6 +279,10 @@ export function RootLayout() {
   
   const [showWelcome, setShowWelcome] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  // RESEARCH-4: Startup readiness check
+  const [researchReadiness, setResearchReadiness] = useState<ResearchReadiness | null>(null);
+  const [isCheckingReadiness, setIsCheckingReadiness] = useState(true);
 
   useEffect(() => {
     try {
@@ -203,6 +296,20 @@ export function RootLayout() {
       // Show welcome modal if we can't check status
       setShowWelcome(true);
     }
+  }, []);
+  
+  // RESEARCH-4: Check research readiness on app startup
+  useEffect(() => {
+    checkResearchReadiness().then(readiness => {
+      setResearchReadiness(readiness);
+      setIsCheckingReadiness(false);
+      
+      console.info('[RootLayout] Research readiness:', readiness);
+      
+      if (!readiness.ready && import.meta.env.PROD) {
+        console.error('[RootLayout] Research-unsafe mode detected in production');
+      }
+    });
   }, []);
 
   // Keyboard shortcuts
@@ -388,6 +495,12 @@ export function RootLayout() {
 
   // Research safety check
   const isResearchUnsafeMode = isResearchUnsafe();
+  
+  // RESEARCH-4: Block if startup readiness check fails in production
+  const shouldBlockForReadiness = !isCheckingReadiness && 
+    !researchReadiness?.ready && 
+    import.meta.env.PROD &&
+    !isResearchUnsafeMode; // Don't double-block
 
   return (
     <TooltipProvider delayDuration={100}>
@@ -401,6 +514,14 @@ export function RootLayout() {
       <div className="flex flex-col h-screen">
         {/* Research Unsafe Blocker - BLOCKS ALL INTERACTIONS */}
         {isResearchUnsafeMode && <ResearchUnsafeBlocker />}
+        
+        {/* RESEARCH-4: Startup Readiness Blocker */}
+        {shouldBlockForReadiness && (
+          <ResearchReadinessBlocker 
+            reason={researchReadiness?.reason} 
+            diagnostics={researchReadiness?.diagnostics} 
+          />
+        )}
 
         {showWelcome && <WelcomeModal onClose={handleCloseWelcome} />}
 

@@ -30,6 +30,7 @@ import type {
   SaveTextbookUnitResult,
 } from '@/app/types';
 import type { CreateUnitInput } from './textbook-units';
+import { createEventId } from '../utils/event-id';
 
 // Configuration
 // VITE_API_BASE_URL is the canonical env var — presence alone enables backend mode
@@ -944,6 +945,11 @@ class DualStorageManager {
     });
   }
 
+  /**
+   * @deprecated Use saveInteraction() for all research-critical events.
+   * This method uses the old send-and-queue-on-failure logic instead of 
+   * the durable pending-store lifecycle. Removed for concept_view and session_end.
+   */
   private syncLatestLocalInteraction<T>(learnerId: string, source: string, write: () => T): T {
     const beforeCount = localStorageManager.getInteractionsByLearner(learnerId).length;
     const result = write();
@@ -1031,11 +1037,20 @@ class DualStorageManager {
     unitId?: string;
     sessionId?: string;
   }): { success: boolean; quotaExceeded?: boolean } {
-    return this.syncLatestLocalInteraction(
-      params.learnerId,
-      'logConceptView',
-      () => localStorageManager.logConceptView(params),
-    );
+    // RESEARCH-2: Use same durable pending-store path as all research-critical events
+    const event: InteractionEvent = {
+      id: createEventId('concept'),
+      learnerId: params.learnerId,
+      sessionId: params.sessionId || this.getActiveSessionId(),
+      timestamp: Date.now(),
+      eventType: 'concept_view',
+      problemId: params.problemId,
+      conceptId: params.conceptId,
+      source: params.source,
+      unitId: params.unitId,
+    };
+    
+    return this.saveInteraction(event);
   }
 
   logSessionEnd(params: {
@@ -1046,11 +1061,20 @@ class DualStorageManager {
     problemsAttempted: number;
     problemsSolved: number;
   }): { success: boolean; quotaExceeded?: boolean } {
-    return this.syncLatestLocalInteraction(
-      params.learnerId,
-      'logSessionEnd',
-      () => localStorageManager.logSessionEnd(params),
-    );
+    // RESEARCH-2: Use same durable pending-store path as all research-critical events
+    const event: InteractionEvent = {
+      id: createEventId('session_end'),
+      learnerId: params.learnerId,
+      sessionId: params.sessionId,
+      timestamp: Date.now(),
+      eventType: 'session_end',
+      problemId: params.problemId,
+      totalTime: params.totalTime,
+      problemsAttempted: params.problemsAttempted,
+      problemsSolved: params.problemsSolved,
+    };
+    
+    return this.saveInteraction(event);
   }
 
   async saveInteractionCritical(event: InteractionEvent): Promise<CriticalWriteStatus> {
@@ -1584,13 +1608,18 @@ class DualStorageManager {
   /**
    * Flush with keepalive for pagehide/logout scenarios
    * RESEARCH-3: Ensures data is sent even when tab closes
+   * RESEARCH-1: Includes CSRF token for Neon auth+CSRF routes
+   * Only marks events confirmed when confirmed by backend ID
    */
   async flushWithKeepalive(sessionId: string): Promise<CriticalWriteStatus> {
     if (!this.config.useBackend) {
       return { backendConfirmed: true, pendingSync: false };
     }
 
-    console.info('[telemetry_pagehide_flush_started]', { sessionId });
+    console.info('[telemetry_pagehide_flush_started]', { 
+      sessionId,
+      contractVersion: RESEARCH_CONTRACT_VERSION 
+    });
 
     // RESEARCH-1: Get ALL pending interactions from durable pending store
     // This includes both newly created events and retry queue items
@@ -1610,35 +1639,50 @@ class DualStorageManager {
     }
     const allEvents = Array.from(eventMap.values());
 
-    // Send batch with keepalive
-    let keepaliveSuccess = false;
+    // Send batch with keepalive and track confirmed IDs
+    let flushResult: { success: boolean; confirmedIds?: string[] } = { success: false };
     if (allEvents.length > 0) {
-      keepaliveSuccess = await storageClient.logInteractionsBatchKeepalive(allEvents);
+      flushResult = await storageClient.logInteractionsBatchKeepalive(allEvents);
       
-      // RESEARCH-1: Mark events as confirmed if keepalive succeeded
-      if (keepaliveSuccess) {
-        for (const event of allEvents) {
-          this.pendingStore.markConfirmedInteraction(event.id);
+      // Only mark confirmed events as confirmed (not all events)
+      if (flushResult.success && flushResult.confirmedIds) {
+        for (const confirmedId of flushResult.confirmedIds) {
+          this.pendingStore.markConfirmedInteraction(confirmedId);
         }
       }
     }
 
-    // Also flush any pending session_ends
+    // Flush pending session_ends only if interactions were confirmed
     const pendingSessionEnds = this.readPendingSessionEnds().filter(
       item => item.event.sessionId === sessionId
     );
 
-    for (const item of pendingSessionEnds) {
-      await storageClient.logInteractionsBatchKeepalive([item.event]);
+    if (flushResult.success) {
+      for (const item of pendingSessionEnds) {
+        const sessionEndResult = await storageClient.logInteractionsBatchKeepalive([item.event]);
+        if (sessionEndResult.success) {
+          this.removePendingSessionEnd(item.event);
+        }
+      }
     }
 
-    const result: CriticalWriteStatus = keepaliveSuccess
+    const allConfirmed = flushResult.success && 
+      (flushResult.confirmedIds?.length === allEvents.length);
+
+    const result: CriticalWriteStatus = allConfirmed
       ? { backendConfirmed: true, pendingSync: false }
-      : { backendConfirmed: false, pendingSync: true, error: 'Keepalive flush may not have completed' };
+      : { backendConfirmed: false, pendingSync: true, error: 'Keepalive flush incomplete' };
 
     console.info(
-      keepaliveSuccess ? '[telemetry_pagehide_flush_confirmed]' : '[telemetry_pagehide_flush_pending]',
-      { sessionId, eventCount: allEvents.length }
+      allConfirmed 
+        ? '[telemetry_pagehide_flush_confirmed]' 
+        : '[telemetry_pagehide_flush_pending]',
+      { 
+        sessionId, 
+        eventCount: allEvents.length,
+        confirmedCount: flushResult.confirmedIds?.length || 0,
+        reason: allConfirmed ? undefined : 'partial_confirmation'
+      }
     );
 
     return result;

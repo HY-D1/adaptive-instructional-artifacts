@@ -46,6 +46,19 @@ export function withCsrfHeader(init: RequestInit = {}): RequestInit {
   };
 }
 
+/**
+ * Get CSRF headers for keepalive-safe fetch requests
+ * Returns headers object that can be spread into fetch init
+ * RESEARCH-3: Required for pagehide/logout flush with Neon auth+CSRF
+ */
+export function getCsrfHeaders(): Record<string, string> {
+  const token = csrfTokenOverride ?? getCookie(CSRF_COOKIE_NAME);
+  if (!token) {
+    return {};
+  }
+  return { 'x-csrf-token': token };
+}
+
 export function setCsrfToken(token: string | null | undefined): void {
   csrfTokenOverride = normalizeToken(token);
 }

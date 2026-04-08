@@ -858,13 +858,15 @@ export function AskMyTextbookChat({
 
   /**
    * Save chat response to My Textbook organized by problem
+   * RESEARCH-3: Logs chat interaction as CRITICAL since it anchors the saved note
    */
   const saveChatResponseToTextbook = useCallback(async (
     response: string,
     query: string,
     quickChip: string | undefined,
     sources: Array<{id: string; title: string; type: 'unit' | 'pdf'}>,
-    conceptIds: string[]
+    conceptIds: string[],
+    message?: string
   ): Promise<void> => {
     try {
       // Generate title based on query type
@@ -881,7 +883,7 @@ export function AskMyTextbookChat({
         title = `Q: ${query.slice(0, 40)}${query.length > 40 ? '...' : ''}`;
       }
       
-      // Create unit input
+      // Create unit input with deterministic ID for idempotency
       const unitInput = {
         learnerId,
         sessionId,
@@ -895,6 +897,46 @@ export function AskMyTextbookChat({
         sourceRefIds: sources.map(s => s.id),
         problemId // Associate with current problem
       };
+      
+      // RESEARCH-3: Log chat interaction as CRITICAL before saving note
+      // This ensures telemetry anchors the saved artifact
+      const chatMessage = message || query;
+      const normalizedProvider = undefined; // Not LLM-generated when saving existing response
+      
+      const chatEvent: InteractionEvent = {
+        id: createEventId('chat-save'),
+        sessionId: sessionId!,
+        learnerId: learnerId!,
+        timestamp: Date.now(),
+        eventType: 'chat_interaction',
+        problemId: problemId!,
+        chatMessage,
+        chatResponse: response,
+        chatQuickChip: quickChip,
+        savedToNotes: true,
+        noteId: unitInput.sourceRefIds[0], // Link to first source ref for provenance
+        retrievedSourceIds: sources.map(s => s.id),
+        textbookUnitsRetrieved: sources.filter(s => s.id.startsWith('unit-') || !s.id.includes(':')).map(s => s.id),
+        llmPurpose: 'ask_my_textbook',
+        inputs: {
+          error_subtype: null,
+          retry_count: 0,
+          stuck_reason: null
+        },
+        outputs: {
+          llm_generated: false,
+          llm_provider: null,
+          fallback_reason: null,
+          note_title: title,
+          note_concept: conceptIds[0] || 'general'
+        }
+      };
+      
+      // Use critical path for chat event that anchors the saved note
+      const chatResult = await storage.saveInteractionCritical(chatEvent);
+      if (!chatResult.backendConfirmed && !chatResult.pendingSync) {
+        console.error('[AskMyTextbookChat] Critical chat event failed');
+      }
       
       // Save using backend-confirmed critical write path for account mode.
       const write = await storage.saveTextbookUnitV2Critical(learnerId, unitInput, problemId);
@@ -915,7 +957,7 @@ export function AskMyTextbookChat({
     } catch {
       // Failed to save to textbook - error handled via UI
     }
-  }, [learnerId, problemId, showToast]);
+  }, [learnerId, problemId, sessionId, showToast]);
 
   // Generate LLM-powered response when available
   const generateLLMResponse = useCallback(async (

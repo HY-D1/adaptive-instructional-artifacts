@@ -41,7 +41,11 @@ interface ExportRow {
   templateId: string | null;
   sqlEngageSubtype: string | null;
   hasRetrievalLinks: boolean;
+  // RESEARCH-5: Provenance tracking
   provenanceStatus: ProvenanceStatus;
+  telemetryProvenanceStatus: ProvenanceStatus;
+  legacyBackfillApplied: boolean;
+  templateIdUnverifiable: boolean;
 }
 
 export function buildInteractionEventsCsv(events: any[]): string {
@@ -141,6 +145,7 @@ async function main() {
   const DATABASE_URL = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
   const FORMAT = process.argv.find(arg => arg.startsWith('--format='))?.split('=')[1] || 'json';
   const OUTPUT_PATH = process.argv.find(arg => arg.startsWith('--output='))?.split('=')[1];
+  const NATIVE_ONLY = process.argv.includes('--native-only');
 
   if (!DATABASE_URL) {
     console.error('❌ Error: DATABASE_URL environment variable is not set');
@@ -151,6 +156,9 @@ async function main() {
 
   try {
     console.log('📊 Querying interaction events...');
+    if (NATIVE_ONLY) {
+      console.log('   Filter: native_complete events only');
+    }
     
     const rows = await db`
       SELECT 
@@ -172,22 +180,42 @@ async function main() {
       ORDER BY ie.timestamp DESC
     `;
 
-    console.log(`   Found ${rows.length} events`);
+    console.log(`   Found ${rows.length} events (before filtering)`);
 
-    const exportRows: ExportRow[] = rows.map(row => ({
-      id: row.id,
-      eventType: row.event_type,
-      timestamp: row.timestamp,
-      learnerId: row.learner_id,
-      sessionId: row.session_id,
-      problemId: row.problem_id,
-      hintId: row.hint_id,
-      templateId: row.template_id,
-      sqlEngageSubtype: row.sql_engage_subtype,
-      sqlEngageRowId: row.sql_engage_row_id,
-      hasRetrievalLinks: row.has_retrieval_links,
-      provenanceStatus: determineProvenanceStatus(row),
-    }));
+    // RESEARCH-5: Filter to native_complete only if requested
+    let filteredRows = rows;
+    if (NATIVE_ONLY) {
+      filteredRows = rows.filter((row: any) => 
+        row.hint_id && row.hint_id.trim() !== '' && 
+        row.template_id && row.template_id.trim() !== ''
+      );
+      console.log(`   Filtered to ${filteredRows.length} native_complete events`);
+    }
+
+    const exportRows: ExportRow[] = filteredRows.map((row: any) => {
+      const provenanceStatus = determineProvenanceStatus(row);
+      const hasHintId = row.hint_id && row.hint_id.trim() !== '';
+      const hasTemplateId = row.template_id && row.template_id.trim() !== '';
+      
+      return {
+        id: row.id,
+        eventType: row.event_type,
+        timestamp: row.timestamp,
+        learnerId: row.learner_id,
+        sessionId: row.session_id,
+        problemId: row.problem_id,
+        hintId: row.hint_id,
+        templateId: row.template_id,
+        sqlEngageSubtype: row.sql_engage_subtype,
+        sqlEngageRowId: row.sql_engage_row_id,
+        hasRetrievalLinks: row.has_retrieval_links,
+        // RESEARCH-5: Provenance tracking
+        provenanceStatus,
+        telemetryProvenanceStatus: provenanceStatus,
+        legacyBackfillApplied: provenanceStatus !== 'native_complete',
+        templateIdUnverifiable: !hasTemplateId && row.event_type === 'hint_view',
+      };
+    });
 
     // Calculate provenance distribution
     const provenanceCounts: Record<ProvenanceStatus, number> = {
