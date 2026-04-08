@@ -862,6 +862,8 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
   const payload = data.payload || {};
   // RESEARCH-4: hintId can be at top level (from convertToBackendInteraction) or in payload
   const storedHintId = data.hintId ?? payload.hintId ?? null;
+  const storedSessionId =
+    data.sessionId ?? (typeof payload.sessionId === 'string' ? payload.sessionId : null);
   const timestampIso = normalizeInteractionTimestamp(data.timestamp, now);
   const storedConceptId = payload.conceptId || (Array.isArray(payload.conceptIds) ? payload.conceptIds[0] : null);
   const resolvedSectionId = data.sectionId ?? await resolveSectionIdForLearner(data.learnerId);
@@ -893,7 +895,7 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
       ${data.id},
       ${data.learnerId},
       ${resolvedSectionId},
-      ${payload.sessionId || null},
+      ${storedSessionId},
       ${timestampIso},
       ${data.eventType},
       ${data.problemId},
@@ -992,7 +994,7 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
     id: data.id,
     learnerId: data.learnerId,
     sectionId: resolvedSectionId,
-    sessionId: (payload as { sessionId?: string }).sessionId || null,
+    sessionId: storedSessionId,
     timestamp: timestampIso,
     eventType: data.eventType,
     problemId: data.problemId,

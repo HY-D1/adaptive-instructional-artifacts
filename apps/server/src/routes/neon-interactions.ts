@@ -109,6 +109,8 @@ export function buildNeonInteractionPayload(event: NeonInteractionEventInput): R
   // This ensures they reach the DB columns regardless of whether event.payload was set.
   return {
     ...basePayload,
+    id: event.id ?? basePayload.id,
+    sessionId: event.sessionId ?? basePayload.sessionId,
     hintId: event.hintId ?? basePayload.hintId,
     conceptId: event.conceptId ?? basePayload.conceptId,
     source: event.source ?? basePayload.source,

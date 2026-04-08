@@ -147,6 +147,28 @@ describe('logging contract routing', () => {
     });
   });
 
+  it('keeps top-level sessionId when Neon requests include nested payloads', () => {
+    const payload = buildNeonInteractionPayload({
+      id: 'bandit-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      timestamp: '2026-04-07T00:00:00.000Z',
+      eventType: 'bandit_arm_selected',
+      problemId: 'problem-1',
+      payload: {
+        armId: 'conservative',
+        method: 'thompson_sampling',
+      },
+    });
+
+    expect(payload).toMatchObject({
+      id: 'bandit-1',
+      sessionId: 'session-1',
+      armId: 'conservative',
+      method: 'thompson_sampling',
+    });
+  });
+
   it('documents that hint_view preserves hintId', () => {
     const spec = readFileSync(join(repoRoot, 'docs/research/LOGGING_SPECIFICATION.md'), 'utf8');
     expect(spec).toContain('`hint_view` events preserve `hintId`');
