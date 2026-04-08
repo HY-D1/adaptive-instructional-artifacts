@@ -378,6 +378,7 @@ router.put('/:id/profile', async (req, res) => {
         conceptsCovered: [],
         conceptCoverageEvidence: {},
         errorHistory: {},
+        solvedProblemIds: [],
         interactionCount: 0,
         currentStrategy: 'adaptive',
         preferences: {

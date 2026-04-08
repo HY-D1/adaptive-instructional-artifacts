@@ -1,3 +1,4 @@
+import type { LearnerProfile } from '@/app/types';
 import { beforeAll, beforeEach, afterAll, describe, expect, it, vi } from 'vitest';
 
 type DualStorageModule = typeof import('./dual-storage');
@@ -6,13 +7,33 @@ const isBackendAvailableMock = vi.fn<() => Promise<boolean>>();
 const checkBackendHealthMock = vi.fn<() => Promise<boolean>>();
 const saveSessionMock = vi.fn<(learnerId: string, data: Record<string, unknown>) => Promise<boolean>>();
 const saveTextbookUnitMock = vi.fn<(learnerId: string, unit: Record<string, unknown>) => Promise<boolean>>();
-const getProfileMock = vi.fn<(learnerId: string) => Promise<null>>();
+const getProfileMock = vi.fn<(learnerId: string) => Promise<LearnerProfile | null>>();
 const getSessionMock = vi.fn<(learnerId: string) => Promise<Record<string, unknown> | null>>();
 const getInteractionsMock = vi.fn<(learnerId: string, options?: Record<string, unknown>) => Promise<{ events: unknown[]; total: number }>>();
 const getTextbookMock = vi.fn<(learnerId: string) => Promise<unknown[]>>();
 const logInteractionMock = vi.fn<(event: unknown) => Promise<boolean>>();
 const logInteractionsBatchMock = vi.fn<(events: unknown[]) => Promise<boolean>>();
 const saveProfileMock = vi.fn<(profile: unknown) => Promise<boolean>>();
+
+function createBackendProfile(overrides: Partial<LearnerProfile> = {}): LearnerProfile {
+  return {
+    id: 'learner-1',
+    name: 'Learner 1',
+    conceptsCovered: new Set(),
+    conceptCoverageEvidence: new Map(),
+    errorHistory: new Map(),
+    solvedProblemIds: new Set(),
+    interactionCount: 0,
+    currentStrategy: 'adaptive-medium',
+    preferences: {
+      escalationThreshold: 3,
+      aggregationDelay: 5000,
+    },
+    createdAt: 1_700_000_000_000,
+    lastActive: 1_700_000_001_000,
+    ...overrides,
+  };
+}
 
 let dualStorageModule: DualStorageModule;
 
@@ -200,6 +221,52 @@ describe('dual-storage critical write semantics', () => {
       }
       expect(Object.values(event), `${String(event.eventType)} null payload`).not.toContain(null);
     }
+  });
+
+  it('preserves a locally solved problem when backend hydration is stale', async () => {
+    const localProfile = createBackendProfile({
+      solvedProblemIds: new Set(['problem-9']),
+    });
+    dualStorageModule.dualStorage.saveProfile(localProfile);
+
+    getProfileMock.mockResolvedValueOnce(createBackendProfile({
+      solvedProblemIds: new Set(),
+    }));
+
+    const immediateProfile = dualStorageModule.dualStorage.getProfile('learner-1');
+    expect(immediateProfile?.solvedProblemIds.has('problem-9')).toBe(true);
+
+    await vi.waitFor(() => {
+      expect(getProfileMock).toHaveBeenCalledWith('learner-1');
+      expect(dualStorageModule.dualStorage.getProfile('learner-1')?.solvedProblemIds.has('problem-9')).toBe(true);
+    });
+  });
+
+  it('keeps solved state after stale hydration and later backend catch-up', async () => {
+    dualStorageModule.dualStorage.saveProfile(createBackendProfile({
+      solvedProblemIds: new Set(['problem-9']),
+    }));
+
+    getProfileMock
+      .mockResolvedValueOnce(createBackendProfile({
+        solvedProblemIds: new Set(),
+      }))
+      .mockResolvedValueOnce(createBackendProfile({
+        solvedProblemIds: new Set(['problem-9']),
+      }));
+
+    dualStorageModule.dualStorage.getProfile('learner-1');
+    await vi.waitFor(() => {
+      expect(getProfileMock).toHaveBeenCalledTimes(1);
+    });
+
+    const afterStaleHydration = dualStorageModule.dualStorage.getProfile('learner-1');
+    expect(afterStaleHydration?.solvedProblemIds.has('problem-9')).toBe(true);
+
+    await vi.waitFor(() => {
+      expect(getProfileMock).toHaveBeenCalledTimes(2);
+    });
+    expect(dualStorageModule.dualStorage.getProfile('learner-1')?.solvedProblemIds.has('problem-9')).toBe(true);
   });
 
   it('sends the active session fallback to backend for background interaction writes', async () => {

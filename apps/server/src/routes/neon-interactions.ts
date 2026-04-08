@@ -113,6 +113,48 @@ function logInteractionWrite(req: Request, target: ScopedTarget): void {
   });
 }
 
+type ProblemProgressUpdate = {
+  solved?: boolean;
+  incrementAttempts?: boolean;
+  incrementHints?: boolean;
+  lastCode?: string;
+};
+
+function buildProblemProgressUpdate(event: NeonInteractionEventInput): ProblemProgressUpdate | null {
+  switch (event.eventType) {
+    case 'execution':
+      return {
+        solved: event.successful === true,
+        incrementAttempts: true,
+        lastCode: typeof event.code === 'string' ? event.code : undefined,
+      };
+    case 'error':
+      return {
+        incrementAttempts: true,
+        lastCode: typeof event.code === 'string' ? event.code : undefined,
+      };
+    case 'hint_view':
+      return {
+        incrementHints: true,
+      };
+    default:
+      return null;
+  }
+}
+
+async function persistProblemProgressIfNeeded(
+  learnerId: string,
+  problemId: string,
+  event: NeonInteractionEventInput,
+): Promise<void> {
+  const progressUpdate = buildProblemProgressUpdate(event);
+  if (!progressUpdate) {
+    return;
+  }
+
+  await db.updateProblemProgress(learnerId, problemId, progressUpdate);
+}
+
 export function buildNeonInteractionPayload(event: NeonInteractionEventInput): Record<string, unknown> {
   // Extract payload - frontend sends nested payload, direct API calls send flat structure
   // RESEARCH-3B: Explicitly extract bandit/escalation fields for proper column mapping
@@ -270,6 +312,8 @@ router.post('/', async (req: Request, res: Response) => {
       problemId: event.problemId,
       payload,
     });
+
+    await persistProblemProgressIfNeeded(event.learnerId, event.problemId, event);
     
     // RESEARCH-4: Link textbook retrievals if present (single route parity with batch)
     if (event.textbookUnitsRetrieved && Array.isArray(event.textbookUnitsRetrieved)) {
@@ -341,6 +385,8 @@ router.post('/batch', async (req: Request, res: Response) => {
         problemId: event.problemId,
         payload,
       });
+
+      await persistProblemProgressIfNeeded(scopedTarget.learnerId, event.problemId, event);
       
       // RESEARCH-5: Link textbook retrievals if present
       if (event.textbookUnitsRetrieved && Array.isArray(event.textbookUnitsRetrieved)) {

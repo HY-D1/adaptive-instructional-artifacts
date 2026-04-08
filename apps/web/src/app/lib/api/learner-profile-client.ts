@@ -345,6 +345,7 @@ export async function updateProfileFromEvent(
         timestamp: new Date(event.timestamp).toISOString(),
         eventType: event.eventType,
         problemId: event.problemId,
+        successful: event.successful,
         errorSubtypeId: event.errorSubtypeId,
         conceptIds: event.conceptIds,
         metadata: event.metadata,
@@ -395,6 +396,7 @@ export async function batchUpdateProfile(
         timestamp: new Date(event.timestamp).toISOString(),
         eventType: event.eventType,
         problemId: event.problemId,
+        successful: event.successful,
         errorSubtypeId: event.errorSubtypeId,
         conceptIds: event.conceptIds,
         metadata: event.metadata,
@@ -456,6 +458,10 @@ async function applyEventToLocalProfile(
   // Update interaction count and last active
   profile.interactionCount++;
   profile.lastActive = Date.now();
+
+  if (event.eventType === 'execution' && event.successful && event.problemId) {
+    profile.solvedProblemIds.add(event.problemId);
+  }
   
   // Update error history
   if (event.eventType === 'error' && event.errorSubtypeId) {

@@ -91,6 +91,45 @@ describe('storage-client telemetry contract', () => {
     });
   });
 
+  it('preserves successful execution telemetry fields', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { id: 'execution-1' },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    const { logInteraction } = await import('./storage-client');
+
+    await logInteraction({
+      id: 'execution-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-9',
+      successful: true,
+      code: 'SELECT * FROM employees',
+      timeSpent: 12000,
+    });
+
+    const [, request] = fetchMock.mock.calls[0];
+    expect(JSON.parse(String(request?.body))).toMatchObject({
+      id: 'execution-1',
+      eventType: 'execution',
+      problemId: 'problem-9',
+      successful: true,
+      code: 'SELECT * FROM employees',
+      timeSpent: 12000,
+    });
+  });
+
   it('keeps hintId when reading hint_view interactions from backend', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(
