@@ -27,10 +27,12 @@ import { useEnhancedHints } from '../../../hooks/useEnhancedHints';
 import { HintSourceStatus } from './HintSourceStatus';
 import type { EnhancedHint } from '../../../lib/ml/enhanced-hint-service';
 import { useUserRole } from '../../../hooks/useUserRole';
+import { useStorageFeedback } from '../../../hooks/useStorageFeedback';
 import type { EscalationProfile } from '../../../lib/ml/escalation-profiles';
 import type { SessionConfig } from '../../../types';
 import { orchestrate, type OrchestrationDecision } from '../../../lib/ml/textbook-orchestrator';
 import { buildHintViewEvent, buildStableHintId } from '../../../lib/telemetry/build-hint-view-event';
+import { clearProblemHints, loadHintInfo, saveHintSnapshot } from '../../../lib/storage/hint-cache';
 
 /**
  * Props for the HintSystem component
@@ -100,40 +102,56 @@ export function HintSystem({
   // WS12: Track helpfulness ratings for each hint
   const [hintRatings, setHintRatings] = useState<Record<number, 'helpful' | 'not_helpful' | null>>({});
   const MAX_DEDUPE_KEYS = 1000; // Prevent unbounded set growth
-  
-  // Persist enhanced hint info to localStorage
-  const HINT_INFO_KEY = useMemo(() => `hint-info-${learnerId}-${problemId}`, [learnerId, problemId]);
-  const HINTS_KEY = useMemo(() => `hints-${learnerId}-${problemId}`, [learnerId, problemId]);
+  const { showWarningOnce } = useStorageFeedback();
+  const hintCacheScope = useMemo(() => ({ learnerId, problemId }), [learnerId, problemId]);
+  const hintCacheWarningKey = useMemo(() => `hint-cache-quota:${learnerId}:${problemId}`, [learnerId, problemId]);
   
   // Get user role for hint source display
   const { isInstructor } = useUserRole();
 
-  // Load enhanced hint info from localStorage on mount (backup only)
+  // Load enhanced hint info from bounded cache on mount (backup only)
   useEffect(() => {
-    const saved = localStorage.getItem(HINT_INFO_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setEnhancedHintInfo(parsed);
-      } catch {
-        // Ignore parse errors
-      }
+    const { snapshot } = loadHintInfo(hintCacheScope);
+    if (snapshot?.enhancedHintInfo?.length) {
+      setEnhancedHintInfo(snapshot.enhancedHintInfo);
     }
-  }, [HINT_INFO_KEY]);
+  }, [hintCacheScope]);
 
-  // Save hints to localStorage when they change (for backup only, not for loading)
+  // Persist best-effort hint metadata only. The cache must never block hint UX.
   useEffect(() => {
-    if (hints.length > 0) {
-      localStorage.setItem(HINTS_KEY, JSON.stringify(hints));
+    if (hints.length === 0 && enhancedHintInfo.length === 0) {
+      return;
     }
-  }, [hints, HINTS_KEY]);
 
-  // Save enhanced hint info to localStorage on change
-  useEffect(() => {
-    if (enhancedHintInfo.length > 0) {
-      localStorage.setItem(HINT_INFO_KEY, JSON.stringify(enhancedHintInfo));
+    const result = saveHintSnapshot({
+      learnerId,
+      problemId,
+      currentRung,
+      visibleHintCount: hints.length,
+      lastHintId: activeHintSubtype
+        ? `hint-cache:${activeHintSubtype}:${Math.max(0, nextHelpRequestIndexRef.current - 1)}`
+        : undefined,
+      lastHelpRequestIndex: Math.max(0, nextHelpRequestIndexRef.current - 1),
+      lastHintPreview: hints[hints.length - 1],
+      enhancedHintInfo,
+    });
+
+    if (result.quotaExceeded) {
+      showWarningOnce(
+        hintCacheWarningKey,
+        'Hints still work, but local backup is temporarily unavailable.',
+      );
     }
-  }, [enhancedHintInfo, HINT_INFO_KEY]);
+  }, [
+    activeHintSubtype,
+    currentRung,
+    enhancedHintInfo,
+    hintCacheWarningKey,
+    hints,
+    learnerId,
+    problemId,
+    showWarningOnce,
+  ]);
   
   // Guidance Ladder constants - now profile-aware (Week 5)
   // Get threshold from profile or use defaults (adaptive: 3 hints)
@@ -201,8 +219,7 @@ export function HintSystem({
     setAutoEscalationInfo({ triggered: false, helpRequestCount: 0 });
     setEnhancedHintInfo([]);
     setHintRuntimeError(null);
-    localStorage.removeItem(HINT_INFO_KEY);
-    localStorage.removeItem(HINTS_KEY);
+    clearProblemHints(hintCacheScope);
     // Reset refs to ensure clean state for new problem
     helpFlowKeyRef.current = '';
     nextHelpRequestIndexRef.current = 1;
@@ -532,14 +549,12 @@ export function HintSystem({
   // Note: recentInteractions is intentionally omitted from deps to prevent infinite loops.
   // This effect loads historical data once on mount/problem change, not on every interaction update.
   
-  // Cleanup old localStorage when problem changes
+  // Cleanup per-problem hint cache when the component unmounts or problem changes
   useEffect(() => {
     return () => {
-      // Clear localStorage for this problem when unmounting/changing problems
-      // This prevents stale hints from appearing when returning to the problem
-      localStorage.removeItem(HINTS_KEY);
+      clearProblemHints(hintCacheScope);
     };
-  }, [problemId, HINTS_KEY]);
+  }, [hintCacheScope]);
 
   /**
    * Get the hint selection for a specific help request index.
@@ -891,8 +906,7 @@ export function HintSystem({
         setAutoEscalationInfo({ triggered: false, helpRequestCount: 0 });
         setEnhancedHintInfo([]);
         setHintRuntimeError(null);
-        localStorage.removeItem(HINT_INFO_KEY);
-        localStorage.removeItem(HINTS_KEY);
+        clearProblemHints(hintCacheScope);
         nextHelpRequestIndexRef.current = 1;
         emittedHelpEventKeysRef.current = new Set();
         helpEventSequenceRef.current = 0;

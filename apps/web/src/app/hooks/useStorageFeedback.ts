@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useToast } from '../components/ui/toast';
 
 interface StorageOperationResult {
@@ -9,6 +9,7 @@ interface StorageOperationResult {
 
 export function useStorageFeedback() {
   const { addToast } = useToast();
+  const shownWarningsRef = useRef(new Set<string>());
 
   const handleStorageResult = useCallback((
     result: StorageOperationResult,
@@ -58,8 +59,23 @@ export function useStorageFeedback() {
     return result as ReturnType<T>;
   }, [handleStorageResult]);
 
+  const showWarningOnce = useCallback((key: string, message: string, title = 'Storage Full') => {
+    if (shownWarningsRef.current.has(key)) {
+      return false;
+    }
+
+    shownWarningsRef.current.add(key);
+    addToast({
+      type: 'warning',
+      title,
+      message,
+    });
+    return true;
+  }, [addToast]);
+
   return {
     handleStorageResult,
     withFeedback,
+    showWarningOnce,
   };
 }
