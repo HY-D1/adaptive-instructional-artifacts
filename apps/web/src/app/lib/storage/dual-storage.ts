@@ -1057,13 +1057,22 @@ class DualStorageManager {
    */
   async finalizeActiveSessionBeforeLogout(learnerId: string): Promise<CriticalWriteStatus> {
     // 1. Resolve active session ID
-    const sessionId = localStorageManager.getActiveSessionId();
+    let sessionId = localStorageManager.getActiveSessionId();
+    const allInteractions = localStorageManager.getInteractionsByLearner(learnerId);
+
     if (!sessionId || sessionId === 'session-unknown') {
-      return { backendConfirmed: true, pendingSync: false };
+      const recoveredSessionId = [...allInteractions]
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .find((interaction) => interaction.sessionId && interaction.sessionId !== 'session-unknown')
+        ?.sessionId;
+      if (!recoveredSessionId) {
+        return { backendConfirmed: true, pendingSync: false };
+      }
+      sessionId = recoveredSessionId;
+      localStorageManager.setActiveSessionId(recoveredSessionId);
     }
 
     // 2. Read local interactions for this session
-    const allInteractions = localStorageManager.getInteractionsByLearner(learnerId);
     const sessionInteractions = allInteractions.filter(i => i.sessionId === sessionId);
 
     // 3. If no interactions exist, nothing to finalize

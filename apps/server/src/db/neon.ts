@@ -984,6 +984,7 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
       ${payload.rewardValue ?? null},
       ${now}
     )
+    ON CONFLICT (id) DO NOTHING
   `;
 
   const { sectionId: _ignoredSectionId, ...topLevelPayload } = payload as Record<string, unknown>;

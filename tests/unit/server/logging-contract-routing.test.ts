@@ -204,4 +204,10 @@ describe('logging contract routing', () => {
     expect(payload.problemsAttempted).toBe(5);
     expect(payload.problemsSolved).toBe(3);
   });
+
+  it('keeps Neon interaction writes idempotent for flush retries', () => {
+    const neonSource = readFileSync(join(repoRoot, 'apps/server/src/db/neon.ts'), 'utf8');
+
+    expect(neonSource).toContain('ON CONFLICT (id) DO NOTHING');
+  });
 });

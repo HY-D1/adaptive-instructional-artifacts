@@ -863,7 +863,11 @@ export function LearningInterface() {
       };
       storage.saveInteraction(configEvent);
     }
-    
+
+    if (config.sessionId?.trim()) {
+      storage.setActiveSessionId(config.sessionId.trim());
+    }
+
     setSessionConfig(config);
     
     // Override escalation profile if config specifies a policy
@@ -1044,6 +1048,9 @@ export function LearningInterface() {
 
       if (cancelled) return;
 
+      if (resolvedSessionId && resolvedSessionId !== 'session-unknown') {
+        storage.setActiveSessionId(resolvedSessionId);
+      }
       setSessionId(resolvedSessionId);
       if (currentProblem.id !== resolvedProblem.id) {
         setCurrentProblem(resolvedProblem);

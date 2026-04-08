@@ -475,6 +475,48 @@ describe('dual-storage critical write semantics', () => {
   });
 
   // RESEARCH-4: Logout session finalization barrier tests
+  it('finalizes the latest real session when active session storage has the sentinel', async () => {
+    localStorage.setItem('sql-learning-active-session', 'session-unknown');
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'exec-sentinel-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-real-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-1',
+      successful: true,
+    });
+    logInteractionMock.mockClear();
+
+    getInteractionsMock.mockResolvedValueOnce({
+      events: [
+        {
+          id: 'exec-sentinel-1',
+          learnerId: 'learner-1',
+          sessionId: 'session-real-1',
+          timestamp: 1_700_000_000_000,
+          eventType: 'execution',
+          problemId: 'problem-1',
+          successful: true,
+        },
+      ],
+      total: 1,
+    });
+
+    const status = await dualStorageModule.dualStorage.finalizeActiveSessionBeforeLogout('learner-1');
+
+    expect(status).toEqual({ backendConfirmed: true, pendingSync: false });
+    expect(localStorage.getItem('sql-learning-active-session')).toBe('session-real-1');
+    expect(logInteractionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'session-end:session-real-1',
+        learnerId: 'learner-1',
+        sessionId: 'session-real-1',
+        eventType: 'session_end',
+      }),
+    );
+  });
+
   it('returns confirmed when no active session exists', async () => {
     // Ensure no active session
     localStorage.removeItem('sql-adapt-session-id');
