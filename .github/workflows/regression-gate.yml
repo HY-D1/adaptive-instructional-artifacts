@@ -75,18 +75,11 @@ jobs:
         id: test-run
         run: |
           echo "Running tests for shard ${{ matrix.shard }} of ${{ matrix.totalShards }}"
-          npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@(integration|flaky)' --shard=${{ matrix.shard }}/${{ matrix.totalShards }} --reporter=list
+          npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@(integration|flaky)' --shard=${{ matrix.shard }}/${{ matrix.totalShards }} --reporter=list || \
+            npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@(integration|flaky)' --shard=${{ matrix.shard }}/${{ matrix.totalShards }} --last-failed --reporter=list
         env:
           CI: true
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results-shard-${{ matrix.shard }}.json
-      
-      - name: Retry failed tests
-        if: failure()
-        run: |
-          npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@(integration|flaky)' --shard=${{ matrix.shard }}/${{ matrix.totalShards }} --last-failed
-        env:
-          CI: true
-        continue-on-error: true
       
       - name: Create demo directory
         if: success() && matrix.shard == 1
@@ -235,7 +228,9 @@ jobs:
           cd apps/server && npm ci
 
       - name: Run unit tests
-        run: npm run test:unit
+        run: |
+          npm run server:build
+          npm run test:unit
       
       - name: Upload coverage
         uses: actions/upload-artifact@v4

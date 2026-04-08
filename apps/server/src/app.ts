@@ -162,6 +162,15 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
 
 app.use(originGuard);
 
+app.get('/', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    service: 'SQL-Adapt Backend API',
+    health: '/health',
+    persistenceStatus: '/api/system/persistence-status',
+  });
+});
+
 app.get('/health', async (_req: Request, res: Response) => {
   const featureStatus = await getFeatureStatus();
   const { source } = resolveDbEnv();

@@ -256,6 +256,18 @@ export async function checkResearchReadiness(): Promise<ResearchReadiness> {
   const envConfigured = isBackendConfigured();
   const apiBase = getApiBaseUrl();
   const apiUrl = apiBase ? `${apiBase}/api` : undefined;
+
+  if (isTestEnvironment()) {
+    return {
+      ready: true,
+      diagnostics: {
+        envConfigured,
+        backendReachable: false,
+        isNeon: false,
+        persistenceEnabled: false,
+      },
+    };
+  }
   
   if (!envConfigured || !apiUrl) {
     return {

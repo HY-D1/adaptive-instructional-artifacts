@@ -63,4 +63,21 @@ describe('runtime-config and demo-mode deployment detection', () => {
     expect(runtimeConfig.getLLMUnavailableError().toLowerCase()).not.toContain('ollama');
     expect(runtimeConfig.getLLMUnavailableError().toLowerCase()).not.toContain('run the app locally');
   });
+
+  it('bypasses research readiness blocking in E2E test mode', async () => {
+    vi.stubEnv('VITE_TEST_MODE', 'true');
+    vi.stubEnv('PROD', true);
+
+    const runtimeConfig = await import('./runtime-config');
+
+    await expect(runtimeConfig.checkResearchReadiness()).resolves.toMatchObject({
+      ready: true,
+      diagnostics: {
+        envConfigured: false,
+        backendReachable: false,
+        isNeon: false,
+        persistenceEnabled: false,
+      },
+    });
+  });
 });
