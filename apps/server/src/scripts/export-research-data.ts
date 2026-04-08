@@ -194,7 +194,6 @@ async function main() {
 
     const exportRows: ExportRow[] = filteredRows.map((row: any) => {
       const provenanceStatus = determineProvenanceStatus(row);
-      const hasHintId = row.hint_id && row.hint_id.trim() !== '';
       const hasTemplateId = row.template_id && row.template_id.trim() !== '';
       
       return {

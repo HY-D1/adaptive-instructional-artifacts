@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ToastProvider } from '../../ui/toast';
@@ -39,6 +40,12 @@ vi.mock('../../../hooks/useUserRole', () => ({
 
 vi.mock('./HintSourceStatus', () => ({
   HintSourceStatus: () => <div data-testid="hint-source-status" />,
+}));
+
+vi.mock('../../ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('../../shared/SourceViewer', () => ({
