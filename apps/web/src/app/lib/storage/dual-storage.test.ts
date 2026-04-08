@@ -59,6 +59,52 @@ beforeEach(() => {
 });
 
 describe('dual-storage critical write semantics', () => {
+  it('sends the active session fallback to backend for background interaction writes', async () => {
+    localStorage.setItem('sql-learning-active-session', 'session-learner-1-active');
+    await dualStorageModule.dualStorage.checkHealth();
+
+    const status = dualStorageModule.dualStorage.saveInteraction({
+      id: 'code-change-active-session',
+      learnerId: 'learner-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'code_change',
+      problemId: 'problem-1',
+      code: 'SELECT name FROM employees',
+    });
+
+    expect(status.success).toBe(true);
+    await vi.waitFor(() => {
+      expect(logInteractionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 'code-change-active-session',
+          sessionId: 'session-learner-1-active',
+        }),
+      );
+    });
+  });
+
+  it('sends the active session fallback to backend for critical interaction writes', async () => {
+    localStorage.setItem('sql-learning-active-session', 'session-learner-1-critical');
+
+    const status = await dualStorageModule.dualStorage.saveInteractionCritical({
+      id: 'critical-active-session',
+      learnerId: 'learner-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-1',
+      error: 'syntax error',
+    });
+
+    expect(status.backendConfirmed).toBe(true);
+    expect(status.pendingSync).toBe(false);
+    expect(logInteractionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'critical-active-session',
+        sessionId: 'session-learner-1-critical',
+      }),
+    );
+  });
+
   it('returns backend-confirmed status for persisted session writes', async () => {
     const status = await dualStorageModule.dualStorage.ensureSessionPersisted('learner-1', 'session-1');
 

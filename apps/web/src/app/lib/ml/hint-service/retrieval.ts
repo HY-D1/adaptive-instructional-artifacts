@@ -43,6 +43,7 @@ export function buildEnhancedRetrievalBundle(
 
   return {
     ...baseBundle,
+    problem,
     textbookUnits,
   };
 }

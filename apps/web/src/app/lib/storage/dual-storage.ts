@@ -350,30 +350,45 @@ class DualStorageManager {
   // Interaction/Event Operations
   // ============================================================================
 
+  private withActiveSessionFallback(event: InteractionEvent): InteractionEvent {
+    const explicitSessionId = event.sessionId?.trim();
+    if (explicitSessionId) {
+      return explicitSessionId === event.sessionId
+        ? event
+        : { ...event, sessionId: explicitSessionId };
+    }
+
+    return {
+      ...event,
+      sessionId: localStorageManager.getActiveSessionId(),
+    };
+  }
+
   saveInteraction(event: InteractionEvent): { success: boolean; quotaExceeded?: boolean } {
+    const eventForWrite = this.withActiveSessionFallback(event);
     // Send to backend FIRST (primary source of truth) - async in background
     if (this.shouldUseBackend()) {
-      storageClient.logInteraction(event).then(backendSuccess => {
+      storageClient.logInteraction(eventForWrite).then(backendSuccess => {
         if (!backendSuccess) {
           // Backend failed, queue for retry
           this.offlineQueue.add({
-            id: event.id,
+            id: eventForWrite.id,
             type: 'interaction',
-            data: event,
+            data: eventForWrite,
           });
         }
       }).catch(error => {
         console.warn('[DualStorage] Backend saveInteraction failed, queuing for retry:', error);
         this.offlineQueue.add({
-          id: event.id,
+          id: eventForWrite.id,
           type: 'interaction',
-          data: event,
+          data: eventForWrite,
         });
       });
     }
     
     // Always cache in localStorage (synchronous return)
-    return localStorageManager.saveInteraction(event);
+    return localStorageManager.saveInteraction(eventForWrite);
   }
 
   logInteraction(event: InteractionEvent): { success: boolean; quotaExceeded?: boolean } {
@@ -456,7 +471,8 @@ class DualStorageManager {
   }
 
   async saveInteractionCritical(event: InteractionEvent): Promise<CriticalWriteStatus> {
-    const localResult = localStorageManager.saveInteraction(event);
+    const eventForWrite = this.withActiveSessionFallback(event);
+    const localResult = localStorageManager.saveInteraction(eventForWrite);
     if (localResult.success === false) {
       return {
         backendConfirmed: false,
@@ -474,9 +490,9 @@ class DualStorageManager {
     const healthy = await this.checkHealth();
     if (!healthy) {
       this.offlineQueue.add({
-        id: event.id,
+        id: eventForWrite.id,
         type: 'interaction',
-        data: event,
+        data: eventForWrite,
       });
       return {
         backendConfirmed: false,
@@ -486,14 +502,14 @@ class DualStorageManager {
     }
 
     try {
-      const backendSuccess = await storageClient.logInteraction(event);
+      const backendSuccess = await storageClient.logInteraction(eventForWrite);
       if (backendSuccess) {
         return { backendConfirmed: true, pendingSync: false };
       }
       this.offlineQueue.add({
-        id: event.id,
+        id: eventForWrite.id,
         type: 'interaction',
-        data: event,
+        data: eventForWrite,
       });
       return {
         backendConfirmed: false,
@@ -503,9 +519,9 @@ class DualStorageManager {
     } catch (error) {
       console.warn('[DualStorage] saveInteractionCritical backend failure, queued:', error);
       this.offlineQueue.add({
-        id: event.id,
+        id: eventForWrite.id,
         type: 'interaction',
-        data: event,
+        data: eventForWrite,
       });
       return {
         backendConfirmed: false,

@@ -182,6 +182,7 @@ export type ScoredHintCandidate = {
  * Extended retrieval bundle with textbook units
  */
 export type EnhancedRetrievalBundle = RetrievalBundle & {
+  problem: SQLProblem;
   textbookUnits?: InstructionalUnit[];
 };
 
