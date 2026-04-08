@@ -92,6 +92,7 @@ export interface LearnerProfile {
   conceptsCovered: string[]; // Set serialized as array
   conceptCoverageEvidence: Record<string, ConceptCoverageEvidence>; // Map serialized as object
   errorHistory: Record<string, number>; // Map serialized as object (subtype -> count)
+  solvedProblemIds: string[];
   interactionCount: number;
   currentStrategy: string;
   preferences: LearnerPreferences;

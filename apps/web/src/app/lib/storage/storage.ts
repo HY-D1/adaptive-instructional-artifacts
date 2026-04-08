@@ -849,16 +849,16 @@ class StorageManager {
     // Get existing version or start at 0
     const existingVersion = index >= 0 ? (profiles[index].version || 0) : 0;
     const incomingVersion = (profile as any).version || 0;
+    const existingProfile = index >= 0 ? this.getProfile(profile.id) : null;
     
     // Simple merge strategy: if incoming has lower version, merge data
     let mergedConceptsCovered = profile.conceptsCovered;
     let mergedEvidence = profile.conceptCoverageEvidence || new Map();
     let mergedErrorHistory = profile.errorHistory;
+    let mergedSolvedProblemIds = new Set(profile.solvedProblemIds || new Set());
     
     if (index >= 0 && incomingVersion < existingVersion) {
       // Race condition detected: merge with existing data instead of overwriting
-      const existingProfile = this.getProfile(profile.id);
-      
       if (existingProfile) {
         // Merge conceptsCovered: union of both sets
         mergedConceptsCovered = new Set([
@@ -882,6 +882,13 @@ class StorageManager {
         }
       }
     }
+
+    if (existingProfile) {
+      mergedSolvedProblemIds = new Set([
+        ...Array.from(existingProfile.solvedProblemIds),
+        ...Array.from(profile.solvedProblemIds || new Set()),
+      ]);
+    }
     
     // Atomic read-modify-write: use the profiles from initial read with merged data
     // This prevents race conditions from concurrent tab modifications
@@ -896,7 +903,7 @@ class StorageManager {
       conceptsCovered: Array.from(mergedConceptsCovered),
       conceptCoverageEvidence: Array.from(mergedEvidence.entries()),
       errorHistory: Array.from(mergedErrorHistory.entries()),
-      solvedProblemIds: Array.from(profile.solvedProblemIds || new Set())
+      solvedProblemIds: Array.from(mergedSolvedProblemIds)
     };
     
     // Re-find index in the current profiles array (from initial read)

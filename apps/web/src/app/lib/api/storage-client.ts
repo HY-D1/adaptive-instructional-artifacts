@@ -314,6 +314,7 @@ interface BackendLearnerProfile {
   conceptsCovered: string[];
   conceptCoverageEvidence: Record<string, ConceptCoverageEvidence>;
   errorHistory: Record<string, number>;
+  solvedProblemIds: string[];
   interactionCount: number;
   currentStrategy: string;
   preferences: {
@@ -584,7 +585,7 @@ export async function getProfile(learnerId: string): Promise<LearnerProfile | nu
     conceptsCovered: new Set(data.conceptsCovered),
     conceptCoverageEvidence: new Map(Object.entries(data.conceptCoverageEvidence)),
     errorHistory: new Map(Object.entries(data.errorHistory)),
-    solvedProblemIds: new Set(),
+    solvedProblemIds: new Set(data.solvedProblemIds || []),
     interactionCount: data.interactionCount,
     currentStrategy: data.currentStrategy as LearnerProfile['currentStrategy'],
     preferences: data.preferences,
@@ -658,7 +659,7 @@ export async function getAllProfiles(): Promise<LearnerProfile[]> {
     conceptsCovered: new Set(data.conceptsCovered),
     conceptCoverageEvidence: new Map(Object.entries(data.conceptCoverageEvidence)),
     errorHistory: new Map(Object.entries(data.errorHistory)),
-    solvedProblemIds: new Set(),
+    solvedProblemIds: new Set(data.solvedProblemIds || []),
     interactionCount: data.interactionCount,
     currentStrategy: data.currentStrategy as LearnerProfile['currentStrategy'],
     preferences: data.preferences,
@@ -688,9 +689,9 @@ export async function updateProfileFromEvent(
         code: event.code,
         error: event.error,
         errorSubtypeId: event.errorSubtypeId,
+        successful: event.successful,
         conceptIds: event.conceptIds,
         metadata: {
-          successful: event.successful,
           ...event.metadata,
         },
       },
@@ -706,7 +707,7 @@ export async function updateProfileFromEvent(
     conceptsCovered: new Set(data.conceptsCovered),
     conceptCoverageEvidence: new Map(Object.entries(data.conceptCoverageEvidence)),
     errorHistory: new Map(Object.entries(data.errorHistory)),
-    solvedProblemIds: new Set(),
+    solvedProblemIds: new Set(data.solvedProblemIds || []),
     interactionCount: data.interactionCount,
     currentStrategy: data.currentStrategy as LearnerProfile['currentStrategy'],
     preferences: data.preferences,
