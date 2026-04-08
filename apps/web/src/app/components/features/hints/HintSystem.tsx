@@ -30,6 +30,7 @@ import { useUserRole } from '../../../hooks/useUserRole';
 import type { EscalationProfile } from '../../../lib/ml/escalation-profiles';
 import type { SessionConfig } from '../../../types';
 import { orchestrate, type OrchestrationDecision } from '../../../lib/ml/textbook-orchestrator';
+import { buildHintViewEvent, buildStableHintId } from '../../../lib/telemetry/build-hint-view-event';
 
 /**
  * Props for the HintSystem component
@@ -586,6 +587,7 @@ export function HintSystem({
     sqlEngageSubtype: string;
     sqlEngageRowId: string;
     policyVersion: string;
+    templateId: string;
     pdfPassages: RetrievalPdfPassage[];
     isEnhanced: boolean;
     retrievalConfidence: number;
@@ -630,6 +632,7 @@ export function HintSystem({
           sqlEngageSubtype: effectiveSubtype,
           sqlEngageRowId: enhancedHint.llmGenerated ? 'llm-generated' : 'sql-engage-enhanced',
           policyVersion: enhancedHint.llmGenerated ? 'enhanced-llm-v1' : 'sql-engage-v1',
+          templateId: enhancedHint.llmGenerated ? 'llm-template' : `sql-engage-rung-${rung}`,
           pdfPassages,
           isEnhanced: enhancedHint.llmGenerated || enhancedHint.sources.textbook,
           retrievalConfidence: enhancedHint.retrievalConfidence,
@@ -956,6 +959,7 @@ export function HintSystem({
         sqlEngageSubtype: string;
         sqlEngageRowId: string;
         policyVersion: string;
+        templateId: string;
         pdfPassages: RetrievalPdfPassage[];
         isEnhanced: boolean;
         retrievalConfidence: number;
@@ -991,6 +995,7 @@ export function HintSystem({
           sqlEngageSubtype: standardHint.sqlEngageSubtype,
           sqlEngageRowId: standardHint.sqlEngageRowId,
           policyVersion: standardHint.policyVersion,
+          templateId: `sql-engage-rung-${standardHint.hintLevel}`,
           pdfPassages,
           isEnhanced: false,
           retrievalConfidence: 0.5,
@@ -1043,20 +1048,25 @@ export function HintSystem({
         ]),
       );
 
-      const hintEvent: InteractionEvent = {
+      // Build hint event using centralized helper for research contract compliance
+      const hintEvent = buildHintViewEvent({
         id: buildHelpEventId('hint', nextHelpRequestIndex),
         sessionId,
         learnerId,
-        timestamp: Date.now(),
-        eventType: 'hint_view',
         problemId,
-        hintId: buildStableHintId(hintSelection),
+        hintId: buildStableHintId({
+          subtype: hintSelection.sqlEngageSubtype,
+          rowId: hintSelection.sqlEngageRowId,
+          level: hintSelection.hintLevel,
+          templateId: hintSelection.templateId,
+        }),
         hintText: hintSelection.hintText,
         hintLevel: hintSelection.hintLevel,
-        helpRequestIndex: nextHelpRequestIndex,
+        templateId: hintSelection.templateId,
         sqlEngageSubtype: hintSelection.sqlEngageSubtype,
         sqlEngageRowId: hintSelection.sqlEngageRowId,
         policyVersion: hintSelection.policyVersion,
+        helpRequestIndex: nextHelpRequestIndex,
         ruleFired: hintSelection.isEnhanced ? 'enhanced-hint' : 'progressive-hint',
         retrievedSourceIds,
         retrievedChunks: hintSelection.pdfPassages.map((passage) => ({
@@ -1076,6 +1086,7 @@ export function HintSystem({
           help_request_index: nextHelpRequestIndex,
           sql_engage_subtype: hintSelection.sqlEngageSubtype,
           sql_engage_row_id: hintSelection.sqlEngageRowId,
+          template_id: hintSelection.templateId,
           will_escalate: willEscalate,
           rule_fired: willEscalate ? 'progressive-hint-will-escalate' : (hintSelection.isEnhanced ? 'enhanced-hint' : 'progressive-hint'),
           is_enhanced: hintSelection.isEnhanced,
@@ -1091,7 +1102,7 @@ export function HintSystem({
           orchestration_trigger_reason: orchestrationDecisionForHint?.escalationTriggerReason ?? null,
         },
         conditionId: sessionConfig?.conditionId
-      };
+      });
       storage.saveInteraction(hintEvent);
       onInteractionLogged?.(hintEvent);
       for (const conceptId of conceptIds.filter(Boolean)) {

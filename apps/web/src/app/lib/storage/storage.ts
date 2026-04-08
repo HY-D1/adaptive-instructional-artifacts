@@ -3077,15 +3077,39 @@ class StorageManager {
     const fallbackAnchor = getDeterministicSqlEngageAnchor(canonicalSubtype, rowSeed);
     const sqlEngageRowId = interaction.sqlEngageRowId?.trim() || fallbackAnchor.rowId;
     const policyVersion = interaction.policyVersion?.trim() || getSqlEngagePolicyVersion();
+    
+    // hintId: Allow fallback derivation for backward compatibility
     const hintId =
       interaction.hintId?.trim() ||
       `sql-engage:${canonicalSubtype}:hint:${sqlEngageRowId}:L${hintLevel}`;
+
+    // Paper Data Contract: templateId must NOT be fabricated
+    // If missing, mark as unverifiable and warn
+    let templateId = interaction.templateId?.trim();
+    if (!templateId) {
+      templateId = 'unverifiable';
+      if (import.meta.env.DEV || import.meta.env.MODE === 'test') {
+        // eslint-disable-next-line no-console
+        console.warn(`[telemetry_contract_violation] hint_view ${interaction.id} missing required field: templateId. ` +
+          `Hint events must include templateId at creation time.`);
+      }
+    }
+
+    // Paper Data Contract: hintText must NOT be empty
+    const hintText = interaction.hintText?.trim();
+    if (!hintText && (import.meta.env.DEV || import.meta.env.MODE === 'test')) {
+      // eslint-disable-next-line no-console
+      console.warn(`[telemetry_contract_violation] hint_view ${interaction.id} missing required field: hintText. ` +
+        `Hint events must include the rendered hint text.`);
+    }
 
     const normalizedHintView: InteractionEvent = {
       ...interaction,
       eventType: 'hint_view',
       hintId,
       hintLevel,
+      hintText: hintText || '[missing-hint-text]',
+      templateId,
       sqlEngageSubtype: canonicalSubtype,
       sqlEngageRowId,
       policyVersion

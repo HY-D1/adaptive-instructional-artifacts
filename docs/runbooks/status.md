@@ -1,6 +1,6 @@
 # Project Status — SQL-Adapt
 
-**Last Updated**: 2026-04-07 (Telemetry Hardening: Logout Barrier + Concept View Dedupe)
+**Last Updated**: 2026-04-07 (Telemetry Hardening: Paper Data Contract v1 - Messages 1-4)
 **Purpose**: Single durable status file for implementation and deployment readiness.
 
 ---
@@ -150,6 +150,63 @@ Full details in [Beta Supervised Launch Packet](./beta-supervised-launch-packet.
 - Resolve WS5-BLOCKER-001 in parallel for future fully-automated acceptance testing
 
 ---
+
+---
+
+## Paper-Data Readiness (Research Contract v1)
+
+**Status**: IN PROGRESS
+
+**Goal**: Harden telemetry from beta-ready to research-ready without changing the adaptive textbook architecture.
+
+### Paper Data Contract Gate
+
+Run the research-readiness gate:
+```bash
+npm run research:gate
+```
+
+This validates row-level completeness thresholds:
+- hint_view: hint_id, hint_text, hint_level, template_id ≥ 99%
+- concept_view: concept_id, source ≥ 99%
+- session_end: total_time, problems_attempted, problems_solved ≥ 99%
+- code_change: burst ratio ≤ 30% (events under 1s)
+
+### Implementation Status
+
+| Component | Status | Evidence |
+|-----------|--------|----------|
+| Research Gate | ✅ Complete | `scripts/verification/check-neon-paper-data-contract.mjs` |
+| PAPER_DATA_CONTRACT.md | ✅ Complete | `docs/research/PAPER_DATA_CONTRACT.md` |
+| Audit SQL Bundle | ✅ Complete | `docs/audit/neon-research-readiness-sql-queries-2026-04-07.sql` |
+| validate-research-fields.ts | ✅ Extended | Paper data contract checks added |
+| Hint Identity Helper | ✅ Complete | `apps/web/src/app/lib/telemetry/build-hint-view-event.ts` |
+| HintSystem.tsx | ✅ Updated | Uses centralized hint event builder |
+| storage.ts Normalization | ✅ Updated | Warns on missing templateId/hintText |
+| Editor Debounce | ✅ Complete | `apps/web/src/app/hooks/useDebouncedCodeChange.ts` |
+| LearningInterface.tsx | ✅ Updated | Uses debounced telemetry |
+| Derived Exports | ✅ Complete | hint_events, hint_response_windows in export |
+| Retrieval Link Table | ✅ Complete | `interaction_textbook_unit_retrievals` migration |
+| Backfill Script | ✅ Complete | `apps/server/src/scripts/backfill-research-telemetry.ts` |
+
+### Commands
+
+```bash
+# Run the research gate
+npm run research:gate
+
+# Validate exported research data
+npm run research:validate
+
+# Run all tests
+npx vitest run apps/web/src/app/lib/telemetry/build-hint-view-event.test.ts
+npx vitest run apps/web/src/app/hooks/useDebouncedCodeChange.test.ts
+```
+
+### Related Documents
+
+- [Paper Data Contract](../research/PAPER_DATA_CONTRACT.md) - Full contract specification
+- [Beta Telemetry Readiness](./beta-telemetry-readiness.md) - Beta readiness checklist (superseded for paper decisions)
 
 ---
 

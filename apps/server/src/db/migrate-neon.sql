@@ -292,6 +292,24 @@ CREATE INDEX IF NOT EXISTS idx_textbook_unit_event_links_unit_id ON textbook_uni
 CREATE INDEX IF NOT EXISTS idx_textbook_unit_event_links_event_id ON textbook_unit_event_links(event_id);
 
 -- ============================================================================
+-- Textbook unit retrievals (provenance for retrieval events)
+-- Paper Data Contract: Structured retrieval provenance (Message 5/5)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS interaction_textbook_unit_retrievals (
+  id SERIAL PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES interaction_events(id) ON DELETE CASCADE,
+  unit_id TEXT NOT NULL,
+  rank INTEGER,
+  source_kind TEXT,
+  score NUMERIC,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_retrievals_event_id ON interaction_textbook_unit_retrievals(event_id);
+CREATE INDEX IF NOT EXISTS idx_retrievals_unit_id ON interaction_textbook_unit_retrievals(unit_id);
+
+-- ============================================================================
 -- Processed corpus tables (local-only raw PDF -> remote Neon corpus)
 -- ============================================================================
 

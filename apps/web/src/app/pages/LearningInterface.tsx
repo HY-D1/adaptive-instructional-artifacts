@@ -82,6 +82,7 @@ import {
   type LearningPathRecommendation,
   type PathProgress
 } from '../lib/knowledge';
+import { useDebouncedCodeChange } from '../hooks/useDebouncedCodeChange';
 
 const INSTRUCTOR_SUBTYPE_OPTIONS = getKnownSqlEngageSubtypes();
 
@@ -370,6 +371,23 @@ export function LearningInterface() {
   
   // Week 6: Session configuration for experimental conditions
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
+  
+  // Paper Data Contract: Debounced code change telemetry
+  const {
+    handleCodeChange: debouncedHandleCodeChange,
+    flush: flushCodeChangeTelemetry,
+    reset: resetCodeChangeTelemetry,
+  } = useDebouncedCodeChange({
+    learnerId,
+    sessionId: sessionId || undefined,
+    problemId: currentProblem.id,
+    conditionId: sessionConfig?.conditionId,
+    debounceMs: 1500,
+    onSaveInteraction: (event) => {
+      storage.saveInteraction(event);
+      setInteractions((prev) => [...prev, event]);
+    },
+  });
   
   const timerRef = useRef<number | null>(null);
   const stopAnalysisRef = useRef<(() => void) | null>(null);
@@ -1227,27 +1245,20 @@ export function LearningInterface() {
     ? canonicalizeSqlEngageSubtype(subtypeOverride)
     : undefined;
 
-  const handleCodeChange = (code: string) => {
-    const event: InteractionEvent = {
-      id: createEventId('event', 'code-change'),
-      sessionId,
-      learnerId,
-      timestamp: Date.now(),
-      eventType: 'code_change',
-      problemId: currentProblem.id,
-      code,
-      conditionId: sessionConfig?.conditionId
-    };
-    storage.saveInteraction(event);
-    setInteractions((previousInteractions) => [...previousInteractions, event]);
-  };
-
+  // Paper Data Contract: Debounced code_change telemetry
+  // Immediate draft persistence for UX, debounced telemetry for research
   const handleEditorCodeChange = (code: string) => {
     setSqlDraft(code);
     if (sessionId) {
       storage.savePracticeDraft(learnerId, sessionId, currentProblem.id, code);
     }
-    handleCodeChange(code);
+    // Debounced telemetry - not immediate
+    debouncedHandleCodeChange(code);
+  };
+  
+  // Flush code change telemetry before executing query
+  const flushTelemetryBeforeExecute = () => {
+    flushCodeChangeTelemetry();
   };
 
   const handleEditorReset = () => {
@@ -1273,20 +1284,14 @@ export function LearningInterface() {
     }
     setCurrentProblem(problem);
 
-    // Log problem change with condition context
-    if (sessionConfig?.conditionId) {
-      const event: InteractionEvent = {
-        id: createEventId('event', 'problem-change'),
-        sessionId,
-        learnerId,
-        timestamp: Date.now(),
-        eventType: 'code_change',
-        problemId: problem.id,
-        conditionId: sessionConfig.conditionId,
-        metadata: { action: 'problem_change', previousProblemId: currentProblem.id }
-      };
-      storage.saveInteraction(event);
-    }
+    // Paper Data Contract: Flush any pending code change telemetry before switching
+    flushCodeChangeTelemetry();
+    
+    // Reset code change telemetry state for new problem
+    resetCodeChangeTelemetry();
+    
+    // Note: We no longer emit code_change for problem switching
+    // This was semantically incorrect and caused telemetry noise
     
     const restoredDraft = sessionId
       ? storage.getPracticeDraft(learnerId, sessionId, problem.id)
@@ -1497,6 +1502,9 @@ export function LearningInterface() {
   };
 
   const handleExecute = async (query: string, result: QueryResult, isCorrect?: boolean) => {
+    // Paper Data Contract: Flush pending code change telemetry before execution
+    flushCodeChangeTelemetry();
+    
     // isCorrect indicates if results match expected (for result-graded problems)
     // If not provided, fall back to result.success (no SQL errors)
     const actuallyCorrect = isCorrect ?? result.success;
@@ -1915,6 +1923,8 @@ export function LearningInterface() {
     }
 
     return () => {
+      // Paper Data Contract: Flush pending code change telemetry on unmount
+      flushCodeChangeTelemetry();
       finalizeSessionEnd('cleanup');
     };
   }, [finalizeSessionEnd, learnerId, sessionId]);
@@ -1928,6 +1938,8 @@ export function LearningInterface() {
       if (event.persisted) {
         return;
       }
+      // Paper Data Contract: Flush pending code change telemetry before page hide
+      flushCodeChangeTelemetry();
       finalizeSessionEnd('pagehide');
     };
 

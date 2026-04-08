@@ -62,6 +62,9 @@ export const RESEARCH_EXPORT_FILES = [
   'escalation_events.csv', 'escalation_events.json',
   'session_events_joined.csv', 'session_events_joined.json',
   'event_type_summary.json',
+  // Paper Data Contract: Derived exports (Message 4/5)
+  'hint_events.csv', 'hint_events.json',
+  'hint_response_windows.csv', 'hint_response_windows.json',
   'manifest.json',
 ] as const;
 
@@ -523,6 +526,168 @@ async function exportSessionEventJoin(db: DbClient): Promise<void> {
   console.log(`   ✓ ${joinedData.length} joined records exported`);
 }
 
+// ============================================================================
+// Paper Data Contract: Derived Exports (Message 4/5)
+// ============================================================================
+
+async function exportHintEvents(db: DbClient): Promise<void> {
+  console.log('📊 Exporting hint events (derived)...');
+
+  const result = await db`
+    SELECT
+      id as event_id,
+      user_id,
+      session_id,
+      problem_id,
+      timestamp,
+      hint_id,
+      hint_text,
+      hint_level,
+      template_id,
+      help_request_index,
+      sql_engage_subtype,
+      sql_engage_row_id,
+      policy_version,
+      rule_fired,
+      retrieved_source_ids,
+      inputs,
+      outputs,
+      condition_id,
+      created_at
+    FROM interaction_events
+    WHERE event_type = 'hint_view'
+    ORDER BY timestamp DESC
+  `;
+  const hints = Array.isArray(result) ? result as QueryResult[] : [];
+
+  const csvPath = path.join(OUTPUT_DIR, 'hint_events.csv');
+  const jsonPath = path.join(OUTPUT_DIR, 'hint_events.json');
+
+  // CSV Export
+  const csvHeader = 'event_id,user_id,session_id,problem_id,timestamp,hint_id,hint_text,hint_level,template_id,help_request_index,sql_engage_subtype,sql_engage_row_id,policy_version,rule_fired,condition_id,created_at\n';
+  const csvRows = hints.map(h => [
+    h.event_id,
+    h.user_id,
+    h.session_id || '',
+    h.problem_id,
+    h.timestamp,
+    h.hint_id || '',
+    escapeCsv(h.hint_text || ''),
+    h.hint_level ?? '',
+    h.template_id || '',
+    h.help_request_index ?? '',
+    h.sql_engage_subtype || '',
+    h.sql_engage_row_id || '',
+    h.policy_version || '',
+    h.rule_fired || '',
+    h.condition_id || '',
+    h.created_at
+  ].join(',')).join('\n');
+  fs.writeFileSync(csvPath, csvHeader + csvRows);
+
+  // JSON Export with parsed fields
+  const parsedHints = hints.map(h => ({
+    ...h,
+    retrieved_source_ids: parseJsonSafe(h.retrieved_source_ids),
+    inputs: parseJsonSafe(h.inputs),
+    outputs: parseJsonSafe(h.outputs),
+  }));
+  fs.writeFileSync(jsonPath, JSON.stringify(parsedHints, null, 2));
+
+  console.log(`   ✓ ${hints.length} hint events exported`);
+}
+
+async function exportHintResponseWindows(db: DbClient): Promise<void> {
+  console.log('📊 Exporting hint response windows (derived)...');
+
+  // Use a window function to find events after each hint
+  const result = await db`
+    WITH hint_events AS (
+      SELECT
+        id as hint_event_id,
+        user_id,
+        session_id,
+        problem_id,
+        timestamp as hint_timestamp,
+        hint_id,
+        hint_level,
+        template_id,
+        LEAD(timestamp) OVER (PARTITION BY session_id, problem_id ORDER BY timestamp) as next_event_time
+      FROM interaction_events
+      WHERE event_type = 'hint_view'
+    ),
+    hint_windows AS (
+      SELECT
+        h.hint_event_id,
+        h.user_id,
+        h.session_id,
+        h.problem_id,
+        h.hint_timestamp,
+        h.hint_id,
+        h.hint_level,
+        h.template_id,
+        MIN(e.timestamp) FILTER (WHERE e.event_type IN ('code_change', 'execution', 'error', 'hint_view')) as first_event_after_hint,
+        COUNT(e.id) as events_after_hint,
+        COUNT(e.id) FILTER (WHERE e.event_type = 'code_change') as code_changes_after_hint,
+        COUNT(e.id) FILTER (WHERE e.event_type = 'execution') as executions_after_hint,
+        COUNT(e.id) FILTER (WHERE e.event_type = 'error') as errors_after_hint,
+        COUNT(e.id) FILTER (WHERE e.event_type = 'hint_view') as next_hint_viewed,
+        BOOL_OR(e.event_type = 'escalation_triggered' OR e.event_type = 'guidance_escalate') as escalated_after_hint,
+        BOOL_OR(e.event_type = 'execution' AND e.successful = true) as had_successful_execution,
+        CASE 
+          WHEN COUNT(e.id) FILTER (WHERE e.event_type = 'hint_view') > 0 THEN 'next_hint'
+          WHEN COUNT(e.id) FILTER (WHERE e.event_type = 'problem_change' OR e.event_type = 'problem_change_request') > 0 THEN 'problem_change'
+          WHEN COUNT(e.id) FILTER (WHERE e.event_type = 'session_end') > 0 THEN 'session_end'
+          WHEN h.next_event_time IS NULL THEN 'end_of_trace'
+          ELSE 'other'
+        END as window_closed_by
+      FROM hint_events h
+      LEFT JOIN interaction_events e ON 
+        e.session_id = h.session_id 
+        AND e.problem_id = h.problem_id
+        AND e.timestamp > h.hint_timestamp
+        AND (h.next_event_time IS NULL OR e.timestamp < h.next_event_time)
+      GROUP BY 
+        h.hint_event_id, h.user_id, h.session_id, h.problem_id, 
+        h.hint_timestamp, h.hint_id, h.hint_level, h.template_id, h.next_event_time
+    )
+    SELECT * FROM hint_windows
+    ORDER BY hint_timestamp DESC
+  `;
+  const windows = Array.isArray(result) ? result as QueryResult[] : [];
+
+  const csvPath = path.join(OUTPUT_DIR, 'hint_response_windows.csv');
+  const jsonPath = path.join(OUTPUT_DIR, 'hint_response_windows.json');
+
+  // CSV Export
+  const csvHeader = 'hint_event_id,user_id,session_id,problem_id,hint_timestamp,hint_id,hint_level,template_id,first_event_after_hint,events_after_hint,code_changes_after_hint,executions_after_hint,errors_after_hint,next_hint_viewed,escalated_after_hint,left_problem_without_execution,window_closed_by\n';
+  const csvRows = windows.map(w => [
+    w.hint_event_id,
+    w.user_id,
+    w.session_id || '',
+    w.problem_id,
+    w.hint_timestamp,
+    w.hint_id || '',
+    w.hint_level ?? '',
+    w.template_id || '',
+    w.first_event_after_hint || '',
+    w.events_after_hint,
+    w.code_changes_after_hint,
+    w.executions_after_hint,
+    w.errors_after_hint,
+    w.next_hint_viewed,
+    w.escalated_after_hint,
+    !w.had_successful_execution,
+    w.window_closed_by
+  ].join(',')).join('\n');
+  fs.writeFileSync(csvPath, csvHeader + csvRows);
+
+  // JSON Export
+  fs.writeFileSync(jsonPath, JSON.stringify(windows, null, 2));
+
+  console.log(`   ✓ ${windows.length} hint response windows exported`);
+}
+
 async function createManifest(db: DbClient): Promise<ExportManifest> {
   console.log('📋 Creating export manifest...');
 
@@ -704,6 +869,10 @@ async function main() {
     await exportStrategyRewardEvents(db);
     await exportEscalationEvents(db);
     await exportSessionEventJoin(db);
+
+    // Paper Data Contract: Derived exports (Message 4/5)
+    await exportHintEvents(db);
+    await exportHintResponseWindows(db);
 
     // Manifest
     const manifest = await createManifest(db);
