@@ -106,6 +106,9 @@ export function SourceViewer({
           <BookOpen className="size-4" />
           <span className="text-sm">No sources available</span>
         </div>
+        <p className="text-xs text-gray-400 mt-2">
+          Sources will appear here when hints reference textbook content.
+        </p>
       </div>
     );
   }

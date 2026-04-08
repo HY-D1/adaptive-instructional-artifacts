@@ -1013,7 +1013,24 @@ class DualStorageManager {
     // This ensures the event is tracked even if the tab closes during send
     this.pendingStore.add(eventForWrite);
     
-    // Step 3: Send to backend (async in background)
+    // Step 3: Update problem progress for execution events
+    if (this.shouldUseBackend() && eventForWrite.eventType === 'execution' && eventForWrite.problemId) {
+      const progressPayload = {
+        solved: eventForWrite.successful === true,
+        incrementAttempts: true,
+        lastCode: eventForWrite.code,
+      };
+      storageClient.updateProblemProgress(
+        eventForWrite.learnerId,
+        eventForWrite.problemId,
+        progressPayload
+      ).catch(error => {
+        console.warn('[DualStorage] Backend updateProblemProgress failed:', error);
+        // Non-blocking - progress update is best-effort
+      });
+    }
+    
+    // Step 4: Send to backend (async in background)
     if (this.shouldUseBackend()) {
       this.pendingStore.markSent(eventForWrite.id);
       
@@ -2074,6 +2091,20 @@ class DualStorageManager {
     if (this.shouldUseBackend()) {
       storageClient.getProfile(learnerId).then(backendProfile => {
         if (backendProfile) {
+          // Merge solvedProblemIds by union with local before saving
+          // This prevents wiping locally-correct solved state with empty backend set during transition
+          const localProfile = localStorageManager.getProfile(learnerId);
+          if (localProfile?.solvedProblemIds?.size && !backendProfile.solvedProblemIds?.size) {
+            // Backend has empty solved set but local has data - keep local data
+            console.log('[DualStorage] Preserving local solvedProblemIds during backend sync');
+          } else if (localProfile?.solvedProblemIds?.size && backendProfile.solvedProblemIds?.size) {
+            // Both have data - merge by union
+            const mergedSolvedIds = new Set([
+              ...Array.from(localProfile.solvedProblemIds),
+              ...Array.from(backendProfile.solvedProblemIds),
+            ]);
+            backendProfile.solvedProblemIds = mergedSolvedIds;
+          }
           // Sync to localStorage for offline access
           localStorageManager.saveProfile(backendProfile);
         }
@@ -2133,6 +2164,15 @@ class DualStorageManager {
       ]);
 
       if (profile) {
+        // Merge solvedProblemIds by union with local to prevent data loss during transition
+        const localProfile = localStorageManager.getProfile(learnerId);
+        if (localProfile && profile.solvedProblemIds) {
+          const mergedSolvedIds = new Set([
+            ...Array.from(localProfile.solvedProblemIds || []),
+            ...Array.from(profile.solvedProblemIds || []),
+          ]);
+          profile.solvedProblemIds = mergedSolvedIds;
+        }
         localStorageManager.saveProfile(profile);
       }
 

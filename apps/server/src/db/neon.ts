@@ -1554,6 +1554,24 @@ export async function updateLearnerProfileFromEvent(
     }
   }
 
+  // Update problem_progress on successful execution
+  // This makes problem_progress the durable source of truth for solved state
+  if (event.eventType === 'execution' && event.successful && event.problemId) {
+    await updateProblemProgress(learnerId, event.problemId, {
+      solved: true,
+      incrementAttempts: true,
+      lastCode: event.code,
+    });
+    // Refresh solvedProblemIds from durable source
+    currentProfile.solvedProblemIds = await getSolvedProblemIdsForLearner(learnerId);
+  } else if (event.eventType === 'execution' && event.problemId) {
+    // Failed execution - just increment attempts
+    await updateProblemProgress(learnerId, event.problemId, {
+      incrementAttempts: true,
+      lastCode: event.code,
+    });
+  }
+
   // Save updated profile
   return saveLearnerProfile(learnerId, currentProfile);
 }

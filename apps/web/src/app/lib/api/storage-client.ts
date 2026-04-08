@@ -1452,6 +1452,54 @@ export async function setCorpusActiveRun(
 }
 
 // ============================================================================
+// Problem Progress API
+// ============================================================================
+
+export interface ProblemProgress {
+  userId: string;
+  problemId: string;
+  solved: boolean;
+  attemptsCount: number;
+  hintsUsed: number;
+  lastCode: string | null;
+  firstAttemptedAt: number | null;
+  solvedAt: number | null;
+}
+
+export async function getProblemProgress(
+  learnerId: string,
+  problemId: string
+): Promise<ProblemProgress | null> {
+  const response = await fetchApi<ProblemProgress>(`/learners/${learnerId}/progress/${problemId}`);
+  if (!response.success || !response.data) return null;
+  return response.data;
+}
+
+export async function getAllProblemProgress(learnerId: string): Promise<ProblemProgress[]> {
+  const response = await fetchApi<ProblemProgress[]>(`/learners/${learnerId}/progress`);
+  if (!response.success || !response.data) return [];
+  return response.data;
+}
+
+export async function updateProblemProgress(
+  learnerId: string,
+  problemId: string,
+  payload: {
+    solved?: boolean;
+    incrementAttempts?: boolean;
+    incrementHints?: boolean;
+    lastCode?: string;
+  }
+): Promise<ProblemProgress | null> {
+  const response = await fetchApi<ProblemProgress>(`/learners/${learnerId}/progress/${problemId}`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+  if (!response.success || !response.data) return null;
+  return response.data;
+}
+
+// ============================================================================
 // Export
 // ============================================================================
 
@@ -1468,6 +1516,10 @@ export const storageClient = {
   saveProfile,
   getAllProfiles,
   updateProfileFromEvent,
+  // Problem progress
+  getProblemProgress,
+  getAllProblemProgress,
+  updateProblemProgress,
   // Interactions
   logInteraction,
   logInteractionsBatch,

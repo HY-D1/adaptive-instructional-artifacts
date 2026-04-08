@@ -1345,6 +1345,66 @@ export function ResearchDashboard() {
     };
   }, [filteredInteractions]);
 
+  // Normalization helpers for safe data access
+  const safeArray = <T,>(value: unknown): T[] => Array.isArray(value) ? value : [];
+  const safeRecord = (value: unknown): Record<string, number> => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return value as Record<string, number>;
+    }
+    return {};
+  };
+  const safeNumber = (value: unknown, fallback = 0): number => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : fallback;
+  };
+  
+  // Normalize week5Analytics to prevent crashes with empty/partial/legacy data
+  const safeWeek5Analytics = {
+    week5Events: safeArray(safeWeek5Analytics.week5Events),
+    profileDistributionData: safeArray(safeWeek5Analytics.profileDistributionData),
+    banditArmData: safeArray(safeWeek5Analytics.banditArmData),
+    banditRewardData: safeArray(safeWeek5Analytics.banditRewardData),
+    hdiBins: safeArray(safeWeek5Analytics.hdiBins),
+    highHDIAlerts: safeArray(safeWeek5Analytics.highHDIAlerts),
+    profileEffectivenessData: safeArray(safeWeek5Analytics.profileEffectivenessData),
+    conditionStats: safeArray(safeWeek5Analytics.conditionStats),
+    reinforcementStats: safeWeek5Analytics.reinforcementStats ? {
+      totalScheduled: safeNumber(safeWeek5Analytics.reinforcementStats.totalScheduled),
+      totalShown: safeNumber(safeWeek5Analytics.reinforcementStats.totalShown),
+      totalResponded: safeNumber(safeWeek5Analytics.reinforcementStats.totalResponded),
+      responseRate: safeNumber(safeWeek5Analytics.reinforcementStats.responseRate),
+      averageRetentionScore: safeNumber(safeWeek5Analytics.reinforcementStats.averageRetentionScore),
+    } : null,
+    reinforcementTimeline: safeArray(safeWeek5Analytics.reinforcementTimeline),
+    qualityStats: safeWeek5Analytics.qualityStats ? {
+      averageQuality: safeNumber(safeWeek5Analytics.qualityStats.averageQuality),
+      totalScored: safeNumber(safeWeek5Analytics.qualityStats.totalScored),
+      distribution: {
+        excellent: safeNumber(safeWeek5Analytics.qualityStats.distribution?.excellent),
+        good: safeNumber(safeWeek5Analytics.qualityStats.distribution?.good),
+        needsWork: safeNumber(safeWeek5Analytics.qualityStats.distribution?.needsWork),
+      },
+      dimensionAverages: {
+        paraphrase: safeNumber(safeWeek5Analytics.qualityStats.dimensionAverages?.paraphrase),
+        length: safeNumber(safeWeek5Analytics.qualityStats.dimensionAverages?.length),
+        conceptKeywords: safeNumber(safeWeek5Analytics.qualityStats.dimensionAverages?.conceptKeywords),
+        exampleInclusion: safeNumber(safeWeek5Analytics.qualityStats.dimensionAverages?.exampleInclusion),
+        structuralCompleteness: safeNumber(safeWeek5Analytics.qualityStats.dimensionAverages?.structuralCompleteness),
+      },
+    } : null,
+    violationStats: {
+      total: safeNumber(safeWeek5Analytics.violationStats?.total),
+      byConcept: safeRecord(safeWeek5Analytics.violationStats?.byConcept),
+      byMissingPrerequisite: safeRecord(safeWeek5Analytics.violationStats?.byMissingPrerequisite),
+      bySeverity: {
+        low: safeNumber(safeWeek5Analytics.violationStats?.bySeverity?.low),
+        medium: safeNumber(safeWeek5Analytics.violationStats?.bySeverity?.medium),
+        high: safeNumber(safeWeek5Analytics.violationStats?.bySeverity?.high),
+      },
+      recent: safeArray(safeWeek5Analytics.violationStats?.recent),
+    },
+  };
+
   // Helper to format labels consistently (extracted to reduce duplication)
   const formatLabel = (str: string, separator: '_' | '-' = '_') => 
     str.replace(new RegExp(separator, 'g'), ' ');
@@ -2162,12 +2222,12 @@ export function ResearchDashboard() {
                   <Target className="size-5 text-blue-600" />
                   Escalation Profile Distribution
                 </h3>
-                {week5Analytics.profileDistributionData.length > 0 ? (
+                {safeWeek5Analytics.profileDistributionData.length > 0 ? (
                   <div className="flex flex-col items-center">
                     <ResponsiveContainer width="100%" height={250}>
                       <PieChart>
                         <Pie
-                          data={week5Analytics.profileDistributionData}
+                          data={safeWeek5Analytics.profileDistributionData}
                           cx="50%"
                           cy="50%"
                           innerRadius={50}
@@ -2176,7 +2236,7 @@ export function ResearchDashboard() {
                           dataKey="value"
                           label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                         >
-                          {week5Analytics.profileDistributionData.map((entry, index) => (
+                          {safeWeek5Analytics.profileDistributionData.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
                         </Pie>
@@ -2185,7 +2245,7 @@ export function ResearchDashboard() {
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="w-full mt-4 space-y-2">
-                      {week5Analytics.profileDistributionData.map((item) => (
+                      {safeWeek5Analytics.profileDistributionData.map((item) => (
                         <div key={item.name} className="flex items-center justify-between p-2 rounded bg-gray-50">
                           <div className="flex items-center gap-2">
                             <span className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
@@ -2211,13 +2271,13 @@ export function ResearchDashboard() {
                   <BrainCircuit className="size-5 text-purple-600" />
                   Bandit Performance
                 </h3>
-                {week5Analytics.banditArmData.length > 0 ? (
+                {safeWeek5Analytics.banditArmData.length > 0 ? (
                   <div className="space-y-6">
                     {/* Arm Selection Frequency */}
                     <div>
                       <p className="text-sm text-gray-600 mb-2">Arm Selection Frequency</p>
                       <ResponsiveContainer width="100%" height={150}>
-                        <BarChart data={week5Analytics.banditArmData}>
+                        <BarChart data={safeWeek5Analytics.banditArmData}>
                           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                           <XAxis dataKey="armId" tick={{ fontSize: 11 }} />
                           <YAxis tick={{ fontSize: 11 }} />
@@ -2230,11 +2290,11 @@ export function ResearchDashboard() {
                     </div>
                     
                     {/* Mean Rewards Timeline */}
-                    {week5Analytics.banditRewardData.length > 0 && (
+                    {safeWeek5Analytics.banditRewardData.length > 0 && (
                       <div>
                         <p className="text-sm text-gray-600 mb-2">Cumulative Mean Reward</p>
                         <ResponsiveContainer width="100%" height={120}>
-                          <LineChart data={week5Analytics.banditRewardData}>
+                          <LineChart data={safeWeek5Analytics.banditRewardData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                             <XAxis 
                               dataKey="timestamp" 
@@ -2278,9 +2338,9 @@ export function ResearchDashboard() {
                 {/* HDI Histogram */}
                 <div>
                   <p className="text-sm text-gray-600 mb-2">HDI Distribution</p>
-                  {week5Analytics.hdiBins.some(b => b.count > 0) ? (
+                  {safeWeek5Analytics.hdiBins.some(b => b.count > 0) ? (
                     <ResponsiveContainer width="100%" height={200}>
-                      <BarChart data={week5Analytics.hdiBins}>
+                      <BarChart data={safeWeek5Analytics.hdiBins}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                         <XAxis dataKey="range" tick={{ fontSize: 11 }} />
                         <YAxis tick={{ fontSize: 11 }} />
@@ -2302,12 +2362,12 @@ export function ResearchDashboard() {
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-sm text-gray-600">High HDI Alerts (&gt; 0.8)</p>
                     <Badge variant="destructive" className="text-xs">
-                      {week5Analytics.highHDIAlerts.length} learners
+                      {safeWeek5Analytics.highHDIAlerts.length} learners
                     </Badge>
                   </div>
-                  {week5Analytics.highHDIAlerts.length > 0 ? (
+                  {safeWeek5Analytics.highHDIAlerts.length > 0 ? (
                     <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                      {week5Analytics.highHDIAlerts.map((alert, idx) => (
+                      {safeWeek5Analytics.highHDIAlerts.map((alert, idx) => (
                         <div 
                           key={idx} 
                           className="flex items-center justify-between p-3 bg-red-50 border border-red-100 rounded-lg"
@@ -2345,7 +2405,7 @@ export function ResearchDashboard() {
                 <TrendingUp className="size-5 text-green-600" />
                 Profile Effectiveness Comparison
               </h3>
-              {week5Analytics.profileEffectivenessData.length > 0 ? (
+              {safeWeek5Analytics.profileEffectivenessData.length > 0 ? (
                 <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
                   <Table>
                     <TableHeader>
@@ -2359,7 +2419,7 @@ export function ResearchDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {week5Analytics.profileEffectivenessData.map((row) => (
+                      {safeWeek5Analytics.profileEffectivenessData.map((row) => (
                         <TableRow key={row.profile}>
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -2414,38 +2474,38 @@ export function ResearchDashboard() {
                 <AlertCircle className="size-5 text-amber-600" />
                 Prerequisite Violations
               </h3>
-              {week5Analytics.violationStats.total > 0 ? (
+              {safeWeek5Analytics.violationStats.total > 0 ? (
                 <div className="space-y-6">
                   {/* Summary Stats */}
                   <div className="grid grid-cols-3 gap-4">
                     <div className="p-3 bg-gray-50 rounded-lg text-center">
                       <p className="text-2xl font-bold text-amber-600">
-                        {week5Analytics.violationStats.total}
+                        {safeWeek5Analytics.violationStats.total}
                       </p>
                       <p className="text-xs text-gray-600">Total Violations</p>
                     </div>
                     <div className="p-3 bg-red-50 rounded-lg text-center">
                       <p className="text-2xl font-bold text-red-600">
-                        {week5Analytics.violationStats.bySeverity.high}
+                        {safeWeek5Analytics.violationStats.bySeverity.high}
                       </p>
                       <p className="text-xs text-red-600">High Severity</p>
                     </div>
                     <div className="p-3 bg-yellow-50 rounded-lg text-center">
                       <p className="text-2xl font-bold text-yellow-600">
-                        {Object.keys(week5Analytics.violationStats.byConcept).length}
+                        {Object.keys(safeWeek5Analytics.violationStats.byConcept).length}
                       </p>
                       <p className="text-xs text-yellow-700">Concepts Affected</p>
                     </div>
                   </div>
                   
                   {/* Most problematic concepts */}
-                  {Object.keys(week5Analytics.violationStats.byConcept).length > 0 && (
+                  {Object.keys(safeWeek5Analytics.violationStats.byConcept).length > 0 && (
                     <div>
                       <p className="text-sm font-medium text-gray-700 mb-2">
                         Most Problematic Concepts
                       </p>
                       <div className="space-y-2">
-                        {Object.entries(week5Analytics.violationStats.byConcept)
+                        {Object.entries(safeWeek5Analytics.violationStats.byConcept)
                           .sort((a, b) => b[1] - a[1])
                           .slice(0, 5)
                           .map(([conceptId, count]) => (
@@ -2461,13 +2521,13 @@ export function ResearchDashboard() {
                   )}
                   
                   {/* Most commonly missing prerequisites */}
-                  {Object.keys(week5Analytics.violationStats.byMissingPrerequisite).length > 0 && (
+                  {Object.keys(safeWeek5Analytics.violationStats.byMissingPrerequisite).length > 0 && (
                     <div>
                       <p className="text-sm font-medium text-gray-700 mb-2">
                         Most Commonly Missing Prerequisites
                       </p>
                       <div className="space-y-2">
-                        {Object.entries(week5Analytics.violationStats.byMissingPrerequisite)
+                        {Object.entries(safeWeek5Analytics.violationStats.byMissingPrerequisite)
                           .sort((a, b) => b[1] - a[1])
                           .slice(0, 5)
                           .map(([prereq, count]) => (
@@ -2490,24 +2550,24 @@ export function ResearchDashboard() {
                         <div 
                           className="bg-red-500 h-full"
                           style={{ 
-                            width: `${week5Analytics.violationStats.total > 0 
-                              ? (week5Analytics.violationStats.bySeverity.high / week5Analytics.violationStats.total) * 100 
+                            width: `${safeWeek5Analytics.violationStats.total > 0 
+                              ? (safeWeek5Analytics.violationStats.bySeverity.high / safeWeek5Analytics.violationStats.total) * 100 
                               : 0}%` 
                           }}
                         />
                         <div 
                           className="bg-yellow-500 h-full"
                           style={{ 
-                            width: `${week5Analytics.violationStats.total > 0 
-                              ? (week5Analytics.violationStats.bySeverity.medium / week5Analytics.violationStats.total) * 100 
+                            width: `${safeWeek5Analytics.violationStats.total > 0 
+                              ? (safeWeek5Analytics.violationStats.bySeverity.medium / safeWeek5Analytics.violationStats.total) * 100 
                               : 0}%` 
                           }}
                         />
                         <div 
                           className="bg-green-500 h-full"
                           style={{ 
-                            width: `${week5Analytics.violationStats.total > 0 
-                              ? (week5Analytics.violationStats.bySeverity.low / week5Analytics.violationStats.total) * 100 
+                            width: `${safeWeek5Analytics.violationStats.total > 0 
+                              ? (safeWeek5Analytics.violationStats.bySeverity.low / safeWeek5Analytics.violationStats.total) * 100 
                               : 0}%` 
                           }}
                         />
@@ -2515,13 +2575,13 @@ export function ResearchDashboard() {
                     </div>
                     <div className="flex justify-between text-xs text-gray-600 mt-1">
                       <span className="text-red-600">
-                        High: {week5Analytics.violationStats.bySeverity.high}
+                        High: {safeWeek5Analytics.violationStats.bySeverity.high}
                       </span>
                       <span className="text-yellow-600">
-                        Medium: {week5Analytics.violationStats.bySeverity.medium}
+                        Medium: {safeWeek5Analytics.violationStats.bySeverity.medium}
                       </span>
                       <span className="text-green-600">
-                        Low: {week5Analytics.violationStats.bySeverity.low}
+                        Low: {safeWeek5Analytics.violationStats.bySeverity.low}
                       </span>
                     </div>
                   </div>
@@ -2543,7 +2603,7 @@ export function ResearchDashboard() {
                 <Target className="size-5 text-purple-600" />
                 Experimental Condition Statistics
               </h3>
-              {week5Analytics.conditionStats.length > 0 ? (
+              {safeWeek5Analytics.conditionStats.length > 0 ? (
                 <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
                   <Table>
                     <TableHeader>
@@ -2555,7 +2615,7 @@ export function ResearchDashboard() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {week5Analytics.conditionStats.map((row) => (
+                      {safeWeek5Analytics.conditionStats.map((row) => (
                         <TableRow key={row.condition}>
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -2604,22 +2664,22 @@ export function ResearchDashboard() {
                 <BrainCircuit className="size-5 text-purple-600" />
                 Self-Explanation Quality (RQS)
               </h3>
-              {week5Analytics.qualityStats ? (
+              {safeWeek5Analytics.qualityStats ? (
                 <div className="space-y-6">
                   {/* Overall Stats */}
                   <div className="grid grid-cols-3 gap-4">
                     <div className="p-4 bg-purple-50 rounded-lg text-center">
                       <p className="text-sm text-purple-600 mb-1">Average Quality</p>
-                      <p className="text-2xl font-bold text-purple-900">{week5Analytics.qualityStats.averageQuality}/100</p>
+                      <p className="text-2xl font-bold text-purple-900">{safeWeek5Analytics.qualityStats.averageQuality}/100</p>
                     </div>
                     <div className="p-4 bg-blue-50 rounded-lg text-center">
                       <p className="text-sm text-blue-600 mb-1">Total Scored</p>
-                      <p className="text-2xl font-bold text-blue-900">{week5Analytics.qualityStats.totalScored}</p>
+                      <p className="text-2xl font-bold text-blue-900">{safeWeek5Analytics.qualityStats.totalScored}</p>
                     </div>
                     <div className="p-4 bg-green-50 rounded-lg text-center">
                       <p className="text-sm text-green-600 mb-1">Excellent Rate</p>
                       <p className="text-2xl font-bold text-green-900">
-                        {Math.round((week5Analytics.qualityStats.distribution.excellent / week5Analytics.qualityStats.totalScored) * 100)}%
+                        {Math.round((safeWeek5Analytics.qualityStats.distribution.excellent / safeWeek5Analytics.qualityStats.totalScored) * 100)}%
                       </p>
                     </div>
                   </div>
@@ -2633,30 +2693,30 @@ export function ResearchDashboard() {
                         <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-green-500 rounded-full"
-                            style={{ width: `${(week5Analytics.qualityStats.distribution.excellent / week5Analytics.qualityStats.totalScored) * 100}%` }}
+                            style={{ width: `${(safeWeek5Analytics.qualityStats.distribution.excellent / safeWeek5Analytics.qualityStats.totalScored) * 100}%` }}
                           />
                         </div>
-                        <span className="text-xs w-8 text-right">{week5Analytics.qualityStats.distribution.excellent}</span>
+                        <span className="text-xs w-8 text-right">{safeWeek5Analytics.qualityStats.distribution.excellent}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs w-20">Good (60-79)</span>
                         <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-blue-500 rounded-full"
-                            style={{ width: `${(week5Analytics.qualityStats.distribution.good / week5Analytics.qualityStats.totalScored) * 100}%` }}
+                            style={{ width: `${(safeWeek5Analytics.qualityStats.distribution.good / safeWeek5Analytics.qualityStats.totalScored) * 100}%` }}
                           />
                         </div>
-                        <span className="text-xs w-8 text-right">{week5Analytics.qualityStats.distribution.good}</span>
+                        <span className="text-xs w-8 text-right">{safeWeek5Analytics.qualityStats.distribution.good}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-xs w-20">Needs Work (&lt;60)</span>
                         <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-red-500 rounded-full"
-                            style={{ width: `${(week5Analytics.qualityStats.distribution.needsWork / week5Analytics.qualityStats.totalScored) * 100}%` }}
+                            style={{ width: `${(safeWeek5Analytics.qualityStats.distribution.needsWork / safeWeek5Analytics.qualityStats.totalScored) * 100}%` }}
                           />
                         </div>
-                        <span className="text-xs w-8 text-right">{week5Analytics.qualityStats.distribution.needsWork}</span>
+                        <span className="text-xs w-8 text-right">{safeWeek5Analytics.qualityStats.distribution.needsWork}</span>
                       </div>
                     </div>
                   </div>
@@ -2665,11 +2725,11 @@ export function ResearchDashboard() {
                   <div>
                     <p className="text-sm text-gray-600 mb-3">Average Dimension Scores</p>
                     <div className="space-y-2">
-                      <DimensionBar label="Originality" value={week5Analytics.qualityStats.dimensionAverages.paraphrase} />
-                      <DimensionBar label="Length" value={week5Analytics.qualityStats.dimensionAverages.length} />
-                      <DimensionBar label="Keywords" value={week5Analytics.qualityStats.dimensionAverages.conceptKeywords} />
-                      <DimensionBar label="Examples" value={week5Analytics.qualityStats.dimensionAverages.exampleInclusion} />
-                      <DimensionBar label="Structure" value={week5Analytics.qualityStats.dimensionAverages.structuralCompleteness} />
+                      <DimensionBar label="Originality" value={safeWeek5Analytics.qualityStats.dimensionAverages.paraphrase} />
+                      <DimensionBar label="Length" value={safeWeek5Analytics.qualityStats.dimensionAverages.length} />
+                      <DimensionBar label="Keywords" value={safeWeek5Analytics.qualityStats.dimensionAverages.conceptKeywords} />
+                      <DimensionBar label="Examples" value={safeWeek5Analytics.qualityStats.dimensionAverages.exampleInclusion} />
+                      <DimensionBar label="Structure" value={safeWeek5Analytics.qualityStats.dimensionAverages.structuralCompleteness} />
                     </div>
                   </div>
                 </div>
@@ -2695,22 +2755,22 @@ export function ResearchDashboard() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="p-4 bg-blue-50 rounded-lg">
                     <p className="text-sm text-blue-600 mb-1">Total Scheduled</p>
-                    <p className="text-2xl font-bold text-blue-900">{week5Analytics.reinforcementStats.totalScheduled}</p>
+                    <p className="text-2xl font-bold text-blue-900">{safeWeek5Analytics.reinforcementStats.totalScheduled}</p>
                   </div>
                   <div className="p-4 bg-green-50 rounded-lg">
                     <p className="text-sm text-green-600 mb-1">Response Rate</p>
                     <p className="text-2xl font-bold text-green-900">
-                      {(week5Analytics.reinforcementStats.responseRate * 100).toFixed(0)}%
+                      {(safeWeek5Analytics.reinforcementStats.responseRate * 100).toFixed(0)}%
                     </p>
                   </div>
                   <div className="p-4 bg-purple-50 rounded-lg">
                     <p className="text-sm text-purple-600 mb-1">Prompts Shown</p>
-                    <p className="text-2xl font-bold text-purple-900">{week5Analytics.reinforcementStats.totalShown}</p>
+                    <p className="text-2xl font-bold text-purple-900">{safeWeek5Analytics.reinforcementStats.totalShown}</p>
                   </div>
                   <div className="p-4 bg-amber-50 rounded-lg">
                     <p className="text-sm text-amber-600 mb-1">Avg Retention Score</p>
                     <p className="text-2xl font-bold text-amber-900">
-                      {(week5Analytics.reinforcementStats.averageRetentionScore * 100).toFixed(0)}%
+                      {(safeWeek5Analytics.reinforcementStats.averageRetentionScore * 100).toFixed(0)}%
                     </p>
                   </div>
                 </div>
@@ -2722,10 +2782,10 @@ export function ResearchDashboard() {
                   <TrendingUp className="size-5 text-green-600" />
                   Retention Levels
                 </h3>
-                {week5Analytics.reinforcementTimeline.filter(t => t.eventType === 'response').length > 0 ? (
+                {safeWeek5Analytics.reinforcementTimeline.filter(t => t.eventType === 'response').length > 0 ? (
                   <div className="space-y-4">
                     {(() => {
-                      const responses = week5Analytics.reinforcementTimeline.filter(t => t.eventType === 'response');
+                      const responses = safeWeek5Analytics.reinforcementTimeline.filter(t => t.eventType === 'response');
                       const remembered = responses.filter(r => r.retentionLevel === 'remembered').length;
                       const partial = responses.filter(r => r.retentionLevel === 'partial').length;
                       const forgotten = responses.filter(r => r.retentionLevel === 'forgotten').length;
@@ -2789,9 +2849,9 @@ export function ResearchDashboard() {
                 <Clock className="size-5 text-purple-600" />
                 Reinforcement Activity Timeline
               </h3>
-              {week5Analytics.reinforcementTimeline.length > 0 ? (
+              {safeWeek5Analytics.reinforcementTimeline.length > 0 ? (
                 <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                  {week5Analytics.reinforcementTimeline.map((event, idx) => (
+                  {safeWeek5Analytics.reinforcementTimeline.map((event, idx) => (
                     <div 
                       key={idx}
                       className={`flex items-center justify-between p-3 rounded-lg ${

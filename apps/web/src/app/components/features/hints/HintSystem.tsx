@@ -1536,26 +1536,24 @@ export function HintSystem({
         </div>
       )}
 
-      {/* Week 3 D7: Source Viewer for grounded help */}
-      {conceptIds.length > 0 && (
-        <SourceViewer
-          passages={hintPdfPassages[hintPdfPassages.length - 1]?.map(p => ({
-            passageId: p.chunkId,
-            conceptId: conceptIds[0] || 'general',
-            docId: p.docId,
-            chunkId: p.chunkId,
-            page: p.page,
-            text: p.text,
-            whyIncluded: 'Retrieved from PDF index'
-          })) || []}
-          conceptLabels={Object.fromEntries(conceptIds.map(id => [id, getConceptLabel(id)]))}
-          initiallyExpanded={false}
-          // Week 3 D8: Pass logging props
-          problemId={problemId}
-          learnerId={learnerId}
-          sessionId={sessionId}
-        />
-      )}
+      {/* Week 3 D7: Source Viewer for grounded help - always render for UX consistency */}
+      <SourceViewer
+        passages={hintPdfPassages[hintPdfPassages.length - 1]?.map(p => ({
+          passageId: p.chunkId,
+          conceptId: conceptIds[0] || 'general',
+          docId: p.docId,
+          chunkId: p.chunkId,
+          page: p.page,
+          text: p.text,
+          whyIncluded: 'Retrieved from PDF index'
+        })) || []}
+        conceptLabels={Object.fromEntries(conceptIds.map(id => [id, getConceptLabel(id)]))}
+        initiallyExpanded={false}
+        // Week 3 D8: Pass logging props
+        problemId={problemId}
+        learnerId={learnerId}
+        sessionId={sessionId}
+      />
 
       <div className="flex flex-col gap-2">
         <Tooltip>
