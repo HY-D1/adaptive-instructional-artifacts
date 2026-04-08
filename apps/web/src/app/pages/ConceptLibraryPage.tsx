@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { listConcepts } from '../lib/content/concept-loader';
-import { BookOpen, Clock, GraduationCap } from 'lucide-react';
+import { BookOpen, Clock, GraduationCap, Search } from 'lucide-react';
+import { CommandTrigger } from '../components/shared/CommandMenu';
 
 export function ConceptLibraryPage() {
   const [concepts, setConcepts] = useState<Array<{id: string; title: string; difficulty: string}>>([]);
@@ -98,15 +99,26 @@ export function ConceptLibraryPage() {
           </div>
         </div>
         
-        {/* Search */}
+        {/* Search - using Command Palette */}
         <div className="mb-6">
-          <input
-            type="text"
-            placeholder="Search concepts..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full max-w-md px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
+          <div className="flex items-center gap-3">
+            <CommandTrigger className="flex-1 max-w-md justify-start" />
+            <span className="text-sm text-gray-500 hidden sm:inline">
+              or press <kbd className="px-1.5 py-0.5 text-xs font-medium text-gray-600 bg-gray-100 rounded">⌘K</kbd>
+            </span>
+          </div>
+          {searchQuery && (
+            <div className="mt-3 flex items-center gap-2 text-sm text-gray-600">
+              <Search className="w-4 h-4" />
+              <span>Filtering by: "{searchQuery}"</span>
+              <button 
+                onClick={() => setSearchQuery('')}
+                className="text-blue-600 hover:underline ml-2"
+              >
+                Clear
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Filters */}

@@ -14,6 +14,7 @@ import { useAuth } from '../lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
 import { resolveLogoutLearnerId } from '../lib/auth/logout-learner';
 import { useToast } from '../components/ui/toast';
+import { CommandMenu } from '../components/shared/CommandMenu';
 import { 
   isResearchUnsafe, 
   getResearchRuntimeMode, 
@@ -833,6 +834,9 @@ export function RootLayout() {
             </div>
           )}
         </nav>
+
+        {/* Global Command Menu (⌘+K) */}
+        <CommandMenu />
 
         <main
           id="main-content"
