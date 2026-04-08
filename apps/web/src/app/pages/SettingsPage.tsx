@@ -600,8 +600,8 @@ export function SettingsPage() {
           </Card>
         )}
 
-        {/* Week 6: Session Experimental Toggles - Instructors Only */}
-        {isInstructor && (
+        {/* Week 6: Session Experimental Toggles - Instructors Only (Development Mode) */}
+        {isDev && isInstructor && (
           <Card className="mt-6 p-6 max-w-5xl border-indigo-200" data-testid="experimental-toggles-section">
             <CardHeader className="px-0 pt-0">
               <div className="flex items-center gap-3">

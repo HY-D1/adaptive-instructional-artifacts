@@ -131,6 +131,13 @@ function SessionExpired({ onRedirect }: SessionExpiredProps) {
  */
 function ResearchUnsafeBlocker() {
   const researchMode = getResearchRuntimeMode();
+  const [diagnostics, setDiagnostics] = useState<{ envConfigured: boolean } | null>(null);
+  
+  useEffect(() => {
+    checkResearchReadiness().then(readiness => {
+      setDiagnostics(readiness.diagnostics);
+    });
+  }, []);
   
   return (
     <div 
@@ -158,7 +165,7 @@ function ResearchUnsafeBlocker() {
           </p>
           <div className="bg-gray-50 p-4 rounded-lg text-sm font-mono space-y-1">
             <p>Contract Version: {RESEARCH_CONTRACT_VERSION}</p>
-            <p>Backend Configured: {String(false)}</p>
+            <p>Backend Configured: {String(diagnostics?.envConfigured ?? false)}</p>
             <p>Environment: Production</p>
           </div>
           <p className="text-sm text-gray-500">

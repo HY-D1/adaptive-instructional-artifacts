@@ -1045,6 +1045,73 @@ export async function getInteractionById(id: string): Promise<Interaction | null
   return result ? rowToInteraction(result) : null;
 }
 
+export interface InteractionAggregates {
+  totalCount: number;
+  interactionsByType: Record<string, number>;
+  last24Hours: number;
+  last7Days: number;
+  last30Days: number;
+}
+
+export async function getInteractionAggregatesByUsers(
+  userIds: string[],
+  referenceTime: number = Date.now()
+): Promise<InteractionAggregates> {
+  const db = getDb();
+  const ids = Array.from(new Set(userIds.filter(Boolean)));
+  
+  if (ids.length === 0) {
+    return {
+      totalCount: 0,
+      interactionsByType: {},
+      last24Hours: 0,
+      last7Days: 0,
+      last30Days: 0,
+    };
+  }
+
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const cutoff24h = new Date(referenceTime - msPerDay).toISOString();
+  const cutoff7d = new Date(referenceTime - 7 * msPerDay).toISOString();
+  const cutoff30d = new Date(referenceTime - 30 * msPerDay).toISOString();
+
+  // Single query to get all aggregates using GROUP BY
+  const rows = await db`
+    SELECT 
+      event_type,
+      COUNT(*) as count,
+      COUNT(*) FILTER (WHERE timestamp >= ${cutoff24h}) as count_24h,
+      COUNT(*) FILTER (WHERE timestamp >= ${cutoff7d}) as count_7d,
+      COUNT(*) FILTER (WHERE timestamp >= ${cutoff30d}) as count_30d
+    FROM interaction_events
+    WHERE user_id = ANY(${ids})
+    GROUP BY event_type
+  `;
+
+  const interactionsByType: Record<string, number> = {};
+  let totalCount = 0;
+  let last24Hours = 0;
+  let last7Days = 0;
+  let last30Days = 0;
+
+  for (const row of rows) {
+    const count = Number(row.count);
+    interactionsByType[row.event_type] = count;
+    totalCount += count;
+    last24Hours += Number(row.count_24h);
+    last7Days += Number(row.count_7d);
+    last30Days += Number(row.count_30d);
+  }
+
+  return {
+    totalCount,
+    interactionsByType,
+    last24Hours,
+    last7Days,
+    last30Days,
+  };
+}
+
 // ============================================================================
 // Textbook Unit Operations
 // ============================================================================
@@ -1131,6 +1198,27 @@ export async function getTextbookUnitsByUser(userId: string): Promise<Instructio
     ORDER BY created_at DESC
   `;
   return results.map(rowToInstructionalUnit);
+}
+
+export async function getTextbookUnitCountsByUsers(userIds: string[]): Promise<Map<string, number>> {
+  const db = getDb();
+  const ids = Array.from(new Set(userIds.filter(Boolean)));
+  if (ids.length === 0) {
+    return new Map();
+  }
+
+  const rows = await db`
+    SELECT user_id, COUNT(*) as count
+    FROM textbook_units
+    WHERE user_id = ANY(${ids})
+    GROUP BY user_id
+  `;
+
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    counts.set(row.user_id, Number(row.count));
+  }
+  return counts;
 }
 
 export async function getTextbookUnitById(userId: string, unitId: string): Promise<InstructionalUnit | null> {

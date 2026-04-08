@@ -11,6 +11,8 @@ import {
   getInteractionsByUser,
   getTextbookUnitsByUser,
   getAllUsers,
+  getInteractionAggregatesByUsers,
+  getTextbookUnitCountsByUsers,
 } from '../db/neon.js';
 import type {
   ApiResponse,
@@ -47,43 +49,32 @@ router.get('/aggregates', async (req, res) => {
     const instructorUserId = req.auth!.learnerId;
     const scopedLearnerIds = await getScopedLearnerIdsForInstructor(instructorUserId);
     const learners = (await getAllUsers()).filter((learner) => scopedLearnerIds.has(learner.id));
-    let totalInteractions = 0;
-    let totalTextbookUnits = 0;
-    const interactionsByType: Record<string, number> = {};
-    const now = Date.now();
-    let last24Hours = 0;
-    let last7Days = 0;
-    let last30Days = 0;
+    
+    // Use single aggregated queries instead of N+1 loops
+    const learnerIds = learners.map(l => l.id);
+    const [aggregates, unitCounts] = await Promise.all([
+      getInteractionAggregatesByUsers(learnerIds),
+      getTextbookUnitCountsByUsers(learnerIds),
+    ]);
 
-    for (const learner of learners) {
-      const interactionsResult = await getInteractionsByUser(learner.id, { limit: 5000 });
-      const interactions = interactionsResult.interactions;
-      const units = await getTextbookUnitsByUser(learner.id);
-      totalInteractions += interactionsResult.total;
-      totalTextbookUnits += units.length;
-      for (const interaction of interactions) {
-        interactionsByType[interaction.eventType] = (interactionsByType[interaction.eventType] || 0) + 1;
-      }
-      for (const interaction of interactions) {
-        const ts = new Date(interaction.timestamp).getTime();
-        if (now - ts <= 24 * 60 * 60 * 1000) last24Hours++;
-        if (now - ts <= 7 * 24 * 60 * 60 * 1000) last7Days++;
-        if (now - ts <= 30 * 24 * 60 * 60 * 1000) last30Days++;
-      }
+    // Sum up textbook unit counts across all learners
+    let totalTextbookUnits = 0;
+    for (const count of unitCounts.values()) {
+      totalTextbookUnits += count;
     }
 
     const response: ApiResponse<ClassStats> = {
       success: true,
       data: {
         totalLearners: learners.length,
-        totalInteractions,
-        interactionsByType: interactionsByType as ClassStats['interactionsByType'],
+        totalInteractions: aggregates.totalCount,
+        interactionsByType: aggregates.interactionsByType as ClassStats['interactionsByType'],
         totalTextbookUnits,
         averageUnitsPerLearner: learners.length > 0 ? totalTextbookUnits / learners.length : 0,
         recentActivity: {
-          last24Hours,
-          last7Days,
-          last30Days,
+          last24Hours: aggregates.last24Hours,
+          last7Days: aggregates.last7Days,
+          last30Days: aggregates.last30Days,
         },
       },
     };

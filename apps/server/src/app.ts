@@ -37,6 +37,7 @@ import { isUsingNeon } from './db/index.js';
 import { resolveDbEnv } from './db/env-resolver.js';
 import { optionalAuth, requireAuth, requireInstructor } from './middleware/auth.js';
 import { requireCsrf } from './middleware/csrf.js';
+import { generalApiLimiter, authRateLimiter } from './middleware/rate-limit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../.env');
@@ -206,24 +207,24 @@ const usingNeon = isUsingNeon();
 
 if (usingNeon) {
   console.log('🔌 Using Neon PostgreSQL routes (auth + csrf required)');
-  app.use('/api/learners', requireAuth, requireCsrf, neonLearnersRouter);
-  app.use('/api/interactions', requireAuth, requireCsrf, neonInteractionsRouter);
-  app.use('/api/textbooks', requireAuth, requireCsrf, neonTextbooksRouter);
-  app.use('/api/sessions', requireAuth, requireCsrf, neonSessionsRouter);
+  app.use('/api/learners', generalApiLimiter, requireAuth, requireCsrf, neonLearnersRouter);
+  app.use('/api/interactions', generalApiLimiter, requireAuth, requireCsrf, neonInteractionsRouter);
+  app.use('/api/textbooks', generalApiLimiter, requireAuth, requireCsrf, neonTextbooksRouter);
+  app.use('/api/sessions', generalApiLimiter, requireAuth, requireCsrf, neonSessionsRouter);
 } else {
   console.log('💾 Using SQLite routes (legacy)');
-  app.use('/api/learners', learnersRouter);
-  app.use('/api/interactions', interactionsRouter);
-  app.use('/api/textbooks', textbooksRouter);
-  app.use('/api/sessions', sessionsRouter);
+  app.use('/api/learners', generalApiLimiter, learnersRouter);
+  app.use('/api/interactions', generalApiLimiter, interactionsRouter);
+  app.use('/api/textbooks', generalApiLimiter, textbooksRouter);
+  app.use('/api/sessions', generalApiLimiter, sessionsRouter);
 }
 
-app.use('/api/auth', authRouter);
-app.use('/api/research', requireAuth, requireInstructor, researchRouter);
-app.use('/api/instructor', requireAuth, instructorRouter);
-app.use('/api/corpus', corpusRouter);
-app.use('/api/pdf-index', pdfIndexRouter);
-app.use('/api/llm', llmRouter);
+app.use('/api/auth', authRateLimiter, authRouter);
+app.use('/api/research', generalApiLimiter, requireAuth, requireInstructor, researchRouter);
+app.use('/api/instructor', generalApiLimiter, requireAuth, instructorRouter);
+app.use('/api/corpus', generalApiLimiter, corpusRouter);
+app.use('/api/pdf-index', generalApiLimiter, pdfIndexRouter);
+app.use('/api/llm', generalApiLimiter, llmRouter);
 
 app.post('/ollama/api/generate', async (req: Request, res: Response) => {
   if (!ENABLE_LLM) {
