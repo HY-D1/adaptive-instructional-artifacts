@@ -152,6 +152,116 @@ interface PracticePageUiState {
   subtypeOverride?: string;
 }
 
+interface PracticeDraftLookup {
+  getPracticeDraft: (sessionId: string, problemId: string) => string | null;
+  findAnyPracticeDraft: (problemId: string) => string | null;
+}
+
+function findProblemById(problemId: string | null | undefined, problems: SQLProblem[]): SQLProblem | null {
+  if (!problemId) return null;
+  return problems.find((problem) => problem.id === problemId) ?? null;
+}
+
+export function resolvePracticeProblemFromSources(args: {
+  problems: SQLProblem[];
+  fallbackProblem: SQLProblem;
+  persistedProblemId?: string;
+  backendProblemId?: string | null;
+  preferBackendProblem: boolean;
+}): SQLProblem {
+  const { problems, fallbackProblem, persistedProblemId, backendProblemId, preferBackendProblem } = args;
+
+  if (preferBackendProblem) {
+    return (
+      findProblemById(backendProblemId, problems) ??
+      findProblemById(persistedProblemId, problems) ??
+      fallbackProblem
+    );
+  }
+
+  return (
+    findProblemById(persistedProblemId, problems) ??
+    findProblemById(backendProblemId, problems) ??
+    fallbackProblem
+  );
+}
+
+export function resolvePracticeDraftState(args: {
+  lookup: PracticeDraftLookup;
+  sessionId: string;
+  fallbackProblem: SQLProblem;
+  problems: SQLProblem[];
+  isMeaningfulDraft: (draft: string | null | undefined) => draft is string;
+  lockProblemId?: string | null;
+}): { problem: SQLProblem; draft: string | null } {
+  const { lookup, sessionId, fallbackProblem, problems, isMeaningfulDraft, lockProblemId } = args;
+
+  const lockedProblem = findProblemById(lockProblemId, problems);
+  if (lockedProblem) {
+    const currentSessionDraft = lookup.getPracticeDraft(sessionId, lockedProblem.id);
+    if (isMeaningfulDraft(currentSessionDraft)) {
+      return { problem: lockedProblem, draft: currentSessionDraft };
+    }
+
+    const anySessionDraft = lookup.findAnyPracticeDraft(lockedProblem.id);
+    if (isMeaningfulDraft(anySessionDraft)) {
+      return { problem: lockedProblem, draft: anySessionDraft };
+    }
+
+    return { problem: lockedProblem, draft: null };
+  }
+
+  const currentSessionDraft = lookup.getPracticeDraft(sessionId, fallbackProblem.id);
+  if (isMeaningfulDraft(currentSessionDraft)) {
+    return { problem: fallbackProblem, draft: currentSessionDraft };
+  }
+  const currentAnySessionDraft = lookup.findAnyPracticeDraft(fallbackProblem.id);
+  if (isMeaningfulDraft(currentAnySessionDraft)) {
+    return { problem: fallbackProblem, draft: currentAnySessionDraft };
+  }
+
+  let fallbackAnyDraft: { problem: SQLProblem; draft: string } | null = null;
+  for (const problem of problems) {
+    const sessionDraft = lookup.getPracticeDraft(sessionId, problem.id);
+    if (isMeaningfulDraft(sessionDraft)) {
+      return { problem, draft: sessionDraft };
+    }
+    if (!fallbackAnyDraft && typeof sessionDraft === 'string' && sessionDraft.trim().length > 0) {
+      fallbackAnyDraft = { problem, draft: sessionDraft };
+    }
+  }
+
+  for (const problem of problems) {
+    const anySessionDraft = lookup.findAnyPracticeDraft(problem.id);
+    if (isMeaningfulDraft(anySessionDraft)) {
+      return { problem, draft: anySessionDraft };
+    }
+    if (!fallbackAnyDraft && typeof anySessionDraft === 'string' && anySessionDraft.trim().length > 0) {
+      fallbackAnyDraft = { problem, draft: anySessionDraft };
+    }
+  }
+
+  const activeProblemFromSessionId = sessionId && !sessionId.startsWith('session-')
+    ? findProblemById(sessionId, problems)
+    : null;
+  if (activeProblemFromSessionId) {
+    const activeProblemDraft = lookup.getPracticeDraft(sessionId, activeProblemFromSessionId.id);
+    if (isMeaningfulDraft(activeProblemDraft)) {
+      return { problem: activeProblemFromSessionId, draft: activeProblemDraft };
+    }
+    const activeProblemAnySessionDraft = lookup.findAnyPracticeDraft(activeProblemFromSessionId.id);
+    if (isMeaningfulDraft(activeProblemAnySessionDraft)) {
+      return { problem: activeProblemFromSessionId, draft: activeProblemAnySessionDraft };
+    }
+  }
+
+  if (fallbackAnyDraft) {
+    return fallbackAnyDraft;
+  }
+
+  return { problem: fallbackProblem, draft: null };
+}
+
 function DependencyWarningToast({ onClose }: DependencyWarningToastProps) {
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -405,6 +515,17 @@ export function LearningInterface() {
   // Screen reader announcements for accessibility
   const { announcement: hintAnnouncement, announce: announceHint } = useScreenReaderAnnouncer();
   const [notificationAnnouncement, setNotificationAnnouncement] = useState('');
+  const persistedPracticeUiState = useMemo(() => {
+    if (!learnerId) return null;
+    const params = new URLSearchParams(location.search);
+    const queryHasExplicitContext = params.has('problemId') || params.has('conceptId');
+    if (queryHasExplicitContext) return null;
+
+    return getUiState<PracticePageUiState>('practice', {
+      role: isInstructor ? 'instructor' : 'student',
+      actorId: learnerId,
+    });
+  }, [learnerId, isInstructor, location.search]);
 
   // Week 5: Get current escalation profile based on assignment strategy
   // Week 6: Modified to respect sessionConfig experimental settings
@@ -694,37 +815,28 @@ export function LearningInterface() {
   }, [location.search]);
 
   useEffect(() => {
-    if (!learnerId) return;
-    const params = new URLSearchParams(location.search);
-    const queryHasExplicitContext = params.has('problemId') || params.has('conceptId');
-    if (queryHasExplicitContext) return;
+    if (!persistedPracticeUiState) return;
 
-    const persisted = getUiState<PracticePageUiState>('practice', {
-      role: isInstructor ? 'instructor' : 'student',
-      actorId: learnerId,
-    });
-    if (!persisted) return;
-
-    if (persisted.currentProblemId) {
-      const persistedProblem = sqlProblems.find((problem) => problem.id === persisted.currentProblemId);
+    if (!AUTH_BACKEND_CONFIGURED && persistedPracticeUiState.currentProblemId) {
+      const persistedProblem = findProblemById(persistedPracticeUiState.currentProblemId, sqlProblems);
       if (persistedProblem) {
         setCurrentProblem(persistedProblem);
       }
     }
 
-    if (persisted.activeConceptId) {
-      setActiveConceptId(persisted.activeConceptId);
-      void getConcept(persisted.activeConceptId).then((concept) => {
+    if (persistedPracticeUiState.activeConceptId) {
+      setActiveConceptId(persistedPracticeUiState.activeConceptId);
+      void getConcept(persistedPracticeUiState.activeConceptId).then((concept) => {
         if (concept) setActiveConceptTitle(concept.title);
       });
-    } else if (persisted.activeConceptTitle === null) {
+    } else if (persistedPracticeUiState.activeConceptTitle === null) {
       setActiveConceptTitle(null);
     }
 
-    if (persisted.subtypeOverride) {
-      setSubtypeOverride(persisted.subtypeOverride);
+    if (persistedPracticeUiState.subtypeOverride) {
+      setSubtypeOverride(persistedPracticeUiState.subtypeOverride);
     }
-  }, [learnerId, isInstructor, location.search]);
+  }, [persistedPracticeUiState]);
 
   useEffect(() => {
     if (!learnerId) return;
@@ -918,67 +1030,10 @@ export function LearningInterface() {
       typeof draft === 'string' &&
       draft.trim().length > 0 &&
       draft.trim() !== DEFAULT_SQL_EDITOR_CODE.trim();
-
-    const resolveDraftState = (
-      candidateSessionId: string,
-      fallbackProblem: SQLProblem,
-    ): { problem: SQLProblem; draft: string | null } => {
-      const currentSessionDraft = storage.getPracticeDraft(learnerId, candidateSessionId, fallbackProblem.id);
-      if (isMeaningfulDraft(currentSessionDraft)) {
-        return { problem: fallbackProblem, draft: currentSessionDraft };
-      }
-      const currentAnySessionDraft = storage.findAnyPracticeDraft(learnerId, fallbackProblem.id);
-      if (isMeaningfulDraft(currentAnySessionDraft)) {
-        return { problem: fallbackProblem, draft: currentAnySessionDraft };
-      }
-
-      let fallbackAnyDraft: { problem: SQLProblem; draft: string } | null = null;
-      for (const problem of sqlProblems) {
-        const sessionDraft = storage.getPracticeDraft(learnerId, candidateSessionId, problem.id);
-        if (isMeaningfulDraft(sessionDraft)) {
-          return { problem, draft: sessionDraft };
-        }
-        if (!fallbackAnyDraft && typeof sessionDraft === 'string' && sessionDraft.trim().length > 0) {
-          fallbackAnyDraft = { problem, draft: sessionDraft };
-        }
-      }
-
-      for (const problem of sqlProblems) {
-        const anySessionDraft = storage.findAnyPracticeDraft(learnerId, problem.id);
-        if (isMeaningfulDraft(anySessionDraft)) {
-          return { problem, draft: anySessionDraft };
-        }
-        if (!fallbackAnyDraft && typeof anySessionDraft === 'string' && anySessionDraft.trim().length > 0) {
-          fallbackAnyDraft = { problem, draft: anySessionDraft };
-        }
-      }
-
-      const activeProblemFromSessionId = candidateSessionId && !candidateSessionId.startsWith('session-')
-        ? sqlProblems.find((problem) => problem.id === candidateSessionId)
-        : undefined;
-      if (activeProblemFromSessionId) {
-        const activeProblemDraft = storage.getPracticeDraft(
-          learnerId,
-          candidateSessionId,
-          activeProblemFromSessionId.id,
-        );
-        if (isMeaningfulDraft(activeProblemDraft)) {
-          return { problem: activeProblemFromSessionId, draft: activeProblemDraft };
-        }
-        const activeProblemAnySessionDraft = storage.findAnyPracticeDraft(
-          learnerId,
-          activeProblemFromSessionId.id,
-        );
-        if (isMeaningfulDraft(activeProblemAnySessionDraft)) {
-          return { problem: activeProblemFromSessionId, draft: activeProblemAnySessionDraft };
-        }
-      }
-
-      if (fallbackAnyDraft) {
-        return fallbackAnyDraft;
-      }
-
-      return { problem: fallbackProblem, draft: null };
+    const draftLookup: PracticeDraftLookup = {
+      getPracticeDraft: (candidateSessionId, problemId) =>
+        storage.getPracticeDraft(learnerId, candidateSessionId, problemId),
+      findAnyPracticeDraft: (problemId) => storage.findAnyPracticeDraft(learnerId, problemId),
     };
 
     const initializeSessionState = async () => {
@@ -1019,49 +1074,79 @@ export function LearningInterface() {
         ? activeSessionId
         : storage.startSession(learnerId);
 
-      let { problem: resolvedProblem, draft: resolvedDraft } = resolveDraftState(
-        resolvedSessionId,
-        currentProblem,
-      );
+      let resolvedProblem = resolvePracticeProblemFromSources({
+        problems: sqlProblems,
+        fallbackProblem: currentProblem,
+        persistedProblemId: AUTH_BACKEND_CONFIGURED ? undefined : persistedPracticeUiState?.currentProblemId,
+        preferBackendProblem: false,
+      });
+      let resolvedDraft: string | null = null;
 
-      if (!isMeaningfulDraft(resolvedDraft) && AUTH_BACKEND_CONFIGURED) {
+      if (AUTH_BACKEND_CONFIGURED) {
         const hydrated = await storage.hydrateLearner(learnerId, { force: true });
         if (!cancelled && hydrated) {
           const hydratedSessionId = storage.getActiveSessionId();
           if (hydratedSessionId && hydratedSessionId !== 'session-unknown') {
             resolvedSessionId = hydratedSessionId;
           }
-          const hydratedState = resolveDraftState(resolvedSessionId, resolvedProblem);
-          resolvedProblem = hydratedState.problem;
-          resolvedDraft = hydratedState.draft;
         }
-      }
 
-      if (!isMeaningfulDraft(resolvedDraft) && AUTH_BACKEND_CONFIGURED) {
         const backendSessionSnapshot = await storage.getBackendSessionSnapshot(learnerId);
-        if (!cancelled && backendSessionSnapshot && isMeaningfulDraft(backendSessionSnapshot.currentCode)) {
-          const snapshotSessionId = backendSessionSnapshot.sessionId?.trim();
+        if (!cancelled) {
+          const snapshotSessionId = backendSessionSnapshot?.sessionId?.trim();
           if (snapshotSessionId) {
             resolvedSessionId = snapshotSessionId;
             storage.setActiveSessionId(snapshotSessionId);
           }
 
-          const snapshotProblemId = backendSessionSnapshot.currentProblemId?.trim();
-          if (snapshotProblemId) {
-            const snapshotProblem = sqlProblems.find((problem) => problem.id === snapshotProblemId);
-            if (snapshotProblem) {
-              resolvedProblem = snapshotProblem;
-            }
-          }
+          const snapshotProblemId = backendSessionSnapshot?.currentProblemId?.trim();
+          resolvedProblem = resolvePracticeProblemFromSources({
+            problems: sqlProblems,
+            fallbackProblem: currentProblem,
+            persistedProblemId: persistedPracticeUiState?.currentProblemId,
+            backendProblemId: snapshotProblemId,
+            preferBackendProblem: true,
+          });
 
-          resolvedDraft = backendSessionSnapshot.currentCode;
-          storage.savePracticeDraft(
-            learnerId,
-            resolvedSessionId,
-            resolvedProblem.id,
-            backendSessionSnapshot.currentCode,
-          );
+          if (backendSessionSnapshot && isMeaningfulDraft(backendSessionSnapshot.currentCode)) {
+            resolvedDraft = backendSessionSnapshot.currentCode;
+            storage.savePracticeDraft(
+              learnerId,
+              resolvedSessionId,
+              resolvedProblem.id,
+              backendSessionSnapshot.currentCode,
+            );
+          } else if (snapshotProblemId) {
+            resolvedDraft = resolvePracticeDraftState({
+              lookup: draftLookup,
+              sessionId: resolvedSessionId,
+              fallbackProblem: resolvedProblem,
+              problems: sqlProblems,
+              isMeaningfulDraft,
+              lockProblemId: snapshotProblemId,
+            }).draft;
+          } else {
+            const localFallbackState = resolvePracticeDraftState({
+              lookup: draftLookup,
+              sessionId: resolvedSessionId,
+              fallbackProblem: resolvedProblem,
+              problems: sqlProblems,
+              isMeaningfulDraft,
+            });
+            resolvedProblem = localFallbackState.problem;
+            resolvedDraft = localFallbackState.draft;
+          }
         }
+      } else {
+        const localState = resolvePracticeDraftState({
+          lookup: draftLookup,
+          sessionId: resolvedSessionId,
+          fallbackProblem: resolvedProblem,
+          problems: sqlProblems,
+          isMeaningfulDraft,
+        });
+        resolvedProblem = localState.problem;
+        resolvedDraft = localState.draft;
       }
 
       if (cancelled) return;
@@ -1094,7 +1179,7 @@ export function LearningInterface() {
     return () => {
       cancelled = true;
     };
-  }, [learnerId, isHydrating, isRoleLoading]);
+  }, [learnerId, isHydrating, isRoleLoading, persistedPracticeUiState]);
 
   // Effect 2: Background analysis - handles trace analysis lifecycle
   useEffect(() => {
