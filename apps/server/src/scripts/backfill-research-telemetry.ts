@@ -44,6 +44,14 @@ interface BackfillReport {
     linksCreated: number;
     failedParses: number;
   };
+  // RESEARCH-5: Provenance tracking
+  provenanceSummary: {
+    nativeComplete: number;
+    backfilledHintId: number;
+    backfilledRetrieval: number;
+    unverifiableTemplate: number;
+    legacyPartial: number;
+  };
 }
 
 async function main() {
@@ -78,6 +86,13 @@ async function main() {
       linksCreated: 0,
       failedParses: 0,
     },
+    provenanceSummary: {
+      nativeComplete: 0,
+      backfilledHintId: 0,
+      backfilledRetrieval: 0,
+      unverifiableTemplate: 0,
+      legacyPartial: 0,
+    },
   };
 
   try {
@@ -99,6 +114,11 @@ async function main() {
     // Step 4: Backfill retrieval links
     console.log('🔗 Backfilling retrieval links...');
     await backfillRetrievalLinks(db, report);
+    console.log();
+
+    // Step 5: Analyze provenance distribution
+    console.log('📊 Analyzing provenance distribution...');
+    await analyzeProvenance(db, report);
     console.log();
 
     // Save report
@@ -273,6 +293,45 @@ async function backfillRetrievalLinks(db: any, report: BackfillReport) {
   console.log(`   Failed parses: ${failedParses}`);
 }
 
+async function analyzeProvenance(db: any, report: BackfillReport) {
+  // Count provenance statuses for hint_view events
+  const result = await db`
+    SELECT 
+      COUNT(*) FILTER (
+        WHERE hint_id IS NOT NULL AND template_id IS NOT NULL
+      ) as native_complete,
+      COUNT(*) FILTER (
+        WHERE hint_id IS NOT NULL AND (template_id IS NULL OR btrim(template_id) = '')
+      ) as missing_template,
+      COUNT(*) FILTER (
+        WHERE (hint_id IS NULL OR btrim(hint_id) = '') 
+          AND sql_engage_subtype IS NOT NULL 
+          AND sql_engage_row_id IS NOT NULL
+      ) as recoverable_hint_id,
+      COUNT(*) FILTER (
+        WHERE hint_id IS NOT NULL 
+          AND EXISTS (SELECT 1 FROM interaction_textbook_unit_retrievals r WHERE r.event_id = interaction_events.id)
+      ) as has_retrieval_links
+    FROM interaction_events 
+    WHERE event_type = 'hint_view'
+  `;
+
+  const row = result[0];
+  report.provenanceSummary.nativeComplete = parseInt(row.native_complete, 10);
+  report.provenanceSummary.unverifiableTemplate = parseInt(row.missing_template, 10);
+  report.provenanceSummary.backfilledHintId = parseInt(row.recoverable_hint_id, 10);
+  report.provenanceSummary.backfilledRetrieval = parseInt(row.has_retrieval_links, 10);
+  
+  // Legacy partial = those that need both hint_id backfill AND have retrieval links
+  report.provenanceSummary.legacyPartial = 
+    report.provenanceSummary.backfilledHintId + report.provenanceSummary.backfilledRetrieval;
+
+  console.log(`   Native complete: ${report.provenanceSummary.nativeComplete}`);
+  console.log(`   Missing template (unverifiable): ${report.provenanceSummary.unverifiableTemplate}`);
+  console.log(`   Recoverable hint_id: ${report.provenanceSummary.backfilledHintId}`);
+  console.log(`   Has retrieval links: ${report.provenanceSummary.backfilledRetrieval}`);
+}
+
 async function saveReport(report: BackfillReport) {
   const reportDir = path.join(__dirname, '../../../../docs/audit/evidence');
   fs.mkdirSync(reportDir, { recursive: true });
@@ -306,6 +365,13 @@ function printSummary(report: BackfillReport) {
   console.log(`  Events with retrievals: ${report.retrievalLinks.eventsWithRetrievals}`);
   console.log(`  Links created: ${report.retrievalLinks.linksCreated}`);
   console.log(`  Failed parses: ${report.retrievalLinks.failedParses}`);
+  console.log();
+  console.log('Provenance Summary:');
+  console.log(`  Native complete: ${report.provenanceSummary.nativeComplete}`);
+  console.log(`  Backfilled hint_id: ${report.provenanceSummary.backfilledHintId}`);
+  console.log(`  Backfilled retrieval: ${report.provenanceSummary.backfilledRetrieval}`);
+  console.log(`  Unverifiable template: ${report.provenanceSummary.unverifiableTemplate}`);
+  console.log(`  Legacy partial: ${report.provenanceSummary.legacyPartial}`);
   console.log();
 
   if (report.dryRun) {

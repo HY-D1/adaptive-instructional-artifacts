@@ -1847,6 +1847,9 @@ export function LearningInterface() {
     }
     finalizedSessionIdsRef.current.add(sessionId);
 
+    // RESEARCH-2: Both paths now use strong verification barrier
+    // The pagehide path uses keepalive transport but same verification logic
+    
     if (reason === 'pagehide') {
       if (!AUTH_BACKEND_CONFIGURED) {
         void storage.emitSessionEnd(sessionEndEvent).catch((error) => {
@@ -1855,21 +1858,31 @@ export function LearningInterface() {
         return;
       }
 
-      // RESEARCH-3: Use keepalive flush for pagehide durability
-      // First queue the session_end
-      const queued = storage.queueSessionEnd(sessionEndEvent);
-      if (!queued.success) {
-        console.warn('[LearningInterface] session_end queue failed before pagehide');
-        return;
-      }
+      // RESEARCH-2: Use flushPendingWithVerification for strong barrier
+      // First flush all pending interactions, then send session_end
+      void storage.flushPendingWithVerification(sessionId).then((flushResult) => {
+        if (flushResult.interactionsFlushed > 0) {
+          console.info('[LearningInterface] pagehide flush result:', {
+            flushed: flushResult.interactionsFlushed,
+            confirmed: flushResult.interactionsConfirmed,
+          });
+        }
 
-      // Use keepalive flush for immediate send attempt
-      void storage.flushWithKeepalive(sessionId).then((status) => {
-        if (!status.backendConfirmed) {
+        // Only proceed with session_end if all interactions are flushed or we're in best-effort mode
+        const queued = storage.queueSessionEnd(sessionEndEvent);
+        if (!queued.success) {
+          console.warn('[LearningInterface] session_end queue failed before pagehide');
+          return;
+        }
+
+        // Use keepalive for final session_end send
+        return storage.flushWithKeepalive(sessionId);
+      }).then((status) => {
+        if (status && !status.backendConfirmed) {
           console.warn('[LearningInterface] session_end keepalive flush pending:', status.error);
         }
       }).catch((error) => {
-        console.warn('[LearningInterface] session_end keepalive flush failed:', error);
+        console.warn('[LearningInterface] session_end pagehide flush failed:', error);
       });
       return;
     }

@@ -306,6 +306,11 @@ CREATE TABLE IF NOT EXISTS interaction_textbook_unit_retrievals (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- RESEARCH-4: Unique constraint for upsert support (event_id, unit_id)
+ALTER TABLE interaction_textbook_unit_retrievals
+ADD CONSTRAINT IF NOT EXISTS unique_event_unit_retrieval 
+UNIQUE (event_id, unit_id);
+
 CREATE INDEX IF NOT EXISTS idx_retrievals_event_id ON interaction_textbook_unit_retrievals(event_id);
 CREATE INDEX IF NOT EXISTS idx_retrievals_unit_id ON interaction_textbook_unit_retrievals(unit_id);
 

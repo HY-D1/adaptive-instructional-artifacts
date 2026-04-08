@@ -48,8 +48,18 @@ const CHUNK_SIZE = 100;
 const RETRY_INTERVAL_MS = 5000;
 const BATCH_SIZE = 25;
 
+// RESEARCH-1: Durable pending store for all interactions
+const PENDING_INTERACTIONS_KEY = 'sql-adapt-pending-interactions';
+
 // Event status for tracking durability
 export type EventStatus = 'queued_locally' | 'sent_unverified' | 'backend_confirmed' | 'dead_letter';
+
+// RESEARCH-1: Interaction status lifecycle for durable writes
+export type InteractionStatus =
+  | 'locally_persisted'      // Saved to localStorage, not yet sent
+  | 'backend_pending'        // In flight, awaiting confirmation
+  | 'backend_confirmed'      // Backend confirmed receipt
+  | 'dead_letter';           // Irrecoverable, schema validation failed
 
 interface StorageConfig {
   useBackend: boolean;
@@ -112,16 +122,34 @@ export interface QueueStats {
 // ============================================================================
 
 // ============================================================================
-// Durable Pending Store - Indexed storage for reliable event tracking
+// Pending Interaction Entry - RESEARCH-1: Durable pending store
+// ============================================================================
+
+interface PendingInteraction {
+  id: string;
+  event: InteractionEvent;
+  status: InteractionStatus;
+  timestamp: number;        // When first saved locally
+  lastAttempt?: number;     // When last sent to backend
+  retryCount: number;       // Number of send attempts
+  sessionId: string;
+  eventType: string;
+}
+
+// ============================================================================
+// Durable Pending Store - RESEARCH-1: Tracks ALL unconfirmed interactions
 // ============================================================================
 
 class DurablePendingStore {
+  private interactions: Map<string, PendingInteraction> = new Map();
   private confirmedIds: Set<string> = new Set();
 
   constructor() {
     this.loadConfirmed();
+    this.loadPending();
   }
 
+  // Confirmed IDs management (for deduplication)
   private loadConfirmed(): void {
     try {
       const raw = localStorage.getItem(PENDING_CONFIRMED_KEY);
@@ -152,14 +180,208 @@ class DurablePendingStore {
 
   markConfirmed(id: string): void {
     this.confirmedIds.add(id);
+    this.interactions.delete(id); // Remove from pending once confirmed
+    this.savePending();
     this.saveConfirmed();
   }
 
   markConfirmedBatch(ids: string[]): void {
     for (const id of ids) {
       this.confirmedIds.add(id);
+      this.interactions.delete(id);
     }
+    this.savePending();
     this.saveConfirmed();
+  }
+
+  // Pending interactions management
+  private loadPending(): void {
+    try {
+      const raw = localStorage.getItem(PENDING_INTERACTIONS_KEY);
+      if (raw) {
+        const pending: PendingInteraction[] = JSON.parse(raw);
+        for (const item of pending) {
+          // Skip if already confirmed
+          if (!this.confirmedIds.has(item.id)) {
+            this.interactions.set(item.id, item);
+          }
+        }
+      }
+    } catch {
+      this.interactions.clear();
+    }
+  }
+
+  private savePending(): void {
+    try {
+      // Filter out confirmed interactions and sort by timestamp
+      const pending = Array.from(this.interactions.values())
+        .filter(item => !this.confirmedIds.has(item.id) && item.status !== 'backend_confirmed')
+        .sort((a, b) => a.timestamp - b.timestamp);
+      
+      // Store in chunks if needed
+      if (pending.length > CHUNK_SIZE) {
+        localStorage.setItem(PENDING_INTERACTIONS_KEY, JSON.stringify(pending.slice(-CHUNK_SIZE)));
+      } else {
+        localStorage.setItem(PENDING_INTERACTIONS_KEY, JSON.stringify(pending));
+      }
+    } catch {
+      // If quota exceeded, try with just the most recent
+      try {
+        const recent = Array.from(this.interactions.values())
+          .filter(item => !this.confirmedIds.has(item.id))
+          .sort((a, b) => b.timestamp - a.timestamp)
+          .slice(0, 50);
+        localStorage.setItem(PENDING_INTERACTIONS_KEY, JSON.stringify(recent));
+      } catch {
+        // Last resort: clear pending store
+        console.error('[DurablePendingStore] Failed to save pending interactions');
+      }
+    }
+  }
+
+  /**
+   * Add a new interaction to the pending store
+   * RESEARCH-1: Every interaction starts as 'backend_pending'
+   */
+  add(event: InteractionEvent): void {
+    // Skip if already confirmed
+    if (this.confirmedIds.has(event.id)) {
+      return;
+    }
+
+    const pending: PendingInteraction = {
+      id: event.id,
+      event,
+      status: 'backend_pending',
+      timestamp: Date.now(),
+      retryCount: 0,
+      sessionId: event.sessionId || 'unknown',
+      eventType: event.eventType,
+    };
+
+    this.interactions.set(event.id, pending);
+    this.savePending();
+
+    console.info('[telemetry_interaction_pending]', {
+      eventId: event.id,
+      eventType: event.eventType,
+      sessionId: event.sessionId,
+    });
+  }
+
+  /**
+   * Mark an interaction as sent (but not yet confirmed)
+   */
+  markSent(id: string): void {
+    const item = this.interactions.get(id);
+    if (item) {
+      item.status = 'backend_pending';
+      item.lastAttempt = Date.now();
+      item.retryCount++;
+      this.savePending();
+    }
+  }
+
+  /**
+   * Mark an interaction as confirmed by backend
+   */
+  markConfirmedInteraction(id: string): void {
+    this.markConfirmed(id);
+    console.info('[telemetry_interaction_confirmed]', { eventId: id });
+  }
+
+  /**
+   * Mark an interaction as dead letter (irrecoverable)
+   */
+  markDeadLetter(id: string, reason: string): void {
+    const item = this.interactions.get(id);
+    if (item) {
+      item.status = 'dead_letter';
+      this.savePending();
+      console.error('[telemetry_dead_letter]', { eventId: id, reason });
+    }
+  }
+
+  /**
+   * Get all pending interactions (backend_pending status)
+   */
+  getAllPending(): PendingInteraction[] {
+    return Array.from(this.interactions.values())
+      .filter(item => item.status === 'backend_pending' && !this.confirmedIds.has(item.id))
+      .sort((a, b) => a.timestamp - b.timestamp);
+  }
+
+  /**
+   * Get pending interactions for a specific session
+   * RESEARCH-1: Used for pagehide flush
+   */
+  getPendingForSession(sessionId: string): PendingInteraction[] {
+    return this.getAllPending().filter(item => item.sessionId === sessionId);
+  }
+
+  /**
+   * Get a specific pending interaction
+   */
+  get(id: string): PendingInteraction | undefined {
+    return this.interactions.get(id);
+  }
+
+  /**
+   * Check if an interaction is pending
+   */
+  isPending(id: string): boolean {
+    const item = this.interactions.get(id);
+    return item !== undefined && item.status === 'backend_pending' && !this.confirmedIds.has(id);
+  }
+
+  /**
+   * Get count of pending interactions
+   */
+  getPendingCount(): number {
+    return this.getAllPending().length;
+  }
+
+  /**
+   * Get statistics for diagnostics
+   */
+  getStats(): {
+    totalPending: number;
+    oldestPendingAgeMs: number | null;
+    bySession: Record<string, number>;
+    byEventType: Record<string, number>;
+  } {
+    const pending = this.getAllPending();
+    const now = Date.now();
+    
+    let oldestPendingAgeMs: number | null = null;
+    if (pending.length > 0) {
+      const oldest = Math.min(...pending.map(p => p.timestamp));
+      oldestPendingAgeMs = now - oldest;
+    }
+
+    const bySession: Record<string, number> = {};
+    const byEventType: Record<string, number> = {};
+    
+    for (const item of pending) {
+      bySession[item.sessionId] = (bySession[item.sessionId] || 0) + 1;
+      byEventType[item.eventType] = (byEventType[item.eventType] || 0) + 1;
+    }
+
+    return {
+      totalPending: pending.length,
+      oldestPendingAgeMs,
+      bySession,
+      byEventType,
+    };
+  }
+
+  /**
+   * Clear all pending interactions (use with caution)
+   */
+  clear(): void {
+    this.interactions.clear();
+    localStorage.removeItem(PENDING_INTERACTIONS_KEY);
   }
 }
 
@@ -172,9 +394,11 @@ class OfflineQueueManager {
   private isProcessing = false;
   private durableStore: DurablePendingStore;
   private deadLetter: DeadLetterItem[] = [];
+  private onConfirmedCallback?: (ids: string[]) => void;
 
-  constructor() {
+  constructor(onConfirmed?: (ids: string[]) => void) {
     this.durableStore = new DurablePendingStore();
+    this.onConfirmedCallback = onConfirmed;
     this.loadQueue();
     this.loadDeadLetter();
     // Start background processing
@@ -275,6 +499,11 @@ class OfflineQueueManager {
     this.queue = this.queue.filter(item => !ids.includes(item.id));
     this.durableStore.markConfirmedBatch(ids);
     this.saveQueue();
+    
+    // RESEARCH-1: Notify external pending store of confirmations
+    if (this.onConfirmedCallback) {
+      this.onConfirmedCallback(ids);
+    }
   }
 
   getPending(): QueuedItem[] {
@@ -448,6 +677,7 @@ class DualStorageManager {
   private config: StorageConfig;
   private backendHealthy: boolean = false;
   private offlineQueue: OfflineQueueManager;
+  private pendingStore: DurablePendingStore;  // RESEARCH-1: Tracks all pending interactions
   private lastHydratedAt: Record<string, number> = {};
   private lastBackendAckTime: number | null = null;
   private totalConfirmedCount: number = 0;
@@ -459,7 +689,13 @@ class DualStorageManager {
       fallbackToLocal: true,
     };
     
-    this.offlineQueue = new OfflineQueueManager();
+    this.pendingStore = new DurablePendingStore();  // RESEARCH-1
+    this.offlineQueue = new OfflineQueueManager((ids) => {
+      // RESEARCH-1: When offline queue confirms items, also mark in pending store
+      for (const id of ids) {
+        this.pendingStore.markConfirmedInteraction(id);
+      }
+    });
     
     // Check backend health on init
     if (this.config.useBackend) {
@@ -556,12 +792,36 @@ class DualStorageManager {
    */
   logQueueStats(): void {
     const stats = this.getQueueStats();
+    const pendingStats = this.pendingStore.getStats();
     // eslint-disable-next-line no-console
     console.info('[telemetry_queue_stats]', {
       ...stats,
+      pendingStore: pendingStats,
       researchMode: this.getResearchMode(),
       contractVersion: RESEARCH_CONTRACT_VERSION,
     });
+  }
+
+  /**
+   * RESEARCH-1: Get all pending interactions (not yet confirmed by backend)
+   */
+  getAllPendingInteractions(): InteractionEvent[] {
+    return this.pendingStore.getAllPending().map(p => p.event);
+  }
+
+  /**
+   * RESEARCH-1: Get pending interactions for a specific session
+   * Used for pagehide flush to ensure all session events are sent
+   */
+  getPendingInteractionsForSession(sessionId: string): InteractionEvent[] {
+    return this.pendingStore.getPendingForSession(sessionId).map(p => p.event);
+  }
+
+  /**
+   * RESEARCH-1: Get pending store statistics
+   */
+  getPendingStats(): ReturnType<DurablePendingStore['getStats']> {
+    return this.pendingStore.getStats();
   }
 
   /**
@@ -715,23 +975,43 @@ class DualStorageManager {
     }
 
     const eventForWrite = this.withActiveSessionFallback(event);
-    // Send to backend FIRST (primary source of truth) - async in background
-    if (this.shouldUseBackend()) {
-      storageClient.logInteraction(eventForWrite).then(backendSuccess => {
-        if (!backendSuccess) {
-          // Backend failed, queue for retry
-          this.queueInteractionForRetry(eventForWrite);
-        } else {
-          this.trackBackendAck();
-        }
-      }).catch(error => {
-        console.warn('[DualStorage] Backend saveInteraction failed, queuing for retry:', error);
-        this.queueInteractionForRetry(eventForWrite);
-      });
+    
+    // RESEARCH-1: Durable write semantics
+    // Step 1: Save to localStorage FIRST (synchronous, always succeeds or fails fast)
+    const localResult = localStorageManager.saveInteraction(eventForWrite);
+    if (!localResult.success) {
+      return localResult;  // Return quota exceeded or other local failure
     }
     
-    // Always cache in localStorage (synchronous return)
-    return localStorageManager.saveInteraction(eventForWrite);
+    // Step 2: Add to durable pending store BEFORE network send
+    // This ensures the event is tracked even if the tab closes during send
+    this.pendingStore.add(eventForWrite);
+    
+    // Step 3: Send to backend (async in background)
+    if (this.shouldUseBackend()) {
+      this.pendingStore.markSent(eventForWrite.id);
+      
+      storageClient.logInteraction(eventForWrite).then(result => {
+        if (result.success && result.confirmed) {
+          // Backend confirmed receipt - mark as confirmed
+          this.pendingStore.markConfirmedInteraction(eventForWrite.id);
+          this.trackBackendAck();
+        } else {
+          // Backend did not confirm - will be retried via pending store
+          console.warn('[DualStorage] Backend did not confirm interaction, will retry:', eventForWrite.id);
+          this.queueInteractionForRetry(eventForWrite);
+        }
+      }).catch(error => {
+        console.warn('[DualStorage] Backend saveInteraction failed, will retry:', error);
+        // Event remains in pending store, will be retried
+        this.queueInteractionForRetry(eventForWrite);
+      });
+    } else {
+      // No backend - mark as confirmed locally
+      this.pendingStore.markConfirmedInteraction(eventForWrite.id);
+    }
+    
+    return localResult;
   }
 
   private trackBackendAck(): void {
@@ -1312,17 +1592,35 @@ class DualStorageManager {
 
     console.info('[telemetry_pagehide_flush_started]', { sessionId });
 
-    // Get all unconfirmed interactions for this session
-    const unconfirmed = this.offlineQueue.getAllUnconfirmed().filter(
+    // RESEARCH-1: Get ALL pending interactions from durable pending store
+    // This includes both newly created events and retry queue items
+    const pendingInteractions = this.pendingStore.getPendingForSession(sessionId);
+    const events = pendingInteractions.map(p => p.event);
+
+    // Also include retry queue items that might not be in pending store
+    const retryQueueItems = this.offlineQueue.getAllUnconfirmed().filter(
       item => item.type === 'interaction' && (item.data as InteractionEvent).sessionId === sessionId
     );
+    const retryEvents = retryQueueItems.map(item => item.data as InteractionEvent);
 
-    const events = unconfirmed.map(item => item.data as InteractionEvent);
+    // Merge and deduplicate by event ID
+    const eventMap = new Map<string, InteractionEvent>();
+    for (const event of [...events, ...retryEvents]) {
+      eventMap.set(event.id, event);
+    }
+    const allEvents = Array.from(eventMap.values());
 
     // Send batch with keepalive
     let keepaliveSuccess = false;
-    if (events.length > 0) {
-      keepaliveSuccess = await storageClient.logInteractionsBatchKeepalive(events);
+    if (allEvents.length > 0) {
+      keepaliveSuccess = await storageClient.logInteractionsBatchKeepalive(allEvents);
+      
+      // RESEARCH-1: Mark events as confirmed if keepalive succeeded
+      if (keepaliveSuccess) {
+        for (const event of allEvents) {
+          this.pendingStore.markConfirmedInteraction(event.id);
+        }
+      }
     }
 
     // Also flush any pending session_ends
@@ -1340,8 +1638,79 @@ class DualStorageManager {
 
     console.info(
       keepaliveSuccess ? '[telemetry_pagehide_flush_confirmed]' : '[telemetry_pagehide_flush_pending]',
-      { sessionId, eventCount: events.length }
+      { sessionId, eventCount: allEvents.length }
     );
+
+    return result;
+  }
+
+  /**
+   * RESEARCH-2: Flush pending interactions with verification before session_end
+   * Ensures all session interactions are confirmed before sending session_end
+   */
+  async flushPendingWithVerification(sessionId: string): Promise<{
+    interactionsFlushed: number;
+    interactionsConfirmed: number;
+    sessionEndSent: boolean;
+    sessionEndConfirmed: boolean;
+    error?: string;
+  }> {
+    const result = {
+      interactionsFlushed: 0,
+      interactionsConfirmed: 0,
+      sessionEndSent: false,
+      sessionEndConfirmed: false,
+    };
+
+    if (!this.config.useBackend) {
+      return result;
+    }
+
+    // Step 1: Get all pending interactions for this session
+    const pendingInteractions = this.pendingStore.getPendingForSession(sessionId);
+    const events = pendingInteractions.map(p => p.event);
+
+    if (events.length > 0) {
+      result.interactionsFlushed = events.length;
+      
+      // Step 2: Send via keepalive batch
+      const keepaliveSuccess = await storageClient.logInteractionsBatchKeepalive(events);
+      
+      if (keepaliveSuccess) {
+        // Mark all as confirmed
+        for (const event of events) {
+          this.pendingStore.markConfirmedInteraction(event.id);
+        }
+        result.interactionsConfirmed = events.length;
+      } else {
+        // Keepalive failed - events remain in pending store for retry
+        result.error = 'Keepalive flush failed, events remain pending';
+        return result;
+      }
+    }
+
+    // Step 3: Also process retry queue items for this session
+    const retryQueueItems = this.offlineQueue.getAllUnconfirmed().filter(
+      item => item.type === 'interaction' && (item.data as InteractionEvent).sessionId === sessionId
+    );
+    
+    if (retryQueueItems.length > 0) {
+      const retryEvents = retryQueueItems.map(item => item.data as InteractionEvent);
+      const retrySuccess = await storageClient.logInteractionsBatchKeepalive(retryEvents);
+      
+      if (retrySuccess) {
+        for (const item of retryQueueItems) {
+          this.pendingStore.markConfirmedInteraction(item.id);
+        }
+      }
+    }
+
+    // Step 4: Check if there are still pending interactions
+    const remainingPending = this.pendingStore.getPendingForSession(sessionId);
+    if (remainingPending.length > 0) {
+      result.error = `${remainingPending.length} interactions still pending after flush`;
+      return result;
+    }
 
     return result;
   }

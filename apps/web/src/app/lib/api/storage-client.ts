@@ -830,15 +830,20 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
 /**
  * Log a single interaction event (lossless)
  * Sends complete InteractionEvent to backend
+ * RESEARCH-1: Returns confirmation status for durable pending store
  */
-export async function logInteraction(event: InteractionEvent): Promise<boolean> {
+export async function logInteraction(event: InteractionEvent): Promise<{ success: boolean; confirmed?: boolean }> {
   const backendEvent = convertToBackendInteraction(event);
   
   const response = await fetchApi<BackendInteraction>('/interactions', {
     method: 'POST',
     body: JSON.stringify(backendEvent),
   });
-  return response.success;
+  
+  return {
+    success: response.success,
+    confirmed: response.success,  // Single event: success means confirmed
+  };
 }
 
 /**

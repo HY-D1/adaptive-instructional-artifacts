@@ -239,6 +239,26 @@ router.post('/', async (req: Request, res: Response) => {
 
     const id = event.id || `${event.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
 
+    // RESEARCH-3: Validate research-critical events in production
+    if (process.env.NODE_ENV === 'production') {
+      const validation = validateResearchEvent(event);
+      if (!validation.valid) {
+        console.warn('[telemetry_validation_error]', {
+          eventType: event.eventType,
+          missingFields: validation.missing,
+          eventId: id,
+          route: 'single',
+        });
+        // Return 400 to reject invalid research events
+        res.status(400).json({
+          success: false,
+          error: 'Invalid research-critical event',
+          missingFields: validation.missing,
+        });
+        return;
+      }
+    }
+
     const payload = buildNeonInteractionPayload(event);
 
     const interaction = await db.createInteraction({
@@ -250,6 +270,17 @@ router.post('/', async (req: Request, res: Response) => {
       problemId: event.problemId,
       payload,
     });
+    
+    // RESEARCH-4: Link textbook retrievals if present (single route parity with batch)
+    if (event.textbookUnitsRetrieved && Array.isArray(event.textbookUnitsRetrieved)) {
+      try {
+        await db.linkTextbookRetrievals(id, event.textbookUnitsRetrieved);
+      } catch (err) {
+        console.warn('[neon-interactions] Failed to link retrievals:', err);
+        // Don't fail the entire request for retrieval linking issues
+      }
+    }
+    
     logInteractionWrite(req, scopedTarget);
 
     res.status(201).json({ success: true, data: interaction });
