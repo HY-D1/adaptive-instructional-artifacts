@@ -497,6 +497,38 @@ export async function getProfile(learnerId: string): Promise<LearnerProfile | nu
   };
 }
 
+function toStringArray(value: unknown): string[] {
+  if (value instanceof Set) {
+    return Array.from(value).filter((item): item is string => typeof item === 'string');
+  }
+
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string');
+  }
+
+  return [];
+}
+
+function toRecord<T>(value: unknown): Record<string, T> {
+  if (value instanceof Map) {
+    return Object.fromEntries(value) as Record<string, T>;
+  }
+
+  if (Array.isArray(value)) {
+    const entries = value.filter(
+      (entry): entry is [string, T] =>
+        Array.isArray(entry) && typeof entry[0] === 'string' && entry.length >= 2,
+    );
+    return Object.fromEntries(entries) as Record<string, T>;
+  }
+
+  if (value && typeof value === 'object') {
+    return value as Record<string, T>;
+  }
+
+  return {};
+}
+
 /**
  * Save a learner's full profile
  */
@@ -505,11 +537,11 @@ export async function saveProfile(profile: LearnerProfile): Promise<boolean> {
     method: 'PUT',
     body: JSON.stringify({
       name: profile.name,
-      conceptsCovered: Array.from(profile.conceptsCovered),
-      conceptCoverageEvidence: Object.fromEntries(profile.conceptCoverageEvidence),
-      errorHistory: Object.fromEntries(profile.errorHistory),
+      conceptsCovered: toStringArray(profile.conceptsCovered),
+      conceptCoverageEvidence: toRecord<ConceptCoverageEvidence>(profile.conceptCoverageEvidence),
+      errorHistory: toRecord<number>(profile.errorHistory),
       interactionCount: profile.interactionCount,
-      currentStrategy: profile.currentStrategy,
+      currentStrategy: profile.currentStrategy ?? 'adaptive-medium',
       preferences: profile.preferences,
       lastActive: profile.lastActive,
     }),

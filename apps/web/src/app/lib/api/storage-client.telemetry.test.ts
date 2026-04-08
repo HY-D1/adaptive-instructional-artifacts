@@ -326,4 +326,47 @@ describe('storage-client telemetry contract', () => {
       problemsSolved: 3,
     });
   });
+
+  it('serializes queued profiles when Set and Map fields are missing', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { id: 'learner-1' },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    const { saveProfile } = await import('./storage-client');
+
+    await expect(
+      saveProfile({
+        id: 'learner-1',
+        name: 'Learner 1',
+        interactionCount: 3,
+        currentStrategy: 'adaptive-medium',
+        preferences: {
+          escalationThreshold: 3,
+          aggregationDelay: 5000,
+        },
+        createdAt: 1_700_000_000_000,
+        lastActive: 1_700_000_100_000,
+      } as Parameters<typeof saveProfile>[0]),
+    ).resolves.toBe(true);
+
+    const [, request] = fetchMock.mock.calls[0];
+    const body = JSON.parse(String(request?.body));
+    expect(body).toMatchObject({
+      name: 'Learner 1',
+      conceptsCovered: [],
+      conceptCoverageEvidence: {},
+      errorHistory: {},
+      interactionCount: 3,
+      currentStrategy: 'adaptive-medium',
+    });
+  });
 });
