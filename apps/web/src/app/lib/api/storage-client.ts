@@ -619,6 +619,24 @@ function normalizeInteractionTimestampToIso(timestamp: string | number): string 
   return fallback;
 }
 
+function getBackendHintId(event: InteractionEvent): string | undefined {
+  if (event.eventType !== 'hint_view') {
+    return event.hintId;
+  }
+
+  const explicitHintId = event.hintId?.trim();
+  if (explicitHintId) {
+    return explicitHintId;
+  }
+
+  const hintLevel = Number.isFinite(event.hintLevel)
+    ? Math.max(1, Math.min(3, Math.trunc(Number(event.hintLevel))))
+    : 1;
+  const subtype = (event.sqlEngageSubtype || event.errorSubtypeId || 'unknown').trim() || 'unknown';
+  const rowId = event.sqlEngageRowId?.trim() || 'unknown';
+  return `sql-engage:${subtype}:hint:${rowId}:L${hintLevel}`;
+}
+
 function convertToBackendInteraction(event: InteractionEvent): Partial<BackendInteraction> {
   const timestampIso = normalizeInteractionTimestampToIso(event.timestamp);
   return {
@@ -642,7 +660,7 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
     executionTimeMs: event.executionTimeMs,
     
     // Hint/Explanation fields
-    hintId: event.hintId,
+    hintId: getBackendHintId(event),
     explanationId: event.explanationId,
     hintText: event.hintText,
     hintLevel: event.hintLevel,

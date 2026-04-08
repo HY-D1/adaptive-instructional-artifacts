@@ -1,0 +1,8 @@
+
+> adaptive-instructional-artifacts@0.0.1 integrity:scan
+> bash scripts/verification/check-token-corruption.sh && node scripts/verification/check-auth-storage-imports.mjs && node scripts/verification/check-neon-interaction-schema-contract.mjs && node scripts/verification/check-neon-auth-events-schema-contract.mjs
+
+[PASS] no tokenized corruption signature or fixed token markers found for: apps/web/src/app apps/server/src package.json apps/server/package.json apps/web/vite.config.ts apps/server/tsconfig.json playwright.config.ts tsconfig.json vercel.json (scanner: rg)
+Auth/storage import guard passed.
+Neon interaction_events schema contract guard passed.
+Neon auth_events schema contract guard passed.

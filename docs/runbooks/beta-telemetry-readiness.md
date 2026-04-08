@@ -7,6 +7,8 @@ Finalized: 2026-03-30 (Workstream 6 - Documentation Updates)
 **Status**: READY FOR CONTROLLED STUDENT BETA LAUNCH
 **Release**: `v1.1.0-beta-50` on `main` (`91e7696c044e6c65b9c348609d79dd8de612d0d4`, merged PR `#17`)
 
+> 2026-04-07 audit note: this checklist predates the conference-grade Neon paper-data audit. Treat the older `concept_view`, auth telemetry, and `hintId` gap language below as superseded for paper-readiness decisions; use `docs/audit/paper-data-contract-freeze-2026-04-07.md`, `docs/audit/neon-research-readiness-runtime-audit-2026-04-07.md`, and `docs/audit/paper-data-readiness-2026-04-07.md` instead. That audit found real production-row gaps and local patches that still require deployment and re-audit before student data collection.
+
 Purpose:
 - Confirm first-user supervised beta observability is sufficient without schema redesign.
 - Session persistence hardening is tracked separately from telemetry scope; partial session writes now preserve stored condition flags and policy values.

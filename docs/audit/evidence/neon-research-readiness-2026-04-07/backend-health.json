@@ -1,0 +1,1 @@
+{"status":"ok","timestamp":"2026-04-07T22:31:26.974Z","version":"1.0.0","db":{"mode":"neon","envSource":"DATABASE_URL"},"features":{"pdfIndex":{"enabled":false,"available":false,"message":"PDF index disabled (set ENABLE_PDF_INDEX=true to enable)"},"llm":{"enabled":true,"available":true,"message":"Groq connected with 18 model(s) available (18 active)","provider":"groq"}}}

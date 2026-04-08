@@ -1,0 +1,24 @@
+
+> adaptive-instructional-artifacts@0.0.1 replay:gate
+> npm run export:policies && node scripts/replay-checksum-gate.mjs
+
+
+> adaptive-instructional-artifacts@0.0.1 export:policies
+> node scripts/export/export-policies.mjs
+
+Policies exported: dist/policies.json
+Policy version: policy-definitions-v1
+Export version: policy-export-v1
+Policies: aggressive, conservative, explanation_first, adaptive, no_hints
+
+=== TOY Replay Checksum Gate ===
+
+Running toy replay...
+Replay export written: /Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts/dist/replay/toy-replay-output.json
+Policy-only checksum sha256: 3b66c077f967bed685a4a255e1e1e0073052d3cf7d8d12e12fd3ef345b05a82d
+Replay export sha256: 79cf0c9b5905f461629cb0432430dcdc84cb3607a3a65638815f40fed15005c7
+Replay checksum gate skipped: fixture/policy inputs changed.
+Run `npm run replay:gate:update` after reviewing intended replay changes.
+
+=== Checksum Gate Summary ===
+toy: SKIPPED

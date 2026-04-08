@@ -137,8 +137,17 @@ router.post('/signup', async (req: Request, res: Response) => {
     return;
   }
 
+  const telemetryEmail =
+    typeof req.body?.email === 'string' && z.string().email().safeParse(req.body.email).success
+      ? req.body.email.trim().toLowerCase()
+      : undefined;
   const parsed = SignupSchema.safeParse(req.body);
   if (!parsed.success) {
+    await logAuthEvent({
+      email: telemetryEmail,
+      outcome: 'failure',
+      failureReason: 'validation_error',
+    });
     res.status(400).json({
       success: false,
       error: 'Validation error',
@@ -152,6 +161,12 @@ router.post('/signup', async (req: Request, res: Response) => {
   // Validate instructor code
   if (role === 'instructor') {
     if (!INSTRUCTOR_SIGNUP_CODE) {
+      await logAuthEvent({
+        email,
+        role,
+        outcome: 'failure',
+        failureReason: 'instructor_signup_not_configured',
+      });
       res.status(503).json({
         success: false,
         error: 'Instructor signup is not configured on this server',
@@ -159,6 +174,12 @@ router.post('/signup', async (req: Request, res: Response) => {
       return;
     }
     if (!instructorCode || instructorCode !== INSTRUCTOR_SIGNUP_CODE) {
+      await logAuthEvent({
+        email,
+        role,
+        outcome: 'failure',
+        failureReason: 'invalid_instructor_code',
+      });
       res.status(403).json({
         success: false,
         error: 'Invalid instructor code',
@@ -174,6 +195,12 @@ router.post('/signup', async (req: Request, res: Response) => {
     // Validate student class code (section signup code)
     if (role === 'student') {
       if (!classCode?.trim()) {
+        await logAuthEvent({
+          email,
+          role,
+          outcome: 'failure',
+          failureReason: 'missing_class_code',
+        });
         res.status(400).json({
           success: false,
           error: 'Class code is required for student signup',
@@ -182,6 +209,12 @@ router.post('/signup', async (req: Request, res: Response) => {
       }
       studentSection = await getSectionBySignupCode(classCode);
       if (!studentSection) {
+        await logAuthEvent({
+          email,
+          role,
+          outcome: 'failure',
+          failureReason: 'invalid_class_code',
+        });
         res.status(403).json({
           success: false,
           error: 'Invalid class code',
@@ -193,6 +226,12 @@ router.post('/signup', async (req: Request, res: Response) => {
     // Check for duplicate email
     const existing = await getAuthAccountByEmail(db, email);
     if (existing) {
+      await logAuthEvent({
+        email,
+        role,
+        outcome: 'failure',
+        failureReason: 'duplicate_email',
+      });
       res.status(409).json({
         success: false,
         error: 'An account with this email already exists',
@@ -230,6 +269,14 @@ router.post('/signup', async (req: Request, res: Response) => {
       });
     }
 
+    await logAuthEvent({
+      email,
+      accountId: account.id,
+      learnerId: account.learnerId,
+      role: account.role,
+      outcome: 'success',
+    });
+
     // Issue JWT cookie
     const token = signToken({
       accountId: account.id,
@@ -248,6 +295,11 @@ router.post('/signup', async (req: Request, res: Response) => {
       csrfToken,
     });
   } catch (err) {
+    await logAuthEvent({
+      email: telemetryEmail,
+      outcome: 'failure',
+      failureReason: 'internal_error',
+    });
     console.error('[auth/signup]', err);
     res.status(500).json({ success: false, error: 'Internal server error' });
   }

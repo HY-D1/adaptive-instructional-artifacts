@@ -1,0 +1,222 @@
+{
+  "queryContext": {
+    "learnerId": "abb443fe-ce38-4fd3-a0bb-7a84ffa1cf87",
+    "auditStart": "2026-04-07T22:34:53.915Z",
+    "connectionEnvKeyUsed": "adaptive_data_DATABASE_URL",
+    "note": "Direct Neon query for captured preview/deployment audit session; secrets omitted."
+  },
+  "accounts": [
+    {
+      "id": "716c2267-4440-4508-b981-bbc8dc2eaacc",
+      "email": "neon-readiness-audit-20260407t223453z@sql-adapt.test",
+      "role": "student",
+      "learner_id": "abb443fe-ce38-4fd3-a0bb-7a84ffa1cf87",
+      "name": "Neon Readiness Audit 2026-04-07T22:34:53.915Z",
+      "created_at": "2026-04-07T22:34:54.653Z"
+    },
+    {
+      "id": "86e7ed47-cfe6-440e-b534-8353d3bc4339",
+      "email": "neon-readiness-audit-20260407t223333z@sql-adapt.test",
+      "role": "student",
+      "learner_id": "a2bd0063-5072-499e-b45e-c8ed3bd7293a",
+      "name": "Neon Readiness Audit 2026-04-07T22:33:33.723Z",
+      "created_at": "2026-04-07T22:33:36.080Z"
+    }
+  ],
+  "userRows": [
+    {
+      "id": "abb443fe-ce38-4fd3-a0bb-7a84ffa1cf87",
+      "name": "Neon Readiness Audit 2026-04-07T22:34:53.915Z",
+      "role": "student",
+      "created_at": "2026-04-07T22:34:54.643Z"
+    },
+    {
+      "id": "a2bd0063-5072-499e-b45e-c8ed3bd7293a",
+      "name": "Neon Readiness Audit 2026-04-07T22:33:33.723Z",
+      "role": "student",
+      "created_at": "2026-04-07T22:33:36.067Z"
+    }
+  ],
+  "counts": [
+    {
+      "event_type": "code_change",
+      "count": 1
+    },
+    {
+      "event_type": "condition_assigned",
+      "count": 1
+    },
+    {
+      "event_type": "error",
+      "count": 1
+    },
+    {
+      "event_type": "hint_view",
+      "count": 1
+    },
+    {
+      "event_type": "llm_generate",
+      "count": 1
+    },
+    {
+      "event_type": "textbook_add",
+      "count": 1
+    }
+  ],
+  "interactions": [
+    {
+      "id": "condition_assigned-abb443fe-ce38-4fd3-a0bb-7a84ffa1cf87-1775601297540",
+      "event_type": "condition_assigned",
+      "session_id": "session-1775601297009-rbpg9kg",
+      "section_id": "e57489af-668b-42d6-ae96-1f83211e593a",
+      "problem_id": "problem-1",
+      "hint_id": null,
+      "concept_id": null,
+      "source": null,
+      "total_time": null,
+      "problems_attempted": null,
+      "problems_solved": null,
+      "unit_id": null,
+      "saved_to_notes": null,
+      "timestamp": "2026-04-07T22:34:57.009Z",
+      "created_at": "2026-04-07T22:34:57.540Z"
+    },
+    {
+      "id": "code_change-abb443fe-ce38-4fd3-a0bb-7a84ffa1cf87-1775601298225",
+      "event_type": "code_change",
+      "session_id": null,
+      "section_id": "e57489af-668b-42d6-ae96-1f83211e593a",
+      "problem_id": "problem-1",
+      "hint_id": null,
+      "concept_id": null,
+      "source": null,
+      "total_time": null,
+      "problems_attempted": null,
+      "problems_solved": null,
+      "unit_id": null,
+      "saved_to_notes": null,
+      "timestamp": "2026-04-07T22:34:58.104Z",
+      "created_at": "2026-04-07T22:34:58.226Z"
+    },
+    {
+      "id": "error-abb443fe-ce38-4fd3-a0bb-7a84ffa1cf87-1775601298351",
+      "event_type": "error",
+      "session_id": null,
+      "section_id": "e57489af-668b-42d6-ae96-1f83211e593a",
+      "problem_id": "problem-1",
+      "hint_id": null,
+      "concept_id": null,
+      "source": null,
+      "total_time": null,
+      "problems_attempted": null,
+      "problems_solved": null,
+      "unit_id": null,
+      "saved_to_notes": null,
+      "timestamp": "2026-04-07T22:34:58.146Z",
+      "created_at": "2026-04-07T22:34:58.351Z"
+    },
+    {
+      "id": "hint_view-abb443fe-ce38-4fd3-a0bb-7a84ffa1cf87-1775601300534",
+      "event_type": "hint_view",
+      "session_id": "session-1775601297009-rbpg9kg",
+      "section_id": "e57489af-668b-42d6-ae96-1f83211e593a",
+      "problem_id": "problem-1",
+      "hint_id": null,
+      "concept_id": null,
+      "source": null,
+      "total_time": null,
+      "problems_attempted": null,
+      "problems_solved": null,
+      "unit_id": null,
+      "saved_to_notes": null,
+      "timestamp": "2026-04-07T22:35:00.404Z",
+      "created_at": "2026-04-07T22:35:00.534Z"
+    },
+    {
+      "id": "llm_generate-abb443fe-ce38-4fd3-a0bb-7a84ffa1cf87-1775601301112",
+      "event_type": "llm_generate",
+      "session_id": "session-1775601297009-rbpg9kg",
+      "section_id": "e57489af-668b-42d6-ae96-1f83211e593a",
+      "problem_id": "problem-1",
+      "hint_id": null,
+      "concept_id": null,
+      "source": null,
+      "total_time": null,
+      "problems_attempted": null,
+      "problems_solved": null,
+      "unit_id": null,
+      "saved_to_notes": null,
+      "timestamp": "2026-04-07T22:35:00.989Z",
+      "created_at": "2026-04-07T22:35:01.113Z"
+    },
+    {
+      "id": "textbook_add-abb443fe-ce38-4fd3-a0bb-7a84ffa1cf87-1775601301115",
+      "event_type": "textbook_add",
+      "session_id": "session-1775601297009-rbpg9kg",
+      "section_id": "e57489af-668b-42d6-ae96-1f83211e593a",
+      "problem_id": "problem-1",
+      "hint_id": null,
+      "concept_id": null,
+      "source": null,
+      "total_time": null,
+      "problems_attempted": null,
+      "problems_solved": null,
+      "unit_id": null,
+      "saved_to_notes": null,
+      "timestamp": "2026-04-07T22:35:00.990Z",
+      "created_at": "2026-04-07T22:35:01.115Z"
+    }
+  ],
+  "authEvents": [],
+  "authCounts": [
+    {
+      "outcome": "failure",
+      "role": null,
+      "count": 3
+    }
+  ],
+  "textbookUnits": [
+    {
+      "id": "abb443fe-ce38-4fd3-a0bb-7a84ffa1cf87-unit-deterministic-incomplete query-fnv1a32:1cbc4289",
+      "unit_id": "unit-deterministic-incomplete query-fnv1a32:1cbc4289",
+      "title": "Incomplete SQL Query Structure: Select All Users",
+      "user_id": "abb443fe-ce38-4fd3-a0bb-7a84ffa1cf87",
+      "source_interaction_ids": "[\"hint-1775601300404-e-d5b569cf-1-1\"]",
+      "created_at": "2026-04-07T22:35:00.984Z",
+      "updated_at": "2026-04-07T22:35:00.984Z"
+    }
+  ],
+  "sectionRows": [
+    {
+      "learner_id": "abb443fe-ce38-4fd3-a0bb-7a84ffa1cf87",
+      "learner_name": "Neon Readiness Audit 2026-04-07T22:34:53.915Z",
+      "section_id": "e57489af-668b-42d6-ae96-1f83211e593a",
+      "section_name": "Fresh E2E Instructor's Section",
+      "joined_at": "2026-04-07T22:34:54.659Z"
+    }
+  ],
+  "thresholds": {
+    "globalMissingHint": {
+      "missing_hint_id": 98
+    },
+    "postCutoffMissingHint": {
+      "missing_hint_id": 1
+    },
+    "postCutoffBadConcept": {
+      "bad_concept_rows": 0
+    },
+    "postCutoffBadSessionEnd": {
+      "bad_session_end_rows": 0
+    },
+    "monotonicViolations": {
+      "timestamp_monotonicity_violations": 0
+    },
+    "textbookLinks": [
+      {
+        "unit_id": "unit-deterministic-incomplete query-fnv1a32:1cbc4289",
+        "title": "Incomplete SQL Query Structure: Select All Users",
+        "linked_events": 0
+      }
+    ]
+  }
+}

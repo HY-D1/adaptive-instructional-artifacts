@@ -1,0 +1,10 @@
+
+ RUN  v4.0.18 /Users/harrydai/Desktop/Personal Portfolio/adaptive-instructional-artifacts
+
+ ✓ apps/web/src/app/lib/api/storage-client.telemetry.test.ts (8 tests) 55ms
+
+ Test Files  1 passed (1)
+      Tests  8 passed (8)
+   Start at  15:46:00
+   Duration  824ms (transform 78ms, setup 19ms, import 25ms, tests 55ms, environment 586ms)
+

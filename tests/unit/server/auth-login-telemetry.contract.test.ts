@@ -4,12 +4,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const getDbMock = vi.fn();
 const getAuthAccountByEmailMock = vi.fn();
+const createAuthAccountMock = vi.fn();
 const createAuthEventMock = vi.fn();
 const signTokenMock = vi.fn(() => 'signed-token');
 const setAuthCookieMock = vi.fn();
 const createCsrfTokenMock = vi.fn(() => 'csrf-token');
 const setCsrfCookieMock = vi.fn();
 const getSectionForStudentMock = vi.fn();
+const getSectionBySignupCodeMock = vi.fn();
+const enrollStudentInSectionMock = vi.fn();
 const getOwnedSectionsByInstructorMock = vi.fn();
 
 vi.mock('../../../apps/server/src/db/index.js', () => ({
@@ -23,7 +26,7 @@ vi.mock('../../../apps/server/src/db/neon.js', () => ({
 }));
 
 vi.mock('../../../apps/server/src/db/auth.js', () => ({
-  createAuthAccount: vi.fn(),
+  createAuthAccount: createAuthAccountMock,
   getAuthAccountByEmail: getAuthAccountByEmailMock,
   getAuthAccountById: vi.fn(),
   toPublicAccount: (account: Record<string, unknown>) => ({
@@ -54,9 +57,9 @@ vi.mock('../../../apps/server/src/middleware/csrf.js', () => ({
 
 vi.mock('../../../apps/server/src/db/sections.js', () => ({
   createSectionForInstructor: vi.fn(),
-  enrollStudentInSection: vi.fn(),
+  enrollStudentInSection: enrollStudentInSectionMock,
   getOwnedSectionsByInstructor: getOwnedSectionsByInstructorMock,
-  getSectionBySignupCode: vi.fn(),
+  getSectionBySignupCode: getSectionBySignupCodeMock,
   getSectionForStudent: getSectionForStudentMock,
 }));
 
@@ -107,17 +110,62 @@ async function invokeJsonHandler(
 afterEach(() => {
   getDbMock.mockReset().mockReturnValue({});
   getAuthAccountByEmailMock.mockReset();
+  createAuthAccountMock.mockReset();
   createAuthEventMock.mockReset();
   signTokenMock.mockClear();
   setAuthCookieMock.mockClear();
   createCsrfTokenMock.mockClear();
   setCsrfCookieMock.mockClear();
   getSectionForStudentMock.mockReset();
+  getSectionBySignupCodeMock.mockReset();
+  enrollStudentInSectionMock.mockReset();
   getOwnedSectionsByInstructorMock.mockReset();
   vi.resetModules();
 });
 
 describe('auth login telemetry contract', () => {
+  it('records a success auth event for student signup', async () => {
+    const { authRouter } = await import('../../../apps/server/src/routes/auth');
+    const signupHandler = getRouteHandler(
+      authRouter as unknown as { stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }> },
+      'post',
+      '/signup',
+    );
+
+    getDbMock.mockReturnValue({});
+    getSectionBySignupCodeMock.mockResolvedValue({ id: 'section-1', name: 'Section 1' });
+    getAuthAccountByEmailMock.mockResolvedValue(null);
+    createAuthAccountMock.mockResolvedValue({
+      id: 'account-1',
+      email: 'student@example.com',
+      role: 'student',
+      learnerId: 'learner-1',
+      name: 'Student One',
+      createdAt: '2026-04-05T00:00:00.000Z',
+    });
+    getSectionForStudentMock.mockResolvedValue({ id: 'section-1', name: 'Section 1' });
+
+    const result = await invokeJsonHandler(signupHandler, {
+      name: 'Student One',
+      email: 'student@example.com',
+      password: 'correct horse battery staple',
+      role: 'student',
+      classCode: 'SECTION1',
+    });
+
+    expect(result.status).toBe(201);
+    expect((result.json as { success?: boolean; user?: { learnerId?: string } }).success).toBe(true);
+    expect(createAuthEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outcome: 'success',
+        email: 'student@example.com',
+        accountId: 'account-1',
+        learnerId: 'learner-1',
+        role: 'student',
+      }),
+    );
+  });
+
   it('records a success auth event without changing the login response shape', async () => {
     const { authRouter } = await import('../../../apps/server/src/routes/auth');
     const loginHandler = getRouteHandler(
@@ -143,7 +191,7 @@ describe('auth login telemetry contract', () => {
       password: 'correct horse battery staple',
     });
 
-    expect(getAuthAccountByEmailMock).toHaveBeenCalledWith(undefined, 'student@example.com');
+    expect(getAuthAccountByEmailMock).toHaveBeenCalledWith({}, 'student@example.com');
     expect(result.status).toBe(200);
     expect((result.json as { success?: boolean; user?: { learnerId?: string } }).success).toBe(true);
     expect((result.json as { user?: { learnerId?: string } }).user?.learnerId).toBe('learner-1');

@@ -56,6 +56,41 @@ describe('storage-client telemetry contract', () => {
     });
   });
 
+  it('computes a stable hintId fallback when hint_view omits one', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: { id: 'hint-1' },
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    const { logInteraction } = await import('./storage-client');
+
+    await logInteraction({
+      id: 'hint-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'hint_view',
+      problemId: 'problem-1',
+      hintLevel: 1,
+      sqlEngageSubtype: 'incomplete query',
+      sqlEngageRowId: 'sql-engage-enhanced',
+    });
+
+    const [, request] = fetchMock.mock.calls[0];
+    expect(JSON.parse(String(request?.body))).toMatchObject({
+      eventType: 'hint_view',
+      hintId: 'sql-engage:incomplete query:hint:sql-engage-enhanced:L1',
+    });
+  });
+
   it('keeps hintId when reading hint_view interactions from backend', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(

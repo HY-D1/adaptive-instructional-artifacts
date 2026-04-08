@@ -1,0 +1,58 @@
+## git status before audit
+## main...origin/main
+?? docs/audit/
+
+## env keys present (values redacted)
+-- .env.local
+VERCEL_OIDC_TOKEN=<redacted>
+VITE_INSTRUCTOR_PASSCODE=<redacted>
+adaptive_data_DATABASE_URL=<redacted>
+adaptive_data_DATABASE_URL_UNPOOLED=<redacted>
+adaptive_data_NEON_AUTH_BASE_URL=<redacted>
+adaptive_data_NEON_PROJECT_ID=<redacted>
+adaptive_data_PGDATABASE=<redacted>
+adaptive_data_PGHOST=<redacted>
+adaptive_data_PGHOST_UNPOOLED=<redacted>
+adaptive_data_PGPASSWORD=<redacted>
+adaptive_data_PGUSER=<redacted>
+adaptive_data_POSTGRES_DATABASE=<redacted>
+adaptive_data_POSTGRES_HOST=<redacted>
+adaptive_data_POSTGRES_PASSWORD=<redacted>
+adaptive_data_POSTGRES_PRISMA_URL=<redacted>
+adaptive_data_POSTGRES_URL=<redacted>
+adaptive_data_POSTGRES_URL_NON_POOLING=<redacted>
+adaptive_data_POSTGRES_URL_NO_SSL=<redacted>
+adaptive_data_POSTGRES_USER=<redacted>
+adaptive_data_VITE_NEON_AUTH_URL=<redacted>
+-- .env.development.local
+E2E_ALLOW_INSTRUCTOR_SIGNUP=<redacted>
+E2E_INSTRUCTOR_CODE=<redacted>
+E2E_INSTRUCTOR_EMAIL=<redacted>
+E2E_INSTRUCTOR_PASSWORD=<redacted>
+E2E_STUDENT_CLASS_CODE=<redacted>
+E2E_STUDENT_EMAIL=<redacted>
+E2E_STUDENT_PASSWORD=<redacted>
+PLAYWRIGHT_API_BASE_URL=<redacted>
+PLAYWRIGHT_BASE_URL=<redacted>
+VERCEL_AUTOMATION_BYPASS_SECRET=<redacted>
+VERCEL_OIDC_TOKEN=<redacted>
+VITE_API_BASE_URL=<redacted>
+VITE_INSTRUCTOR_PASSCODE=<redacted>
+adaptive_data_DATABASE_URL=<redacted>
+adaptive_data_DATABASE_URL_UNPOOLED=<redacted>
+adaptive_data_NEON_AUTH_BASE_URL=<redacted>
+adaptive_data_NEON_PROJECT_ID=<redacted>
+adaptive_data_PGDATABASE=<redacted>
+adaptive_data_PGHOST=<redacted>
+adaptive_data_PGHOST_UNPOOLED=<redacted>
+adaptive_data_PGPASSWORD=<redacted>
+adaptive_data_PGUSER=<redacted>
+adaptive_data_POSTGRES_DATABASE=<redacted>
+adaptive_data_POSTGRES_HOST=<redacted>
+adaptive_data_POSTGRES_PASSWORD=<redacted>
+adaptive_data_POSTGRES_PRISMA_URL=<redacted>
+adaptive_data_POSTGRES_URL=<redacted>
+adaptive_data_POSTGRES_URL_NON_POOLING=<redacted>
+adaptive_data_POSTGRES_URL_NO_SSL=<redacted>
+adaptive_data_POSTGRES_USER=<redacted>
+adaptive_data_VITE_NEON_AUTH_URL=<redacted>

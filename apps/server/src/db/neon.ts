@@ -1096,6 +1096,26 @@ export async function createTextbookUnit(
       updated_at = EXCLUDED.updated_at
   `;
 
+  const sourceInteractionIds = Array.isArray(data.sourceInteractionIds)
+    ? Array.from(new Set(data.sourceInteractionIds.filter((sourceId) => typeof sourceId === 'string' && sourceId.trim()).map((sourceId) => sourceId.trim())))
+    : [];
+  if (sourceInteractionIds.length > 0) {
+    await db`
+      DELETE FROM textbook_unit_event_links
+      WHERE unit_id = ${id} AND link_type = 'trigger'
+    `;
+    for (const sourceInteractionId of sourceInteractionIds) {
+      await db`
+        INSERT INTO textbook_unit_event_links (unit_id, event_id, link_type)
+        SELECT ${id}, ${sourceInteractionId}, 'trigger'
+        WHERE EXISTS (
+          SELECT 1 FROM interaction_events WHERE id = ${sourceInteractionId}
+        )
+        ON CONFLICT (unit_id, event_id, link_type) DO NOTHING
+      `;
+    }
+  }
+
   const [result] = await db`SELECT * FROM textbook_units WHERE id = ${id}`;
   return rowToInstructionalUnit(result);
 }

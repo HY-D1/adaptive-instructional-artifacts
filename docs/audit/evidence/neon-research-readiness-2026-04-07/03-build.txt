@@ -1,0 +1,29 @@
+
+> adaptive-instructional-artifacts@0.0.1 prebuild
+> npm run integrity:scan
+
+
+> adaptive-instructional-artifacts@0.0.1 integrity:scan
+> bash scripts/verification/check-token-corruption.sh && node scripts/verification/check-auth-storage-imports.mjs && node scripts/verification/check-neon-interaction-schema-contract.mjs && node scripts/verification/check-neon-auth-events-schema-contract.mjs
+
+[PASS] no tokenized corruption signature or fixed token markers found for: apps/web/src/app apps/server/src package.json apps/server/package.json apps/web/vite.config.ts apps/server/tsconfig.json playwright.config.ts tsconfig.json vercel.json (scanner: rg)
+Auth/storage import guard passed.
+Neon interaction_events schema contract guard passed.
+Neon auth_events schema contract guard passed.
+
+> adaptive-instructional-artifacts@0.0.1 build
+> npx vite build --config apps/web/vite.config.ts
+
+vite v6.4.1 building for production...
+transforming...
+✓ 2862 modules transformed.
+rendering chunks...
+computing gzip size...
+../../dist/app/index.html                            1.34 kB │ gzip:   0.67 kB
+../../dist/app/assets/index-BVv09Jvx.css           100.40 kB │ gzip:  17.12 kB
+../../dist/app/assets/llm-contracts-BM4nCCL-.js      9.47 kB │ gzip:   3.18 kB
+../../dist/app/assets/vendor-editor-B03hhld5.js     55.10 kB │ gzip:  19.45 kB
+../../dist/app/assets/vendor-react-DFaSu_N3.js      95.51 kB │ gzip:  32.52 kB
+../../dist/app/assets/vendor-charts-LtijjaO_.js    557.52 kB │ gzip: 157.54 kB
+../../dist/app/assets/index-Cqn3hd1b.js          1,466.51 kB │ gzip: 367.31 kB
+✓ built in 3.66s
