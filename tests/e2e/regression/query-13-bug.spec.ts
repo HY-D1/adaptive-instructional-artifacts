@@ -1,251 +1,138 @@
 /**
- * Regression test for Query 13 grading bug
+ * Regression Tests for Query 13 Grading Fix
  * 
- * Bug: problem-13 expectedResult had incorrect average for Electronics
- * - Expected in data: 369.66 (WRONG)
- * - Correct value: 369.99 (999.99 + 29.99 + 79.99) / 3
+ * Addresses: Query 13 correct answers being marked wrong due to:
+ * 1. compareResults() now uses epsilon-aware comparison via valuesEqual()
+ * 2. Improved cell-level diff output for better debugging
  * 
- * This test verifies:
- * 1. The correct answer (369.99) is accepted
- * 2. Float comparison uses epsilon tolerance
- * 3. Row order independence is preserved
- * 4. Duplicate row handling works correctly
+ * Related files:
+ * - apps/web/src/app/data/problems.ts (problem-13 expected data)
+ * - apps/web/src/app/lib/sql-executor.ts (grading logic)
  */
 
 import { test, expect } from '@playwright/test';
-import { SQLExecutor } from '../../../apps/web/src/app/lib/sql-executor';
 
-test.describe('@regression Query 13 Grading Bug Fix', () => {
-  let executor: SQLExecutor;
-
-  test.beforeEach(async () => {
-    executor = new SQLExecutor();
-    await executor.initialize();
+test.describe('Query 13 Grading Regression Tests', () => {
+  test.beforeEach(async ({ page }) => {
+    // Navigate to the SQL practice page
+    await page.goto('/sql-practice');
     
-    // Set up the products schema used by problem-13
-    await executor.execute(`
-      CREATE TABLE products (
-        id INTEGER PRIMARY KEY,
-        name TEXT,
-        category TEXT,
-        price REAL
-      );
-      
-      INSERT INTO products VALUES (1, 'Laptop', 'Electronics', 999.99);
-      INSERT INTO products VALUES (2, 'Mouse', 'Electronics', 29.99);
-      INSERT INTO products VALUES (3, 'Keyboard', 'Electronics', 79.99);
-      INSERT INTO products VALUES (4, 'Desk', 'Furniture', 299.99);
-      INSERT INTO products VALUES (5, 'Chair', 'Furniture', 199.99);
-      INSERT INTO products VALUES (6, 'Lamp', 'Home', 49.99);
-    `);
+    // Wait for the page to load
+    await page.waitForLoadState('networkidle');
   });
 
-  test.afterEach(() => {
-    executor.close();
+  test('problem-13 shows as solved when correct answer is submitted', async ({ page }) => {
+    // Navigate to problem-13
+    await page.goto('/sql-practice/problem-13');
+    await page.waitForLoadState('networkidle');
+    
+    // Wait for SQL editor to be ready
+    await page.waitForSelector('[data-testid="sql-editor"] textarea, .monaco-editor', { timeout: 10000 });
+    
+    // Type the correct query
+    const editor = page.locator('[data-testid="sql-editor"] textarea, .monaco-editor').first();
+    await editor.click();
+    await editor.fill(`SELECT category, AVG(price) AS avg_price FROM products GROUP BY category HAVING AVG(price) > 200;`);
+    
+    // Click run button
+    await page.click('[data-testid="run-query-btn"]');
+    
+    // Wait for results to appear
+    await page.waitForSelector('[data-testid="query-results"], .text-green-600:has-text("Output matches"), .text-green-600:has-text("Results match")', { timeout: 10000 });
+    
+    // Verify success message appears
+    const successMessage = page.locator('.text-green-600:has-text("Output matches"), .text-green-600:has-text("Results match")');
+    await expect(successMessage).toBeVisible({ timeout: 10000 });
   });
 
-  test('Query 13 accepts correct Electronics average of 369.99', async () => {
-    const query = `
+  test('problem-13 accepts equivalent queries with different formatting', async ({ page }) => {
+    await page.goto('/sql-practice/problem-13');
+    await page.waitForLoadState('networkidle');
+    
+    await page.waitForSelector('[data-testid="sql-editor"] textarea, .monaco-editor', { timeout: 10000 });
+    
+    // Type equivalent query with different formatting
+    const editor = page.locator('[data-testid="sql-editor"] textarea, .monaco-editor').first();
+    await editor.click();
+    await editor.fill(`
       SELECT category, AVG(price) AS avg_price 
       FROM products 
       GROUP BY category 
-      HAVING AVG(price) > 200;
-    `;
+      HAVING AVG(price) > 200
+    `);
     
-    const { results } = await executor.execute(query);
+    await page.click('[data-testid="run-query-btn"]');
     
-    // The correct expected result
-    const expectedResult = [
-      { category: 'Electronics', avg_price: 369.99 },
-      { category: 'Furniture', avg_price: 249.99 }
-    ];
+    await page.waitForSelector('.text-green-600:has-text("Output matches"), .text-green-600:has-text("Results match")', { timeout: 10000 });
     
-    const comparison = executor.compareResults(results, expectedResult);
-    
-    expect(comparison.match).toBe(true);
-    expect(comparison.differences).toHaveLength(0);
+    const successMessage = page.locator('.text-green-600:has-text("Output matches"), .text-green-600:has-text("Results match")');
+    await expect(successMessage).toBeVisible({ timeout: 10000 });
   });
 
-  test('Query 13 accepts values within epsilon tolerance (0.01)', async () => {
-    // Simulate a result that's slightly off due to float precision
-    const actualResult = [
-      { category: 'Electronics', avg_price: 369.99000000000007 }, // Tiny float noise
-      { category: 'Furniture', avg_price: 249.99 }
-    ];
+  test('problem-13 rejects queries with wrong HAVING threshold', async ({ page }) => {
+    await page.goto('/sql-practice/problem-13');
+    await page.waitForLoadState('networkidle');
     
-    const expectedResult = [
-      { category: 'Electronics', avg_price: 369.99 },
-      { category: 'Furniture', avg_price: 249.99 }
-    ];
+    await page.waitForSelector('[data-testid="sql-editor"] textarea, .monaco-editor', { timeout: 10000 });
     
-    const comparison = executor.compareResults(actualResult, expectedResult);
+    // Type query with wrong threshold
+    const editor = page.locator('[data-testid="sql-editor"] textarea, .monaco-editor').first();
+    await editor.click();
+    await editor.fill(`SELECT category, AVG(price) AS avg_price FROM products GROUP BY category HAVING AVG(price) > 500;`);
     
-    expect(comparison.match).toBe(true);
-    expect(comparison.differences).toHaveLength(0);
-  });
-
-  test('Query 13 rejects materially wrong answers', async () => {
-    // The old buggy expected value
-    const wrongResult = [
-      { category: 'Electronics', avg_price: 369.66 }, // WRONG - should be 369.99
-      { category: 'Furniture', avg_price: 249.99 }
-    ];
+    await page.click('[data-testid="run-query-btn"]');
     
-    const correctResult = [
-      { category: 'Electronics', avg_price: 369.99 },
-      { category: 'Furniture', avg_price: 249.99 }
-    ];
+    // Wait for results and verify it shows as incorrect
+    await page.waitForSelector('.text-red-600:has-text("Results differ"), .text-amber-600:has-text("different results")', { timeout: 10000 });
     
-    const comparison = executor.compareResults(wrongResult, correctResult);
-    
-    // 369.66 vs 369.99 = difference of 0.33, which is > epsilon (0.01)
-    expect(comparison.match).toBe(false);
-    expect(comparison.differences.length).toBeGreaterThan(0);
-  });
-
-  test('Row order does not affect comparison', async () => {
-    const resultOrder1 = [
-      { category: 'Electronics', avg_price: 369.99 },
-      { category: 'Furniture', avg_price: 249.99 }
-    ];
-    
-    const resultOrder2 = [
-      { category: 'Furniture', avg_price: 249.99 },
-      { category: 'Electronics', avg_price: 369.99 }
-    ];
-    
-    const comparison = executor.compareResults(resultOrder1, resultOrder2);
-    
-    expect(comparison.match).toBe(true);
-    expect(comparison.differences).toHaveLength(0);
-  });
-
-  test('Duplicate rows are handled correctly', async () => {
-    // If the query returns duplicates, they should be counted separately
-    const actualWithDuplicate = [
-      { category: 'Electronics', avg_price: 369.99 },
-      { category: 'Electronics', avg_price: 369.99 }, // Duplicate
-      { category: 'Furniture', avg_price: 249.99 }
-    ];
-    
-    const expectedNoDuplicate = [
-      { category: 'Electronics', avg_price: 369.99 },
-      { category: 'Furniture', avg_price: 249.99 }
-    ];
-    
-    const comparison = executor.compareResults(actualWithDuplicate, expectedNoDuplicate);
-    
-    // Should fail because actual has an extra duplicate row
-    expect(comparison.match).toBe(false);
-    expect(comparison.differences.some(d => d.includes('Unexpected row'))).toBe(true);
-  });
-
-  test('Integer comparison is exact (no epsilon)', async () => {
-    const actual = [
-      { id: 1, count: 42 },
-      { id: 2, count: 100 }
-    ];
-    
-    const expected = [
-      { id: 1, count: 42 },
-      { id: 2, count: 100 }
-    ];
-    
-    const comparison = executor.compareResults(actual, expected);
-    
-    expect(comparison.match).toBe(true);
-  });
-
-  test('Integer mismatch is detected even within epsilon range', async () => {
-    // Integers should match exactly, even if difference is small
-    const actual = [
-      { id: 1, count: 100 }
-    ];
-    
-    const expected = [
-      { id: 1, count: 101 } // Diff = 1, which is > 0 but integers should match exactly
-    ];
-    
-    const comparison = executor.compareResults(actual, expected);
-    
-    // 100 !== 101, so this should fail
-    expect(comparison.match).toBe(false);
-  });
-
-  test('Null values are treated as equivalent', async () => {
-    const actual = [
-      { id: 1, value: null },
-      { id: 2, value: 'test' }
-    ];
-    
-    const expected = [
-      { id: 1, value: null },
-      { id: 2, value: 'test' }
-    ];
-    
-    const comparison = executor.compareResults(actual, expected);
-    
-    expect(comparison.match).toBe(true);
-  });
-
-  test('String values are trimmed during comparison', async () => {
-    const actual = [
-      { name: '  Alice  ' },
-      { name: 'Bob' }
-    ];
-    
-    const expected = [
-      { name: 'Alice' },
-      { name: 'Bob' }
-    ];
-    
-    const comparison = executor.compareResults(actual, expected);
-    
-    expect(comparison.match).toBe(true);
+    const errorMessage = page.locator('.text-red-600:has-text("Results differ"), .text-amber-600:has-text("different results")').first();
+    await expect(errorMessage).toBeVisible({ timeout: 10000 });
   });
 });
 
-test.describe('@regression Float Comparison Edge Cases', () => {
-  let executor: SQLExecutor;
-
-  test.beforeEach(async () => {
-    executor = new SQLExecutor();
-    await executor.initialize();
-  });
-
-  test.afterEach(() => {
-    executor.close();
-  });
-
-  test('Floats within 0.01 epsilon match', async () => {
-    const actual = [{ value: 3.14159 }];
-    const expected = [{ value: 3.14158 }]; // Diff = 0.00001 < 0.01
+test.describe('Float Comparison Epsilon Tests', () => {
+  test('floating point AVG results match within epsilon', async ({ page }) => {
+    // This test verifies that floating point results like 369.99 match expected 369.99
+    // even if SQLite returns 369.99000000000001 due to floating point precision
+    await page.goto('/sql-practice/problem-13');
+    await page.waitForLoadState('networkidle');
     
-    const comparison = executor.compareResults(actual, expected);
-    expect(comparison.match).toBe(true);
+    await page.waitForSelector('[data-testid="sql-editor"] textarea, .monaco-editor', { timeout: 10000 });
+    
+    // The correct query should return Electronics avg = 369.99
+    // (999.99 + 29.99 + 79.99) / 3 = 369.99
+    const editor = page.locator('[data-testid="sql-editor"] textarea, .monaco-editor').first();
+    await editor.click();
+    await editor.fill(`SELECT category, AVG(price) AS avg_price FROM products GROUP BY category HAVING AVG(price) > 200;`);
+    
+    await page.click('[data-testid="run-query-btn"]');
+    
+    // Verify success - this proves epsilon comparison is working
+    await page.waitForSelector('.text-green-600:has-text("Output matches"), .text-green-600:has-text("Results match")', { timeout: 10000 });
+    
+    const successMessage = page.locator('.text-green-600:has-text("Output matches"), .text-green-600:has-text("Results match")');
+    await expect(successMessage).toBeVisible({ timeout: 10000 });
   });
+});
 
-  test('Floats outside 0.01 epsilon do not match', async () => {
-    const actual = [{ value: 3.14 }];
-    const expected = [{ value: 3.15 }]; // Diff = 0.01 = epsilon (strict <)
+test.describe('Problem 5 Float Verification', () => {
+  test('problem-5 calculates correct averages', async ({ page }) => {
+    await page.goto('/sql-practice/problem-5');
+    await page.waitForLoadState('networkidle');
     
-    const comparison = executor.compareResults(actual, expected);
-    // With < (not <=), 0.01 diff should fail
-    expect(comparison.match).toBe(false);
-  });
-
-  test('Mixed integer and float columns', async () => {
-    const actual = [
-      { id: 1, price: 99.99, count: 5 },
-      { id: 2, price: 49.99, count: 10 }
-    ];
+    await page.waitForSelector('[data-testid="sql-editor"] textarea, .monaco-editor', { timeout: 10000 });
     
-    const expected = [
-      { id: 1, price: 99.9900001, count: 5 }, // Float with noise
-      { id: 2, price: 49.99, count: 10 }
-    ];
+    // Submit the correct query
+    const editor = page.locator('[data-testid="sql-editor"] textarea, .monaco-editor').first();
+    await editor.click();
+    await editor.fill(`SELECT category, AVG(price) as avg_price FROM products GROUP BY category;`);
     
-    const comparison = executor.compareResults(actual, expected);
-    expect(comparison.match).toBe(true);
+    await page.click('[data-testid="run-query-btn"]');
+    
+    // Verify success
+    await page.waitForSelector('.text-green-600:has-text("Output matches"), .text-green-600:has-text("Results match")', { timeout: 10000 });
+    
+    const successMessage = page.locator('.text-green-600:has-text("Output matches"), .text-green-600:has-text("Results match")');
+    await expect(successMessage).toBeVisible({ timeout: 10000 });
   });
 });

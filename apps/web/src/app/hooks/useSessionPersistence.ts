@@ -116,6 +116,7 @@ export function useSessionPersistence(): UseSessionPersistenceReturn {
   
   /**
    * Update last activity timestamp in localStorage
+   * CRITICAL PATH: Wrapped in try-catch to prevent crashes on quota exceeded
    */
   const updateActivity = useCallback((): void => {
     if (typeof window === 'undefined' || !window.localStorage) {
@@ -128,7 +129,12 @@ export function useSessionPersistence(): UseSessionPersistenceReturn {
       setIsSessionExpired(false);
     } catch (error) {
       // Silently fail if localStorage is unavailable or quota exceeded
-      console.warn('[useSessionPersistence] Failed to update activity timestamp:', error);
+      // This is non-critical telemetry - session continues normally
+      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+        console.warn('[useSessionPersistence] Storage quota exceeded, skipping activity timestamp');
+      } else {
+        console.warn('[useSessionPersistence] Failed to update activity timestamp:', error);
+      }
     }
   }, []);
   

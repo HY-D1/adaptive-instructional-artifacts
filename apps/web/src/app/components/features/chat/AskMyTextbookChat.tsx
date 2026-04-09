@@ -401,7 +401,17 @@ export function AskMyTextbookChat({
       // Filter out restoration messages before saving
       const messagesToSave = messages.filter(m => !m.id.includes('chat-restore'));
       if (messagesToSave.length > 0) {
-        localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messagesToSave));
+        try {
+          localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messagesToSave));
+        } catch (error) {
+          // UX: Chat continues working even if persistence fails
+          // This is best-effort caching, not critical data
+          if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+            console.warn('[AskMyTextbookChat] Storage quota exceeded, chat history not persisted');
+          } else {
+            console.warn('[AskMyTextbookChat] Failed to persist chat history:', error);
+          }
+        }
       }
     }
   }, [messages, CHAT_HISTORY_KEY]);

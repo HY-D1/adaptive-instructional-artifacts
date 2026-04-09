@@ -430,8 +430,18 @@ export class SQLExecutor {
         const actualRow = actualRows[aIdx];
         const actualKeys = Object.keys(actualRow).sort();
 
-        // Check column structure matches
-        if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+        // Check column structure matches (exact column name comparison)
+        if (actualKeys.length !== expectedKeys.length) {
+          continue;
+        }
+        let columnsMatch = true;
+        for (let k = 0; k < actualKeys.length; k++) {
+          if (actualKeys[k] !== expectedKeys[k]) {
+            columnsMatch = false;
+            break;
+          }
+        }
+        if (!columnsMatch) {
           continue;
         }
 
@@ -460,11 +470,53 @@ export class SQLExecutor {
       return { match: true, differences: [] };
     }
 
-    // Generate detailed diffs for unmatched rows
+    // Generate detailed diffs for unmatched rows with cell-level detail
     // Find unmatched expected rows (missing from actual)
     for (let eIdx = 0; eIdx < expectedRows.length; eIdx++) {
       if (!matchedExpected.has(eIdx)) {
-        differences.push(`Missing row: ${JSON.stringify(expectedRows[eIdx])}`);
+        const row = expectedRows[eIdx];
+        const rowDiffs: string[] = [];
+        
+        // Find the best matching actual row to show cell-level diffs
+        let bestMatch: Record<string, unknown> | null = null;
+        let bestMatchScore = -1;
+        
+        for (let aIdx = 0; aIdx < actualRows.length; aIdx++) {
+          if (matchedActual.has(aIdx)) continue;
+          
+          const actualRow = actualRows[aIdx];
+          const actualKeys = Object.keys(actualRow).sort();
+          const expectedKeys = Object.keys(row).sort();
+          
+          if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) continue;
+          
+          let matchScore = 0;
+          for (const key of actualKeys) {
+            if (valuesEqual(actualRow[key], row[key])) {
+              matchScore++;
+            }
+          }
+          
+          if (matchScore > bestMatchScore) {
+            bestMatchScore = matchScore;
+            bestMatch = actualRow;
+          }
+        }
+        
+        // Show cell-level differences
+        if (bestMatch) {
+          for (const key of Object.keys(row).sort()) {
+            if (!valuesEqual(bestMatch[key], row[key])) {
+              rowDiffs.push(`${key}: got ${JSON.stringify(bestMatch[key])}, expected ${JSON.stringify(row[key])}`);
+            }
+          }
+        }
+        
+        if (rowDiffs.length > 0) {
+          differences.push(`Row mismatch: ${rowDiffs.join('; ')}`);
+        } else {
+          differences.push(`Missing row: ${JSON.stringify(row)}`);
+        }
       }
     }
 

@@ -200,20 +200,29 @@ export function InstructorDashboard() {
   }, [isStudent, isRoleLoading, navigate]);
 
   // Load data from backend or fallback to local storage
+  // PERFORMANCE: Uses lazy hydration - backend call is async, local data shown immediately
   useEffect(() => {
     const loadData = async () => {
       setIsDataLoading(true);
 
-      if (isBackendAvailable) {
-        await storage.hydrateInstructorDashboard();
-      }
-
+      // Load local data immediately for fast initial render
       const allProfiles = storage.getAllProfiles().map(p => storage.getProfile(p.id)).filter(Boolean) as LearnerProfile[];
       const allInteractions = storage.getAllInteractions();
-      setProfiles(backendProfiles.length > 0 ? backendProfiles : allProfiles);
+      
+      // Use backend profiles if already available, otherwise use local
+      const effectiveProfiles = backendProfiles.length > 0 ? backendProfiles : allProfiles;
+      setProfiles(effectiveProfiles);
       setInteractions(allInteractions);
-
+      
+      // Mark loading complete - backend hydration happens in background
       setIsDataLoading(false);
+
+      // Lazy backend hydration - non-blocking for UI
+      if (isBackendAvailable) {
+        storage.hydrateInstructorDashboard().catch((error) => {
+          console.warn('[InstructorDashboard] Background hydration failed:', error);
+        });
+      }
     };
     
     void loadData();
