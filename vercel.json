@@ -1,6 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "node": "20.x",
   "framework": "vite",
   "relatedProjects": ["prj_vR3HTHqulLCVqv5EnSMfnStWP4cZ"],
   "buildCommand": "npm run build",

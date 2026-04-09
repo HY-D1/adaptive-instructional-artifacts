@@ -153,3 +153,4 @@ apps/server/dist/
 .env*.local
 .local/
 .env.pdf-local
+.neon
