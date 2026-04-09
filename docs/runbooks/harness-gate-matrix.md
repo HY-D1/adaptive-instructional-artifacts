@@ -112,17 +112,19 @@ The Harness Gate Matrix tracks the acceptance status of all critical system dime
 | Research exports | ✅ | Memory-safe implementation |
 | Rate limiting | ✅ | Classroom-safe keys |
 | Authz boundaries | ✅ | `api-authz.spec.ts` |
-| Error state visibility | ✅ **FIXED** | `instructor-dashboard-fix.md` |
-| Silent failure fix | ✅ **FIXED** | `hydrateInstructorDashboard()` now returns structured errors |
-| Empty scope handling | ✅ **FIXED** | "No Learners Yet" state added |
+| Error state visibility | ✅ **SOURCE-FIXED** | `instructor-dashboard-verification.md` |
+| Silent failure fix | ✅ **SOURCE-FIXED** | `hydrateInstructorDashboard()` returns structured errors |
+| Empty scope handling | ✅ **SOURCE-FIXED** | "No Learners Yet" state added |
+| Playwright auth project | ✅ **ADDED** | `chromium:instructor` project in config |
 
 **Issue Discovered & Fixed**:
 - **Problem**: `hydrateInstructorDashboard()` caught all errors and returned `false`, causing silent failures
 - **Impact**: Instructors saw empty charts instead of error states
 - **Fix**: Enhanced return type with structured error info + explicit error UI states
 - **Files**: `dual-storage.ts`, `ResearchDashboard.tsx`
+- **Verification**: Source-verified ✅ | Live-verification pending ⏳
 
-**Gate**: ⚠️ **SOURCE-FIXED** - Code fix complete, live Playwright verification pending
+**Gate**: ⚠️ **SOURCE-FIXED** - Code verified, live Playwright blocked by auth credentials
 
 ---
 

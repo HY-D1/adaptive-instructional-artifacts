@@ -29,8 +29,9 @@ const VERCEL_BYPASS_SECRET =
 
 // ─── Auth state file paths ────────────────────────────────────────────────────
 // Created by the 'setup:auth' project via tests/e2e/setup/auth.setup.ts.
-// Consumed by the 'chromium:auth' project.
+// Consumed by the 'chromium:auth' and 'chromium:instructor' projects.
 export const STUDENT_AUTH_FILE = 'playwright/.auth/student.json';
+export const INSTRUCTOR_AUTH_FILE = 'playwright/.auth/instructor.json';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -122,7 +123,7 @@ export default defineConfig({
       ],
     },
 
-    // ── Auth-backed deployed smoke ─────────────────────────────────────────────
+    // ── Auth-backed deployed smoke (student) ───────────────────────────────────
     // Runs AFTER setup:auth. Each test context starts with the student JWT
     // cookie + localStorage profile pre-loaded — no UI login needed per test.
     // Tests self-skip when the auth file contains no cookies (backend absent).
@@ -140,6 +141,21 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         storageState: STUDENT_AUTH_FILE,
+      },
+    },
+
+    // ── Auth-backed instructor tests ────────────────────────────────────────────
+    // Runs AFTER setup:auth. Uses instructor JWT for instructor-only routes.
+    {
+      name: 'chromium:instructor',
+      testMatch: [
+        '**/instructor-dashboard-error-states.spec.ts',
+        '**/2026-03-24-instructor.spec.ts',
+      ],
+      dependencies: ['setup:auth'],
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: INSTRUCTOR_AUTH_FILE,
       },
     },
   ]
