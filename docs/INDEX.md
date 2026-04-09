@@ -28,7 +28,7 @@
 | Document | Purpose | Last Updated |
 |----------|---------|--------------|
 | [`AGENTS.md`](./AGENTS.md) | AI agent working rules and guidelines | 2026-03-24 |
-| [`README.md`](./README.md) | Project overview and quick start | 2026-03-31 |
+| [`README.md`](../README.md) | Project overview and quick start | 2026-04-08 |
 | [`CHANGELOG.md`](./CHANGELOG.md) | Progress tracker and decision log | 2026-04-08 |
 | [`INDEX.md`](./INDEX.md) | This file - documentation navigation | 2026-04-08 |
 
@@ -40,17 +40,38 @@
 | [`ENVIRONMENT.md`](./ENVIRONMENT.md) | Environment variables reference | Active |
 | [`runbooks/status.md`](./runbooks/status.md) | Current project status | Check frequently |
 
-### Recent Audit Reports (Active Work)
+### Audit & Hardening Reports
 | Document | Purpose | Date | Status |
 |----------|---------|------|--------|
-| [`PERSISTENCE_HARDENING_REPORT.md`](./PERSISTENCE_HARDENING_REPORT.md) | Master agent synthesis for persistence fix | 2026-04-08 | ✅ Complete |
-| [`PERSISTENCE_MAP.md`](./PERSISTENCE_MAP.md) | Data authority map (what's source of truth) | 2026-04-08 | ✅ Complete |
-| [`GRADING_HARDENING_FINAL_REPORT.md`](./GRADING_HARDENING_FINAL_REPORT.md) | Query 13 grading fix | 2026-04-08 | ✅ Complete |
-| [`QA_VERIFICATION_REPORT.md`](./QA_VERIFICATION_REPORT.md) | QA testing results | 2026-04-08 | ✅ Complete |
+| [`PERSISTENCE_HARDENING_REPORT.md`](./PERSISTENCE_HARDENING_REPORT.md) | Persistence fix implementation details | 2026-04-08 | ✅ Complete |
+| [`PERSISTENCE_MAP.md`](./PERSISTENCE_MAP.md) | Data authority map (source of truth) | 2026-04-08 | ✅ Complete |
 | [`PROGRESS_AUDIT_REPORT.md`](./PROGRESS_AUDIT_REPORT.md) | Progress system audit | 2026-04-08 | ✅ Complete |
+| [`PROGRESS_MODEL.md`](./PROGRESS_MODEL.md) | Progress tracking data model | 2026-04-08 | ✅ Complete |
+| [`audit/P1_FIXES_SUMMARY.md`](./audit/P1_FIXES_SUMMARY.md) | Priority 1 fixes completed | 2026-04-03 | ✅ Complete |
+| [`audit/P2_P3_FIXES_SUMMARY.md`](./audit/P2_P3_FIXES_SUMMARY.md) | Priority 2/3 fixes completed | 2026-04-03 | ✅ Complete |
+| [`audit/PRACTICE_HINTS_LOGGING_AUDIT.md`](./audit/PRACTICE_HINTS_LOGGING_AUDIT.md) | Full practice/hints audit | 2026-04-03 | ✅ Complete |
 
-### Archive
-Old documents are in [`archive/`](./archive/) - check dates before using.
+### Research Documentation
+See [`research/`](./research/) for 27 research architecture documents including:
+- [`PROJECT_OVERVIEW.md`](./research/PROJECT_OVERVIEW.md)
+- [`RESEARCH_ARCHITECTURE.md`](./research/RESEARCH_ARCHITECTURE.md)
+- [`LOGGING_SPECIFICATION.md`](./research/LOGGING_SPECIFICATION.md)
+- [`MULTI_ARMED_BANDIT.md`](./research/MULTI_ARMED_BANDIT.md)
+- [`ESCALATION_POLICIES.md`](./research/ESCALATION_POLICIES.md)
+
+### Test Reports
+| Document | Purpose |
+|----------|---------|
+| [`reports/BANDIT_TEST_REPORT.md`](./reports/BANDIT_TEST_REPORT.md) | Bandit algorithm test results |
+| [`reports/BUG_HUNTING_REPORT.md`](./reports/BUG_HUNTING_REPORT.md) | Bug hunting findings |
+| [`reports/PERFORMANCE_BENCHMARK_REPORT.md`](./reports/PERFORMANCE_BENCHMARK_REPORT.md) | Performance benchmarks |
+
+### Operational Runbooks
+See [`runbooks/`](./runbooks/) for 17 operational guides including:
+- [`runbooks/status.md`](./runbooks/status.md) - Current project status
+- [`runbooks/beta-50-student-operations.md`](./runbooks/beta-50-student-operations.md) - Beta operations
+- [`runbooks/storage-quota-incident.md`](./runbooks/storage-quota-incident.md) - Storage incident response
+- [`runbooks/beta-supervised-launch-packet.md`](./runbooks/beta-supervised-launch-packet.md) - Launch procedures
 
 ---
 
@@ -68,17 +89,7 @@ Old documents are in [`archive/`](./archive/) - check dates before using.
 - Tests: All 1781 tests passing
 - Build: ✅ Passing
 
-### Workstream 2: Grading Hardening ✅ COMPLETE
-**Status**: Query 13 fix verified and deployed
 
-**Key Documents**:
-- [`GRADING_HARDENING_FINAL_REPORT.md`](./GRADING_HARDENING_FINAL_REPORT.md)
-
-### Workstream 3: QA Verification ✅ COMPLETE
-**Status**: All scenarios tested and passing
-
-**Key Documents**:
-- [`QA_VERIFICATION_REPORT.md`](./QA_VERIFICATION_REPORT.md)
 
 ---
 
@@ -120,8 +131,8 @@ Old documents are in [`archive/`](./archive/) - check dates before using.
 
 ### Audit Reports (Snapshot in time)
 - `PERSISTENCE_HARDENING_REPORT.md` - 2026-04-08
-- `GRADING_HARDENING_FINAL_REPORT.md` - 2026-04-08
-- `QA_VERIFICATION_REPORT.md` - 2026-04-08
+- `PERSISTENCE_MAP.md` - 2026-04-08
+- `audit/PRACTICE_HINTS_LOGGING_AUDIT.md` - 2026-04-03
 
 ### Reference (Stable)
 - `DEPLOYMENT.md`
@@ -153,7 +164,8 @@ Old documents are in [`archive/`](./archive/) - check dates before using.
 |------|--------|--------|
 | 2026-04-08 | Created INDEX.md and CHANGELOG.md | Master Agent |
 | 2026-04-08 | Persistence hardening complete | Master Agent |
-| 2026-04-08 | Grading hardening complete | Master Agent |
+| 2026-04-08 | Documentation cleanup complete | Master Agent |
+| 2026-04-08 | Deleted obsolete folders and agent artifacts | Master Agent |
 
 ---
 

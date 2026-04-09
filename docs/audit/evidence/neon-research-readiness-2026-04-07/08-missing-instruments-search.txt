@@ -1,5 +1,0 @@
-# Missing external assessment instrumentation search - 2026-04-07
-Command: rg -n "pretest|pre-test|posttest|post-test|survey|questionnaire|demographic|IRB|consent|session_start|dropout" apps docs tests
-tests/fixtures/replay/real-trace-input.json:9:      "eventType": "session_started"
-apps/web/src/app/lib/replay/replay-normalize.test.ts:52:  'session_started',
-apps/web/src/app/lib/replay/replay-normalize.test.ts:110:    expect(ALLOWED_EVENT_TYPES.has('session_started')).toBe(true);
