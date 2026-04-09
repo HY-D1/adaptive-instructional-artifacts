@@ -68,13 +68,13 @@ router.get('/aggregates', async (req, res) => {
       data: {
         totalLearners: learners.length,
         totalInteractions: aggregates.totalCount,
-        interactionsByType: aggregates.interactionsByType as ClassStats['interactionsByType'],
+        interactionsByType: (aggregates.interactionsByType as ClassStats['interactionsByType']) ?? {},
         totalTextbookUnits,
         averageUnitsPerLearner: learners.length > 0 ? totalTextbookUnits / learners.length : 0,
         recentActivity: {
-          last24Hours: aggregates.last24Hours,
-          last7Days: aggregates.last7Days,
-          last30Days: aggregates.last30Days,
+          last24Hours: aggregates.last24Hours ?? 0,
+          last7Days: aggregates.last7Days ?? 0,
+          last30Days: aggregates.last30Days ?? 0,
         },
       },
     };
@@ -140,7 +140,7 @@ router.get('/learner/:id/trajectory', async (req, res) => {
       : undefined;
 
     const trajectory: LearnerTrajectory & { 
-      hdiStats?: { average: number; readings: number; lastLevel?: string };
+      hdiStats?: { average: number | null; readings: number; lastLevel?: string | null };
       escalationCount?: number;
     } = {
       learner,
@@ -158,14 +158,12 @@ router.get('/learner/:id/trajectory', async (req, res) => {
     };
     
     // Add HDI stats if available
-    if (averageHdi !== undefined) {
-      const lastHdi = interactions.find(i => i.hdiLevel !== undefined);
-      trajectory.hdiStats = {
-        average: Math.round(averageHdi * 100) / 100,
-        readings: hdiReadings.length,
-        lastLevel: lastHdi?.hdiLevel,
-      };
-    }
+    const lastHdi = interactions.find(i => i.hdiLevel !== undefined);
+    trajectory.hdiStats = {
+      average: averageHdi !== undefined ? Math.round(averageHdi * 100) / 100 : null,
+      readings: hdiReadings.length,
+      lastLevel: lastHdi?.hdiLevel ?? null,
+    };
 
     const response: ApiResponse<typeof trajectory> = {
       success: true,

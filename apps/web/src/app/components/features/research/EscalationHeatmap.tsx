@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { InteractionEvent } from '../../../types';
 
 interface Props {
-  interactions: InteractionEvent[];
+  interactions?: InteractionEvent[];
   maxLearners?: number;
   maxProblems?: number;
 }
@@ -28,10 +28,13 @@ const RUNG_LABELS = {
 };
 
 export function EscalationHeatmap({ 
-  interactions, 
+  interactions: interactionsProp, 
   maxLearners = 20, 
   maxProblems = 15 
 }: Props) {
+  // Defensive: ensure interactions is always an array
+  const interactions = interactionsProp ?? [];
+  
   const heatmapData = useMemo<HeatmapData>(() => {
     const learners = [...new Set(interactions.map(i => i.learnerId))];
     const problems = [...new Set(interactions.map(i => i.problemId).filter((p): p is string => !!p))];

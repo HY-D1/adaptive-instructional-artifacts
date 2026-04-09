@@ -8,109 +8,20 @@ import {
   getSectionForLearnerInInstructorScope,
   getSectionForStudent,
 } from '../db/sections.js';
+import {
+  validateResearchEvent,
+  validateResearchBatchForWrite,
+  type BatchValidationError,
+  type BatchValidationResult,
+} from '../db/index.js';
 
 const router = Router();
 
 type NeonInteractionEventInput = Record<string, any>;
 
-// ============================================================================
-// Research Event Validation (RESEARCH-4)
-// ============================================================================
-
-interface ValidationResult {
-  valid: boolean;
-  missing: string[];
-}
-
-function hasText(value: unknown): boolean {
-  return typeof value === 'string' && value.trim() !== '';
-}
-
-function hasItems(value: unknown): boolean {
-  return Array.isArray(value) && value.length > 0;
-}
-
-export interface BatchValidationError {
-  eventId: string;
-  eventType: string;
-  missingFields: string[];
-}
-
-export interface BatchValidationResult {
-  valid: boolean;
-  failedIds: string[];
-  errors: BatchValidationError[];
-}
-
-export function validateResearchEvent(event: NeonInteractionEventInput): ValidationResult {
-  const missing: string[] = [];
-  
-  switch (event.eventType) {
-    case 'hint_view':
-      if (!event.hintId?.trim()) missing.push('hintId');
-      if (!event.hintText?.trim()) missing.push('hintText');
-      if (![1, 2, 3].includes(event.hintLevel)) missing.push('hintLevel');
-      if (!event.templateId?.trim()) missing.push('templateId');
-      if (!event.sqlEngageSubtype?.trim()) missing.push('sqlEngageSubtype');
-      if (!event.sqlEngageRowId?.trim()) missing.push('sqlEngageRowId');
-      if (!event.policyVersion?.trim()) missing.push('policyVersion');
-      if (typeof event.helpRequestIndex !== 'number' || event.helpRequestIndex < 1) {
-        missing.push('helpRequestIndex');
-      }
-      break;
-      
-    case 'concept_view':
-      if (!event.conceptId?.trim()) missing.push('conceptId');
-      if (!event.source?.trim()) missing.push('source');
-      break;
-      
-    case 'session_end':
-      if (!hasText(event.sessionId)) missing.push('sessionId');
-      if (typeof event.totalTime !== 'number') missing.push('totalTime');
-      if (typeof event.problemsAttempted !== 'number') missing.push('problemsAttempted');
-      if (typeof event.problemsSolved !== 'number') missing.push('problemsSolved');
-      break;
-
-    case 'textbook_add':
-    case 'textbook_update':
-      if (!hasText(event.noteId)) missing.push('noteId');
-      if (!hasText(event.noteContent)) missing.push('noteContent');
-      if (!hasText(event.templateId)) missing.push('templateId');
-      if (!hasText(event.policyVersion)) missing.push('policyVersion');
-      break;
-
-    case 'chat_interaction':
-      if (!hasText(event.chatMessage)) missing.push('chatMessage');
-      if (!hasText(event.chatResponse)) missing.push('chatResponse');
-      if (hasItems(event.textbookUnitsRetrieved) && !hasItems(event.retrievedSourceIds)) {
-        missing.push('retrievedSourceIds');
-      }
-      break;
-  }
-  
-  return { valid: missing.length === 0, missing };
-}
-
-export function validateResearchBatchForWrite(events: NeonInteractionEventInput[]): BatchValidationResult {
-  const errors: BatchValidationError[] = [];
-
-  for (const event of events) {
-    const validation = validateResearchEvent(event);
-    if (!validation.valid) {
-      errors.push({
-        eventId: typeof event.id === 'string' ? event.id : '',
-        eventType: typeof event.eventType === 'string' ? event.eventType : 'unknown',
-        missingFields: validation.missing,
-      });
-    }
-  }
-
-  return {
-    valid: errors.length === 0,
-    failedIds: errors.map((error) => error.eventId).filter(Boolean),
-    errors,
-  };
-}
+// Re-export for backward compatibility
+export { validateResearchEvent, validateResearchBatchForWrite };
+export type { BatchValidationError, BatchValidationResult };
 
 // ============================================================================
 // Auth helpers

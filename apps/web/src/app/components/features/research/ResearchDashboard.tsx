@@ -361,18 +361,22 @@ export function ResearchDashboard() {
   };
 
   useEffect(() => {
-    if (selectedLearner !== 'all' && !profiles.some((profile) => profile.id === selectedLearner)) {
+    // Defensive: ensure profiles is always treated as array
+    const safeProfiles = profiles ?? [];
+    if (selectedLearner !== 'all' && !safeProfiles.some((profile) => profile.id === selectedLearner)) {
       setSelectedLearner('all');
     }
   }, [profiles, selectedLearner]);
 
   useEffect(() => {
-    if (!selectedTraceLearner && profiles[0]) {
-      setSelectedTraceLearner(profiles[0].id);
+    // Defensive: ensure profiles is always treated as array
+    const safeProfiles = profiles ?? [];
+    if (!selectedTraceLearner && safeProfiles[0]) {
+      setSelectedTraceLearner(safeProfiles[0].id);
       return;
     }
-    if (selectedTraceLearner && !profiles.some((profile) => profile.id === selectedTraceLearner)) {
-      setSelectedTraceLearner(profiles[0]?.id || '');
+    if (selectedTraceLearner && !safeProfiles.some((profile) => profile.id === selectedTraceLearner)) {
+      setSelectedTraceLearner(safeProfiles[0]?.id || '');
     }
   }, [profiles, selectedTraceLearner]);
 
@@ -737,8 +741,10 @@ export function ResearchDashboard() {
 
   // Analytics
   const scopedInteractions = useMemo(() => {
-    const learnerIds = new Set(profiles.map((profile) => profile.id));
-    return filterInteractionsByLearners(interactions, learnerIds);
+    // Defensive: ensure profiles is always treated as array
+    const safeProfiles = profiles ?? [];
+    const learnerIds = new Set(safeProfiles.map((profile) => profile.id));
+    return filterInteractionsByLearners(interactions ?? [], learnerIds);
   }, [interactions, profiles]);
 
   const filteredInteractions = useMemo(() => {
@@ -756,7 +762,7 @@ export function ResearchDashboard() {
 
   // Memoized error analysis calculations
   const errorsByType = useMemo(() => 
-    filteredInteractions
+    (filteredInteractions ?? [])
       .filter(i => i.eventType === 'error' && i.errorSubtypeId)
       .reduce((acc, i) => {
         const type = i.errorSubtypeId!;
@@ -776,7 +782,7 @@ export function ResearchDashboard() {
   );
 
   const interactionsByType = useMemo(() => 
-    filteredInteractions.reduce((acc, i) => {
+    (filteredInteractions ?? []).reduce((acc, i) => {
       acc[i.eventType] = (acc[i.eventType] || 0) + 1;
       return acc;
     }, {} as Record<string, number>),
@@ -784,11 +790,11 @@ export function ResearchDashboard() {
   );
 
   const errorCount = useMemo(
-    () => countInteractionsByType(filteredInteractions, 'error'),
+    () => countInteractionsByType(filteredInteractions ?? [], 'error'),
     [filteredInteractions]
   );
   const hintCount = useMemo(
-    () => countInteractionsByType(filteredInteractions, 'hint_view'),
+    () => countInteractionsByType(filteredInteractions ?? [], 'hint_view'),
     [filteredInteractions]
   );
 
@@ -826,8 +832,12 @@ export function ResearchDashboard() {
 
   // Strategy comparison
   const comparisonData = useMemo(() => {
-    const strategyComparison = selectedProfiles.reduce((acc, profile) => {
-      const learnerInteractions = filteredInteractions.filter(i => i.learnerId === profile.id);
+    // Defensive: ensure arrays are always defined
+    const safeProfiles = selectedProfiles ?? [];
+    const safeInteractions = filteredInteractions ?? [];
+    
+    const strategyComparison = safeProfiles.reduce((acc, profile) => {
+      const learnerInteractions = safeInteractions.filter(i => i.learnerId === profile.id);
       const errorCount = learnerInteractions.filter(i => i.eventType === 'error').length;
       const hintCount = learnerInteractions.filter(i => i.eventType === 'hint_view').length;
       const successCount = learnerInteractions.filter(i => i.eventType === 'execution' && i.successful).length;
@@ -877,7 +887,7 @@ export function ResearchDashboard() {
 
   // Memoized timeline data calculation
   const timelineChartData = useMemo(() => {
-    const sortedTimelineInteractions = filteredInteractions
+    const sortedTimelineInteractions = (filteredInteractions ?? [])
       .slice()
       .sort((a, b) => a.timestamp - b.timestamp);
     const timelineStartTimestamp = sortedTimelineInteractions[0]?.timestamp ?? 0;
@@ -897,7 +907,7 @@ export function ResearchDashboard() {
   const traceProblemOptions = useMemo(() => {
     if (!selectedTraceLearner) return [];
     return Array.from(new Set(
-      scopedInteractions
+      (scopedInteractions ?? [])
         .filter((interaction) => interaction.learnerId === selectedTraceLearner)
         .map((interaction) => interaction.problemId)
         .filter(Boolean)
@@ -977,16 +987,20 @@ export function ResearchDashboard() {
   // Week 5: Adaptive Personalization Analytics
   // Week 6: Rich Research Dashboard Metrics
   const researchMetrics = useMemo<ResearchMetrics>(() => {
-    const clusters = profiles.length > 0 
-      ? clusterLearners(profiles, filteredInteractions, 3)
+    // Defensive: ensure arrays are always defined
+    const safeProfiles = profiles ?? [];
+    const safeInteractions = filteredInteractions ?? [];
+    
+    const clusters = safeProfiles.length > 0 
+      ? clusterLearners(safeProfiles, safeInteractions, 3)
       : [];
     
-    const errorTransitions = buildErrorTransitionStats(filteredInteractions);
+    const errorTransitions = buildErrorTransitionStats(safeInteractions);
     
     return {
       clusters,
       errorTransitions,
-      selectedMasteryLearner: selectedMasteryLearner || (profiles[0]?.id ?? '')
+      selectedMasteryLearner: selectedMasteryLearner || (safeProfiles[0]?.id ?? '')
     };
   }, [profiles, filteredInteractions, selectedMasteryLearner]);
 
@@ -997,8 +1011,11 @@ export function ResearchDashboard() {
   }, [profiles, selectedMasteryLearner]);
 
   const week5Analytics = useMemo(() => {
+    // Defensive: ensure filteredInteractions is always an array
+    const safeInteractions = filteredInteractions ?? [];
+    
     // Filter Week 5 event types (including Component 10: Reinforcement)
-    const week5Events = filteredInteractions.filter(i =>
+    const week5Events = safeInteractions.filter(i =>
       ['condition_assigned', 'profile_assigned', 'escalation_triggered', 'profile_adjusted',
        'bandit_arm_selected', 'bandit_reward_observed', 'bandit_updated',
        'hdi_calculated', 'hdi_trajectory_updated', 'dependency_intervention_triggered',
@@ -1011,7 +1028,7 @@ export function ResearchDashboard() {
     );
     
     // Knowledge-Structure Layer: Prerequisite Violation Analytics
-    const violationEvents = filteredInteractions.filter(
+    const violationEvents = safeInteractions.filter(
       i => i.eventType === 'prerequisite_violation_detected'
     );
     
@@ -1079,6 +1096,7 @@ export function ResearchDashboard() {
       const hdiValues = conditionHdiEvents.map(e => e.hdi || (e.payload as { hdi?: number })?.hdi || 0).filter(h => h > 0);
       
       conditionStats[condition].hdiValues = hdiValues;
+      // Defensive: avoid division by zero
       conditionStats[condition].avgHDI = hdiValues.length > 0 
         ? hdiValues.reduce((a, b) => a + b, 0) / hdiValues.length 
         : 0;
@@ -1232,7 +1250,7 @@ export function ResearchDashboard() {
       let totalInteractions = 0;
       
       learnerIds.forEach(learnerId => {
-        const learnerEvents = filteredInteractions.filter(i => i.learnerId === learnerId);
+        const learnerEvents = safeInteractions.filter(i => i.learnerId === learnerId);
         const successes = learnerEvents.filter(i => i.eventType === 'execution' && i.successful).length;
         const executions = learnerEvents.filter(i => i.eventType === 'execution').length;
         const escalations = learnerEvents.filter(i => i.eventType === 'explanation_view').length;
@@ -2058,7 +2076,7 @@ export function ResearchDashboard() {
                       <SelectValue placeholder="Select learner" />
                     </SelectTrigger>
                     <SelectContent>
-                      {profiles.map((profile) => (
+                      {(profiles ?? []).map((profile) => (
                         <SelectItem key={profile.id} value={profile.id}>
                           {profile.name} ({profile.currentStrategy})
                         </SelectItem>
@@ -2074,7 +2092,7 @@ export function ResearchDashboard() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All problems</SelectItem>
-                      {traceProblemOptions.map((problemId) => (
+                      {(traceProblemOptions ?? []).map((problemId) => (
                         <SelectItem key={problemId} value={problemId}>
                           {problemId}
                         </SelectItem>
@@ -3031,7 +3049,7 @@ export function ResearchDashboard() {
                     <SelectValue placeholder="Select learner" />
                   </SelectTrigger>
                   <SelectContent>
-                    {profiles.map((p) => (
+                    {(profiles ?? []).map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.name}
                       </SelectItem>
@@ -3042,7 +3060,7 @@ export function ResearchDashboard() {
               
               {selectedMasteryLearner ? (
                 <MasteryTimeline 
-                  interactions={filteredInteractions} 
+                  interactions={filteredInteractions ?? []} 
                   learnerId={selectedMasteryLearner}
                   maxEvents={25}
                 />

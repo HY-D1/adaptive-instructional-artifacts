@@ -3,7 +3,7 @@ import { Badge } from '../../ui/badge';
 import type { InteractionEvent } from '../../../types';
 
 interface Props {
-  interactions: InteractionEvent[];
+  interactions?: InteractionEvent[];
   learnerId: string;
   maxEvents?: number;
 }
@@ -60,7 +60,10 @@ function classifyEventType(eventType: string, successful?: boolean): TimelineEve
   return 'other';
 }
 
-export function MasteryTimeline({ interactions, learnerId, maxEvents = 20 }: Props) {
+export function MasteryTimeline({ interactions: interactionsProp, learnerId, maxEvents = 20 }: Props) {
+  // Defensive: ensure interactions is always an array
+  const interactions = interactionsProp ?? [];
+  
   const timeline = useMemo<TimelineEvent[]>(() => {
     // Get concept-related events for this learner
     const learnerEvents = interactions
@@ -274,8 +277,8 @@ export function MasteryTimeline({ interactions, learnerId, maxEvents = 20 }: Pro
 }
 
 interface MultiLearnerTimelineProps {
-  interactions: InteractionEvent[];
-  learnerIds: string[];
+  interactions?: InteractionEvent[];
+  learnerIds?: string[];
   maxEventsPerLearner?: number;
 }
 
@@ -284,9 +287,20 @@ export function MultiLearnerMasteryTimeline({
   learnerIds, 
   maxEventsPerLearner = 10 
 }: MultiLearnerTimelineProps) {
+  // Defensive: ensure arrays are always defined
+  const safeLearnerIds = learnerIds ?? [];
+  
+  if (safeLearnerIds.length === 0) {
+    return (
+      <div className="p-8 text-center text-gray-500">
+        No learners selected for timeline view
+      </div>
+    );
+  }
+  
   return (
     <div className="space-y-6">
-      {learnerIds.map(learnerId => (
+      {safeLearnerIds.map(learnerId => (
         <div key={learnerId} className="border rounded-lg p-4">
           <h4 className="font-semibold text-gray-700 mb-3">{learnerId}</h4>
           <MasteryTimeline 

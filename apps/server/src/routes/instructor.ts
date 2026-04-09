@@ -15,6 +15,15 @@ import { requireInstructor } from '../middleware/auth.js';
 
 const router = Router();
 
+// Export limits and defaults
+const EXPORT_CONFIG = {
+  MAX_LEARNER_IDS: 50,
+  MAX_INTERACTIONS_PER_LEARNER: 10000,
+  DEFAULT_PER_PAGE: 1000,
+  MAX_PER_PAGE: 5000,
+  ESTIMATED_BYTES_PER_INTERACTION: 500, // Approximate memory per interaction
+};
+
 router.use(requireInstructor);
 
 router.get('/overview', async (req: Request, res: Response) => {
@@ -49,11 +58,11 @@ router.get('/overview', async (req: Request, res: Response) => {
         totalInteractions: interactionAggregates.totalCount,
         totalTextbookUnits,
         // Additional aggregate data for richer UI
-        interactionsByType: interactionAggregates.interactionsByType,
+        interactionsByType: interactionAggregates.interactionsByType ?? {},
         recentActivity: {
-          last24Hours: interactionAggregates.last24Hours,
-          last7Days: interactionAggregates.last7Days,
-          last30Days: interactionAggregates.last30Days,
+          last24Hours: interactionAggregates.last24Hours ?? 0,
+          last7Days: interactionAggregates.last7Days ?? 0,
+          last30Days: interactionAggregates.last30Days ?? 0,
         },
       },
     });
@@ -90,7 +99,7 @@ router.get('/learners', async (req: Request, res: Response) => {
             ? { id: section.id, name: section.name, studentSignupCode: section.studentSignupCode }
             : null,
           // Note: interaction counts omitted for performance - use /overview for aggregates
-          interactionCount: null,
+          interactionCount: 0,
           lastInteractionAt: null,
         };
       })
@@ -151,15 +160,82 @@ router.get('/export', async (req: Request, res: Response) => {
     const learnerIds = await getInstructorScopedLearnerIds(instructorId);
     const sections = await getOwnedSectionsByInstructor(instructorId);
 
-    const learners = await Promise.all(learnerIds.map((id) => getUserById(id)));
-    const interactionsByLearner = await Promise.all(
-      learnerIds.map(async (learnerId) => ({
-        learnerId,
-        interactions: (await getInteractionsByUser(learnerId, { limit: 100000 })).interactions,
-      }))
+    // 1. Check learner ID limit
+    if (learnerIds.length > EXPORT_CONFIG.MAX_LEARNER_IDS) {
+      res.status(400).json({
+        success: false,
+        error: `Too many learners to export. Maximum allowed: ${EXPORT_CONFIG.MAX_LEARNER_IDS}. Please use pagination or filter learners.`,
+        code: 'LEARNER_LIMIT_EXCEEDED',
+        details: {
+          requested: learnerIds.length,
+          maximum: EXPORT_CONFIG.MAX_LEARNER_IDS,
+        },
+      });
+      return;
+    }
+
+    // Parse pagination parameters
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const perPage = Math.min(
+      EXPORT_CONFIG.MAX_PER_PAGE,
+      Math.max(1, parseInt(req.query.perPage as string) || EXPORT_CONFIG.DEFAULT_PER_PAGE)
     );
+    const useStreaming = req.query.stream === 'true';
+
+    // Calculate pagination for learners
+    const startLearnerIndex = (page - 1) * perPage;
+    const endLearnerIndex = startLearnerIndex + perPage;
+    const paginatedLearnerIds = learnerIds.slice(startLearnerIndex, endLearnerIndex);
+    const hasMoreLearners = endLearnerIndex < learnerIds.length;
+
+    // 2. Memory safeguard - estimate payload size before querying
+    const estimatedTotalInteractions = paginatedLearnerIds.length * EXPORT_CONFIG.MAX_INTERACTIONS_PER_LEARNER;
+    const estimatedBytes = estimatedTotalInteractions * EXPORT_CONFIG.ESTIMATED_BYTES_PER_INTERACTION;
+    const MAX_ESTIMATED_BYTES = 100 * 1024 * 1024; // 100MB threshold
+
+    if (estimatedBytes > MAX_ESTIMATED_BYTES && !useStreaming) {
+      res.status(413).json({
+        success: false,
+        error: 'Export request too large. Use streaming mode or reduce pagination size.',
+        code: 'PAYLOAD_TOO_LARGE',
+        details: {
+          estimatedSizeMB: Math.round(estimatedBytes / (1024 * 1024)),
+          suggestion: 'Add ?stream=true for large exports',
+        },
+      });
+      return;
+    }
+
+    // Fetch learners with pagination
+    const learners = (await Promise.all(paginatedLearnerIds.map((id) => getUserById(id)))).filter(
+      Boolean
+    );
+
+    // 3. Fetch interactions with reduced limit (10000 instead of 100000)
+    const interactionsByLearner = await Promise.all(
+      paginatedLearnerIds.map(async (learnerId) => {
+        const result = await getInteractionsByUser(learnerId, {
+          limit: EXPORT_CONFIG.MAX_INTERACTIONS_PER_LEARNER,
+        });
+        // hasMore is true if we got exactly the limit but total says there's more
+        const hasMore = result.interactions.length >= EXPORT_CONFIG.MAX_INTERACTIONS_PER_LEARNER &&
+                        result.total > result.interactions.length;
+        return {
+          learnerId,
+          interactions: result.interactions,
+          hasMore,
+          totalAvailable: result.total,
+        };
+      })
+    );
+
+    // Check if any learner hit the interaction limit
+    const learnersWithLimitReached = interactionsByLearner
+      .filter((item) => item.hasMore)
+      .map((item) => item.learnerId);
+
     const textbookByLearner = await Promise.all(
-      learnerIds.map(async (learnerId) => ({
+      paginatedLearnerIds.map(async (learnerId) => ({
         learnerId,
         units: await getTextbookUnitsByUser(learnerId),
       }))
@@ -167,7 +243,107 @@ router.get('/export', async (req: Request, res: Response) => {
 
     const interactions = interactionsByLearner.flatMap((item) => item.interactions);
 
-    res.json({
+    // Build warnings if limits were reached
+    const warnings: string[] = [];
+    if (learnersWithLimitReached.length > 0) {
+      warnings.push(
+        `Interaction limit (${EXPORT_CONFIG.MAX_INTERACTIONS_PER_LEARNER}) reached for ${learnersWithLimitReached.length} learner(s). Data may be incomplete.`
+      );
+    }
+
+    // Streaming response for large exports
+    if (useStreaming) {
+      res.setHeader('Content-Type', 'application/x-ndjson');
+      res.setHeader('X-Export-Page', page.toString());
+      res.setHeader('X-Export-Per-Page', perPage.toString());
+      res.setHeader('X-Export-Has-More', hasMoreLearners.toString());
+
+      // Stream metadata
+      res.write(
+        JSON.stringify({
+          type: 'metadata',
+          exportedAt: new Date().toISOString(),
+          exportMetadata: {
+            actorRole: req.auth!.role,
+            actorId: instructorId,
+            sectionIds: sections.map((section) => section.id),
+            sectionNames: sections.map((section) => section.name),
+          },
+          pagination: {
+            page,
+            perPage,
+            hasMore: hasMoreLearners,
+            totalLearners: learnerIds.length,
+            returnedLearners: learners.length,
+          },
+          warnings: warnings.length > 0 ? warnings : undefined,
+        }) + '\n'
+      );
+
+      // Stream summary
+      res.write(
+        JSON.stringify({
+          type: 'summary',
+          learnerCount: learners.length,
+          interactionCount: interactions.length,
+          textbookUnitCount: textbookByLearner.reduce((acc, item) => acc + item.units.length, 0),
+          fieldsPreserved: ['id', 'learnerId', 'sectionId', 'sessionId', 'timestamp', 'eventType', 'problemId'],
+        }) + '\n'
+      );
+
+      // Stream learners
+      for (const learner of learners) {
+        res.write(JSON.stringify({ type: 'learner', data: learner }) + '\n');
+      }
+
+      // Stream interactions in batches
+      for (const item of interactionsByLearner) {
+        for (const interaction of item.interactions) {
+          res.write(JSON.stringify({ type: 'interaction', data: interaction }) + '\n');
+        }
+      }
+
+      // Stream textbook units
+      for (const item of textbookByLearner) {
+        res.write(JSON.stringify({ type: 'textbookUnit', learnerId: item.learnerId, data: item.units }) + '\n');
+      }
+
+      // End marker
+      res.write(JSON.stringify({ type: 'end' }) + '\n');
+      res.end();
+      return;
+    }
+
+    // Standard JSON response
+    const response: {
+      success: boolean;
+      data: {
+        exportedAt: string;
+        exportMetadata: {
+          actorRole: string;
+          actorId: string;
+          sectionIds: string[];
+          sectionNames: string[];
+        };
+        pagination: {
+          page: number;
+          perPage: number;
+          hasMore: boolean;
+          totalLearners: number;
+          returnedLearners: number;
+        };
+        summary: {
+          learnerCount: number;
+          interactionCount: number;
+          textbookUnitCount: number;
+          fieldsPreserved: string[];
+        };
+        learners: (typeof learners)[number][];
+        interactions: typeof interactions;
+        textbookUnits: typeof textbookByLearner;
+      };
+      warnings?: string[];
+    } = {
       success: true,
       data: {
         exportedAt: new Date().toISOString(),
@@ -177,17 +353,30 @@ router.get('/export', async (req: Request, res: Response) => {
           sectionIds: sections.map((section) => section.id),
           sectionNames: sections.map((section) => section.name),
         },
+        pagination: {
+          page,
+          perPage,
+          hasMore: hasMoreLearners,
+          totalLearners: learnerIds.length,
+          returnedLearners: learners.length,
+        },
         summary: {
-          learnerCount: learnerIds.length,
+          learnerCount: learners.length,
           interactionCount: interactions.length,
           textbookUnitCount: textbookByLearner.reduce((acc, item) => acc + item.units.length, 0),
           fieldsPreserved: ['id', 'learnerId', 'sectionId', 'sessionId', 'timestamp', 'eventType', 'problemId'],
         },
-        learners: learners.filter(Boolean),
+        learners,
         interactions,
         textbookUnits: textbookByLearner,
       },
-    });
+    };
+
+    if (warnings.length > 0) {
+      response.warnings = warnings;
+    }
+
+    res.json(response);
   } catch (error) {
     console.error('[instructor/export]', error);
     res.status(500).json({ success: false, error: 'Failed to export instructor scoped data' });

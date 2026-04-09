@@ -669,13 +669,23 @@ export function HintSystem({
     
     const pdfPassages = retrievePdfPassagesForHint(standardHint.sqlEngageSubtype);
     
+    // Defensive: ensure templateId is always present
+    const templateId = standardHint.templateId?.trim() || `sql-engage-rung-${standardHint.hintLevel}`;
+    if (!standardHint.templateId?.trim() && import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.warn(`[HintSystem] standardHint missing templateId, using fallback: ${templateId}`, {
+        sqlEngageSubtype: standardHint.sqlEngageSubtype,
+        hintLevel: standardHint.hintLevel,
+      });
+    }
+    
     return {
       hintText: standardHint.hintText,
       hintLevel: standardHint.hintLevel,
       sqlEngageSubtype: standardHint.sqlEngageSubtype,
       sqlEngageRowId: standardHint.sqlEngageRowId,
       policyVersion: standardHint.policyVersion,
-      templateId: standardHint.templateId,
+      templateId,
       pdfPassages,
       isEnhanced: false,
       retrievalConfidence: 0.5,
@@ -1063,6 +1073,16 @@ export function HintSystem({
         ]),
       );
 
+      // Defensive validation: ensure templateId is always present for research contract
+      const finalTemplateId = hintSelection.templateId?.trim() || `sql-engage-rung-${hintSelection.hintLevel}`;
+      if (finalTemplateId !== hintSelection.templateId && import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.warn(`[HintSystem] templateId was empty, using fallback: ${finalTemplateId}`, {
+          hintLevel: hintSelection.hintLevel,
+          sqlEngageSubtype: hintSelection.sqlEngageSubtype,
+        });
+      }
+
       // Build hint event using centralized helper for research contract compliance
       const hintEvent = buildHintViewEvent({
         id: buildHelpEventId('hint', nextHelpRequestIndex),
@@ -1076,7 +1096,7 @@ export function HintSystem({
         }),
         hintText: hintSelection.hintText,
         hintLevel: hintSelection.hintLevel,
-        templateId: hintSelection.templateId,
+        templateId: finalTemplateId,
         sqlEngageSubtype: hintSelection.sqlEngageSubtype,
         sqlEngageRowId: hintSelection.sqlEngageRowId,
         policyVersion: hintSelection.policyVersion,

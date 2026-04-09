@@ -216,7 +216,9 @@ export function ConceptCoverage({ learnerId }: ConceptCoverageProps) {
 
   // Get recent activity - memoized to avoid re-fetching on every render
   const recentActivity = useMemo(() => {
-    const recentInteractions = storage.getInteractionsByLearner(learnerId)
+    // Defensive: storage.getInteractionsByLearner may return null/undefined
+    const learnerInteractions = storage.getInteractionsByLearner(learnerId) ?? [];
+    const recentInteractions = learnerInteractions
       .filter(i => i.conceptIds && i.conceptIds.length > 0)
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, 5);

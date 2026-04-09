@@ -11,6 +11,8 @@ import {
   createInteractionsBatch,
   queryInteractions,
   getAllInteractionsForExport,
+  validateResearchEvent,
+  validateResearchBatchForWrite,
 } from '../db/index.js';
 import type {
   ApiResponse,
@@ -251,6 +253,19 @@ router.post('/', async (req, res) => {
     }
 
     const data: CreateInteractionRequest = parseResult.data;
+
+    // Validate research events (RESEARCH-4 parity with Neon routes)
+    const researchValidation = validateResearchEvent(data as unknown as import('../db/index.js').ResearchEventInput);
+    if (!researchValidation.valid) {
+      const response: ApiResponse<never> = {
+        success: false,
+        error: 'Research validation failed',
+        message: `Missing required fields for ${data.eventType}: ${researchValidation.missing.join(', ')}`,
+      };
+      res.status(400).json(response);
+      return;
+    }
+
     const id = generateId();
     const interaction = await createInteraction({ id, ...data });
 
@@ -288,6 +303,19 @@ router.post('/batch', async (req, res) => {
     }
 
     const { events } = parseResult.data;
+
+    // Validate research events in batch (RESEARCH-4 parity with Neon routes)
+    const researchValidation = validateResearchBatchForWrite(events as unknown as import('../db/index.js').ResearchEventInput[]);
+    if (!researchValidation.valid) {
+      const response: ApiResponse<never> = {
+        success: false,
+        error: 'Research validation failed',
+        message: `Invalid events: ${researchValidation.errors.map((e: import('../db/index.js').BatchValidationError) => `${e.eventType}(${e.eventId}): [${e.missingFields.join(', ')}]`).join('; ')}`,
+      };
+      res.status(400).json(response);
+      return;
+    }
+
     const interactions = await createInteractionsBatch(events);
 
     const response: ApiResponse<{ count: number; interactions: Interaction[] }> = {

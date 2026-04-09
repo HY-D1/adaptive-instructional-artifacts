@@ -2,16 +2,18 @@ import { Badge } from '../../ui/badge';
 import type { ErrorTransitionMatrix, ErrorChain } from '../../../lib/research/error-transitions';
 
 interface Props {
-  matrix: ErrorTransitionMatrix[];
+  matrix?: ErrorTransitionMatrix[];
   maxTransitions?: number;
 }
 
 interface ChainViewProps {
-  chains: ErrorChain[];
+  chains?: ErrorChain[];
   maxChains?: number;
 }
 
-export function ErrorTransitionView({ matrix, maxTransitions = 10 }: Props) {
+export function ErrorTransitionView({ matrix: matrixProp, maxTransitions = 10 }: Props) {
+  // Defensive: ensure matrix is always an array
+  const matrix = matrixProp ?? [];
   const topTransitions = matrix.slice(0, maxTransitions);
   
   if (matrix.length === 0) {
@@ -74,7 +76,10 @@ export function ErrorTransitionView({ matrix, maxTransitions = 10 }: Props) {
   );
 }
 
-export function ErrorChainView({ chains, maxChains = 5 }: ChainViewProps) {
+export function ErrorChainView({ chains: chainsProp, maxChains = 5 }: ChainViewProps) {
+  // Defensive: ensure chains is always an array
+  const chains = chainsProp ?? [];
+  
   if (chains.length === 0) {
     return (
       <div className="p-4 text-center text-sm text-gray-500">
@@ -115,11 +120,14 @@ export function ErrorChainView({ chains, maxChains = 5 }: ChainViewProps) {
 }
 
 interface RecoveryPatternProps {
-  patterns: Array<{ errorType: string; recoveryRate: number; count: number }>;
+  patterns?: Array<{ errorType: string; recoveryRate: number; count: number }>;
   maxPatterns?: number;
 }
 
-export function ErrorRecoveryView({ patterns, maxPatterns = 8 }: RecoveryPatternProps) {
+export function ErrorRecoveryView({ patterns: patternsProp, maxPatterns = 8 }: RecoveryPatternProps) {
+  // Defensive: ensure patterns is always an array
+  const patterns = patternsProp ?? [];
+  
   if (patterns.length === 0) {
     return (
       <div className="p-4 text-center text-sm text-gray-500">

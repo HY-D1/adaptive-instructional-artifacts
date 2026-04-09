@@ -25,8 +25,10 @@ export interface DebouncedCodeChangeOptions {
   problemId: string;
   /** Condition ID for experimental tracking */
   conditionId?: string;
-  /** Debounce delay in milliseconds (default: 1500) */
+  /** Debounce delay in milliseconds (default: 2000) */
   debounceMs?: number;
+  /** Maximum wait time before forcing emission (default: 5000) */
+  maxWaitMs?: number;
   /** Callback to save the interaction event */
   onSaveInteraction: (event: InteractionEvent) => void;
 }
@@ -93,16 +95,19 @@ export function useDebouncedCodeChange(options: DebouncedCodeChangeOptions) {
     sessionId,
     problemId,
     conditionId,
-    debounceMs = 1500,
+    debounceMs = 2000,
+    maxWaitMs = 5000,
     onSaveInteraction,
   } = options;
 
   // Refs for managing debounce state
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const maxWaitTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingCodeRef = useRef<string | null>(null);
   const previousCodeRef = useRef<string>('');
   const burstIdRef = useRef<string>(generateBurstId(sessionId, problemId));
   const isDirtyRef = useRef(false);
+  const firstChangeTimeRef = useRef<number | null>(null);
 
   // Update burst ID when session or problem changes
   useEffect(() => {
@@ -170,7 +175,27 @@ export function useDebouncedCodeChange(options: DebouncedCodeChangeOptions) {
     pendingCodeRef.current = code;
     isDirtyRef.current = true;
 
-    // Clear existing timeout
+    // Track when first change in burst occurred (for maxWait)
+    if (firstChangeTimeRef.current === null) {
+      firstChangeTimeRef.current = Date.now();
+      
+      // Set maxWait timeout to force emission after maxWaitMs
+      if (maxWaitTimeoutRef.current) {
+        clearTimeout(maxWaitTimeoutRef.current);
+      }
+      maxWaitTimeoutRef.current = setTimeout(() => {
+        if (pendingCodeRef.current !== null) {
+          if (import.meta.env.DEV) {
+            console.debug('[useDebouncedCodeChange] maxWait triggered, forcing emission');
+          }
+          emitCodeChange(pendingCodeRef.current, true);
+          pendingCodeRef.current = null;
+          firstChangeTimeRef.current = null;
+        }
+      }, maxWaitMs);
+    }
+
+    // Clear existing debounce timeout
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
     }
@@ -180,9 +205,14 @@ export function useDebouncedCodeChange(options: DebouncedCodeChangeOptions) {
       if (pendingCodeRef.current !== null) {
         emitCodeChange(pendingCodeRef.current);
         pendingCodeRef.current = null;
+        firstChangeTimeRef.current = null;
+        if (maxWaitTimeoutRef.current) {
+          clearTimeout(maxWaitTimeoutRef.current);
+          maxWaitTimeoutRef.current = null;
+        }
       }
     }, debounceMs);
-  }, [debounceMs, emitCodeChange]);
+  }, [debounceMs, maxWaitMs, emitCodeChange]);
 
   /**
    * Flush pending changes immediately
@@ -193,11 +223,16 @@ export function useDebouncedCodeChange(options: DebouncedCodeChangeOptions) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+    if (maxWaitTimeoutRef.current) {
+      clearTimeout(maxWaitTimeoutRef.current);
+      maxWaitTimeoutRef.current = null;
+    }
 
     if (pendingCodeRef.current !== null) {
       emitCodeChange(pendingCodeRef.current, true);
       pendingCodeRef.current = null;
     }
+    firstChangeTimeRef.current = null;
   }, [emitCodeChange]);
 
   /**
@@ -208,10 +243,15 @@ export function useDebouncedCodeChange(options: DebouncedCodeChangeOptions) {
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+    if (maxWaitTimeoutRef.current) {
+      clearTimeout(maxWaitTimeoutRef.current);
+      maxWaitTimeoutRef.current = null;
+    }
     pendingCodeRef.current = null;
     previousCodeRef.current = '';
     burstIdRef.current = generateBurstId(sessionId, problemId);
     isDirtyRef.current = false;
+    firstChangeTimeRef.current = null;
   }, [sessionId, problemId]);
 
   // Cleanup on unmount
@@ -219,6 +259,9 @@ export function useDebouncedCodeChange(options: DebouncedCodeChangeOptions) {
     return () => {
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
+      }
+      if (maxWaitTimeoutRef.current) {
+        clearTimeout(maxWaitTimeoutRef.current);
       }
       // Flush any pending changes before unmount
       if (pendingCodeRef.current !== null) {

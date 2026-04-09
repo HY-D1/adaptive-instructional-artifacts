@@ -763,6 +763,41 @@ export function InstructorDashboard() {
           </Card>
         )}
 
+        {/* Section Scope Info */}
+        <Card className={classStats.totalStudents === 0 ? "border-amber-200 bg-amber-50/50" : "border-gray-200"}>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="size-4" />
+              Section Scope
+              {classStats.totalStudents === 0 && <Badge variant="outline" className="text-xs">No Students</Badge>}
+            </CardTitle>
+            <CardDescription>
+              {classStats.totalStudents === 0 
+                ? "No students are currently enrolled in your sections."
+                : `Showing ${classStats.totalStudents} student${classStats.totalStudents !== 1 ? 's' : ''} enrolled across ${authUser?.ownedSections?.length || 0} section${(authUser?.ownedSections?.length || 0) !== 1 ? 's' : ''}.`
+              }
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-600">
+              {classStats.totalStudents === 0 
+                ? "Students must use your signup code during registration to appear here. If students registered before sections were created, they may need to be manually enrolled."
+                : "Only students who enrolled using your section signup code are visible. This ensures data privacy and accurate analytics for your classroom."
+              }
+            </p>
+            {classStats.totalStudents === 0 && (
+              <div className="mt-3 p-3 bg-white rounded border border-amber-200">
+                <p className="text-xs text-amber-800 font-medium">Troubleshooting:</p>
+                <ul className="text-xs text-amber-700 mt-1 list-disc list-inside space-y-0.5">
+                  <li>Share your signup code with students before they create accounts</li>
+                  <li>Students cannot be added retroactively without enrollment records</li>
+                  <li>Contact support if you need to migrate existing student data</li>
+                </ul>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Quick Links */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate('/research')}>

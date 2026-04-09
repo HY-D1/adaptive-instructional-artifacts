@@ -15,6 +15,111 @@ import type {
   CreateUnitRequest,
 } from '../types.js';
 
+// ============================================================================
+// Research Event Validation (RESEARCH-4) - Shared between SQLite and Neon
+// ============================================================================
+
+export interface ValidationResult {
+  valid: boolean;
+  missing: string[];
+}
+
+export interface BatchValidationError {
+  eventId: string;
+  eventType: string;
+  missingFields: string[];
+}
+
+export interface BatchValidationResult {
+  valid: boolean;
+  failedIds: string[];
+  errors: BatchValidationError[];
+}
+
+export interface ResearchEventInput {
+  id?: string;
+  eventType?: string;
+  [key: string]: unknown;
+}
+
+function hasText(value: unknown): boolean {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+function hasItems(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0;
+}
+
+export function validateResearchEvent(event: ResearchEventInput): ValidationResult {
+  const missing: string[] = [];
+
+  switch (event.eventType) {
+    case 'hint_view':
+      if (!event.hintId || typeof event.hintId !== 'string' || !event.hintId.trim()) missing.push('hintId');
+      if (!event.hintText || typeof event.hintText !== 'string' || !event.hintText.trim()) missing.push('hintText');
+      if (![1, 2, 3].includes(event.hintLevel as number)) missing.push('hintLevel');
+      if (!event.templateId || typeof event.templateId !== 'string' || !event.templateId.trim()) missing.push('templateId');
+      if (!event.sqlEngageSubtype || typeof event.sqlEngageSubtype !== 'string' || !event.sqlEngageSubtype.trim()) missing.push('sqlEngageSubtype');
+      if (!event.sqlEngageRowId || typeof event.sqlEngageRowId !== 'string' || !event.sqlEngageRowId.trim()) missing.push('sqlEngageRowId');
+      if (!event.policyVersion || typeof event.policyVersion !== 'string' || !event.policyVersion.trim()) missing.push('policyVersion');
+      if (typeof event.helpRequestIndex !== 'number' || event.helpRequestIndex < 1) {
+        missing.push('helpRequestIndex');
+      }
+      break;
+
+    case 'concept_view':
+      if (!event.conceptId || typeof event.conceptId !== 'string' || !event.conceptId.trim()) missing.push('conceptId');
+      if (!event.source || typeof event.source !== 'string' || !event.source.trim()) missing.push('source');
+      break;
+
+    case 'session_end':
+      if (!hasText(event.sessionId)) missing.push('sessionId');
+      if (typeof event.totalTime !== 'number') missing.push('totalTime');
+      if (typeof event.problemsAttempted !== 'number') missing.push('problemsAttempted');
+      if (typeof event.problemsSolved !== 'number') missing.push('problemsSolved');
+      break;
+
+    case 'textbook_add':
+    case 'textbook_update':
+      if (!hasText(event.noteId)) missing.push('noteId');
+      if (!hasText(event.noteContent)) missing.push('noteContent');
+      if (!hasText(event.templateId)) missing.push('templateId');
+      if (!hasText(event.policyVersion)) missing.push('policyVersion');
+      break;
+
+    case 'chat_interaction':
+      if (!hasText(event.chatMessage)) missing.push('chatMessage');
+      if (!hasText(event.chatResponse)) missing.push('chatResponse');
+      if (hasItems(event.textbookUnitsRetrieved) && !hasItems(event.retrievedSourceIds)) {
+        missing.push('retrievedSourceIds');
+      }
+      break;
+  }
+
+  return { valid: missing.length === 0, missing };
+}
+
+export function validateResearchBatchForWrite(events: ResearchEventInput[]): BatchValidationResult {
+  const errors: BatchValidationError[] = [];
+
+  for (const event of events) {
+    const validation = validateResearchEvent(event);
+    if (!validation.valid) {
+      errors.push({
+        eventId: typeof event.id === 'string' ? event.id : '',
+        eventType: typeof event.eventType === 'string' ? event.eventType : 'unknown',
+        missingFields: validation.missing,
+      });
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    failedIds: errors.map((error) => error.eventId).filter(Boolean),
+    errors,
+  };
+}
+
 // Import both database implementations
 import * as neonDb from './neon.js';
 import * as sqliteDb from './sqlite.js';

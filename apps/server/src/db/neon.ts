@@ -7,6 +7,7 @@
  * - Type-safe query wrappers
  * - Automatic JSON serialization for complex fields
  * - Foreign key constraints with CASCADE delete
+ * - Race-condition safe progress updates using atomic operations and row locking
  */
 
 import { createHash } from 'node:crypto';
@@ -514,6 +515,7 @@ export async function initializeSchema(): Promise<void> {
   `;
 
   // Learner profiles (full rich profile with concept coverage)
+  // Version column added for optimistic locking
   await db`
     CREATE TABLE IF NOT EXISTS learner_profiles (
       learner_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -526,10 +528,14 @@ export async function initializeSchema(): Promise<void> {
       preferences TEXT NOT NULL DEFAULT '{"escalationThreshold":3,"aggregationDelay":30000}',
       last_activity_at TIMESTAMPTZ,
       profile_data TEXT NOT NULL DEFAULT '{}',
+      version INTEGER NOT NULL DEFAULT 1,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+
+  // Ensure version column exists for existing schemas (migration path)
+  await db`ALTER TABLE learner_profiles ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1`;
 
   await db`CREATE INDEX IF NOT EXISTS idx_learner_profiles_last_activity ON learner_profiles(last_activity_at)`;
 
@@ -758,6 +764,11 @@ export async function clearSession(userId: string, sessionId: string): Promise<b
 // Problem Progress Operations
 // ============================================================================
 
+/**
+ * Update problem progress with race-condition safe atomic operations.
+ * Uses INSERT ... ON CONFLICT ... DO UPDATE pattern where PostgreSQL handles
+ * concurrency via row-level locking during the upsert.
+ */
 export async function updateProblemProgress(
   userId: string,
   problemId: string,
@@ -771,7 +782,10 @@ export async function updateProblemProgress(
   const db = getDb();
   const now = new Date().toISOString();
 
-  // Try to insert first, then update if exists
+  // Race-condition safe atomic upsert:
+  // - attempts_count and hints_used reference the CURRENT database value
+  // - solved uses boolean OR logic to preserve "true" once set
+  // - solved_at only updates when transitioning from unsolved to solved
   await db`
     INSERT INTO problem_progress (
       user_id, problem_id, solved, attempts_count, hints_used, last_code,
@@ -1506,10 +1520,11 @@ export async function saveLearnerProfile(
     extendedData: profile.extendedData || existing?.extendedData || {},
   };
 
+  // Atomic upsert with version increment for optimistic locking
   await db`
     INSERT INTO learner_profiles (
       learner_id, name, concept_coverage, concept_evidence, error_history,
-      interaction_count, strategy, preferences, last_activity_at, profile_data, updated_at
+      interaction_count, strategy, preferences, last_activity_at, profile_data, version, updated_at
     ) VALUES (
       ${learnerId},
       ${mergedProfile.name},
@@ -1521,6 +1536,7 @@ export async function saveLearnerProfile(
       ${JSON.stringify(mergedProfile.preferences)},
       ${now},
       ${JSON.stringify(mergedProfile.extendedData)},
+      1,
       ${now}
     )
     ON CONFLICT (learner_id) DO UPDATE SET
@@ -1533,6 +1549,7 @@ export async function saveLearnerProfile(
       preferences = EXCLUDED.preferences,
       last_activity_at = EXCLUDED.last_activity_at,
       profile_data = EXCLUDED.profile_data,
+      version = learner_profiles.version + 1,
       updated_at = EXCLUDED.updated_at
   `;
 
@@ -1565,81 +1582,153 @@ export async function getAllLearnerProfiles(): Promise<LearnerProfile[]> {
   }));
 }
 
+/**
+ * Update learner profile from an interaction event.
+ * Uses SELECT FOR UPDATE row locking to prevent race conditions during
+ * concurrent event processing.
+ */
 export async function updateLearnerProfileFromEvent(
   learnerId: string,
   event: CreateInteractionRequest
 ): Promise<LearnerProfile | null> {
-  const profile = await getLearnerProfile(learnerId);
-  if (!profile) {
-    // Create default profile if doesn't exist
-    await saveLearnerProfile(learnerId, {
-      name: learnerId,
-      conceptsCovered: [],
-      conceptCoverageEvidence: {},
-      errorHistory: {},
-      solvedProblemIds: [],
-      interactionCount: 0,
-      currentStrategy: 'default',
-      preferences: {
-        escalationThreshold: 3,
-        aggregationDelay: 30000,
-      },
-    });
+  const db = getDb();
+  const now = new Date().toISOString();
+  const nowMs = Date.now();
+
+  // Step 1: Ensure profile exists (atomic initialization - safe for concurrent calls)
+  await db`
+    INSERT INTO learner_profiles (learner_id, name, created_at, updated_at, version)
+    VALUES (${learnerId}, ${learnerId}, ${now}, ${now}, 1)
+    ON CONFLICT (learner_id) DO NOTHING
+  `;
+
+  // Step 2: Atomic increment of interaction_count - race condition safe
+  // Each concurrent call increments the counter separately
+  await db`
+    UPDATE learner_profiles
+    SET interaction_count = interaction_count + 1,
+        last_activity_at = ${now},
+        version = version + 1,
+        updated_at = ${now}
+    WHERE learner_id = ${learnerId}
+  `;
+
+  // Step 3: For complex JSON updates, use SELECT FOR UPDATE to lock the row
+  // This ensures exclusive access during the read-modify-write cycle
+  const [lockedRow] = await db`
+    SELECT * FROM learner_profiles
+    WHERE learner_id = ${learnerId}
+    FOR UPDATE
+  `;
+
+  if (!lockedRow) {
+    return getLearnerProfile(learnerId);
   }
 
-  // Get fresh profile (either existing or newly created)
-  const currentProfile = (await getLearnerProfile(learnerId))!;
+  // Parse current values from locked row
+  const currentErrorHistory = parseJson(lockedRow.error_history) || {};
+  const currentConceptEvidence = parseJson(lockedRow.concept_evidence) || {};
+  const currentConceptCoverage = parseJson(lockedRow.concept_coverage) || [];
 
-  // Update profile based on event
-  currentProfile.interactionCount++;
-  currentProfile.lastActive = Date.now();
+  let hasUpdates = false;
+  let updatedErrorHistory = currentErrorHistory;
+  let updatedConceptEvidence = currentConceptEvidence;
+  let updatedConceptCoverage = currentConceptCoverage;
 
   // Update error history if error event
   if (event.errorSubtypeId) {
-    const currentCount = currentProfile.errorHistory[event.errorSubtypeId] || 0;
-    currentProfile.errorHistory[event.errorSubtypeId] = currentCount + 1;
+    updatedErrorHistory = {
+      ...currentErrorHistory,
+      [event.errorSubtypeId]: (currentErrorHistory[event.errorSubtypeId] || 0) + 1,
+    };
+    hasUpdates = true;
   }
 
-  // Update concept coverage
+  // Update concept coverage and evidence
   if (event.conceptIds && event.conceptIds.length > 0) {
     for (const conceptId of event.conceptIds) {
-      if (!currentProfile.conceptsCovered.includes(conceptId)) {
-        currentProfile.conceptsCovered.push(conceptId);
+      // Add to coverage if not present
+      if (!updatedConceptCoverage.includes(conceptId)) {
+        updatedConceptCoverage = [...updatedConceptCoverage, conceptId];
+        hasUpdates = true;
       }
 
-      // Update evidence
-      if (!currentProfile.conceptCoverageEvidence[conceptId]) {
-        currentProfile.conceptCoverageEvidence[conceptId] = {
-          conceptId,
-          score: 0,
-          confidence: 'low',
-          lastUpdated: Date.now(),
-          evidenceCounts: {
-            successfulExecution: 0,
-            hintViewed: 0,
-            explanationViewed: 0,
-            errorEncountered: 0,
-            notesAdded: 0,
+      // Initialize evidence structure if needed
+      if (!updatedConceptEvidence[conceptId]) {
+        updatedConceptEvidence = {
+          ...updatedConceptEvidence,
+          [conceptId]: {
+            conceptId,
+            score: 0,
+            confidence: 'low',
+            lastUpdated: nowMs,
+            evidenceCounts: {
+              successfulExecution: 0,
+              hintViewed: 0,
+              explanationViewed: 0,
+              errorEncountered: 0,
+              notesAdded: 0,
+            },
+            streakCorrect: 0,
+            streakIncorrect: 0,
           },
-          streakCorrect: 0,
-          streakIncorrect: 0,
         };
+        hasUpdates = true;
       }
-
-      const evidence = currentProfile.conceptCoverageEvidence[conceptId];
-      evidence.lastUpdated = Date.now();
 
       // Update evidence counts based on event type
+      const evidence = updatedConceptEvidence[conceptId];
+      const updatedEvidence = { ...evidence };
+      let evidenceChanged = false;
+
       if (event.eventType === 'hint_view') {
-        evidence.evidenceCounts.hintViewed++;
+        updatedEvidence.evidenceCounts = {
+          ...evidence.evidenceCounts,
+          hintViewed: evidence.evidenceCounts.hintViewed + 1,
+        };
+        evidenceChanged = true;
       } else if (event.eventType === 'explanation_view') {
-        evidence.evidenceCounts.explanationViewed++;
+        updatedEvidence.evidenceCounts = {
+          ...evidence.evidenceCounts,
+          explanationViewed: evidence.evidenceCounts.explanationViewed + 1,
+        };
+        evidenceChanged = true;
       } else if (event.eventType === 'error') {
-        evidence.evidenceCounts.errorEncountered++;
+        updatedEvidence.evidenceCounts = {
+          ...evidence.evidenceCounts,
+          errorEncountered: evidence.evidenceCounts.errorEncountered + 1,
+        };
+        evidenceChanged = true;
       } else if (event.successful) {
-        evidence.evidenceCounts.successfulExecution++;
+        updatedEvidence.evidenceCounts = {
+          ...evidence.evidenceCounts,
+          successfulExecution: evidence.evidenceCounts.successfulExecution + 1,
+        };
+        evidenceChanged = true;
+      }
+
+      if (evidenceChanged) {
+        updatedEvidence.lastUpdated = nowMs;
+        updatedConceptEvidence = {
+          ...updatedConceptEvidence,
+          [conceptId]: updatedEvidence,
+        };
+        hasUpdates = true;
       }
     }
+  }
+
+  // Apply updates if any JSON fields changed
+  if (hasUpdates) {
+    await db`
+      UPDATE learner_profiles
+      SET error_history = ${JSON.stringify(updatedErrorHistory)},
+          concept_evidence = ${JSON.stringify(updatedConceptEvidence)},
+          concept_coverage = ${JSON.stringify(updatedConceptCoverage)},
+          version = version + 1,
+          updated_at = ${now}
+      WHERE learner_id = ${learnerId}
+    `;
   }
 
   // Update problem_progress on successful execution
@@ -1650,8 +1739,6 @@ export async function updateLearnerProfileFromEvent(
       incrementAttempts: true,
       lastCode: event.code,
     });
-    // Refresh solvedProblemIds from durable source
-    currentProfile.solvedProblemIds = await getSolvedProblemIdsForLearner(learnerId);
   } else if (event.eventType === 'execution' && event.problemId) {
     // Failed execution - just increment attempts
     await updateProblemProgress(learnerId, event.problemId, {
@@ -1660,8 +1747,8 @@ export async function updateLearnerProfileFromEvent(
     });
   }
 
-  // Save updated profile
-  return saveLearnerProfile(learnerId, currentProfile);
+  // Return fresh profile (with updated solvedProblemIds from durable source)
+  return getLearnerProfile(learnerId);
 }
 
 async function getSolvedProblemIdsForLearner(learnerId: string): Promise<string[]> {

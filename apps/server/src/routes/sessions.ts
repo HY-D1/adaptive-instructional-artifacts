@@ -16,14 +16,39 @@ const router = Router();
 
 // Validation schema for session data
 const sessionDataSchema = z.object({
+  sessionId: z.string().optional(),
+  sectionId: z.string().optional(),
+  conditionId: z.string().optional(),
   currentProblemId: z.string().optional(),
   currentCode: z.string().optional(),
   guidanceState: z.record(z.unknown()).optional(),
   hdiState: z.record(z.unknown()).optional(),
   banditState: z.record(z.unknown()).optional(),
+  textbookDisabled: z.boolean().optional(),
+  adaptiveLadderDisabled: z.boolean().optional(),
+  immediateExplanationMode: z.boolean().optional(),
+  staticHintMode: z.boolean().optional(),
+  escalationPolicy: z.custom<import('../types.js').SessionEscalationPolicy>().optional(),
   startTime: z.string().datetime().optional(),
   lastActivity: z.string().datetime().optional(),
 });
+
+// Check if session payload has mutation data (parity with neon-sessions.ts)
+function hasSessionMutationPayload(body: SessionData): boolean {
+  return (
+    body.currentProblemId !== undefined ||
+    body.currentCode !== undefined ||
+    body.guidanceState !== undefined ||
+    body.hdiState !== undefined ||
+    body.banditState !== undefined ||
+    body.conditionId !== undefined ||
+    body.textbookDisabled !== undefined ||
+    body.adaptiveLadderDisabled !== undefined ||
+    body.immediateExplanationMode !== undefined ||
+    body.staticHintMode !== undefined ||
+    body.escalationPolicy !== undefined
+  );
+}
 
 // ============================================================================
 // GET /api/sessions/:learnerId/active - Get active session
@@ -79,6 +104,22 @@ router.post('/:learnerId/active', async (req, res) => {
     }
 
     const data: SessionData = parseResult.data;
+
+    // Treat heartbeat-only writes as read-through when an active session exists.
+    // This prevents session bootstrapping calls from replacing resumable state
+    // with an empty session that has null currentCode. (parity with neon-sessions.ts)
+    if (!hasSessionMutationPayload(data)) {
+      const existingSession = await getActiveSession(learnerId);
+      if (existingSession) {
+        const response: ApiResponse<Session> = {
+          success: true,
+          data: existingSession as Session,
+        };
+        res.json(response);
+        return;
+      }
+    }
+
     const session = await saveActiveSession(learnerId, data);
 
     const response: ApiResponse<Session> = {
@@ -116,6 +157,22 @@ router.put('/:learnerId/active', async (req, res) => {
     }
 
     const data: SessionData = parseResult.data;
+
+    // Treat heartbeat-only writes as read-through when an active session exists.
+    // This prevents session bootstrapping calls from replacing resumable state
+    // with an empty session that has null currentCode. (parity with neon-sessions.ts)
+    if (!hasSessionMutationPayload(data)) {
+      const existingSession = await getActiveSession(learnerId);
+      if (existingSession) {
+        const response: ApiResponse<Session> = {
+          success: true,
+          data: existingSession as Session,
+        };
+        res.json(response);
+        return;
+      }
+    }
+
     const session = await saveActiveSession(learnerId, data);
 
     const response: ApiResponse<Session> = {

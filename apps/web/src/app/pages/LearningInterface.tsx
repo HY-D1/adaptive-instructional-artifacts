@@ -484,6 +484,12 @@ export function LearningInterface() {
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
   
   // Paper Data Contract: Debounced code change telemetry
+  // Stabilize callback to prevent hook recreation on every render
+  const handleSaveCodeChangeInteraction = useCallback((event: InteractionEvent) => {
+    storage.saveInteraction(event);
+    setInteractions((prev) => [...prev, event]);
+  }, []);
+
   const {
     handleCodeChange: debouncedHandleCodeChange,
     flush: flushCodeChangeTelemetry,
@@ -493,11 +499,9 @@ export function LearningInterface() {
     sessionId: sessionId || undefined,
     problemId: currentProblem.id,
     conditionId: sessionConfig?.conditionId,
-    debounceMs: 1500,
-    onSaveInteraction: (event) => {
-      storage.saveInteraction(event);
-      setInteractions((prev) => [...prev, event]);
-    },
+    debounceMs: 2000,
+    maxWaitMs: 5000,
+    onSaveInteraction: handleSaveCodeChangeInteraction,
   });
   
   const timerRef = useRef<number | null>(null);
@@ -1353,14 +1357,15 @@ export function LearningInterface() {
 
   // Paper Data Contract: Debounced code_change telemetry
   // Immediate draft persistence for UX, debounced telemetry for research
-  const handleEditorCodeChange = (code: string) => {
+  // Stabilized with useCallback to prevent unnecessary re-renders and debounce resets
+  const handleEditorCodeChange = useCallback((code: string) => {
     setSqlDraft(code);
     if (sessionId) {
       storage.savePracticeDraft(learnerId, sessionId, currentProblem.id, code);
     }
     // Debounced telemetry - not immediate
     debouncedHandleCodeChange(code);
-  };
+  }, [sessionId, learnerId, currentProblem.id, debouncedHandleCodeChange]);
   
   // Flush code change telemetry before executing query
   const flushTelemetryBeforeExecute = () => {
