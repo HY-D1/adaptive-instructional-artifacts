@@ -1005,7 +1005,7 @@ export function ResearchDashboard() {
   }, [profiles, filteredInteractions, selectedMasteryLearner]);
 
   useEffect(() => {
-    if (!selectedMasteryLearner && profiles.length > 0) {
+    if (!selectedMasteryLearner && (profiles ?? []).length > 0) {
       setSelectedMasteryLearner(profiles[0].id);
     }
   }, [profiles, selectedMasteryLearner]);
@@ -2925,7 +2925,7 @@ export function ResearchDashboard() {
                 Learners are automatically grouped based on HDI, escalation rate, and independence metrics using k-means clustering.
               </p>
               
-              {researchMetrics.clusters.length > 0 ? (
+              {(researchMetrics.clusters?.length ?? 0) > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {researchMetrics.clusters.map((cluster) => (
                     <Card key={cluster.id} className="p-4 border-l-4 border-l-blue-500">
@@ -3015,7 +3015,7 @@ export function ResearchDashboard() {
               </Card>
             </div>
 
-            {researchMetrics.errorTransitions.errorChains.length > 0 && (
+            {(researchMetrics.errorTransitions?.errorChains?.length ?? 0) > 0 && (
               <Card className="p-6">
                 <h3 className="font-semibold mb-4 flex items-center gap-2">
                   <Activity className="size-5 text-amber-600" />

@@ -31,7 +31,7 @@ router.param('id', requireOwnership);
 // User Management
 // ============================================================================
 
-// GET /api/learners - List all users
+// GET /api/learners - List all users (scoped to instructor's sections)
 router.get('/', async (req: Request, res: Response) => {
   try {
     if (req.auth?.role === 'student') {
@@ -39,6 +39,18 @@ router.get('/', async (req: Request, res: Response) => {
       res.json({ success: true, data: self ? [self] : [] });
       return;
     }
+    
+    // Instructors only see learners in their sections (scope enforcement)
+    if (req.auth?.role === 'instructor') {
+      const scopedLearnerIds = await getInstructorScopedLearnerIds(req.auth.learnerId);
+      const scopedUsers = await Promise.all(
+        scopedLearnerIds.map((id) => db.getUserById(id))
+      );
+      res.json({ success: true, data: scopedUsers.filter(Boolean) });
+      return;
+    }
+    
+    // Admin or other roles - return all users (if needed)
     const users = await db.getAllUsers();
     res.json({ success: true, data: users });
   } catch (error) {
