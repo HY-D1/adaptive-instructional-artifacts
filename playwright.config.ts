@@ -150,7 +150,7 @@ export default defineConfig({
       name: 'chromium:instructor',
       testMatch: [
         '**/instructor-dashboard-error-states.spec.ts',
-        '**/2026-03-24-instructor.spec.ts',
+        '**/instructor.spec.ts',
       ],
       dependencies: ['setup:auth'],
       use: {

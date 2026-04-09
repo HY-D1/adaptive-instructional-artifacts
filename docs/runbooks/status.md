@@ -1,8 +1,49 @@
 # Project Status — SQL-Adapt
 
-**Last Updated**: 2026-04-09 (Thread Start Protocol - Verification Complete)
-**Previous Update**: 2026-04-09 (Environment Isolation - Preview/Prod DB Separation)
+**Last Updated**: 2026-04-09 (Node 22 Upgrade + Build Fixes)
+**Previous Update**: 2026-04-09 (Thread Start Protocol - Verification Complete)
 **Purpose**: Single durable status file for implementation and deployment readiness.
+
+---
+
+## Build Fixes — 2026-04-09
+
+**Status**: ✅ **FIXED AND VERIFIED**
+
+### Problem
+Vercel build failed with:
+```
+npm warn EBADENGINE Unsupported engine {
+  package: 'chevrotain@12.0.0',
+  required: { node: '>=22.0.0' },
+  current: { node: 'v20.20.2', npm: '10.8.2' }
+}
+```
+
+### Root Cause
+chevrotain@12.0.0 (transitive dependency via @mermaid-js/mermaid-cli → mermaid → @mermaid-js/parser → langium) requires Node.js >=22.0.0, but project was pinned to Node 20.x.
+
+### Fixes Applied
+
+| File | Change | Before | After |
+|------|--------|--------|-------|
+| `package.json` | engines.node | `"20.x"` | `"22.x"` |
+| `.nvmrc` | Node version | `20` | `22` |
+| `.vercel/project.json` | nodeVersion | `"20.x"` | `"22.x"` |
+| `tests/e2e/regression/2026-03-24-instructor.spec.ts` | Renamed | dated filename | `instructor.spec.ts` |
+| `playwright.config.ts` | Test match pattern | `2026-03-24-instructor.spec.ts` | `instructor.spec.ts` |
+
+### Verification
+
+| Command | Result |
+|---------|--------|
+| `npm run integrity:scan` | ✅ PASS |
+| `npm run server:build` | ✅ PASS |
+| `npm run build` | ✅ PASS (2875 modules, 2.84s) |
+| `npm run test:unit` | ✅ 1781 passed, 2 skipped |
+| `npm run replay:gate` | ✅ PASS |
+
+**Commit**: `65f9628` → `[pending]` (Node 22 upgrade)
 
 ---
 
@@ -19,7 +60,7 @@
 | **Query Performance** | ✅ | `apps/server/src/db/migrate-neon.sql` | Composite indexes for interaction_events |
 | **Rate Limiting** | ✅ | `apps/server/src/middleware/rate-limit.ts` | Classroom-safe (user-based keys) |
 | **Storage Hardening** | ✅ | `apps/web/src/app/lib/storage/storage.ts` | Critical paths use safeSetItem |
-| **Environment Isolation** | ✅ | `docs/runbooks/ENVIRONMENT_ISOLATION_FIX.md` | Preview/prod DB isolation, Node 20 alignment |
+| **Environment Isolation** | ✅ | `docs/runbooks/ENVIRONMENT_ISOLATION_FIX.md` | Preview/prod DB isolation, Node 22 alignment |
 | **Runbook Truthfulness** | ✅ | `docs/runbooks/status.md` | This checklist |
 
 ---
@@ -92,9 +133,9 @@ Production Health Endpoint:
 
 | File | Value |
 |------|-------|
-| `.nvmrc` | `20` |
-| `package.json` engines | `"node": "20.x"` |
-| `.vercel/project.json` | `"nodeVersion": "20.x"` |
+| `.nvmrc` | `22` |
+| `package.json` engines | `"node": "22.x"` |
+| `.vercel/project.json` | `"nodeVersion": "22.x"` |
 
 ### Build Verification (Message 6/8)
 
