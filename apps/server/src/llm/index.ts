@@ -4,7 +4,7 @@
  * Exports the provider interface and factory for creating LLM providers
  */
 
-export {
+export type {
   LLMProvider,
   LLMProviderType,
   LLMGenerateRequest,
@@ -14,15 +14,15 @@ export {
   LLMGenerationParams,
 } from './provider.js';
 
-export { OllamaProvider, OllamaConfig } from './providers/ollama.js';
-export { GroqProvider, GroqConfig } from './providers/groq.js';
+export { OllamaProvider, type OllamaConfig } from './providers/ollama.js';
+export { GroqProvider, type GroqConfig } from './providers/groq.js';
 
-import {
+import type {
   LLMProvider,
   LLMProviderType,
 } from './provider.js';
-import { OllamaProvider, OllamaConfig } from './providers/ollama.js';
-import { GroqProvider, GroqConfig } from './providers/groq.js';
+import { OllamaProvider, type OllamaConfig } from './providers/ollama.js';
+import { GroqProvider, type GroqConfig } from './providers/groq.js';
 
 export interface LLMProviderFactoryConfig {
   type: LLMProviderType;

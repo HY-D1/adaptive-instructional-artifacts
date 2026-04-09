@@ -36,6 +36,56 @@ export type {
 export type { CreateUnitInput } from './textbook-units';
 
 // ============================================================================
+// Safe Storage Adapter (Production-safe storage with quota handling)
+// ============================================================================
+
+export {
+  safeStorage,
+  safeSet,
+  safeGet,
+  safeRemove,
+  isStorageAvailable,
+  estimateSize,
+  isQuotaError,
+  evictRecoverableCaches,
+  subscribeToStorageTelemetry,
+} from './safe-storage';
+
+export type {
+  SafeSetOptions,
+  SafeSetResult,
+  StorageTelemetryEvent,
+  StorageInfo,
+} from './safe-storage';
+
+// ============================================================================
+// Storage Budget Monitor (Proactive budget monitoring with threshold alerts)
+// ============================================================================
+
+export {
+  storageBudget,
+  estimateStorageUsage,
+  getStorageBudgetStatus,
+  startBudgetMonitoring,
+  stopBudgetMonitoring,
+  isBudgetMonitoringRunning,
+  forceBudgetCheck,
+  getBudgetSummary,
+  subscribeToStorageBudgetTelemetry,
+  checkBudgetAndAct,
+  STORAGE_BUDGET_BYTES,
+  WARNING_THRESHOLD,
+  CRITICAL_THRESHOLD,
+  DEFAULT_MONITORING_INTERVAL_MS,
+} from './storage-budget';
+
+export type {
+  StorageBudgetStatus,
+  StorageBudgetInfo,
+  StorageBudgetTelemetryEvent,
+} from './storage-budget';
+
+// ============================================================================
 // Cross-Tab Sync Utilities (from storage-local - localStorage only)
 // ============================================================================
 

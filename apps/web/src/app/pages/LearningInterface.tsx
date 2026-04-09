@@ -59,9 +59,9 @@ import { safeGetStrategy, safeGetProfileOverride } from '../lib/storage/storage-
 import { assignProfile, getProfileById, type EscalationProfile } from '../lib/ml/escalation-profiles';
 import { 
   assignCondition, 
-  loadSessionConfig, 
+  loadSessionConfig,
+  loadSessionConfigAsync,
   saveSessionConfig,
-  SESSION_CONFIG_STORAGE_KEY,
   getConditionAssignmentVersion
 } from '../lib/experiments/condition-assignment';
 import type { SessionConfig } from '../types';
@@ -960,61 +960,81 @@ export function LearningInterface() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Effect: Session configuration assignment/loading (Week 6)
+  // Effect: Session configuration assignment/loading (Week 6 + Workstream 3/6 redesign)
+  // Async loading with backend-first priority, sessionStorage fallback, then assignment
   useEffect(() => {
     if (!learnerId) return;
     
-    // Try to load existing session config first
-    let config = loadSessionConfig();
+    let cancelled = false;
     
-    if (!config || config.learnerId !== learnerId) {
-      // No valid config exists or belongs to different learner - assign new condition
-      config = assignCondition(learnerId);
-      saveSessionConfig(config);
+    const loadConfig = async () => {
+      // Use async loader: backend -> sessionStorage -> assign
+      const result = await loadSessionConfigAsync(learnerId);
       
-      // Log condition assignment event (canonical RESEARCH-4 event type)
-      const configEvent: InteractionEvent = {
-        id: createEventId('event', 'session-config'),
-        sessionId: config.sessionId,
-        learnerId,
-        timestamp: Date.now(),
-        eventType: 'condition_assigned',
-        problemId: currentProblem.id,
-        conditionId: config.conditionId,
-        profileId: config.escalationPolicy,
-        strategyAssigned: config.conditionId,
-        assignmentStrategy: config.staticHintMode ? 'static' : (config.adaptiveLadderDisabled ? 'diagnostic' : 'bandit'),
-        metadata: {
-          sessionConfigVersion: getConditionAssignmentVersion(),
-          textbookDisabled: config.textbookDisabled,
-          adaptiveLadderDisabled: config.adaptiveLadderDisabled,
-          immediateExplanationMode: config.immediateExplanationMode,
-          staticHintMode: config.staticHintMode,
-        }
-      };
-      storage.saveInteraction(configEvent);
-    }
-
-    if (config.sessionId?.trim()) {
-      storage.setActiveSessionId(config.sessionId.trim());
-    }
-
-    setSessionConfig(config);
-    
-    // Override escalation profile if config specifies a policy
-    if (config.escalationPolicy && config.escalationPolicy !== 'adaptive') {
-      const policyProfile = getProfileById(config.escalationPolicy === 'explanation_first' 
-        ? 'explanation-first' 
-        : config.escalationPolicy === 'aggressive' 
-          ? 'fast-escalator'
-          : config.escalationPolicy === 'conservative'
-            ? 'slow-escalator'
-            : 'adaptive-escalator'
-      );
-      if (policyProfile) {
-        setCurrentEscalationProfile(policyProfile);
+      if (cancelled) return;
+      
+      const config = result.config;
+      
+      // Log condition assignment event for new assignments (canonical RESEARCH-4 event type)
+      if (result.isNewAssignment) {
+        const configEvent: InteractionEvent = {
+          id: createEventId('event', 'session-config'),
+          sessionId: config.sessionId,
+          learnerId,
+          timestamp: Date.now(),
+          eventType: 'condition_assigned',
+          problemId: currentProblem.id,
+          conditionId: config.conditionId,
+          profileId: config.escalationPolicy,
+          strategyAssigned: config.conditionId,
+          assignmentStrategy: config.staticHintMode ? 'static' : (config.adaptiveLadderDisabled ? 'diagnostic' : 'bandit'),
+          metadata: {
+            sessionConfigVersion: getConditionAssignmentVersion(),
+            sessionConfigSource: result.source,
+            textbookDisabled: config.textbookDisabled,
+            adaptiveLadderDisabled: config.adaptiveLadderDisabled,
+            immediateExplanationMode: config.immediateExplanationMode,
+            staticHintMode: config.staticHintMode,
+          }
+        };
+        storage.saveInteraction(configEvent);
       }
-    }
+      
+      // Log recovery from sessionStorage (for debugging)
+      if (result.source === 'sessionStorage') {
+        console.info('[SessionConfig] Recovered from sessionStorage:', {
+          learnerId,
+          conditionId: config.conditionId,
+        });
+      }
+
+      if (config.sessionId?.trim()) {
+        storage.setActiveSessionId(config.sessionId.trim());
+      }
+
+      setSessionConfig(config);
+      
+      // Override escalation profile if config specifies a policy
+      if (config.escalationPolicy && config.escalationPolicy !== 'adaptive') {
+        const policyProfile = getProfileById(config.escalationPolicy === 'explanation_first' 
+          ? 'explanation-first' 
+          : config.escalationPolicy === 'aggressive' 
+            ? 'fast-escalator'
+            : config.escalationPolicy === 'conservative'
+              ? 'slow-escalator'
+              : 'adaptive-escalator'
+        );
+        if (policyProfile) {
+          setCurrentEscalationProfile(policyProfile);
+        }
+      }
+    };
+    
+    void loadConfig();
+    
+    return () => {
+      cancelled = true;
+    };
   }, [learnerId, currentProblem.id]);
 
   // Effect 1: Session initialization - handles profile, session ID, and state reset.

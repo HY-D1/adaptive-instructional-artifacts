@@ -31,6 +31,7 @@ import {
 // Note: Using div with overflow-auto instead of ScrollArea
 import { cn } from '../../ui/utils';
 import { storage } from '../../../lib/storage';
+import { MAX_CHAT_MESSAGES, trimChatHistory } from '../../../lib/storage/cache-trimmer';
 import { createEventId } from '../../../lib/utils/event-id';
 import type { InteractionEvent, InstructionalUnit } from '../../../types';
 import { buildRetrievalBundle } from '../../../lib/content/retrieval-bundle';
@@ -395,26 +396,51 @@ export function AskMyTextbookChat({
     }
   }, [learnerId, problemId, CHAT_HISTORY_KEY]);
 
-  // Persist messages on change
+  // Persist messages on change with FIFO eviction
   useEffect(() => {
     if (messages.length > 0) {
       // Filter out restoration messages before saving
       const messagesToSave = messages.filter(m => !m.id.includes('chat-restore'));
       if (messagesToSave.length > 0) {
+        // Apply FIFO cap before saving
+        let cappedMessages = messagesToSave;
+        let evictedCount = 0;
+        if (messagesToSave.length > MAX_CHAT_MESSAGES) {
+          cappedMessages = messagesToSave.slice(-MAX_CHAT_MESSAGES);
+          evictedCount = messagesToSave.length - cappedMessages.length;
+        }
+        
         try {
-          localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messagesToSave));
+          localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(cappedMessages));
+          
+          // Log eviction if it occurred (non-blocking, best-effort)
+          if (evictedCount > 0 && typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('storage_eviction', {
+              detail: {
+                eventType: 'storage_eviction',
+                timestamp: Date.now(),
+                keyClass: 'chat_history',
+                bytesRemoved: 0, // Would need original size to calculate
+                entriesRemoved: evictedCount,
+                trigger: 'startup_trim',
+                context: 'AskMyTextbookChat'
+              }
+            }));
+          }
         } catch (error) {
           // UX: Chat continues working even if persistence fails
           // This is best-effort caching, not critical data
           if (error instanceof DOMException && error.name === 'QuotaExceededError') {
             console.warn('[AskMyTextbookChat] Storage quota exceeded, chat history not persisted');
+            // Try to trim this specific chat history
+            trimChatHistory(learnerId, problemId);
           } else {
             console.warn('[AskMyTextbookChat] Failed to persist chat history:', error);
           }
         }
       }
     }
-  }, [messages, CHAT_HISTORY_KEY]);
+  }, [messages, CHAT_HISTORY_KEY, learnerId, problemId]);
 
   // Track auto-saved queries to prevent duplicates
   const autoSavedQueriesRef = useRef<Set<string>>(new Set());
