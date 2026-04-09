@@ -133,6 +133,7 @@ interface ResearchDashboardUiState {
   timeRange: string;
   activeTab: string;
 }
+import { Card } from '../../ui/card';
 import {
   Table,
   TableBody,
@@ -896,7 +897,7 @@ export function ResearchDashboard() {
     const safeAverage = (total: number, count: number, digits = 1) => (
       count > 0 ? (total / count).toFixed(digits) : (0).toFixed(digits)
     );
-    const comparisonData = Object.values(strategyComparison).map((s): ComparisonRow => ({
+    return Object.values(strategyComparison).map((s): ComparisonRow => ({
       strategy: s.strategy.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
       avgErrors: Number(safeAverage(s.totalErrors, s.learnerCount)),
       avgHints: Number(safeAverage(s.totalHints, s.learnerCount)),

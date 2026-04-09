@@ -66,8 +66,66 @@ const INSTRUCTOR_CODE =
   process.env.VITE_INSTRUCTOR_PASSCODE ??
   (IS_DEPLOYED_AUTH_TARGET ? undefined : 'TeachSQL2024');
 
+// Test seed configuration for deterministic preview accounts
+const TEST_SEED_SECRET = process.env.E2E_TEST_SEED_SECRET ?? 'sql-adapt-e2e-test-secret';
+
+interface TestSeedCredentials {
+  instructor: {
+    email: string;
+    password: string;
+    sectionCode: string;
+  };
+  student: {
+    email: string;
+    password: string;
+    classCode: string;
+  };
+}
+
+let _testSeedCredentials: TestSeedCredentials | null = null;
+
+/**
+ * Attempt to provision deterministic test accounts via the test-seed endpoint.
+ * This is the preferred method for deployed preview testing as it doesn't
+ * require manual env var configuration.
+ */
+async function provisionTestSeedCredentials(): Promise<TestSeedCredentials | null> {
+  try {
+    const bypassHeaders = getVercelBypassHeaders();
+    const response = await fetch(`${API_BASE_URL}/api/auth/test-seed`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-e2e-test-seed-secret': TEST_SEED_SECRET,
+        ...bypassHeaders,
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Unknown' }));
+      console.log(`[auth-setup] Test seed not available: ${error.error || response.status}`);
+      return null;
+    }
+
+    const data = await response.json() as { success: boolean; credentials: TestSeedCredentials };
+    if (data.success && data.credentials) {
+      console.log('[auth-setup] Using deterministic test-seed credentials');
+      return data.credentials;
+    }
+    return null;
+  } catch (error) {
+    console.log('[auth-setup] Test seed endpoint unavailable:', error instanceof Error ? error.message : 'Unknown error');
+    return null;
+  }
+}
+
 function requireDeterministicEnvForDeployed(): void {
   if (!IS_DEPLOYED_AUTH_TARGET) return;
+
+  // If test-seed is configured, we don't need manual env vars
+  if (process.env.E2E_TEST_SEED_SECRET || process.env.E2E_ALLOW_TEST_SEED !== 'false') {
+    return; // Will try test-seed during setup
+  }
 
   const missing: string[] = [];
   if (!process.env.E2E_INSTRUCTOR_EMAIL) missing.push('E2E_INSTRUCTOR_EMAIL');
@@ -81,8 +139,7 @@ function requireDeterministicEnvForDeployed(): void {
     throw new Error(
       '[auth-setup] Deployed auth runs require deterministic env vars: ' +
       missing.join(', ') +
-      '. Seed one real instructor account once, capture its studentSignupCode, ' +
-      'set stable E2E_* values, then rerun setup:auth.',
+      '. Or set E2E_TEST_SEED_SECRET to use automatic test account provisioning.',
     );
   }
 }
@@ -502,6 +559,15 @@ async function signupOrLogin(
 setup.describe('@auth-setup', () => {
   setup.beforeAll(async () => {
     requireDeterministicEnvForDeployed();
+
+    // Try to provision deterministic credentials via test-seed endpoint
+    if (IS_DEPLOYED_AUTH_TARGET && !process.env.E2E_STUDENT_CLASS_CODE) {
+      _testSeedCredentials = await provisionTestSeedCredentials();
+      if (_testSeedCredentials) {
+        console.log('[auth-setup] Using test-seed credentials for deployed auth');
+      }
+    }
+
     const preflight = await runNeonPreflight(API_BASE_URL);
     console.log(
       `[auth-setup] frontendBaseUrl=${FRONTEND_BASE_URL} apiBaseUrl=${API_BASE_URL} ` +
@@ -517,11 +583,16 @@ setup.describe('@auth-setup', () => {
     if (IS_DEPLOYED_AUTH_TARGET) {
       console.log('[auth-setup] Using API-first auth for student (deployed target)');
 
-      let studentClassCode = STUDENT_CLASS_CODE;
+      // Use test-seed credentials if available
+      const testSeedStudent = _testSeedCredentials?.student;
+      const studentEmail = testSeedStudent?.email ?? STUDENT_EMAIL;
+      const studentPassword = testSeedStudent?.password ?? STUDENT_PASSWORD;
+      let studentClassCode = testSeedStudent?.classCode ?? STUDENT_CLASS_CODE;
+
       const apiContext = await createApiContext(playwright, API_BASE_URL);
       try {
-        if (!studentClassCode) {
-          // Provision instructor account to get class code
+        if (!studentClassCode && !_testSeedCredentials) {
+          // Fallback: Provision instructor account to get class code
           const provisionEmail = `e2e-classcode-${Date.now()}@sql-adapt.test`;
           const provisionPassword = 'E2eCodeProvision!123';
           const provisionResponse = await apiContext.post('/api/auth/signup', {
@@ -544,12 +615,12 @@ setup.describe('@auth-setup', () => {
           }
         }
 
-        // Create student account via API
+        // Create student account via API (idempotent - will fail gracefully if exists)
         const signupRes = await apiContext.post('/api/auth/signup', {
           data: {
             name: STUDENT_NAME,
-            email: STUDENT_EMAIL,
-            password: STUDENT_PASSWORD,
+            email: studentEmail,
+            password: studentPassword,
             role: 'student',
             classCode: studentClassCode,
           },
@@ -571,7 +642,7 @@ setup.describe('@auth-setup', () => {
       }
 
       // Use API login to capture auth state
-      await apiLoginAndCaptureState(page, STUDENT_EMAIL, STUDENT_PASSWORD, 'student', '/practice');
+      await apiLoginAndCaptureState(page, studentEmail, studentPassword, 'student', '/practice');
 
       // Verify we're on the practice page
       await expect(page).toHaveURL(/\/practice/, { timeout: 15_000 });
@@ -639,16 +710,23 @@ setup.describe('@auth-setup', () => {
     if (IS_DEPLOYED_AUTH_TARGET) {
       console.log('[auth-setup] Using API-first auth for instructor (deployed target)');
 
+      // Use test-seed credentials if available
+      const testSeedInstructor = _testSeedCredentials?.instructor;
+      const instructorEmail = testSeedInstructor?.email ?? INSTRUCTOR_EMAIL;
+      const instructorPassword = testSeedInstructor?.password ?? INSTRUCTOR_PASSWORD;
+      // For test-seed, we don't need instructorCode (account already exists)
+      const instructorCode = testSeedInstructor ? undefined : INSTRUCTOR_CODE;
+
       const apiContext = await createApiContext(playwright, API_BASE_URL);
       try {
-        // Create instructor account via API if needed
+        // Create instructor account via API if needed (idempotent - will fail gracefully if exists)
         const signupRes = await apiContext.post('/api/auth/signup', {
           data: {
             name: INSTRUCTOR_NAME,
-            email: INSTRUCTOR_EMAIL,
-            password: INSTRUCTOR_PASSWORD,
+            email: instructorEmail,
+            password: instructorPassword,
             role: 'instructor',
-            instructorCode: INSTRUCTOR_CODE,
+            instructorCode,
           },
         });
 
@@ -666,8 +744,8 @@ setup.describe('@auth-setup', () => {
       // Use API login to capture auth state
       await apiLoginAndCaptureState(
         page,
-        INSTRUCTOR_EMAIL,
-        INSTRUCTOR_PASSWORD,
+        instructorEmail,
+        instructorPassword,
         'instructor',
         '/instructor-dashboard',
       );

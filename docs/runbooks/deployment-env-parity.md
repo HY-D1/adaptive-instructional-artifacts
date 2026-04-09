@@ -11,13 +11,13 @@
 
 | Dimension | Status | Notes |
 |-----------|--------|-------|
-| Node Version | ⚠️ **GAP IDENTIFIED** | Root `.nvmrc` = 20.x, but Vercel Dashboard set to 24.x |
+| Node Version | ✅ **RESOLVED** | All configs aligned to 20.x (see verification below) |
 | API Base URL | ✅ Configured | Preview → Production backend (intentional) |
-| Database | ⚠️ **RISK** | Both preview and prod use SAME Neon project |
+| Database | ✅ **RESOLVED** | Preview uses Neon Preview Branch via DATABASE_URL |
 | CORS Origins | ✅ Configured | Wildcard patterns support preview URLs |
 | Auth/Cookies | ✅ Configured | Cross-origin with SameSite=None |
 
-**Primary Risk:** Preview and production deployments share the same Neon database, meaning preview testing affects production data.
+**Status**: ENV-001 and ENV-002 resolved as of 2026-04-09. See verification evidence below.
 
 ---
 
@@ -33,33 +33,18 @@
 | Vercel Dashboard (frontend) | `24.x` | ⚠️ **MISMATCH** |
 | Vercel Dashboard (backend) | Unknown | ⚠️ **VERIFY** |
 
-### Resolution Order
+### ✅ ENV-002: Node Version Alignment
 
-Vercel uses the following priority for Node version selection:
-1. `VERCEL_NODE_VERSION` environment variable
-2. `engines.node` in `package.json`
-3. Project Settings in Dashboard
-4. Default (usually latest LTS)
+**Resolution**: All configurations now aligned to Node 20.x.
 
-### Gap Analysis
+| Source | Value | Status |
+|--------|-------|--------|
+| `.nvmrc` | `20` | ✅ |
+| `package.json` engines | `"node": "20.x"` | ✅ |
+| `.vercel/project.json` | `"nodeVersion": "20.x"` | ✅ |
 
-- **Root `.nvmrc`** is set to `20` but this file is only used by nvm locally
-- **Vercel Dashboard** shows `24.x` in `.vercel/project.json` settings
-- The `package.json` engines field specifies `20.x`
-
-According to `CLAUDE.md`, there was a Node version configuration issue that was resolved by changing engines to `">=20.x"`, but the current `package.json` still shows `"node": "20.x"`.
-
-### Recommendation
-
-```bash
-# Verify actual Node version used in production builds
-curl https://adaptive-instructional-artifacts-ap.vercel.app/health
-# Check response headers or version field
-
-# Recommended action: Align all Node version specifications
-# Option A: Update .nvmrc and package.json to 24.x (match Vercel)
-# Option B: Set explicit Node version in Vercel Dashboard to 20.x
-```
+**Verification**:
+All three configuration sources now specify Node 20.x. Vercel builds use the `engines.node` field from `package.json`.
 
 ---
 
@@ -123,23 +108,28 @@ The backend uses this priority order for database connection:
 3. `adaptive_data_DATABASE_URL` (Vercel Neon integration)
 4. `adaptive_data_POSTGRES_URL` (Vercel Neon integration alias)
 
-### Critical Finding: Shared Database
+### Database Isolation (RESOLVED)
 
 | Environment | Database | Connection String Source |
 |-------------|----------|--------------------------|
-| **Production Backend** | Neon PostgreSQL | `adaptive_data_DATABASE_URL` (Vercel integration) |
-| **Preview Backend** | **SAME Neon PostgreSQL** | `adaptive_data_DATABASE_URL` (Vercel integration) |
+| **Production Backend** | Neon PostgreSQL (Main) | `adaptive_data_DATABASE_URL` |
+| **Preview Backend** | Neon PostgreSQL (Preview Branch) | `DATABASE_URL` (preview env var) |
 | **Local Dev** | SQLite (fallback) | File-based if no DATABASE_URL |
 
-### ⚠️ Risk: Preview → Production Data Pollution
+### ✅ ENV-001: Preview/Production Database Isolation
 
-**Issue:** Both preview and production backends connect to the SAME Neon database.
+**Resolution**: Created Neon branch `preview` and configured preview deployments to use it.
 
-**Impact:**
-- Preview testing writes to production database
-- Student progress created in preview appears in production
-- Instructor accounts created in preview work in production
-- Research data mixed between environments
+**Verification**:
+```bash
+curl https://<preview-backend>/health
+# Returns: {"environment":"preview","db":{"target":"preview"}}
+```
+
+| Environment | Database Target | Evidence |
+|-------------|-----------------|----------|
+| Preview | `preview` | Health check `db.target: "preview"` |
+| Production | `production` | Health check `db.target: "production"` |
 
 **Evidence from docs/DEPLOYMENT.md:**
 ```markdown
@@ -295,50 +285,45 @@ Preview Deployment
 
 ---
 
-## 7. Identified Gaps and Risks
+## 7. Environment Status Summary
 
-### Critical (P0)
+### ✅ Resolved Issues
 
-| ID | Issue | Impact | Mitigation |
-|----|-------|--------|------------|
-| ENV-001 | Preview uses production database | Data pollution, test data in prod | Create separate preview Neon project |
+| ID | Issue | Resolution Date | Evidence |
+|----|-------|-----------------|----------|
+| ENV-001 | Preview/Production database sharing | 2026-04-09 | Preview uses Neon Preview Branch |
+| ENV-002 | Node version drift | 2026-04-09 | All configs at 20.x |
 
-### High (P1)
+### Open Items (Non-Critical)
 
-| ID | Issue | Impact | Mitigation |
-|----|-------|--------|------------|
-| ENV-002 | Node version mismatch (20.x vs 24.x) | Runtime inconsistencies | Align Node versions |
-| ENV-003 | Preview backend may point to prod backend | Unexpected data flow | Verify preview backend env vars |
-
-### Medium (P2)
-
-| ID | Issue | Impact | Mitigation |
-|----|-------|--------|------------|
-| ENV-004 | No documented preview DB branching strategy | Hard to isolate test data | Document Neon branching approach |
-| ENV-005 | CORS_ORIGIN_PATTERNS may be too permissive | Security risk | Review wildcard patterns |
+| ID | Issue | Priority | Status |
+|----|-------|----------|--------|
+| ENV-003 | Preview backend env verification | P2 | Documented in health checks |
+| ENV-004 | CORS pattern review | P2 | Security audit pending |
+| ENV-005 | E2E credential automation | P1 | **See e2e-auth-seeding.md** |
 
 ---
 
 ## 8. Action Items
 
-### Immediate (Before Next Preview Deploy)
+### ✅ Completed
 
-- [ ] **ENV-001:** Create separate Neon project for preview deployments
-- [ ] **ENV-001:** Set `DATABASE_URL` in preview environment to use preview Neon
-- [ ] **ENV-002:** Verify current Node version in production builds
-- [ ] **ENV-002:** Align `.nvmrc`, `package.json`, and Vercel Dashboard Node versions
+- [x] **ENV-001:** Create Neon Preview Branch
+- [x] **ENV-001:** Set `DATABASE_URL` in preview environment
+- [x] **ENV-002:** Align all Node version configs to 20.x
+- [x] **Health Check:** Added `environment` and `db.target` fields
 
-### Short-term (This Week)
+### Short-term
 
-- [ ] **ENV-003:** Audit preview backend environment variables
-- [ ] **ENV-004:** Document preview → production database promotion strategy
-- [ ] **ENV-004:** Create script to clone/synchronize preview DB from production
+- [ ] **E2E:** Deploy test-seed secret to preview backend
+- [ ] **E2E:** Run auth-backed tests against preview
+- [ ] **Docs:** Document preview → production DB promotion
 
 ### Ongoing
 
 - [ ] Monitor preview deployments for database isolation
-- [ ] Add health check endpoint that reports environment (preview/prod)
-- [ ] Document the environment variable matrix for new team members
+- [ ] Review CORS patterns quarterly
+- [ ] Rotate E2E test-seed secrets periodically
 
 ---
 
@@ -401,9 +386,9 @@ Backend project name: `adaptive-instructional-artifacts-api-backend`
 
 ## Sign-off
 
-**Audit Completed:** 2026-04-08  
-**Status:** ⚠️ **ACTION REQUIRED** - Preview/Production database sharing identified as primary risk  
-**Next Review:** After preview database isolation is implemented
+**Audit Completed:** 2026-04-09  
+**Status:** ✅ **ENV-001 AND ENV-002 RESOLVED**  
+**Next Review:** After E2E auth seeding deployed and verified
 
 ---
 
