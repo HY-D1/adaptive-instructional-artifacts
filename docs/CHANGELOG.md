@@ -3,7 +3,7 @@
 > **Single Source of Truth for Project Progress and Decisions**
 > 
 > Format: [Keep a Changelog](https://keepachangelog.com/)  
-> Last Updated: 2026-04-08
+> Last Updated: 2026-04-09
 
 ---
 
@@ -50,6 +50,28 @@
 - No `docs/archive/` - delete old docs
 - No dated audit evidence - delete after use
 - No duplicate "* 2" files
+
+### Changed - 2026-04-09
+
+#### Documentation Consolidation
+**Deep audit and consolidation of docs folder** - merged duplicates, removed rule violations, improved cross-references.
+
+**Files Deleted** (violating PROJECT_COORDINATION.md):
+- `docs/progress.md` - Rule violation: use CHANGELOG.md instead
+- `docs/week2026-04-09_progress.md` - Rule violation: no week-based progress files
+
+**Duplicates Removed**:
+- `docs/runbooks/PERSISTENCE_HARDENING_REPORT.md` - Duplicate of docs/PERSISTENCE_HARDENING_REPORT.md
+- `docs/runbooks/HARNESS_GATE_MATRIX.md` - Case-duplicate of harness-gate-matrix.md
+
+**Content Merged**:
+- `docs/runbooks/persistence-truth-map.md` → merged into `docs/PERSISTENCE_MAP.md`
+- `docs/runbooks/instructor-dashboard-fix.md` + `instructor-dashboard-verification.md` → merged into `docs/runbooks/instructor-dashboard.md`
+
+**Cross-References Added**:
+- E2E_AUTH_CREDENTIALS.md ↔ e2e-auth-seeding.md ↔ e2e-inventory.md
+
+**Documentation Count**: Reduced from 70+ files to 61 organized files
 
 ### Fixed - 2026-04-08
 

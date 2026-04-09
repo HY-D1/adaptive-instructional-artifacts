@@ -1,5 +1,9 @@
 # E2E Test Inventory
 
+> **Related Documents:**  
+> - [E2E Auth Credentials](../E2E_AUTH_CREDENTIALS.md) — Production test account credentials  
+> - [E2E Auth Seeding](./e2e-auth-seeding.md) — Deterministic test-seed approach for preview
+
 **Date**: 2026-04-09  
 **Branch**: `hardening/research-grade-tightening`  
 **Commit**: `a00f41d`  

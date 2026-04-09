@@ -1,5 +1,9 @@
 # E2E Auth Seeding Guide
 
+> **Related Documents:**  
+> - [E2E Auth Credentials](../E2E_AUTH_CREDENTIALS.md) — Production test account credentials  
+> - [E2E Inventory](./e2e-inventory.md) — Complete test catalog and sharding strategy
+
 **Date**: 2026-04-09  
 **Status**: Message 3/9 Complete  
 
