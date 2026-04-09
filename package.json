@@ -83,6 +83,7 @@
     "vercel:preview": "vercel deploy --prebuilt"
   },
   "dependencies": {
+    "@monaco-editor/loader": "^1.7.0",
     "@monaco-editor/react": "^4.7.0",
     "@neondatabase/serverless": "^1.0.2",
     "@radix-ui/react-checkbox": "1.1.4",
@@ -152,6 +153,9 @@
     "react-dom": {
       "optional": true
     }
+  },
+  "engines": {
+    "node": "20.x"
   },
   "pnpm": {
     "overrides": {

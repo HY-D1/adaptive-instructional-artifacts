@@ -322,9 +322,10 @@ async function analyzeProvenance(db: any, report: BackfillReport) {
   report.provenanceSummary.backfilledHintId = parseInt(row.recoverable_hint_id, 10);
   report.provenanceSummary.backfilledRetrieval = parseInt(row.has_retrieval_links, 10);
   
-  // Legacy partial = those that need both hint_id backfill AND have retrieval links
-  report.provenanceSummary.legacyPartial = 
-    report.provenanceSummary.backfilledHintId + report.provenanceSummary.backfilledRetrieval;
+  // Note: legacyPartial is intentionally NOT calculated as a sum.
+  // backfilledHintId and backfilledRetrieval can overlap (an event may have
+  // had its hint_id recovered AND have retrieval links), so summing would
+  // double-count. Each metric is reported individually in the summary.
 
   console.log(`   Native complete: ${report.provenanceSummary.nativeComplete}`);
   console.log(`   Missing template (unverifiable): ${report.provenanceSummary.unverifiableTemplate}`);
@@ -371,7 +372,8 @@ function printSummary(report: BackfillReport) {
   console.log(`  Backfilled hint_id: ${report.provenanceSummary.backfilledHintId}`);
   console.log(`  Backfilled retrieval: ${report.provenanceSummary.backfilledRetrieval}`);
   console.log(`  Unverifiable template: ${report.provenanceSummary.unverifiableTemplate}`);
-  console.log(`  Legacy partial: ${report.provenanceSummary.legacyPartial}`);
+  // Note: Individual categories above may overlap (e.g., an event could have both
+  // hint_id backfilled AND retrieval links). Do not sum them for a "total" count.
   console.log();
 
   if (report.dryRun) {
@@ -399,7 +401,7 @@ function printCiSummary(report: BackfillReport) {
   console.log(`template_ids_unverifiable=${report.templateIdReport.markedUnverifiable}`);
   console.log(`retrieval_links_created=${report.retrievalLinks.linksCreated}`);
   console.log(`native_complete=${report.provenanceSummary.nativeComplete}`);
-  console.log(`legacy_partial=${report.provenanceSummary.legacyPartial}`);
+  // Note: legacy_partial metric removed - categories can overlap, so summing causes double-counting
   console.log('==================');
 }
 
