@@ -83,6 +83,7 @@ import {
   type PathProgress
 } from '../lib/knowledge';
 import { useDebouncedCodeChange } from '../hooks/useDebouncedCodeChange';
+import { useLearnerProgress } from '../hooks/useLearnerProgress';
 
 const INSTRUCTOR_SUBTYPE_OPTIONS = getKnownSqlEngageSubtypes();
 
@@ -2112,55 +2113,42 @@ export function LearningInterface() {
     return allInteractions.filter(i => i.problemId === currentProblem.id);
   }, [learnerId, currentProblem.id, solvedRefreshKey]);
 
-  // Memoized helper to check if a problem has been solved
-  // Reads from learner profile for persistence across sessions
-  const solvedProblemIds = useMemo(() => {
-    const profile = storage.getProfile(learnerId);
-    return profile?.solvedProblemIds ?? new Set<string>();
-  }, [learnerId, solvedRefreshKey]);
+  // Unified progress model - single source of truth for all progress metrics
+  const progress = useLearnerProgress({
+    learnerId,
+    currentProblemId: currentProblem.id,
+    refreshKey: solvedRefreshKey,
+  });
 
-  // Current problem solved status - refreshes when problem changes
-  const isCurrentProblemSolved = useMemo(() => {
-    const profile = storage.getProfile(learnerId);
-    return profile?.solvedProblemIds?.has(currentProblem.id) ?? false;
-  }, [learnerId, currentProblem.id, solvedRefreshKey]);
-
-  const isProblemSolved = useCallback((problemId: string): boolean => {
-    return solvedProblemIds.has(problemId);
-  }, [solvedProblemIds]);
-
-  // Get count of solved problems
-  const solvedCount = solvedProblemIds.size;
-
-  // Calculate progress percentage
-  const progressPercentage = useMemo(() =>
-    Math.round((solvedCount / sqlProblems.length) * 100),
-    [solvedCount]
-  );
-
-  // Current problem index (1-based for display)
-  const currentProblemIndex = useMemo(() =>
-    sqlProblems.findIndex(p => p.id === currentProblem.id) + 1,
-    [currentProblem.id]
-  );
+  // Destructure for convenience (backward compatibility with existing code)
+  const {
+    totalProblems,
+    currentProblemNumber,
+    solvedCount,
+    solvedPercent,
+    solvedProblemIds,
+    isCurrentProblemSolved,
+    isProblemSolved,
+    getSolvedCountForDifficulty,
+  } = progress;
 
   // Navigation handlers
   const handleNextProblem = useCallback(() => {
-    const nextIndex = currentProblemIndex; // already 1-based, so this is correct position for next
+    const nextIndex = currentProblemNumber; // already 1-based, so this is correct position for next
     if (nextIndex < sqlProblems.length) {
       handleProblemChange(sqlProblems[nextIndex].id);
     }
-  }, [currentProblemIndex, handleProblemChange]);
+  }, [currentProblemNumber, handleProblemChange]);
 
   const handlePreviousProblem = useCallback(() => {
-    const prevIndex = currentProblemIndex - 2; // convert to 0-based, then back one
+    const prevIndex = currentProblemNumber - 2; // convert to 0-based, then back one
     if (prevIndex >= 0) {
       handleProblemChange(sqlProblems[prevIndex].id);
     }
-  }, [currentProblemIndex, handleProblemChange]);
+  }, [currentProblemNumber, handleProblemChange]);
 
-  const hasNextProblem = currentProblemIndex < sqlProblems.length;
-  const hasPreviousProblem = currentProblemIndex > 1;
+  const hasNextProblem = currentProblemNumber < sqlProblems.length;
+  const hasPreviousProblem = currentProblemNumber > 1;
 
   // Memoized error and attempt calculations
   const latestProblemErrorEvent = useMemo(() => 
@@ -2333,25 +2321,26 @@ export function LearningInterface() {
                   </TooltipContent>
                 </Tooltip>
 
-                {/* Student progress indicator */}
+                {/* Student progress indicator - Shows solved count, NOT current position */}
                 {isStudent && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-lg border border-green-200">
                         <Target className="size-4 text-green-600" />
                         <span className="text-sm font-medium text-green-700">
-                          {solvedCount}/{sqlProblems.length} solved
+                          Solved: {solvedCount} / {totalProblems}
                         </span>
                         <div className="w-16 h-2 bg-green-200 rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-green-500 rounded-full transition-all"
-                            style={{ width: `${progressPercentage}%` }}
+                            style={{ width: `${solvedPercent}%` }}
                           />
                         </div>
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>Your progress: {progressPercentage}% complete</p>
+                      <p>You have solved {solvedCount} of {totalProblems} problems ({solvedPercent}%)</p>
+                      <p className="text-xs text-gray-500 mt-1">This shows your overall completion progress</p>
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -2455,7 +2444,7 @@ export function LearningInterface() {
                   <div className="flex-1 min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className="text-sm text-gray-500 font-medium">
-                        Problem {currentProblemIndex} of {sqlProblems.length}
+                        Current: {currentProblemNumber} / {totalProblems}
                       </span>
                       <h2 className="text-xl font-bold">{currentProblem.title}</h2>
                       <Badge 
@@ -2540,8 +2529,8 @@ export function LearningInterface() {
                     <SelectTrigger className="w-full lg:w-[300px]" data-testid="problem-select-trigger">
                       <div className="flex items-center gap-2 overflow-hidden">
                         <span className="truncate">{currentProblem.title}</span>
-                        <Badge variant="outline" className="text-[10px] px-1 shrink-0 hidden sm:inline-flex">
-                          {solvedCount}/{sqlProblems.length}
+                        <Badge variant="outline" className="text-[10px] px-1 shrink-0 hidden sm:inline-flex" title="Problems solved">
+                          {solvedCount} / {totalProblems} solved
                         </Badge>
                       </div>
                     </SelectTrigger>
@@ -2557,7 +2546,7 @@ export function LearningInterface() {
                               difficulty === 'intermediate' ? 'text-yellow-700 bg-yellow-50' :
                               'text-red-700 bg-red-50'
                             }`}>
-                              {difficulty} ({solvedInDifficulty}/{problems.length} solved)
+                              {difficulty} ({solvedInDifficulty} / {problems.length} solved)
                             </div>
                             {problems.map(problem => {
                               const solved = isProblemSolved(problem.id);

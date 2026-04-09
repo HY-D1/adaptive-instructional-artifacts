@@ -387,10 +387,7 @@ export class SQLExecutor {
    * - Floating point values use epsilon tolerance (0.01)
    * - Null and undefined are treated as equivalent
    * - String values are trimmed before comparison
-   */
-  /**
-   * Compare actual and expected query results
-   * Uses set-based comparison (order-independent)
+   * 
    * @param actual - Actual query results
    * @param expected - Expected query results
    * @returns Comparison result with match flag and differences
@@ -409,56 +406,76 @@ export class SQLExecutor {
       return { match: false, differences };
     }
 
-    // Normalize rows for set comparison (order-independent)
-    const normalizeRow = (row: Record<string, unknown>): string => {
-      const sortedKeys = Object.keys(row).sort();
-      const normalized: Record<string, string> = {};
-      for (const key of sortedKeys) {
-        normalized[key] = normalizeValue(row[key]);
-      }
-      return JSON.stringify(normalized);
-    };
-
-    // Build multisets of normalized rows to handle duplicate rows correctly
-    const actualSet = new Map<string, number>();
-    const expectedSet = new Map<string, number>();
-
-    for (const row of actual) {
-      const key = normalizeRow(row);
-      actualSet.set(key, (actualSet.get(key) || 0) + 1);
+    // Handle empty results
+    if (actual.length === 0 && expected.length === 0) {
+      return { match: true, differences: [] };
     }
 
-    for (const row of expected) {
-      const key = normalizeRow(row);
-      expectedSet.set(key, (expectedSet.get(key) || 0) + 1);
-    }
+    // Create mutable copies for matching
+    const actualRows = [...actual];
+    const expectedRows = [...expected];
+    const matchedActual = new Set<number>();
+    const matchedExpected = new Set<number>();
 
-    // Compare the two multisets
-    let match = true;
-    
-    // Check for missing or mismatched rows in actual
-    for (const [key, count] of expectedSet) {
-      const actualCount = actualSet.get(key) || 0;
-      if (actualCount !== count) {
-        match = false;
-        const row = JSON.parse(key) as Record<string, string>;
-        if (actualCount < count) {
-          differences.push(`Missing ${count - actualCount} row(s): ${JSON.stringify(row)}`);
+    // First pass: Match rows that are equal using valuesEqual (epsilon-aware)
+    for (let eIdx = 0; eIdx < expectedRows.length; eIdx++) {
+      if (matchedExpected.has(eIdx)) continue;
+      
+      const expectedRow = expectedRows[eIdx];
+      const expectedKeys = Object.keys(expectedRow).sort();
+
+      for (let aIdx = 0; aIdx < actualRows.length; aIdx++) {
+        if (matchedActual.has(aIdx)) continue;
+
+        const actualRow = actualRows[aIdx];
+        const actualKeys = Object.keys(actualRow).sort();
+
+        // Check column structure matches
+        if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+          continue;
+        }
+
+        // Check all cells using valuesEqual (supports epsilon for floats)
+        let allCellsMatch = true;
+        for (const key of actualKeys) {
+          if (!valuesEqual(actualRow[key], expectedRow[key])) {
+            allCellsMatch = false;
+            break;
+          }
+        }
+
+        if (allCellsMatch) {
+          matchedActual.add(aIdx);
+          matchedExpected.add(eIdx);
+          break;
         }
       }
     }
 
-    // Check for extra rows in actual
-    for (const [key, count] of actualSet) {
-      const expectedCount = expectedSet.get(key) || 0;
-      if (expectedCount === 0) {
-        match = false;
-        const row = JSON.parse(key) as Record<string, string>;
-        differences.push(`Unexpected row: ${JSON.stringify(row)}`);
+    // Check if all rows matched
+    const allMatched = matchedExpected.size === expectedRows.length && 
+                       matchedActual.size === actualRows.length;
+
+    if (allMatched) {
+      return { match: true, differences: [] };
+    }
+
+    // Generate detailed diffs for unmatched rows
+    // Find unmatched expected rows (missing from actual)
+    for (let eIdx = 0; eIdx < expectedRows.length; eIdx++) {
+      if (!matchedExpected.has(eIdx)) {
+        differences.push(`Missing row: ${JSON.stringify(expectedRows[eIdx])}`);
       }
     }
 
-    return { match, differences };
+    // Find unmatched actual rows (unexpected in actual)
+    for (let aIdx = 0; aIdx < actualRows.length; aIdx++) {
+      if (!matchedActual.has(aIdx)) {
+        differences.push(`Unexpected row: ${JSON.stringify(actualRows[aIdx])}`);
+      }
+    }
+
+    return { match: false, differences };
   }
 
   /**

@@ -358,7 +358,7 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     schema: productsPracticeSchema,
     expectedQuery: 'SELECT category, AVG(price) AS avg_price FROM products GROUP BY category HAVING AVG(price) > 200;',
     expectedResult: [
-      { category: 'Electronics', avg_price: 369.66 },
+      { category: 'Electronics', avg_price: 369.99 },
       { category: 'Furniture', avg_price: 249.99 }
     ]
   },
