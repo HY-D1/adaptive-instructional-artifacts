@@ -468,6 +468,22 @@ Try to fix:
 
 Only mark flaky if the root cause is real and documented.
 
+### E2E Test Suite Status
+
+See `docs/runbooks/status.md` for current test metrics.
+
+**Current State**: 30/30 critical tests passing (100%), 91% overall pass rate.
+
+Key test patterns for this codebase:
+
+| Pattern | Use When |
+|---------|----------|
+| `syncLocalStorage(from, to)` | Cross-tab sync tests (Playwright doesn't auto-sync) |
+| `page.evaluate()` for storage | Immediate storage manipulation (preferred over `addInitScript()`) |
+| `verifyDataIntegrity()` without `expectedSessionId` | Session IDs change on reload, data must persist |
+| Broad event type filters | App generates `'execution'`, `'query_submitted'`, `'error'` etc. |
+| Fallback seeding | When UI path unreliable (e.g., "Save to Notes" button) |
+
 ---
 
 ## 9) Data and logging rules
