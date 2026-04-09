@@ -34,7 +34,7 @@ import {
   OLLAMA_BASE_URL,
 } from './config.js';
 import { isUsingNeon } from './db/index.js';
-import { resolveDbEnv } from './db/env-resolver.js';
+import { resolveDbEnv, resolveEnvironment, resolveDbTarget } from './db/env-resolver.js';
 import { optionalAuth, requireAuth, requireInstructor } from './middleware/auth.js';
 import { requireCsrf } from './middleware/csrf.js';
 import { generalApiLimiter, researchRateLimiter } from './middleware/rate-limit.js';
@@ -183,6 +183,8 @@ app.get('/', (_req: Request, res: Response) => {
 app.get('/health', async (_req: Request, res: Response) => {
   const featureStatus = await getFeatureStatus();
   const { source } = resolveDbEnv();
+  const environment = resolveEnvironment();
+  const dbTarget = resolveDbTarget();
 
   // Check actual database connectivity
   let dbStatus: 'ok' | 'error' = 'ok';
@@ -204,9 +206,11 @@ app.get('/health', async (_req: Request, res: Response) => {
     status: dbStatus === 'ok' ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
+    environment,
     db: {
       mode: isUsingNeon() ? 'neon' : 'sqlite',
       envSource: source,
+      target: dbTarget,
       status: dbStatus,
       latencyMs: dbLatencyMs,
     },
@@ -220,11 +224,15 @@ app.get('/health', async (_req: Request, res: Response) => {
 app.get('/api/system/persistence-status', (_req: Request, res: Response) => {
   const neon = isUsingNeon();
   const { source } = resolveDbEnv();
+  const environment = resolveEnvironment();
+  const dbTarget = resolveDbTarget();
 
   res.json({
     backendReachable: true,
     dbMode: neon ? 'neon' : 'sqlite',
     resolvedEnvSource: source,
+    dbTarget,
+    environment,
     persistenceRoutesEnabled: true,
     researchContractVersion: RESEARCH_CONTRACT_VERSION,
   });

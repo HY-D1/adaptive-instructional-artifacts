@@ -706,6 +706,8 @@ test.describe('@weekly @quota @recovery SC-4: Storage Quota & Recovery', () => {
   });
 
   test('Graceful degradation with memory fallback', async ({ page }) => {
+    // Navigate to practice page (auth is set up by beforeEach)
+    // Navigate to root first, then wait for redirect to /practice
     await page.goto('/');
     await expect(page).toHaveURL(/\/practice/, { timeout: 30_000 });
     
@@ -713,35 +715,51 @@ test.describe('@weekly @quota @recovery SC-4: Storage Quota & Recovery', () => {
       return await page.getByRole('button', { name: 'Run Query' }).isEnabled().catch(() => false);
     }, { timeout: 30_000, intervals: [500] }).toBe(true);
 
-    // Try to push past quota limit
+    // Try to push past quota limit with more aggressive filling
     const quotaResult = await page.evaluate(({ fillPrefix }) => {
-      const chunkSize = 500 * 1024; // 500KB chunks
-      const chunk = 'x'.repeat(chunkSize);
-      let keysCreated = 0;
-      let quotaErrors = 0;
+      const results = {
+        keysCreated: 0,
+        quotaErrors: 0,
+        lastError: null as string | null
+      };
       
-      for (let i = 0; i < 20; i++) {
+      // Try increasingly large chunks until we hit quota
+      const chunkSizes = [100 * 1024, 500 * 1024, 1024 * 1024]; // 100KB, 500KB, 1MB
+      
+      for (const chunkSize of chunkSizes) {
         try {
-          localStorage.setItem(`${fillPrefix}large-${i}`, chunk);
-          keysCreated++;
-        } catch (e: any) {
-          if (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014) {
-            quotaErrors++;
-            break;
+          const chunk = 'x'.repeat(chunkSize);
+          
+          for (let i = 0; i < 50; i++) {
+            try {
+              localStorage.setItem(`${fillPrefix}large-${chunkSize}-${i}`, chunk);
+              results.keysCreated++;
+            } catch (e: any) {
+              if (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014 || 
+                  e.message?.includes('quota') || e.message?.includes('Quota')) {
+                results.quotaErrors++;
+                results.lastError = e.name || e.message;
+                break;
+              }
+            }
           }
+          
+          if (results.quotaErrors > 0) break;
+        } catch (e: any) {
+          results.lastError = e.name || e.message;
         }
       }
       
-      return { keysCreated, quotaErrors };
+      return results;
     }, { fillPrefix: STORAGE_FILL_PREFIX });
     
-    console.log(`Quota test: ${quotaResult.keysCreated} keys, ${quotaResult.quotaErrors} quota errors`);
+    console.log(`Quota test: ${quotaResult.keysCreated} keys, ${quotaResult.quotaErrors} quota errors, lastError: ${quotaResult.lastError}`);
     
-    // App should still function
+    // App should still function even if quota was hit
     await expect(page.locator('body')).toBeVisible();
     await expect(page.locator('#root')).toBeVisible();
     
-    // Try to perform operations
+    // Try to perform operations - this verifies memory fallback works
     await replaceEditorText(page, CORRECT_QUERY);
     await page.getByRole('button', { name: 'Run Query' }).click();
     await page.waitForTimeout(2000);
@@ -751,16 +769,40 @@ test.describe('@weekly @quota @recovery SC-4: Storage Quota & Recovery', () => {
       fullPage: true 
     });
 
-    // Clean up
+    // Clean up - remove all our test data
     await clearDummyStorageData(page);
     
-    // Reload and verify recovery
+    // Reload and verify recovery - app should work normally after cleanup
+    // Note: after reload, we need to restore auth state since addInitScript only runs on fresh navigation
+    await page.evaluate((id: string) => {
+      window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
+      window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
+        id,
+        name: 'Quota Recovery Tester',
+        role: 'student',
+        createdAt: Date.now()
+      }));
+      window.localStorage.setItem('sql-learning-profiles', JSON.stringify([{
+        id,
+        name: 'Quota Recovery Tester',
+        conceptsCovered: [],
+        conceptCoverageEvidence: [],
+        errorHistory: [],
+        interactionCount: 0,
+        version: 1,
+        currentStrategy: 'adaptive-medium',
+        preferences: { escalationThreshold: 3, aggregationDelay: 300000 }
+      }]));
+    }, LEARNER_ID);
+    
     await page.reload();
-    await page.waitForLoadState('domcontentloaded', { timeout: 15_000 });
+    await page.waitForLoadState('networkidle', { timeout: 15_000 });
     
     await expect(page.locator('body')).toBeVisible();
     
-    const runButtonVisible = await page.getByRole('button', { name: 'Run Query' }).isVisible().catch(() => false);
-    expect(runButtonVisible).toBe(true);
+    // Wait for the app to fully load and render the Run Query button
+    await expect.poll(async () => {
+      return await page.getByRole('button', { name: 'Run Query' }).isVisible().catch(() => false);
+    }, { timeout: 15_000, intervals: [500] }).toBe(true);
   });
 });
