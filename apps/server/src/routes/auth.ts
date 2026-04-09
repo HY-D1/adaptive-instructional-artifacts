@@ -43,6 +43,7 @@ import {
   getSectionBySignupCode,
   getSectionForStudent,
 } from '../db/sections.js';
+import { loginRateLimiter, signupRateLimiter } from '../middleware/rate-limit.js';
 
 const router = Router();
 
@@ -147,7 +148,7 @@ async function logAuthEvent(params: {
 // POST /api/auth/signup
 // ============================================================================
 
-router.post('/signup', async (req: Request, res: Response) => {
+router.post('/signup', signupRateLimiter, async (req: Request, res: Response) => {
   // Auth routes require Neon (SQLite has no real auth)
   if (!isUsingNeon()) {
     res.status(503).json({
@@ -329,7 +330,7 @@ router.post('/signup', async (req: Request, res: Response) => {
 // POST /api/auth/login
 // ============================================================================
 
-router.post('/login', async (req: Request, res: Response) => {
+router.post('/login', loginRateLimiter, async (req: Request, res: Response) => {
   if (!isUsingNeon()) {
     res.status(503).json({
       success: false,
@@ -416,6 +417,7 @@ router.post('/login', async (req: Request, res: Response) => {
 
 // ============================================================================
 // POST /api/auth/logout
+// No rate limiting - logout should always work
 // ============================================================================
 
 router.post('/logout', requireCsrf, (_req: Request, res: Response) => {
@@ -426,6 +428,7 @@ router.post('/logout', requireCsrf, (_req: Request, res: Response) => {
 
 // ============================================================================
 // GET /api/auth/me
+// No rate limiting - session check should always work
 // ============================================================================
 
 router.get('/me', (req: Request, res: Response) => {

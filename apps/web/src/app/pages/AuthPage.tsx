@@ -125,7 +125,15 @@ export function AuthPage() {
     const result = await login(loginEmail, loginPassword);
     setLoginLoading(false);
     if (!result.success) {
-      setLoginError(result.error ?? 'Login failed');
+      // Check if this is a rate limit error (429)
+      if (result.rateLimited) {
+        const retryMsg = result.retryAfter
+          ? ` Please try again in ${result.retryAfter}.`
+          : ' Please wait 15 minutes before trying again.';
+        setLoginError(`Too many login attempts.${retryMsg}`);
+      } else {
+        setLoginError(result.error ?? 'Login failed');
+      }
       return;
     }
     // Navigation handled by the useEffect above once user is set
@@ -148,6 +156,14 @@ export function AuthPage() {
     });
     setSignupLoading(false);
     if (!result.success) {
+      // Check if this is a rate limit error (429)
+      if (result.rateLimited) {
+        const retryMsg = result.retryAfter
+          ? ` Please try again in ${result.retryAfter}.`
+          : ' Please wait 15 minutes before trying again.';
+        setSignupError(`Too many signup attempts.${retryMsg}`);
+        return;
+      }
       const fieldErrors = result.details
         ? Object.entries(result.details)
             .map(([f, msgs]) => `${f}: ${msgs.join(', ')}`)

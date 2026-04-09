@@ -1,6 +1,7 @@
 # Project Status — SQL-Adapt
 
-**Last Updated**: 2026-04-07 (Telemetry Hardening: Paper Data Contract v1 - Messages 1-4)
+**Last Updated**: 2026-04-08 (Auth Rate Limiting Fix — Workstream 6 Deployment Parity Verification)
+**Previous Update**: 2026-04-08 (Storage Hardening: Workstream 6/6 - Deployment Readiness and Runbook Alignment)
 **Purpose**: Single durable status file for implementation and deployment readiness.
 
 ---
@@ -22,6 +23,7 @@
 | WS5 - Production Acceptance Tests | PASSED | Core supervised-beta flows covered by regression tests (auth/resume, learning page, hints, save-to-notes, refresh/resume, active-run integrity) |
 | WS5b - Public Edge Concurrent Load Test | PASSED | 300 concurrent requests against production public endpoints, 100% success, 0 errors, p95 < 2400ms |
 | WS6 - Beta Operations Documentation | COMPLETED | 40-student operations runbook with stop conditions, escalation path, and incident runbook |
+| WS6b - Storage Quota Hardening | COMPLETED | Incident playbook created, safe cleanup keys documented, Neon durability verification steps defined |
 | WS7 - Live Staged Beta Audit | PENDING | Requires real student sessions: observation forms, telemetry audit, and stage-gate evidence |
 
 ### Live Beta Evidence Requirement
@@ -207,6 +209,78 @@ npx vitest run apps/web/src/app/hooks/useDebouncedCodeChange.test.ts
 
 - [Paper Data Contract](../research/PAPER_DATA_CONTRACT.md) - Full contract specification
 - [Beta Telemetry Readiness](./beta-telemetry-readiness.md) - Beta readiness checklist (superseded for paper decisions)
+
+---
+
+## Auth Rate Limiting Fix — 2026-04-08
+
+**Issue**: Preview/prod login blocked by overly aggressive IP-based rate limiting  
+**Fix**: Endpoint-specific rate limiters with email+IP keying for login  
+**Status**: Deployed
+
+| Endpoint | Rate Limit | Key Strategy |
+|----------|------------|--------------|
+| POST /api/auth/login | 10/15min | email + IP (normalized lowercase) |
+| POST /api/auth/signup | 5/15min | IP only |
+| POST /api/auth/logout | None | N/A |
+| GET /api/auth/me | None | N/A |
+
+**Deployment Verification**:
+```bash
+# Check rate limit headers on login
+curl -i -X POST https://adaptive-instructional-artifacts-ap.vercel.app/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"wrong"}'
+
+# Should see RateLimit-* headers; 429 response after 10 failed attempts
+```
+
+**Deployment Parity Notes**:
+- Preview and production deployments use separate Vercel serverless functions
+- Rate limiter state is in-memory (Map/Set), so each deployment is isolated
+- Preview deployments cannot pollute production rate limit state
+- Backend: `https://adaptive-instructional-artifacts-ap.vercel.app`
+- Frontend: `https://adaptive-instructional-artifacts.vercel.app`
+
+---
+
+## Storage Quota Hardening — 2026-04-08
+
+**Status**: COMPLETED
+
+**Goal**: Ensure operational readiness for localStorage quota issues with clear incident response procedures.
+
+### Completed Deliverables
+
+| Deliverable | Status | Location |
+|-------------|--------|----------|
+| Storage-quota incident playbook | ✅ Complete | `docs/runbooks/storage-quota-incident.md` |
+| Safe cleanup keys documented | ✅ Complete | Incident playbook + storage.ts source |
+| Neon durability verification | ✅ Complete | Incident playbook + DEPLOYMENT.md |
+| Rollback threshold defined | ✅ Complete | Incident playbook |
+| Recovery steps validated | ✅ Complete | Incident playbook |
+
+### Safe Cleanup Keys (Priority Order)
+
+When localStorage quota is exceeded, clear in this order:
+
+1. **Hint cache** (safe): `hint-cache:*` prefixes — cached hint data, regenerable
+2. **PDF index** (safe): `sql-learning-pdf-index` — memory fallback exists
+3. **LLM cache** (safe): `sql-learning-llm-cache` — can be regenerated
+4. **Legacy keys** (safe): `hints-*`, `hint-info-*` — migration cleanup
+5. **Offline queue** (caution): `sql-adapt-offline-queue` — verify backend sync first
+
+### Never Clear Without Verification
+
+- `sql-learning-interactions` — research data, ensure backend sync
+- `sql-learning-profiles` — learner progress, verify Neon persistence
+- `sql-adapt-user-profile` — active session identity
+- `sql-learning-active-session` — current session state
+
+### Related Documents
+
+- [Storage Quota Incident Playbook](./storage-quota-incident.md) — Full incident response guide
+- [Beta 50-Student Operations](./beta-50-student-operations.md) — General operations runbook
 
 ---
 

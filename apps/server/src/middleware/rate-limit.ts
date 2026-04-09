@@ -6,29 +6,6 @@
 import { rateLimit } from 'express-rate-limit';
 import { Request, Response } from 'express';
 
-// Store for tracking successful auth requests to skip counting
-const successfulAuthRequests = new Set<string>();
-
-/**
- * Generate a unique key for tracking auth requests
- */
-function getAuthRequestKey(req: Request): string {
-  return `${req.ip}:${req.method}:${req.path}`;
-}
-
-/**
- * Mark an auth request as successful (to be skipped from rate limiting)
- */
-export function markAuthSuccess(req: Request): void {
-  const key = getAuthRequestKey(req);
-  successfulAuthRequests.add(key);
-  
-  // Clean up after 15 minutes to prevent memory leak
-  setTimeout(() => {
-    successfulAuthRequests.delete(key);
-  }, 15 * 60 * 1000);
-}
-
 /**
  * General API rate limiter
  * 100 requests per 15 minutes per IP
@@ -57,38 +34,60 @@ export const generalApiLimiter = rateLimit({
 });
 
 /**
- * Auth endpoints rate limiter
- * 5 requests per 15 minutes per IP (stricter)
- * Skips successful auth requests
+ * Login endpoint rate limiter
+ * 10 requests per 15 minutes per email+IP combination
+ * Keyed by email + IP to prevent shared IP blocking different users
  */
-export const authRateLimiter = rateLimit({
+export const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 5, // 5 requests per window
+  limit: 10, // 10 login attempts per window per email+IP
   standardHeaders: true,
   legacyHeaders: false,
   message: {
     success: false,
-    error: 'Too many auth attempts',
-    message: 'Too many authentication attempts. Please try again later.',
+    error: 'Too many login attempts',
+    message: 'Too many login attempts. Please try again later.',
     retryAfter: '15 minutes',
   },
-  skip: (req: Request) => {
-    // Skip if this request was previously marked as successful
-    const key = getAuthRequestKey(req);
-    if (successfulAuthRequests.has(key)) {
-      successfulAuthRequests.delete(key); // Clean up after skipping
-      return true;
-    }
-    return false;
-  },
   keyGenerator: (req: Request) => {
-    return req.ip ?? 'unknown';
+    const email = (req.body?.email as string)?.toLowerCase()?.trim() ?? 'unknown';
+    const ip = req.ip ?? 'unknown';
+    return `login:${email}:${ip}`;
   },
   handler: (_req: Request, res: Response) => {
     res.status(429).json({
       success: false,
-      error: 'Too many auth attempts',
-      message: 'Too many authentication attempts. Please try again later.',
+      error: 'Too many login attempts',
+      message: 'Too many login attempts. Please try again later.',
+      retryAfter: '15 minutes',
+    });
+  },
+});
+
+/**
+ * Signup endpoint rate limiter
+ * 5 requests per 15 minutes per IP
+ * Keyed by IP only (new users don't have email yet)
+ */
+export const signupRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 5, // 5 signup attempts per window per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Too many signup attempts',
+    message: 'Too many signup attempts. Please try again later.',
+    retryAfter: '15 minutes',
+  },
+  keyGenerator: (req: Request) => {
+    return `signup:${req.ip ?? 'unknown'}`;
+  },
+  handler: (_req: Request, res: Response) => {
+    res.status(429).json({
+      success: false,
+      error: 'Too many signup attempts',
+      message: 'Too many signup attempts. Please try again later.',
       retryAfter: '15 minutes',
     });
   },
@@ -113,3 +112,9 @@ export const strictRateLimiter = rateLimit({
     return req.ip ?? 'unknown';
   },
 });
+
+/**
+ * Legacy export for backward compatibility during transition
+ * @deprecated Use loginRateLimiter or signupRateLimiter instead
+ */
+export const authRateLimiter = loginRateLimiter;

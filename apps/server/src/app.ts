@@ -37,7 +37,7 @@ import { isUsingNeon } from './db/index.js';
 import { resolveDbEnv } from './db/env-resolver.js';
 import { optionalAuth, requireAuth, requireInstructor } from './middleware/auth.js';
 import { requireCsrf } from './middleware/csrf.js';
-import { generalApiLimiter, authRateLimiter } from './middleware/rate-limit.js';
+import { generalApiLimiter } from './middleware/rate-limit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../.env');
@@ -120,6 +120,12 @@ function originGuard(req: Request, res: Response, next: NextFunction): void {
 }
 
 const app = express();
+
+// Trust proxy for Vercel deployment to get correct client IP
+if (process.env.VERCEL === '1' || process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 const CORS_ORIGIN_REGEXPS = CORS_ORIGIN_PATTERNS.map((pattern) => wildcardPatternToRegExp(pattern));
 
 app.use(cors({
@@ -240,7 +246,9 @@ if (usingNeon) {
   app.use('/api/sessions', generalApiLimiter, sessionsRouter);
 }
 
-app.use('/api/auth', authRateLimiter, authRouter);
+// Auth routes - rate limiting applied per-endpoint in auth router
+app.use('/api/auth', authRouter);
+
 app.use('/api/research', generalApiLimiter, requireAuth, requireInstructor, researchRouter);
 app.use('/api/instructor', generalApiLimiter, requireAuth, instructorRouter);
 app.use('/api/corpus', generalApiLimiter, corpusRouter);
