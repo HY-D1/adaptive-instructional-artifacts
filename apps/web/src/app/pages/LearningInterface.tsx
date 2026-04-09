@@ -23,6 +23,8 @@
  * @module LearningInterface
  */
 
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+
 import {
   Clock,
   CheckCircle2,
