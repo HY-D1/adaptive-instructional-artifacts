@@ -2492,7 +2492,7 @@ export function LearningInterface() {
                   <div className="flex-1 min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className="text-sm text-gray-500 font-medium">
-                        Current: {currentProblemNumber} / {totalProblems}
+                        Problem {currentProblemNumber} of {totalProblems}
                       </span>
                       <h2 className="text-xl font-bold">{currentProblem.title}</h2>
                       <Badge 
@@ -2578,7 +2578,7 @@ export function LearningInterface() {
                       <div className="flex items-center gap-2 overflow-hidden">
                         <span className="truncate">{currentProblem.title}</span>
                         <Badge variant="outline" className="text-[10px] px-1 shrink-0 hidden sm:inline-flex" title="Problems solved">
-                          {solvedCount} / {totalProblems} solved
+                          {solvedCount} of {totalProblems} solved
                         </Badge>
                       </div>
                     </SelectTrigger>
@@ -2594,7 +2594,7 @@ export function LearningInterface() {
                               difficulty === 'intermediate' ? 'text-yellow-700 bg-yellow-50' :
                               'text-red-700 bg-red-50'
                             }`}>
-                              {difficulty} ({solvedInDifficulty} / {problems.length} solved)
+                              {difficulty} — {solvedInDifficulty} of {problems.length} solved
                             </div>
                             {problems.map(problem => {
                               const solved = isProblemSolved(problem.id);
@@ -2653,7 +2653,7 @@ export function LearningInterface() {
                       <div className="flex items-center gap-1 cursor-help">
                         <CheckCircle2 className="size-4" />
                         <span>
-                          {allProblemInteractions.filter(i => i.successful).length} successful runs
+                          {allProblemInteractions.filter(i => i.successful).length} correct runs
                         </span>
                       </div>
                     </TooltipTrigger>
@@ -2904,7 +2904,7 @@ export function LearningInterface() {
               <Card className="p-4">
                 <h3 className="font-semibold mb-3">Session Stats</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 text-sm">
-                  <div className="text-gray-600">Total attempts:</div>
+                  <div className="text-gray-600" title="Query attempts in this session only">Attempts (this session):</div>
                   <div className="font-medium text-right">{totalAttempts}</div>
                   <div className="text-gray-600">Hints viewed:</div>
                   <div className="font-medium text-right">{hintViewsCount}</div>

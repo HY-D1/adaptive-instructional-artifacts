@@ -19,7 +19,8 @@ import {
   Play,
   X,
   Database,
-  RotateCcw
+  RotateCcw,
+  CheckCircle2
 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -566,7 +567,8 @@ export function InstructorDashboard() {
       testId: 'instructor-total-students-value',
       icon: Users, 
       color: 'text-blue-600',
-      bgColor: 'bg-blue-50'
+      bgColor: 'bg-blue-50',
+      description: 'Total enrolled students in your sections'
     },
     { 
       label: 'Active Today', 
@@ -574,15 +576,17 @@ export function InstructorDashboard() {
       testId: 'instructor-active-today-value',
       icon: Activity, 
       color: 'text-green-600',
-      bgColor: 'bg-green-50'
+      bgColor: 'bg-green-50',
+      description: 'Students with activity in the last 24 hours'
     },
     { 
-      label: 'Avg Progress', 
+      label: 'Avg Concept Coverage', 
       value: `${classStats.avgProgress}%`, 
       testId: 'instructor-avg-progress-value',
       icon: TrendingUp, 
       color: 'text-purple-600',
-      bgColor: 'bg-purple-50'
+      bgColor: 'bg-purple-50',
+      description: 'Average percentage of 6 SQL concepts students have engaged with'
     },
     { 
       label: 'Total Interactions', 
@@ -590,7 +594,8 @@ export function InstructorDashboard() {
       testId: 'instructor-total-interactions-value',
       icon: Target, 
       color: 'text-orange-600',
-      bgColor: 'bg-orange-50'
+      bgColor: 'bg-orange-50',
+      description: 'Total learning interactions across all students'
     },
   ], [classStats]);
 
@@ -732,12 +737,12 @@ export function InstructorDashboard() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">{stat.label}</p>
-                    <p className="text-3xl font-bold mt-1" data-testid={stat.testId}>
+                    <p className="text-sm font-medium text-gray-600" title={stat.description}>{stat.label}</p>
+                    <p className="text-3xl font-bold mt-1" data-testid={stat.testId} title={stat.description}>
                       {stat.value}
                     </p>
                   </div>
-                  <div className={`p-3 rounded-lg ${stat.bgColor}`}>
+                  <div className={`p-3 rounded-lg ${stat.bgColor}`} title={stat.description}>
                     <stat.icon className={`size-6 ${stat.color}`} />
                   </div>
                 </div>
@@ -1266,6 +1271,7 @@ export function InstructorDashboard() {
                   <TableRow>
                     <TableHead>Student</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Problems Solved</TableHead>
                     <TableHead>Concepts Covered</TableHead>
                     <TableHead>Last Active</TableHead>
                     <TableHead>Action</TableHead>
@@ -1288,6 +1294,13 @@ export function InstructorDashboard() {
                           <Badge variant={student.isActive ? 'default' : 'secondary'} className="text-xs">
                             {student.isActive ? 'Active' : 'Away'}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="size-4 text-green-500" />
+                            <span className="font-medium">{student.solvedCount}</span>
+                            <span className="text-sm text-gray-500">solved</span>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
