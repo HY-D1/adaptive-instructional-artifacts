@@ -75,7 +75,9 @@ function getRouteHandler(
   const layer = router.stack?.find(
     (entry) => entry.route?.path === path && entry.route?.methods?.[method],
   );
-  const handle = layer?.route?.stack?.[0]?.handle;
+  // Get the last handler in the stack (the actual route handler, skipping middlewares like rate limiter)
+  const stack = layer?.route?.stack;
+  const handle = stack?.[stack.length - 1]?.handle;
   if (!handle) {
     throw new Error(`Route handler not found for ${method.toUpperCase()} ${path}`);
   }
@@ -102,8 +104,9 @@ async function invokeJsonHandler(
       return this;
     },
   };
+  const next = vi.fn();
 
-  await handler(req, res);
+  await handler(req, res, next);
   return { status: statusCode, json: payload };
 }
 
