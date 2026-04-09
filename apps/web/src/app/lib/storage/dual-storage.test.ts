@@ -17,6 +17,7 @@ const logInteractionsBatchVerifiedMock = vi.fn<(events: unknown[]) => Promise<{ 
 const logInteractionsBatchKeepaliveMock = vi.fn<(events: unknown[]) => Promise<{ success: boolean; confirmedIds?: string[] }>>();
 const saveProfileMock = vi.fn<(profile: unknown) => Promise<boolean>>();
 const updateProblemProgressMock = vi.fn<(learnerId: string, problemId: string, update: unknown) => Promise<unknown>>();
+const getAllProblemProgressMock = vi.fn<(learnerId: string) => Promise<Array<{ problemId: string; solved: boolean }>>>();
 
 function createBackendProfile(overrides: Partial<LearnerProfile> = {}): LearnerProfile {
   return {
@@ -52,6 +53,7 @@ beforeAll(async () => {
       getSession: getSessionMock,
       getInteractions: getInteractionsMock,
       getTextbook: getTextbookMock,
+      getAllProblemProgress: getAllProblemProgressMock,
       logInteraction: logInteractionMock,
       logInteractionsBatch: logInteractionsBatchMock,
       logInteractionsBatchVerified: logInteractionsBatchVerifiedMock,
@@ -96,6 +98,7 @@ beforeEach(() => {
   });
   saveProfileMock.mockReset().mockResolvedValue(true);
   updateProblemProgressMock.mockReset().mockResolvedValue({ success: true });
+  getAllProblemProgressMock.mockReset().mockResolvedValue([]);
 });
 
 describe('dual-storage critical write semantics', () => {

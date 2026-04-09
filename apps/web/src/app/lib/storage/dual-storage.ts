@@ -2177,21 +2177,34 @@ class DualStorageManager {
     try {
       // Hydrate session/profile first so resumed editor state is available quickly
       // on first render in account mode.
-      const [profile, session] = await Promise.all([
+      // RESEARCH-4: Also fetch problem_progress for authoritative solved state
+      const [profile, session, problemProgress] = await Promise.all([
         storageClient.getProfile(learnerId),
         storageClient.getSession(learnerId),
+        storageClient.getAllProblemProgress(learnerId),
       ]);
 
       if (profile) {
-        // Merge solvedProblemIds by union with local to prevent data loss during transition
+        // RESEARCH-4: Use problem_progress as authoritative source for solved state
+        // Profile's solvedProblemIds is a cache; problem_progress is durable truth
+        const solvedIdsFromProgress = new Set(
+          problemProgress
+            .filter((p) => p.solved)
+            .map((p) => p.problemId)
+        );
+
+        // Merge with local to prevent data loss during transition
         const localProfile = localStorageManager.getProfile(learnerId);
-        if (localProfile && profile.solvedProblemIds) {
-          const mergedSolvedIds = new Set([
-            ...Array.from(localProfile.solvedProblemIds || []),
-            ...Array.from(profile.solvedProblemIds || []),
-          ]);
-          profile.solvedProblemIds = mergedSolvedIds;
-        }
+        const localSolvedIds = localProfile?.solvedProblemIds || new Set<string>();
+
+        // Authoritative merge: progress table + local + profile cache
+        const mergedSolvedIds = new Set<string>([
+          ...Array.from(solvedIdsFromProgress),
+          ...Array.from(localSolvedIds),
+          ...Array.from(profile.solvedProblemIds || []),
+        ]);
+
+        profile.solvedProblemIds = mergedSolvedIds;
         localStorageManager.saveProfile(profile);
       }
 
