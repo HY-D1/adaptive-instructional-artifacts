@@ -31,7 +31,25 @@
 #### Documentation System
 - Created: `docs/INDEX.md` - Documentation navigation hub
 - Created: `docs/CHANGELOG.md` - This file - progress tracking
+- Created: `docs/PROJECT_COORDINATION.md` - File organization rules and mandatory checklists
 - Updated: `docs/AGENTS.md` - Added reference to new docs
+- Updated: `docs/INDEX.md` - Added PROJECT_COORDINATION to core documents
+
+#### Documentation Cleanup
+- **Deleted Folders**: Portfolio/, audit-results/, ux-audit-evidence/, docs/archive/, docs/audit/evidence/
+- **Deleted Agent Artifacts**: 27 agent conversation files (BOSS_AGENT_*, MASTER_*, etc.)
+- **Deleted Old Reports**: 6 outdated test reports
+- **Deleted Build Duplicates**: 15+ duplicate files/folders with " 2" in name
+- **Space Freed**: ~13MB+
+- **Files Removed**: 50+
+
+**Rules Established**:
+- All docs must be in `docs/` folder
+- No root-level `*.md` files
+- No `docs/progress.md` or week-based files
+- No `docs/archive/` - delete old docs
+- No dated audit evidence - delete after use
+- No duplicate "* 2" files
 
 ### Fixed - 2026-04-08
 
@@ -122,10 +140,12 @@
 - Integrity Scan: ✅ Passing
 
 ### Documentation
-- Core Docs: 7
+- Core Docs: 8
 - Audit Reports: 6
-- Runbooks: 25+
-- Total: 111 markdown files
+- Runbooks: 17
+- Research Docs: 27
+- Test Reports: 3
+- Total: 70 markdown files (cleaned from 103)
 
 ---
 

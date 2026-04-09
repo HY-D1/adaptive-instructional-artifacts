@@ -1,5 +1,7 @@
 # AGENTS.md — Adaptive Instructional Artifacts (SQL-Adapt)
 
+> **⚠️ BEFORE READING THIS FILE**: Read [`PROJECT_COORDINATION.md`](./PROJECT_COORDINATION.md) first for file organization rules and mandatory checklists.
+>
 > Purpose: single source of truth for AI coding agents working on the SQL-Adapt project.
 > Use this file to stay aligned with the current architecture, launch priorities, and research scope.
 > Work from the current codebase and provided files only. Do not guess.

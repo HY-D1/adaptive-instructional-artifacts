@@ -11,9 +11,10 @@
 ## 📋 Quick Navigation
 
 ### For New Agents
-1. Start here: [`AGENTS.md`](./AGENTS.md) - Complete working guide
-2. Check status: [`runbooks/status.md`](./runbooks/status.md)
-3. Deployment info: [`DEPLOYMENT.md`](./DEPLOYMENT.md)
+1. **Start here**: [`PROJECT_COORDINATION.md`](./PROJECT_COORDINATION.md) - Rules and organization
+2. **Working guide**: [`AGENTS.md`](./AGENTS.md) - Complete agent guidelines
+3. **Check status**: [`runbooks/status.md`](./runbooks/status.md)
+4. **Deployment info**: [`DEPLOYMENT.md`](./DEPLOYMENT.md)
 
 ### For Current Work
 - **Persistence Fix**: [`PERSISTENCE_HARDENING_REPORT.md`](./PERSISTENCE_HARDENING_REPORT.md)
@@ -27,6 +28,7 @@
 ### Core Documents
 | Document | Purpose | Last Updated |
 |----------|---------|--------------|
+| [`PROJECT_COORDINATION.md`](./PROJECT_COORDINATION.md) | **File organization rules and progress tracking** | 2026-04-08 |
 | [`AGENTS.md`](./AGENTS.md) | AI agent working rules and guidelines | 2026-03-24 |
 | [`README.md`](../README.md) | Project overview and quick start | 2026-04-08 |
 | [`CHANGELOG.md`](./CHANGELOG.md) | Progress tracker and decision log | 2026-04-08 |
@@ -144,10 +146,11 @@ See [`runbooks/`](./runbooks/) for 17 operational guides including:
 ## 📝 For AI Agents
 
 **Before starting work**:
-1. Read `AGENTS.md` (working rules)
-2. Check `runbooks/status.md` (current state)
-3. Read this `INDEX.md` (find relevant docs)
-4. Check `CHANGELOG.md` (recent decisions)
+1. Read `PROJECT_COORDINATION.md` (organization rules)
+2. Read `AGENTS.md` (working rules)
+3. Check `runbooks/status.md` (current state)
+4. Read this `INDEX.md` (find relevant docs)
+5. Check `CHANGELOG.md` (recent decisions)
 
 **Before claiming completion**:
 1. Update relevant docs
