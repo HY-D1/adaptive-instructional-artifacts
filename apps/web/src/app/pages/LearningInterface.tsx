@@ -1139,6 +1139,8 @@ export function LearningInterface() {
           if (hydratedSessionId && hydratedSessionId !== 'session-unknown') {
             resolvedSessionId = hydratedSessionId;
           }
+          // Force refresh of solved progress from newly hydrated storage
+          setSolvedRefreshKey(prev => prev + 1);
         }
 
         const backendSessionSnapshot = await storage.getBackendSessionSnapshot(learnerId);
