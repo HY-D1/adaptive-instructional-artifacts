@@ -3533,3 +3533,30 @@ export function clearAllDebugSettingsWithSync(): void {
   broadcastSync(DEBUG_PROFILE_KEY, null);
   broadcastSync(DEBUG_STRATEGY_KEY, null);
 }
+
+// ============================================================================
+// Cache Trimmer Integration (Workstream 4/6)
+// ============================================================================
+
+// Re-export cache trimmer functions for convenience
+export {
+  initializeCacheTrimmer,
+  runStartupTrimPass,
+  emergencyEviction,
+  getCacheStats,
+  trimChatHistory,
+  trimAllChatHistories,
+  MAX_CHAT_MESSAGES
+} from './cache-trimmer';
+
+// Auto-initialize cache trimmer when storage module loads
+if (typeof window !== 'undefined') {
+  // Defer to avoid blocking initial render
+  setTimeout(() => {
+    import('./cache-trimmer').then(({ initializeCacheTrimmer }) => {
+      initializeCacheTrimmer();
+    }).catch((error) => {
+      console.warn('[Storage] Failed to initialize cache trimmer:', error);
+    });
+  }, 1000);
+}

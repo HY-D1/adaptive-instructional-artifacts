@@ -258,6 +258,8 @@ export async function setCorpusActiveRun(
 export {
   getDb as getNeonDb,
   resetDb as resetNeonDb,
+  linkTextbookRetrievals,
+  getTextbookRetrievalsForEvent,
 } from './neon.js';
 
 // ============================================================================

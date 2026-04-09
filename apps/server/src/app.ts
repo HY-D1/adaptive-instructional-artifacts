@@ -37,7 +37,7 @@ import { isUsingNeon } from './db/index.js';
 import { resolveDbEnv } from './db/env-resolver.js';
 import { optionalAuth, requireAuth, requireInstructor } from './middleware/auth.js';
 import { requireCsrf } from './middleware/csrf.js';
-import { generalApiLimiter, authRateLimiter } from './middleware/rate-limit.js';
+import { generalApiLimiter } from './middleware/rate-limit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../.env');
@@ -120,6 +120,12 @@ function originGuard(req: Request, res: Response, next: NextFunction): void {
 }
 
 const app = express();
+
+// Trust proxy for Vercel deployment to get correct client IP
+if (process.env.VERCEL === '1' || process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 const CORS_ORIGIN_REGEXPS = CORS_ORIGIN_PATTERNS.map((pattern) => wildcardPatternToRegExp(pattern));
 
 app.use(cors({
@@ -178,16 +184,37 @@ app.get('/health', async (_req: Request, res: Response) => {
   const featureStatus = await getFeatureStatus();
   const { source } = resolveDbEnv();
 
-  res.json({
-    status: 'ok',
+  // Check actual database connectivity
+  let dbStatus: 'ok' | 'error' = 'ok';
+  let dbLatencyMs: number | undefined;
+  if (isUsingNeon()) {
+    const startTime = Date.now();
+    try {
+      const { getDb } = await import('./db/neon.js');
+      const db = getDb();
+      await db`SELECT 1`;
+      dbLatencyMs = Date.now() - startTime;
+    } catch (error) {
+      dbStatus = 'error';
+      console.error('[health] Database connectivity check failed:', error);
+    }
+  }
+
+  const response: Record<string, unknown> = {
+    status: dbStatus === 'ok' ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
     db: {
       mode: isUsingNeon() ? 'neon' : 'sqlite',
       envSource: source,
+      status: dbStatus,
+      latencyMs: dbLatencyMs,
     },
     features: featureStatus,
-  });
+  };
+
+  const statusCode = dbStatus === 'ok' ? 200 : 503;
+  res.status(statusCode).json(response);
 });
 
 app.get('/api/system/persistence-status', (_req: Request, res: Response) => {
@@ -219,7 +246,9 @@ if (usingNeon) {
   app.use('/api/sessions', generalApiLimiter, sessionsRouter);
 }
 
-app.use('/api/auth', authRateLimiter, authRouter);
+// Auth routes - rate limiting applied per-endpoint in auth router
+app.use('/api/auth', authRouter);
+
 app.use('/api/research', generalApiLimiter, requireAuth, requireInstructor, researchRouter);
 app.use('/api/instructor', generalApiLimiter, requireAuth, instructorRouter);
 app.use('/api/corpus', generalApiLimiter, corpusRouter);

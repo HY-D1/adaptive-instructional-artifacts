@@ -2,9 +2,50 @@ import path from 'path';
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import plainText from 'vite-plugin-plain-text';
+import fs from 'fs';
+
+// Load SQL.js WASM file for test mocking
+const wasmPath = path.resolve(__dirname, 'node_modules/sql.js/dist/sql-wasm.wasm');
+const wasmBinary = fs.existsSync(wasmPath) ? fs.readFileSync(wasmPath) : null;
+
+// Plugin to mock sql.js in test environment
+const sqlJsMockPlugin = () => ({
+  name: 'sql-js-mock',
+  enforce: 'pre' as const,
+  async resolveId(id: string) {
+    if (id === 'sql.js' && process.env.VITEST) {
+      // Return a virtual module ID
+      return '\0virtual:sql.js';
+    }
+    return null;
+  },
+  async load(id: string) {
+    if (id === '\0virtual:sql.js') {
+      // Return a module that exports sql.js pre-initialized with WASM binary
+      return `
+        import initSqlJs from 'sql.js/dist/sql-wasm.js';
+        
+        const wasmBinary = new Uint8Array([${wasmBinary ? Array.from(wasmBinary).join(',') : ''}]);
+        
+        export default function initSql(options = {}) {
+          return initSqlJs({
+            ...options,
+            wasmBinary,
+            locateFile: () => ''
+          });
+        }
+        
+        // Re-export other exports from sql.js if needed
+        export { initSqlJs };
+      `;
+    }
+    return null;
+  }
+});
 
 export default defineConfig({
   plugins: [
+    sqlJsMockPlugin(),
     react(),
     // Handle ?raw imports for CSV and other text files
     plainText(['**/*.csv'], { namedExport: false })

@@ -11,6 +11,13 @@
 
 import { storage as localStorageManager } from './storage';
 import {
+  safeSet,
+  safeGet,
+  safeRemove,
+  subscribeToStorageTelemetry,
+  type SafeSetResult,
+} from './safe-storage';
+import {
   storageClient,
   isBackendAvailable,
   checkBackendHealth,
@@ -152,27 +159,25 @@ class DurablePendingStore {
 
   // Confirmed IDs management (for deduplication)
   private loadConfirmed(): void {
-    try {
-      const raw = localStorage.getItem(PENDING_CONFIRMED_KEY);
-      if (raw) {
-        const confirmed: ConfirmedItem[] = JSON.parse(raw);
-        this.confirmedIds = new Set(confirmed.map(c => c.id));
-      }
-    } catch {
+    const confirmed = safeGet<ConfirmedItem[]>(PENDING_CONFIRMED_KEY, []);
+    if (confirmed) {
+      this.confirmedIds = new Set(confirmed.map(c => c.id));
+    } else {
       this.confirmedIds = new Set();
     }
   }
 
-  private saveConfirmed(): void {
-    try {
-      const confirmed: ConfirmedItem[] = Array.from(this.confirmedIds).map(id => ({
-        id,
-        confirmedAt: Date.now(),
-      }));
-      localStorage.setItem(PENDING_CONFIRMED_KEY, JSON.stringify(confirmed.slice(-1000)));
-    } catch {
-      // Ignore save errors
-    }
+  private saveConfirmed(): SafeSetResult {
+    const confirmed: ConfirmedItem[] = Array.from(this.confirmedIds).map(id => ({
+      id,
+      confirmedAt: Date.now(),
+    }));
+    // Critical session data - use memory fallback if quota exceeded
+    const result = safeSet(PENDING_CONFIRMED_KEY, confirmed.slice(-1000), {
+      priority: 'critical',
+      allowEviction: true,
+    });
+    return result;
   }
 
   isConfirmed(id: string): boolean {
@@ -197,48 +202,53 @@ class DurablePendingStore {
 
   // Pending interactions management
   private loadPending(): void {
-    try {
-      const raw = localStorage.getItem(PENDING_INTERACTIONS_KEY);
-      if (raw) {
-        const pending: PendingInteraction[] = JSON.parse(raw);
-        for (const item of pending) {
-          // Skip if already confirmed
-          if (!this.confirmedIds.has(item.id)) {
-            this.interactions.set(item.id, item);
-          }
+    const pending = safeGet<PendingInteraction[]>(PENDING_INTERACTIONS_KEY, []);
+    if (pending) {
+      for (const item of pending) {
+        // Skip if already confirmed
+        if (!this.confirmedIds.has(item.id)) {
+          this.interactions.set(item.id, item);
         }
       }
-    } catch {
+    } else {
       this.interactions.clear();
     }
   }
 
-  private savePending(): void {
-    try {
-      // Filter out confirmed interactions and sort by timestamp
-      const pending = Array.from(this.interactions.values())
-        .filter(item => !this.confirmedIds.has(item.id) && item.status !== 'backend_confirmed')
-        .sort((a, b) => a.timestamp - b.timestamp);
+  private savePending(): SafeSetResult {
+    // Filter out confirmed interactions and sort by timestamp
+    const pending = Array.from(this.interactions.values())
+      .filter(item => !this.confirmedIds.has(item.id) && item.status !== 'backend_confirmed')
+      .sort((a, b) => a.timestamp - b.timestamp);
+    
+    // Store in chunks if needed
+    const dataToStore = pending.length > CHUNK_SIZE ? pending.slice(-CHUNK_SIZE) : pending;
+    
+    // Critical session data - use memory fallback if quota exceeded
+    const result = safeSet(PENDING_INTERACTIONS_KEY, dataToStore, {
+      priority: 'critical',
+      allowEviction: true,
+    });
+    
+    if (!result.success && result.quotaExceeded) {
+      // Try with just the most recent
+      const recent = Array.from(this.interactions.values())
+        .filter(item => !this.confirmedIds.has(item.id))
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, 50);
       
-      // Store in chunks if needed
-      if (pending.length > CHUNK_SIZE) {
-        localStorage.setItem(PENDING_INTERACTIONS_KEY, JSON.stringify(pending.slice(-CHUNK_SIZE)));
-      } else {
-        localStorage.setItem(PENDING_INTERACTIONS_KEY, JSON.stringify(pending));
+      const retryResult = safeSet(PENDING_INTERACTIONS_KEY, recent, {
+        priority: 'critical',
+        allowEviction: true,
+      });
+      
+      if (!retryResult.success) {
+        console.error('[DurablePendingStore] Failed to save pending interactions', retryResult.error);
       }
-    } catch {
-      // If quota exceeded, try with just the most recent
-      try {
-        const recent = Array.from(this.interactions.values())
-          .filter(item => !this.confirmedIds.has(item.id))
-          .sort((a, b) => b.timestamp - a.timestamp)
-          .slice(0, 50);
-        localStorage.setItem(PENDING_INTERACTIONS_KEY, JSON.stringify(recent));
-      } catch {
-        // Last resort: clear pending store
-        console.error('[DurablePendingStore] Failed to save pending interactions');
-      }
+      return retryResult;
     }
+    
+    return result;
   }
 
   /**
@@ -382,7 +392,7 @@ class DurablePendingStore {
    */
   clear(): void {
     this.interactions.clear();
-    localStorage.removeItem(PENDING_INTERACTIONS_KEY);
+    safeRemove(PENDING_INTERACTIONS_KEY);
   }
 }
 
@@ -409,64 +419,68 @@ class OfflineQueueManager {
   }
 
   private loadQueue(): void {
-    try {
-      const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
-      if (raw) {
-        this.queue = JSON.parse(raw);
-      }
-    } catch {
-      this.queue = [];
-    }
+    this.queue = safeGet<QueuedItem[]>(OFFLINE_QUEUE_KEY, []) ?? [];
   }
 
-  private saveQueue(): void {
-    try {
-      // Filter out confirmed items before saving
-      const unconfirmed = this.queue.filter(item => 
-        item.status !== 'backend_confirmed' && !this.durableStore.isConfirmed(item.id)
-      );
-      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(unconfirmed));
-    } catch {
-      // If we can't save, try to save in chunks
-      this.saveQueueChunked();
+  private saveQueue(): SafeSetResult {
+    // Filter out confirmed items before saving
+    const unconfirmed = this.queue.filter(item => 
+      item.status !== 'backend_confirmed' && !this.durableStore.isConfirmed(item.id)
+    );
+    
+    // Critical session data - use memory fallback if quota exceeded
+    const result = safeSet(OFFLINE_QUEUE_KEY, unconfirmed, {
+      priority: 'critical',
+      allowEviction: true,
+    });
+    
+    if (!result.success && result.quotaExceeded) {
+      // Try to save in chunks
+      return this.saveQueueChunked();
     }
+    
+    return result;
   }
 
-  private saveQueueChunked(): void {
-    try {
-      // Keep only most recent items if storage is limited
-      const recent = this.queue
-        .filter(item => item.status !== 'backend_confirmed')
-        .slice(-CHUNK_SIZE);
-      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(recent));
-    } catch {
+  private saveQueueChunked(): SafeSetResult {
+    // Keep only most recent items if storage is limited
+    const recent = this.queue
+      .filter(item => item.status !== 'backend_confirmed')
+      .slice(-CHUNK_SIZE);
+    
+    const result = safeSet(OFFLINE_QUEUE_KEY, recent, {
+      priority: 'critical',
+      allowEviction: true,
+    });
+    
+    if (!result.success) {
       // Last resort: keep minimal queue
       const minimal = this.queue.slice(-20);
-      try {
-        localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(minimal));
-      } catch {
-        this.queue = [];
+      const minimalResult = safeSet(OFFLINE_QUEUE_KEY, minimal, {
+        priority: 'critical',
+        allowEviction: true,
+      });
+      
+      if (!minimalResult.success) {
+        // Memory fallback: queue remains in memory, will be retried on next session
+        console.error('[OfflineQueueManager] Failed to save queue to storage, using memory fallback');
       }
+      return minimalResult;
     }
+    
+    return result;
   }
 
   private loadDeadLetter(): void {
-    try {
-      const raw = localStorage.getItem(DEAD_LETTER_KEY);
-      if (raw) {
-        this.deadLetter = JSON.parse(raw);
-      }
-    } catch {
-      this.deadLetter = [];
-    }
+    this.deadLetter = safeGet<DeadLetterItem[]>(DEAD_LETTER_KEY, []) ?? [];
   }
 
-  private saveDeadLetter(): void {
-    try {
-      localStorage.setItem(DEAD_LETTER_KEY, JSON.stringify(this.deadLetter.slice(-50)));
-    } catch {
-      // Ignore
-    }
+  private saveDeadLetter(): SafeSetResult {
+    // Critical for research data integrity - use memory fallback if quota exceeded
+    return safeSet(DEAD_LETTER_KEY, this.deadLetter.slice(-50), {
+      priority: 'critical',
+      allowEviction: true,
+    });
   }
 
   add(item: Omit<QueuedItem, 'retries' | 'timestamp' | 'status' | 'errorCount'>): void {
@@ -700,11 +714,20 @@ class DualStorageManager {
   private totalConfirmedCount: number = 0;
   private totalFailedCount: number = 0;
 
+  private storageTelemetryUnsubscribe?: () => void;
+
   constructor() {
     this.config = {
       useBackend: USE_BACKEND,
       fallbackToLocal: true,
     };
+    
+    // Subscribe to storage telemetry for monitoring quota issues
+    this.storageTelemetryUnsubscribe = subscribeToStorageTelemetry((event) => {
+      if (event.type === 'storage_write_failed' && event.details?.priority === 'critical') {
+        console.error('[DualStorage] Critical storage write failed:', event.key, event.details);
+      }
+    });
     
     this.pendingStore = new DurablePendingStore();  // RESEARCH-1
     this.offlineQueue = new OfflineQueueManager((ids) => {
@@ -1976,42 +1999,38 @@ class DualStorageManager {
   }
 
   private readPendingSessionEnds(): PendingSessionEnd[] {
-    try {
-      const raw = localStorage.getItem(PENDING_SESSION_ENDS_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter((item): item is PendingSessionEnd => {
-        return Boolean(
-          item &&
-          typeof item.key === 'string' &&
-          item.event &&
-          typeof item.event.id === 'string' &&
-          typeof item.event.learnerId === 'string' &&
-          item.event.eventType === 'session_end' &&
-          typeof item.queuedAt === 'number',
-        );
-      });
-    } catch {
-      return [];
-    }
+    const parsed = safeGet<PendingSessionEnd[]>(PENDING_SESSION_ENDS_KEY, []);
+    if (!parsed || !Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is PendingSessionEnd => {
+      return Boolean(
+        item &&
+        typeof item.key === 'string' &&
+        item.event &&
+        typeof item.event.id === 'string' &&
+        typeof item.event.learnerId === 'string' &&
+        item.event.eventType === 'session_end' &&
+        typeof item.queuedAt === 'number',
+      );
+    });
   }
 
-  private writePendingSessionEnds(pending: PendingSessionEnd[]): { success: boolean; quotaExceeded?: boolean } {
-    try {
-      localStorage.setItem(PENDING_SESSION_ENDS_KEY, JSON.stringify(pending));
-      return { success: true };
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-        try {
-          localStorage.setItem(PENDING_SESSION_ENDS_KEY, JSON.stringify(pending.slice(-20)));
-          return { success: true };
-        } catch {
-          return { success: false, quotaExceeded: true };
-        }
-      }
-      return { success: false };
+  private writePendingSessionEnds(pending: PendingSessionEnd[]): SafeSetResult {
+    // Critical session data - use memory fallback if quota exceeded
+    const result = safeSet(PENDING_SESSION_ENDS_KEY, pending, {
+      priority: 'critical',
+      allowEviction: true,
+    });
+    
+    if (!result.success && result.quotaExceeded) {
+      // Try with just the most recent items
+      const reducedResult = safeSet(PENDING_SESSION_ENDS_KEY, pending.slice(-20), {
+        priority: 'critical',
+        allowEviction: true,
+      });
+      return reducedResult;
     }
+    
+    return result;
   }
 
   private markPendingSessionEndAttempt(event: InteractionEvent): void {

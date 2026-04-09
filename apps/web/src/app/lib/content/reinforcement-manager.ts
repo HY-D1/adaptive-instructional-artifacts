@@ -9,6 +9,7 @@
  * - Check for due reinforcements periodically
  * - Handle learner responses with event logging
  * - Works in hosted mode (no LLM dependency)
+ * - Uses safe storage adapter for quota-aware persistence
  */
 
 import type { InstructionalUnit, InteractionEvent } from '../../types';
@@ -27,6 +28,7 @@ import {
   generatePromptContent
 } from '../reinforcement-scheduler';
 import { storage } from '../storage/storage';
+import { safeStorage, subscribeToStorageTelemetry, type StorageTelemetryEvent } from '../storage/safe-storage';
 import { createEventId } from '../utils/event-id';
 
 /**
@@ -58,6 +60,15 @@ export interface ScheduleOptions {
 }
 
 /**
+ * Storage operation result
+ */
+export interface StorageResult {
+  success: boolean;
+  quotaExceeded?: boolean;
+  error?: string;
+}
+
+/**
  * ReinforcementManager class
  * 
  * Manages the complete lifecycle of reinforcement prompts:
@@ -65,6 +76,12 @@ export interface ScheduleOptions {
  * 2. Check for due prompts periodically
  * 3. Handle learner responses
  * 4. Log all events for analytics
+ * 
+ * Storage safety:
+ * - Uses safeStorage adapter for quota-aware persistence
+ * - Emits telemetry events on storage failures
+ * - Gracefully handles quota exceeded errors
+ * - Maintains backward compatibility
  */
 export class ReinforcementManager {
   private readonly SCHEDULES_KEY = 'sql-learning-reinforcement-schedules';
@@ -75,28 +92,91 @@ export class ReinforcementManager {
   // Production delays: 1 day, 3 days, 7 days (standard spaced repetition)
   private readonly PRODUCTION_DELAYS_DAYS = [1, 3, 7];
 
+  // Telemetry subscription cleanup function
+  private telemetryUnsubscribe: (() => void) | null = null;
+
+  constructor() {
+    // Subscribe to storage telemetry events
+    this.telemetryUnsubscribe = subscribeToStorageTelemetry((event) => {
+      if (event.key === this.SCHEDULES_KEY) {
+        this.handleStorageTelemetry(event);
+      }
+    });
+  }
+
   /**
-   * Get all reinforcement schedules from storage
+   * Handle storage telemetry events for reinforcement schedules
    */
-  getSchedules(): ReinforcementSchedule[] {
-    try {
-      const raw = localStorage.getItem(this.SCHEDULES_KEY);
-      if (!raw) return [];
-      return JSON.parse(raw) as ReinforcementSchedule[];
-    } catch {
-      return [];
+  private handleStorageTelemetry(event: StorageTelemetryEvent): void {
+    // Log to console for debugging/monitoring
+    if (event.type === 'storage_write_failed') {
+      console.warn('[ReinforcementManager] Storage write failed:', {
+        key: event.key,
+        details: event.details,
+        timestamp: event.timestamp,
+      });
+    } else if (event.type === 'storage_eviction') {
+      console.info('[ReinforcementManager] Storage eviction occurred:', {
+        key: event.key,
+        details: event.details,
+        timestamp: event.timestamp,
+      });
+    } else if (event.type === 'storage_unavailable') {
+      console.warn('[ReinforcementManager] Storage unavailable:', {
+        key: event.key,
+        details: event.details,
+        timestamp: event.timestamp,
+      });
     }
   }
 
   /**
-   * Save reinforcement schedules to storage
+   * Clean up resources (call this when the manager is no longer needed)
    */
-  private saveSchedules(schedules: ReinforcementSchedule[]): void {
-    try {
-      localStorage.setItem(this.SCHEDULES_KEY, JSON.stringify(schedules));
-    } catch (error) {
-      console.warn('[ReinforcementManager] Failed to save schedules:', error);
+  destroy(): void {
+    if (this.telemetryUnsubscribe) {
+      this.telemetryUnsubscribe();
+      this.telemetryUnsubscribe = null;
     }
+  }
+
+  /**
+   * Get all reinforcement schedules from storage
+   */
+  getSchedules(): ReinforcementSchedule[] {
+    const result = safeStorage.get<ReinforcementSchedule[]>(this.SCHEDULES_KEY, []);
+    return result ?? [];
+  }
+
+  /**
+   * Save reinforcement schedules to storage
+   * 
+   * Uses safeStorage.safeSet() for quota-aware persistence.
+   * Handles quota errors gracefully and emits telemetry on failures.
+   * 
+   * @param schedules - The schedules to save
+   * @returns StorageResult with success flag and error details
+   */
+  saveSchedules(schedules: ReinforcementSchedule[]): StorageResult {
+    const result = safeStorage.set(this.SCHEDULES_KEY, schedules, {
+      priority: 'standard',
+      allowEviction: true,
+    });
+
+    if (!result.success) {
+      console.warn('[ReinforcementManager] Failed to save schedules:', result.error);
+      
+      // Log additional context for quota errors
+      if (result.quotaExceeded) {
+        console.warn('[ReinforcementManager] Storage quota exceeded. Schedules may not persist.');
+      }
+    }
+
+    return {
+      success: result.success,
+      quotaExceeded: result.quotaExceeded,
+      error: result.error,
+    };
   }
 
   /**
@@ -148,7 +228,12 @@ export class ReinforcementManager {
     // Save to storage
     const schedules = this.getSchedules();
     schedules.push(schedule);
-    this.saveSchedules(schedules);
+    const saveResult = this.saveSchedules(schedules);
+
+    // Log warning if save failed (but still return the schedule)
+    if (!saveResult.success) {
+      console.warn('[ReinforcementManager] Schedule created but storage failed. Schedule may not persist across sessions.');
+    }
 
     // Log reinforcement_scheduled event
     this.logScheduledEvent(schedule, unit);
@@ -385,7 +470,7 @@ export class ReinforcementManager {
       sessionId: storage.getActiveSessionId(),
       learnerId: schedule.learnerId,
       timestamp: schedule.createdAt,
-      eventType: 'reinforcement_scheduled',
+      eventType: 'reinforcement_scheduling',
       problemId: 'reinforcement',
       scheduleId: schedule.id,
       unitId: unit.id,

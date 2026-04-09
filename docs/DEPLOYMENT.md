@@ -95,7 +95,7 @@ git checkout fc143c6 && git push -f origin HEAD:main  # DANGER: force push
 | `GROQ_API_KEY` | Required (Groq) | API key for Groq hosted LLM. Get from https://console.groq.com/keys |
 | `GROQ_MODEL` | Optional (Groq) | Groq model for generation (default `openai/gpt-oss-20b`) |
 
-> **Auth setup**: Set `JWT_SECRET` to a strong random value (e.g. `openssl rand -base64 32`). Set both `STUDENT_SIGNUP_CODE` and `INSTRUCTOR_SIGNUP_CODE` to protect account creation. After adding these vars, redeploy the backend and run `npm run db:init:neon` to create the `auth_accounts` table.
+> **Auth setup**: Set `JWT_SECRET` to a strong random value (e.g. `openssl rand -base64 32`). Set both `STUDENT_SIGNUP_CODE` and `INSTRUCTOR_SIGNUP_CODE` to protect account creation. After adding these vars, redeploy the backend and run `cd apps/server && npm run db:init:neon` to initialize the Neon database schema including the `auth_accounts` table.
 >
 > **CORS setup (preview + prod)**:
 > - Keep stable domains in `CORS_ORIGINS`, for example:
@@ -320,6 +320,7 @@ Must match these exactly:
 | Instructor mode fails | Missing env var | Add VITE_INSTRUCTOR_PASSCODE |
 | Build fails on `@vercel/analytics/react` | Missing dependency or optional analytics mode | Install `@vercel/analytics` or keep `VITE_ENABLE_VERCEL_ANALYTICS=false` for launch-safe builds |
 | PDF/Ollama fails | Hosted mode limitation | Expected - use local dev |
+| Storage quota exceeded | localStorage full (5-10MB limit) | See [Storage Quota Incident Playbook](./runbooks/storage-quota-incident.md) |
 
 ---
 
@@ -709,8 +710,42 @@ curl http://localhost:3001/api/llm/status
 1. **Never expose Ollama directly** - Always proxy through backend
 2. **Use HTTPS in production** - For both frontend and backend
 3. **Change default passcode** - Set a secure `VITE_INSTRUCTOR_PASSCODE`
-4. **Rate limiting** - Consider adding rate limiting for API endpoints
+4. **Rate limiting** - Endpoint-specific rate limiting is active on auth routes
 5. **File upload limits** - PDF uploads are limited by server config
+
+### Auth Rate Limiting Verification
+
+The auth endpoints have endpoint-specific rate limiting to prevent abuse while allowing legitimate users through:
+
+| Endpoint | Rate Limit | Key Strategy |
+|----------|------------|--------------|
+| POST /api/auth/login | 10/15min | email + IP |
+| POST /api/auth/signup | 5/15min | IP only |
+
+**Verify rate limiting is active**:
+
+```bash
+# Check rate limit headers on login (expect 401 for wrong password, not 429)
+curl -i -X POST https://adaptive-instructional-artifacts-ap.vercel.app/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"wrong"}'
+
+# Look for RateLimit-* headers in response:
+# RateLimit-Limit: 10
+# RateLimit-Remaining: 9
+# RateLimit-Reset: <timestamp>
+
+# After 10 failed attempts, expect 429 with retry information
+curl -i -X POST https://adaptive-instructional-artifacts-ap.vercel.app/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"wrong"}'
+# HTTP/2 429
+# {"success":false,"error":"Too many login attempts",...}
+```
+
+**Deployment Parity**:
+- Preview and production deployments are isolated (separate in-memory rate limiter state)
+- Rate limits apply per-deployment, so preview testing won't affect production
 
 ---
 

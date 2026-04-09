@@ -4,13 +4,20 @@
  * Deterministic A/B test condition assignment for experimental control.
  * Ensures consistent condition assignment across sessions for the same learner.
  * 
- * Version: condition-assignment-v1
+ * Version: condition-assignment-v2
+ * 
+ * Session Config Redesign (Workstream 3/6):
+ * - Uses sessionStorage instead of localStorage (tab-local, survives refresh, not permanent)
+ * - Backend-first loading with sessionStorage fallback
+ * - Safe storage writes that never crash on quota exceeded
+ * - Telemetry logging for storage failures
  * 
  * @module experiments/condition-assignment
  */
 
 import type { SessionConfig } from '../../types';
 import { POLICY_IDS, getPolicyById } from '../policies/policy-definitions';
+import { storageClient, isBackendAvailable } from '../api/storage-client';
 
 /**
  * Hash a string to a numeric value for deterministic assignment
@@ -346,53 +353,353 @@ export function getExperimentalConditions(): string[] {
  * Get version of the condition assignment module.
  */
 export function getConditionAssignmentVersion(): string {
-  return 'condition-assignment-v1';
+  return 'condition-assignment-v2';
 }
 
+// ============================================================================
+// Session Config Persistence (Redesigned Workstream 3/6)
+// ============================================================================
+
 /**
- * Storage key for session config in LocalStorage
+ * Storage key for session config in sessionStorage
+ * Changed from localStorage to sessionStorage for tab-local persistence
  */
 export const SESSION_CONFIG_STORAGE_KEY = 'sql-adapt-session-config';
 
 /**
+ * Legacy storage key for migration (localStorage)
+ * @deprecated Used only for one-time migration from localStorage
+ */
+const LEGACY_SESSION_CONFIG_KEY = 'sql-adapt-session-config-local';
+
+/**
+ * Telemetry event for storage failures
+ */
+interface StorageFailureEvent {
+  type: 'session_config_storage_failure';
+  operation: 'save' | 'load' | 'clear';
+  error: string;
+  timestamp: number;
+  storageType: 'sessionStorage' | 'localStorage' | 'backend';
+}
+
+/**
+ * Log storage failure for telemetry/monitoring
+ * Never throws - always fails silently
+ */
+function logStorageFailure(
+  operation: 'save' | 'load' | 'clear',
+  error: unknown,
+  storageType: 'sessionStorage' | 'localStorage' | 'backend'
+): void {
+  try {
+    const event: StorageFailureEvent = {
+      type: 'session_config_storage_failure',
+      operation,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: Date.now(),
+      storageType,
+    };
+    
+    // Log to console for development/debugging
+    console.warn(`[SessionConfig] Storage failure (${storageType}/${operation}):`, event.error);
+    
+    // Emit custom event for telemetry subscribers
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('session_config_storage_failure', { detail: event }));
+    }
+  } catch {
+    // Absolute last resort - never crash
+  }
+}
+
+/**
+ * Check if a DOMException is a QuotaExceededError
+ */
+function isQuotaExceededError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'QuotaExceededError';
+}
+
+/**
+ * Safely write to sessionStorage with quota handling
+ */
+function safeSessionStorageWrite(key: string, value: string): { success: boolean; quotaExceeded?: boolean } {
+  try {
+    sessionStorage.setItem(key, value);
+    return { success: true };
+  } catch (error) {
+    if (isQuotaExceededError(error)) {
+      logStorageFailure('save', error, 'sessionStorage');
+      return { success: false, quotaExceeded: true };
+    }
+    logStorageFailure('save', error, 'sessionStorage');
+    return { success: false };
+  }
+}
+
+/**
  * Save session config to storage
  * 
+ * Redesigned (v2):
+ * - Primary: sessionStorage (tab-local, survives refresh, not permanent)
+ * - Never throws - always returns success status
+ * - Logs failures for telemetry
+ * 
  * @param config - Session configuration to save
+ * @returns Success status and quota exceeded flag
  */
-export function saveSessionConfig(config: SessionConfig): void {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.setItem(SESSION_CONFIG_STORAGE_KEY, JSON.stringify(config));
+export function saveSessionConfig(config: SessionConfig): { success: boolean; quotaExceeded?: boolean } {
+  // Always validate first
+  const validation = validateSessionConfig(config);
+  if (!validation.valid) {
+    logStorageFailure('save', `Validation failed: ${validation.errors.join(', ')}`, 'sessionStorage');
+    return { success: false };
   }
+  
+  // Primary: sessionStorage
+  if (typeof sessionStorage !== 'undefined') {
+    const result = safeSessionStorageWrite(SESSION_CONFIG_STORAGE_KEY, JSON.stringify(config));
+    if (result.success) {
+      return result;
+    }
+    // If quota exceeded, don't try localStorage - just fail gracefully
+    if (result.quotaExceeded) {
+      return result;
+    }
+  }
+  
+  return { success: false };
 }
 
 /**
  * Load session config from storage
  * 
- * @returns Session configuration or null if not found
+ * Redesigned (v2):
+ * - Primary: sessionStorage (tab-local)
+ * - Validates loaded config
+ * - Returns null if invalid or not found
+ * - Clears corrupted/invalid data
+ * - Never throws
+ * 
+ * @returns Session configuration or null if not found/invalid
  */
 export function loadSessionConfig(): SessionConfig | null {
-  if (typeof localStorage !== 'undefined') {
-    const stored = localStorage.getItem(SESSION_CONFIG_STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        const validated = validateSessionConfig(parsed);
-        if (validated.valid) {
-          return parsed;
+  // Primary: sessionStorage
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      const stored = sessionStorage.getItem(SESSION_CONFIG_STORAGE_KEY);
+      if (stored) {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(stored);
+        } catch (parseError) {
+          // Corrupted JSON - clear it
+          logStorageFailure('load', parseError, 'sessionStorage');
+          safeClearSessionConfig();
+          return null;
         }
-      } catch {
-        // Invalid JSON, return null
+        
+        const validated = validateSessionConfig(parsed as SessionConfig);
+        if (validated.valid) {
+          return parsed as SessionConfig;
+        }
+        // Invalid config - clear it
+        safeClearSessionConfig();
       }
+    } catch (error) {
+      logStorageFailure('load', error, 'sessionStorage');
     }
   }
+  
   return null;
 }
 
 /**
- * Clear session config from storage
+ * Clear session config from all storage
+ * 
+ * Redesigned (v2):
+ * - Clears from sessionStorage (primary)
+ * - Never throws
+ * 
+ * @returns Success status
  */
-export function clearSessionConfig(): void {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem(SESSION_CONFIG_STORAGE_KEY);
+export function safeClearSessionConfig(): boolean {
+  let success = true;
+  
+  // Clear sessionStorage (primary)
+  if (typeof sessionStorage !== 'undefined') {
+    try {
+      sessionStorage.removeItem(SESSION_CONFIG_STORAGE_KEY);
+    } catch (error) {
+      logStorageFailure('clear', error, 'sessionStorage');
+      success = false;
+    }
   }
+  
+  // Also clear legacy localStorage if present
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.removeItem(SESSION_CONFIG_STORAGE_KEY);
+      localStorage.removeItem(LEGACY_SESSION_CONFIG_KEY);
+    } catch (error) {
+      logStorageFailure('clear', error, 'localStorage');
+      success = false;
+    }
+  }
+  
+  return success;
+}
+
+// ============================================================================
+// Async Backend Session Loading (Workstream 3/6)
+// ============================================================================
+
+/**
+ * Result from loading session config with backend priority
+ */
+export interface SessionLoadResult {
+  /** The loaded or assigned session config */
+  config: SessionConfig;
+  /** Source of the session config */
+  source: 'backend' | 'sessionStorage' | 'assigned';
+  /** Whether a new condition was assigned */
+  isNewAssignment: boolean;
+}
+
+/**
+ * Session data from backend (subset for condition assignment)
+ */
+interface BackendSessionData {
+  sessionId?: string;
+  conditionId?: string;
+  escalationPolicy?: SessionConfig['escalationPolicy'];
+  textbookDisabled?: boolean;
+  adaptiveLadderDisabled?: boolean;
+  immediateExplanationMode?: boolean;
+  staticHintMode?: boolean;
+  generationMode?: GenerationMode;
+  startTime?: string;
+}
+
+/**
+ * Load session config with backend-first priority
+ * 
+ * Redesigned boot sequence (v2):
+ * 1. Try load from backend learner_sessions first (most durable)
+ * 2. Else recover from sessionStorage
+ * 3. Else assign new condition via assignCondition()
+ * 
+ * Condition assignment remains deterministic (same learnerId → same condition)
+ * 
+ * @param learnerId - Current learner ID
+ * @returns Promise resolving to session config and load metadata
+ */
+export async function loadSessionConfigAsync(
+  learnerId: string
+): Promise<SessionLoadResult> {
+  // Try backend first (most durable)
+  if (isBackendAvailable()) {
+    try {
+      const backendSession = await storageClient.getSession(learnerId);
+      if (backendSession && isValidBackendSession(backendSession, learnerId)) {
+        const config = convertBackendSessionToConfig(backendSession, learnerId);
+        
+        // Also save to sessionStorage for tab-local recovery
+        saveSessionConfig(config);
+        
+        return {
+          config,
+          source: 'backend',
+          isNewAssignment: false,
+        };
+      }
+    } catch (error) {
+      logStorageFailure('load', error, 'backend');
+    }
+  }
+  
+  // Fallback: sessionStorage
+  const storedConfig = loadSessionConfig();
+  if (storedConfig && storedConfig.learnerId === learnerId) {
+    return {
+      config: storedConfig,
+      source: 'sessionStorage',
+      isNewAssignment: false,
+    };
+  }
+  
+  // Final fallback: assign new condition
+  // assignCondition is deterministic - same learnerId always gets same condition
+  const newConfig = assignCondition(learnerId);
+  
+  // Save to sessionStorage (best effort - don't block on failure)
+  saveSessionConfig(newConfig);
+  
+  return {
+    config: newConfig,
+    source: 'assigned',
+    isNewAssignment: true,
+  };
+}
+
+/**
+ * Check if backend session data is valid and belongs to current learner
+ */
+function isValidBackendSession(
+  session: BackendSessionData,
+  expectedLearnerId: string
+): boolean {
+  // Must have a conditionId to be valid
+  if (!session.conditionId) {
+    return false;
+  }
+  
+  // Must have valid escalation policy
+  if (!session.escalationPolicy || !POLICY_IDS.includes(session.escalationPolicy)) {
+    return false;
+  }
+  
+  return true;
+}
+
+/**
+ * Convert backend session data to SessionConfig
+ */
+function convertBackendSessionToConfig(
+  session: BackendSessionData,
+  learnerId: string
+): SessionConfig {
+  // Generate new session ID if not provided
+  const sessionId = session.sessionId || generateSessionId();
+  
+  // Use backend values with sensible defaults
+  const conditionId = session.conditionId || 'adaptive';
+  // Ensure escalationPolicy is a valid policy ID
+  const escalationPolicy = (session.escalationPolicy && POLICY_IDS.includes(session.escalationPolicy))
+    ? session.escalationPolicy
+    : (conditionId as SessionConfig['escalationPolicy']);
+  
+  const policy = getPolicyById(conditionId);
+  const defaultToggles = calculateToggles(conditionId, policy?.hintsEnabled ?? true);
+  
+  return {
+    sessionId,
+    learnerId,
+    conditionId,
+    escalationPolicy,
+    textbookDisabled: session.textbookDisabled ?? defaultToggles.textbookDisabled,
+    adaptiveLadderDisabled: session.adaptiveLadderDisabled ?? defaultToggles.adaptiveLadderDisabled,
+    immediateExplanationMode: session.immediateExplanationMode ?? defaultToggles.immediateExplanationMode,
+    staticHintMode: session.staticHintMode ?? defaultToggles.staticHintMode,
+    generationMode: session.generationMode || 'quality_mode',
+    createdAt: session.startTime ? new Date(session.startTime).getTime() : Date.now(),
+  };
+}
+
+/**
+ * Legacy clear function (alias for safeClearSessionConfig)
+ * @deprecated Use safeClearSessionConfig instead
+ */
+export function clearSessionConfig(): boolean {
+  return safeClearSessionConfig();
 }

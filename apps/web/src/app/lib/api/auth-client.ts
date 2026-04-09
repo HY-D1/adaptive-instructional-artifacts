@@ -70,6 +70,8 @@ export interface AuthResult {
   user?: AuthUser;
   error?: string;
   details?: Record<string, string[]>;
+  rateLimited?: boolean;
+  retryAfter?: string;
 }
 
 export interface LogoutResult {
@@ -136,7 +138,14 @@ export async function signup(params: {
     const data = await res.json();
     setCsrfToken(data?.csrfToken);
     if (!res.ok) {
-      return { success: false, error: data.error ?? `HTTP ${res.status}`, details: data.details };
+      const isRateLimit = res.status === 429;
+      return {
+        success: false,
+        error: data.error ?? `HTTP ${res.status}`,
+        details: data.details,
+        rateLimited: isRateLimit,
+        retryAfter: res.headers.get('Retry-After') || data.retryAfter,
+      };
     }
     return { success: true, user: data.user };
   } catch (err) {
@@ -153,7 +162,14 @@ export async function login(email: string, password: string): Promise<AuthResult
     const data = await res.json();
     setCsrfToken(data?.csrfToken);
     if (!res.ok) {
-      return { success: false, error: data.error ?? `HTTP ${res.status}` };
+      const isRateLimit = res.status === 429;
+      return {
+        success: false,
+        error: data.error ?? `HTTP ${res.status}`,
+        details: data.details,
+        rateLimited: isRateLimit,
+        retryAfter: res.headers.get('Retry-After') || data.retryAfter,
+      };
     }
     return { success: true, user: data.user };
   } catch (err) {

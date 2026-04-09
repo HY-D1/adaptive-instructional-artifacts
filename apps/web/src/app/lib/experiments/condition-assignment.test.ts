@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   hashString,
   generateSessionId,
@@ -7,9 +7,23 @@ import {
   getConditionDistribution,
   validateSessionConfig,
   getExperimentalConditions,
-  getConditionAssignmentVersion
+  getConditionAssignmentVersion,
+  saveSessionConfig,
+  loadSessionConfig,
+  safeClearSessionConfig,
+  loadSessionConfigAsync,
+  SESSION_CONFIG_STORAGE_KEY,
 } from './condition-assignment';
 import type { SessionConfig } from '../../types';
+import { storageClient } from '../api/storage-client';
+
+// Mock storage-client
+vi.mock('../api/storage-client', () => ({
+  storageClient: {
+    getSession: vi.fn(),
+  },
+  isBackendAvailable: vi.fn(() => true),
+}));
 
 describe('@weekly Condition Assignment', () => {
   describe('hashString', () => {
@@ -274,8 +288,320 @@ describe('@weekly Condition Assignment', () => {
   });
 
   describe('getConditionAssignmentVersion', () => {
-    it('should return version string', () => {
-      expect(getConditionAssignmentVersion()).toBe('condition-assignment-v1');
+    it('should return v2 version string', () => {
+      expect(getConditionAssignmentVersion()).toBe('condition-assignment-v2');
+    });
+  });
+
+  // ============================================================================
+  // Session Config Persistence Tests (Workstream 3/6)
+  // ============================================================================
+
+  describe('Session Config Persistence (Workstream 3/6)', () => {
+    beforeEach(() => {
+      // Clear sessionStorage before each test
+      sessionStorage.clear();
+      localStorage.clear();
+      vi.clearAllMocks();
+    });
+
+    describe('saveSessionConfig', () => {
+      it('should save valid config to sessionStorage', () => {
+        const config = assignCondition('learner-123');
+        const result = saveSessionConfig(config);
+        
+        expect(result.success).toBe(true);
+        expect(sessionStorage.getItem(SESSION_CONFIG_STORAGE_KEY)).not.toBeNull();
+      });
+
+      it('should return success=false for invalid config', () => {
+        const invalidConfig = { ...assignCondition('learner-123'), sessionId: '' };
+        const result = saveSessionConfig(invalidConfig);
+        
+        expect(result.success).toBe(false);
+      });
+
+      it('should not crash on storage quota exceeded', () => {
+        // Mock sessionStorage to throw QuotaExceededError
+        const originalSetItem = sessionStorage.setItem;
+        sessionStorage.setItem = vi.fn(() => {
+          throw new DOMException('Quota exceeded', 'QuotaExceededError');
+        });
+        
+        const config = assignCondition('learner-123');
+        const result = saveSessionConfig(config);
+        
+        expect(result.success).toBe(false);
+        expect(result.quotaExceeded).toBe(true);
+        
+        // Restore
+        sessionStorage.setItem = originalSetItem;
+      });
+
+      it('should not crash on unexpected storage errors', () => {
+        // Mock sessionStorage to throw generic error
+        const originalSetItem = sessionStorage.setItem;
+        sessionStorage.setItem = vi.fn(() => {
+          throw new Error('Unexpected error');
+        });
+        
+        const config = assignCondition('learner-123');
+        const result = saveSessionConfig(config);
+        
+        expect(result.success).toBe(false);
+        expect(result.quotaExceeded).toBeUndefined();
+        
+        // Restore
+        sessionStorage.setItem = originalSetItem;
+      });
+    });
+
+    describe('loadSessionConfig', () => {
+      it('should load config from sessionStorage', () => {
+        const config = assignCondition('learner-123');
+        saveSessionConfig(config);
+        
+        const loaded = loadSessionConfig();
+        expect(loaded).not.toBeNull();
+        expect(loaded?.learnerId).toBe('learner-123');
+        expect(loaded?.conditionId).toBe(config.conditionId);
+      });
+
+      it('should return null for non-existent config', () => {
+        const loaded = loadSessionConfig();
+        expect(loaded).toBeNull();
+      });
+
+      it('should return null and clear corrupted config', () => {
+        sessionStorage.setItem(SESSION_CONFIG_STORAGE_KEY, 'invalid json');
+        
+        const loaded = loadSessionConfig();
+        expect(loaded).toBeNull();
+        expect(sessionStorage.getItem(SESSION_CONFIG_STORAGE_KEY)).toBeNull();
+      });
+
+      it('should return null for invalid config and clear it', () => {
+        const invalidConfig = { 
+          sessionId: '',
+          learnerId: '',
+          conditionId: '',
+          escalationPolicy: 'adaptive',
+          createdAt: 0,
+        };
+        sessionStorage.setItem(SESSION_CONFIG_STORAGE_KEY, JSON.stringify(invalidConfig));
+        
+        const loaded = loadSessionConfig();
+        expect(loaded).toBeNull();
+        expect(sessionStorage.getItem(SESSION_CONFIG_STORAGE_KEY)).toBeNull();
+      });
+
+      it('should not crash when sessionStorage is unavailable', () => {
+        const originalGetItem = sessionStorage.getItem;
+        sessionStorage.getItem = vi.fn(() => {
+          throw new Error('sessionStorage disabled');
+        });
+        
+        const loaded = loadSessionConfig();
+        expect(loaded).toBeNull();
+        
+        // Restore
+        sessionStorage.getItem = originalGetItem;
+      });
+    });
+
+    describe('safeClearSessionConfig', () => {
+      it('should clear config from sessionStorage', () => {
+        const config = assignCondition('learner-123');
+        saveSessionConfig(config);
+        
+        const result = safeClearSessionConfig();
+        expect(result).toBe(true);
+        expect(loadSessionConfig()).toBeNull();
+      });
+
+      it('should return false on clear error', () => {
+        const originalRemoveItem = sessionStorage.removeItem;
+        sessionStorage.removeItem = vi.fn(() => {
+          throw new Error('Cannot remove');
+        });
+        
+        const result = safeClearSessionConfig();
+        expect(result).toBe(false);
+        
+        // Restore
+        sessionStorage.removeItem = originalRemoveItem;
+      });
+
+      it('should also clear legacy localStorage keys', () => {
+        localStorage.setItem(SESSION_CONFIG_STORAGE_KEY, 'legacy-data');
+        
+        safeClearSessionConfig();
+        
+        expect(localStorage.getItem(SESSION_CONFIG_STORAGE_KEY)).toBeNull();
+      });
+    });
+
+    describe('loadSessionConfigAsync', () => {
+      it('should assign new condition for fresh learner', async () => {
+        vi.mocked(storageClient.getSession).mockResolvedValue(null);
+        
+        const result = await loadSessionConfigAsync('fresh-learner-123');
+        
+        expect(result.isNewAssignment).toBe(true);
+        expect(result.source).toBe('assigned');
+        expect(result.config.learnerId).toBe('fresh-learner-123');
+        expect(result.config.conditionId).toBeDefined();
+      });
+
+      it('should restore from sessionStorage for returning learner', async () => {
+        const config = assignCondition('returning-learner-456');
+        saveSessionConfig(config);
+        vi.mocked(storageClient.getSession).mockResolvedValue(null);
+        
+        const result = await loadSessionConfigAsync('returning-learner-456');
+        
+        expect(result.isNewAssignment).toBe(false);
+        expect(result.source).toBe('sessionStorage');
+        expect(result.config.learnerId).toBe('returning-learner-456');
+        expect(result.config.conditionId).toBe(config.conditionId);
+      });
+
+      it('should prefer backend over sessionStorage', async () => {
+        const backendSession = {
+          sessionId: 'backend-session-123',
+          conditionId: 'aggressive',
+          escalationPolicy: 'aggressive' as const,
+          textbookDisabled: false,
+          adaptiveLadderDisabled: false,
+          startTime: new Date().toISOString(),
+        };
+        
+        // Pre-populate sessionStorage with different condition
+        const sessionConfig = assignCondition('learner-789');
+        sessionConfig.conditionId = 'conservative';
+        saveSessionConfig(sessionConfig);
+        
+        vi.mocked(storageClient.getSession).mockResolvedValue(backendSession);
+        
+        const result = await loadSessionConfigAsync('learner-789');
+        
+        expect(result.source).toBe('backend');
+        expect(result.config.conditionId).toBe('aggressive');
+      });
+
+      it('should continue without crash on backend failure', async () => {
+        vi.mocked(storageClient.getSession).mockRejectedValue(new Error('Network error'));
+        
+        const result = await loadSessionConfigAsync('learner-abc');
+        
+        expect(result.isNewAssignment).toBe(true);
+        expect(result.source).toBe('assigned');
+        expect(result.config.learnerId).toBe('learner-abc');
+      });
+
+      it('should handle corrupted sessionStorage gracefully', async () => {
+        sessionStorage.setItem(SESSION_CONFIG_STORAGE_KEY, 'invalid-json');
+        vi.mocked(storageClient.getSession).mockResolvedValue(null);
+        
+        const result = await loadSessionConfigAsync('learner-def');
+        
+        expect(result.isNewAssignment).toBe(true);
+        expect(result.source).toBe('assigned');
+      });
+
+      it('should not use sessionStorage config for different learner', async () => {
+        const config = assignCondition('learner-original');
+        saveSessionConfig(config);
+        vi.mocked(storageClient.getSession).mockResolvedValue(null);
+        
+        const result = await loadSessionConfigAsync('learner-different');
+        
+        expect(result.isNewAssignment).toBe(true);
+        expect(result.source).toBe('assigned');
+        expect(result.config.learnerId).toBe('learner-different');
+      });
+
+      it('should maintain condition assignment determinism', async () => {
+        vi.mocked(storageClient.getSession).mockResolvedValue(null);
+        
+        // First assignment
+        const result1 = await loadSessionConfigAsync('deterministic-learner');
+        
+        // Clear sessionStorage to force re-assignment
+        safeClearSessionConfig();
+        
+        // Second assignment should be identical
+        const result2 = await loadSessionConfigAsync('deterministic-learner');
+        
+        expect(result1.config.conditionId).toBe(result2.config.conditionId);
+        expect(result1.config.escalationPolicy).toBe(result2.config.escalationPolicy);
+        expect(result1.config.textbookDisabled).toBe(result2.config.textbookDisabled);
+        expect(result1.config.adaptiveLadderDisabled).toBe(result2.config.adaptiveLadderDisabled);
+      });
+
+      it('should handle backend session with missing conditionId', async () => {
+        const invalidBackendSession = {
+          sessionId: 'session-123',
+          // Missing conditionId
+          escalationPolicy: 'adaptive' as const,
+        };
+        
+        vi.mocked(storageClient.getSession).mockResolvedValue(invalidBackendSession);
+        
+        const result = await loadSessionConfigAsync('learner-ghi');
+        
+        expect(result.isNewAssignment).toBe(true);
+        expect(result.source).toBe('assigned');
+      });
+
+      it('should handle backend session with invalid escalationPolicy', async () => {
+        const invalidBackendSession = {
+          sessionId: 'session-123',
+          conditionId: 'aggressive',
+          escalationPolicy: 'invalid-policy',
+        } as const;
+        
+        vi.mocked(storageClient.getSession).mockResolvedValue(invalidBackendSession as unknown as Awaited<ReturnType<typeof storageClient.getSession>>);
+        
+        const result = await loadSessionConfigAsync('learner-jkl');
+        
+        expect(result.isNewAssignment).toBe(true);
+        expect(result.source).toBe('assigned');
+      });
+
+      it('should save assigned config to sessionStorage', async () => {
+        vi.mocked(storageClient.getSession).mockResolvedValue(null);
+        
+        await loadSessionConfigAsync('learner-mno');
+        
+        // Should have saved to sessionStorage
+        const saved = sessionStorage.getItem(SESSION_CONFIG_STORAGE_KEY);
+        expect(saved).not.toBeNull();
+        
+        const parsed = JSON.parse(saved!);
+        expect(parsed.learnerId).toBe('learner-mno');
+      });
+
+      it('should emit telemetry event on storage failure', async () => {
+        const telemetryEvents: Array<{ detail: unknown }> = [];
+        window.addEventListener('session_config_storage_failure', (e) => {
+          telemetryEvents.push({ detail: (e as CustomEvent).detail });
+        });
+        
+        // Mock sessionStorage to fail
+        const originalSetItem = sessionStorage.setItem;
+        sessionStorage.setItem = vi.fn(() => {
+          throw new DOMException('Quota exceeded', 'QuotaExceededError');
+        });
+        
+        vi.mocked(storageClient.getSession).mockResolvedValue(null);
+        
+        // Should not throw
+        await loadSessionConfigAsync('learner-pqr');
+        
+        // Restore before assertions
+        sessionStorage.setItem = originalSetItem;
+      });
     });
   });
 });

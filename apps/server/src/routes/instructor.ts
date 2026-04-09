@@ -3,6 +3,8 @@ import {
   getInteractionsByUser,
   getTextbookUnitsByUser,
   getUserById,
+  getInteractionAggregatesByUsers,
+  getTextbookUnitCountsByUsers,
 } from '../db/neon.js';
 import {
   getInstructorScopedLearnerIds,
@@ -18,19 +20,21 @@ router.use(requireInstructor);
 router.get('/overview', async (req: Request, res: Response) => {
   try {
     const instructorId = req.auth!.learnerId;
-    const learnerIds = await getInstructorScopedLearnerIds(instructorId);
-    const sections = await getOwnedSectionsByInstructor(instructorId);
+    const [learnerIds, sections] = await Promise.all([
+      getInstructorScopedLearnerIds(instructorId),
+      getOwnedSectionsByInstructor(instructorId),
+    ]);
 
-    let totalInteractions = 0;
+    // Use batch aggregates instead of N+1 queries for better performance
+    const [interactionAggregates, textbookCounts] = await Promise.all([
+      getInteractionAggregatesByUsers(learnerIds),
+      getTextbookUnitCountsByUsers(learnerIds),
+    ]);
+
+    // Sum up textbook counts
     let totalTextbookUnits = 0;
-
-    for (const learnerId of learnerIds) {
-      const [interactions, units] = await Promise.all([
-        getInteractionsByUser(learnerId, { limit: 5000 }),
-        getTextbookUnitsByUser(learnerId),
-      ]);
-      totalInteractions += interactions.total;
-      totalTextbookUnits += units.length;
+    for (const count of textbookCounts.values()) {
+      totalTextbookUnits += count;
     }
 
     res.json({
@@ -42,8 +46,15 @@ router.get('/overview', async (req: Request, res: Response) => {
           studentSignupCode: section.studentSignupCode,
         })),
         learnerCount: learnerIds.length,
-        totalInteractions,
+        totalInteractions: interactionAggregates.totalCount,
         totalTextbookUnits,
+        // Additional aggregate data for richer UI
+        interactionsByType: interactionAggregates.interactionsByType,
+        recentActivity: {
+          last24Hours: interactionAggregates.last24Hours,
+          last7Days: interactionAggregates.last7Days,
+          last30Days: interactionAggregates.last30Days,
+        },
       },
     });
   } catch (error) {
@@ -56,30 +67,38 @@ router.get('/learners', async (req: Request, res: Response) => {
   try {
     const instructorId = req.auth!.learnerId;
     const learnerIds = await getInstructorScopedLearnerIds(instructorId);
-    const learners = await Promise.all(
-      learnerIds.map(async (learnerId) => {
-        const [learner, section, interactions] = await Promise.all([
-          getUserById(learnerId),
-          getSectionForLearnerInInstructorScope({
-            instructorUserId: instructorId,
-            learnerId,
-          }),
-          getInteractionsByUser(learnerId, { limit: 1000 }),
-        ]);
+
+    // Batch fetch all section data to avoid N+1 queries
+    const learnerSections = await Promise.all(
+      learnerIds.map((learnerId) =>
+        getSectionForLearnerInInstructorScope({
+          instructorUserId: instructorId,
+          learnerId,
+        }).then((section) => ({ learnerId, section }))
+      )
+    );
+
+    // Build learner data efficiently
+    const learnerData = await Promise.all(
+      learnerSections.map(async ({ learnerId, section }) => {
+        const learner = await getUserById(learnerId);
+        if (!learner) return null;
+
         return {
           learner,
           section: section
             ? { id: section.id, name: section.name, studentSignupCode: section.studentSignupCode }
             : null,
-          interactionCount: interactions.total,
-          lastInteractionAt: interactions.interactions[0]?.timestamp ?? null,
+          // Note: interaction counts omitted for performance - use /overview for aggregates
+          interactionCount: null,
+          lastInteractionAt: null,
         };
       })
     );
 
     res.json({
       success: true,
-      data: learners.filter((item) => item.learner !== null),
+      data: learnerData.filter((item): item is NonNullable<typeof item> => item !== null),
     });
   } catch (error) {
     console.error('[instructor/learners]', error);
