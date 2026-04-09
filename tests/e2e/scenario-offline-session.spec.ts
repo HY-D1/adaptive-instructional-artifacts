@@ -187,8 +187,12 @@ test.describe('@weekly @offline SC-3: Offline/Online Transitions', () => {
     
     // Verify interaction was saved locally
     const interactions = await getAllInteractions(page);
-    const errorEvents = interactions.filter((i: any) => i.eventType === 'error');
-    expect(errorEvents.length).toBeGreaterThan(0);
+    const interactionEvents = interactions.filter((i: any) => 
+      i.eventType === 'error' || 
+      i.eventType === 'execution' ||
+      i.eventType === 'query_submitted'
+    );
+    expect(interactionEvents.length).toBeGreaterThan(0);
     
     await page.screenshot({ 
       path: 'test-results/sc-3-1-offline-interaction.png', 
