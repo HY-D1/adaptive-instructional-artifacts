@@ -1,8 +1,8 @@
 # Deployment Environment Parity Audit
 
-**Date:** 2026-04-08  
-**Auditor:** Claude Code (Codebase Exploration Agent)  
-**Scope:** Preview vs Production environment configuration parity  
+**Date:** 2026-04-09 (Updated)  
+**Auditor:** Claude Code (Codebase Exploration Agent) / Sub-Agent 1 (Environment Isolation)  
+**Scope:** Preview vs Production environment configuration parity and isolation verification  
 **Branch:** `hardening/research-grade-tightening`
 
 ---
@@ -13,7 +13,7 @@
 |-----------|--------|-------|
 | Node Version | ✅ **RESOLVED** | All configs aligned to 20.x (see verification below) |
 | API Base URL | ✅ Configured | Preview → Production backend (intentional) |
-| Database | ✅ **RESOLVED** | Preview uses Neon Preview Branch via DATABASE_URL |
+| Database | ✅ **VERIFIED** | Preview uses Neon Preview Branch via DATABASE_URL, Production uses Neon Main |
 | CORS Origins | ✅ Configured | Wildcard patterns support preview URLs |
 | Auth/Cookies | ✅ Configured | Cross-origin with SameSite=None |
 
@@ -55,7 +55,7 @@ All three configuration sources now specify Node 20.x. Vercel builds use the `en
 | Environment | Frontend URL | Backend URL | Config Source |
 |-------------|--------------|-------------|---------------|
 | **Production** | `https://adaptive-instructional-artifacts.vercel.app` | `https://adaptive-instructional-artifacts-ap.vercel.app` | `VITE_API_BASE_URL` env var |
-| **Preview** | `https://adaptive-instructional-artifacts-git-*-*.vercel.app` | `https://adaptive-instructional-artifacts-ap.vercel.app` | **SAME PROD BACKEND** |
+| **Preview** | `https://adaptive-instructional-artifacts-git-*-*.vercel.app` | `https://adaptive-instructional-artifacts-api-git-*-*.vercel.app` (per-branch) | `@vercel/related-projects` auto-discovery |
 | **Local Dev** | `http://localhost:5173` | `http://localhost:3001` | `VITE_API_BASE_URL=http://localhost:3001` |
 
 ### Build-Time Resolution (vite.config.ts)
@@ -273,15 +273,25 @@ Promote to Production
        └── Database → Production Neon DB
 ```
 
-### Actual Current Flow (Risky)
+### Actual Current Flow (✅ ISOLATED)
 
 ```
 Preview Deployment
        │
-       ├── Frontend → Preview URL
-       ├── Backend → Production backend URL (or preview)
-       └── Database → PRODUCTION NEON DB ⚠️
+       ├── Frontend → Preview URL (per-branch)
+       ├── Backend → Preview backend URL (per-branch)
+       └── Database → PREVIEW NEON BRANCH ✅
+
+Production Deployment
+       │
+       ├── Frontend → Production URL
+       ├── Backend → Production backend URL
+       └── Database → PRODUCTION NEON DB ✅
 ```
+
+**Verification Evidence:**
+- Preview backend health check: `{"environment":"preview","db":{"target":"preview"}}`
+- See full audit: [environment-isolation-audit.md](./environment-isolation-audit.md)
 
 ---
 

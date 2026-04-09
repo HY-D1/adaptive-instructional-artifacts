@@ -70,24 +70,95 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(AUTH_ENABLED);
   const [isHydrating, setIsHydrating] = useState(false);
 
-  /** Sync authenticated user into localStorage so existing guards work */
-  function syncToLocalStorage(authUser: AuthUser) {
+  /** 
+   * Sync authenticated user into localStorage so existing guards work.
+   * Preserves existing local profile createdAt when available to maintain
+   * accurate account creation metadata.
+   */
+  function syncToLocalStorage(authUser: AuthUser): {
+    hadExistingProfile: boolean;
+    preservedCreatedAt: number | null;
+    previousLearnerId: string | null;
+  } {
+    // Check for existing profile to preserve metadata
+    const existingProfile = storage.getUserProfile();
+    const hadExistingProfile = existingProfile !== null;
+    const previousLearnerId = existingProfile?.id ?? null;
+    
+    // Preserve createdAt from existing profile if available, otherwise use now
+    // This prevents resetting the creation date on every login
+    const preservedCreatedAt = existingProfile?.createdAt ?? Date.now();
+    
+    const auditInfo = {
+      action: hadExistingProfile ? 'profile_update' : 'profile_create',
+      learnerId: authUser.learnerId,
+      previousLearnerId,
+      hadExistingProfile,
+      preservedCreatedAt,
+      newCreatedAt: Date.now(),
+    };
+    
+    // Log for data integrity auditing
+    console.info('[auth_hydration_profile_sync]', auditInfo);
+    
     storage.saveUserProfile({
       id: authUser.learnerId,
       name: authUser.name,
       role: authUser.role,
-      createdAt: Date.now(),
+      createdAt: preservedCreatedAt,
     });
+    
+    return {
+      hadExistingProfile,
+      preservedCreatedAt,
+      previousLearnerId,
+    };
   }
 
-  async function hydrateFromBackend(authUser: AuthUser): Promise<void> {
+  async function hydrateFromBackend(
+    authUser: AuthUser,
+    syncInfo: { hadExistingProfile: boolean; previousLearnerId: string | null }
+  ): Promise<void> {
     if (!AUTH_ENABLED) return;
     setIsHydrating(true);
+    
+    const hydrationStart = Date.now();
+    
     try {
-      await storage.hydrateLearner(authUser.learnerId);
+      // Detect potential legacy data scenario
+      const hasLegacyData = syncInfo.previousLearnerId && 
+        syncInfo.previousLearnerId !== authUser.learnerId;
+      
+      if (hasLegacyData) {
+        console.info('[auth_hydration_legacy_detected]', {
+          previousLearnerId: syncInfo.previousLearnerId,
+          newLearnerId: authUser.learnerId,
+          action: 'preserving_local_data',
+          note: 'Local data under previous learnerId will be preserved but not migrated to backend',
+        });
+      }
+      
+      const hydrated = await storage.hydrateLearner(authUser.learnerId);
+      
       if (authUser.role === 'instructor') {
         await storage.hydrateInstructorDashboard();
       }
+      
+      console.info('[auth_hydration_complete]', {
+        learnerId: authUser.learnerId,
+        success: hydrated,
+        durationMs: Date.now() - hydrationStart,
+        hadExistingProfile: syncInfo.hadExistingProfile,
+        hadLegacyData: hasLegacyData,
+      });
+    } catch (error) {
+      console.error('[auth_hydration_error]', {
+        learnerId: authUser.learnerId,
+        error: error instanceof Error ? error.message : 'unknown',
+        durationMs: Date.now() - hydrationStart,
+      });
+      // Don't throw - login should succeed even if hydration fails
+      // The storage layer will fall back to local data
     } finally {
       setIsHydrating(false);
     }
@@ -101,8 +172,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     getMe().then(async (authUser) => {
       if (authUser) {
-        syncToLocalStorage(authUser);
-        await hydrateFromBackend(authUser);
+        const syncInfo = syncToLocalStorage(authUser);
+        await hydrateFromBackend(authUser, syncInfo);
         setUser(authUser);
       }
       setIsLoading(false);
@@ -115,8 +186,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user?.learnerId && user.learnerId !== result.user.learnerId) {
         clearUiStateForActor(user.learnerId);
       }
-      syncToLocalStorage(result.user);
-      await hydrateFromBackend(result.user);
+      const syncInfo = syncToLocalStorage(result.user);
+      await hydrateFromBackend(result.user, syncInfo);
       setUser(result.user);
     }
     return result;
@@ -153,8 +224,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user?.learnerId && user.learnerId !== result.user.learnerId) {
         clearUiStateForActor(user.learnerId);
       }
-      syncToLocalStorage(result.user);
-      await hydrateFromBackend(result.user);
+      const syncInfo = syncToLocalStorage(result.user);
+      await hydrateFromBackend(result.user, syncInfo);
       setUser(result.user);
     }
     return result;

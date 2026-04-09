@@ -311,6 +311,11 @@ export function ResearchDashboard() {
   
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
+  const [hydrationError, setHydrationError] = useState<{
+    type: 'auth' | 'backend' | 'scope_empty' | 'network';
+    message: string;
+  } | null>(null);
+  const [scopeEmpty, setScopeEmpty] = useState(false);
   const [selectedMasteryLearner, setSelectedMasteryLearner] = useState<string>('');
   const uiActorId = storage.getUserProfile()?.id || 'unknown';
 
@@ -355,7 +360,18 @@ export function ResearchDashboard() {
   }, [uiActorId, selectedLearner, timeRange, activeTab]);
 
   const loadData = async () => {
-    await storage.hydrateInstructorDashboard();
+    setHydrationError(null);
+    setScopeEmpty(false);
+    
+    const result = await storage.hydrateInstructorDashboard();
+    
+    if (!result.ok) {
+      setHydrationError({ type: result.error, message: result.message });
+      console.warn('[ResearchDashboard] Hydration failed:', result.error, result.message);
+    } else {
+      setScopeEmpty(result.scopeEmpty);
+    }
+    
     setInteractions(storage.getAllInteractions());
     const loadedProfiles = storage
       .getAllProfiles()
@@ -508,7 +524,7 @@ export function ResearchDashboard() {
       setLlmHealthOk(status.ok);
       setLlmProviderLabel(status.provider || 'backend');
       setLlmTargetModel(
-        status.availableModels[0]
+        status.availableModels?.[0]
           || (status.provider ? getDefaultModelForProvider(status.provider) : null),
       );
     } catch (error) {
@@ -1489,6 +1505,87 @@ export function ResearchDashboard() {
           <Skeleton className="h-24" />
         </div>
         <Skeleton className="h-96" />
+      </div>
+    );
+  }
+
+  // Error states for hydration failures
+  if (hydrationError) {
+    const errorConfig = {
+      auth: {
+        icon: <AlertCircle className="size-12 text-amber-500" />,
+        title: 'Authentication Required',
+        description: hydrationError.message || 'Please sign in as an instructor to view this dashboard.',
+        action: null,
+      },
+      backend: {
+        icon: <AlertCircle className="size-12 text-red-500" />,
+        title: 'Dashboard Unavailable',
+        description: hydrationError.message || 'Failed to load instructor data from the server.',
+        action: (
+          <Button onClick={loadData} variant="outline" size="sm">
+            <RefreshCw className="size-4 mr-2" />
+            Retry
+          </Button>
+        ),
+      },
+      network: {
+        icon: <AlertCircle className="size-12 text-orange-500" />,
+        title: 'Connection Error',
+        description: hydrationError.message || 'Unable to connect to the server. Please check your connection.',
+        action: (
+          <Button onClick={loadData} variant="outline" size="sm">
+            <RefreshCw className="size-4 mr-2" />
+            Retry
+          </Button>
+        ),
+      },
+      scope_empty: {
+        icon: <Users className="size-12 text-blue-500" />,
+        title: 'No Learners in Your Sections',
+        description: 'You don\'t have any learners enrolled in your sections yet. Students need to join using your section code.',
+        action: null,
+      },
+    };
+
+    const config = errorConfig[hydrationError.type];
+
+    return (
+      <div className="space-y-6">
+        <Card className="p-8">
+          <div className="flex flex-col items-center text-center gap-4">
+            {config.icon}
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">{config.title}</h2>
+              <p className="text-gray-600 mt-2 max-w-md">{config.description}</p>
+            </div>
+            {config.action && <div className="mt-2">{config.action}</div>}
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // Empty scope state - instructor has no learners
+  if (scopeEmpty) {
+    return (
+      <div className="space-y-6">
+        <Card className="p-8">
+          <div className="flex flex-col items-center text-center gap-4">
+            <Users className="size-12 text-blue-500" />
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">No Learners Yet</h2>
+              <p className="text-gray-600 mt-2 max-w-md">
+                You don&apos;t have any learners enrolled in your sections. 
+                Share your section code with students so they can join.
+              </p>
+            </div>
+            <Button onClick={loadData} variant="outline" size="sm">
+              <RefreshCw className="size-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }

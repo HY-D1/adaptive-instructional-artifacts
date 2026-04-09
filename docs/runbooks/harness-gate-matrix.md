@@ -2,7 +2,7 @@
 
 **Date**: 2026-04-09  
 **Branch**: `hardening/research-grade-tightening`  
-**Commit**: `a00f41d`  
+**Commit**: `e45ec36` (instructor dashboard fix)  
 
 ---
 
@@ -21,7 +21,7 @@ The Harness Gate Matrix tracks the acceptance status of all critical system dime
 | **C** | Session Restore | ✅ PASS | None |
 | **D** | Solved Progress | ⚠️ SOURCE-FIXED | Pending live verification |
 | **E** | Notes/Textbook | ✅ PASS | None |
-| **F** | Instructor/Research | ✅ PASS | None |
+| **F** | Instructor/Research | ⚠️ SOURCE-FIXED | Live verification pending |
 | **G** | Storage Edge Cases | ✅ PASS | None |
 | **H** | Deployment/Env Parity | ✅ PASS | None |
 | **I** | E2E Trustworthiness | ⚠️ IN-PROGRESS | Auth seeding deployed but not verified |
@@ -104,7 +104,7 @@ The Harness Gate Matrix tracks the acceptance status of all critical system dime
 
 ---
 
-### F. Instructor/Research ✅
+### F. Instructor/Research ⚠️
 
 | Check | Status | Evidence |
 |-------|--------|----------|
@@ -112,8 +112,17 @@ The Harness Gate Matrix tracks the acceptance status of all critical system dime
 | Research exports | ✅ | Memory-safe implementation |
 | Rate limiting | ✅ | Classroom-safe keys |
 | Authz boundaries | ✅ | `api-authz.spec.ts` |
+| Error state visibility | ✅ **FIXED** | `instructor-dashboard-fix.md` |
+| Silent failure fix | ✅ **FIXED** | `hydrateInstructorDashboard()` now returns structured errors |
+| Empty scope handling | ✅ **FIXED** | "No Learners Yet" state added |
 
-**Gate**: ✅ PASS
+**Issue Discovered & Fixed**:
+- **Problem**: `hydrateInstructorDashboard()` caught all errors and returned `false`, causing silent failures
+- **Impact**: Instructors saw empty charts instead of error states
+- **Fix**: Enhanced return type with structured error info + explicit error UI states
+- **Files**: `dual-storage.ts`, `ResearchDashboard.tsx`
+
+**Gate**: ⚠️ **SOURCE-FIXED** - Code fix complete, live Playwright verification pending
 
 ---
 

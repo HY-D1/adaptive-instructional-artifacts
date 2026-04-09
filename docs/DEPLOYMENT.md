@@ -3,6 +3,10 @@
 > **Quick Reference**: See [DEPLOYMENT_MODES.md](./DEPLOYMENT_MODES.md) for a detailed capability matrix showing which features work in local vs hosted mode.
 >
 > **Beta Launch Status**: See [Beta Launch Readiness](../.claude/state/runs/run-1774826173/beta-launch-packet.json) for current release candidate details.
+>
+> **Environment Isolation**: See [Environment Isolation Audit](./runbooks/environment-isolation-audit.md) for preview/production DB separation verification.
+>
+> **Session/Hydration Safety**: See [Session Rehydration Audit](./runbooks/session-rehydration-audit.md) for login-time merge behavior analysis.
 
 ## Production Release Candidate (v1.0.0-beta)
 
@@ -321,6 +325,8 @@ Must match these exactly:
 | Build fails on `@vercel/analytics/react` | Missing dependency or optional analytics mode | Install `@vercel/analytics` or keep `VITE_ENABLE_VERCEL_ANALYTICS=false` for launch-safe builds |
 | PDF/Ollama fails | Hosted mode limitation | Expected - use local dev |
 | Storage quota exceeded | localStorage full (5-10MB limit) | See [Storage Quota Incident Playbook](./runbooks/storage-quota-incident.md) |
+| Preview/Prod DB isolation concerns | Environment misconfiguration | See [Environment Isolation Audit](./runbooks/environment-isolation-audit.md) |
+| Login/hydration data loss concerns | Merge behavior questions | See [Session Rehydration Audit](./runbooks/session-rehydration-audit.md) |
 
 ---
 
@@ -1159,3 +1165,55 @@ This suite is intentionally narrow and maps to real product risks:
 - primary CTA stability and labeled icon-only controls after hydration
 
 *Last updated: 2026-03-24*
+*Last updated: 2026-03-24*
+
+---
+
+## Related Audit Documents
+
+The following audit documents provide detailed verification of critical deployment infrastructure:
+
+### Environment Isolation Audit
+**File**: [docs/runbooks/environment-isolation-audit.md](./runbooks/environment-isolation-audit.md)
+
+Verifies preview and production environments are properly isolated:
+- Preview deployments use Neon Preview Branch database
+- Production deployments use Neon Main database
+- Health endpoints report correct `environment` and `db.target` values
+- Cross-environment data pollution prevention
+
+**Key Findings** (2026-04-09):
+- ✅ Preview environment correctly targets `preview` Neon branch
+- ✅ Production environment correctly targets `production` Neon
+- ✅ No shared DATABASE_URL between environments
+- ⚠️ Production backend needs redeploy for new health check format parity
+
+### Session Rehydration Audit
+**File**: [docs/runbooks/session-rehydration-audit.md](./runbooks/session-rehydration-audit.md)
+
+Analyzes login-time session restoration and data merge behavior:
+- 6 active safety guards preventing data loss
+- Backend authoritative session strategy
+- `hasSessionMutationPayload()` read-through protection
+- Session ownership validation
+- solvedProblemIds merge strategy
+
+**Key Findings** (2026-04-09):
+- ✅ Backend is authoritative when authenticated
+- ✅ Empty frontend state cannot overwrite valid backend session
+- ✅ `session-unknown` sentinel properly rejected
+- ✅ No code changes required - system is research-grade hardened
+
+### Weekly Progress Reports
+**File**: [docs/week2026-04-09_progress.md](./week2026-04-09_progress.md)
+
+Comprehensive weekly progress tracking including:
+- Sub-agent assignment status
+- Commands used for verification
+- Deploy/health results
+- Playwright test status
+- Cross-references between all audit documents
+
+---
+
+*Last updated: 2026-04-09 by Sub-Agent 7 (Documentation and Audit Trail)*
