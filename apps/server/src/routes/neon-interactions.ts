@@ -409,6 +409,27 @@ router.post('/batch', async (req: Request, res: Response) => {
       return;
     }
 
+    // RESEARCH-4: Validate basic required fields for each event (parity with single route)
+    const invalidEvents: Array<{ index: number; eventId: string; reason: string }> = [];
+    for (let i = 0; i < events.length; i++) {
+      const event = events[i];
+      if (!event.learnerId || !event.eventType || !event.problemId) {
+        invalidEvents.push({
+          index: i,
+          eventId: event.id || `index-${i}`,
+          reason: 'Missing required fields: learnerId, eventType, or problemId',
+        });
+      }
+    }
+    if (invalidEvents.length > 0) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid events in batch',
+        invalidEvents,
+      });
+      return;
+    }
+
     if (process.env.NODE_ENV === 'production') {
       const batchValidation = validateResearchBatchForWrite(events);
       if (!batchValidation.valid) {
@@ -429,42 +450,83 @@ router.post('/batch', async (req: Request, res: Response) => {
 
     const results = [];
     const confirmedIds: string[] = [];
+    const failedEvents: Array<{ index: number; eventId: string; error: string }> = [];
     
-    for (const event of events) {
-      const scopedTarget = await resolveScopedTarget(req, event.learnerId, 'write');
-      event.learnerId = scopedTarget.learnerId;
-      event.sectionId = scopedTarget.sectionId;
-      const id = event.id || `${event.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
-      
-      const payload = buildNeonInteractionPayload(event);
-      const interaction = await db.createInteraction({
-        id,
-        learnerId: scopedTarget.learnerId,
-        sectionId: scopedTarget.sectionId,
-        timestamp: event.timestamp || new Date().toISOString(),
-        eventType: event.eventType,
-        problemId: event.problemId,
-        payload,
-      });
+    // Process each event, tracking partial failures
+    for (let i = 0; i < events.length; i++) {
+      const event = events[i];
+      try {
+        const scopedTarget = await resolveScopedTarget(req, event.learnerId, 'write');
+        event.learnerId = scopedTarget.learnerId;
+        event.sectionId = scopedTarget.sectionId;
+        const id = event.id || `${event.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
+        
+        const payload = buildNeonInteractionPayload(event);
+        const interaction = await db.createInteraction({
+          id,
+          learnerId: scopedTarget.learnerId,
+          sectionId: scopedTarget.sectionId,
+          timestamp: event.timestamp || new Date().toISOString(),
+          eventType: event.eventType,
+          problemId: event.problemId,
+          payload,
+        });
 
-      await persistProblemProgressIfNeeded(scopedTarget.learnerId, event.problemId, event);
-      
-      // RESEARCH-5: Link textbook retrievals if present
-      if (event.textbookUnitsRetrieved && Array.isArray(event.textbookUnitsRetrieved)) {
+        // Persist problem progress - log but don't fail if this fails
         try {
-          await db.linkTextbookRetrievals(id, event.textbookUnitsRetrieved);
-        } catch (err) {
-          console.warn('[neon-interactions] Failed to link retrievals:', err);
-          // Don't fail the entire request for retrieval linking issues
+          await persistProblemProgressIfNeeded(scopedTarget.learnerId, event.problemId, event);
+        } catch (progressErr) {
+          console.warn('[neon-interactions] Failed to persist problem progress:', progressErr);
         }
+        
+        // RESEARCH-5: Link textbook retrievals if present
+        if (event.textbookUnitsRetrieved && Array.isArray(event.textbookUnitsRetrieved)) {
+          try {
+            await db.linkTextbookRetrievals(id, event.textbookUnitsRetrieved);
+          } catch (err) {
+            console.warn('[neon-interactions] Failed to link retrievals:', err);
+            // Don't fail the entire request for retrieval linking issues
+          }
+        }
+        
+        logInteractionWrite(req, scopedTarget);
+        results.push(interaction);
+        confirmedIds.push(id);
+      } catch (eventError) {
+        const errorMessage = eventError instanceof Error ? eventError.message : 'Unknown error';
+        console.error(`[neon-interactions] Failed to process event ${i}:`, eventError);
+        failedEvents.push({
+          index: i,
+          eventId: event.id || `index-${i}`,
+          error: errorMessage,
+        });
       }
-      
-      logInteractionWrite(req, scopedTarget);
-      results.push(interaction);
-      confirmedIds.push(id);
     }
 
     // RESEARCH-2: Return confirmed IDs for client-side verification
+    // If all events failed, return 500. If partial success, return 207 Multi-Status
+    if (results.length === 0 && failedEvents.length > 0) {
+      res.status(500).json({
+        success: false,
+        error: 'All events failed to process',
+        failedEvents,
+      });
+      return;
+    }
+
+    if (failedEvents.length > 0) {
+      res.status(207).json({
+        success: true,
+        partial: true,
+        data: {
+          count: results.length,
+          confirmedIds,
+        },
+        failedEvents,
+      });
+      return;
+    }
+
     res.status(201).json({ 
       success: true, 
       data: { 

@@ -178,16 +178,37 @@ app.get('/health', async (_req: Request, res: Response) => {
   const featureStatus = await getFeatureStatus();
   const { source } = resolveDbEnv();
 
-  res.json({
-    status: 'ok',
+  // Check actual database connectivity
+  let dbStatus: 'ok' | 'error' = 'ok';
+  let dbLatencyMs: number | undefined;
+  if (isUsingNeon()) {
+    const startTime = Date.now();
+    try {
+      const { getDb } = await import('./db/neon.js');
+      const db = getDb();
+      await db`SELECT 1`;
+      dbLatencyMs = Date.now() - startTime;
+    } catch (error) {
+      dbStatus = 'error';
+      console.error('[health] Database connectivity check failed:', error);
+    }
+  }
+
+  const response: Record<string, unknown> = {
+    status: dbStatus === 'ok' ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
     db: {
       mode: isUsingNeon() ? 'neon' : 'sqlite',
       envSource: source,
+      status: dbStatus,
+      latencyMs: dbLatencyMs,
     },
     features: featureStatus,
-  });
+  };
+
+  const statusCode = dbStatus === 'ok' ? 200 : 503;
+  res.status(statusCode).json(response);
 });
 
 app.get('/api/system/persistence-status', (_req: Request, res: Response) => {

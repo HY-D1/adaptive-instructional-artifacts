@@ -66,6 +66,26 @@ const LoginSchema = z.object({
   password: z.string().min(1),
 });
 
+// Fast path: minimal context for login response (non-blocking)
+// Heavy hydration should be done by the frontend after login
+async function withMinimalSectionContext(account: AuthAccountPublic) {
+  if (account.role === 'student') {
+    // Return minimal context - section can be hydrated via separate API call
+    return {
+      ...account,
+      sectionId: null, // Frontend should fetch via /api/learners/:id/session or similar
+      sectionName: null,
+    };
+  }
+
+  // For instructors, return empty sections array - they can fetch full list via /api/instructor/overview
+  return {
+    ...account,
+    ownedSections: [],
+  };
+}
+
+// Full context for when explicitly needed (e.g., /api/auth/me)
 async function withSectionContext(account: AuthAccountPublic) {
   if (account.role === 'student') {
     const section = await getSectionForStudent(account.learnerId);
@@ -291,7 +311,7 @@ router.post('/signup', async (req: Request, res: Response) => {
 
     res.status(201).json({
       success: true,
-      user: await withSectionContext(toPublicAccount(account)),
+      user: await withMinimalSectionContext(toPublicAccount(account)),
       csrfToken,
     });
   } catch (err) {
@@ -380,7 +400,7 @@ router.post('/login', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      user: await withSectionContext(toPublicAccount(account)),
+      user: await withMinimalSectionContext(toPublicAccount(account)),
       csrfToken,
     });
   } catch (err) {
