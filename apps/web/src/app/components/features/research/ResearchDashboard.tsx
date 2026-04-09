@@ -1,5 +1,28 @@
-import { useState, useEffect, useMemo, useRef, useCallback, type JSX } from 'react';
-import { Card } from '../../ui/card';
+/**
+ * ResearchDashboard.tsx
+ * 
+ * Instructor research dashboard for learner analytics and data export.
+ * 
+ * RESPONSIBILITIES:
+ * - Learner analytics visualization (HDI, progress, engagement)
+ * - Interaction trace replay for qualitative analysis
+ * - Data export (CSV/JSON) for external research tools
+ * - Strategy comparison and A/B test reporting
+ * - Bandit algorithm monitoring (if adaptive enabled)
+ * 
+ * KEY VIEWS:
+ * - Overview: Class-level aggregates and recent activity
+ * - Learners: Individual learner drill-down with stats
+ * - Traces: Event-by-event replay of learner sessions
+ * - Export: Data download with filtering
+ * 
+ * PERFORMANCE NOTES:
+ * - Uses defensive rendering for sparse/tiny datasets
+ * - Client-side pagination for large learner lists
+ * - Interactions filtered at API level, not loaded then filtered
+ * 
+ * @module ResearchDashboard
+ */
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';

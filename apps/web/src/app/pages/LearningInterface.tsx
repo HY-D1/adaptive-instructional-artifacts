@@ -1,5 +1,27 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useLocation, Link } from 'react-router';
+/**
+ * LearningInterface.tsx
+ * 
+ * Main student practice interface for SQL problem solving.
+ * 
+ * RESPONSIBILITIES:
+ * - Problem presentation and navigation
+ * - SQL code editor integration
+ * - Hint/explanation system coordination
+ * - Real-time telemetry capture (interactions, HDI, bandit state)
+ * - Session management and condition assignment
+ * - Progress tracking and completion detection
+ * 
+ * KEY SUBSYSTEMS:
+ * - Telemetry: Captures every keystroke, execution, hint request to interaction_events
+ * - HDI Calculation: Real-time Help Dependency Index for adaptive support
+ * - Bandit: Thompson sampling for profile assignment (if enabled)
+ * - Session Config: Experimental condition persistence across reloads
+ * 
+ * SIZE NOTE: This file is intentionally large (~3000 LOC) to maintain
+ * cohesive student experience. Sub-components extracted where reuse needed.
+ * 
+ * @module LearningInterface
+ */
 
 import {
   Clock,

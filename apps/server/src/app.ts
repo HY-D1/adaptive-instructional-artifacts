@@ -37,7 +37,7 @@ import { isUsingNeon } from './db/index.js';
 import { resolveDbEnv } from './db/env-resolver.js';
 import { optionalAuth, requireAuth, requireInstructor } from './middleware/auth.js';
 import { requireCsrf } from './middleware/csrf.js';
-import { generalApiLimiter } from './middleware/rate-limit.js';
+import { generalApiLimiter, researchRateLimiter } from './middleware/rate-limit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../.env');
@@ -232,14 +232,30 @@ app.get('/api/system/persistence-status', (_req: Request, res: Response) => {
 
 const usingNeon = isUsingNeon();
 
+// ============================================================================
+// DATABASE PATH SELECTION
+// ============================================================================
+// Neon PostgreSQL is the PRODUCTION and RESEARCH path.
+// SQLite is legacy local/dev fallback only.
+//
+// RESEARCH DATA COLLECTION: Only the Neon path supports:
+// - Multi-learner aggregation queries
+// - Section-scoped access control
+// - Research export endpoints with streaming
+// - Full telemetry audit trails
+//
+// For preview/production deployments, DATABASE_URL must be set.
+// ============================================================================
+
 if (usingNeon) {
-  console.log('🔌 Using Neon PostgreSQL routes (auth + csrf required)');
+  console.log('🔌 Using Neon PostgreSQL routes (auth + csrf required) [PRODUCTION PATH]');
   app.use('/api/learners', generalApiLimiter, requireAuth, requireCsrf, neonLearnersRouter);
   app.use('/api/interactions', generalApiLimiter, requireAuth, requireCsrf, neonInteractionsRouter);
   app.use('/api/textbooks', generalApiLimiter, requireAuth, requireCsrf, neonTextbooksRouter);
   app.use('/api/sessions', generalApiLimiter, requireAuth, requireCsrf, neonSessionsRouter);
 } else {
-  console.log('💾 Using SQLite routes (legacy)');
+  console.log('💾 Using SQLite routes (local/dev fallback only)');
+  console.log('⚠️  Research exports and multi-learner features require DATABASE_URL');
   app.use('/api/learners', generalApiLimiter, learnersRouter);
   app.use('/api/interactions', generalApiLimiter, interactionsRouter);
   app.use('/api/textbooks', generalApiLimiter, textbooksRouter);
@@ -249,8 +265,10 @@ if (usingNeon) {
 // Auth routes - rate limiting applied per-endpoint in auth router
 app.use('/api/auth', authRouter);
 
-app.use('/api/research', generalApiLimiter, requireAuth, requireInstructor, researchRouter);
-app.use('/api/instructor', generalApiLimiter, requireAuth, instructorRouter);
+// Research endpoints use stricter rate limits due to expensive aggregation queries
+app.use('/api/research', researchRateLimiter, requireAuth, requireInstructor, researchRouter);
+// Instructor export endpoints also use research rate limits
+app.use('/api/instructor', researchRateLimiter, requireAuth, instructorRouter);
 app.use('/api/corpus', generalApiLimiter, corpusRouter);
 app.use('/api/pdf-index', generalApiLimiter, pdfIndexRouter);
 app.use('/api/llm', generalApiLimiter, llmRouter);

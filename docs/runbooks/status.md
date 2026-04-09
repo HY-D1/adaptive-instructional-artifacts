@@ -1,8 +1,114 @@
 # Project Status — SQL-Adapt
 
-**Last Updated**: 2026-04-08 (Storage Hardening Final Verification)
-**Previous Update**: 2026-04-08 (Auth Rate Limiting Fix — Workstream 6 Deployment Parity Verification)
+**Last Updated**: 2026-04-08 (Research-Grade Tightening Hardening)
+**Previous Update**: 2026-04-08 (Storage Hardening Final Verification)
 **Purpose**: Single durable status file for implementation and deployment readiness.
+
+---
+
+## Research Readiness Checklist (Evidence-Based)
+
+**Status**: Updated per hardening branch `hardening/research-grade-tightening`
+
+| Item | Status | Evidence | Notes |
+|------|--------|----------|-------|
+| **Data Capture Integrity** | ✅ | `apps/web/src/app/lib/storage/dual-storage.ts` | Backend-first with localStorage fallback |
+| **Export Reproducibility** | ✅ | `docs/research/EXPORT_DATA_CONTRACT.md` | Field order, pagination, ordering guarantees documented |
+| **Section Scoping** | ✅ | `apps/server/src/routes/neon-learners.ts` | Instructors only see their section's learners |
+| **Export Memory Safety** | ✅ | `apps/server/src/routes/research.ts` | SQL-level filtering, bounded result sizes |
+| **Query Performance** | ✅ | `apps/server/src/db/migrate-neon.sql` | Composite indexes for interaction_events |
+| **Rate Limiting** | ✅ | `apps/server/src/middleware/rate-limit.ts` | Classroom-safe (user-based keys) |
+| **Storage Hardening** | ✅ | `apps/web/src/app/lib/storage/storage.ts` | Critical paths use safeSetItem |
+| **Runbook Truthfulness** | ✅ | `docs/runbooks/status.md` | This checklist |
+
+---
+
+## Research-Grade Tightening — 2026-04-08
+
+**Status**: ✅ **COMPLETE**
+
+Hardening mission to tighten the existing system for research-grade reliability, performance, and reproducibility. No new user-facing features. Only hardening, refactoring, correctness, performance, and ops truthfulness.
+
+### Workstream 1: Backend Scalability
+**Problem**: `getInteractionsByUser` fetched all events then filtered in JavaScript  
+**Solution**: SQL-level filtering with composite indexes
+
+| Change | File | Evidence |
+|--------|------|----------|
+| SQL-level filtering | `apps/server/src/db/neon.ts` | `getInteractionsByUser` now filters in SQL |
+| Composite indexes | `apps/server/src/db/migrate-neon.sql` | 5 new indexes for query patterns |
+| Count helper | `apps/server/src/db/neon.ts` | `countInteractionsByUser` for pagination metadata |
+| Memory limits | `apps/server/src/routes/research.ts` | Max 100 learners for summary, 10k interactions per learner |
+
+### Workstream 2: Research Export Memory Safety
+**Problem**: Exports loaded unbounded arrays into memory  
+**Solution**: SQL filtering, bounded results, documented contract
+
+| Change | File | Evidence |
+|--------|------|----------|
+| Export contract | `docs/research/EXPORT_DATA_CONTRACT.md` | Field semantics, ordering, reproducibility |
+| SQL filtering | `apps/server/src/routes/research.ts` | Date/eventType filtering in SQL, not JS |
+| Pagination | `apps/server/src/routes/research.ts` | `/learners` endpoint has page/perPage/hasMore |
+
+### Workstream 3: Classroom-Safe Rate Limiting
+**Problem**: IP-based rate limiting blocked students behind shared NAT  
+**Solution**: User-aware keys for authenticated traffic
+
+| Change | File | Evidence |
+|--------|------|----------|
+| Classroom-safe keys | `apps/server/src/middleware/rate-limit.ts` | Uses `user:${learnerId}` when authenticated |
+| Research limiter | `apps/server/src/middleware/rate-limit.ts` | Stricter limits (30/15min) for expensive endpoints |
+| Endpoint application | `apps/server/src/app.ts` | `/api/research` and `/api/instructor` use researchRateLimiter |
+
+### Workstream 4: Storage Hardening Completion
+**Problem**: Remaining raw localStorage writes for critical data  
+**Solution**: Route all critical writes through safeSetItem
+
+| Change | File | Evidence |
+|--------|------|----------|
+| Session management | `apps/web/src/app/lib/storage/storage.ts` | `startSession`, `setActiveSessionId` use safeSetItem |
+| Import validation | `apps/web/src/app/lib/storage/storage.ts` | Interactions/profiles/textbooks use safeSetItem with quota errors |
+
+### Workstream 5: Frontend Hotspot Documentation
+**Goal**: Reduce regression risk through module-level documentation  
+**Solution**: Added responsibility comments to hotspot files
+
+| File | Lines | Documentation Added |
+|------|-------|---------------------|
+| `LearningInterface.tsx` | ~3149 | Module responsibilities, key subsystems |
+| `storage.ts` | ~3562 | Data categories, safety features, critical vs nice-to-have |
+| `ResearchDashboard.tsx` | ~3117 | View descriptions, performance notes |
+| `dual-storage.ts` | ~2712 | Already documented |
+
+### Workstream 6: Environment Truth
+**Problem**: Missing referenced docs (ENVIRONMENT.md)  
+**Solution**: Created missing docs, verified links
+
+| Change | File | Evidence |
+|--------|------|----------|
+| Environment reference | `docs/ENVIRONMENT.md` | Created with full variable reference |
+| Node 20 guidance | `docs/ENVIRONMENT.md` | Version requirement documented |
+| README links | `README.md` | All links verified |
+
+### Workstream 7: Neon Path Clarity
+**Problem**: Ambiguity about SQLite vs Neon for production/research  
+**Solution**: Explicit comments and documentation
+
+| Change | File | Evidence |
+|--------|------|----------|
+| Path documentation | `apps/server/src/app.ts` | Clear comments: Neon = production/research |
+| Console logging | `apps/server/src/app.ts` | Logs "[PRODUCTION PATH]" for Neon, warns for SQLite |
+
+### Workstream 8: Runbook Truthfulness
+**Result**: This status file now includes the evidence-based Research Readiness Checklist above.
+
+---
+
+## Controlled Student Beta Launch Readiness
+
+**Status**: READY FOR CONTROLLED 40-STUDENT LIVE TEST
+
+**Final Verdict**: **READY FOR STAGED BETA EXECUTION**. The production deployment is the single supported release candidate for a supervised 40-student live test on the existing `v1.1.0-beta-50` release line. All critical infrastructure verified, telemetry operational, staged rollout controls documented, and operational runbooks refreshed to the current hosted auth-first contract. The mandatory staged ramp (5 → 15 → 40) de-risks authenticated concurrent-use validation by proving real student behavior at each stage before scale-up. **Final 40-student approval requires real live-session evidence from all three stages.**
 
 ---
 
