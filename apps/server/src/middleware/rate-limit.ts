@@ -3,7 +3,7 @@
  * Supports 100+ concurrent users with tiered rate limits
  */
 
-import rateLimit from 'express-rate-limit';
+import { rateLimit } from 'express-rate-limit';
 import { Request, Response } from 'express';
 
 // Store for tracking successful auth requests to skip counting
