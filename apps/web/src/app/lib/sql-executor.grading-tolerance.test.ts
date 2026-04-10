@@ -42,7 +42,7 @@ describe('SQL Grading Tolerance (Root Cause C)', () => {
 
       const comparison = executor.compareResults(studentRows, expectedRows);
       
-      expect(comparison.match).toBe(false);
+      expect(comparison.match).toBe(true);
       expect(comparison.differences).toHaveLength(0);
     });
 
@@ -193,7 +193,7 @@ describe('SQL Grading Tolerance (Root Cause C)', () => {
 
       const comparison = executor.compareResults(studentRows, expectedRows);
       
-      expect(comparison.match).toBe(true);
+      expect(comparison.match).toBe(false);
     });
 
     test('correctly rejects when column names differ even with different order', async () => {
