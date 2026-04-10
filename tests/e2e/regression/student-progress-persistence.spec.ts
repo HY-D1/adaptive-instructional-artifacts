@@ -7,7 +7,24 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { navigateToPracticePage, executeQuery, waitForProblemLoad } from '../practice-page/practice-page-helpers';
+
+async function navigateToPracticePage(page: import('@playwright/test').Page) {
+  await page.goto('/practice');
+  await page.waitForSelector('[data-testid="sql-editor"], .monaco-editor', { timeout: 15000 });
+}
+
+async function executeQuery(page: import('@playwright/test').Page, sql?: string) {
+  if (sql) {
+    await page.fill('[data-testid="sql-editor"] textarea, .cm-editor textarea', sql);
+  }
+  await page.locator('[data-testid="run-query-btn"]').click();
+  await page.waitForSelector('[data-testid="query-results"], [data-testid="result-correct"], [data-testid="result-incorrect"]', { timeout: 15000 });
+}
+
+async function waitForProblemLoad(page: import('@playwright/test').Page) {
+  await page.goto('/practice');
+  await page.waitForSelector('[data-testid="sql-editor"], .monaco-editor', { timeout: 15000 });
+}
 
 test.describe('Student Progress Persistence', () => {
   test.beforeEach(async ({ page }) => {
@@ -18,7 +35,7 @@ test.describe('Student Progress Persistence', () => {
   test('solved count updates after executing correct query', async ({ page }) => {
     // Wait for problem to load
     await waitForProblemLoad(page);
-    
+
     // Get initial solved count from progress display
     const progressIndicator = page.locator('[data-testid="progress-indicator"], .progress-text, text=/\\d+\\/\\d+/').first();
     const initialText = await progressIndicator.textContent().catch(() => '0/32');
@@ -29,7 +46,7 @@ test.describe('Student Progress Persistence', () => {
     
     // Execute the query
     await executeQuery(page);
-    
+
     // Wait for success indicator
     await expect(page.locator('[data-testid="success-indicator"], .success-message, text=/correct/i').first()).toBeVisible({ timeout: 5000 });
     
@@ -49,7 +66,7 @@ test.describe('Student Progress Persistence', () => {
   test('draft survives page reload', async ({ page }) => {
     // Wait for problem to load
     await waitForProblemLoad(page);
-    
+
     // Type a draft query
     const draftQuery = 'SELECT id, name FROM employees WHERE department = ';
     await page.fill('[data-testid="sql-editor"] textarea, .cm-editor textarea', draftQuery);
@@ -60,7 +77,7 @@ test.describe('Student Progress Persistence', () => {
     // Reload the page
     await page.reload();
     await waitForProblemLoad(page);
-    
+
     // Verify draft is restored
     const editor = page.locator('[data-testid="sql-editor"] textarea, .cm-editor textarea').first();
     const restoredContent = await editor.inputValue();
@@ -70,14 +87,14 @@ test.describe('Student Progress Persistence', () => {
   test('draft survives problem navigation', async ({ page }) => {
     // Wait for problem to load
     await waitForProblemLoad(page);
-    
+
     // Type a draft query on first problem
     const draftQuery = 'SELECT * FROM departments WHERE location = ';
     await page.fill('[data-testid="sql-editor"] textarea, .cm-editor textarea', draftQuery);
     
     // Wait for draft to be saved
     await page.waitForTimeout(2500);
-    
+
     // Navigate to next problem
     const nextButton = page.locator('[data-testid="next-problem-btn"], button:has-text("Next"), .problem-nav-next').first();
     if (await nextButton.isVisible().catch(() => false)) {
@@ -100,7 +117,7 @@ test.describe('Student Progress Persistence', () => {
     }
     
     await waitForProblemLoad(page);
-    
+
     // Verify draft is restored for first problem
     const editor = page.locator('[data-testid="sql-editor"] textarea, .cm-editor textarea').first();
     const restoredContent = await editor.inputValue();
@@ -110,14 +127,14 @@ test.describe('Student Progress Persistence', () => {
   test('progress shows correctly immediately after login', async ({ page }) => {
     // This test verifies that the hydration race condition is fixed
     // by checking that progress is accurate immediately after page load
-    
+
     await waitForProblemLoad(page);
-    
+
     // Solve a problem first
     await page.fill('[data-testid="sql-editor"] textarea, .cm-editor textarea', 'SELECT * FROM employees');
     await executeQuery(page);
     await expect(page.locator('[data-testid="success-indicator"], .success-message').first()).toBeVisible({ timeout: 5000 });
-    
+
     // Clear storage to simulate fresh login
     await page.evaluate(() => {
       localStorage.clear();
@@ -127,7 +144,7 @@ test.describe('Student Progress Persistence', () => {
     // Reload (simulating fresh login)
     await page.reload();
     await waitForProblemLoad(page);
-    
+
     // Wait for hydration to complete
     await page.waitForTimeout(2000);
     

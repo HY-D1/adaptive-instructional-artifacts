@@ -101,11 +101,11 @@ test.describe('SQL Grading Tolerance (Root Cause C)', () => {
           (3, 102, 3, 25.00);
       `);
 
-      const studentResult = await executor.executeQuery('
+      const studentResult = await executor.executeQuery(`
         SELECT AVG(quantity * unit_price) AS avg_amount 
         FROM order_items 
         WHERE order_id = 101
-      ');
+      `);
       const studentRows = executor.formatResults(studentResult);
 
       // Expected value with slight rounding difference
@@ -159,11 +159,11 @@ test.describe('SQL Grading Tolerance (Root Cause C)', () => {
           (1, 125.50), (1, 225.00), (1, 369.99);
       `);
 
-      const studentResult = await executor.executeQuery('
+      const studentResult = await executor.executeQuery(`
         SELECT AVG(item_total) AS avg_price 
         FROM order_items 
         WHERE order_id = 1
-      ');
+      `);
       const studentRows = executor.formatResults(studentResult);
 
       // Expected: (125.50 + 225.00 + 369.99) / 3 = 720.49 / 3 = 240.163333...

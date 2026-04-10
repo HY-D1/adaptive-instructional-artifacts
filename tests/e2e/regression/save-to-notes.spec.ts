@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { navigateToProblem, waitForProblemLoad } from '../helpers/learning-interface';
+
+/** Navigate to practice and wait for problem to load */
+async function waitForProblemLoad(page: import('@playwright/test').Page) {
+  await page.goto('/practice');
+  await page.waitForSelector('[data-testid="sql-editor"], .monaco-editor', { timeout: 15000 });
+}
 
 test.describe('Save to Notes @hardening', () => {
   test('Save to Notes works without prior error', async ({ page }) => {
@@ -8,7 +13,7 @@ test.describe('Save to Notes @hardening', () => {
     
     // Wait for the page to load and navigate to a problem
     await waitForProblemLoad(page);
-    
+
     // Do NOT submit any incorrect query - we want to test saving without an error
     
     // Click "Save to Notes" button
@@ -42,7 +47,7 @@ test.describe('Save to Notes @hardening', () => {
     
     // Wait for the page to load
     await waitForProblemLoad(page);
-    
+
     // Do NOT submit any incorrect query
     
     // Look for and click an escalation button ("I need more help" or similar)
