@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 
 import { isUsingNeon, createUser } from '../db/index.js';
-import { createAuthEvent, getDb } from '../db/neon.js';
+import { createAuthEvent, getDb, saveLearnerProfile } from '../db/neon.js';
 import {
   createAuthAccount,
   getAuthAccountByEmail,
@@ -275,6 +275,25 @@ router.post('/signup', signupRateLimiter, async (req: Request, res: Response) =>
       learnerId,
       name,
     });
+
+    if (role === 'student') {
+      await saveLearnerProfile(learnerId, {
+        name,
+        conceptsCovered: [],
+        conceptCoverageEvidence: {},
+        errorHistory: {},
+        interactionCount: 0,
+        currentStrategy: 'adaptive-medium',
+        preferences: {
+          escalationThreshold: 3,
+          aggregationDelay: 300000,
+          autoTextbookEnabled: true,
+          notificationsEnabled: true,
+          theme: 'system',
+        },
+        extendedData: {},
+      });
+    }
 
     if (role === 'student' && studentSection) {
       await enrollStudentInSection({

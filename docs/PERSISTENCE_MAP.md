@@ -64,6 +64,19 @@ CREATE TABLE problem_progress (
 
 **Updated on:** Every `execution` event where `successful=true` in `apps/server/src/db/neon.ts:1803-1811`
 
+### learner_profiles Creation Paths
+
+Durable learner profiles may now be created through two verified paths:
+
+1. **Student signup**: `apps/server/src/routes/auth.ts`
+   - Student account creation now seeds an initial `learner_profiles` row in Neon.
+   - This makes a newly enrolled learner visible to instructor-scoped profile queries before the learner ever opens Practice.
+
+2. **Default profile creation in the web app**: `apps/web/src/app/lib/storage/dual-storage.ts`
+   - `createDefaultProfile()` still creates the local cache synchronously.
+   - In backend mode it now also calls `storageClient.saveProfile(...)` and queues retry on failure.
+   - This prevents local-only profile creation from diverging from Neon.
+
 ---
 
 ## 3. localStorage (Browser - CACHE ONLY)
@@ -105,7 +118,7 @@ CREATE TABLE problem_progress (
 ### 5.1 Login Flow
 
 ```
-User Login
+User Login / Student Signup
     ↓
 /api/auth/login → Sets JWT cookie (auth_token)
     ↓
@@ -133,6 +146,8 @@ Background Sync (non-blocking):
     - storageClient.getInteractions(limit: 5000)
     - storageClient.getTextbook(learnerId)
 ```
+
+**Signup note:** Student signup also seeds `learner_profiles` in Neon before the first hydration pass, reducing the chance of instructor-dashboard visibility gaps for brand new enrollments.
 
 ### 5.2 Page Refresh Flow
 

@@ -1,8 +1,61 @@
 # Project Status — SQL-Adapt
 
-**Last Updated**: 2026-04-09 (Node 22 Upgrade + Build Fixes)
-**Previous Update**: 2026-04-09 (Thread Start Protocol - Verification Complete)
+**Last Updated**: 2026-04-10 (Instructor Dashboard Profile Gap Fix + Preview Backfill)
+**Previous Update**: 2026-04-09 (Node 22 Upgrade + Build Fixes)
 **Purpose**: Single durable status file for implementation and deployment readiness.
+
+---
+
+## Instructor Dashboard Profile Gap — 2026-04-10
+
+**Status**: ✅ **CODE FIXED** | ✅ **PREVIEW NEON BACKFILL EXECUTED** | ⏳ **PRODUCTION VERIFICATION STILL NEEDED**
+
+### Problem
+
+Instructor dashboards derived student visibility from `learner_profiles`, but some enrolled students never received a durable profile row in Neon. Result: instructors saw only the learners who had later triggered an explicit profile save path.
+
+### Source-Verified Root Cause
+
+| Layer | Evidence | Finding |
+|------|----------|---------|
+| Frontend init | `apps/web/src/app/pages/LearningInterface.tsx` | Missing learners were initialized via `storage.createDefaultProfile(...)` |
+| Storage adapter | `apps/web/src/app/lib/storage/dual-storage.ts` | `createDefaultProfile` was a localStorage-only pass-through |
+| Signup flow | `apps/server/src/routes/auth.ts` | Student signup created `users` and `section_enrollments`, but not `learner_profiles` |
+| Instructor API | `apps/server/src/routes/neon-learners.ts` | `/api/learners/profiles` returns only scoped learners with actual profile rows |
+
+### Fixes Applied
+
+| File | Change |
+|------|--------|
+| `apps/web/src/app/lib/storage/dual-storage.ts` | `createDefaultProfile()` now syncs to backend and queues retry on failure |
+| `apps/server/src/routes/auth.ts` | Student signup now creates an initial learner profile in Neon |
+| `apps/web/src/app/lib/storage/dual-storage.test.ts` | Added backend sync + retry coverage |
+| `tests/unit/server/auth-login-telemetry.contract.test.ts` | Added signup profile creation coverage |
+| `tests/e2e/regression/instructor-dashboard-profiles.spec.ts` | Added instructor visibility regression coverage |
+
+### Verification
+
+| Gate | Result |
+|------|--------|
+| `npx vitest run apps/web/src/app/lib/storage/dual-storage.test.ts tests/unit/server/auth-login-telemetry.contract.test.ts` | ✅ PASS |
+| `npm run integrity:scan` | ✅ PASS |
+| `npm run server:build` | ✅ PASS |
+| `npm run build` | ✅ PASS |
+| `npm run test:unit` | ✅ 1790 passed, 2 skipped |
+| `npm run replay:gate` | ✅ PASS (toy checksum gate intentionally skipped update) |
+| `npx playwright test -c playwright.config.ts tests/e2e/regression/instructor-dashboard-profiles.spec.ts --project=chromium:instructor --no-deps --reporter=line` | ✅ PASS against preview deployment |
+
+### Preview Data Repair (Executed)
+
+| Metric | Before | After |
+|------|--------|-------|
+| `learner_profiles` rows | 103 | 253 |
+| Distinct enrolled students missing profiles | 156 | 0 |
+| Fresh E2E Instructor's Section | 123 enrolled / 53 profiles | 123 enrolled / 123 profiles |
+
+### Remaining Step
+
+Preview data is repaired. Production still needs separate verification/backfill if it is not pointed at the same Neon target.
 
 ---
 

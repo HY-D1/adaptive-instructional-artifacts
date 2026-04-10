@@ -118,6 +118,7 @@ export default defineConfig({
         '**/deployed-auth-smoke.spec.ts',
         '**/student-multi-device-persistence.spec.ts',
         '**/instructor-section-scope.spec.ts',
+        '**/instructor-dashboard-profiles.spec.ts',
         '**/api-authz.spec.ts',
         '**/hint-stability-beta.spec.ts',
       ],
@@ -151,6 +152,7 @@ export default defineConfig({
       testMatch: [
         '**/instructor-dashboard-error-states.spec.ts',
         '**/instructor.spec.ts',
+        '**/instructor-dashboard-profiles.spec.ts',
       ],
       dependencies: ['setup:auth'],
       use: {

@@ -882,6 +882,24 @@ class DualStorageManager {
   // User Profile Operations
   // ============================================================================
 
+  private queueProfileForRetry(
+    profile: LearnerProfile,
+    reason: string,
+    idPrefix: 'profile' | 'full-profile' = 'full-profile',
+    error?: unknown,
+  ): void {
+    if (error !== undefined) {
+      console.warn(reason, error);
+    } else {
+      console.warn(reason);
+    }
+    this.offlineQueue.add({
+      id: `${idPrefix}-${profile.id}-${Date.now()}`,
+      type: 'profile',
+      data: profile,
+    });
+  }
+
   saveUserProfile(profile: UserProfile): { success: boolean; quotaExceeded?: boolean } {
     // Always save to localStorage as cache (synchronous)
     const localResult = localStorageManager.saveUserProfile(profile);
@@ -891,19 +909,10 @@ class DualStorageManager {
       storageClient.createLearner(profile).then(success => {
         if (!success) {
           // Backend failed, add to offline queue
-          this.offlineQueue.add({
-            id: `profile-${profile.id}-${Date.now()}`,
-            type: 'profile',
-            data: profile,
-          });
+          this.queueProfileForRetry(profile, '[DualStorage] Backend saveUserProfile failed, queued for retry.', 'profile');
         }
       }).catch(error => {
-        console.warn('[DualStorage] Backend saveUserProfile failed, queued for retry:', error);
-        this.offlineQueue.add({
-          id: `profile-${profile.id}-${Date.now()}`,
-          type: 'profile',
-          data: profile,
-        });
+        this.queueProfileForRetry(profile, '[DualStorage] Backend saveUserProfile failed, queued for retry.', 'profile', error);
       });
     }
     
@@ -2081,24 +2090,38 @@ class DualStorageManager {
     if (this.shouldUseBackend()) {
       storageClient.saveProfile(profile).then(success => {
         if (!success) {
-          this.offlineQueue.add({
-            id: `full-profile-${profile.id}-${Date.now()}`,
-            type: 'profile',
-            data: profile,
-          });
+          this.queueProfileForRetry(profile, '[DualStorage] Backend saveProfile failed, queued for retry.');
         }
       }).catch(err => {
-        console.warn('[DualStorage] Failed to sync profile to backend, queuing:', err);
-        this.offlineQueue.add({
-          id: `full-profile-${profile.id}-${Date.now()}`,
-          type: 'profile',
-          data: profile,
-        });
+        this.queueProfileForRetry(profile, '[DualStorage] Failed to sync profile to backend, queuing.', 'full-profile', err);
       });
     }
     
     // Always cache in localStorage (synchronous)
     localStorageManager.saveProfile(profile);
+  }
+
+  /**
+   * Create and persist a default learner profile.
+   * Keeps localStorage creation synchronous, then mirrors to backend when available.
+   */
+  createDefaultProfile(
+    learnerId: string,
+    strategy: LearnerProfile['currentStrategy'] = 'adaptive-medium',
+  ): LearnerProfile {
+    const profile = localStorageManager.createDefaultProfile(learnerId, strategy);
+
+    if (this.shouldUseBackend()) {
+      storageClient.saveProfile(profile).then(success => {
+        if (!success) {
+          this.queueProfileForRetry(profile, '[DualStorage] Backend createDefaultProfile failed, queued for retry.');
+        }
+      }).catch(err => {
+        this.queueProfileForRetry(profile, '[DualStorage] Failed to sync default profile to backend, queuing.', 'full-profile', err);
+      });
+    }
+
+    return profile;
   }
 
   /**
@@ -2846,7 +2869,6 @@ class DualStorageManager {
   getInteractionsByProblem = localStorageManager.getInteractionsByProblem.bind(localStorageManager);
   
   // Textbook helpers
-  createDefaultProfile = localStorageManager.createDefaultProfile.bind(localStorageManager);
   clearTextbook = localStorageManager.clearTextbook.bind(localStorageManager);
   getLegacyHtmlUnitsInfo = localStorageManager.getLegacyHtmlUnitsInfo.bind(localStorageManager);
   

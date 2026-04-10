@@ -3,11 +3,40 @@
 > **Single Source of Truth for Project Progress and Decisions**
 > 
 > Format: [Keep a Changelog](https://keepachangelog.com/)  
-> Last Updated: 2026-04-09
+> Last Updated: 2026-04-10
 
 ---
 
 ## [Unreleased] - Harderning/Research-Grade-Tightening
+
+### Fixed - 2026-04-10 (Instructor Dashboard Visibility)
+
+#### Learner Profile Creation Gap
+- **Bug**: Instructors could see only the subset of students who happened to have a `learner_profiles` row in Neon, even when many more students were properly enrolled in their sections.
+- **Root Cause**:
+  - `LearningInterface.tsx` created missing profiles through `storage.createDefaultProfile(...)`
+  - `apps/web/src/app/lib/storage/dual-storage.ts` delegated `createDefaultProfile` directly to localStorage only
+  - `apps/server/src/routes/auth.ts` created student accounts and section enrollments but did not create a Neon `learner_profiles` row at signup
+- **Fix**:
+  - `apps/web/src/app/lib/storage/dual-storage.ts`: replaced the pass-through `createDefaultProfile` bind with a real adapter that creates the local profile, syncs it to the backend, and queues retry on backend failure
+  - `apps/server/src/routes/auth.ts`: student signup now creates an initial learner profile in Neon with the same default strategy/preferences used by the web app
+- **Tests**:
+  - `apps/web/src/app/lib/storage/dual-storage.test.ts`: covers backend sync + retry queue for default profile creation
+  - `tests/unit/server/auth-login-telemetry.contract.test.ts`: covers learner profile creation during student signup
+  - `tests/e2e/regression/instructor-dashboard-profiles.spec.ts`: adds a preview/deployed regression for instructor visibility without a prior Practice visit
+- **Verification**:
+  - `npm run integrity:scan` ✅
+  - `npm run server:build` ✅
+  - `npm run build` ✅
+  - `npm run test:unit` ✅ 1790 passed, 2 skipped
+  - `npm run replay:gate` ✅ skipped by checksum gate as designed
+- **Data repair**:
+  - Preview Neon backfill executed on 2026-04-10.
+  - `learner_profiles`: `103 -> 253`
+  - Distinct enrolled students missing profiles: `156 -> 0`
+  - Largest affected section moved from `123 enrolled / 53 with_profiles` to `123 / 123`
+- **Remaining follow-up**:
+  - Production still needs separate verification/backfill if it is not sharing the same Neon target. See `docs/audit/INSTRUCTOR_DASHBOARD_FIX_2026-04-10.md`.
 
 ### Added - 2026-04-08
 

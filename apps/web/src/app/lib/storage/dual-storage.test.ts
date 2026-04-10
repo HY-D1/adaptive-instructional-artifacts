@@ -291,6 +291,42 @@ describe('dual-storage critical write semantics', () => {
     expect(dualStorageModule.dualStorage.getProfile('learner-1')?.solvedProblemIds.has('problem-9')).toBe(true);
   });
 
+  it('syncs a newly created default profile to the backend while preserving local creation', async () => {
+    await dualStorageModule.dualStorage.checkHealth();
+
+    const profile = dualStorageModule.dualStorage.createDefaultProfile('learner-new');
+
+    expect(profile.id).toBe('learner-new');
+    expect(dualStorageModule.dualStorage.getProfile('learner-new')).toEqual(
+      expect.objectContaining({
+        id: 'learner-new',
+        currentStrategy: 'adaptive-medium',
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(saveProfileMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'learner-new' }));
+    });
+  });
+
+  it('queues a newly created default profile for retry when backend sync fails', async () => {
+    await dualStorageModule.dualStorage.checkHealth();
+    saveProfileMock.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+    dualStorageModule.dualStorage.createDefaultProfile('learner-queued');
+
+    await vi.waitFor(() => {
+      expect(saveProfileMock).toHaveBeenCalledTimes(1);
+    });
+
+    await dualStorageModule.dualStorage.processOfflineQueue();
+
+    await vi.waitFor(() => {
+      expect(saveProfileMock).toHaveBeenCalledTimes(2);
+      expect(saveProfileMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ id: 'learner-queued' }));
+    });
+  });
+
   it('sends the active session fallback to backend for background interaction writes', async () => {
     localStorage.setItem('sql-learning-active-session', 'session-learner-1-active');
     await dualStorageModule.dualStorage.checkHealth();
