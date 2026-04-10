@@ -179,6 +179,7 @@ import {
   BookOpen
 } from 'lucide-react';
 import { storage } from '../../../lib/storage';
+import * as storageClient from '../../../lib/api/storage-client';
 import { InteractionEvent, LearnerProfile, ExperimentCondition, PdfIndexDocument } from '../../../types';
 import { type ReflectionQualityScore } from '../../../lib/content/self-explanation-scorer';
 import { orchestrator, ReplayDecisionPoint, AutoEscalationMode } from '../../../lib/adaptive-orchestrator';
@@ -362,22 +363,76 @@ export function ResearchDashboard() {
   const loadData = async () => {
     setHydrationError(null);
     setScopeEmpty(false);
-    
-    const result = await storage.hydrateInstructorDashboard();
-    
-    if (!result.ok) {
-      setHydrationError({ type: result.error, message: result.message });
-      console.warn('[ResearchDashboard] Hydration failed:', result.error, result.message);
-    } else {
-      setScopeEmpty(result.scopeEmpty);
+
+    try {
+      // Fetch profiles directly from backend API (not localStorage)
+      const apiProfiles = await storageClient.getAllProfiles();
+
+      if (apiProfiles.length === 0) {
+        // Check if this is an auth issue or genuinely empty
+        const healthy = await storageClient.fetchBackendHealth();
+        if (!healthy) {
+          setHydrationError({ type: 'network', message: 'Backend unavailable' });
+        } else {
+          setScopeEmpty(true);
+        }
+        // Still set empty data so UI renders properly
+        setInteractions([]);
+        setProfiles([]);
+        return;
+      }
+
+      // Use API profiles directly (already scoped to instructor's sections)
+      const frontendProfiles: LearnerProfile[] = apiProfiles.map(p => ({
+        ...p,
+        conceptsCovered: p.conceptsCovered instanceof Set ? p.conceptsCovered : new Set(p.conceptsCovered || []),
+        conceptCoverageEvidence: p.conceptCoverageEvidence instanceof Map
+          ? p.conceptCoverageEvidence
+          : new Map(Object.entries(p.conceptCoverageEvidence || {})),
+        errorHistory: p.errorHistory instanceof Map
+          ? p.errorHistory
+          : new Map(Object.entries(p.errorHistory || {})),
+      }));
+      setProfiles(frontendProfiles);
+
+      // Fetch interactions for scoped learners via research API
+      // Use paginated endpoint to avoid loading all events at once
+      const learnerIds = frontendProfiles.map(p => p.id);
+      const allInteractions: InteractionEvent[] = [];
+
+      // Fetch interactions in batches of learners to avoid overwhelming the API
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < learnerIds.length; i += BATCH_SIZE) {
+        const batch = learnerIds.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.all(
+          batch.map(id => storageClient.getInteractions(id, { limit: 200 }))
+        );
+        for (const result of batchResults) {
+          allInteractions.push(...result.events);
+        }
+      }
+
+      setInteractions(allInteractions);
+
+      // Also cache profiles to localStorage for other components
+      for (const profile of apiProfiles) {
+        storage.saveProfile(profile);
+      }
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      setHydrationError({ type: 'backend', message });
+      console.error('[ResearchDashboard] Data load failed:', error);
+
+      // Fallback to localStorage
+      setInteractions(storage.getAllInteractions());
+      const loadedProfiles = storage
+        .getAllProfiles()
+        .map((profile: { id: string }) => storage.getProfile(profile.id))
+        .filter((profile): profile is LearnerProfile => Boolean(profile));
+      setProfiles(loadedProfiles);
     }
-    
-    setInteractions(storage.getAllInteractions());
-    const loadedProfiles = storage
-      .getAllProfiles()
-      .map((profile: { id: string }) => storage.getProfile(profile.id))
-      .filter((profile): profile is LearnerProfile => Boolean(profile));
-    setProfiles(loadedProfiles);
+
     setPolicyReplayMode(storage.getPolicyReplayMode());
     const pdfIndex = storage.getPdfIndex();
     if (pdfIndex) {
@@ -387,8 +442,8 @@ export function ResearchDashboard() {
     } else {
       resetPdfIndexState('idle');
     }
-    if (!selectedTraceLearner && loadedProfiles[0]) {
-      setSelectedTraceLearner(loadedProfiles[0].id);
+    if (!selectedTraceLearner && profiles[0]) {
+      setSelectedTraceLearner(profiles[0].id);
     }
   };
 
