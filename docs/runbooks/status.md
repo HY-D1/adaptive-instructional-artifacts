@@ -1,6 +1,6 @@
 # Project Status — SQL-Adapt
 
-**Last Updated**: 2026-04-10 (Instructor Dashboard Profile Gap Fix + Preview Backfill)
+**Last Updated**: 2026-04-10 (Instructor Dashboard Profile Gap Fix + Preview & Production Backfill Complete)
 **Previous Update**: 2026-04-09 (Node 22 Upgrade + Build Fixes)
 **Purpose**: Single durable status file for implementation and deployment readiness.
 
@@ -8,7 +8,7 @@
 
 ## Instructor Dashboard Profile Gap — 2026-04-10
 
-**Status**: ✅ **CODE FIXED** | ✅ **PREVIEW NEON BACKFILL EXECUTED** | ⏳ **PRODUCTION VERIFICATION STILL NEEDED**
+**Status**: ✅ **CODE FIXED** | ✅ **PREVIEW NEON BACKFILL EXECUTED** | ✅ **PRODUCTION BACKFILL COMPLETE**
 
 ### Problem
 
@@ -53,9 +53,14 @@ Instructor dashboards derived student visibility from `learner_profiles`, but so
 | Distinct enrolled students missing profiles | 156 | 0 |
 | Fresh E2E Instructor's Section | 123 enrolled / 53 profiles | 123 enrolled / 123 profiles |
 
-### Remaining Step
+### Verification Complete
 
-Preview data is repaired. Production still needs separate verification/backfill if it is not pointed at the same Neon target.
+| Environment | Gap | Action | Result |
+|-------------|-----|--------|--------|
+| Preview | 156 students missing profiles | Backfill executed 2026-04-10 | ✅ 253 profiles, 100% coverage |
+| Production | 157 students missing profiles | Backfill executed 2026-04-10 | ✅ 262 profiles, 100% coverage |
+
+**Instructor Dashboard now shows all enrolled students** — "2 of 259" bug is fully resolved.
 
 ---
 
