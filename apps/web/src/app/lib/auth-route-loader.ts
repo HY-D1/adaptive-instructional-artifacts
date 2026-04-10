@@ -27,14 +27,14 @@ export function createProtectedLoader(options?: ProtectedLoaderOptions): LoaderF
       }
       const authUser = await getMe();
       if (!authUser) {
-        return redirect(ROUTES.HOME);
+        return redirect(`${ROUTES.HOME}?reason=unauthorized`);
       }
       if (
         options?.requiredRole &&
         authUser.role !== options.requiredRole &&
         !(options.requiredRole === 'student' && authUser.role === 'instructor' && isPreviewModeActive())
       ) {
-        return redirect(getDefaultRouteForRole(authUser.role));
+        return redirect(`${getDefaultRouteForRole(authUser.role)}?reason=access-denied`);
       }
       return null;
     }

@@ -62,6 +62,42 @@ chevrotain@12.0.0 (transitive dependency via @mermaid-js/mermaid-cli → mermaid
 | **Storage Hardening** | ✅ | `apps/web/src/app/lib/storage/storage.ts` | Critical paths use safeSetItem |
 | **Environment Isolation** | ✅ | `docs/runbooks/ENVIRONMENT_ISOLATION_FIX.md` | Preview/prod DB isolation, Node 22 alignment |
 | **Runbook Truthfulness** | ✅ | `docs/runbooks/status.md` | This checklist |
+| **Storage Safety Ph.2** | ✅ | `learner-profile-client.ts`, `ui-state.ts` | Migrated to safeSet |
+
+---
+
+## Hardening Sprint — 2026-04-09
+
+**Status**: ✅ **COMPLETE**
+
+Hardening sprint: Storage Safety Phase 2 + UX Clarity + Performance.
+
+### Summary Table
+
+| Workstream | Status | Files Changed |
+|------------|--------|---------------|
+| **Storage Safety Phase 2** | ✅ | `learner-profile-client.ts`, `ui-state.ts` |
+| **UX P1-003: Silent Redirects** | ✅ | `auth-route-loader.ts`, `StartPage.tsx`, `InstructorDashboard.tsx` |
+| **UX P1-004: HDI Confirmation** | ✅ Verified | `SettingsPage.tsx` (already wired) |
+| **UX P1-002: Preview Banner** | ✅ Verified | `RootLayout.tsx` (already working) |
+| **Performance: Debounce** | ✅ | `useSessionPersistence.ts` (50ms debounce) |
+
+### Changes Detail
+
+#### Storage Safety Phase 2
+- `learner-profile-client.ts`: `setCache()` now uses `safeSet()` with quota detection
+- `ui-state.ts`: `setUiState()` now uses `safeSet()` with `{ priority: 'cache' }`
+- `reinforcement-manager.ts`: Verified already uses `safeStorage.set()`
+
+#### UX Clarity (P1 Items from March Audit)
+- Unauthorized redirects now carry `?reason=unauthorized` or `?reason=access-denied`
+- StartPage and InstructorDashboard display dismissible alerts on redirect
+- HDI clear confirmation dialog verified already wired correctly
+- Preview mode banner verified already renders correctly
+
+#### Performance
+- Added 50ms debounce to `handleStorageChange` in `useSessionPersistence.ts`
+- Prevents unnecessary re-renders on rapid cross-tab storage write bursts
 
 ---
 
@@ -420,7 +456,9 @@ Hardening mission to tighten the existing system for research-grade reliability,
 | `safe-storage.ts` | New centralized module | ✅ **ADDED** | Exports safeSet/safeGet/safeRemove with quota detection |
 | `storage.ts` | Already used safeSetItem | ✅ **VERIFIED** | Uses existing safe pattern |
 | `dual-storage.ts` | Offline queue pending interactions | ✅ **VERIFIED** | Has try-catch, documented for future enhancement |
-| `reinforcement-manager.ts` | Schedules save raw setItem | ⚠️ **ACCEPTED RISK** | Has try-catch; scheduled for Phase 2 |
+| `reinforcement-manager.ts` | Schedules save raw setItem | ✅ **VERIFIED** | Already uses safeStorage.set() pattern |
+| `learner-profile-client.ts` | Profile cache raw setItem | ✅ **FIXED (Ph.2)** | Migrated to safeSet |
+| `ui-state.ts` | UI state raw setItem | ✅ **FIXED (Ph.2)** | Migrated to safeSet with cache priority |
 
 ### Safe Cleanup Keys (Priority Order)
 

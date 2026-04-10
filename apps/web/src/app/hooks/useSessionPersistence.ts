@@ -93,6 +93,7 @@ export function useSessionPersistence(): UseSessionPersistenceReturn {
   const isMountedRef = useRef(true);
   const currentProfileRef = useRef<UserProfile | null>(null);
   const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const storageDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   /**
    * Get last activity timestamp from localStorage
@@ -221,63 +222,71 @@ export function useSessionPersistence(): UseSessionPersistenceReturn {
     // Only handle our profile key
     if (event.key !== USER_PROFILE_KEY) return;
     
-    const now = Date.now();
-    
-    // Profile was cleared in another tab
-    if (event.newValue === null) {
-      const previousProfile = currentProfileRef.current;
-      
-      setProfile(null);
-      currentProfileRef.current = null;
-      setLastSync(now);
-      setSource('storage');
-      
-      // Emit event for same-tab listeners
-      emitProfileCleared(previousProfile, 'storage');
-      
-      // Auto-redirect to start page
-      if (typeof window !== 'undefined') {
-        window.location.href = '/';
-      }
-      return;
+    // Debounce rapid sequential events (cross-tab write bursts)
+    if (storageDebounceRef.current) {
+      clearTimeout(storageDebounceRef.current);
     }
-    
-    // Profile was updated in another tab
-    if (event.newValue) {
-      try {
-        const newProfile = JSON.parse(event.newValue) as UserProfile;
+    storageDebounceRef.current = setTimeout(() => {
+      if (!isMountedRef.current) return;
+      
+      const now = Date.now();
+      
+      // Profile was cleared in another tab
+      if (event.newValue === null) {
         const previousProfile = currentProfileRef.current;
         
-        // Validate the parsed profile
-        if (
-          typeof newProfile.id === 'string' &&
-          typeof newProfile.name === 'string' &&
-          (newProfile.role === 'student' || newProfile.role === 'instructor') &&
-          typeof newProfile.createdAt === 'number'
-        ) {
-          setProfile(newProfile);
-          currentProfileRef.current = newProfile;
-          setLastSync(now);
-          setSource('storage');
-          setShowSyncToast(true);
-          
-          // Emit event for same-tab listeners
-          emitProfileUpdated(newProfile, previousProfile, 'storage');
-          
-          // Auto-dismiss toast after 5 seconds
-          if (toastTimeoutRef.current) {
-            clearTimeout(toastTimeoutRef.current);
-          }
-          toastTimeoutRef.current = setTimeout(() => {
-            if (isMountedRef.current) {
-              setShowSyncToast(false);
-            }
-          }, 5000);
+        setProfile(null);
+        currentProfileRef.current = null;
+        setLastSync(now);
+        setSource('storage');
+        
+        // Emit event for same-tab listeners
+        emitProfileCleared(previousProfile, 'storage');
+        
+        // Auto-redirect to start page
+        if (typeof window !== 'undefined') {
+          window.location.href = '/';
         }
-      } catch (error) {
-        console.error('[useSessionPersistence] Failed to parse profile from storage event:', error);
+        return;
       }
-    }
+      
+      // Profile was updated in another tab
+      if (event.newValue) {
+        try {
+          const newProfile = JSON.parse(event.newValue) as UserProfile;
+          const previousProfile = currentProfileRef.current;
+          
+          // Validate the parsed profile
+          if (
+            typeof newProfile.id === 'string' &&
+            typeof newProfile.name === 'string' &&
+            (newProfile.role === 'student' || newProfile.role === 'instructor') &&
+            typeof newProfile.createdAt === 'number'
+          ) {
+            setProfile(newProfile);
+            currentProfileRef.current = newProfile;
+            setLastSync(now);
+            setSource('storage');
+            setShowSyncToast(true);
+            
+            // Emit event for same-tab listeners
+            emitProfileUpdated(newProfile, previousProfile, 'storage');
+            
+            // Auto-dismiss toast after 5 seconds
+            if (toastTimeoutRef.current) {
+              clearTimeout(toastTimeoutRef.current);
+            }
+            toastTimeoutRef.current = setTimeout(() => {
+              if (isMountedRef.current) {
+                setShowSyncToast(false);
+              }
+            }, 5000);
+          }
+        } catch (error) {
+          console.error('[useSessionPersistence] Failed to parse profile from storage event:', error);
+        }
+      }
+    }, 50);
   }, []);
   
   /**
@@ -314,6 +323,7 @@ export function useSessionPersistence(): UseSessionPersistenceReturn {
     
     return () => {
       window.removeEventListener('storage', handleStorageChange);
+      if (storageDebounceRef.current) clearTimeout(storageDebounceRef.current);
     };
   }, [handleStorageChange]);
   
@@ -322,6 +332,9 @@ export function useSessionPersistence(): UseSessionPersistenceReturn {
     return () => {
       if (toastTimeoutRef.current) {
         clearTimeout(toastTimeoutRef.current);
+      }
+      if (storageDebounceRef.current) {
+        clearTimeout(storageDebounceRef.current);
       }
     };
   }, []);

@@ -51,6 +51,33 @@
 - No dated audit evidence - delete after use
 - No duplicate "* 2" files
 
+### Fixed - 2026-04-09
+
+#### Storage Safety Phase 2
+- **Scope**: Migrated remaining raw `localStorage.setItem` calls to quota-safe `safeSet` wrapper
+- **Files Changed**:
+  - `apps/web/src/app/lib/api/learner-profile-client.ts` - Profile cache writes now use safeSet
+  - `apps/web/src/app/lib/ui-state.ts` - UI state writes now use safeSet with cache priority
+  - `apps/web/src/app/lib/content/reinforcement-manager.ts` - Already used safeStorage (verified)
+- **Impact**: Prevents silent crashes on quota exceeded during profile caching and UI state updates
+
+#### UX P1: Silent Redirects
+- **Problem**: Unauthorized route redirects sent users to home page with no explanation
+- **Solution**: Added `?reason=` query param to redirect URLs, display dismissible alert on landing pages
+- **Files Changed**:
+  - `apps/web/src/app/lib/auth-route-loader.ts` - Added reason param to redirects
+  - `apps/web/src/app/pages/StartPage.tsx` - Added alert for unauthorized access
+  - `apps/web/src/app/pages/InstructorDashboard.tsx` - Added alert for access-denied
+
+#### UX P1: Verified Existing Fixes
+- **HDI Clear Confirmation**: Verified ConfirmDialog properly wired in SettingsPage.tsx (no changes needed)
+- **Preview Mode Banner**: Verified PreviewModeBanner renders correctly in RootLayout.tsx (no changes needed)
+
+#### Performance: Cross-Tab Debounce
+- **Problem**: `handleStorageChange` processed storage events immediately, potential for unnecessary re-renders
+- **Solution**: Added 50ms debounce to storage event handler in useSessionPersistence.ts
+- **Files Changed**: `apps/web/src/app/hooks/useSessionPersistence.ts`
+
 ### Changed - 2026-04-09
 
 #### Documentation Consolidation

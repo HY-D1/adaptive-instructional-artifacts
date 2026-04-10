@@ -77,6 +77,8 @@
 | `role-system.spec.ts` | Auth roles | ✅ Passing | **HIGH** - Security |
 | `critical-bugs.spec.ts` | P0 bug regression | ✅ Passing | **HIGH** |
 | `high-priority-bugs.spec.ts` | P1 bug regression | ✅ Passing | **MEDIUM** |
+| `storage-safety-phase2.spec.ts` | Storage quota resilience (Phase 2) | ✅ Passing | **HIGH** - Safety |
+| `ux-auth-redirect-feedback.spec.ts` | Unauthorized redirect feedback | ✅ Passing | **MEDIUM** - UX |
 
 ---
 

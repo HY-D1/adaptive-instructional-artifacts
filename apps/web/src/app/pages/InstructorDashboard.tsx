@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import {
   BarChart3,
@@ -177,6 +177,20 @@ export function InstructorDashboard() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [demoDataExists, setDemoDataExists] = useState(false);
+  
+  // Handle redirect reason query param (P1-003: Silent Redirects UX Fix)
+  const [params] = useSearchParams();
+  const reason = params.get('reason');
+  const [showRedirectAlert, setShowRedirectAlert] = useState(false);
+  
+  useEffect(() => {
+    if (reason === 'access-denied') {
+      setShowRedirectAlert(true);
+      // Auto-dismiss after 5 seconds
+      const timer = setTimeout(() => setShowRedirectAlert(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [reason]);
   const [isBackendAvailable, setIsBackendAvailable] = useState(false);
 
   // Check backend availability
@@ -668,6 +682,14 @@ export function InstructorDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Redirect Alert (P1-003) */}
+      {showRedirectAlert && (
+        <Alert variant="destructive" className="m-4 max-w-7xl mx-auto">
+          <AlertDescription>
+            You do not have permission to access this page.
+          </AlertDescription>
+        </Alert>
+      )}
       {/* Header */}
       <div className="border-b bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

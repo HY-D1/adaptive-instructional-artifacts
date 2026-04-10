@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import { BookOpen, BarChart3, Database, GraduationCap, Lock, LogIn } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -49,6 +50,20 @@ export function StartPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const showDiagnostic = import.meta.env.DEV || import.meta.env.MODE === 'test';
+  
+  // Handle redirect reason query param (P1-003: Silent Redirects UX Fix)
+  const [params] = useSearchParams();
+  const reason = params.get('reason');
+  const [showRedirectAlert, setShowRedirectAlert] = useState(false);
+  
+  useEffect(() => {
+    if (reason === 'unauthorized' || reason === 'access-denied') {
+      setShowRedirectAlert(true);
+      // Auto-dismiss after 5 seconds
+      const timer = setTimeout(() => setShowRedirectAlert(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [reason]);
 
   // Log runtime configuration in development
   useEffect(() => {
@@ -181,6 +196,16 @@ export function StartPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Redirect Alert (P1-003) */}
+      {showRedirectAlert && (
+        <Alert variant="destructive" className="m-4 max-w-2xl self-center">
+          <AlertDescription>
+            {reason === 'unauthorized'
+              ? 'Please sign in to access this page.'
+              : 'You do not have permission to access this page.'}
+          </AlertDescription>
+        </Alert>
+      )}
       {/* Header */}
       <header className="bg-white border-b">
         <div className="container mx-auto px-4 h-16 flex items-center gap-3">
