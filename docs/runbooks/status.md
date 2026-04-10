@@ -1,8 +1,38 @@
 # Project Status — SQL-Adapt
 
-**Last Updated**: 2026-04-10 (Instructor Dashboard Profile Gap Fix + Preview & Production Backfill Complete)
-**Previous Update**: 2026-04-09 (Node 22 Upgrade + Build Fixes)
+**Last Updated**: 2026-04-10 (CI Fixes + Research Dashboard API Migration + 3 Live Bugs Fix)
+**Previous Update**: 2026-04-10 (Instructor Dashboard Profile Gap Fix + Preview & Production Backfill Complete)
 **Purpose**: Single durable status file for implementation and deployment readiness.
+
+---
+
+## CI Test Fixes + Research Dashboard — 2026-04-10
+
+**Status**: ✅ **ALL FIXES APPLIED** | **READY FOR COMMIT**
+
+### CI Failures Fixed
+
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| `grading-tolerance.spec.ts` syntax error | Multiline SQL strings used single quotes (lines 104, 162) | Changed to backticks (template literals) |
+| `save-to-notes.spec.ts` missing module | Imported from non-existent `../helpers/learning-interface` | Removed import, inlined `waitForProblemLoad` helper |
+| `student-progress-persistence.spec.ts` missing module | Imported from non-existent `../practice-page/practice-page-helpers` | Removed import, inlined `navigateToPracticePage`, `executeQuery`, `waitForProblemLoad` helpers |
+
+### Research Dashboard Zero Data Fixed
+
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| Shows 0 Learners, 0 Interactions | Read from localStorage (empty for instructor); fire-and-forget hydration; 120MB data > 5-10MB localStorage limit | Replaced localStorage reads with API calls: `storageClient.getAllProfiles()` and `storageClient.getInteractions()` in batches |
+
+### Verification
+
+| Gate | Result |
+|------|--------|
+| `npm run integrity:scan` | ✅ PASS |
+| `npm run server:build` | ✅ PASS |
+| `npm run build` | ✅ PASS (3.50s) |
+| `npm run test:unit` | ✅ 1790 passed, 2 skipped |
+| `npm run replay:gate` | ✅ SKIPPED (expected) |
 
 ---
 

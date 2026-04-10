@@ -32,7 +32,36 @@
 - **Files**: `apps/web/src/app/pages/LearningInterface.tsx`
 - **Verification**: `npm run build` ✅, `npm run test:unit` ✅ 1790 passed, `npm run replay:gate` ✅ skipped (expected)
 
-### Fixed - 2026-04-10 (Instructor Dashboard Visibility)
+### Fixed - 2026-04-10 (CI Test Failures)
+
+#### CI: Unterminated String Constants in Test Files
+- **Bug**: `grading-tolerance.spec.ts` had multiline SQL strings using single quotes (lines 104, 162), causing `SyntaxError: Unterminated string constant`
+- **Root Cause**: JavaScript single-quoted strings cannot span multiple lines
+- **Fix**: Changed single quotes to backticks (template literals) for multiline SQL strings
+- **Files**: `tests/e2e/regression/grading-tolerance.spec.ts`
+
+#### CI: Missing Module Imports in Test Files
+- **Bug**: `save-to-notes.spec.ts` and `student-progress-persistence.spec.ts` imported from non-existent helper modules
+- **Root Cause**: Test files referenced `../helpers/learning-interface` and `../practice-page/practice-page-helpers` which were never created
+- **Fix**: Removed broken imports, inlined helper functions (`waitForProblemLoad`, `navigateToPracticePage`, `executeQuery`) directly in test files
+- **Files**: `tests/e2e/regression/save-to-notes.spec.ts`, `tests/e2e/regression/student-progress-persistence.spec.ts`
+- **Verification**: `npm run test:unit` ✅ 1790 passed
+
+### Fixed - 2026-04-10 (Research Dashboard Zero Data)
+
+#### Research Dashboard Shows 0 Learners, 0 Interactions
+- **Bug**: Research Dashboard displayed "0 Learners" and "0 Interactions" even when data existed in the backend
+- **Root Cause**: 
+  - Dashboard read data from localStorage via `storage.getAllInteractions()` and `storage.getAllProfiles()`
+  - `hydrateInstructorDashboard()` used fire-and-forget pattern for interactions fetch - returned before data was written
+  - 120,417+ interaction events (~120MB) exceeded localStorage's 5-10MB limit, causing data truncation
+- **Fix**: Replaced localStorage reads with direct API calls:
+  - `storageClient.getAllProfiles()` - fetches instructor-scoped learner profiles from `/api/learners/profiles`
+  - `storageClient.getInteractions()` - fetches per-learner interactions from `/api/interactions` in batches
+  - Added fallback to localStorage on API failure (preserves offline capability)
+  - Profiles cached to localStorage for other components after API fetch
+- **Files**: `apps/web/src/app/components/features/research/ResearchDashboard.tsx`
+- **Verification**: `npm run build` ✅, `npm run test:unit` ✅ 1790 passed
 
 #### Learner Profile Creation Gap
 - **Bug**: Instructors could see only the subset of students who happened to have a `learner_profiles` row in Neon, even when many more students were properly enrolled in their sections.
