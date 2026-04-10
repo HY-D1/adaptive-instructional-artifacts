@@ -6,21 +6,21 @@
  * - Float epsilon of 0.01 was too tight for SQLite rounding
  */
 
-import { test, expect } from '@playwright/test';
-import { SQLExecutor } from '../../../apps/web/src/app/lib/sql-executor';
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+import { SQLExecutor } from './sql-executor';
 
-test.describe('SQL Grading Tolerance (Root Cause C)', () => {
+describe('SQL Grading Tolerance (Root Cause C)', () => {
   let executor: SQLExecutor;
 
-  test.beforeEach(async () => {
+  beforeEach(async () => {
     executor = new SQLExecutor();
   });
 
-  test.afterEach(() => {
+  afterEach(() => {
     executor.close();
   });
 
-  test.describe('Query 26: Column Alias Flexibility', () => {
+  describe('Query 26: Column Alias Flexibility', () => {
     test('accepts UPPER without alias matching expected with alias', async () => {
       await executor.initialize(`
         CREATE TABLE employees (
@@ -86,7 +86,7 @@ test.describe('SQL Grading Tolerance (Root Cause C)', () => {
     });
   });
 
-  test.describe('Query 13: Float Precision Tolerance', () => {
+  describe('Query 13: Float Precision Tolerance', () => {
     test('accepts AVG result within widened epsilon (0.015)', async () => {
       await executor.initialize(`
         CREATE TABLE order_items (
@@ -175,7 +175,7 @@ test.describe('SQL Grading Tolerance (Root Cause C)', () => {
     });
   });
 
-  test.describe('Value-Only Matching Edge Cases', () => {
+  describe('Value-Only Matching Edge Cases', () => {
     test('handles multiple rows with different column names', async () => {
       await executor.initialize(`
         CREATE TABLE products (name TEXT, price INTEGER);
