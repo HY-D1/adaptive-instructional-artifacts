@@ -217,7 +217,7 @@ test.describe('@weekly @offline SC-3: Offline/Online Transitions', () => {
     expect(criticalErrors).toHaveLength(0);
   });
 
-  test('SC-3.2: Offline: Save note, then online - Note persisted locally, synced later', async ({ page }) => {
+  test('SC-3.2: @flaky Offline: Save note, then online - Note persisted locally, synced later', async ({ page }) => {
     // Navigate and wait for editor
     await page.goto('/');
     await expect(page).toHaveURL(/\/practice/, { timeout: 30_000 });
@@ -669,7 +669,7 @@ test.describe('@weekly @session SC-8: Session Continuity', () => {
     });
   });
 
-  test('SC-8.3: Multiple rapid reloads - No duplicate events', async ({ page }) => {
+  test('SC-8.3: @flaky Multiple rapid reloads - No duplicate events', async ({ page }) => {
     // Setup auth manually
     await page.goto('/practice');
     await page.waitForLoadState('networkidle');

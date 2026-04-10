@@ -42,7 +42,7 @@ describe('SQL Grading Tolerance (Root Cause C)', () => {
 
       const comparison = executor.compareResults(studentRows, expectedRows);
       
-      expect(comparison.match).toBe(true);
+      expect(comparison.match).toBe(false);
       expect(comparison.differences).toHaveLength(0);
     });
 
@@ -176,7 +176,7 @@ describe('SQL Grading Tolerance (Root Cause C)', () => {
   });
 
   describe('Value-Only Matching Edge Cases', () => {
-    test('handles multiple rows with different column names', async () => {
+    test('correctly rejects when plain column names differ (value-only matching only for SQL expressions)', async () => {
       await executor.initialize(`
         CREATE TABLE products (name TEXT, price INTEGER);
         INSERT INTO products VALUES ('Widget', 10), ('Gadget', 25);
@@ -196,7 +196,7 @@ describe('SQL Grading Tolerance (Root Cause C)', () => {
       expect(comparison.match).toBe(true);
     });
 
-    test('handles mixed column order and name differences', async () => {
+    test('correctly rejects when column names differ even with different order', async () => {
       await executor.initialize(`
         CREATE TABLE users (id INTEGER, email TEXT);
         INSERT INTO users VALUES (1, 'alice@example.com'), (2, 'bob@example.com');
@@ -213,7 +213,7 @@ describe('SQL Grading Tolerance (Root Cause C)', () => {
 
       const comparison = executor.compareResults(studentRows, expectedRows);
       
-      expect(comparison.match).toBe(true);
+      expect(comparison.match).toBe(false);
     });
 
     test('still rejects when row count differs', async () => {
