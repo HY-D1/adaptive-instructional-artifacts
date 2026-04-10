@@ -15,6 +15,7 @@ import {
   type BatchValidationError,
   type BatchValidationResult,
 } from '../db/index.js';
+import type { EventType } from '../types.js';
 
 const router = Router();
 
@@ -294,18 +295,30 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const scopedTarget = await resolveScopedTarget(req, event.learnerId, 'write');
-    event.learnerId = scopedTarget.learnerId;
-    event.sectionId = scopedTarget.sectionId;
+    const schemaValidation = interactionEventSchema.safeParse(event);
+    if (!schemaValidation.success) {
+      res.status(400).json({
+        success: false,
+        error: 'Schema validation failed',
+        issues: schemaValidation.error.issues.map((issue) => issue.message),
+      });
+      return;
+    }
 
-    const id = event.id || `${event.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
+    const validatedEvent = schemaValidation.data as NeonInteractionEventInput & { sectionId?: string | null };
+
+    const scopedTarget = await resolveScopedTarget(req, validatedEvent.learnerId, 'write');
+    validatedEvent.learnerId = scopedTarget.learnerId;
+    validatedEvent.sectionId = scopedTarget.sectionId;
+
+    const id = validatedEvent.id || `${validatedEvent.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
 
     // RESEARCH-3: Validate research-critical events in production
     if (process.env.NODE_ENV === 'production') {
-      const validation = validateResearchEvent(event);
+      const validation = validateResearchEvent(validatedEvent);
       if (!validation.valid) {
         console.warn('[telemetry_validation_error]', {
-          eventType: event.eventType,
+          eventType: validatedEvent.eventType,
           missingFields: validation.missing,
           eventId: id,
           route: 'single',
@@ -320,24 +333,24 @@ router.post('/', async (req: Request, res: Response) => {
       }
     }
 
-    const payload = buildNeonInteractionPayload(event);
+    const payload = buildNeonInteractionPayload(validatedEvent);
 
     const interaction = await db.createInteraction({
       id,
-      learnerId: event.learnerId,
+      learnerId: validatedEvent.learnerId,
       sectionId: scopedTarget.sectionId,
-      timestamp: event.timestamp || new Date().toISOString(),
-      eventType: event.eventType,
-      problemId: event.problemId,
+      timestamp: validatedEvent.timestamp || new Date().toISOString(),
+      eventType: validatedEvent.eventType as EventType,
+      problemId: validatedEvent.problemId,
       payload,
     });
 
-    await persistProblemProgressIfNeeded(event.learnerId, event.problemId, event);
+    await persistProblemProgressIfNeeded(validatedEvent.learnerId, validatedEvent.problemId, validatedEvent);
     
     // RESEARCH-4: Link textbook retrievals if present (single route parity with batch)
-    if (event.textbookUnitsRetrieved && Array.isArray(event.textbookUnitsRetrieved)) {
+    if (validatedEvent.textbookUnitsRetrieved && Array.isArray(validatedEvent.textbookUnitsRetrieved)) {
       try {
-        await db.linkTextbookRetrievals(id, event.textbookUnitsRetrieved);
+        await db.linkTextbookRetrievals(id, validatedEvent.textbookUnitsRetrieved);
       } catch (err) {
         console.warn('[neon-interactions] Failed to link retrievals:', err);
         // Don't fail the entire request for retrieval linking issues

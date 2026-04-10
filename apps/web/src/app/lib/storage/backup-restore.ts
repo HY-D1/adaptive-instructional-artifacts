@@ -5,7 +5,7 @@
  * for backup, migration, and data portability.
  */
 
-import { storage } from './storage';
+import { safeSet } from './safe-storage';
 import { isValidUserProfile } from './storage-validation';
 
 /**
@@ -111,7 +111,10 @@ export function importAllData(
   if (backup.userProfile) {
     try {
       if (!validate || isValidUserProfile(backup.userProfile)) {
-        localStorage.setItem('sql-adapt-user-profile', JSON.stringify(backup.userProfile));
+        const result = safeSet('sql-adapt-user-profile', backup.userProfile, { priority: 'critical' });
+        if (!result.success) {
+          throw new Error(result.error ?? 'Failed to import user profile');
+        }
         imported.push('userProfile');
       } else {
         errors.push('Invalid user profile');
@@ -126,7 +129,10 @@ export function importAllData(
     try {
       const existing = merge ? safeGetStorageArray('sql-learning-interactions') : [];
       const merged = [...existing, ...backup.interactions];
-      localStorage.setItem('sql-learning-interactions', JSON.stringify(merged));
+      const result = safeSet('sql-learning-interactions', merged, { priority: 'critical' });
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to import interactions');
+      }
       imported.push(`interactions (${backup.interactions.length})`);
     } catch (err) {
       errors.push(`Failed to import interactions: ${err}`);
@@ -138,7 +144,10 @@ export function importAllData(
     try {
       const existing = merge ? safeGetStorageArray('sql-learning-textbook') : [];
       const merged = [...existing, ...backup.textbook];
-      localStorage.setItem('sql-learning-textbook', JSON.stringify(merged));
+      const result = safeSet('sql-learning-textbook', merged, { priority: 'critical' });
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to import textbook');
+      }
       imported.push(`textbook (${backup.textbook.length} units)`);
     } catch (err) {
       errors.push(`Failed to import textbook: ${err}`);
@@ -148,7 +157,10 @@ export function importAllData(
   // Import sessions
   if (backup.sessions?.length > 0) {
     try {
-      localStorage.setItem('sql-learning-active-session', JSON.stringify(backup.sessions[0]));
+      const result = safeSet('sql-learning-active-session', backup.sessions[0], { priority: 'critical' });
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to import sessions');
+      }
       imported.push('sessions');
     } catch (err) {
       errors.push(`Failed to import sessions: ${err}`);
@@ -158,7 +170,10 @@ export function importAllData(
   // Import learner profiles
   if (backup.learnerProfiles && Object.keys(backup.learnerProfiles).length > 0) {
     try {
-      localStorage.setItem('sql-learning-profiles', JSON.stringify(backup.learnerProfiles));
+      const result = safeSet('sql-learning-profiles', backup.learnerProfiles, { priority: 'critical' });
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to import learner profiles');
+      }
       imported.push('learnerProfiles');
     } catch (err) {
       errors.push(`Failed to import learner profiles: ${err}`);
@@ -168,10 +183,14 @@ export function importAllData(
   // Import reinforcement schedules
   if (backup.reinforcementSchedules?.length > 0) {
     try {
-      localStorage.setItem(
+      const result = safeSet(
         'sql-learning-reinforcement-schedules',
-        JSON.stringify(backup.reinforcementSchedules)
+        backup.reinforcementSchedules,
+        { priority: 'critical' }
       );
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to import reinforcement schedules');
+      }
       imported.push('reinforcementSchedules');
     } catch (err) {
       errors.push(`Failed to import reinforcement schedules: ${err}`);
@@ -181,7 +200,10 @@ export function importAllData(
   // Import PDF index
   if (backup.pdfIndex) {
     try {
-      localStorage.setItem('sql-learning-pdf-index', JSON.stringify(backup.pdfIndex));
+      const result = safeSet('sql-learning-pdf-index', backup.pdfIndex, { priority: 'critical' });
+      if (!result.success) {
+        throw new Error(result.error ?? 'Failed to import PDF index');
+      }
       imported.push('pdfIndex');
     } catch (err) {
       errors.push(`Failed to import PDF index: ${err}`);
@@ -193,7 +215,10 @@ export function importAllData(
     localStorage.setItem('sql-adapt-last-active', backup.settings.lastActive);
   }
   if (backup.settings?.sessionConfig) {
-    localStorage.setItem('sql-adapt-session-config', JSON.stringify(backup.settings.sessionConfig));
+    const result = safeSet('sql-adapt-session-config', backup.settings.sessionConfig, { priority: 'critical' });
+    if (!result.success) {
+      throw new Error(result.error ?? 'Failed to import session config');
+    }
   }
 
   return {
