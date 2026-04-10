@@ -32,6 +32,7 @@ import {
   GROQ_MODEL,
   getLLMStatus,
 } from '../../lib/api/llm-client';
+import { safeSet } from '../../lib/storage/safe-storage';
 
 const INITIAL_PROVIDER: LLMProvider = import.meta.env.VITE_API_BASE_URL ? 'groq' : 'ollama';
 
@@ -102,8 +103,8 @@ export function LLMSettingsHelper() {
               model: PROVIDER_DEFAULTS[backendProvider],
             };
             setSettings(syncedSettings);
-            // Save synced settings back to localStorage
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(syncedSettings));
+            // Save synced settings back to localStorage (cache priority - LLM settings are regenerable)
+            safeSet(STORAGE_KEY, syncedSettings, { priority: 'cache' });
           } else {
             setSettings(prev => ({
               ...prev,
@@ -173,9 +174,10 @@ export function LLMSettingsHelper() {
   };
 
   const saveSettings = () => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-
+    // Use safeSet for quota-aware persistence (cache priority - LLM settings are regenerable)
+    const result = safeSet(STORAGE_KEY, settings, { priority: 'cache' });
+    
+    if (result.success) {
       // Dispatch event to notify other components
       window.dispatchEvent(new CustomEvent('llm-settings-changed', {
         detail: settings
@@ -186,7 +188,7 @@ export function LLMSettingsHelper() {
 
       // Reset status after 3 seconds
       setTimeout(() => setSaveStatus('idle'), 3000);
-    } catch {
+    } else {
       setSaveStatus('error');
     }
   };

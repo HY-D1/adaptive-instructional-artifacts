@@ -31,6 +31,7 @@ import {
 // Note: Using div with overflow-auto instead of ScrollArea
 import { cn } from '../../ui/utils';
 import { storage } from '../../../lib/storage';
+import { safeSet, safeRemove } from '../../../lib/storage/safe-storage';
 import { MAX_CHAT_MESSAGES, trimChatHistory } from '../../../lib/storage/cache-trimmer';
 import { createEventId } from '../../../lib/utils/event-id';
 import type { InteractionEvent, InstructionalUnit } from '../../../types';
@@ -410,32 +411,33 @@ export function AskMyTextbookChat({
           evictedCount = messagesToSave.length - cappedMessages.length;
         }
         
-        try {
-          localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(cappedMessages));
-          
+        // Use safeSet for quota-aware persistence (cache priority - chat is regenerable)
+        const result = safeSet(CHAT_HISTORY_KEY, cappedMessages, { priority: 'cache' });
+        
+        if (result.success && evictedCount > 0 && typeof window !== 'undefined') {
           // Log eviction if it occurred (non-blocking, best-effort)
-          if (evictedCount > 0 && typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('storage_eviction', {
-              detail: {
-                eventType: 'storage_eviction',
-                timestamp: Date.now(),
-                keyClass: 'chat_history',
-                bytesRemoved: 0, // Would need original size to calculate
-                entriesRemoved: evictedCount,
-                trigger: 'startup_trim',
-                context: 'AskMyTextbookChat'
-              }
-            }));
-          }
-        } catch (error) {
+          window.dispatchEvent(new CustomEvent('storage_eviction', {
+            detail: {
+              eventType: 'storage_eviction',
+              timestamp: Date.now(),
+              keyClass: 'chat_history',
+              bytesRemoved: 0, // Would need original size to calculate
+              entriesRemoved: evictedCount,
+              trigger: 'startup_trim',
+              context: 'AskMyTextbookChat'
+            }
+          }));
+        }
+        
+        if (!result.success) {
           // UX: Chat continues working even if persistence fails
           // This is best-effort caching, not critical data
-          if (error instanceof DOMException && error.name === 'QuotaExceededError') {
+          if (result.quotaExceeded) {
             console.warn('[AskMyTextbookChat] Storage quota exceeded, chat history not persisted');
             // Try to trim this specific chat history
             trimChatHistory(learnerId, problemId);
           } else {
-            console.warn('[AskMyTextbookChat] Failed to persist chat history:', error);
+            console.warn('[AskMyTextbookChat] Failed to persist chat history:', result.error);
           }
         }
       }
@@ -1480,7 +1482,7 @@ export function AskMyTextbookChat({
   const handleClear = useCallback(() => {
     setMessages([]);
     autoSavedQueriesRef.current.clear();
-    localStorage.removeItem(CHAT_HISTORY_KEY);
+    safeRemove(CHAT_HISTORY_KEY);
   }, [CHAT_HISTORY_KEY]);
 
   const profile = storage.getProfile(learnerId);

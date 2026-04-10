@@ -3,6 +3,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import * as db from '../db/neon.js';
 import {
   getSectionForLearnerInInstructorScope,
@@ -17,7 +18,57 @@ import {
 
 const router = Router();
 
-type NeonInteractionEventInput = Record<string, any>;
+// Zod schema for interaction event validation (BUG-007)
+const interactionEventSchema = z.object({
+  learnerId: z.string(),
+  eventType: z.string(),
+  problemId: z.string(),
+  id: z.string().optional(),
+  sessionId: z.string().optional(),
+  timestamp: z.string().optional(),
+  code: z.string().max(50000).optional(),
+  error: z.string().max(5000).optional(),
+  hintText: z.string().max(10000).optional(),
+  hintLevel: z.number().optional(),
+  hintId: z.string().optional(),
+  conceptId: z.string().optional(),
+  source: z.string().optional(),
+  totalTime: z.number().optional(),
+  problemsAttempted: z.number().optional(),
+  problemsSolved: z.number().optional(),
+  successful: z.boolean().optional(),
+  // Escalation Profile fields
+  profileId: z.string().optional(),
+  assignmentStrategy: z.string().optional(),
+  previousThresholds: z.record(z.any()).optional(),
+  newThresholds: z.record(z.any()).optional(),
+  // Bandit fields
+  selectedArm: z.string().optional(),
+  selectionMethod: z.string().optional(),
+  armStatsAtSelection: z.record(z.any()).optional(),
+  reward: z.number().optional(),
+  newAlpha: z.number().optional(),
+  newBeta: z.number().optional(),
+  // HDI fields
+  hdi: z.number().optional(),
+  hdiLevel: z.string().optional(),
+  hdiComponents: z.record(z.any()).optional(),
+  trend: z.string().optional(),
+  slope: z.number().optional(),
+  interventionType: z.string().optional(),
+  trigger: z.string().optional(),
+  escalationTriggerReason: z.string().optional(),
+  errorCountAtEscalation: z.number().optional(),
+  timeToEscalation: z.number().optional(),
+  strategyAssigned: z.string().optional(),
+  strategyUpdated: z.boolean().optional(),
+  rewardValue: z.number().optional(),
+  learnerProfileId: z.string().optional(),
+  payload: z.record(z.any()).optional(),
+  textbookUnitsRetrieved: z.array(z.string()).optional(),
+}).strict(); // Rejects unknown fields
+
+type NeonInteractionEventInput = z.infer<typeof interactionEventSchema>;
 
 // Re-export for backward compatibility
 export { validateResearchEvent, validateResearchBatchForWrite };
@@ -316,6 +367,36 @@ router.post('/batch', async (req: Request, res: Response) => {
       res.status(400).json({
         success: false,
         error: 'Request body must contain an events array',
+      });
+      return;
+    }
+
+    // BUG-002: Enforce batch size limit
+    if (events.length > 500) {
+      res.status(400).json({
+        success: false,
+        error: 'Batch size exceeds maximum of 500 events',
+      });
+      return;
+    }
+
+    // BUG-007: Validate each event against schema
+    const schemaValidationErrors: Array<{ index: number; eventId: string; issues: string[] }> = [];
+    for (let i = 0; i < events.length; i++) {
+      const result = interactionEventSchema.safeParse(events[i]);
+      if (!result.success) {
+        schemaValidationErrors.push({
+          index: i,
+          eventId: events[i]?.id || `index-${i}`,
+          issues: result.error.issues.map(issue => issue.message),
+        });
+      }
+    }
+    if (schemaValidationErrors.length > 0) {
+      res.status(400).json({
+        success: false,
+        error: 'Schema validation failed for one or more events',
+        schemaErrors: schemaValidationErrors,
       });
       return;
     }

@@ -33,6 +33,7 @@ import { LLMSettingsHelper } from '../components/shared/LLMSettingsHelper';
 import { useUserRole } from '../hooks/useUserRole';
 import { useToast } from '../components/ui/toast';
 import { banditManager, BANDIT_ARM_PROFILES } from '../lib/ml/learner-bandit-manager';
+import { safeSet, safeRemove } from '../lib/storage/safe-storage';
 import type { BanditArmId } from '../lib/ml/learner-bandit-manager';
 import { assignProfile } from '../lib/ml/escalation-profiles';
 import type { AssignmentStrategy } from '../lib/ml/escalation-profiles';
@@ -160,7 +161,7 @@ export function SettingsPage() {
   // Handle preview mode toggle with cross-tab sync
   const handlePreviewModeChange = useCallback((enabled: boolean) => {
     setIsPreviewMode(enabled);
-    localStorage.setItem('sql-adapt-preview-mode', String(enabled));
+    safeSet('sql-adapt-preview-mode', String(enabled), { priority: 'standard' });
     broadcastSync('sql-adapt-preview-mode', String(enabled));
     
     addToast({
@@ -203,21 +204,21 @@ export function SettingsPage() {
   const handleProfileOverrideChange = useCallback((value: ProfileOverrideId) => {
     setProfileOverride(value);
     if (value === 'auto') {
-      localStorage.removeItem(DEBUG_KEYS.PROFILE_OVERRIDE);
+      safeRemove(DEBUG_KEYS.PROFILE_OVERRIDE);
     } else {
-      localStorage.setItem(DEBUG_KEYS.PROFILE_OVERRIDE, value);
+      safeSet(DEBUG_KEYS.PROFILE_OVERRIDE, value, { priority: 'standard' });
     }
   }, []);
 
   const handleResetProfileOverride = useCallback(() => {
     setProfileOverride('auto');
-    localStorage.removeItem(DEBUG_KEYS.PROFILE_OVERRIDE);
+    safeRemove(DEBUG_KEYS.PROFILE_OVERRIDE);
   }, []);
 
   // Assignment Strategy Handler
   const handleStrategyChange = useCallback((value: AssignmentStrategy) => {
     setAssignmentStrategy(value);
-    localStorage.setItem(DEBUG_KEYS.ASSIGNMENT_STRATEGY, value);
+    safeSet(DEBUG_KEYS.ASSIGNMENT_STRATEGY, value, { priority: 'standard' });
   }, []);
 
   // HDI Reset Handler with confirmation and feedback
@@ -228,7 +229,11 @@ export function SettingsPage() {
       const interactions = storage.getAllInteractions();
       const filteredInteractions = filterOutHDIEvents(interactions, learnerId);
 
-      localStorage.setItem('sql-learning-interactions', JSON.stringify(filteredInteractions));
+      const result = safeSet('sql-learning-interactions', filteredInteractions, { priority: 'critical' });
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save interactions');
+      }
+      
       setHdiScore(null);
       setHdiEventCount(0);
       setRefreshKey((k) => k + 1);

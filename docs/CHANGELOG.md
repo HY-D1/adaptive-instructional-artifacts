@@ -53,6 +53,26 @@
 
 ### Fixed - 2026-04-09
 
+#### CI/Infra Hardening (BUG-001, BUG-003)
+- **BUG-001**: Aligned CI Node version to 22 in `.github/workflows/regression-gate.yml`
+- **BUG-003**: Added `unhandledRejection` handler in `apps/server/src/index.ts`
+- **Impact**: Prevents CI failures and silent server crashes
+
+#### Server Security Hardening (BUG-002, BUG-005, BUG-007)
+- **BUG-002**: Added 500-event limit to batch interactions endpoint
+- **BUG-005**: Added error logging to PDF index catch blocks
+- **BUG-007**: Added Zod schema validation for interaction events (strict mode, string length caps)
+- **Files**: `apps/server/src/routes/neon-interactions.ts`, `apps/server/src/routes/pdf-index.ts`
+
+#### Storage Safety Sweep (BUG-004, BUG-006, BUG-008)
+- **BUG-004**: Migrated raw `localStorage.setItem` calls to `safeSet`:
+  - `AskMyTextbookChat.tsx`: Chat history (priority: 'cache')
+  - `SettingsPage.tsx`: Interactions data (priority: 'critical'), debug overrides (priority: 'standard')
+  - `LLMSettingsHelper.tsx`: LLM settings (priority: 'cache')
+- **BUG-006**: Storage event debounce already present in `useSessionPersistence.ts` (50ms)
+- **BUG-008**: `reinforcement-manager.ts` already uses `safeStorage.set()`
+- **Impact**: Prevents quota exceeded crashes, adds eviction support
+
 #### Storage Safety Phase 2
 - **Scope**: Migrated remaining raw `localStorage.setItem` calls to quota-safe `safeSet` wrapper
 - **Files Changed**:
