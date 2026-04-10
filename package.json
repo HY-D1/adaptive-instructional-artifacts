@@ -15,6 +15,7 @@
     "server:db:init": "cd apps/server && npm run db:init",
     "server:db:migrate": "cd apps/server && npm run db:migrate",
     "test:unit": "npx vitest run",
+    "test:sql:regression": "npx vitest run apps/web/src/app/lib/sql-executor.regression.test.ts",
     "test:e2e": "npx playwright test -c playwright.config.ts",
     "test:e2e:weekly": "CI=1 npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@(integration|flaky)'",
     "test:e2e:integration": "CI=1 npx playwright test -c playwright.config.ts --grep '@integration'",
@@ -36,6 +37,8 @@
     "demo:week3": "npm run build && npm run demo:weekly && echo 'Week 3 demo complete. Run: node scripts/replay-metrics.mjs dist/weekly-demo/export.json'",
     "verify:weekly": "npm run build && npm run replay:gate && npm run test:e2e:weekly && npm run demo:weekly && npm run check:concept-map && npm run gate:weekly:acceptance && npm run gate:textbook:content && npm run gate:week3:acceptance",
     "test:e2e:parser-batch": "npx playwright test -c playwright.config.ts --grep @parser-batch",
+    "test:e2e:vercel": "npx playwright test -c playwright.vercel.config.ts",
+    "test:e2e:vercel:production": "npx playwright test -c playwright.vercel.config.ts --grep @production",
     "llm:health:capture": "node scripts/capture-llm-health-message.mjs",
     "export:policies": "node scripts/export/export-policies.mjs",
     "replay:toy": "node scripts/replay-toy.mjs",
@@ -155,7 +158,7 @@
     }
   },
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   },
   "pnpm": {
     "overrides": {

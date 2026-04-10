@@ -121,7 +121,7 @@ export function isStorageAvailable(storageType: 'local' | 'session' = 'local'): 
     return true;
   } catch {
     return false;
- safely }
+  }
 }
 
 /**

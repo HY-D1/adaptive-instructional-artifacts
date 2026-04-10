@@ -882,6 +882,24 @@ class DualStorageManager {
   // User Profile Operations
   // ============================================================================
 
+  private queueProfileForRetry(
+    profile: LearnerProfile,
+    reason: string,
+    idPrefix: 'profile' | 'full-profile' = 'full-profile',
+    error?: unknown,
+  ): void {
+    if (error !== undefined) {
+      console.warn(reason, error);
+    } else {
+      console.warn(reason);
+    }
+    this.offlineQueue.add({
+      id: `${idPrefix}-${profile.id}-${Date.now()}`,
+      type: 'profile',
+      data: profile,
+    });
+  }
+
   saveUserProfile(profile: UserProfile): { success: boolean; quotaExceeded?: boolean } {
     // Always save to localStorage as cache (synchronous)
     const localResult = localStorageManager.saveUserProfile(profile);
@@ -891,19 +909,10 @@ class DualStorageManager {
       storageClient.createLearner(profile).then(success => {
         if (!success) {
           // Backend failed, add to offline queue
-          this.offlineQueue.add({
-            id: `profile-${profile.id}-${Date.now()}`,
-            type: 'profile',
-            data: profile,
-          });
+          this.queueProfileForRetry(profile, '[DualStorage] Backend saveUserProfile failed, queued for retry.', 'profile');
         }
       }).catch(error => {
-        console.warn('[DualStorage] Backend saveUserProfile failed, queued for retry:', error);
-        this.offlineQueue.add({
-          id: `profile-${profile.id}-${Date.now()}`,
-          type: 'profile',
-          data: profile,
-        });
+        this.queueProfileForRetry(profile, '[DualStorage] Backend saveUserProfile failed, queued for retry.', 'profile', error);
       });
     }
     
@@ -2081,24 +2090,38 @@ class DualStorageManager {
     if (this.shouldUseBackend()) {
       storageClient.saveProfile(profile).then(success => {
         if (!success) {
-          this.offlineQueue.add({
-            id: `full-profile-${profile.id}-${Date.now()}`,
-            type: 'profile',
-            data: profile,
-          });
+          this.queueProfileForRetry(profile, '[DualStorage] Backend saveProfile failed, queued for retry.');
         }
       }).catch(err => {
-        console.warn('[DualStorage] Failed to sync profile to backend, queuing:', err);
-        this.offlineQueue.add({
-          id: `full-profile-${profile.id}-${Date.now()}`,
-          type: 'profile',
-          data: profile,
-        });
+        this.queueProfileForRetry(profile, '[DualStorage] Failed to sync profile to backend, queuing.', 'full-profile', err);
       });
     }
     
     // Always cache in localStorage (synchronous)
     localStorageManager.saveProfile(profile);
+  }
+
+  /**
+   * Create and persist a default learner profile.
+   * Keeps localStorage creation synchronous, then mirrors to backend when available.
+   */
+  createDefaultProfile(
+    learnerId: string,
+    strategy: LearnerProfile['currentStrategy'] = 'adaptive-medium',
+  ): LearnerProfile {
+    const profile = localStorageManager.createDefaultProfile(learnerId, strategy);
+
+    if (this.shouldUseBackend()) {
+      storageClient.saveProfile(profile).then(success => {
+        if (!success) {
+          this.queueProfileForRetry(profile, '[DualStorage] Backend createDefaultProfile failed, queued for retry.');
+        }
+      }).catch(err => {
+        this.queueProfileForRetry(profile, '[DualStorage] Failed to sync default profile to backend, queuing.', 'full-profile', err);
+      });
+    }
+
+    return profile;
   }
 
   /**
@@ -2174,24 +2197,81 @@ class DualStorageManager {
       return false;
     }
 
+    const hydrationStart = Date.now();
+    
+    // Capture pre-hydration state for audit
+    const localProfileBefore = localStorageManager.getProfile(learnerId);
+    const localInteractionsBefore = localStorageManager.getInteractionsByLearner(learnerId);
+    const localTextbookBefore = localStorageManager.getTextbook(learnerId);
+    
+    const auditContext = {
+      learnerId,
+      timestamp: hydrationStart,
+      localBefore: {
+        hadProfile: localProfileBefore !== null,
+        solvedProblemCount: localProfileBefore?.solvedProblemIds?.size ?? 0,
+        interactionCount: localInteractionsBefore.length,
+        textbookUnitCount: localTextbookBefore.length,
+      },
+    };
+
     try {
       // Hydrate session/profile first so resumed editor state is available quickly
       // on first render in account mode.
-      const [profile, session] = await Promise.all([
+      // RESEARCH-4: Also fetch problem_progress for authoritative solved state
+      const [profile, session, problemProgress] = await Promise.all([
         storageClient.getProfile(learnerId),
         storageClient.getSession(learnerId),
+        storageClient.getAllProblemProgress(learnerId),
       ]);
 
       if (profile) {
-        // Merge solvedProblemIds by union with local to prevent data loss during transition
+        // RESEARCH-4: Use problem_progress as authoritative source for solved state
+        // Profile's solvedProblemIds is a cache; problem_progress is durable truth
+        const solvedIdsFromProgress = new Set(
+          problemProgress
+            .filter((p) => p.solved)
+            .map((p) => p.problemId)
+        );
+
+        // Merge with local to prevent data loss during transition
         const localProfile = localStorageManager.getProfile(learnerId);
-        if (localProfile && profile.solvedProblemIds) {
-          const mergedSolvedIds = new Set([
-            ...Array.from(localProfile.solvedProblemIds || []),
-            ...Array.from(profile.solvedProblemIds || []),
-          ]);
-          profile.solvedProblemIds = mergedSolvedIds;
-        }
+        const localSolvedIds = localProfile?.solvedProblemIds || new Set<string>();
+
+        // Authoritative merge: progress table + local + profile cache
+        const mergedSolvedIds = new Set<string>([
+          ...Array.from(solvedIdsFromProgress),
+          ...Array.from(localSolvedIds),
+          ...Array.from(profile.solvedProblemIds || []),
+        ]);
+
+        // Log merge details for audit
+        console.info('[hydration_profile_merge]', {
+          ...auditContext,
+          backendSources: {
+            fromProgressTable: solvedIdsFromProgress.size,
+            fromProfileCache: profile.solvedProblemIds?.size ?? 0,
+          },
+          localSource: {
+            beforeCount: localSolvedIds.size,
+          },
+          mergeResult: {
+            afterCount: mergedSolvedIds.size,
+            newProblemsAdded: Math.max(0, mergedSolvedIds.size - Math.max(
+              solvedIdsFromProgress.size,
+              localSolvedIds.size,
+              profile.solvedProblemIds?.size ?? 0
+            )),
+          },
+          preservedFields: [
+            'solvedProblemIds (union merge)',
+            'conceptsCovered (backend authoritative)',
+            'errorHistory (backend authoritative)',
+            'conceptCoverageEvidence (backend authoritative)',
+          ],
+        });
+
+        profile.solvedProblemIds = mergedSolvedIds;
         localStorageManager.saveProfile(profile);
       }
 
@@ -2226,26 +2306,79 @@ class DualStorageManager {
         .then(([interactionsResult, textbookUnits]) => {
           const existing = localStorageManager.getAllInteractions();
           const byId = new Map(existing.map((item) => [item.id, item]));
+          
+          // Track merge statistics for audit
+          const beforeCount = byId.size;
+          let backendNewCount = 0;
+          let backendOverwriteCount = 0;
+          
           for (const interaction of interactionsResult.events) {
+            if (byId.has(interaction.id)) {
+              backendOverwriteCount++;
+            } else {
+              backendNewCount++;
+            }
             byId.set(interaction.id, interaction);
           }
+          
+          const mergedInteractions = Array.from(byId.values()).sort((a, b) => a.timestamp - b.timestamp);
+          
           localStorageManager.importData({
-            interactions: Array.from(byId.values()).sort((a, b) => a.timestamp - b.timestamp),
+            interactions: mergedInteractions,
             activeSessionId: hydratedSessionId || localStorageManager.getActiveSessionId(),
           });
 
+          // Track textbook merge
+          let textbookUnitsAdded = 0;
           for (const unit of textbookUnits) {
+            const existingUnits = localStorageManager.getTextbook(learnerId);
+            const alreadyExists = existingUnits.some(u => u.id === unit.id);
             localStorageManager.saveTextbookUnit(learnerId, unit);
+            if (!alreadyExists) {
+              textbookUnitsAdded++;
+            }
           }
+          
+          // Log background sync audit
+          console.info('[hydration_background_sync]', {
+            learnerId,
+            interactions: {
+              localBefore: beforeCount,
+              backendReceived: interactionsResult.events.length,
+              backendNew: backendNewCount,
+              backendOverwrite: backendOverwriteCount,
+              localAfter: mergedInteractions.length,
+              mergeStrategy: 'id_based_dedup_backend_wins',
+            },
+            textbook: {
+              backendReceived: textbookUnits.length,
+              unitsAdded: textbookUnitsAdded,
+              mergeStrategy: 'id_based_upsert',
+            },
+            durationMs: Date.now() - hydrationStart,
+          });
         })
         .catch((syncError) => {
           console.warn('[DualStorage] hydrateLearner background sync failed:', syncError);
         });
 
+      // Log immediate hydration completion (background sync continues)
+      console.info('[hydration_immediate_complete]', {
+        learnerId,
+        durationMs: Date.now() - hydrationStart,
+        sessionRestored: !!hydratedSessionId,
+        profileHydrated: !!profile,
+        backgroundSyncInitiated: true,
+      });
+
       this.lastHydratedAt[learnerId] = now;
       return true;
     } catch (error) {
-      console.warn('[DualStorage] hydrateLearner failed:', error);
+      console.error('[DualStorage] hydrateLearner failed:', {
+        learnerId,
+        error: error instanceof Error ? error.message : 'unknown',
+        durationMs: Date.now() - hydrationStart,
+      });
       return false;
     }
   }
@@ -2272,13 +2405,20 @@ class DualStorageManager {
     }
   }
 
-  async hydrateInstructorDashboard(): Promise<boolean> {
+  /**
+   * Result type for hydrateInstructorDashboard with detailed error information
+   */
+  async hydrateInstructorDashboard(): Promise<
+    | { ok: true; scopeEmpty: boolean; sectionCount: number; learnerCount: number }
+    | { ok: false; error: 'auth' | 'backend' | 'scope_empty' | 'network'; message: string }
+  > {
     if (!this.config.useBackend) {
-      return false;
+      return { ok: false, error: 'backend', message: 'Backend not configured' };
     }
+    
     const healthy = await this.checkHealth();
     if (!healthy) {
-      return false;
+      return { ok: false, error: 'network', message: 'Backend health check failed' };
     }
 
     try {
@@ -2287,6 +2427,24 @@ class DualStorageManager {
         storageClient.getInstructorLearners(),
         storageClient.getAllProfiles(),
       ]);
+
+      // Check for auth errors (null/empty responses indicate auth failure)
+      if (overview === null && learners.length === 0 && profiles.length === 0) {
+        // Check if we have a valid user profile - if so, it's likely an auth issue
+        const currentProfile = localStorageManager.getUserProfile();
+        if (currentProfile?.role !== 'instructor') {
+          return { 
+            ok: false, 
+            error: 'auth', 
+            message: 'Not authenticated as instructor' 
+          };
+        }
+        return { 
+          ok: false, 
+          error: 'backend', 
+          message: 'Failed to fetch instructor data' 
+        };
+      }
 
       for (const profile of profiles) {
         localStorageManager.saveProfile(profile);
@@ -2298,14 +2456,38 @@ class DualStorageManager {
         }
       }
 
+      const sectionCount = overview?.sections?.length ?? 0;
+      const learnerCount = learners.length;
+      const scopeEmpty = sectionCount === 0 || learnerCount === 0;
+
       console.log('[DualStorage] Instructor dashboard hydrated', {
-        sectionCount: overview?.sections?.length ?? 0,
-        learnerCount: learners.length,
+        sectionCount,
+        learnerCount,
+        scopeEmpty,
       });
-      return true;
+      
+      return { 
+        ok: true, 
+        scopeEmpty, 
+        sectionCount, 
+        learnerCount 
+      };
     } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
       console.warn('[DualStorage] hydrateInstructorDashboard failed:', error);
-      return false;
+      
+      // Categorize error type
+      if (message.includes('401') || message.includes('Unauthorized')) {
+        return { ok: false, error: 'auth', message: 'Authentication required' };
+      }
+      if (message.includes('403') || message.includes('Forbidden')) {
+        return { ok: false, error: 'auth', message: 'Instructor access required' };
+      }
+      if (message.includes('network') || message.includes('fetch')) {
+        return { ok: false, error: 'network', message };
+      }
+      
+      return { ok: false, error: 'backend', message };
     }
   }
 
@@ -2687,7 +2869,6 @@ class DualStorageManager {
   getInteractionsByProblem = localStorageManager.getInteractionsByProblem.bind(localStorageManager);
   
   // Textbook helpers
-  createDefaultProfile = localStorageManager.createDefaultProfile.bind(localStorageManager);
   clearTextbook = localStorageManager.clearTextbook.bind(localStorageManager);
   getLegacyHtmlUnitsInfo = localStorageManager.getLegacyHtmlUnitsInfo.bind(localStorageManager);
   

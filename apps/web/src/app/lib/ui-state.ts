@@ -1,3 +1,5 @@
+import { safeSet } from './storage/safe-storage';
+
 type UiRole = 'student' | 'instructor' | 'anonymous';
 
 interface UiScope {
@@ -45,11 +47,8 @@ export function getUiState<T>(pageKey: string, scope: Partial<UiScope>): T | nul
 
 export function setUiState<T>(pageKey: string, scope: Partial<UiScope>, state: T): void {
   if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(buildKey(pageKey, scope), JSON.stringify(state));
-  } catch {
-    // Ignore storage quota and serialization failures for non-critical UI state.
-  }
+  safeSet(buildKey(pageKey, scope), state, { priority: 'cache' });
+  // No warning on failure - UI state is recoverable
 }
 
 export function clearUiStateForActor(actorId: string | null | undefined): void {

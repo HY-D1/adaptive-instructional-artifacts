@@ -1,3 +1,5 @@
+import { safeSet } from './safe-storage';
+
 type HintCacheSources = {
   sqlEngage: boolean;
   textbook: boolean;
@@ -88,21 +90,36 @@ function isQuotaExceededError(error: unknown): boolean {
   );
 }
 
-function safeSetItem(key: string, value: string): HintCacheResult {
+function safeSetItem(key: string, snapshot: HintCacheSnapshot, raw: string): HintCacheResult {
   try {
-    localStorage.setItem(key, value);
+    const result = safeSet(key, snapshot, { priority: 'cache' });
+    if (!result.success) {
+      if (result.quotaExceeded || result.error?.startsWith('Storage unavailable')) {
+        logDiagnostic('hint_cache_write_skipped_quota', { key, bytes: raw.length });
+        return {
+          success: false,
+          quotaExceeded: true,
+          bytes: raw.length,
+          budgetBytes: HINT_CACHE_BUDGET_BYTES,
+          diagnostic: 'hint_cache_write_skipped_quota',
+        };
+      }
+
+      throw new Error(result.error ?? 'Failed to save hint cache');
+    }
+
     return {
       success: true,
-      bytes: value.length,
+      bytes: raw.length,
       budgetBytes: HINT_CACHE_BUDGET_BYTES,
     };
   } catch (error) {
     if (isQuotaExceededError(error)) {
-      logDiagnostic('hint_cache_write_skipped_quota', { key, bytes: value.length });
+      logDiagnostic('hint_cache_write_skipped_quota', { key, bytes: raw.length });
       return {
         success: false,
         quotaExceeded: true,
-        bytes: value.length,
+        bytes: raw.length,
         budgetBytes: HINT_CACHE_BUDGET_BYTES,
         diagnostic: 'hint_cache_write_skipped_quota',
       };
@@ -353,7 +370,7 @@ export function saveHintSnapshot(input: HintCacheWriteInput): HintCacheResult {
     };
   }
 
-  const result = safeSetItem(buildHintCacheKey(input), raw);
+  const result = safeSetItem(buildHintCacheKey(input), snapshot, raw);
   return {
     ...result,
     removedCount: cleanup.removedCount,
@@ -366,4 +383,3 @@ export function clearProblemHints(scope: HintCacheScope): HintCacheResult {
   localStorage.removeItem(buildLegacyHintInfoKey(scope));
   return { success: true };
 }
-

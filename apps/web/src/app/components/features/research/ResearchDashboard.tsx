@@ -1,5 +1,29 @@
-import { useState, useEffect, useMemo, useRef, useCallback, type JSX } from 'react';
-import { Card } from '../../ui/card';
+/**
+ * ResearchDashboard.tsx
+ * 
+ * Instructor research dashboard for learner analytics and data export.
+ * 
+ * RESPONSIBILITIES:
+ * - Learner analytics visualization (HDI, progress, engagement)
+ * - Interaction trace replay for qualitative analysis
+ * - Data export (CSV/JSON) for external research tools
+ * - Strategy comparison and A/B test reporting
+ * - Bandit algorithm monitoring (if adaptive enabled)
+ * 
+ * KEY VIEWS:
+ * - Overview: Class-level aggregates and recent activity
+ * - Learners: Individual learner drill-down with stats
+ * - Traces: Event-by-event replay of learner sessions
+ * - Export: Data download with filtering
+ * 
+ * PERFORMANCE NOTES:
+ * - Uses defensive rendering for sparse/tiny datasets
+ * - Client-side pagination for large learner lists
+ * - Interactions filtered at API level, not loaded then filtered
+ * 
+ * @module ResearchDashboard
+ */
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
@@ -109,6 +133,7 @@ interface ResearchDashboardUiState {
   timeRange: string;
   activeTab: string;
 }
+import { Card } from '../../ui/card';
 import {
   Table,
   TableBody,
@@ -154,6 +179,7 @@ import {
   BookOpen
 } from 'lucide-react';
 import { storage } from '../../../lib/storage';
+import * as storageClient from '../../../lib/api/storage-client';
 import { InteractionEvent, LearnerProfile, ExperimentCondition, PdfIndexDocument } from '../../../types';
 import { type ReflectionQualityScore } from '../../../lib/content/self-explanation-scorer';
 import { orchestrator, ReplayDecisionPoint, AutoEscalationMode } from '../../../lib/adaptive-orchestrator';
@@ -286,6 +312,11 @@ export function ResearchDashboard() {
   
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
+  const [hydrationError, setHydrationError] = useState<{
+    type: 'auth' | 'backend' | 'scope_empty' | 'network';
+    message: string;
+  } | null>(null);
+  const [scopeEmpty, setScopeEmpty] = useState(false);
   const [selectedMasteryLearner, setSelectedMasteryLearner] = useState<string>('');
   const uiActorId = storage.getUserProfile()?.id || 'unknown';
 
@@ -330,13 +361,78 @@ export function ResearchDashboard() {
   }, [uiActorId, selectedLearner, timeRange, activeTab]);
 
   const loadData = async () => {
-    await storage.hydrateInstructorDashboard();
-    setInteractions(storage.getAllInteractions());
-    const loadedProfiles = storage
-      .getAllProfiles()
-      .map((profile: { id: string }) => storage.getProfile(profile.id))
-      .filter((profile): profile is LearnerProfile => Boolean(profile));
-    setProfiles(loadedProfiles);
+    setHydrationError(null);
+    setScopeEmpty(false);
+
+    try {
+      // Fetch profiles directly from backend API (not localStorage)
+      const apiProfiles = await storageClient.getAllProfiles();
+
+      if (apiProfiles.length === 0) {
+        // Check if this is an auth issue or genuinely empty
+        const healthy = await storageClient.fetchBackendHealth();
+        if (!healthy) {
+          setHydrationError({ type: 'network', message: 'Backend unavailable' });
+        } else {
+          setScopeEmpty(true);
+        }
+        // Still set empty data so UI renders properly
+        setInteractions([]);
+        setProfiles([]);
+        return;
+      }
+
+      // Use API profiles directly (already scoped to instructor's sections)
+      const frontendProfiles: LearnerProfile[] = apiProfiles.map(p => ({
+        ...p,
+        conceptsCovered: p.conceptsCovered instanceof Set ? p.conceptsCovered : new Set(p.conceptsCovered || []),
+        conceptCoverageEvidence: p.conceptCoverageEvidence instanceof Map
+          ? p.conceptCoverageEvidence
+          : new Map(Object.entries(p.conceptCoverageEvidence || {})),
+        errorHistory: p.errorHistory instanceof Map
+          ? p.errorHistory
+          : new Map(Object.entries(p.errorHistory || {})),
+      }));
+      setProfiles(frontendProfiles);
+
+      // Fetch interactions for scoped learners via research API
+      // Use paginated endpoint to avoid loading all events at once
+      const learnerIds = frontendProfiles.map(p => p.id);
+      const allInteractions: InteractionEvent[] = [];
+
+      // Fetch interactions in batches of learners to avoid overwhelming the API
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < learnerIds.length; i += BATCH_SIZE) {
+        const batch = learnerIds.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.all(
+          batch.map(id => storageClient.getInteractions(id, { limit: 200 }))
+        );
+        for (const result of batchResults) {
+          allInteractions.push(...result.events);
+        }
+      }
+
+      setInteractions(allInteractions);
+
+      // Also cache profiles to localStorage for other components
+      for (const profile of apiProfiles) {
+        storage.saveProfile(profile);
+      }
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      setHydrationError({ type: 'backend', message });
+      console.error('[ResearchDashboard] Data load failed:', error);
+
+      // Fallback to localStorage
+      setInteractions(storage.getAllInteractions());
+      const loadedProfiles = storage
+        .getAllProfiles()
+        .map((profile: { id: string }) => storage.getProfile(profile.id))
+        .filter((profile): profile is LearnerProfile => Boolean(profile));
+      setProfiles(loadedProfiles);
+    }
+
     setPolicyReplayMode(storage.getPolicyReplayMode());
     const pdfIndex = storage.getPdfIndex();
     if (pdfIndex) {
@@ -346,8 +442,8 @@ export function ResearchDashboard() {
     } else {
       resetPdfIndexState('idle');
     }
-    if (!selectedTraceLearner && loadedProfiles[0]) {
-      setSelectedTraceLearner(loadedProfiles[0].id);
+    if (!selectedTraceLearner && profiles[0]) {
+      setSelectedTraceLearner(profiles[0].id);
     }
   };
 
@@ -483,7 +579,7 @@ export function ResearchDashboard() {
       setLlmHealthOk(status.ok);
       setLlmProviderLabel(status.provider || 'backend');
       setLlmTargetModel(
-        status.availableModels[0]
+        status.availableModels?.[0]
           || (status.provider ? getDefaultModelForProvider(status.provider) : null),
       );
     } catch (error) {
@@ -872,7 +968,7 @@ export function ResearchDashboard() {
     const safeAverage = (total: number, count: number, digits = 1) => (
       count > 0 ? (total / count).toFixed(digits) : (0).toFixed(digits)
     );
-    const comparisonData = Object.values(strategyComparison).map((s): ComparisonRow => ({
+    return Object.values(strategyComparison).map((s): ComparisonRow => ({
       strategy: s.strategy.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
       avgErrors: Number(safeAverage(s.totalErrors, s.learnerCount)),
       avgHints: Number(safeAverage(s.totalHints, s.learnerCount)),
@@ -1464,6 +1560,87 @@ export function ResearchDashboard() {
           <Skeleton className="h-24" />
         </div>
         <Skeleton className="h-96" />
+      </div>
+    );
+  }
+
+  // Error states for hydration failures
+  if (hydrationError) {
+    const errorConfig = {
+      auth: {
+        icon: <AlertCircle className="size-12 text-amber-500" />,
+        title: 'Authentication Required',
+        description: hydrationError.message || 'Please sign in as an instructor to view this dashboard.',
+        action: null,
+      },
+      backend: {
+        icon: <AlertCircle className="size-12 text-red-500" />,
+        title: 'Dashboard Unavailable',
+        description: hydrationError.message || 'Failed to load instructor data from the server.',
+        action: (
+          <Button onClick={loadData} variant="outline" size="sm">
+            <RefreshCw className="size-4 mr-2" />
+            Retry
+          </Button>
+        ),
+      },
+      network: {
+        icon: <AlertCircle className="size-12 text-orange-500" />,
+        title: 'Connection Error',
+        description: hydrationError.message || 'Unable to connect to the server. Please check your connection.',
+        action: (
+          <Button onClick={loadData} variant="outline" size="sm">
+            <RefreshCw className="size-4 mr-2" />
+            Retry
+          </Button>
+        ),
+      },
+      scope_empty: {
+        icon: <Users className="size-12 text-blue-500" />,
+        title: 'No Learners in Your Sections',
+        description: 'You don\'t have any learners enrolled in your sections yet. Students need to join using your section code.',
+        action: null,
+      },
+    };
+
+    const config = errorConfig[hydrationError.type];
+
+    return (
+      <div className="space-y-6">
+        <Card className="p-8">
+          <div className="flex flex-col items-center text-center gap-4">
+            {config.icon}
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">{config.title}</h2>
+              <p className="text-gray-600 mt-2 max-w-md">{config.description}</p>
+            </div>
+            {config.action && <div className="mt-2">{config.action}</div>}
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // Empty scope state - instructor has no learners
+  if (scopeEmpty) {
+    return (
+      <div className="space-y-6">
+        <Card className="p-8">
+          <div className="flex flex-col items-center text-center gap-4">
+            <Users className="size-12 text-blue-500" />
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">No Learners Yet</h2>
+              <p className="text-gray-600 mt-2 max-w-md">
+                You don&apos;t have any learners enrolled in your sections. 
+                Share your section code with students so they can join.
+              </p>
+            </div>
+            <Button onClick={loadData} variant="outline" size="sm">
+              <RefreshCw className="size-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }

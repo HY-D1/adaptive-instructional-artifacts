@@ -17,6 +17,7 @@ const logInteractionsBatchVerifiedMock = vi.fn<(events: unknown[]) => Promise<{ 
 const logInteractionsBatchKeepaliveMock = vi.fn<(events: unknown[]) => Promise<{ success: boolean; confirmedIds?: string[] }>>();
 const saveProfileMock = vi.fn<(profile: unknown) => Promise<boolean>>();
 const updateProblemProgressMock = vi.fn<(learnerId: string, problemId: string, update: unknown) => Promise<unknown>>();
+const getAllProblemProgressMock = vi.fn<(learnerId: string) => Promise<Array<{ problemId: string; solved: boolean }>>>();
 
 function createBackendProfile(overrides: Partial<LearnerProfile> = {}): LearnerProfile {
   return {
@@ -52,6 +53,7 @@ beforeAll(async () => {
       getSession: getSessionMock,
       getInteractions: getInteractionsMock,
       getTextbook: getTextbookMock,
+      getAllProblemProgress: getAllProblemProgressMock,
       logInteraction: logInteractionMock,
       logInteractionsBatch: logInteractionsBatchMock,
       logInteractionsBatchVerified: logInteractionsBatchVerifiedMock,
@@ -96,6 +98,7 @@ beforeEach(() => {
   });
   saveProfileMock.mockReset().mockResolvedValue(true);
   updateProblemProgressMock.mockReset().mockResolvedValue({ success: true });
+  getAllProblemProgressMock.mockReset().mockResolvedValue([]);
 });
 
 describe('dual-storage critical write semantics', () => {
@@ -286,6 +289,42 @@ describe('dual-storage critical write semantics', () => {
       expect(getProfileMock).toHaveBeenCalledTimes(2);
     });
     expect(dualStorageModule.dualStorage.getProfile('learner-1')?.solvedProblemIds.has('problem-9')).toBe(true);
+  });
+
+  it('syncs a newly created default profile to the backend while preserving local creation', async () => {
+    await dualStorageModule.dualStorage.checkHealth();
+
+    const profile = dualStorageModule.dualStorage.createDefaultProfile('learner-new');
+
+    expect(profile.id).toBe('learner-new');
+    expect(dualStorageModule.dualStorage.getProfile('learner-new')).toEqual(
+      expect.objectContaining({
+        id: 'learner-new',
+        currentStrategy: 'adaptive-medium',
+      }),
+    );
+
+    await vi.waitFor(() => {
+      expect(saveProfileMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'learner-new' }));
+    });
+  });
+
+  it('queues a newly created default profile for retry when backend sync fails', async () => {
+    await dualStorageModule.dualStorage.checkHealth();
+    saveProfileMock.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+    dualStorageModule.dualStorage.createDefaultProfile('learner-queued');
+
+    await vi.waitFor(() => {
+      expect(saveProfileMock).toHaveBeenCalledTimes(1);
+    });
+
+    await dualStorageModule.dualStorage.processOfflineQueue();
+
+    await vi.waitFor(() => {
+      expect(saveProfileMock).toHaveBeenCalledTimes(2);
+      expect(saveProfileMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ id: 'learner-queued' }));
+    });
   });
 
   it('sends the active session fallback to backend for background interaction writes', async () => {

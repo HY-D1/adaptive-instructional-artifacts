@@ -6,6 +6,7 @@ const getDbMock = vi.fn();
 const getAuthAccountByEmailMock = vi.fn();
 const createAuthAccountMock = vi.fn();
 const createAuthEventMock = vi.fn();
+const saveLearnerProfileMock = vi.fn();
 const signTokenMock = vi.fn(() => 'signed-token');
 const setAuthCookieMock = vi.fn();
 const createCsrfTokenMock = vi.fn(() => 'csrf-token');
@@ -23,6 +24,7 @@ vi.mock('../../../apps/server/src/db/index.js', () => ({
 vi.mock('../../../apps/server/src/db/neon.js', () => ({
   getDb: getDbMock,
   createAuthEvent: createAuthEventMock,
+  saveLearnerProfile: saveLearnerProfileMock,
 }));
 
 vi.mock('../../../apps/server/src/db/auth.js', () => ({
@@ -115,6 +117,7 @@ afterEach(() => {
   getAuthAccountByEmailMock.mockReset();
   createAuthAccountMock.mockReset();
   createAuthEventMock.mockReset();
+  saveLearnerProfileMock.mockReset();
   signTokenMock.mockClear();
   setAuthCookieMock.mockClear();
   createCsrfTokenMock.mockClear();
@@ -127,7 +130,7 @@ afterEach(() => {
 });
 
 describe('auth login telemetry contract', () => {
-  it('records a success auth event for student signup', async () => {
+  it('creates a learner profile and records a success auth event for student signup', async () => {
     const { authRouter } = await import('../../../apps/server/src/routes/auth');
     const signupHandler = getRouteHandler(
       authRouter as unknown as { stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }> },
@@ -146,6 +149,25 @@ describe('auth login telemetry contract', () => {
       name: 'Student One',
       createdAt: '2026-04-05T00:00:00.000Z',
     });
+    saveLearnerProfileMock.mockResolvedValue({
+      id: 'learner-1',
+      name: 'Student One',
+      conceptsCovered: [],
+      conceptCoverageEvidence: {},
+      errorHistory: {},
+      solvedProblemIds: [],
+      interactionCount: 0,
+      currentStrategy: 'adaptive-medium',
+      preferences: {
+        escalationThreshold: 3,
+        aggregationDelay: 300000,
+        autoTextbookEnabled: true,
+        notificationsEnabled: true,
+        theme: 'system',
+      },
+      createdAt: 1743811200000,
+      lastActive: 1743811200000,
+    });
     getSectionForStudentMock.mockResolvedValue({ id: 'section-1', name: 'Section 1' });
 
     const result = await invokeJsonHandler(signupHandler, {
@@ -158,6 +180,24 @@ describe('auth login telemetry contract', () => {
 
     expect(result.status).toBe(201);
     expect((result.json as { success?: boolean; user?: { learnerId?: string } }).success).toBe(true);
+    expect(saveLearnerProfileMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        name: 'Student One',
+        conceptsCovered: [],
+        conceptCoverageEvidence: {},
+        errorHistory: {},
+        interactionCount: 0,
+        currentStrategy: 'adaptive-medium',
+        preferences: expect.objectContaining({
+          escalationThreshold: 3,
+          aggregationDelay: 300000,
+          autoTextbookEnabled: true,
+          notificationsEnabled: true,
+          theme: 'system',
+        }),
+      }),
+    );
     expect(createAuthEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
         outcome: 'success',

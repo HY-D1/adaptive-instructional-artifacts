@@ -60,17 +60,24 @@ interface UseLearnerProgressOptions {
   
   /** Optional refresh key to force recalculation */
   refreshKey?: number;
+  
+  /** Optional hydrated solved IDs from external source (e.g., post-login hydration) */
+  hydratedSolvedIds?: Set<string>;
 }
 
 export function useLearnerProgress(options: UseLearnerProgressOptions): LearnerProgress {
-  const { learnerId, currentProblemId, refreshKey = 0 } = options;
+  const { learnerId, currentProblemId, refreshKey = 0, hydratedSolvedIds } = options;
 
   // Get the solved problem IDs from storage (memoized for performance)
+  // Prefer injected hydrated data over localStorage read to avoid race conditions
   const solvedProblemIds = useMemo(() => {
+    if (hydratedSolvedIds && hydratedSolvedIds.size > 0) {
+      return hydratedSolvedIds;
+    }
     if (!learnerId) return new Set<string>();
     const profile = storage.getProfile(learnerId);
     return profile?.solvedProblemIds ?? new Set<string>();
-  }, [learnerId, refreshKey]);
+  }, [learnerId, refreshKey, hydratedSolvedIds]);
 
   // Calculate current problem's 1-based position
   const currentProblemNumber = useMemo(() => {

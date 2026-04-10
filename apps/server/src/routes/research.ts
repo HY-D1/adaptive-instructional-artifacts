@@ -202,25 +202,60 @@ router.get('/export', async (req, res) => {
       learners = learners.filter(l => learnerIds.includes(l.id));
     }
 
-    let filteredInteractions = [] as Interaction[];
-    for (const learner of learners) {
-      const learnerInteractions = (await getInteractionsByUser(learner.id, { limit: 100000 })).interactions;
-      filteredInteractions.push(...learnerInteractions);
+    // SAFETY: Limit the number of learners processed to prevent memory exhaustion
+    const MAX_LEARNERS_FOR_SUMMARY = 100;
+    if (learners.length > MAX_LEARNERS_FOR_SUMMARY) {
+      res.status(400).json({
+        success: false,
+        error: `Too many learners (${learners.length}) for summary. Maximum: ${MAX_LEARNERS_FOR_SUMMARY}. Use filters or the export endpoint with pagination.`,
+        code: 'LEARNER_LIMIT_EXCEEDED',
+      });
+      return;
     }
-    if (learnerIds && learnerIds.length > 0) {
-      filteredInteractions = filteredInteractions.filter((i) => learnerIds.includes(i.learnerId));
-    }
-    if (eventTypes && eventTypes.length > 0) {
-      filteredInteractions = filteredInteractions.filter(i => eventTypes.includes(i.eventType));
-    }
-    if (startDate) {
-      const startTs = new Date(startDate).getTime();
-      filteredInteractions = filteredInteractions.filter((i) => new Date(i.timestamp).getTime() >= startTs);
-    }
-    if (endDate) {
-      const endTs = new Date(endDate).getTime();
-      filteredInteractions = filteredInteractions.filter((i) => new Date(i.timestamp).getTime() <= endTs);
-    }
+
+    // Use SQL-level filtering for interactions instead of loading all then filtering in JS
+    // This prevents memory exhaustion with large datasets
+    const INTERACTIONS_PER_LEARNER = 10000; // Reduced from 100000 for memory safety
+    
+    // Build date filter options for SQL
+    const dateFilterOptions: { startDate?: string; endDate?: string } = {};
+    if (startDate) dateFilterOptions.startDate = new Date(startDate).toISOString();
+    if (endDate) dateFilterOptions.endDate = new Date(endDate).toISOString();
+
+    // Fetch interactions with SQL-level filtering
+    const interactionsByLearner = await Promise.all(
+      learners.map(async (learner) => {
+        // If eventTypes are specified, we need to fetch for each type separately
+        // because the API supports multiple event types (OR logic)
+        if (eventTypes && eventTypes.length > 0) {
+          const results = await Promise.all(
+            eventTypes.map(eventType =>
+              getInteractionsByUser(learner.id, {
+                ...dateFilterOptions,
+                eventType,
+                limit: INTERACTIONS_PER_LEARNER,
+              })
+            )
+          );
+          // Merge and deduplicate by interaction id
+          const merged = results.flatMap(r => r.interactions);
+          const seen = new Set<string>();
+          return merged.filter(i => {
+            if (seen.has(i.id)) return false;
+            seen.add(i.id);
+            return true;
+          });
+        }
+        
+        // No event type filter - fetch all interactions with date filter
+        return getInteractionsByUser(learner.id, {
+          ...dateFilterOptions,
+          limit: INTERACTIONS_PER_LEARNER,
+        }).then(r => r.interactions);
+      })
+    );
+
+    let filteredInteractions = interactionsByLearner.flat();
 
     // Get all textbook units for these learners
     const allTextbookUnits: { learnerId: string; units: Awaited<ReturnType<typeof getTextbookUnitsByUser>> }[] = [];
@@ -298,15 +333,37 @@ router.get('/export', async (req, res) => {
 // GET /api/research/learners - List all learners with summary stats
 // ============================================================================
 
+// Default and maximum limits for pagination
+const DEFAULT_LEARNERS_PER_PAGE = 50;
+const MAX_LEARNERS_PER_PAGE = 200;
+
 router.get('/learners', async (req, res) => {
   try {
     const instructorUserId = req.auth!.learnerId;
     const scopedLearnerIds = await getScopedLearnerIdsForInstructor(instructorUserId);
-    const learners = (await getAllUsers()).filter((learner) => scopedLearnerIds.has(learner.id));
+    let learners = (await getAllUsers()).filter((learner) => scopedLearnerIds.has(learner.id));
+
+    // Pagination parameters
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const perPage = Math.min(
+      MAX_LEARNERS_PER_PAGE,
+      Math.max(1, parseInt(req.query.perPage as string) || DEFAULT_LEARNERS_PER_PAGE)
+    );
+
+    // Apply pagination at the learner level
+    const totalLearners = learners.length;
+    const startIndex = (page - 1) * perPage;
+    const endIndex = startIndex + perPage;
+    const paginatedLearners = learners.slice(startIndex, endIndex);
+    const hasMore = endIndex < totalLearners;
     
+    // Reduced limit for individual learner stats to prevent memory issues
+    // These are summary stats, not full exports
+    const INTERACTIONS_LIMIT = 1000;
+
     const learnersWithStats = await Promise.all(
-      learners.map(async (learner) => {
-        const interactions = (await getInteractionsByUser(learner.id, { limit: 10000 })).interactions;
+      paginatedLearners.map(async (learner) => {
+        const interactions = (await getInteractionsByUser(learner.id, { limit: INTERACTIONS_LIMIT })).interactions;
         const textbookUnits = await getTextbookUnitsByUser(learner.id);
         const uniqueProblems = new Set(interactions.map(i => i.problemId));
         
@@ -329,6 +386,21 @@ router.get('/learners', async (req, res) => {
         };
       })
     );
+
+    // Add pagination metadata to response
+    const responseData = {
+      success: true,
+      data: learnersWithStats,
+      pagination: {
+        page,
+        perPage,
+        total: totalLearners,
+        hasMore,
+      },
+    };
+
+    res.json(responseData);
+    return;
 
     const response: ApiResponse<typeof learnersWithStats> = {
       success: true,

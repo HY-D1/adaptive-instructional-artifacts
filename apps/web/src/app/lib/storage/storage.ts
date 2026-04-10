@@ -1,26 +1,28 @@
-import {
-  InteractionEvent,
-  LearnerProfile,
-  InstructionalUnit,
-  SaveTextbookUnitResult,
-  LLMCacheRecord,
-  PdfIndexDocument,
-  PdfIndexChunk,
-  PdfIndexProvenance,
-  PdfSourceDoc,
-  PdfCitation,
-  UnitProvenance,
-  ConceptCoverageEvidence,
-  GuidanceRequestType,
-  RungLevel,
-  GuidanceEscalationTrigger,
-  TextbookUnitAction,
-  UserProfile,
-  UserRole,
-  ReinforcementSchedule,
-  SessionConfig,
-  ScheduledPrompt
-} from '../../types';
+/**
+ * storage.ts
+ * 
+ * Client-side storage manager with quota protection and backend sync.
+ * 
+ * RESPONSIBILITIES:
+ * - CRITICAL: Research data persistence (interactions, profiles, textbook units)
+ * - UI cache: LLM cache, PDF index (graceful degradation on quota error)
+ * - Session management: Active session ID, session config
+ * - Cross-tab sync: BroadcastChannel for multi-tab consistency
+ * - Import/export: Full data portability for research
+ * 
+ * SAFETY FEATURES:
+ * - safeSetItem: Quota exceeded detection with cross-browser compatibility
+ * - All critical writes use safeSetItem (interactions, profiles, textbook)
+ * - UI cache writes degrade gracefully (no user-facing errors)
+ * - Storage validation on read (parse guards)
+ * 
+ * DATA CATEGORIES:
+ * - Critical (fail on quota error): interactions, profiles, textbook units
+ * - Nice-to-have (fail silent): LLM cache, PDF index
+ * - Session (in-memory fallback): active session ID
+ * 
+ * @module Storage
+ */
 import { createEventId } from '../utils/event-id';
 import {
   canonicalizeSqlEngageSubtype,
@@ -326,12 +328,17 @@ class StorageManager {
 
   /**
    * Start a new session
+   * CRITICAL PATH: Uses safeSetItem for quota protection
    * @param learnerId - Learner identifier
    * @returns Session ID
    */
   startSession(learnerId: string): string {
     const sessionId = `session-${learnerId}-${Date.now()}`;
-    localStorage.setItem(this.ACTIVE_SESSION_KEY, sessionId);
+    const result = this.safeSetItem(this.ACTIVE_SESSION_KEY, sessionId);
+    if (!result.success) {
+      // Session is critical but not fatal - continue with in-memory only
+      console.warn('[Storage] Failed to persist session ID (quota exceeded)');
+    }
     return sessionId;
   }
 
@@ -344,7 +351,7 @@ class StorageManager {
     if (existing) return existing;
 
     const fallback = 'session-unknown';
-    localStorage.setItem(this.ACTIVE_SESSION_KEY, fallback);
+    // Don't persist the fallback - it's a transient state
     return fallback;
   }
 
@@ -352,13 +359,20 @@ class StorageManager {
     localStorage.removeItem(this.ACTIVE_SESSION_KEY);
   }
 
+  /**
+   * Set active session ID
+   * CRITICAL PATH: Uses safeSetItem for quota protection
+   */
   setActiveSessionId(sessionId: string) {
     const normalized = sessionId.trim();
     if (!normalized) {
       this.clearActiveSession();
       return;
     }
-    localStorage.setItem(this.ACTIVE_SESSION_KEY, normalized);
+    const result = this.safeSetItem(this.ACTIVE_SESSION_KEY, normalized);
+    if (!result.success) {
+      console.warn('[Storage] Failed to persist session ID update');
+    }
   }
 
   /**
@@ -2537,7 +2551,14 @@ class StorageManager {
           throw new Error('Invalid import data: interaction.learnerId must be a string');
         }
       }
-      localStorage.setItem(this.INTERACTIONS_KEY, JSON.stringify(data.interactions));
+      // CRITICAL PATH: Use safeSetItem with quota protection
+      const result = this.safeSetItem(this.INTERACTIONS_KEY, JSON.stringify(data.interactions));
+      if (!result.success) {
+        if (result.quotaExceeded) {
+          throw new Error('Storage quota exceeded: cannot import interactions. Try clearing old data first.');
+        }
+        throw new Error('Failed to save interactions to storage');
+      }
     }
     
     // Validate profiles array if provided
@@ -2556,7 +2577,11 @@ class StorageManager {
           throw new Error('Invalid import data: profile.id must be a string');
         }
       }
-      localStorage.setItem(this.PROFILES_KEY, JSON.stringify(data.profiles));
+      // CRITICAL PATH: Use safeSetItem with quota protection
+      const result = this.safeSetItem(this.PROFILES_KEY, JSON.stringify(data.profiles));
+      if (!result.success && result.quotaExceeded) {
+        throw new Error('Storage quota exceeded: cannot import profiles');
+      }
     }
     
     // Validate textbooks object if provided
@@ -2565,16 +2590,22 @@ class StorageManager {
         console.error('Import failed: textbooks must be an object (learnerId -> units map)');
         throw new Error('Invalid import data: textbooks must be an object');
       }
-      localStorage.setItem(this.TEXTBOOK_KEY, JSON.stringify(data.textbooks));
+      // CRITICAL PATH: Use safeSetItem with quota protection
+      const result = this.safeSetItem(this.TEXTBOOK_KEY, JSON.stringify(data.textbooks));
+      if (!result.success && result.quotaExceeded) {
+        throw new Error('Storage quota exceeded: cannot import textbooks');
+      }
     }
     
     // Validate LLM cache if provided
+    // NOTE: LLM cache is "nice-to-have UI cache" not critical research data
     if (data.llmCache !== undefined) {
       if (!data.llmCache || typeof data.llmCache !== 'object' || Array.isArray(data.llmCache)) {
         console.error('Import failed: llmCache must be an object');
         throw new Error('Invalid import data: llmCache must be an object');
       }
-      localStorage.setItem(this.LLM_CACHE_KEY, JSON.stringify(data.llmCache));
+      // UI cache - use safeSetItem but don't fail import on quota error
+      this.safeSetItem(this.LLM_CACHE_KEY, JSON.stringify(data.llmCache));
     }
     
     if (typeof data.replayMode === 'boolean') {

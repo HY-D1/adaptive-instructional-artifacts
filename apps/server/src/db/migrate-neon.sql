@@ -228,6 +228,32 @@ CREATE INDEX IF NOT EXISTS idx_interaction_events_session_id ON interaction_even
 CREATE INDEX IF NOT EXISTS idx_interaction_events_event_type ON interaction_events(event_type);
 CREATE INDEX IF NOT EXISTS idx_interaction_events_timestamp ON interaction_events(timestamp);
 CREATE INDEX IF NOT EXISTS idx_interaction_events_problem_id ON interaction_events(problem_id);
+
+-- ============================================================================
+-- Composite indexes for efficient filtered queries (research-grade performance)
+-- These support getInteractionsByUser with various filter combinations
+-- ============================================================================
+
+-- Primary index: user events ordered by time (most common query pattern)
+CREATE INDEX IF NOT EXISTS idx_interaction_events_user_timestamp 
+  ON interaction_events(user_id, timestamp DESC);
+
+-- For session-scoped queries
+CREATE INDEX IF NOT EXISTS idx_interaction_events_user_session_timestamp 
+  ON interaction_events(user_id, session_id, timestamp DESC);
+
+-- For event-type filtered queries (e.g., code_change, hint_request)
+CREATE INDEX IF NOT EXISTS idx_interaction_events_user_event_type_timestamp 
+  ON interaction_events(user_id, event_type, timestamp DESC);
+
+-- For problem-scoped queries
+CREATE INDEX IF NOT EXISTS idx_interaction_events_user_problem_timestamp 
+  ON interaction_events(user_id, problem_id, timestamp DESC);
+
+-- For section-level analytics
+CREATE INDEX IF NOT EXISTS idx_interaction_events_section_timestamp 
+  ON interaction_events(section_id, timestamp DESC);
+
 ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL;
 ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS learner_profile_id TEXT;
 ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS escalation_trigger_reason TEXT;

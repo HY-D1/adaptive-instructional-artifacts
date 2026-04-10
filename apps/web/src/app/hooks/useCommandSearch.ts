@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { loadConceptMap, type ConceptInfo } from '../lib/content/concept-loader';
+import { safeSet } from '../lib/storage/safe-storage';
 import { sqlProblems } from '../data/problems';
 import type { SQLProblem } from '../types';
 
@@ -92,7 +93,7 @@ export function useCommandSearch(options: UseCommandSearchOptions = {}) {
       setRecentSearches((prev) => {
         const filtered = prev.filter((s) => s.id !== item.id);
         const updated = [item, ...filtered].slice(0, MAX_RECENT_SEARCHES);
-        localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+        safeSet(RECENT_SEARCHES_KEY, updated, { priority: 'cache' });
         return updated;
       });
     } catch {

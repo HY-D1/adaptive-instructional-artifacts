@@ -3,6 +3,7 @@
  */
 
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import * as db from '../db/neon.js';
 import {
   getSectionForLearnerInInstructorScope,
@@ -14,10 +15,61 @@ import {
   type BatchValidationError,
   type BatchValidationResult,
 } from '../db/index.js';
+import type { EventType } from '../types.js';
 
 const router = Router();
 
-type NeonInteractionEventInput = Record<string, any>;
+// Zod schema for interaction event validation (BUG-007)
+const interactionEventSchema = z.object({
+  learnerId: z.string(),
+  eventType: z.string(),
+  problemId: z.string(),
+  id: z.string().optional(),
+  sessionId: z.string().optional(),
+  timestamp: z.string().optional(),
+  code: z.string().max(50000).optional(),
+  error: z.string().max(5000).optional(),
+  hintText: z.string().max(10000).optional(),
+  hintLevel: z.number().optional(),
+  hintId: z.string().optional(),
+  conceptId: z.string().optional(),
+  source: z.string().optional(),
+  totalTime: z.number().optional(),
+  problemsAttempted: z.number().optional(),
+  problemsSolved: z.number().optional(),
+  successful: z.boolean().optional(),
+  // Escalation Profile fields
+  profileId: z.string().optional(),
+  assignmentStrategy: z.string().optional(),
+  previousThresholds: z.record(z.any()).optional(),
+  newThresholds: z.record(z.any()).optional(),
+  // Bandit fields
+  selectedArm: z.string().optional(),
+  selectionMethod: z.string().optional(),
+  armStatsAtSelection: z.record(z.any()).optional(),
+  reward: z.number().optional(),
+  newAlpha: z.number().optional(),
+  newBeta: z.number().optional(),
+  // HDI fields
+  hdi: z.number().optional(),
+  hdiLevel: z.string().optional(),
+  hdiComponents: z.record(z.any()).optional(),
+  trend: z.string().optional(),
+  slope: z.number().optional(),
+  interventionType: z.string().optional(),
+  trigger: z.string().optional(),
+  escalationTriggerReason: z.string().optional(),
+  errorCountAtEscalation: z.number().optional(),
+  timeToEscalation: z.number().optional(),
+  strategyAssigned: z.string().optional(),
+  strategyUpdated: z.boolean().optional(),
+  rewardValue: z.number().optional(),
+  learnerProfileId: z.string().optional(),
+  payload: z.record(z.any()).optional(),
+  textbookUnitsRetrieved: z.array(z.string()).optional(),
+}).strict(); // Rejects unknown fields
+
+type NeonInteractionEventInput = z.infer<typeof interactionEventSchema>;
 
 // Re-export for backward compatibility
 export { validateResearchEvent, validateResearchBatchForWrite };
@@ -243,18 +295,30 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const scopedTarget = await resolveScopedTarget(req, event.learnerId, 'write');
-    event.learnerId = scopedTarget.learnerId;
-    event.sectionId = scopedTarget.sectionId;
+    const schemaValidation = interactionEventSchema.safeParse(event);
+    if (!schemaValidation.success) {
+      res.status(400).json({
+        success: false,
+        error: 'Schema validation failed',
+        issues: schemaValidation.error.issues.map((issue) => issue.message),
+      });
+      return;
+    }
 
-    const id = event.id || `${event.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
+    const validatedEvent = schemaValidation.data as NeonInteractionEventInput & { sectionId?: string | null };
+
+    const scopedTarget = await resolveScopedTarget(req, validatedEvent.learnerId, 'write');
+    validatedEvent.learnerId = scopedTarget.learnerId;
+    validatedEvent.sectionId = scopedTarget.sectionId;
+
+    const id = validatedEvent.id || `${validatedEvent.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
 
     // RESEARCH-3: Validate research-critical events in production
     if (process.env.NODE_ENV === 'production') {
-      const validation = validateResearchEvent(event);
+      const validation = validateResearchEvent(validatedEvent);
       if (!validation.valid) {
         console.warn('[telemetry_validation_error]', {
-          eventType: event.eventType,
+          eventType: validatedEvent.eventType,
           missingFields: validation.missing,
           eventId: id,
           route: 'single',
@@ -269,24 +333,24 @@ router.post('/', async (req: Request, res: Response) => {
       }
     }
 
-    const payload = buildNeonInteractionPayload(event);
+    const payload = buildNeonInteractionPayload(validatedEvent);
 
     const interaction = await db.createInteraction({
       id,
-      learnerId: event.learnerId,
+      learnerId: validatedEvent.learnerId,
       sectionId: scopedTarget.sectionId,
-      timestamp: event.timestamp || new Date().toISOString(),
-      eventType: event.eventType,
-      problemId: event.problemId,
+      timestamp: validatedEvent.timestamp || new Date().toISOString(),
+      eventType: validatedEvent.eventType as EventType,
+      problemId: validatedEvent.problemId,
       payload,
     });
 
-    await persistProblemProgressIfNeeded(event.learnerId, event.problemId, event);
+    await persistProblemProgressIfNeeded(validatedEvent.learnerId, validatedEvent.problemId, validatedEvent);
     
     // RESEARCH-4: Link textbook retrievals if present (single route parity with batch)
-    if (event.textbookUnitsRetrieved && Array.isArray(event.textbookUnitsRetrieved)) {
+    if (validatedEvent.textbookUnitsRetrieved && Array.isArray(validatedEvent.textbookUnitsRetrieved)) {
       try {
-        await db.linkTextbookRetrievals(id, event.textbookUnitsRetrieved);
+        await db.linkTextbookRetrievals(id, validatedEvent.textbookUnitsRetrieved);
       } catch (err) {
         console.warn('[neon-interactions] Failed to link retrievals:', err);
         // Don't fail the entire request for retrieval linking issues
@@ -316,6 +380,36 @@ router.post('/batch', async (req: Request, res: Response) => {
       res.status(400).json({
         success: false,
         error: 'Request body must contain an events array',
+      });
+      return;
+    }
+
+    // BUG-002: Enforce batch size limit
+    if (events.length > 500) {
+      res.status(400).json({
+        success: false,
+        error: 'Batch size exceeds maximum of 500 events',
+      });
+      return;
+    }
+
+    // BUG-007: Validate each event against schema
+    const schemaValidationErrors: Array<{ index: number; eventId: string; issues: string[] }> = [];
+    for (let i = 0; i < events.length; i++) {
+      const result = interactionEventSchema.safeParse(events[i]);
+      if (!result.success) {
+        schemaValidationErrors.push({
+          index: i,
+          eventId: events[i]?.id || `index-${i}`,
+          issues: result.error.issues.map(issue => issue.message),
+        });
+      }
+    }
+    if (schemaValidationErrors.length > 0) {
+      res.status(400).json({
+        success: false,
+        error: 'Schema validation failed for one or more events',
+        schemaErrors: schemaValidationErrors,
       });
       return;
     }

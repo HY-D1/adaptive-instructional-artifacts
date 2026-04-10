@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 
 import { isUsingNeon, createUser } from '../db/index.js';
-import { createAuthEvent, getDb } from '../db/neon.js';
+import { createAuthEvent, getDb, saveLearnerProfile } from '../db/neon.js';
 import {
   createAuthAccount,
   getAuthAccountByEmail,
@@ -276,6 +276,25 @@ router.post('/signup', signupRateLimiter, async (req: Request, res: Response) =>
       name,
     });
 
+    if (role === 'student') {
+      await saveLearnerProfile(learnerId, {
+        name,
+        conceptsCovered: [],
+        conceptCoverageEvidence: {},
+        errorHistory: {},
+        interactionCount: 0,
+        currentStrategy: 'adaptive-medium',
+        preferences: {
+          escalationThreshold: 3,
+          aggregationDelay: 300000,
+          autoTextbookEnabled: true,
+          notificationsEnabled: true,
+          theme: 'system',
+        },
+        extendedData: {},
+      });
+    }
+
     if (role === 'student' && studentSection) {
       await enrollStudentInSection({
         sectionId: studentSection.id,
@@ -485,6 +504,160 @@ router.get('/me', (req: Request, res: Response) => {
     },
     csrfToken,
   });
+});
+
+// ============================================================================
+// POST /api/auth/test-seed
+// Preview-only endpoint for deterministic E2E test account provisioning
+// Requires E2E_TEST_SEED_SECRET to be set (matches secret in auth.setup.ts)
+// ============================================================================
+
+const TEST_SEED_SECRET = process.env.E2E_TEST_SEED_SECRET;
+const ENVIRONMENT = process.env.VERCEL_ENV || process.env.NODE_ENV || 'development';
+const IS_PREVIEW = ENVIRONMENT === 'preview' || ENVIRONMENT === 'development';
+
+// Deterministic E2E test credentials
+const DETERMINISTIC_INSTRUCTOR = {
+  email: 'e2e-instructor@sql-adapt.test',
+  password: 'E2eTestPass!123',
+  name: 'E2E Test Instructor',
+};
+
+const DETERMINISTIC_STUDENT = {
+  email: 'e2e-student@sql-adapt.test',
+  password: 'E2eTestPass!123',
+  name: 'E2E Test Student',
+};
+
+router.post('/test-seed', async (req: Request, res: Response) => {
+  // Security: Only available in preview/development environments
+  if (!IS_PREVIEW) {
+    res.status(403).json({
+      success: false,
+      error: 'Test seed endpoint only available in preview/development environments',
+    });
+    return;
+  }
+
+  // Security: Require secret header
+  const providedSecret = req.headers['x-e2e-test-seed-secret'];
+  if (!TEST_SEED_SECRET || providedSecret !== TEST_SEED_SECRET) {
+    res.status(401).json({
+      success: false,
+      error: 'Invalid or missing test seed secret',
+    });
+    return;
+  }
+
+  // Require Neon database
+  if (!isUsingNeon()) {
+    res.status(503).json({
+      success: false,
+      error: 'Test seed requires Neon database',
+    });
+    return;
+  }
+
+  const db = getDb();
+  const results: {
+    instructor?: { email: string; created: boolean; sectionCode?: string };
+    student?: { email: string; created: boolean; classCode?: string };
+    error?: string;
+  } = {};
+
+  try {
+    // Create or get instructor
+    let instructorAccount = await getAuthAccountByEmail(db, DETERMINISTIC_INSTRUCTOR.email);
+    let instructorSectionCode: string | undefined;
+
+    if (!instructorAccount) {
+      const instructorLearnerId = uuidv4();
+      const instructorPasswordHash = await bcrypt.hash(DETERMINISTIC_INSTRUCTOR.password, SALT_ROUNDS);
+
+      instructorAccount = await createAuthAccount(db, {
+        email: DETERMINISTIC_INSTRUCTOR.email,
+        passwordHash: instructorPasswordHash,
+        name: DETERMINISTIC_INSTRUCTOR.name,
+        role: 'instructor',
+        learnerId: instructorLearnerId,
+      });
+
+      // Create section for instructor
+      const section = await createSectionForInstructor({ instructorUserId: instructorLearnerId, name: 'E2E Test Section' });
+      instructorSectionCode = section.studentSignupCode;
+    } else {
+      // Get existing section code
+      const sections = await getOwnedSectionsByInstructor(instructorAccount.learnerId);
+      if (sections.length > 0) {
+        instructorSectionCode = sections[0].studentSignupCode;
+      } else {
+        // Create section if missing
+        const section = await createSectionForInstructor({ instructorUserId: instructorAccount.learnerId, name: 'E2E Test Section' });
+        instructorSectionCode = section.studentSignupCode;
+      }
+    }
+
+    results.instructor = {
+      email: DETERMINISTIC_INSTRUCTOR.email,
+      created: !instructorAccount,
+      sectionCode: instructorSectionCode,
+    };
+
+    // Create or get student
+    let studentAccount = await getAuthAccountByEmail(db, DETERMINISTIC_STUDENT.email);
+
+    if (!studentAccount) {
+      const studentLearnerId = uuidv4();
+      const studentPasswordHash = await bcrypt.hash(DETERMINISTIC_STUDENT.password, SALT_ROUNDS);
+
+      studentAccount = await createAuthAccount(db, {
+        email: DETERMINISTIC_STUDENT.email,
+        passwordHash: studentPasswordHash,
+        name: DETERMINISTIC_STUDENT.name,
+        role: 'student',
+        learnerId: studentLearnerId,
+      });
+
+      // Enroll student in section if we have a section code
+      if (instructorSectionCode) {
+        const section = await getSectionBySignupCode(instructorSectionCode);
+        if (section) {
+          await enrollStudentInSection({ studentUserId: studentLearnerId, sectionId: section.id });
+        }
+      }
+    }
+
+    results.student = {
+      email: DETERMINISTIC_STUDENT.email,
+      created: !studentAccount,
+      classCode: instructorSectionCode,
+    };
+
+    res.json({
+      success: true,
+      environment: ENVIRONMENT,
+      credentials: {
+        instructor: {
+          email: DETERMINISTIC_INSTRUCTOR.email,
+          password: DETERMINISTIC_INSTRUCTOR.password,
+          sectionCode: instructorSectionCode,
+        },
+        student: {
+          email: DETERMINISTIC_STUDENT.email,
+          password: DETERMINISTIC_STUDENT.password,
+          classCode: instructorSectionCode,
+        },
+      },
+      results,
+    });
+  } catch (error) {
+    console.error('[auth/test-seed]', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to provision test accounts',
+      details: error instanceof Error ? error.message : 'Unknown error',
+    });
+  }
 });
 
 export { router as authRouter };

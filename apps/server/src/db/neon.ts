@@ -1018,37 +1018,106 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
   };
 }
 
-export async function getInteractionsByUser(
+export interface GetInteractionsOptions {
+  sessionId?: string;
+  eventType?: string;
+  problemId?: string;
+  startDate?: string; // ISO date string
+  endDate?: string; // ISO date string
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Count interactions for a user with optional filters.
+ * Uses the same filter logic as getInteractionsByUser for consistency.
+ */
+export async function countInteractionsByUser(
   userId: string,
-  options?: {
-    sessionId?: string;
-    eventType?: string;
-    problemId?: string;
-    limit?: number;
-    offset?: number;
-  }
-): Promise<{ interactions: Interaction[]; total: number }> {
+  options?: Omit<GetInteractionsOptions, 'limit' | 'offset'>
+): Promise<number> {
   const db = getDb();
-  const results = await db`
-    SELECT * FROM interaction_events
-    WHERE user_id = ${userId}
-    ORDER BY timestamp DESC
+
+  const conditions = [db`user_id = ${userId}`];
+  if (options?.sessionId) conditions.push(db`session_id = ${options.sessionId}`);
+  if (options?.eventType) conditions.push(db`event_type = ${options.eventType}`);
+  if (options?.problemId) conditions.push(db`problem_id = ${options.problemId}`);
+  if (options?.startDate) conditions.push(db`timestamp >= ${options.startDate}`);
+  if (options?.endDate) conditions.push(db`timestamp <= ${options.endDate}`);
+
+  const [result] = await db`
+    SELECT COUNT(*) as count
+    FROM interaction_events
+    WHERE ${conditions.reduce((acc, cond, i) => (i === 0 ? cond : db`${acc} AND ${cond}`), db``)}
   `;
 
-  const filtered = results.filter((row) => {
-    if (options?.sessionId && row.session_id !== options.sessionId) return false;
-    if (options?.eventType && row.event_type !== options.eventType) return false;
-    if (options?.problemId && row.problem_id !== options.problemId) return false;
-    return true;
-  });
-  const total = filtered.length;
-  const offset = options?.offset || 0;
-  const paged = options?.limit
-    ? filtered.slice(offset, offset + options.limit)
-    : filtered;
+  return parseInt(result?.count as string, 10) || 0;
+}
+
+/**
+ * Get interactions for a user with SQL-level filtering and pagination.
+ * All filtering happens in the database for scalability.
+ * 
+ * Performance note: This function relies on composite indexes:
+ * - idx_interaction_events_user_timestamp (user_id, timestamp DESC)
+ * - idx_interaction_events_user_session_timestamp (user_id, session_id, timestamp DESC)
+ * - idx_interaction_events_user_event_type_timestamp (user_id, event_type, timestamp DESC)
+ * - idx_interaction_events_user_problem_timestamp (user_id, problem_id, timestamp DESC)
+ */
+export async function getInteractionsByUser(
+  userId: string,
+  options?: GetInteractionsOptions
+): Promise<{ interactions: Interaction[]; total: number }> {
+  const db = getDb();
+
+  // Build filter conditions
+  const conditions = [db`user_id = ${userId}`];
+  if (options?.sessionId) conditions.push(db`session_id = ${options.sessionId}`);
+  if (options?.eventType) conditions.push(db`event_type = ${options.eventType}`);
+  if (options?.problemId) conditions.push(db`problem_id = ${options.problemId}`);
+  if (options?.startDate) conditions.push(db`timestamp >= ${options.startDate}`);
+  if (options?.endDate) conditions.push(db`timestamp <= ${options.endDate}`);
+
+  // Build WHERE clause by combining conditions
+  const whereClause = conditions.reduce((acc, cond, i) => 
+    i === 0 ? cond : db`${acc} AND ${cond}`, db``
+  );
+
+  // Get total count efficiently
+  const [countResult] = await db`
+    SELECT COUNT(*) as count
+    FROM interaction_events
+    WHERE ${whereClause}
+  `;
+  const total = parseInt(countResult?.count as string, 10) || 0;
+
+  // Build main query with pagination at the database level
+  const limit = options?.limit;
+  const offset = options?.offset ?? 0;
+
+  let query;
+  if (limit !== undefined) {
+    query = db`
+      SELECT * FROM interaction_events
+      WHERE ${whereClause}
+      ORDER BY timestamp DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+  } else {
+    // Without limit, we still apply offset for pagination safety
+    // but be aware this could be expensive for very large result sets
+    query = db`
+      SELECT * FROM interaction_events
+      WHERE ${whereClause}
+      ORDER BY timestamp DESC
+      OFFSET ${offset}
+    `;
+  }
+
+  const results = await query;
 
   return {
-    interactions: paged.map(rowToInteraction),
+    interactions: results.map(rowToInteraction),
     total,
   };
 }

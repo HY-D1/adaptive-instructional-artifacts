@@ -215,7 +215,7 @@ export function useLearnerProfile(
 /**
  * Hook for managing all learner profiles (instructor view)
  */
-export function useAllLearnerProfiles(): {
+export function useAllLearnerProfiles(options?: { authTrigger?: string }): {
   profiles: LearnerProfile[];
   isLoading: boolean;
   error: Error | null;
@@ -246,7 +246,7 @@ export function useAllLearnerProfiles(): {
   
   useEffect(() => {
     loadProfiles();
-  }, [loadProfiles]);
+  }, [loadProfiles, options?.authTrigger]);
   
   // Calculate aggregate stats
   const totalInteractionCount = profiles.reduce(

@@ -362,7 +362,8 @@ async function readPdfIndexFromDisk(): Promise<{
       fs.readFile(manifestPath, 'utf8'),
       fs.readFile(chunksPath, 'utf8'),
     ]);
-  } catch {
+  } catch (error) {
+    console.error('[pdf-index]', error);
     return null;
   }
 
@@ -401,7 +402,8 @@ async function readPdfIndexFromDisk(): Promise<{
       manifest: manifestWithCounts,
       document: createDocument(manifestWithCounts, normalizedChunks),
     };
-  } catch {
+  } catch (error) {
+    console.error('[pdf-index]', error);
     return null;
   }
 }
@@ -610,8 +612,8 @@ async function buildPdfIndexFromBuffer(
     // Clean up temp file
     try {
       await fs.unlink(tempPdfPath);
-    } catch {
-      // Ignore cleanup errors
+    } catch (error) {
+      console.error('[pdf-index]', error);
     }
   }
 }

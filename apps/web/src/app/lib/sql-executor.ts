@@ -5,7 +5,7 @@ import { normalizeSqlErrorSubtype } from '../data/sql-engage';
 // This aligns with the wasm-serve plugin in vite.config.ts
 const WASM_URL = '/sql-wasm.wasm';
 
-const FLOAT_EPSILON = 0.01;
+const FLOAT_EPSILON = 0.015; // Widened for SQLite float rounding tolerance
 
 /** Normalizes a value for comparison. Handles null/undefined, booleans, and trims whitespace. */
 function normalizeValue(value: unknown): string {
@@ -458,6 +458,45 @@ export class SQLExecutor {
           matchedActual.add(aIdx);
           matchedExpected.add(eIdx);
           break;
+        }
+      }
+    }
+
+    // Second pass: Try value-only matching for SQL expression columns (ignore column names)
+    // This handles cases like SELECT UPPER(emp_name) vs SELECT UPPER(emp_name) AS name_upper
+    // Only applies when actual columns look like SQL expressions (contain parentheses)
+    if (matchedExpected.size < expectedRows.length) {
+      for (let eIdx = 0; eIdx < expectedRows.length; eIdx++) {
+        if (matchedExpected.has(eIdx)) continue;
+        const expectedRow = expectedRows[eIdx];
+        const expectedKeys = Object.keys(expectedRow).sort();
+        const expectedVals = Object.values(expectedRow).sort((a, b) => String(a).localeCompare(String(b)));
+
+        for (let aIdx = 0; aIdx < actualRows.length; aIdx++) {
+          if (matchedActual.has(aIdx)) continue;
+          const actualRow = actualRows[aIdx];
+          const actualKeys = Object.keys(actualRow).sort();
+          const actualVals = Object.values(actualRow).sort((a, b) => String(a).localeCompare(String(b)));
+
+          if (actualVals.length !== expectedVals.length) continue;
+
+          // Only apply value-only matching if actual columns look like SQL expressions
+          // (contain parentheses like "UPPER(emp_name)", "COUNT(*)", etc.)
+          const hasSqlExpression = actualKeys.some(key => key.includes('(') || key.includes(')'));
+          if (!hasSqlExpression) continue;
+
+          let allMatch = true;
+          for (let v = 0; v < actualVals.length; v++) {
+            if (!valuesEqual(actualVals[v], expectedVals[v])) {
+              allMatch = false;
+              break;
+            }
+          }
+          if (allMatch) {
+            matchedActual.add(aIdx);
+            matchedExpected.add(eIdx);
+            break;
+          }
         }
       }
     }

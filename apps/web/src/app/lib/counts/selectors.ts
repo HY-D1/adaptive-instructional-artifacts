@@ -7,6 +7,7 @@ export interface InstructorLearnerRow {
   lastActive: number;
   conceptsCount: number;
   conceptIds: string[];
+  solvedCount: number;
   isActive: boolean;
 }
 
@@ -16,6 +17,7 @@ export function buildInstructorLearnerRows(profiles: LearnerProfile[]): Instruct
     const candidateEmail = (profile as LearnerProfile & { email?: string }).email;
     const conceptIds = Array.from(profile.conceptsCovered ?? new Set<string>());
     const lastActive = profile.lastActive || profile.createdAt || now;
+    const solvedProblemIds = Array.from(profile.solvedProblemIds ?? new Set<string>());
     return {
       id: profile.id,
       name: profile.name || profile.id,
@@ -23,6 +25,7 @@ export function buildInstructorLearnerRows(profiles: LearnerProfile[]): Instruct
       lastActive,
       conceptsCount: conceptIds.length,
       conceptIds,
+      solvedCount: solvedProblemIds.length,
       isActive: now - lastActive < 60 * 60 * 1000,
     };
   });

@@ -14,6 +14,7 @@ import type {
   InteractionEvent,
 } from '@/app/types';
 import { withCsrfHeader } from './csrf-client';
+import { safeSet } from '../storage/safe-storage';
 
 // API Configuration
 // VITE_API_BASE_URL is the canonical env var (e.g. https://my-api.vercel.app — no trailing /api)
@@ -125,10 +126,9 @@ function getCache(): ProfileCache {
 }
 
 function setCache(cache: ProfileCache): void {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
-  } catch (error) {
-    console.error('[ProfileClient] Failed to save cache:', error);
+  const result = safeSet(CACHE_KEY, cache);
+  if (!result.success) {
+    console.warn('[ProfileClient] Failed to save cache:', result.error);
   }
 }
 

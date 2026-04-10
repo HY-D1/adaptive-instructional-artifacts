@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import {
   BarChart3,
@@ -19,7 +19,8 @@ import {
   Play,
   X,
   Database,
-  RotateCcw
+  RotateCcw,
+  CheckCircle2
 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -168,7 +169,7 @@ export function InstructorDashboard() {
     profiles: backendProfiles,
     isLoading: isProfilesLoading,
     averageConceptCoverage: backendAvgCoverage,
-  } = useAllLearnerProfiles();
+  } = useAllLearnerProfiles({ authTrigger: authUser?.learnerId });
   
   const [profiles, setProfiles] = useState<LearnerProfile[]>([]);
   const [interactions, setInteractions] = useState<InteractionEvent[]>([]);
@@ -176,6 +177,20 @@ export function InstructorDashboard() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [demoDataExists, setDemoDataExists] = useState(false);
+  
+  // Handle redirect reason query param (P1-003: Silent Redirects UX Fix)
+  const [params] = useSearchParams();
+  const reason = params.get('reason');
+  const [showRedirectAlert, setShowRedirectAlert] = useState(false);
+  
+  useEffect(() => {
+    if (reason === 'access-denied') {
+      setShowRedirectAlert(true);
+      // Auto-dismiss after 5 seconds
+      const timer = setTimeout(() => setShowRedirectAlert(false), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [reason]);
   const [isBackendAvailable, setIsBackendAvailable] = useState(false);
 
   // Check backend availability
@@ -566,7 +581,8 @@ export function InstructorDashboard() {
       testId: 'instructor-total-students-value',
       icon: Users, 
       color: 'text-blue-600',
-      bgColor: 'bg-blue-50'
+      bgColor: 'bg-blue-50',
+      description: 'Total enrolled students in your sections'
     },
     { 
       label: 'Active Today', 
@@ -574,15 +590,17 @@ export function InstructorDashboard() {
       testId: 'instructor-active-today-value',
       icon: Activity, 
       color: 'text-green-600',
-      bgColor: 'bg-green-50'
+      bgColor: 'bg-green-50',
+      description: 'Students with activity in the last 24 hours'
     },
     { 
-      label: 'Avg Progress', 
+      label: 'Avg Concept Coverage', 
       value: `${classStats.avgProgress}%`, 
       testId: 'instructor-avg-progress-value',
       icon: TrendingUp, 
       color: 'text-purple-600',
-      bgColor: 'bg-purple-50'
+      bgColor: 'bg-purple-50',
+      description: 'Average percentage of 6 SQL concepts students have engaged with'
     },
     { 
       label: 'Total Interactions', 
@@ -590,7 +608,8 @@ export function InstructorDashboard() {
       testId: 'instructor-total-interactions-value',
       icon: Target, 
       color: 'text-orange-600',
-      bgColor: 'bg-orange-50'
+      bgColor: 'bg-orange-50',
+      description: 'Total learning interactions across all students'
     },
   ], [classStats]);
 
@@ -663,6 +682,14 @@ export function InstructorDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Redirect Alert (P1-003) */}
+      {showRedirectAlert && (
+        <Alert variant="destructive" className="m-4 max-w-7xl mx-auto">
+          <AlertDescription>
+            You do not have permission to access this page.
+          </AlertDescription>
+        </Alert>
+      )}
       {/* Header */}
       <div className="border-b bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -732,12 +759,12 @@ export function InstructorDashboard() {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">{stat.label}</p>
-                    <p className="text-3xl font-bold mt-1" data-testid={stat.testId}>
+                    <p className="text-sm font-medium text-gray-600" title={stat.description}>{stat.label}</p>
+                    <p className="text-3xl font-bold mt-1" data-testid={stat.testId} title={stat.description}>
                       {stat.value}
                     </p>
                   </div>
-                  <div className={`p-3 rounded-lg ${stat.bgColor}`}>
+                  <div className={`p-3 rounded-lg ${stat.bgColor}`} title={stat.description}>
                     <stat.icon className={`size-6 ${stat.color}`} />
                   </div>
                 </div>
@@ -1266,6 +1293,7 @@ export function InstructorDashboard() {
                   <TableRow>
                     <TableHead>Student</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Problems Solved</TableHead>
                     <TableHead>Concepts Covered</TableHead>
                     <TableHead>Last Active</TableHead>
                     <TableHead>Action</TableHead>
@@ -1288,6 +1316,13 @@ export function InstructorDashboard() {
                           <Badge variant={student.isActive ? 'default' : 'secondary'} className="text-xs">
                             {student.isActive ? 'Active' : 'Away'}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <CheckCircle2 className="size-4 text-green-500" />
+                            <span className="font-medium">{student.solvedCount}</span>
+                            <span className="text-sm text-gray-500">solved</span>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">

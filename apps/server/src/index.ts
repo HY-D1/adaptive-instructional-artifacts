@@ -47,6 +47,10 @@ async function startServer() {
   try {
     await ensureSchemaInitialized();
 
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('[FATAL] Unhandled rejection at:', promise, 'reason:', reason);
+    });
+
     const server = app.listen(PORT, () => {
       displayServerStatus();
     });

@@ -1,9 +1,34 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useLocation, Link } from 'react-router';
+/**
+ * LearningInterface.tsx
+ * 
+ * Main student practice interface for SQL problem solving.
+ * 
+ * RESPONSIBILITIES:
+ * - Problem presentation and navigation
+ * - SQL code editor integration
+ * - Hint/explanation system coordination
+ * - Real-time telemetry capture (interactions, HDI, bandit state)
+ * - Session management and condition assignment
+ * - Progress tracking and completion detection
+ * 
+ * KEY SUBSYSTEMS:
+ * - Telemetry: Captures every keystroke, execution, hint request to interaction_events
+ * - HDI Calculation: Real-time Help Dependency Index for adaptive support
+ * - Bandit: Thompson sampling for profile assignment (if enabled)
+ * - Session Config: Experimental condition persistence across reloads
+ * 
+ * SIZE NOTE: This file is intentionally large (~3000 LOC) to maintain
+ * cohesive student experience. Sub-components extracted where reuse needed.
+ * 
+ * @module LearningInterface
+ */
+
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 import {
   Clock,
   CheckCircle2,
+  CheckCircle,
   AlertCircle,
   Pause,
   Sparkles,
@@ -40,6 +65,7 @@ import { useScreenReaderAnnouncer } from '../components/shared/ScreenReaderAnnou
 import { sqlProblems } from '../data/problems';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
+import { useLocation } from 'react-router';
 import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync } from '../lib/storage';
 import { useAuth } from '../lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
@@ -419,6 +445,7 @@ export function LearningInterface() {
   const [showDependencyWarning, setShowDependencyWarning] = useState(false);
   const [hdiRefreshKey, setHdiRefreshKey] = useState(0);
   const [solvedRefreshKey, setSolvedRefreshKey] = useState(0);
+  const [hydratedSolvedIds, setHydratedSolvedIds] = useState<Set<string>>(new Set());
   const dependencyWarningShownRef = useRef(false);
   const lastHintRequestTimeRef = useRef<number>(0);
   
@@ -938,25 +965,25 @@ export function LearningInterface() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if in input/textarea or modal is open
+      // Don't trigger if a modal/dialog is open
+      const isModalOpen = document.querySelector('[role="dialog"]') !== null;
+      if (isModalOpen) return;
+
+      // Ctrl+Enter OR Cmd+Enter (Mac) to run query
+      // Allow from ANYWHERE including the Monaco editor textarea
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        const runButton = document.querySelector('[data-testid="run-query-btn"]') as HTMLButtonElement;
+        runButton?.click();
+        return;
+      }
+
+      // Other shortcuts — skip if in input/textarea (editor handles its own keys)
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
       ) {
         return;
-      }
-
-      // Don't trigger if a modal/dialog is open
-      const isModalOpen = document.querySelector('[role="dialog"]') !== null;
-      if (isModalOpen) {
-        return;
-      }
-
-      // Ctrl+Enter to run query
-      if (e.ctrlKey && e.key === 'Enter') {
-        e.preventDefault();
-        const runButton = document.querySelector('[data-testid="run-query-btn"]') as HTMLButtonElement;
-        runButton?.click();
       }
     };
 
@@ -1113,6 +1140,13 @@ export function LearningInterface() {
           const hydratedSessionId = storage.getActiveSessionId();
           if (hydratedSessionId && hydratedSessionId !== 'session-unknown') {
             resolvedSessionId = hydratedSessionId;
+          }
+          // Force refresh of solved progress from newly hydrated storage
+          setSolvedRefreshKey(prev => prev + 1);
+          // Bridge hydration result through React state to avoid race condition
+          const freshProfile = storage.getProfile(learnerId);
+          if (freshProfile?.solvedProblemIds) {
+            setHydratedSolvedIds(new Set(freshProfile.solvedProblemIds));
           }
         }
 
@@ -1405,8 +1439,9 @@ export function LearningInterface() {
     // This was semantically incorrect and caused telemetry noise
     
     const restoredDraft = sessionId
-      ? storage.getPracticeDraft(learnerId, sessionId, problem.id)
-      : null;
+      ? (storage.getPracticeDraft(learnerId, sessionId, problem.id)
+         ?? storage.findAnyPracticeDraft(learnerId, problem.id))
+      : storage.findAnyPracticeDraft(learnerId, problem.id);
     setSqlDraft(restoredDraft ?? DEFAULT_SQL_EDITOR_CODE);
     setStartTime(Date.now());
     setElapsedTime(0);
@@ -1669,7 +1704,7 @@ export function LearningInterface() {
     if (result.success) {
       setLastError(undefined);
       setLastErrorEventId(undefined);
-      setEscalationTriggered(false);
+      // Keep escalationTriggered=true so Save to Notes stays visible after solving
       setNotesActionMessage(undefined);
       setGenerationError(undefined);
       setLatestGeneratedUnit(null);
@@ -1826,7 +1861,17 @@ export function LearningInterface() {
     // inferring from interaction history. This ensures Save to Notes always works
     // even when no SQL error has been submitted yet (e.g. learner clicked Save
     // after only viewing hints).
-    const escalationSubtype = providedSubtype || lastError || resolveLatestProblemErrorSubtype();
+    let escalationSubtype = providedSubtype || lastError || resolveLatestProblemErrorSubtype();
+    
+    if (!escalationSubtype) {
+      // Fall back to the first concept of the current problem
+      // This allows escalation even when no error has occurred
+      const problemConcepts = currentProblem.concepts;
+      if (problemConcepts && problemConcepts.length > 0) {
+        escalationSubtype = problemConcepts[0];
+      }
+    }
+    
     if (!escalationSubtype) {
       // Cannot save — surface a visible error instead of silently doing nothing.
       setGenerationError('Could not save note: no concept context identified. Try submitting a query or requesting a hint first.');
@@ -1876,7 +1921,18 @@ export function LearningInterface() {
   };
 
   const handleAddToNotes = async () => {
-    const noteSubtype = lastError || resolveLatestProblemErrorSubtype();
+    // Try error-based context first, then fall back to problem concepts
+    let noteSubtype = lastError || resolveLatestProblemErrorSubtype();
+
+    if (!noteSubtype) {
+      // Fall back to the first concept of the current problem
+      // This allows saving notes even when no error has occurred
+      const problemConcepts = currentProblem.concepts;
+      if (problemConcepts && problemConcepts.length > 0) {
+        noteSubtype = problemConcepts[0];
+      }
+    }
+
     if (!noteSubtype) {
       setGenerationError('Could not save note: no concept context identified. Try submitting a query or requesting a hint first.');
       return;
@@ -2143,6 +2199,7 @@ export function LearningInterface() {
     learnerId,
     currentProblemId: currentProblem.id,
     refreshKey: solvedRefreshKey,
+    hydratedSolvedIds,
   });
 
   // Destructure for convenience (backward compatibility with existing code)
@@ -2185,7 +2242,16 @@ export function LearningInterface() {
 
   const latestProblemErrorSubtype = latestProblemErrorEvent?.sqlEngageSubtype || latestProblemErrorEvent?.errorSubtypeId;
   const effectiveLastError = lastError || latestProblemErrorSubtype;
-  const showAddToNotes = escalationTriggered && !!effectiveLastError;
+  // Show Save to Notes when student has engaged with the problem:
+  // 1. After hint escalation with an error (original behavior)
+  // 2. After viewing any hints (student actively sought help)
+  // 3. After solving the problem (student may want to save their learning)
+  const hasViewedHints = problemInteractions.some(i => i.eventType === 'hint_view');
+  const hasSolvedCurrentProblem = isCurrentProblemSolved;
+  const showAddToNotes = 
+    (escalationTriggered && !!effectiveLastError) ||  // Original path
+    hasViewedHints ||                                   // Viewed at least one hint
+    hasSolvedCurrentProblem;                           // Solved the problem
   
   const errorCount = useMemo(() => 
     problemInteractions.filter(i => i.eventType === 'error').length,
@@ -2469,7 +2535,7 @@ export function LearningInterface() {
                   <div className="flex-1 min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <span className="text-sm text-gray-500 font-medium">
-                        Current: {currentProblemNumber} / {totalProblems}
+                        Problem {currentProblemNumber} of {totalProblems}
                       </span>
                       <h2 className="text-xl font-bold">{currentProblem.title}</h2>
                       <Badge 
@@ -2486,6 +2552,22 @@ export function LearningInterface() {
                       )}
                     </div>
                     <p className="text-gray-700">{currentProblem.description}</p>
+                    
+                    {/* Next Problem callout after correct answer */}
+                    {isCurrentProblemSolved && hasNextProblem && (
+                      <div className="mt-2 flex items-center gap-2 text-green-700 text-sm font-medium">
+                        <CheckCircle className="size-4" />
+                        <span>Correct!</span>
+                        <Button 
+                          variant="link" 
+                          size="sm" 
+                          onClick={handleNextProblem} 
+                          className="text-green-700 underline p-0 h-auto"
+                        >
+                          Next Problem →
+                        </Button>
+                      </div>
+                    )}
                     
                     {/* Concept tags */}
                     <div className="flex flex-wrap gap-1.5 mt-3">
@@ -2539,13 +2621,14 @@ export function LearningInterface() {
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
-                      size="icon"
+                      size="sm"
                       onClick={handlePreviousProblem}
                       disabled={!hasPreviousProblem}
                       aria-label="Previous problem"
                       className="shrink-0"
                     >
-                      <ChevronLeft className="size-4" />
+                      <ChevronLeft className="size-4 mr-1" />
+                      <span className="hidden sm:inline">Prev</span>
                     </Button>
                     <Select
                       value={currentProblem.id}
@@ -2555,7 +2638,7 @@ export function LearningInterface() {
                       <div className="flex items-center gap-2 overflow-hidden">
                         <span className="truncate">{currentProblem.title}</span>
                         <Badge variant="outline" className="text-[10px] px-1 shrink-0 hidden sm:inline-flex" title="Problems solved">
-                          {solvedCount} / {totalProblems} solved
+                          {solvedCount} of {totalProblems} solved
                         </Badge>
                       </div>
                     </SelectTrigger>
@@ -2571,7 +2654,7 @@ export function LearningInterface() {
                               difficulty === 'intermediate' ? 'text-yellow-700 bg-yellow-50' :
                               'text-red-700 bg-red-50'
                             }`}>
-                              {difficulty} ({solvedInDifficulty} / {problems.length} solved)
+                              {difficulty} — {solvedInDifficulty} of {problems.length} solved
                             </div>
                             {problems.map(problem => {
                               const solved = isProblemSolved(problem.id);
@@ -2602,13 +2685,14 @@ export function LearningInterface() {
                   </Select>
                     <Button
                       variant="outline"
-                      size="icon"
+                      size="sm"
                       onClick={handleNextProblem}
                       disabled={!hasNextProblem}
                       aria-label="Next problem"
                       className="shrink-0"
                     >
-                      <ChevronRight className="size-4" />
+                      <span className="hidden sm:inline">Next</span>
+                      <ChevronRight className="size-4 ml-1" />
                     </Button>
                   </div>
                 </div>
@@ -2630,7 +2714,7 @@ export function LearningInterface() {
                       <div className="flex items-center gap-1 cursor-help">
                         <CheckCircle2 className="size-4" />
                         <span>
-                          {allProblemInteractions.filter(i => i.successful).length} successful runs
+                          {allProblemInteractions.filter(i => i.successful).length} correct runs
                         </span>
                       </div>
                     </TooltipTrigger>
@@ -2881,7 +2965,7 @@ export function LearningInterface() {
               <Card className="p-4">
                 <h3 className="font-semibold mb-3">Session Stats</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 text-sm">
-                  <div className="text-gray-600">Total attempts:</div>
+                  <div className="text-gray-600" title="Query attempts in this session only">Attempts (this session):</div>
                   <div className="font-medium text-right">{totalAttempts}</div>
                   <div className="text-gray-600">Hints viewed:</div>
                   <div className="font-medium text-right">{hintViewsCount}</div>

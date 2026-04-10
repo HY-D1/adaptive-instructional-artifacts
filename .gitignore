@@ -64,9 +64,23 @@ PROFILE_VALIDATION_TEST_REPORT.md
 *.md
 
 # But keep these documentation files
-!docs/research/corpus-product-fit-audit.md
-!docs/research/embedding-bakeoff-dbms-ramakrishnan.md
-!docs/research/LOGGING_SPECIFICATION.md
+!docs/INDEX.md
+!docs/CHANGELOG.md
+!docs/AGENTS.md
+!docs/PROJECT_COORDINATION.md
+!docs/DEPLOYMENT.md
+!docs/DEPLOYMENT_MODES.md
+!docs/ENVIRONMENT.md
+!docs/README.md
+!docs/PERSISTENCE_MAP.md
+!docs/PERSISTENCE_HARDENING_REPORT.md
+!docs/PROGRESS_AUDIT_REPORT.md
+!docs/PROGRESS_MODEL.md
+!docs/research/*.md
+!docs/audit/*.md
+!docs/reports/*.md
+!docs/runbooks/*.md
+!docs/runbooks/**/*.md
 
 # Architecture diagrams (local only)
 diagrams/
@@ -139,3 +153,4 @@ apps/server/dist/
 .env*.local
 .local/
 .env.pdf-local
+.neon
