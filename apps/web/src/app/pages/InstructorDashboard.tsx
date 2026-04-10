@@ -169,7 +169,7 @@ export function InstructorDashboard() {
     profiles: backendProfiles,
     isLoading: isProfilesLoading,
     averageConceptCoverage: backendAvgCoverage,
-  } = useAllLearnerProfiles();
+  } = useAllLearnerProfiles({ authTrigger: authUser?.learnerId });
   
   const [profiles, setProfiles] = useState<LearnerProfile[]>([]);
   const [interactions, setInteractions] = useState<InteractionEvent[]>([]);

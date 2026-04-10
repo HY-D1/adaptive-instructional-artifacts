@@ -1704,7 +1704,7 @@ export function LearningInterface() {
     if (result.success) {
       setLastError(undefined);
       setLastErrorEventId(undefined);
-      setEscalationTriggered(false);
+      // Keep escalationTriggered=true so Save to Notes stays visible after solving
       setNotesActionMessage(undefined);
       setGenerationError(undefined);
       setLatestGeneratedUnit(null);
@@ -2242,7 +2242,16 @@ export function LearningInterface() {
 
   const latestProblemErrorSubtype = latestProblemErrorEvent?.sqlEngageSubtype || latestProblemErrorEvent?.errorSubtypeId;
   const effectiveLastError = lastError || latestProblemErrorSubtype;
-  const showAddToNotes = escalationTriggered && !!effectiveLastError;
+  // Show Save to Notes when student has engaged with the problem:
+  // 1. After hint escalation with an error (original behavior)
+  // 2. After viewing any hints (student actively sought help)
+  // 3. After solving the problem (student may want to save their learning)
+  const hasViewedHints = problemInteractions.some(i => i.eventType === 'hint_view');
+  const hasSolvedCurrentProblem = isCurrentProblemSolved;
+  const showAddToNotes = 
+    (escalationTriggered && !!effectiveLastError) ||  // Original path
+    hasViewedHints ||                                   // Viewed at least one hint
+    hasSolvedCurrentProblem;                           // Solved the problem
   
   const errorCount = useMemo(() => 
     problemInteractions.filter(i => i.eventType === 'error').length,

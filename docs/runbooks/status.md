@@ -64,6 +64,32 @@ Instructor dashboards derived student visibility from `learner_profiles`, but so
 
 ---
 
+## 3 Live Bugs Fix — 2026-04-10
+
+**Status**: ✅ **ALL FIXED**
+
+Fixed 3 live production bugs affecting instructor dashboard, textbook viewing, and student notebook functionality.
+
+### Bug Registry
+
+| Bug | Symptom | Root Cause | Fix Location | Status |
+|-----|---------|------------|--------------|--------|
+| Dashboard refresh | Empty student list until manual refresh | `useAllLearnerProfiles` raced with auth init, never retried | `useLearnerProfile.ts`, `InstructorDashboard.tsx` | ✅ Fixed |
+| Textbook empty | Instructor view shows empty textbook | `hydrateLearner` returns before background textbook fetch | `TextbookPage.tsx` | ✅ Fixed |
+| Can't save notes | "Save to My Notes" button invisible | Condition too strict: required escalation+error | `LearningInterface.tsx` | ✅ Fixed |
+
+### Verification
+
+| Gate | Result |
+|------|--------|
+| `npm run integrity:scan` | ✅ PASS |
+| `npm run server:build` | ✅ PASS |
+| `npm run build` | ✅ PASS (2.89s) |
+| `npm run test:unit` | ✅ 1790 passed, 2 skipped |
+| `npm run replay:gate` | ✅ SKIPPED (expected) |
+
+---
+
 ## Student Beta Bug Fixes — 2026-04-09 (12 Bugs Fixed, 6 Root Causes)
 
 **Status**: ✅ **COMPLETE**

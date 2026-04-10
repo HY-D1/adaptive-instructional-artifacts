@@ -9,6 +9,29 @@
 
 ## [Unreleased] - Harderning/Research-Grade-Tightening
 
+### Fixed - 2026-04-10 (3 Live Bugs: Dashboard, Textbook, Save to Notes)
+
+#### Bug 1: Instructor Dashboard Needs Manual Refresh
+- **Bug**: Instructor dashboard showed empty student list until manual page refresh
+- **Root Cause**: `useAllLearnerProfiles()` fired once on mount and raced with auth initialization. The fetch completed before JWT cookie was available, returned empty, and never retried.
+- **Fix**: Added `authTrigger` option to `useAllLearnerProfiles()` that re-fetches when auth state changes
+- **Files**: `apps/web/src/app/hooks/useLearnerProfile.ts`, `apps/web/src/app/pages/InstructorDashboard.tsx`
+- **Verification**: `npm run build` ✅, `npm run test:unit` ✅ 1790 passed
+
+#### Bug 2: Instructor "View Textbook" Shows Empty
+- **Bug**: When instructor clicked "View Textbook" for a student, the textbook rendered empty initially
+- **Root Cause**: `hydrateLearner()` returns before the background `void Promise.all([...getTextbook])` completes. TextbookPage reads empty localStorage before data arrives.
+- **Fix**: Added `isHydratingTextbook` state, await hydration with `{force: true}`, wait 1500ms for background sync, then force re-read via `storageVersion` increment
+- **Files**: `apps/web/src/app/pages/TextbookPage.tsx`
+- **Verification**: `npm run build` ✅, `npm run test:unit` ✅ 1790 passed
+
+#### Bug 3: Student Cannot Add to Notebook
+- **Bug**: "Save to My Notes" button only appeared after hint escalation + SQL error
+- **Root Cause**: `showAddToNotes` required both `escalationTriggered` AND `effectiveLastError`. Students who viewed hints without escalating, or who solved the problem, never saw the button. Also, `escalationTriggered` was reset on successful query execution.
+- **Fix**: Widened condition to include `hasViewedHints || hasSolvedCurrentProblem`. Removed `setEscalationTriggered(false)` from success handler so button stays visible after solving.
+- **Files**: `apps/web/src/app/pages/LearningInterface.tsx`
+- **Verification**: `npm run build` ✅, `npm run test:unit` ✅ 1790 passed, `npm run replay:gate` ✅ skipped (expected)
+
 ### Fixed - 2026-04-10 (Instructor Dashboard Visibility)
 
 #### Learner Profile Creation Gap

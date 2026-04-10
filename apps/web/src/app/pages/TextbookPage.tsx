@@ -82,18 +82,32 @@ export function TextbookPage() {
 
   // Storage change listener for reactive updates
   const [storageVersion, setStorageVersion] = useState(0);
+  const [isHydratingTextbook, setIsHydratingTextbook] = useState(true);
   
   useEffect(() => {
-    if (isHydrating || (AUTH_BACKEND_CONFIGURED && (isRoleLoading || !learnerId))) {
+    if (isHydrating || isHydratingTextbook || (AUTH_BACKEND_CONFIGURED && (isRoleLoading || !learnerId))) {
       return undefined;
     }
     const timer = setTimeout(() => setIsLoading(false), 500);
     return () => clearTimeout(timer);
-  }, [isHydrating, isRoleLoading, learnerId]);
+  }, [isHydrating, isHydratingTextbook, isRoleLoading, learnerId]);
 
   useEffect(() => {
     if (!learnerId) return;
-    void storage.hydrateLearner(learnerId);
+    let cancelled = false;
+    setIsHydratingTextbook(true);
+
+    storage.hydrateLearner(learnerId, { force: true }).then(() => {
+      // Wait a beat for the background textbook sync to complete
+      return new Promise(resolve => setTimeout(resolve, 1500));
+    }).finally(() => {
+      if (!cancelled) {
+        setStorageVersion(v => v + 1); // Force re-read from localStorage
+        setIsHydratingTextbook(false);
+      }
+    });
+
+    return () => { cancelled = true; };
   }, [learnerId]);
 
   useEffect(() => {
