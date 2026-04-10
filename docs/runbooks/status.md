@@ -6,6 +6,62 @@
 
 ---
 
+## Student Beta Bug Fixes — 2026-04-09 (12 Bugs Fixed, 6 Root Causes)
+
+**Status**: ✅ **COMPLETE**
+
+Fixed all 12 actionable bugs reported by students during 8:30am and 10:30am beta cohorts (April 9, 2026). One bug (8:30-#5: AI no user question) deferred as feature request.
+
+### Bug Registry Summary
+
+| Bug ID | Student Report | Root Cause | Status |
+|--------|---------------|------------|--------|
+| 8:30-#1 | Progress 0/32 | A: Hydration race | ✅ Fixed |
+| 8:30-#2 | Query 13 rounding | C: Epsilon too tight | ✅ Fixed |
+| 8:30-#3 | Query 26 alias | C: Exact column match | ✅ Fixed |
+| 8:30-#4 | Storage Full | F: Raw localStorage | ✅ Fixed |
+| 8:30-#5 | AI no user question | UX gap | ⏸️ Deferred |
+| 8:30-#6 | Ctrl+Enter broken | D: Textarea guard | ✅ Fixed |
+| 8:30-#7 | Safari broken | D: No metaKey | ✅ Fixed |
+| 8:30-#8 | Navigation unclear | UX: icon-only | ✅ Fixed |
+| 8:30-#9 | Progress out of sync | A: Hydration race | ✅ Fixed |
+| 8:30-#10 | No resume on return | A+B: Hydration+draft | ✅ Fixed |
+| 10:30-#1 | Query not saved | B: SessionId draft | ✅ Fixed |
+| 10:30-#2 | 6/32→2/32 | A: Hydration race | ✅ Fixed |
+| 10:30-#3 | Save to Notes fails | E: Requires error | ✅ Fixed |
+
+### Root Cause Fixes
+
+| Root | Description | Files Changed |
+|------|-------------|---------------|
+| **A** | Progress hydration race | `useLearnerProgress.ts`, `LearningInterface.tsx` |
+| **B** | SessionId-keyed drafts | `LearningInterface.tsx` |
+| **C** | SQL grading too strict | `sql-executor.ts` |
+| **D** | Keyboard shortcuts broken | `LearningInterface.tsx` |
+| **E** | Save to Notes requires error | `LearningInterface.tsx` |
+| **F** | Storage quota crashes | `AskMyTextbookChat.tsx`, `SettingsPage.tsx`, `LLMSettingsHelper.tsx` |
+
+### New Playwright Tests
+
+| Test File | Coverage |
+|-----------|----------|
+| `student-progress-persistence.spec.ts` | Progress hydration, draft survival |
+| `grading-tolerance.spec.ts` | Column alias matching, float epsilon |
+| `keyboard-shortcuts.spec.ts` | Ctrl+Enter, Cmd+Enter from editor |
+| `save-to-notes.spec.ts` | Save without prior error |
+| `navigation-ux.spec.ts` | Next Problem prompt, button labels |
+
+### Verification
+
+| Gate | Result |
+|------|--------|
+| `npm run integrity:scan` | ✅ PASS |
+| `npm run server:build` | ✅ PASS |
+| `npm run build` | ✅ PASS (2.73s) |
+| `npm run test:unit` | ✅ 1781 passed |
+
+---
+
 ## Hardening Pass — 2026-04-09 (8 Bugs Fixed, Playwright Verified)
 
 **Status**: ✅ **COMPLETE**

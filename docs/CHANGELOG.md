@@ -48,10 +48,33 @@
 - No root-level `*.md` files
 - No `docs/progress.md` or week-based files
 - No `docs/archive/` - delete old docs
+
+#### Keyboard Shortcuts Fix (Root Cause D)
+- **Bug**: Ctrl+Enter didn't work from Monaco editor; Cmd+Enter didn't work on Mac
+- **Fix**: Moved run-query shortcut before textarea guard, added metaKey support
+- **Files**: `apps/web/src/app/pages/LearningInterface.tsx`
 - No dated audit evidence - delete after use
 - No duplicate "* 2" files
 
-### Fixed - 2026-04-09
+### Fixed - 2026-04-09 (Student Beta Feedback)
+
+#### SQL Grading Tolerance (Root Cause C)
+- **Bug**: Correct SQL rejected due to column alias mismatch and tight float epsilon
+  - Query 26: `SELECT UPPER(emp_name)` failed because column name was `UPPER(emp_name)` not `name_upper`
+  - Query 13: Float precision epsilon of 0.01 was too tight for SQLite rounding
+- **Fix**: Added value-only fallback matching + widened epsilon 0.01→0.015
+- **Files**: `apps/web/src/app/lib/sql-executor.ts`
+- **Tests**: Added `tests/e2e/regression/grading-tolerance.spec.ts`
+
+#### Progress Hydration Fix (Root Cause A)
+- **Bug**: Progress showed 0/32 after login because `useLearnerProgress` read from localStorage before hydration completed
+- **Fix**: Added `hydratedSolvedIds` injection to bridge hydration result through React state
+- **Files**: `useLearnerProgress.ts`, `LearningInterface.tsx`
+
+#### Cross-Session Draft Persistence (Root Cause B)
+- **Bug**: Drafts lost on page reload because keyed by sessionId which changes on reload
+- **Fix**: Added `findAnyPracticeDraft` fallback in problem change handler
+- **Files**: `LearningInterface.tsx`
 
 #### CI/Infra Hardening (BUG-001, BUG-003)
 - **BUG-001**: Aligned CI Node version to 22 in `.github/workflows/regression-gate.yml`
@@ -81,6 +104,22 @@
   - `apps/web/src/app/lib/content/reinforcement-manager.ts` - Already used safeStorage (verified)
 - **Impact**: Prevents silent crashes on quota exceeded during profile caching and UI state updates
 
+#### Save to Notes Fix (Root Cause E)
+- **Bug**: Save to Notes required prior error; failed with "no concept context" when student hadn't made an error yet
+- **Fix**: Added fallback to problem concepts when no error context exists
+  - `handleAddToNotes()`: Falls back to `currentProblem.concepts[0]` when no error subtype found
+  - `handleEscalation()`: Same fallback pattern for escalation button
+- **Files**: `apps/web/src/app/pages/LearningInterface.tsx`
+- **Tests**: Added `tests/e2e/regression/save-to-notes.spec.ts`
+
+#### Storage Quota Hardening (Root Cause F)
+- **Bug**: Raw localStorage writes crashed on quota exceeded
+- **Fix**: Migrated HIGH/MEDIUM risk sites to safeSet with priority levels
+  - `AskMyTextbookChat.tsx`: Chat history (priority: 'cache') with `safeSet`/`safeRemove`
+  - `SettingsPage.tsx`: Interactions data (priority: 'critical'), debug overrides (priority: 'standard')
+  - `LLMSettingsHelper.tsx`: LLM settings (priority: 'cache')
+- **Files**: `AskMyTextbookChat.tsx`, `SettingsPage.tsx`, `LLMSettingsHelper.tsx`
+
 #### UX P1: Silent Redirects
 - **Problem**: Unauthorized route redirects sent users to home page with no explanation
 - **Solution**: Added `?reason=` query param to redirect URLs, display dismissible alert on landing pages
@@ -97,6 +136,11 @@
 - **Problem**: `handleStorageChange` processed storage events immediately, potential for unnecessary re-renders
 - **Solution**: Added 50ms debounce to storage event handler in useSessionPersistence.ts
 - **Files Changed**: `apps/web/src/app/hooks/useSessionPersistence.ts`
+
+#### Navigation UX Clarity (Bug 8:30-#8)
+- **Bug**: Prev/Next buttons were icon-only, confusing students
+- **Fix**: Added text labels (hidden on mobile), added "Next Problem →" prompt after correct answer
+- **Files**: `LearningInterface.tsx`
 
 ### Changed - 2026-04-09
 

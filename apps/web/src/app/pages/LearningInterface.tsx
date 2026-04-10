@@ -28,6 +28,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Clock,
   CheckCircle2,
+  CheckCircle,
   AlertCircle,
   Pause,
   Sparkles,
@@ -444,6 +445,7 @@ export function LearningInterface() {
   const [showDependencyWarning, setShowDependencyWarning] = useState(false);
   const [hdiRefreshKey, setHdiRefreshKey] = useState(0);
   const [solvedRefreshKey, setSolvedRefreshKey] = useState(0);
+  const [hydratedSolvedIds, setHydratedSolvedIds] = useState<Set<string>>(new Set());
   const dependencyWarningShownRef = useRef(false);
   const lastHintRequestTimeRef = useRef<number>(0);
   
@@ -963,25 +965,25 @@ export function LearningInterface() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if in input/textarea or modal is open
+      // Don't trigger if a modal/dialog is open
+      const isModalOpen = document.querySelector('[role="dialog"]') !== null;
+      if (isModalOpen) return;
+
+      // Ctrl+Enter OR Cmd+Enter (Mac) to run query
+      // Allow from ANYWHERE including the Monaco editor textarea
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        const runButton = document.querySelector('[data-testid="run-query-btn"]') as HTMLButtonElement;
+        runButton?.click();
+        return;
+      }
+
+      // Other shortcuts — skip if in input/textarea (editor handles its own keys)
       if (
         e.target instanceof HTMLInputElement ||
         e.target instanceof HTMLTextAreaElement
       ) {
         return;
-      }
-
-      // Don't trigger if a modal/dialog is open
-      const isModalOpen = document.querySelector('[role="dialog"]') !== null;
-      if (isModalOpen) {
-        return;
-      }
-
-      // Ctrl+Enter to run query
-      if (e.ctrlKey && e.key === 'Enter') {
-        e.preventDefault();
-        const runButton = document.querySelector('[data-testid="run-query-btn"]') as HTMLButtonElement;
-        runButton?.click();
       }
     };
 
@@ -1141,6 +1143,11 @@ export function LearningInterface() {
           }
           // Force refresh of solved progress from newly hydrated storage
           setSolvedRefreshKey(prev => prev + 1);
+          // Bridge hydration result through React state to avoid race condition
+          const freshProfile = storage.getProfile(learnerId);
+          if (freshProfile?.solvedProblemIds) {
+            setHydratedSolvedIds(new Set(freshProfile.solvedProblemIds));
+          }
         }
 
         const backendSessionSnapshot = await storage.getBackendSessionSnapshot(learnerId);
@@ -1432,8 +1439,9 @@ export function LearningInterface() {
     // This was semantically incorrect and caused telemetry noise
     
     const restoredDraft = sessionId
-      ? storage.getPracticeDraft(learnerId, sessionId, problem.id)
-      : null;
+      ? (storage.getPracticeDraft(learnerId, sessionId, problem.id)
+         ?? storage.findAnyPracticeDraft(learnerId, problem.id))
+      : storage.findAnyPracticeDraft(learnerId, problem.id);
     setSqlDraft(restoredDraft ?? DEFAULT_SQL_EDITOR_CODE);
     setStartTime(Date.now());
     setElapsedTime(0);
@@ -1853,7 +1861,17 @@ export function LearningInterface() {
     // inferring from interaction history. This ensures Save to Notes always works
     // even when no SQL error has been submitted yet (e.g. learner clicked Save
     // after only viewing hints).
-    const escalationSubtype = providedSubtype || lastError || resolveLatestProblemErrorSubtype();
+    let escalationSubtype = providedSubtype || lastError || resolveLatestProblemErrorSubtype();
+    
+    if (!escalationSubtype) {
+      // Fall back to the first concept of the current problem
+      // This allows escalation even when no error has occurred
+      const problemConcepts = currentProblem.concepts;
+      if (problemConcepts && problemConcepts.length > 0) {
+        escalationSubtype = problemConcepts[0];
+      }
+    }
+    
     if (!escalationSubtype) {
       // Cannot save — surface a visible error instead of silently doing nothing.
       setGenerationError('Could not save note: no concept context identified. Try submitting a query or requesting a hint first.');
@@ -1903,7 +1921,18 @@ export function LearningInterface() {
   };
 
   const handleAddToNotes = async () => {
-    const noteSubtype = lastError || resolveLatestProblemErrorSubtype();
+    // Try error-based context first, then fall back to problem concepts
+    let noteSubtype = lastError || resolveLatestProblemErrorSubtype();
+
+    if (!noteSubtype) {
+      // Fall back to the first concept of the current problem
+      // This allows saving notes even when no error has occurred
+      const problemConcepts = currentProblem.concepts;
+      if (problemConcepts && problemConcepts.length > 0) {
+        noteSubtype = problemConcepts[0];
+      }
+    }
+
     if (!noteSubtype) {
       setGenerationError('Could not save note: no concept context identified. Try submitting a query or requesting a hint first.');
       return;
@@ -2170,6 +2199,7 @@ export function LearningInterface() {
     learnerId,
     currentProblemId: currentProblem.id,
     refreshKey: solvedRefreshKey,
+    hydratedSolvedIds,
   });
 
   // Destructure for convenience (backward compatibility with existing code)
@@ -2514,6 +2544,22 @@ export function LearningInterface() {
                     </div>
                     <p className="text-gray-700">{currentProblem.description}</p>
                     
+                    {/* Next Problem callout after correct answer */}
+                    {isCurrentProblemSolved && hasNextProblem && (
+                      <div className="mt-2 flex items-center gap-2 text-green-700 text-sm font-medium">
+                        <CheckCircle className="size-4" />
+                        <span>Correct!</span>
+                        <Button 
+                          variant="link" 
+                          size="sm" 
+                          onClick={handleNextProblem} 
+                          className="text-green-700 underline p-0 h-auto"
+                        >
+                          Next Problem →
+                        </Button>
+                      </div>
+                    )}
+                    
                     {/* Concept tags */}
                     <div className="flex flex-wrap gap-1.5 mt-3">
                       {currentProblem.concepts.map(conceptId => {
@@ -2566,13 +2612,14 @@ export function LearningInterface() {
                   <div className="flex items-center gap-2">
                     <Button
                       variant="outline"
-                      size="icon"
+                      size="sm"
                       onClick={handlePreviousProblem}
                       disabled={!hasPreviousProblem}
                       aria-label="Previous problem"
                       className="shrink-0"
                     >
-                      <ChevronLeft className="size-4" />
+                      <ChevronLeft className="size-4 mr-1" />
+                      <span className="hidden sm:inline">Prev</span>
                     </Button>
                     <Select
                       value={currentProblem.id}
@@ -2629,13 +2676,14 @@ export function LearningInterface() {
                   </Select>
                     <Button
                       variant="outline"
-                      size="icon"
+                      size="sm"
                       onClick={handleNextProblem}
                       disabled={!hasNextProblem}
                       aria-label="Next problem"
                       className="shrink-0"
                     >
-                      <ChevronRight className="size-4" />
+                      <span className="hidden sm:inline">Next</span>
+                      <ChevronRight className="size-4 ml-1" />
                     </Button>
                   </div>
                 </div>
