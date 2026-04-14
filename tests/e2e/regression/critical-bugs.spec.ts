@@ -381,6 +381,7 @@ test.describe('@weekly @no-external @integration @critical-bugs Critical Bug Fix
       const keys = Object.keys(cache);
       
       return {
+        keys,
         keyCount: keys.length,
         learner1KeyExists: keys.some((k: string) => k.startsWith('learner-1:')),
         learner2KeyExists: keys.some((k: string) => k.startsWith('learner-2:')),

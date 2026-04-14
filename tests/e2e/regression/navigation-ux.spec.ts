@@ -21,8 +21,9 @@ test.describe('Navigation UX @hardening', () => {
     await page.locator('.monaco-editor textarea').focus();
     await page.keyboard.type('SELECT * FROM users;');
     await page.keyboard.press('Control+Enter');
-    // Verify "Next Problem" link appears after correct answer
-    await expect(page.getByText('Next Problem')).toBeVisible({ timeout: 15000 });
+    // Wait for results to appear, then verify the next-problem navigation button is enabled
+    await expect(page.getByRole('heading', { name: 'Results' })).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('button', { name: /next problem/i })).toBeEnabled({ timeout: 15000 });
   });
 
   test('prev/next buttons have text labels', async ({ page }) => {
