@@ -73,13 +73,13 @@ interface PreviewModeBannerProps {
 
 function PreviewModeBanner({ onExit }: PreviewModeBannerProps) {
   return (
-    <div className="bg-blue-100 border-b border-blue-200 px-4 py-2" data-testid="preview-mode-banner">
+    <div className="bg-blue-100 dark:bg-blue-900/30 border-b border-blue-200 dark:border-blue-800 px-4 py-2" data-testid="preview-mode-banner">
       <div className="container mx-auto flex items-center justify-center gap-3">
         <Eye className="size-4 text-blue-600" />
-        <span className="text-sm text-blue-800">
+        <span className="text-sm text-blue-800 dark:text-blue-200">
           <strong>Preview Mode:</strong> You are viewing as a student
         </span>
-        <Button variant="link" size="sm" onClick={onExit} className="text-blue-700 h-auto py-0">
+        <Button variant="link" size="sm" onClick={onExit} className="text-blue-700 dark:text-blue-300 h-auto py-0">
           Exit Preview
         </Button>
       </div>
@@ -104,16 +104,16 @@ function SessionExpired({ onRedirect }: SessionExpiredProps) {
       aria-labelledby="session-expired-title"
       data-testid="session-expired-modal"
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
             <AlertCircle className="w-5 h-5 text-amber-600" />
           </div>
-          <h2 id="session-expired-title" className="text-lg font-semibold text-gray-900">
+          <h2 id="session-expired-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             Session Expired
           </h2>
         </div>
-        <p className="text-gray-600 mb-6">
+        <p className="text-gray-600 dark:text-gray-300 mb-6">
           Your session has expired due to 7 days of inactivity. Please log in again to continue.
         </p>
         <Button onClick={onRedirect} className="w-full">
@@ -147,7 +147,7 @@ function ResearchUnsafeBlocker() {
       aria-labelledby="research-unsafe-title"
       data-testid="research-unsafe-modal"
     >
-      <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full p-6 border-4 border-red-600">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-lg w-full p-6 border-4 border-red-600">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
             <AlertCircle className="w-6 h-6 text-red-600" />
@@ -159,16 +159,16 @@ function ResearchUnsafeBlocker() {
             <p className="text-sm text-red-600 font-mono">Mode: {researchMode}</p>
           </div>
         </div>
-        <div className="space-y-4 text-gray-700">
+        <div className="space-y-4 text-gray-700 dark:text-gray-200">
           <p className="font-medium">
             {getResearchUnsafeError()}
           </p>
-          <div className="bg-gray-50 p-4 rounded-lg text-sm font-mono space-y-1">
+          <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg text-sm font-mono space-y-1">
             <p>Contract Version: {RESEARCH_CONTRACT_VERSION}</p>
             <p>Backend Configured: {String(diagnostics?.envConfigured ?? false)}</p>
             <p>Environment: Production</p>
           </div>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             This deployment cannot collect research data. Please contact the research team or use the demo mode flag for local development.
           </p>
         </div>
@@ -231,7 +231,7 @@ function ResearchReadinessBlocker({ reason, diagnostics }: ResearchReadinessBloc
       aria-labelledby="research-readiness-title"
       data-testid="research-readiness-modal"
     >
-      <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6 border-4 border-red-600">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl max-w-md w-full p-6 border-4 border-red-600">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
             <AlertCircle className="w-6 h-6 text-red-600" />
@@ -244,7 +244,7 @@ function ResearchReadinessBlocker({ reason, diagnostics }: ResearchReadinessBloc
           </div>
         </div>
         
-        <div className="space-y-4 text-gray-700">
+        <div className="space-y-4 text-gray-700 dark:text-gray-200">
           {/* Student-friendly primary message */}
           <p className="font-medium text-base">
             {getStudentFriendlyMessage()}
@@ -265,7 +265,7 @@ function ResearchReadinessBlocker({ reason, diagnostics }: ResearchReadinessBloc
               onClick={() => setShowDetails(!showDetails)}
               variant="ghost"
               size="sm"
-              className="text-gray-500"
+              className="text-gray-500 dark:text-gray-400"
             >
               {showDetails ? 'Hide Technical Details' : 'Show Technical Details'}
             </Button>
@@ -281,8 +281,8 @@ function ResearchReadinessBlocker({ reason, diagnostics }: ResearchReadinessBloc
                 </div>
               )}
               
-              <div className="bg-gray-50 p-3 rounded-lg text-xs font-mono space-y-1">
-                <p className="font-semibold text-gray-900">Status:</p>
+              <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg text-xs font-mono space-y-1">
+                <p className="font-semibold text-gray-900 dark:text-gray-100">Status:</p>
                 <div className="grid grid-cols-2 gap-1">
                   <span>Backend:</span>
                   <span className={diagnostics.backendReachable ? 'text-green-600' : 'text-red-600'}>
@@ -309,7 +309,7 @@ function ResearchReadinessBlocker({ reason, diagnostics }: ResearchReadinessBloc
                 </div>
               )}
               
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-gray-400 dark:text-gray-500">
                 Contract: {RESEARCH_CONTRACT_VERSION}
               </p>
             </div>
@@ -402,6 +402,19 @@ export function RootLayout() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
+
+  // Theme: sync with OS preference when in 'system' mode
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => {
+      const theme = localStorage.getItem('sql-adapt-theme');
+      if (!theme || theme === 'system') {
+        document.documentElement.classList.toggle('dark', e.matches);
+      }
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   const handleCloseWelcome = () => {
     try {
@@ -594,7 +607,7 @@ export function RootLayout() {
       {/* Skip navigation for accessibility - first focusable element */}
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[60] focus:px-4 focus:py-2 focus:bg-white focus:text-blue-600 focus:rounded-lg focus:shadow-lg focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[60] focus:px-4 focus:py-2 focus:bg-white dark:focus:bg-gray-900 focus:text-blue-600 focus:rounded-lg focus:shadow-lg focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
       >
         Skip to main content
       </a>
@@ -630,7 +643,7 @@ export function RootLayout() {
           />
         )}
 
-        <nav className="border-b bg-white sticky top-0 z-40">
+        <nav className="border-b bg-white dark:bg-gray-900 dark:border-gray-700 sticky top-0 z-40">
           <div className="container mx-auto px-4">
             <div className="flex items-center justify-between h-16">
               {/* Logo */}
@@ -681,7 +694,7 @@ export function RootLayout() {
                 {/* Keyboard shortcut hint - desktop only */}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <kbd className="hidden lg:inline-flex items-center gap-1 px-2 py-1 text-xs font-mono bg-gray-100 border rounded">
+                    <kbd className="hidden lg:inline-flex items-center gap-1 px-2 py-1 text-xs font-mono bg-gray-100 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 border rounded">
                       <Keyboard className="size-3" />
                       ?
                     </kbd>
@@ -811,20 +824,20 @@ export function RootLayout() {
                           <LogOut className="size-5 mr-3" />
                           <span>{isLoggingOut ? 'Signing Out...' : 'Logout'}</span>
                         </Button>
-                        <div className="px-2 text-sm text-gray-600">
+                        <div className="px-2 text-sm text-gray-600 dark:text-gray-300">
                           <p className="font-medium mb-2">Keyboard Shortcuts</p>
                           <div className="space-y-1 text-xs">
                             <div className="flex justify-between">
                               <span>Ctrl + Enter</span>
-                              <span className="text-gray-400">Run query</span>
+                              <span className="text-gray-400 dark:text-gray-500">Run query</span>
                             </div>
                             <div className="flex justify-between">
                               <span>Esc</span>
-                              <span className="text-gray-400">Close modals</span>
+                              <span className="text-gray-400 dark:text-gray-500">Close modals</span>
                             </div>
                             <div className="flex justify-between">
                               <span>?</span>
-                              <span className="text-gray-400">Show help</span>
+                              <span className="text-gray-400 dark:text-gray-500">Show help</span>
                             </div>
                           </div>
                         </div>
@@ -836,7 +849,7 @@ export function RootLayout() {
             </div>
           </div>
           {logoutError && (
-            <div className="border-t border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700" role="alert">
+            <div className="border-t border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-2 text-sm text-red-700 dark:text-red-300" role="alert">
               {logoutError}
             </div>
           )}

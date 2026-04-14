@@ -316,17 +316,17 @@ export function SettingsPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <div className="border-b bg-white">
+      <div className="border-b bg-white dark:bg-gray-900 dark:border-gray-700">
         <div className="container mx-auto px-4 py-6">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-gray-100 rounded-xl">
-              <Settings className="size-7 text-gray-700" />
+            <div className="p-2 bg-gray-100 dark:bg-gray-800 rounded-xl">
+              <Settings className="size-7 text-gray-700 dark:text-gray-200" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-              <p className="text-gray-600 text-sm">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Settings</h1>
+              <p className="text-gray-600 dark:text-gray-300 text-sm">
                 Configure your learning environment and AI preferences
               </p>
             </div>
@@ -346,8 +346,8 @@ export function SettingsPage() {
                 <Eye className="size-5 text-indigo-600" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Appearance</h2>
-                <p className="text-sm text-gray-500">Choose your preferred theme</p>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Appearance</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Choose your preferred theme</p>
               </div>
             </div>
             <div className="space-y-3" data-testid="theme-select-section">
@@ -364,7 +364,7 @@ export function SettingsPage() {
                   <SelectItem value="system">System</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 System follows your device&apos;s color scheme preference.
               </p>
             </div>
@@ -378,10 +378,10 @@ export function SettingsPage() {
                   <FileText className="size-5 text-blue-600" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                     PDF Textbook Upload
                   </h2>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     Upload your SQL textbook for personalized hints
                   </p>
                 </div>
@@ -407,7 +407,7 @@ export function SettingsPage() {
                 <h2 className="text-lg font-semibold text-gray-900">
                   LLM Configuration
                 </h2>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
                   Configure AI model settings for hint generation
                 </p>
               </div>
@@ -425,10 +425,10 @@ export function SettingsPage() {
                   <FlaskConical className="size-5 text-amber-600" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg font-semibold text-gray-900">
+                  <CardTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                     Week 5 Testing Controls
                   </CardTitle>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     Debug controls for adaptive learning research components
                   </p>
                 </div>
@@ -442,8 +442,8 @@ export function SettingsPage() {
               {/* Profile Override Section */}
               <div className="space-y-3" data-testid="profile-override-section">
                 <div className="flex items-center gap-2">
-                  <UserCog className="size-4 text-gray-500" />
-                  <h3 className="text-sm font-medium text-gray-900">
+                  <UserCog className="size-4 text-gray-500 dark:text-gray-400" />
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     Profile Override
                   </h3>
                 </div>
@@ -478,7 +478,7 @@ export function SettingsPage() {
                     Reset
                   </Button>
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   Overrides the bandit-assigned escalation profile for this learner
                 </p>
               </div>
@@ -488,8 +488,8 @@ export function SettingsPage() {
               {/* Assignment Strategy Section */}
               <div className="space-y-3" data-testid="assignment-strategy-section">
                 <div className="flex items-center gap-2">
-                  <Target className="size-4 text-gray-500" />
-                  <h3 className="text-sm font-medium text-gray-900">
+                  <Target className="size-4 text-gray-500 dark:text-gray-400" />
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     Assignment Strategy
                   </h3>
                 </div>
@@ -520,7 +520,7 @@ export function SettingsPage() {
                     </Label>
                   </div>
                 </RadioGroup>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   Determines how escalation profiles are assigned to learners
                 </p>
               </div>
@@ -530,20 +530,20 @@ export function SettingsPage() {
               {/* HDI Reset Section */}
               <div className="space-y-3" data-testid="hdi-section">
                 <div className="flex items-center gap-2">
-                  <BrainCircuit className="size-4 text-gray-500" />
-                  <h3 className="text-sm font-medium text-gray-900">
+                  <BrainCircuit className="size-4 text-gray-500 dark:text-gray-400" />
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     HDI (Hint Dependency Index)
                   </h3>
                 </div>
                 <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-md">
-                    <span className="text-sm text-gray-600">Current Score:</span>
+                  <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-md">
+                    <span className="text-sm text-gray-600 dark:text-gray-300">Current Score:</span>
                     <span className="text-sm font-mono font-medium" data-testid="hdi-score">
                       {formatHDIDetailed(hdiScore)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded-md">
-                    <span className="text-sm text-gray-600">Events:</span>
+                  <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-md">
+                    <span className="text-sm text-gray-600 dark:text-gray-300">Events:</span>
                     <span className="text-sm font-mono font-medium" data-testid="hdi-event-count">
                       {hdiEventCount}
                     </span>
@@ -559,7 +559,7 @@ export function SettingsPage() {
                     Clear HDI History
                   </Button>
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   Clears all HDI-related events (hdi_calculated, hdi_trajectory_updated,
                   dependency_intervention_triggered) for the current learner
                 </p>
@@ -571,8 +571,8 @@ export function SettingsPage() {
               <div className="space-y-3" data-testid="bandit-panel">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <GitBranch className="size-4 text-gray-500" />
-                    <h3 className="text-sm font-medium text-gray-900">
+                    <GitBranch className="size-4 text-gray-500 dark:text-gray-400" />
+                    <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                       Bandit Debug Panel
                     </h3>
                   </div>
@@ -584,18 +584,18 @@ export function SettingsPage() {
                 {/* Arm Stats Table */}
                 <div className="border rounded-md overflow-hidden">
                   <table className="w-full text-sm" data-testid="bandit-arm-stats">
-                    <thead className="bg-gray-50">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
                       <tr>
-                        <th className="px-3 py-2 text-left font-medium text-gray-700">
+                        <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-200">
                           Arm
                         </th>
-                        <th className="px-3 py-2 text-left font-medium text-gray-700">
+                        <th className="px-3 py-2 text-left font-medium text-gray-700 dark:text-gray-200">
                           Profile
                         </th>
-                        <th className="px-3 py-2 text-right font-medium text-gray-700">
+                        <th className="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-200">
                           Mean Reward
                         </th>
-                        <th className="px-3 py-2 text-right font-medium text-gray-700">
+                        <th className="px-3 py-2 text-right font-medium text-gray-700 dark:text-gray-200">
                           Pulls
                         </th>
                       </tr>
@@ -603,7 +603,7 @@ export function SettingsPage() {
                     <tbody className="divide-y">
                       {armStats.length > 0 ? (
                         armStats.map((stat) => (
-                          <tr key={stat.armId} className="hover:bg-gray-50" data-testid={`arm-stat-${stat.armId}`}>
+                          <tr key={stat.armId} className="hover:bg-gray-50 dark:hover:bg-gray-800/50" data-testid={`arm-stat-${stat.armId}`}>
                             <td className="px-3 py-2 font-mono text-xs">
                               {stat.armId}
                             </td>
@@ -620,7 +620,7 @@ export function SettingsPage() {
                         <tr>
                           <td
                             colSpan={4}
-                            className="px-3 py-4 text-center text-gray-500 italic"
+                            className="px-3 py-4 text-center text-gray-500 dark:text-gray-400 italic"
                             data-testid="bandit-no-data"
                           >
                             No bandit data available. Interact with problems to generate
@@ -634,7 +634,7 @@ export function SettingsPage() {
 
                 {/* Force Arm Selection */}
                 <div className="flex items-center gap-3">
-                  <span className="text-sm text-gray-600">Force arm selection:</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">Force arm selection:</span>
                   <div data-testid="force-arm-select">
                     <Select
                       value={selectedArm}
@@ -656,7 +656,7 @@ export function SettingsPage() {
                     Apply
                   </Button>
                 </div>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   Manually select a bandit arm to influence future escalation profile
                   assignments
                 </p>
@@ -674,10 +674,10 @@ export function SettingsPage() {
                   <FlaskConical className="size-5 text-indigo-600" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg font-semibold text-gray-900">
+                  <CardTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                     Session Experimental Toggles
                   </CardTitle>
-                  <p className="text-sm text-gray-500">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
                     Configure experimental features for the current learning session
                   </p>
                 </div>
@@ -691,8 +691,8 @@ export function SettingsPage() {
               {/* Textbook Disabled */}
               <div className="flex items-center justify-between" data-testid="toggle-textbook-disabled">
                 <div className="space-y-1">
-                  <h3 className="text-sm font-medium text-gray-900">Disable Textbook</h3>
-                  <p className="text-xs text-gray-500">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Disable Textbook</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     Hide the &quot;Ask My Textbook&quot; chat interface for this session
                   </p>
                 </div>
@@ -707,8 +707,8 @@ export function SettingsPage() {
               {/* Adaptive Ladder Disabled */}
               <div className="flex items-center justify-between" data-testid="toggle-adaptive-ladder">
                 <div className="space-y-1">
-                  <h3 className="text-sm font-medium text-gray-900">Disable Adaptive Ladder</h3>
-                  <p className="text-xs text-gray-500">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Disable Adaptive Ladder</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     Use static escalation profiles instead of bandit-adaptive selection
                   </p>
                 </div>
@@ -723,8 +723,8 @@ export function SettingsPage() {
               {/* Immediate Explanation Mode */}
               <div className="flex items-center justify-between" data-testid="toggle-immediate-explanation">
                 <div className="space-y-1">
-                  <h3 className="text-sm font-medium text-gray-900">Immediate Explanation Mode</h3>
-                  <p className="text-xs text-gray-500">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Immediate Explanation Mode</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     Skip hints entirely - go straight to explanation on help request
                   </p>
                 </div>
@@ -739,8 +739,8 @@ export function SettingsPage() {
               {/* Static Hint Mode */}
               <div className="flex items-center justify-between" data-testid="toggle-static-hint">
                 <div className="space-y-1">
-                  <h3 className="text-sm font-medium text-gray-900">Static Hint Mode</h3>
-                  <p className="text-xs text-gray-500">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Static Hint Mode</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     Use deterministic (non-adaptive) hint escalation
                   </p>
                 </div>
@@ -776,10 +776,10 @@ export function SettingsPage() {
                 <Eye className="size-5 text-blue-600" />
               </div>
               <div className="flex-1">
-                <h2 className="text-lg font-semibold text-gray-900">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                   Student Preview Mode
                 </h2>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-gray-500 dark:text-gray-400">
                   Preview how the learning interface appears to students
                 </p>
               </div>
@@ -789,15 +789,15 @@ export function SettingsPage() {
                 data-testid="preview-mode-toggle"
               />
             </div>
-            <div className="space-y-2 text-sm text-gray-600">
+            <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
               <p>
                 <strong>Preview Mode</strong> allows instructors to experience the platform 
                 as a student would, including the same hint escalation profiles and 
                 adaptive learning features.
               </p>
               {isPreviewMode && (
-                <div className="mt-3 p-3 bg-blue-50 rounded-md">
-                  <p className="text-blue-700">
+                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-md">
+                  <p className="text-blue-700 dark:text-blue-300">
                     Preview mode is currently <strong>enabled</strong>. Visit the{' '}
                     <a href="/practice" className="underline font-medium">
                       Practice page
@@ -806,7 +806,7 @@ export function SettingsPage() {
                   </p>
                 </div>
               )}
-              <p className="text-xs text-gray-400 mt-2">
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
                 Changes are synchronized across all open tabs automatically.
               </p>
             </div>
@@ -815,8 +815,8 @@ export function SettingsPage() {
 
         {/* Info Section */}
         <Card className="mt-6 p-6 max-w-5xl">
-          <h3 className="font-semibold text-gray-900 mb-2">About These Settings</h3>
-          <div className="space-y-2 text-sm text-gray-600">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2">About These Settings</h3>
+          <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
             {isInstructor && (
               <p>
                 <strong>PDF Textbook Upload:</strong> Upload your course textbook or
