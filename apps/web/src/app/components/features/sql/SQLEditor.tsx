@@ -468,10 +468,10 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
               {/* Initialization Loading Overlay */}
               {initStatus === 'loading' && (
                 <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm z-10 flex items-center justify-center">
-                  <div className="bg-white rounded-lg p-4 shadow-lg flex items-center gap-3">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-lg flex items-center gap-3">
                     <Loader2 className="size-5 text-blue-600 animate-spin" />
                     <div>
-                      <p className="text-sm font-medium text-gray-900">Initializing SQL Engine...</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Initializing SQL Engine...</p>
                       <p className="text-xs text-gray-500">Setting up problem database</p>
                     </div>
                   </div>
@@ -481,20 +481,20 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
               {/* Initialization Error Message */}
               {initStatus === 'error' && (
                 <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm z-10 flex items-center justify-center">
-                  <div className="bg-white rounded-lg p-4 shadow-lg max-w-lg mx-4">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-lg max-w-lg mx-4">
                     <div className="flex items-start gap-3">
                       <AlertCircle className="size-5 text-red-600 shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900">Failed to Initialize SQL Engine</p>
-                        <p className="text-xs text-gray-600 mt-1">{initError || 'An unexpected error occurred'}</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Failed to Initialize SQL Engine</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">{initError || 'An unexpected error occurred'}</p>
                         
                         {/* Expandable error details for debugging */}
                         {initErrorDetails && (
                           <details className="mt-3">
-                            <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-700">
+                            <summary className="text-xs text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700">
                               Show technical details
                             </summary>
-                            <pre className="mt-2 p-2 bg-gray-100 rounded text-[10px] text-gray-700 overflow-auto max-h-32 whitespace-pre-wrap">
+                            <pre className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-[10px] text-gray-700 dark:text-gray-200 overflow-auto max-h-32 whitespace-pre-wrap">
                               {initErrorDetails}
                             </pre>
                           </details>
@@ -587,7 +587,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
                   {result.values && result.values.length > 0 ? (
                     <div className="overflow-x-auto rounded border">
                       <table className="w-full text-sm">
-                        <thead className="bg-gray-100">
+                        <thead className="bg-gray-100 dark:bg-gray-700">
                           <tr>
                             {result.columns?.map((col, idx) => (
                               <th key={idx} scope="col" className="px-4 py-2 text-left border-b font-medium">

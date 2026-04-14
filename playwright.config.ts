@@ -129,7 +129,7 @@ export default defineConfig({
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
       testMatch: [
-        '**/regression/2026-03-24-smoke.spec.ts',
+        '**/regression/*-smoke.spec.ts',
         '**/regression/keyboard-shortcuts.spec.ts',
         '**/regression/navigation-ux.spec.ts',
         '**/regression/storage-quota-resilience.spec.ts',
@@ -139,7 +139,7 @@ export default defineConfig({
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
       testMatch: [
-        '**/regression/2026-03-24-smoke.spec.ts',
+        '**/regression/*-smoke.spec.ts',
         '**/regression/keyboard-shortcuts.spec.ts',
         '**/regression/navigation-ux.spec.ts',
         '**/regression/storage-quota-resilience.spec.ts',

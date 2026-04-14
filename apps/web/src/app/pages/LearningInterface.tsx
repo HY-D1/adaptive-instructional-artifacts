@@ -123,7 +123,7 @@ const STRATEGY_OPTIONS: Array<{ value: LearnerProfile['currentStrategy']; label:
 // Difficulty color mapping
 const difficultyColors = {
   beginner: 'bg-green-100 text-green-800 border-green-200',
-  intermediate: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  intermediate: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-200',
   advanced: 'bg-red-100 text-red-800 border-red-200'
 };
 
@@ -131,7 +131,7 @@ const difficultyColors = {
 const profileBadgeColors: Record<string, { bg: string; text: string; border: string; icon: string }> = {
   aggressive: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200', icon: 'text-blue-600' },
   adaptive: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: 'text-green-600' },
-  conservative: { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-200', icon: 'text-yellow-600' },
+  conservative: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: 'text-amber-600' },
   'explanation-first': { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200', icon: 'text-purple-600' }
 };
 
@@ -2282,7 +2282,7 @@ export function LearningInterface() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="container mx-auto px-4 py-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-4">
@@ -2304,7 +2304,7 @@ export function LearningInterface() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Week 5: Dependency Warning Toast */}
         {showDependencyWarning && (
           <DependencyWarningToast onClose={() => setShowDependencyWarning(false)} />
@@ -2532,8 +2532,10 @@ export function LearningInterface() {
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main problem area */}
-            <div className="lg:col-span-2 space-y-4 min-w-0">
-              <Card className="p-6">
+            <div className="lg:col-span-2 space-y-4 xl:grid xl:grid-cols-2 xl:gap-4 xl:space-y-0 min-w-0">
+              {/* Left sub-column: Problem description + schema */}
+              <div className="space-y-4">
+                <Card className="p-6">
                 <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex-1 min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -2554,7 +2556,7 @@ export function LearningInterface() {
                         </Badge>
                       )}
                     </div>
-                    <p className="text-gray-700">{currentProblem.description}</p>
+                    <p className="text-gray-700 dark:text-gray-200">{currentProblem.description}</p>
                     
                     {/* Next Problem callout after correct answer */}
                     {isCurrentProblemSolved && hasNextProblem && (
@@ -2778,14 +2780,19 @@ export function LearningInterface() {
                   </Card>
                 )}
 
-                <div className="mb-4">
-                  <h3 className="font-semibold text-sm mb-2">Database Schema:</h3>
-                  <pre className="bg-gray-100 p-3 rounded text-xs overflow-x-auto">
+                <details className="mb-4 group">
+                  <summary className="font-semibold text-sm cursor-pointer select-none flex items-center gap-1 hover:text-blue-700">
+                    <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
+                    Database Schema
+                  </summary>
+                  <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded text-xs overflow-x-auto mt-2">
                     {currentProblem.schema}
                   </pre>
-                </div>
+                </details>
               </Card>
+            </div>
 
+            <div className="xl:h-[calc(100vh-200px)]">
               <div className="h-[300px] sm:h-[350px] md:h-[450px] lg:h-[550px] max-h-[60vh]">
                 <SQLEditor
                   key={currentProblem.id}
@@ -2797,8 +2804,9 @@ export function LearningInterface() {
                 />
               </div>
             </div>
+          </div>
 
-            {/* Sidebar with hints */}
+          {/* Sidebar with hints */}
             <div className="space-y-4 min-w-0">
               <HintSystem
                 key={`${learnerId}:${sessionId}:${currentProblem.id}:${instructorSubtypeOverride || 'auto'}`}
@@ -2867,9 +2875,12 @@ export function LearningInterface() {
                     <p className="text-xs text-amber-700">{generationError}</p>
                   )}
                   {notesActionMessage && (
-                    <div className="text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
-                      <p className="font-medium">{notesActionMessage}</p>
-                      <Link to="/textbook" className="text-blue-600 hover:underline mt-1 inline-block">
+                    <div className="text-sm text-green-700 bg-green-50 p-3 rounded-lg border border-green-300 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="size-5 text-green-600 flex-shrink-0" />
+                        <p className="font-medium">{notesActionMessage}</p>
+                      </div>
+                      <Link to="/textbook" className="text-blue-600 hover:underline mt-2 inline-flex items-center gap-1 text-xs">
                         View in My Textbook →
                       </Link>
                     </div>

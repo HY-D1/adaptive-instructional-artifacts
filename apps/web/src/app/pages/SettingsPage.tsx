@@ -94,15 +94,44 @@ export function SettingsPage() {
   
   // Week 6: Session Config State
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
+
+  // Theme preference state
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system');
   
   // Confirmation dialog states
   const [showClearHdiDialog, setShowClearHdiDialog] = useState(false);
 
-  // Load session config on mount
+  // Load session config and theme on mount
   useEffect(() => {
     const config = loadSessionConfig();
     setSessionConfig(config);
+
+    const savedTheme = localStorage.getItem('sql-adapt-theme') as 'light' | 'dark' | 'system' | null;
+    const effectiveTheme = savedTheme || 'system';
+    setTheme(effectiveTheme);
+    applyTheme(effectiveTheme);
   }, []);
+
+  const applyTheme = useCallback((selectedTheme: 'light' | 'dark' | 'system') => {
+    if (selectedTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else if (selectedTheme === 'light') {
+      document.documentElement.classList.remove('dark');
+    } else {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (prefersDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+  }, []);
+
+  const handleThemeChange = useCallback((value: 'light' | 'dark' | 'system') => {
+    setTheme(value);
+    localStorage.setItem('sql-adapt-theme', value);
+    applyTheme(value);
+  }, [applyTheme]);
 
   // Handle toggle changes
   const handleToggleChange = useCallback((toggleName: keyof Pick<SessionConfig, 'textbookDisabled' | 'adaptiveLadderDisabled' | 'immediateExplanationMode' | 'staticHintMode'>, value: boolean) => {
@@ -310,6 +339,37 @@ export function SettingsPage() {
         <div
           className={`grid grid-cols-1 ${isInstructor ? 'lg:grid-cols-2' : ''} gap-6 max-w-5xl`}
         >
+          {/* Appearance Section */}
+          <Card className="p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-indigo-100 rounded-lg">
+                <Eye className="size-5 text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Appearance</h2>
+                <p className="text-sm text-gray-500">Choose your preferred theme</p>
+              </div>
+            </div>
+            <div className="space-y-3" data-testid="theme-select-section">
+              <Select
+                value={theme}
+                onValueChange={(value) => handleThemeChange(value as 'light' | 'dark' | 'system')}
+              >
+                <SelectTrigger className="w-full sm:w-[250px]" data-testid="theme-select-trigger">
+                  <SelectValue placeholder="Select theme" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="light">Light</SelectItem>
+                  <SelectItem value="dark">Dark</SelectItem>
+                  <SelectItem value="system">System</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500">
+                System follows your device&apos;s color scheme preference.
+              </p>
+            </div>
+          </Card>
+
           {/* PDF Upload Section - Instructors only */}
           {isInstructor && (
             <Card className="p-6">

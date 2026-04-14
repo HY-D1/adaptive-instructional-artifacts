@@ -3,12 +3,12 @@ export type TemplateId = 'explanation.v1' | 'notebook_unit.v1';
 export const TEMPLATE_CATALOG: Record<TemplateId, { id: TemplateId; intent: string; outputContract: string }> = {
   'explanation.v1': {
     id: 'explanation.v1',
-    intent: 'Produce a concise grounded explanation after escalation.',
+    intent: 'Produce a concise grounded explanation after escalation. Keep content_markdown under 200 words. Use short bullet points for key_points (max 4). One sentence for common_pitfall.',
     outputContract: 'JSON with fields: title, content_markdown, key_points[], common_pitfall, next_steps[], source_ids[]'
   },
   'notebook_unit.v1': {
     id: 'notebook_unit.v1',
-    intent: 'Produce a reflective My Notes unit for notebook storage.',
+    intent: 'Produce a brief, focused My Notes unit for notebook storage. Keep content_markdown under 150 words. Use short bullet points for key_points (max 3). One sentence for common_pitfall.',
     outputContract: 'JSON with fields: title, content_markdown, key_points[], common_pitfall, next_steps[], source_ids[]'
   }
 };
@@ -27,6 +27,7 @@ export function renderPrompt(templateId: TemplateId, sourcesJson: string): strin
     'Use double quotes for all keys and string values.',
     'Do not use comments or trailing commas.',
     'Required arrays must contain at least one item: key_points, next_steps, source_ids.',
+    'IMPORTANT: Keep content_markdown concise — under 200 words. Students reported notes were too long. Focus on the core concept and one worked example only.',
     template.intent,
     `Template ID: ${template.id}`,
     `Output contract: ${template.outputContract}`,
