@@ -122,9 +122,9 @@ const STRATEGY_OPTIONS: Array<{ value: LearnerProfile['currentStrategy']; label:
 
 // Difficulty color mapping
 const difficultyColors = {
-  beginner: 'bg-green-100 text-green-800 border-green-200',
+  beginner: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800',
   intermediate: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-200',
-  advanced: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300'
+  advanced: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-200 dark:border-red-800'
 };
 
 // Week 5: Profile badge color mapping
@@ -2345,7 +2345,7 @@ export function LearningInterface() {
 
         <div className={cn(
           "border-b",
-          isStudent ? "bg-gradient-to-r from-blue-50 to-white dark:from-blue-900/30 dark:to-gray-900 border-blue-100 dark:border-blue-800" : "bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800"
+          isStudent ? "bg-gradient-to-r from-blue-50 to-white dark:from-blue-950 dark:to-gray-900 border-blue-100 dark:border-blue-800" : "bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800"
         )}>
           <div className="container mx-auto px-4 py-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -2381,7 +2381,7 @@ export function LearningInterface() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h1 className="text-2xl font-bold text-gray-900">SQL Learning Lab</h1>
-                      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">
+                      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">
                         Instructor Mode
                       </Badge>
                     </div>
@@ -2449,9 +2449,9 @@ export function LearningInterface() {
                     <TooltipTrigger asChild>
                       <div className={cn(
                         "flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium cursor-help transition-all hover:shadow-sm",
-                        profileBadgeColors[currentProfileId]?.bg || 'bg-gray-100',
-                        profileBadgeColors[currentProfileId]?.text || 'text-gray-700',
-                        profileBadgeColors[currentProfileId]?.border || 'border-gray-200'
+                        profileBadgeColors[currentProfileId]?.bg || 'bg-gray-100 dark:bg-gray-800',
+                        profileBadgeColors[currentProfileId]?.text || 'text-gray-700 dark:text-gray-300',
+                        profileBadgeColors[currentProfileId]?.border || 'border-gray-200 dark:border-gray-700'
                       )}>
                         <Zap className={cn(
                           "size-3",
@@ -2540,38 +2540,40 @@ export function LearningInterface() {
               {/* Left sub-column: Problem description + schema */}
               <div className="space-y-4 xl:max-h-[calc(100vh-200px)] xl:overflow-y-auto">
                 <Card className="p-6">
-                <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <span className="text-sm text-gray-500 font-medium">
+                <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between">
+                  <div className="flex-1 min-w-0 space-y-4">
+                    <div className="space-y-2">
+                      <span className="text-sm text-gray-500 font-medium block">
                         Problem {currentProblemNumber} of {totalProblems}
                       </span>
-                      <h2 className="text-xl font-bold">{currentProblem.title}</h2>
-                      <Badge 
-                        variant="outline"
-                        className={`w-fit ${difficultyColors[currentProblem.difficulty]}`}
-                      >
-                        {currentProblem.difficulty}
-                      </Badge>
-                      {isCurrentProblemSolved && (
-                        <Badge className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800">
-                          <Check className="size-3 mr-1" />
-                          Solved
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-xl font-bold">{currentProblem.title}</h2>
+                        <Badge 
+                          variant="outline"
+                          className={`w-fit ${difficultyColors[currentProblem.difficulty]}`}
+                        >
+                          {currentProblem.difficulty}
                         </Badge>
-                      )}
+                        {isCurrentProblemSolved && (
+                          <Badge className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800">
+                            <Check className="size-3 mr-1" />
+                            Solved
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                     <p className="text-gray-700 dark:text-gray-200">{currentProblem.description}</p>
                     
                     {/* Next Problem callout after correct answer */}
                     {isCurrentProblemSolved && hasNextProblem && (
-                      <div className="mt-2 flex items-center gap-2 text-green-700 dark:text-green-300 text-sm font-medium">
+                      <div className="flex items-center gap-2 text-green-700 dark:text-green-300 text-sm font-medium">
                         <CheckCircle className="size-4" />
                         <span>Correct!</span>
                         <Button 
                           variant="link" 
                           size="sm" 
                           onClick={handleNextProblem} 
-                          className="text-green-700 dark:text-green-300 underline p-0 h-auto"
+                          className="text-green-700 dark:text-green-300 underline p-0 h-auto transition-colors"
                         >
                           Next Problem →
                         </Button>
@@ -2579,7 +2581,7 @@ export function LearningInterface() {
                     )}
                     
                     {/* Concept tags */}
-                    <div className="flex flex-wrap gap-1.5 mt-3">
+                    <div className="flex flex-wrap gap-1.5">
                       {currentProblem.concepts.map(conceptId => {
                         const concept = getConceptById(conceptId);
                         return (
@@ -2603,22 +2605,22 @@ export function LearningInterface() {
                     
                     {/* Week 6: Condition indicator - subtle experimental condition badge */}
                     {sessionConfig && (
-                      <div className="flex items-center gap-2 mt-3 text-xs">
+                      <div className="flex items-center gap-2 text-xs">
                         <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded">
                           Condition: {sessionConfig.conditionId}
                         </span>
                         {sessionConfig.textbookDisabled && (
-                          <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded">
+                          <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded dark:bg-amber-900/30 dark:text-amber-300">
                             Textbook Disabled
                           </span>
                         )}
                         {sessionConfig.immediateExplanationMode && (
-                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded dark:bg-blue-900/30 dark:text-blue-300">
                             Explanation-First Mode
                           </span>
                         )}
                         {sessionConfig.adaptiveLadderDisabled && (
-                          <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded">
+                          <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded dark:bg-purple-900/30 dark:text-purple-300">
                             Static Ladder
                           </span>
                         )}
@@ -2672,7 +2674,7 @@ export function LearningInterface() {
                                   <div className="flex items-center gap-2 w-full">
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-1.5">
-                                        <span className={`font-medium truncate ${solved ? 'text-green-700' : ''}`}>
+                                        <span className={`font-medium truncate ${solved ? 'text-green-700 dark:text-green-300' : ''}`}>
                                           {problem.title}
                                         </span>
                                         {solved && (
@@ -2706,7 +2708,7 @@ export function LearningInterface() {
                   </div>
                 </div>
 
-                <div className="mb-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800 mb-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="flex items-center gap-1 cursor-help">
@@ -2789,9 +2791,11 @@ export function LearningInterface() {
                     <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
                     Database Schema
                   </summary>
-                  <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded text-xs overflow-x-auto mt-2">
-                    {currentProblem.schema}
-                  </pre>
+                  <div className="overflow-hidden transition-all duration-200">
+                    <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded text-xs overflow-x-auto mt-2">
+                      {currentProblem.schema}
+                    </pre>
+                  </div>
                 </details>
               </Card>
             </div>
@@ -2876,7 +2880,7 @@ export function LearningInterface() {
                     <p className="text-xs text-gray-500">Creating your note...</p>
                   )}
                   {generationError && (
-                    <p className="text-xs text-amber-700">{generationError}</p>
+                    <p className="text-xs text-amber-700 dark:text-amber-300">{generationError}</p>
                   )}
                   {notesActionMessage && (
                     <div className="text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 p-3 rounded-lg border border-green-300 dark:border-green-800 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -2970,7 +2974,7 @@ export function LearningInterface() {
                       <span>Progress: {learningPath.progressPercentage}%</span>
                       <span>{learningPath.completedConcepts}/{learningPath.totalConcepts} concepts</span>
                     </div>
-                    <div className="mt-1.5 h-1.5 bg-blue-200 rounded-full overflow-hidden">
+                    <div className="mt-1.5 h-2 bg-blue-200 dark:bg-blue-900/30 rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-blue-500 rounded-full transition-all"
                         style={{ width: `${learningPath.progressPercentage}%` }}
@@ -3024,9 +3028,9 @@ export function LearningInterface() {
                         variant="outline" 
                         className={cn(
                           "text-xs",
-                          hdiLevel === 'low' && "bg-green-100 text-green-800 border-green-300",
-                          hdiLevel === 'medium' && "bg-yellow-100 text-yellow-800 border-yellow-300",
-                          hdiLevel === 'high' && "bg-red-100 text-red-800 border-red-300"
+                          hdiLevel === 'low' && "bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800",
+                          hdiLevel === 'medium' && "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800",
+                          hdiLevel === 'high' && "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800"
                         )}
                       >
                         {hdiLevel === 'low' && <Check className="size-3 mr-1" />}
@@ -3069,7 +3073,7 @@ export function LearningInterface() {
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-600 w-12 shrink-0">HPA</span>
-                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                          <div className="flex-1 h-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-indigo-500 rounded-full"
                               style={{ width: `${hdiComponents.hpa * 100}%` }}
@@ -3091,7 +3095,7 @@ export function LearningInterface() {
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-600 w-12 shrink-0">AED</span>
-                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                          <div className="flex-1 h-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-indigo-500 rounded-full"
                               style={{ width: `${hdiComponents.aed * 100}%` }}
@@ -3113,7 +3117,7 @@ export function LearningInterface() {
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-600 w-12 shrink-0">ER</span>
-                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                          <div className="flex-1 h-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-indigo-500 rounded-full"
                               style={{ width: `${hdiComponents.er * 100}%` }}
@@ -3135,7 +3139,7 @@ export function LearningInterface() {
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-600 w-12 shrink-0">REAE</span>
-                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                          <div className="flex-1 h-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-indigo-500 rounded-full"
                               style={{ width: `${hdiComponents.reae * 100}%` }}
@@ -3157,7 +3161,7 @@ export function LearningInterface() {
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-600 w-12 shrink-0">IWH</span>
-                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                          <div className="flex-1 h-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-green-500 rounded-full"
                               style={{ width: `${hdiComponents.iwh * 100}%` }}
@@ -3204,11 +3208,11 @@ export function LearningInterface() {
                 <div className="space-y-2 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="text-slate-600">Run query</span>
-                    <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-700 border border-slate-300 dark:border-slate-600 rounded text-slate-700 dark:text-slate-300 font-mono">Ctrl+Enter</kbd>
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 font-mono text-xs shadow-sm">Ctrl+Enter</kbd>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-600">Focus problem</span>
-                    <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-700 border border-slate-300 dark:border-slate-600 rounded text-slate-700 dark:text-slate-300 font-mono">Ctrl+/</kbd>
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 font-mono text-xs shadow-sm">Ctrl+/</kbd>
                   </div>
                 </div>
               </Card>

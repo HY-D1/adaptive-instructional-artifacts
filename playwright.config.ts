@@ -1,4 +1,16 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices, chromium, webkit, firefox } from '@playwright/test';
+
+function isBrowserInstalled(browser: typeof chromium) {
+  try {
+    return !!browser.executablePath();
+  } catch {
+    return false;
+  }
+}
+
+const IS_CHROMIUM_INSTALLED = isBrowserInstalled(chromium);
+const IS_WEBKIT_INSTALLED = isBrowserInstalled(webkit);
+const IS_FIREFOX_INSTALLED = isBrowserInstalled(firefox);
 
 const PORT = 4173;
 const HOST = '127.0.0.1';
@@ -124,27 +136,35 @@ export default defineConfig({
       ],
     },
 
-    // Cross-browser smoke tests (Safari + Firefox)
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-      testMatch: [
-        '**/regression/*-smoke.spec.ts',
-        '**/regression/keyboard-shortcuts.spec.ts',
-        '**/regression/navigation-ux.spec.ts',
-        '**/regression/storage-quota-resilience.spec.ts',
-      ],
-    },
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-      testMatch: [
-        '**/regression/*-smoke.spec.ts',
-        '**/regression/keyboard-shortcuts.spec.ts',
-        '**/regression/navigation-ux.spec.ts',
-        '**/regression/storage-quota-resilience.spec.ts',
-      ],
-    },
+    // Cross-browser smoke tests (Safari + Firefox) — only when browsers are installed
+    ...(IS_WEBKIT_INSTALLED
+      ? [
+          {
+            name: 'webkit',
+            use: { ...devices['Desktop Safari'] },
+            testMatch: [
+              '**/regression/*-smoke.spec.ts',
+              '**/regression/keyboard-shortcuts.spec.ts',
+              '**/regression/navigation-ux.spec.ts',
+              '**/regression/storage-quota-resilience.spec.ts',
+            ],
+          },
+        ]
+      : []),
+    ...(IS_FIREFOX_INSTALLED
+      ? [
+          {
+            name: 'firefox',
+            use: { ...devices['Desktop Firefox'] },
+            testMatch: [
+              '**/regression/*-smoke.spec.ts',
+              '**/regression/keyboard-shortcuts.spec.ts',
+              '**/regression/navigation-ux.spec.ts',
+              '**/regression/storage-quota-resilience.spec.ts',
+            ],
+          },
+        ]
+      : []),
 
     // ── Auth-backed deployed smoke (student) ───────────────────────────────────
     // Runs AFTER setup:auth. Each test context starts with the student JWT

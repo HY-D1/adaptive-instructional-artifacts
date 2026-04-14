@@ -1339,7 +1339,7 @@ export function HintSystem({
             <HelpCircle className="size-5 text-amber-500" />
           </div>
           <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Need help?</p>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Request a hint to get personalized guidance</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Request a hint to get personalized guidance</p>
           <div className="mt-3 flex items-center justify-center gap-1 text-[10px] text-gray-400 dark:text-gray-500">
             <span>Progresses through</span>
             <span className="font-medium text-amber-600 dark:text-amber-400">L1</span>
@@ -1430,7 +1430,7 @@ export function HintSystem({
                   
                   {/* Hint content - improved readability */}
                   <div className={cn(
-                    "prose prose-sm max-w-none",
+                    "prose prose-sm max-w-none animate-in fade-in duration-300",
                     isEnhanced ? "prose-purple" : "prose-blue"
                   )}>
                     {hint.startsWith('##') ? (
@@ -1447,9 +1447,9 @@ export function HintSystem({
                               .replace(/\*\*(.+?)\*\*/g, '<strong class="text-gray-900 dark:text-gray-100">$1</strong>')
                               .replace(/\*(.+?)\*/g, '<em>$1</em>')
                               .replace(/_(.+?)_/g, '<em>$1</em>')
-                              .replace(/`(.+?)`/g, '<code class="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs text-gray-800 dark:text-gray-100">$1</code>')
+                              .replace(/`(.+?)`/g, '<code class="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-sm text-gray-800 dark:text-gray-100">$1</code>')
                               .replace(/- (.+)/g, '<li class="ml-4 mb-1">$1</li>')
-                              .replace(/```sql\n([\s\S]*?)```/g, '<pre class="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto my-2"><code>$1</code></pre>')
+                              .replace(/```sql\n([\s\S]*?)```/g, '<pre class="bg-gray-900 text-gray-100 p-3 rounded text-sm overflow-x-auto my-2"><code>$1</code></pre>')
                               .replace(/\n\n/g, '<br/>'),
                             {
                               ALLOWED_TAGS: ['h3', 'strong', 'em', 'code', 'pre', 'li', 'br'],
@@ -1470,7 +1470,7 @@ export function HintSystem({
                               .replace(/\*\*(.+?)\*\*/g, '<strong class="text-gray-900 dark:text-gray-100">$1</strong>')
                               .replace(/\*(.+?)\*/g, '<em>$1</em>')
                               .replace(/_(.+?)_/g, '<em>$1</em>')
-                              .replace(/`(.+?)`/g, '<code class="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-xs text-gray-800 dark:text-gray-100">$1</code>'),
+                              .replace(/`(.+?)`/g, '<code class="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-sm text-gray-800 dark:text-gray-100">$1</code>'),
                             {
                               ALLOWED_TAGS: ['strong', 'em', 'code'],
                               ALLOWED_ATTR: ['class']
@@ -1523,7 +1523,7 @@ export function HintSystem({
                   {/* Collapsible sources - only shown when expanded */}
                   {isExpanded && hasPdfSources && (
                     <div id={`hint-sources-${idx}`} className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
-                      <p className="text-[11px] text-gray-500 dark:text-gray-400 italic mb-2 flex items-center gap-1">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 italic mb-2 flex items-center gap-1">
                         <BookOpen className="size-3" />
                         Content from SQL Course Textbook used to generate this hint:
                       </p>
@@ -1544,7 +1544,7 @@ export function HintSystem({
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-gray-700 dark:text-gray-200 leading-relaxed line-clamp-4">
+                            <p className="text-sm text-gray-700 dark:text-gray-200 leading-relaxed line-clamp-4">
                               {passage.text}
                             </p>
                           </div>
@@ -1646,7 +1646,7 @@ export function HintSystem({
           className="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2 flex items-start gap-2"
         >
           <AlertCircle className="size-4 text-red-500 shrink-0 mt-0.5" />
-          <p className="text-xs text-red-700 dark:text-red-300">{saveToNotesError}</p>
+          <p className="text-sm text-red-700 dark:text-red-300">{saveToNotesError}</p>
         </div>
       )}
 
@@ -1658,7 +1658,7 @@ export function HintSystem({
           data-testid="hint-runtime-error"
         >
           <AlertCircle className="size-4 text-red-500 shrink-0 mt-0.5" />
-          <p className="text-xs text-red-700 dark:text-red-300">{hintRuntimeError}</p>
+          <p className="text-sm text-red-700 dark:text-red-300">{hintRuntimeError}</p>
         </div>
       )}
 
@@ -1666,15 +1666,15 @@ export function HintSystem({
         <div className="rounded-md bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 px-3 py-2">
           {autoEscalationInfo.triggered ? (
             <>
-              <p className="text-xs font-medium text-emerald-800 dark:text-emerald-300">
+              <p className="text-sm font-medium text-emerald-800 dark:text-emerald-300">
                 📚 Full Explanation Unlocked
               </p>
-              <p className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">
+              <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-1">
                 After {autoEscalationInfo.helpRequestCount} help requests, we're providing a complete worked example to help you master this concept.
               </p>
             </>
           ) : (
-            <p className="text-xs text-emerald-700 dark:text-emerald-300">
+            <p className="text-sm text-emerald-700 dark:text-emerald-300">
               Explanation has been generated for this help flow.
             </p>
           )}
