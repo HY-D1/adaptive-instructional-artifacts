@@ -430,7 +430,7 @@ export class SQLExecutor {
         const actualRow = actualRows[aIdx];
         const actualKeys = Object.keys(actualRow).sort();
 
-        // Check column structure matches (exact column name comparison)
+        // Check column structure matches (case-insensitive column name comparison)
         if (actualKeys.length !== expectedKeys.length) {
           continue;
         }
@@ -532,11 +532,19 @@ export class SQLExecutor {
           const actualKeys = Object.keys(actualRow).sort();
           const expectedKeys = Object.keys(row).sort();
           
-          if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) continue;
+          if (actualKeys.length !== expectedKeys.length) continue;
+          let diffColumnsMatch = true;
+          for (let k = 0; k < actualKeys.length; k++) {
+            if (actualKeys[k].toLowerCase() !== expectedKeys[k].toLowerCase()) {
+              diffColumnsMatch = false;
+              break;
+            }
+          }
+          if (!diffColumnsMatch) continue;
           
           let matchScore = 0;
-          for (const key of actualKeys) {
-            if (valuesEqual(actualRow[key], row[key])) {
+          for (let k = 0; k < actualKeys.length; k++) {
+            if (valuesEqual(actualRow[actualKeys[k]], row[expectedKeys[k]])) {
               matchScore++;
             }
           }
@@ -549,9 +557,16 @@ export class SQLExecutor {
         
         // Show cell-level differences
         if (bestMatch) {
-          for (const key of Object.keys(row).sort()) {
-            if (!valuesEqual(bestMatch[key], row[key])) {
-              rowDiffs.push(`${key}: got ${JSON.stringify(bestMatch[key])}, expected ${JSON.stringify(row[key])}`);
+          const bestMatchKeys = Object.keys(bestMatch);
+          const expectedSorted = Object.keys(row).sort();
+          const bestMatchKeyMap = new Map<string, string>();
+          for (const k of bestMatchKeys) {
+            bestMatchKeyMap.set(k.toLowerCase(), k);
+          }
+          for (const expectedKey of expectedSorted) {
+            const actualKey = bestMatchKeyMap.get(expectedKey.toLowerCase()) || expectedKey;
+            if (!valuesEqual(bestMatch[actualKey], row[expectedKey])) {
+              rowDiffs.push(`${expectedKey}: got ${JSON.stringify(bestMatch[actualKey])}, expected ${JSON.stringify(row[expectedKey])}`);
             }
           }
         }

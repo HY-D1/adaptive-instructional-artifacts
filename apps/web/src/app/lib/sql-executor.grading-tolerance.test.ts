@@ -287,5 +287,17 @@ describe('SQL Grading Tolerance (Root Cause C)', () => {
       expect(comparison.match).toBe(false);
       executor.close();
     });
+
+    test('shows cell-level diff when column case differs but values differ', () => {
+      const studentRows = [{ Order_Count: 5, user_id: 1 }];
+      const expectedRows = [{ order_count: 3, user_id: 1 }];
+
+      const executor = new SQLExecutor();
+      const comparison = executor.compareResults(studentRows, expectedRows);
+      expect(comparison.match).toBe(false);
+      expect(comparison.differences.some(d => d.includes('Row mismatch'))).toBe(true);
+      expect(comparison.differences.some(d => d.includes('order_count'))).toBe(true);
+      executor.close();
+    });
   });
 });
