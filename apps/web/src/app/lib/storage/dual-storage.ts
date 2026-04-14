@@ -2139,6 +2139,7 @@ class DualStorageManager {
           if (localProfile?.solvedProblemIds?.size && !backendProfile.solvedProblemIds?.size) {
             // Backend has empty solved set but local has data - keep local data
             console.log('[DualStorage] Preserving local solvedProblemIds during backend sync');
+            backendProfile.solvedProblemIds = new Set(localProfile.solvedProblemIds);
           } else if (localProfile?.solvedProblemIds?.size && backendProfile.solvedProblemIds?.size) {
             // Both have data - merge by union
             const mergedSolvedIds = new Set([

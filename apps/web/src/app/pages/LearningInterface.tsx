@@ -65,7 +65,7 @@ import { useScreenReaderAnnouncer } from '../components/shared/ScreenReaderAnnou
 import { sqlProblems } from '../data/problems';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
-import { useLocation } from 'react-router';
+import { useLocation, Link } from 'react-router';
 import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync } from '../lib/storage';
 import { useAuth } from '../lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
@@ -1095,7 +1095,11 @@ export function LearningInterface() {
       // Initialize learner profile if doesn't exist
       let profile = storage.getProfile(learnerId);
       if (!profile) {
-        profile = storage.createDefaultProfile(learnerId, 'adaptive-medium');
+        // Do NOT eagerly create a default profile here.
+        // hydrateLearner (in account mode) or updateProfileStatsFromEvent
+        // will create it with proper solved state when needed.
+        // Creating an empty profile here races with backend hydration and
+        // can overwrite progress that hasn't been loaded yet.
       }
 
       // Prefer active session from storage (hydrated from backend in account mode).
@@ -1241,7 +1245,7 @@ export function LearningInterface() {
     return () => {
       cancelled = true;
     };
-  }, [learnerId, isHydrating, isRoleLoading, persistedPracticeUiState]);
+  }, [learnerId, isHydrating, isRoleLoading]);
 
   // Effect 2: Background analysis - handles trace analysis lifecycle
   useEffect(() => {
