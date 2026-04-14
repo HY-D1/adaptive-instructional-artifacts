@@ -506,6 +506,10 @@ test.describe('@edge-case @weekly Console Error Monitoring', () => {
       if (e.includes('BLOCKED: saveInteraction in research-unsafe mode')) return false;
       if (e.includes('[DualStorage] BLOCKED:')) return false;
 
+      // Skip connection-refused errors caused by Vite dev server port switching
+      // between test runs — these are infrastructure noise, not app bugs.
+      if (e.includes('ERR_CONNECTION_REFUSED')) return false;
+
       return true;
     });
     

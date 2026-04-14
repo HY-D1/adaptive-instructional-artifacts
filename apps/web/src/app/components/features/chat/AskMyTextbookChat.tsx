@@ -100,7 +100,7 @@ const MAX_PDF_TEXT_LENGTH = 350;
 interface Toast {
   id: string;
   message: string;
-  type: 'success' | 'info';
+  type: 'success' | 'info' | 'error';
 }
 
 type ChatLearningSignals = {
@@ -133,7 +133,7 @@ export function deriveChatLearningSignals(
   const failedInteractions = relevantInteractions.filter((interaction) =>
     interaction.eventType === 'error' || (interaction.eventType === 'execution' && interaction.successful === false)
   );
-  const latestFailure = failedInteractions.at(-1);
+  const latestFailure = failedInteractions[failedInteractions.length - 1];
   const failedRunCount = failedInteractions.length;
   const retryCount = Math.max(0, failedRunCount - 1);
   const hintCount = relevantInteractions.filter((interaction) =>

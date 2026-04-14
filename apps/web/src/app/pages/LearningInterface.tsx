@@ -124,15 +124,15 @@ const STRATEGY_OPTIONS: Array<{ value: LearnerProfile['currentStrategy']; label:
 const difficultyColors = {
   beginner: 'bg-green-100 text-green-800 border-green-200',
   intermediate: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-200',
-  advanced: 'bg-red-100 text-red-800 border-red-200'
+  advanced: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300'
 };
 
 // Week 5: Profile badge color mapping
 const profileBadgeColors: Record<string, { bg: string; text: string; border: string; icon: string }> = {
-  aggressive: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200', icon: 'text-blue-600' },
-  adaptive: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: 'text-green-600' },
-  conservative: { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: 'text-amber-600' },
-  'explanation-first': { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200', icon: 'text-purple-600' }
+  aggressive: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800', icon: 'text-blue-600 dark:text-blue-400' },
+  adaptive: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-300', border: 'border-green-200 dark:border-green-800', icon: 'text-green-600 dark:text-green-400' },
+  conservative: { bg: 'bg-amber-50 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800', icon: 'text-amber-600 dark:text-amber-400' },
+  'explanation-first': { bg: 'bg-purple-100 dark:bg-purple-900/30', text: 'text-purple-700 dark:text-purple-300', border: 'border-purple-200 dark:border-purple-800', icon: 'text-purple-600 dark:text-purple-400' }
 };
 
 // Week 5: Profile display names
@@ -2345,7 +2345,7 @@ export function LearningInterface() {
 
         <div className={cn(
           "border-b",
-          isStudent ? "bg-gradient-to-r from-blue-50 to-white border-blue-100" : "bg-amber-50 border-amber-200"
+          isStudent ? "bg-gradient-to-r from-blue-50 to-white dark:from-blue-900/30 dark:to-gray-900 border-blue-100 dark:border-blue-800" : "bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800"
         )}>
           <div className="container mx-auto px-4 py-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

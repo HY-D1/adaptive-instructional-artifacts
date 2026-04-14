@@ -239,10 +239,11 @@ export function HintSystem({
     // then fall back to the error subtype prop from the parent.
     const subtypeForSave = activeHintSubtype || errorSubtypeId || null;
 
-    // Resolve subtype: active hint > error prop > first concept of current problem
-    const problemForSave = getProblemById(problemId);
-    const firstConcept = problemForSave?.concepts?.[0] || null;
-    const subtypeForSaveWithFallback = subtypeForSave || firstConcept;
+    // Resolve subtype: active hint > error prop
+    // Do NOT fall back to the first concept of the problem — saving without
+    // any learner interaction (no hints, no errors) must show a visible error
+    // rather than silently saving unrelated content.
+    const subtypeForSaveWithFallback = subtypeForSave;
 
     try {
       // Week 3 D8: Log guidance request for textbook
@@ -254,14 +255,15 @@ export function HintSystem({
         sessionId
       });
 
-      // Build retrieval bundle for context
-      if (problemForSave) {
-        if (!subtypeForSaveWithFallback) {
-          setSaveToNotesError('No concept context found. Try submitting a query first so the system can identify what to save.');
-          setIsAddingToTextbook(false);
-          return;
-        }
+      if (!subtypeForSaveWithFallback) {
+        setSaveToNotesError('No concept context found. Try submitting a query first so the system can identify what to save.');
+        setIsAddingToTextbook(false);
+        return;
+      }
 
+      // Build retrieval bundle for context
+      const problemForSave = getProblemById(problemId);
+      if (problemForSave) {
         const bundle = buildRetrievalBundle({
           learnerId,
           problem: problemForSave,
@@ -315,9 +317,6 @@ export function HintSystem({
         // No problem context — still fire the callback so the parent can save
         // using whatever subtype context it has available.
         onEscalate?.([], subtypeForSaveWithFallback || undefined);
-        if (!subtypeForSaveWithFallback) {
-          setSaveToNotesError('No concept context found. Try submitting a query first so the system can identify what to save.');
-        }
       }
     } catch (err) {
       setSaveToNotesError((err as Error).message || 'Failed to save note. Please try again.');
@@ -495,9 +494,9 @@ export function HintSystem({
     const explanationEvents = problemTrace.filter(
       (interaction) => interaction.eventType === 'explanation_view'
     );
-    const latestHelpEvent = [...hintEvents, ...explanationEvents]
-      .sort((a, b) => a.timestamp - b.timestamp)
-      .at(-1);
+    const sortedHelpEvents = [...hintEvents, ...explanationEvents]
+      .sort((a, b) => a.timestamp - b.timestamp);
+    const latestHelpEvent = sortedHelpEvents[sortedHelpEvents.length - 1];
     
     if (hintEvents.length > 0) {
       // Reconstruct hints from saved hint events

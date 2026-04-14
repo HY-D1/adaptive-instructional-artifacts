@@ -170,7 +170,7 @@ describe('logging contract routing', () => {
   });
 
   it('documents that hint_view preserves hintId', () => {
-    const spec = readFileSync(join(repoRoot, 'docs/research/LOGGING_SPECIFICATION.md'), 'utf8');
+    const spec = readFileSync(join(repoRoot, 'docs/research/LOGGING.md'), 'utf8');
     expect(spec).toContain('`hint_view` events preserve `hintId`');
     expect(spec).not.toContain('`hint_view` events **intentionally omit** the `hintId` field');
   });
