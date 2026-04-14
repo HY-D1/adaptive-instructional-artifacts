@@ -436,7 +436,7 @@ export class SQLExecutor {
         }
         let columnsMatch = true;
         for (let k = 0; k < actualKeys.length; k++) {
-          if (actualKeys[k] !== expectedKeys[k]) {
+          if (actualKeys[k].toLowerCase() !== expectedKeys[k].toLowerCase()) {
             columnsMatch = false;
             break;
           }
@@ -447,8 +447,13 @@ export class SQLExecutor {
 
         // Check all cells using valuesEqual (supports epsilon for floats)
         let allCellsMatch = true;
-        for (const key of actualKeys) {
-          if (!valuesEqual(actualRow[key], expectedRow[key])) {
+        // Build case-insensitive key map: actual key -> expected key
+        const keyMap = new Map<string, string>();
+        for (let k = 0; k < actualKeys.length; k++) {
+          keyMap.set(actualKeys[k], expectedKeys[k]);
+        }
+        for (const [actualKey, expectedKey] of keyMap) {
+          if (!valuesEqual(actualRow[actualKey], expectedRow[expectedKey])) {
             allCellsMatch = false;
             break;
           }

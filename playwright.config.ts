@@ -124,6 +124,28 @@ export default defineConfig({
       ],
     },
 
+    // Cross-browser smoke tests (Safari + Firefox)
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+      testMatch: [
+        '**/regression/2026-03-24-smoke.spec.ts',
+        '**/regression/keyboard-shortcuts.spec.ts',
+        '**/regression/navigation-ux.spec.ts',
+        '**/regression/storage-quota-resilience.spec.ts',
+      ],
+    },
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+      testMatch: [
+        '**/regression/2026-03-24-smoke.spec.ts',
+        '**/regression/keyboard-shortcuts.spec.ts',
+        '**/regression/navigation-ux.spec.ts',
+        '**/regression/storage-quota-resilience.spec.ts',
+      ],
+    },
+
     // ── Auth-backed deployed smoke (student) ───────────────────────────────────
     // Runs AFTER setup:auth. Each test context starts with the student JWT
     // cookie + localStorage profile pre-loaded — no UI login needed per test.

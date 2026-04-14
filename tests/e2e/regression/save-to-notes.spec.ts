@@ -72,4 +72,29 @@ test.describe('Save to Notes @hardening', () => {
     // There should be no "no concept context" error
     expect(errorCount).toBe(0);
   });
+
+  test('Save to Notes works before any query execution (uses problem concept fallback)', async ({ page }) => {
+    await page.goto('/');
+    await waitForProblemLoad(page);
+
+    // Do NOT submit any query or request any hint
+
+    // Look for Save to Notes or Add to My Textbook button
+    const saveBtn = page.locator(
+      'button:has-text("Save to Notes"), button:has-text("Save to My Notes"), [data-testid="save-to-notes-button"]'
+    ).first();
+
+    const btnCount = await saveBtn.count();
+    if (btnCount === 0) {
+      test.skip();
+      return;
+    }
+
+    await saveBtn.click();
+    await page.waitForTimeout(2000);
+
+    // Should NOT see "no concept context" error
+    const errorLocator = page.locator('text=/no concept context/i');
+    await expect(errorLocator).toHaveCount(0);
+  });
 });

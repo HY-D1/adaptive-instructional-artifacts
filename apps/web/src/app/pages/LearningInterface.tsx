@@ -974,7 +974,10 @@ export function LearningInterface() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         const runButton = document.querySelector('[data-testid="run-query-btn"]') as HTMLButtonElement;
-        runButton?.click();
+        if (runButton && !runButton.disabled) {
+          runButton.click();
+        }
+        // If button not found or disabled, shortcut is a no-op (SQL engine still loading)
         return;
       }
 

@@ -374,7 +374,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
 
   return (
     <div className="flex flex-col h-full gap-4">
-        <Card className="flex-1 overflow-hidden">
+        <Card className="flex-1 overflow-hidden min-h-[180px]">
           <div className="h-full flex flex-col">
             <div className="flex items-center justify-between p-4 border-b bg-gray-50/50 flex-wrap gap-2">
               <div className="flex gap-2 items-center flex-wrap">
@@ -554,7 +554,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
         </Card>
 
         {result && (
-          <Card className="p-4">
+          <Card className="p-4 max-h-[45%] overflow-y-auto flex-shrink-0">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold flex items-center gap-2">

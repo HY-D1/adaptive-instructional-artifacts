@@ -239,6 +239,11 @@ export function HintSystem({
     // then fall back to the error subtype prop from the parent.
     const subtypeForSave = activeHintSubtype || errorSubtypeId || null;
 
+    // Resolve subtype: active hint > error prop > first concept of current problem
+    const problemForSave = getProblemById(problemId);
+    const firstConcept = problemForSave?.concepts?.[0] || null;
+    const subtypeForSaveWithFallback = subtypeForSave || firstConcept;
+
     try {
       // Week 3 D8: Log guidance request for textbook
       storage.logGuidanceRequest({
@@ -252,7 +257,7 @@ export function HintSystem({
       // Build retrieval bundle for context
       const problem = getProblemById(problemId);
       if (problem) {
-        if (!subtypeForSave) {
+        if (!subtypeForSaveWithFallback) {
           setSaveToNotesError('No concept context found. Try submitting a query first so the system can identify what to save.');
           setIsAddingToTextbook(false);
           return;
@@ -262,7 +267,7 @@ export function HintSystem({
           learnerId,
           problem,
           interactions: recentInteractions,
-          lastErrorSubtypeId: subtypeForSave || undefined
+          lastErrorSubtypeId: subtypeForSaveWithFallback || undefined
         });
 
         // Week 3 D8: Log escalation to rung 3
@@ -291,7 +296,7 @@ export function HintSystem({
 
         // Trigger escalation, passing the resolved subtype explicitly so the
         // parent does not need to infer it from interaction history.
-        onEscalate?.(bundle.triggerInteractionIds, subtypeForSave || undefined);
+        onEscalate?.(bundle.triggerInteractionIds, subtypeForSaveWithFallback || undefined);
 
         // Update state to rung 3
         setCurrentRung(3);
@@ -310,8 +315,8 @@ export function HintSystem({
       } else {
         // No problem context — still fire the callback so the parent can save
         // using whatever subtype context it has available.
-        onEscalate?.([], subtypeForSave || undefined);
-        if (!subtypeForSave) {
+        onEscalate?.([], subtypeForSaveWithFallback || undefined);
+        if (!subtypeForSaveWithFallback) {
           setSaveToNotesError('No concept context found. Try submitting a query first so the system can identify what to save.');
         }
       }

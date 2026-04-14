@@ -128,15 +128,55 @@ export function scoreRefinedHintCandidate(
 export function getGenericFallbackHint(rung: GuidanceRung, errorSubtypeId: string): string {
   const normalizedSubtype = errorSubtypeId.replace(/-/g, ' ');
 
+  // Check for common error subtypes and provide targeted guidance
+  const subtypeLower = errorSubtypeId.toLowerCase();
+
   if (rung === 1) {
-    return `Focus on the ${normalizedSubtype} part of your query.`;
+    if (subtypeLower.includes('group') || subtypeLower.includes('aggregat')) {
+      return 'Check which column(s) need grouping.';
+    }
+    if (subtypeLower.includes('join')) {
+      return 'Think about which tables need to be connected.';
+    }
+    if (subtypeLower.includes('where') || subtypeLower.includes('filter')) {
+      return 'Re-read the filtering condition required.';
+    }
+    if (subtypeLower.includes('alias') || subtypeLower.includes('column')) {
+      return 'Check the column names in your output.';
+    }
+    if (subtypeLower.includes('order') || subtypeLower.includes('sort')) {
+      return 'Consider the required ordering of results.';
+    }
+    return `Re-read the problem and check the ${normalizedSubtype} part of your query.`;
   }
 
   if (rung === 2) {
-    return `Which step in ${normalizedSubtype} is missing? Use your notes to verify the needed clause.`;
+    if (subtypeLower.includes('group') || subtypeLower.includes('aggregat')) {
+      return 'Are all non-aggregated columns included in your GROUP BY? What function summarizes the data?';
+    }
+    if (subtypeLower.includes('join')) {
+      return 'Which two tables share a common column? How should they connect?';
+    }
+    if (subtypeLower.includes('where') || subtypeLower.includes('filter')) {
+      return 'What condition should rows satisfy? Which comparison operator fits?';
+    }
+    if (subtypeLower.includes('alias') || subtypeLower.includes('column')) {
+      return 'Does your output column name match what the problem expects? Try using AS.';
+    }
+    return `What specifically about ${normalizedSubtype} needs to change? Compare your output with the expected result.`;
   }
 
-  return `Address the ${normalizedSubtype} issue first, then re-run. Use a blank pattern like "SELECT ___ FROM ___" to guide your fix.`;
+  // Rung 3 — most specific
+  if (subtypeLower.includes('group') || subtypeLower.includes('aggregat')) {
+    return `Your query needs a GROUP BY clause. Pattern: SELECT ___, AGG(___) FROM ___ GROUP BY ___. Check if HAVING is also needed.`;
+  }
+  if (subtypeLower.includes('join')) {
+    return `Connect the tables using: SELECT ___ FROM table1 JOIN table2 ON table1.___ = table2.___`;
+  }
+  if (subtypeLower.includes('alias') || subtypeLower.includes('column')) {
+    return `Rename your output column: SELECT expression AS expected_name FROM ___`;
+  }
+  return `Fix the ${normalizedSubtype} issue. Pattern: SELECT ___ FROM ___ WHERE ___. Compare your result with the expected output.`;
 }
 
 /**
