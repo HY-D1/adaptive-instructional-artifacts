@@ -572,11 +572,11 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
                 <>
                   {/* Positive feedback for correct queries - Research shows 2x learning speed */}
                   {correctness?.match && (
-                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg">
                       <div className="flex items-start gap-2">
                         <CheckCircle className="size-4 text-green-600 shrink-0 mt-0.5" />
                         <div>
-                          <p className="text-sm font-medium text-green-800">
+                          <p className="text-sm font-medium text-green-800 dark:text-green-300">
                             {generatePositiveFeedback(code)}
                           </p>
                         </div>
@@ -614,19 +614,19 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
                       </table>
                     </div>
                   ) : (
-                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-center">
+                    <div className="p-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg text-center">
                       <CheckCircle className="size-6 mx-auto mb-2 text-green-600" />
-                      <p className="text-green-800">Query executed successfully. No results returned.</p>
+                      <p className="text-green-800 dark:text-green-300">Query executed successfully. No results returned.</p>
                     </div>
                   )}
 
                   {correctness && correctness.mode === 'result' && !correctness.match && (
-                    <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                      <p className="text-sm font-medium text-amber-800 mb-2 flex items-center gap-2">
+                    <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-2 flex items-center gap-2">
                         <AlertCircle className="size-4" />
                         Your query returned different results:
                       </p>
-                      <ul className="text-sm text-amber-700 space-y-1">
+                      <ul className="text-sm text-amber-700 dark:text-amber-300 space-y-1">
                         {correctness.differences.slice(0, 3).map((diff, idx) => (
                           <li key={idx} className="flex items-start gap-2">
                             <span className="text-amber-500">•</span>
@@ -638,16 +638,16 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
                   )}
                 </>
               ) : (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
                   <div className="flex items-start gap-3">
                     <div className="p-1.5 bg-red-100 rounded-full shrink-0">
                       <AlertCircle className="size-5 text-red-600" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-2">
-                        <p className="text-sm font-semibold text-red-800">SQL Error</p>
+                        <p className="text-sm font-semibold text-red-800 dark:text-red-300">SQL Error</p>
                         {parsedError?.lineNumber && (
-                          <Badge variant="outline" className="text-xs font-mono bg-red-100 border-red-300 text-red-800">
+                          <Badge variant="outline" className="text-xs font-mono bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-800 text-red-800 dark:text-red-300">
                             Line {parsedError.lineNumber}
                             {parsedError.columnNumber && `, Col ${parsedError.columnNumber}`}
                           </Badge>
@@ -655,18 +655,18 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
                       </div>
                       
                       <div className="bg-white border border-red-200 rounded-lg p-3 overflow-x-auto shadow-sm">
-                        <code className="text-sm text-red-700 font-mono whitespace-pre-wrap block">
+                        <code className="text-sm text-red-700 dark:text-red-300 font-mono whitespace-pre-wrap block">
                           {parsedError?.formattedMessage || result.error}
                         </code>
                       </div>
                       
                       {parsedError?.lineNumber && (
                         <div className="mt-3 p-3 bg-red-100/70 rounded-lg border border-red-200">
-                          <p className="text-xs font-semibold text-red-800 mb-1 flex items-center gap-1.5">
+                          <p className="text-xs font-semibold text-red-800 dark:text-red-300 mb-1 flex items-center gap-1.5">
                             <Lightbulb className="size-3.5" />
                             Suggestion
                           </p>
-                          <p className="text-xs text-red-700">
+                          <p className="text-xs text-red-700 dark:text-red-300">
                             Check line {parsedError.lineNumber} for syntax errors. Common issues include missing commas, 
                             incorrect table/column names, or unmatched parentheses.
                           </p>
@@ -675,16 +675,16 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
                       
                       {/* Quick fix suggestions for common errors */}
                       {parsedError?.message?.toLowerCase().includes('no such column') && (
-                        <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
-                          <p className="text-xs text-amber-800">
+                        <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                          <p className="text-xs text-amber-800 dark:text-amber-300">
                             <span className="font-medium">Tip:</span> Check the database schema for available columns. 
                             Column names are case-sensitive.
                           </p>
                         </div>
                       )}
                       {parsedError?.message?.toLowerCase().includes('no such table') && (
-                        <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
-                          <p className="text-xs text-amber-800">
+                        <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                          <p className="text-xs text-amber-800 dark:text-amber-300">
                             <span className="font-medium">Tip:</span> Verify the table name in the schema. 
                             Make sure you are using the correct database.
                           </p>

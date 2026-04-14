@@ -304,7 +304,7 @@ function DependencyWarningToast({ onClose }: DependencyWarningToastProps) {
       aria-live="polite"
       data-testid="dependency-warning-toast"
     >
-      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 max-w-sm">
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 max-w-sm">
         <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
           <Sparkles className="w-4 h-4 text-amber-600" />
         </div>
@@ -2333,7 +2333,7 @@ export function LearningInterface() {
                 variant="secondary" 
                 size="sm"
                 onClick={exitPreviewMode}
-                className="bg-white text-purple-700 hover:bg-purple-50 border-0 font-medium"
+                className="bg-white dark:bg-gray-800 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/30 border-0 font-medium"
                 aria-label="Exit Student Preview mode and return to instructor dashboard"
               >
                 <LogOut className="size-4 mr-2" aria-hidden="true" />
@@ -2393,7 +2393,7 @@ export function LearningInterface() {
                 {/* Enhanced Session Timer */}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg">
                       {isTimerPaused ? (
                         <Pause className="size-4 text-amber-500" />
                       ) : (
@@ -2423,9 +2423,9 @@ export function LearningInterface() {
                 {isStudent && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-lg border border-green-200">
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-200 dark:border-green-800">
                         <Target className="size-4 text-green-600" />
-                        <span className="text-sm font-medium text-green-700">
+                        <span className="text-sm font-medium text-green-700 dark:text-green-300">
                           Solved: {solvedCount} / {totalProblems}
                         </span>
                         <div className="w-16 h-2 bg-green-200 rounded-full overflow-hidden">
@@ -2538,7 +2538,7 @@ export function LearningInterface() {
             {/* Main problem area */}
             <div className="lg:col-span-2 space-y-4 xl:grid xl:grid-cols-2 xl:gap-4 xl:space-y-0 min-w-0">
               {/* Left sub-column: Problem description + schema */}
-              <div className="space-y-4">
+              <div className="space-y-4 xl:max-h-[calc(100vh-200px)] xl:overflow-y-auto">
                 <Card className="p-6">
                 <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex-1 min-w-0">
@@ -2554,7 +2554,7 @@ export function LearningInterface() {
                         {currentProblem.difficulty}
                       </Badge>
                       {isCurrentProblemSolved && (
-                        <Badge className="bg-green-100 text-green-800 border-green-200">
+                        <Badge className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800">
                           <Check className="size-3 mr-1" />
                           Solved
                         </Badge>
@@ -2564,14 +2564,14 @@ export function LearningInterface() {
                     
                     {/* Next Problem callout after correct answer */}
                     {isCurrentProblemSolved && hasNextProblem && (
-                      <div className="mt-2 flex items-center gap-2 text-green-700 text-sm font-medium">
+                      <div className="mt-2 flex items-center gap-2 text-green-700 dark:text-green-300 text-sm font-medium">
                         <CheckCircle className="size-4" />
                         <span>Correct!</span>
                         <Button 
                           variant="link" 
                           size="sm" 
                           onClick={handleNextProblem} 
-                          className="text-green-700 underline p-0 h-auto"
+                          className="text-green-700 dark:text-green-300 underline p-0 h-auto"
                         >
                           Next Problem →
                         </Button>
@@ -2604,7 +2604,7 @@ export function LearningInterface() {
                     {/* Week 6: Condition indicator - subtle experimental condition badge */}
                     {sessionConfig && (
                       <div className="flex items-center gap-2 mt-3 text-xs">
-                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded">
+                        <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded">
                           Condition: {sessionConfig.conditionId}
                         </span>
                         {sessionConfig.textbookDisabled && (
@@ -2659,9 +2659,9 @@ export function LearningInterface() {
                         return (
                           <div key={difficulty}>
                             <div className={`px-2 py-1.5 text-xs font-semibold uppercase tracking-wide ${
-                              difficulty === 'beginner' ? 'text-green-700 bg-green-50' :
+                              difficulty === 'beginner' ? 'text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30' :
                               difficulty === 'intermediate' ? 'text-yellow-700 bg-yellow-50' :
-                              'text-red-700 bg-red-50'
+                              'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30'
                             }`}>
                               {difficulty} — {solvedInDifficulty} of {problems.length} solved
                             </div>
@@ -2735,7 +2735,7 @@ export function LearningInterface() {
 
                 {/* Instructor Controls - only visible in instructor mode */}
                 {isInstructor && (
-                  <Card className="p-4 mb-4 bg-amber-50 border-amber-200">
+                  <Card className="p-4 mb-4 bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800">
                     <h3 className="font-semibold text-sm mb-3">Instructor Controls</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
@@ -2784,7 +2784,7 @@ export function LearningInterface() {
                   </Card>
                 )}
 
-                <details className="mb-4 group">
+                <details className="mb-4 group" open>
                   <summary className="font-semibold text-sm cursor-pointer select-none flex items-center gap-1 hover:text-blue-700">
                     <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
                     Database Schema
@@ -2797,7 +2797,7 @@ export function LearningInterface() {
             </div>
 
             <div className="xl:h-[calc(100vh-200px)]">
-              <div className="h-[300px] sm:h-[350px] md:h-[450px] lg:h-[550px] max-h-[60vh]">
+              <div className="h-[300px] sm:h-[350px] md:h-[450px] lg:h-[550px] max-h-[60vh] xl:h-full xl:max-h-full">
                 <SQLEditor
                   key={currentProblem.id}
                   problem={currentProblem}
@@ -2879,7 +2879,7 @@ export function LearningInterface() {
                     <p className="text-xs text-amber-700">{generationError}</p>
                   )}
                   {notesActionMessage && (
-                    <div className="text-sm text-green-700 bg-green-50 p-3 rounded-lg border border-green-300 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <div className="text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 p-3 rounded-lg border border-green-300 dark:border-green-800 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
                       <div className="flex items-center gap-2">
                         <CheckCircle className="size-5 text-green-600 flex-shrink-0" />
                         <p className="font-medium">{notesActionMessage}</p>
@@ -2906,7 +2906,7 @@ export function LearningInterface() {
                 const status = checkPrerequisites(conceptId, profile.conceptsCovered);
                 return !status.ready;
               }) && (
-                <Card className="p-4 bg-amber-50 border-amber-200">
+                <Card className="p-4 bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertCircle className="size-4 text-amber-600" />
                     <h3 className="font-semibold text-amber-900">Prerequisites Needed</h3>
@@ -2920,11 +2920,11 @@ export function LearningInterface() {
                       
                       return (
                         <div key={conceptId} className="text-sm">
-                          <p className="text-amber-800 font-medium">
+                          <p className="text-amber-800 dark:text-amber-300 font-medium">
                             {conceptId.replace(/-/g, ' ')}
                           </p>
                           {status.missing.length > 0 && (
-                            <p className="text-amber-700 text-xs mt-0.5">
+                            <p className="text-amber-700 dark:text-amber-300 text-xs mt-0.5">
                               Missing: {status.missing.slice(0, 2).join(', ')}
                               {status.missing.length > 2 && ` +${status.missing.length - 2} more`}
                             </p>
@@ -2958,7 +2958,7 @@ export function LearningInterface() {
                           </p>
                         </div>
                         {rec.priority === 'high' && (
-                          <span className="flex-shrink-0 px-1.5 py-0.5 bg-red-100 text-red-700 text-[10px] rounded">
+                          <span className="flex-shrink-0 px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-[10px] rounded">
                             High
                           </span>
                         )}
@@ -2997,9 +2997,9 @@ export function LearningInterface() {
                   <div
                     className={cn(
                       'text-right text-xs font-medium capitalize',
-                      sessionSyncStatus === 'confirmed' && 'text-green-700',
-                      sessionSyncStatus === 'pending' && 'text-amber-700',
-                      sessionSyncStatus === 'failed' && 'text-red-700',
+                      sessionSyncStatus === 'confirmed' && 'text-green-700 dark:text-green-300',
+                      sessionSyncStatus === 'pending' && 'text-amber-700 dark:text-amber-300',
+                      sessionSyncStatus === 'failed' && 'text-red-700 dark:text-red-300',
                       sessionSyncStatus === 'checking' && 'text-gray-600',
                     )}
                     title={sessionSyncError}
@@ -3204,11 +3204,11 @@ export function LearningInterface() {
                 <div className="space-y-2 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="text-slate-600">Run query</span>
-                    <kbd className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-slate-700 font-mono">Ctrl+Enter</kbd>
+                    <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-700 border border-slate-300 dark:border-slate-600 rounded text-slate-700 dark:text-slate-300 font-mono">Ctrl+Enter</kbd>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-600">Focus problem</span>
-                    <kbd className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-slate-700 font-mono">Ctrl+/</kbd>
+                    <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-700 border border-slate-300 dark:border-slate-600 rounded text-slate-700 dark:text-slate-300 font-mono">Ctrl+/</kbd>
                   </div>
                 </div>
               </Card>

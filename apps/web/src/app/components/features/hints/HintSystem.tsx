@@ -255,8 +255,7 @@ export function HintSystem({
       });
 
       // Build retrieval bundle for context
-      const problem = getProblemById(problemId);
-      if (problem) {
+      if (problemForSave) {
         if (!subtypeForSaveWithFallback) {
           setSaveToNotesError('No concept context found. Try submitting a query first so the system can identify what to save.');
           setIsAddingToTextbook(false);
@@ -265,7 +264,7 @@ export function HintSystem({
 
         const bundle = buildRetrievalBundle({
           learnerId,
-          problem,
+          problem: problemForSave,
           interactions: recentInteractions,
           lastErrorSubtypeId: subtypeForSaveWithFallback || undefined
         });
@@ -1275,7 +1274,7 @@ export function HintSystem({
       {/* Clean header with title and rung */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-amber-50 rounded-lg">
+          <div className="p-1.5 bg-amber-50 dark:bg-amber-900/30 rounded-lg">
             <Lightbulb className="size-4 text-amber-500" />
           </div>
           <div>
