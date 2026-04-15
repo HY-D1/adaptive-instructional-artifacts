@@ -337,9 +337,7 @@ test.describe('@regression @storage @quota-resilience @no-external Storage quota
     
     // Wait for results
     await expect.poll(async () => {
-      const resultsVisible = await page.locator('[data-testid="query-results"]').isVisible().catch(() => false);
-      const errorVisible = await page.locator('.text-red-600, .text-red-700').first().isVisible().catch(() => false);
-      return resultsVisible || errorVisible;
+      return await page.getByRole('heading', { name: 'Results' }).isVisible().catch(() => false);
     }, { timeout: 15_000, intervals: [500] }).toBe(true);
     
     await page.screenshot({ 
