@@ -2541,7 +2541,7 @@ export function LearningInterface() {
               <div className="space-y-4 xl:max-h-[calc(100vh-200px)] xl:overflow-y-auto">
                 <Card className="p-6">
                 <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between">
-                  <div className="flex-1 min-w-0 space-y-4">
+                  <div className="flex-auto min-w-0 space-y-4">
                     <div className="space-y-2">
                       <span className="text-sm text-gray-500 font-medium block">
                         Problem {currentProblemNumber} of {totalProblems}
