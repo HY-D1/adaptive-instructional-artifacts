@@ -157,6 +157,12 @@
       "optional": true
     }
   },
+  "browserslist": [
+    "last 2 Chrome versions",
+    "last 2 Safari versions",
+    "last 2 Firefox versions",
+    "not dead"
+  ],
   "engines": {
     "node": "22.x"
   },

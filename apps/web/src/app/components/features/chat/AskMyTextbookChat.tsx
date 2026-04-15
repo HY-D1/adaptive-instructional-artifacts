@@ -100,7 +100,7 @@ const MAX_PDF_TEXT_LENGTH = 350;
 interface Toast {
   id: string;
   message: string;
-  type: 'success' | 'info';
+  type: 'success' | 'info' | 'error';
 }
 
 type ChatLearningSignals = {
@@ -133,7 +133,7 @@ export function deriveChatLearningSignals(
   const failedInteractions = relevantInteractions.filter((interaction) =>
     interaction.eventType === 'error' || (interaction.eventType === 'execution' && interaction.successful === false)
   );
-  const latestFailure = failedInteractions.at(-1);
+  const latestFailure = failedInteractions[failedInteractions.length - 1];
   const failedRunCount = failedInteractions.length;
   const retryCount = Math.max(0, failedRunCount - 1);
   const hintCount = relevantInteractions.filter((interaction) =>
@@ -172,14 +172,14 @@ function renderMarkdownToHtml(content: string): string {
   let html = content
     // Code blocks (must be before inline code)
     .replace(/```sql\n([\s\S]*?)```/g, '<pre class="bg-gray-900 text-gray-100 p-2 rounded text-xs overflow-x-auto my-2 font-mono"><code>$1</code></pre>')
-    .replace(/```\n?([\s\S]*?)```/g, '<pre class="bg-gray-100 p-2 rounded text-xs overflow-x-auto my-2 font-mono"><code>$1</code></pre>')
+    .replace(/```\n?([\s\S]*?)```/g, '<pre class="bg-gray-100 dark:bg-gray-700 p-2 rounded text-xs overflow-x-auto my-2 font-mono"><code>$1</code></pre>')
     // Bold
-    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-gray-900 dark:text-gray-100">$1</strong>')
     // Italic
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/_(.+?)_/g, '<em>$1</em>')
     // Inline code
-    .replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-xs font-mono text-pink-600">$1</code>')
+    .replace(/`(.+?)`/g, '<code class="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded text-xs font-mono text-pink-600">$1</code>')
     // List items
     .replace(/^\*\s+(.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
     .replace(/^-\s+(.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
@@ -228,7 +228,7 @@ function ChatMessageBubble({ msg, idx, onSaveToNotes }: ChatMessageBubbleProps) 
     
     return (
       <div 
-        className="whitespace-pre-wrap break-words prose prose-sm max-w-none text-gray-700"
+        className="whitespace-pre-wrap break-words prose prose-sm max-w-none text-gray-700 dark:text-gray-200"
         dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
       />
     );
@@ -245,7 +245,7 @@ function ChatMessageBubble({ msg, idx, onSaveToNotes }: ChatMessageBubbleProps) 
         className={`rounded-lg px-3 py-2.5 text-sm ${
           msg.role === 'user'
             ? 'bg-blue-600 text-white max-w-[95%]'
-            : 'bg-gray-50 border border-gray-200 text-gray-800 shadow-sm'
+            : 'bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 dark:text-gray-100 shadow-sm'
         }`}
       >
         {renderContent()}
@@ -262,9 +262,9 @@ function ChatMessageBubble({ msg, idx, onSaveToNotes }: ChatMessageBubbleProps) 
                 <button
                   type="button"
                   onClick={() => setShowSources(!showSources)}
-                  className="inline-flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-700 transition-colors"
+                  className="inline-flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
                 >
-                  <span className="bg-gray-100 px-1.5 py-0.5 rounded">
+                  <span className="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">
                     {sourceCount} source{sourceCount !== 1 ? 's' : ''}
                   </span>
                   <span className="text-gray-400">
@@ -286,7 +286,7 @@ function ChatMessageBubble({ msg, idx, onSaveToNotes }: ChatMessageBubbleProps) 
             <Button
               variant="ghost"
               size="sm"
-              className="h-5 px-2 text-[10px] text-gray-500 hover:text-gray-700"
+              className="h-5 px-2 text-[10px] text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
               onClick={() => onSaveToNotes(idx)}
               disabled={msg.savedToNotes}
             >
@@ -297,7 +297,7 @@ function ChatMessageBubble({ msg, idx, onSaveToNotes }: ChatMessageBubbleProps) 
           
           {/* Expanded source badges */}
           {showSources && hasSources && (
-            <div className="flex flex-wrap gap-1 mt-1 pt-1 border-t border-gray-100">
+            <div className="flex flex-wrap gap-1 mt-1 pt-1 border-t border-gray-100 dark:border-gray-700">
               {/* AI badge for LLM-generated responses */}
               {msg.llmGenerated && (
                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 border border-purple-200">
@@ -1491,7 +1491,7 @@ export function AskMyTextbookChat({
     return (
       <Card className="p-4 text-center" data-testid="chat-panel">
         <MessageCircle className="size-8 mx-auto text-gray-300 mb-2" />
-        <p className="text-sm text-gray-500">Create a profile to use Ask My Textbook</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Create a profile to use Ask My Textbook</p>
       </Card>
     );
   }
@@ -1522,7 +1522,7 @@ export function AskMyTextbookChat({
           <MessageCircle className="size-4 text-blue-600" />
           <h3 className="font-semibold text-sm">Ask My Textbook</h3>
           {availableResources.llm && (
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700 border border-purple-200" title="AI Assistant enabled">
+            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800" title="AI Assistant enabled">
               <Sparkles className="size-3" />
               AI
             </span>
@@ -1532,7 +1532,7 @@ export function AskMyTextbookChat({
           <button 
             type="button"
             onClick={() => setShowClearConfirm(true)}
-            className="text-xs text-gray-400 hover:text-gray-600"
+            className="text-xs text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-400"
             title="Clear chat history"
           >
             <X className="size-3" />
@@ -1541,7 +1541,7 @@ export function AskMyTextbookChat({
       </div>
 
       {/* Quick Chips */}
-      <div className="p-2 border-b bg-gray-50">
+      <div className="p-2 border-b bg-gray-50 dark:bg-gray-800/50 dark:border-gray-700">
         <div className="flex flex-wrap gap-1.5">
           {QUICK_CHIPS.map(chip => (
             <button
@@ -1549,7 +1549,7 @@ export function AskMyTextbookChat({
               key={chip.id}
               onClick={() => handleSend(chip.id)}
               disabled={isLoading || !sessionId}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-white border hover:bg-gray-50 disabled:opacity-50"
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-white dark:bg-gray-800 border dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
             >
               <chip.icon className="size-3" />
               <span className="hidden sm:inline">{chip.label}</span>
@@ -1562,7 +1562,7 @@ export function AskMyTextbookChat({
       <div className="flex-1 min-h-[200px] max-h-[400px] overflow-y-auto">
         <div className="p-3 space-y-4">
           {messages.length === 0 ? (
-            <div className="text-center py-6 text-gray-400 text-sm">
+            <div className="text-center py-6 text-gray-400 dark:text-gray-500 text-sm">
               <BookOpen className="size-8 mx-auto mb-2 opacity-50" />
               <p>Ask a question about this problem</p>
               <p className="text-xs mt-1">or use the quick chips above</p>

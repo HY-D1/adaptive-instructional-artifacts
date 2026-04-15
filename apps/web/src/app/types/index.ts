@@ -530,6 +530,7 @@ export type NextHintSelection = {
   hintLevel: 1 | 2 | 3;
   policyVersion: string;
   shouldEscalate: boolean;
+  templateId?: string;
 };
 
 export type SQLProblem = {

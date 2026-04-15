@@ -1,0 +1,42 @@
+- generic [ref=e2]:
+  - link "Skip to main content" [ref=e3] [cursor=pointer]:
+    - /url: "#main-content"
+  - generic [ref=e4]:
+    - navigation [ref=e5]:
+      - generic [ref=e7]:
+        - link "SQL-Adapt Student" [ref=e8] [cursor=pointer]:
+          - /url: /practice
+          - img [ref=e9]
+          - generic [ref=e12]: SQL-Adapt
+          - generic [ref=e13]:
+            - img [ref=e14]
+            - text: Student
+        - generic [ref=e17]:
+          - link "Learn" [ref=e18] [cursor=pointer]:
+            - /url: /concepts
+            - img
+            - generic [ref=e19]: Learn
+          - link "Practice" [ref=e20] [cursor=pointer]:
+            - /url: /practice
+            - img
+            - generic [ref=e21]: Practice
+          - link "My Textbook" [ref=e22] [cursor=pointer]:
+            - /url: /textbook
+            - img
+            - generic [ref=e23]: My Textbook
+          - link "Settings" [ref=e24] [cursor=pointer]:
+            - /url: /settings
+            - img
+            - generic [ref=e25]: Settings
+        - generic [ref=e26]:
+          - generic [ref=e27]:
+            - img [ref=e28]
+            - text: "?"
+          - button "Open help and keyboard shortcuts" [ref=e30]:
+            - img
+            - generic [ref=e31]: Help
+          - button "Logout" [ref=e32]:
+            - img
+            - generic [ref=e33]: Logout
+    - main [ref=e34]
+  - region "Notifications"

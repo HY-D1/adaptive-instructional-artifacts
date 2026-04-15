@@ -15,11 +15,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useLearnerProgress } from './useLearnerProgress';
-import { storage } from '../lib/storage';
+import { storage as localStorageManager } from '../lib/storage/storage';
 import { sqlProblems } from '../data/problems';
 
-// Mock the storage module
-vi.mock('../lib/storage', () => ({
+// Mock the local storage module
+vi.mock('../lib/storage/storage', () => ({
   storage: {
     getProfile: vi.fn(),
     saveInteraction: vi.fn(),
@@ -43,7 +43,7 @@ describe('useLearnerProgress - Grading Integration', () => {
   describe('Solved State Update Path', () => {
     it('should reflect solved state when profile contains solvedProblemIds', () => {
       // Simulate: Event with successful=true was saved, updateProfileStatsFromEvent added problemId
-      vi.mocked(storage.getProfile).mockReturnValue({
+      vi.mocked(localStorageManager.getProfile).mockReturnValue({
         id: mockLearnerId,
         name: 'Test Learner',
         conceptsCovered: new Set(),
@@ -68,7 +68,7 @@ describe('useLearnerProgress - Grading Integration', () => {
     });
 
     it('should correctly identify unsolved problems not in solvedProblemIds', () => {
-      vi.mocked(storage.getProfile).mockReturnValue({
+      vi.mocked(localStorageManager.getProfile).mockReturnValue({
         id: mockLearnerId,
         name: 'Test Learner',
         conceptsCovered: new Set(),
@@ -98,7 +98,7 @@ describe('useLearnerProgress - Grading Integration', () => {
       // updateProfileStatsFromEvent uses Set.add() which prevents duplicates
       const solvedSet = new Set([firstProblemId]);
       
-      vi.mocked(storage.getProfile).mockReturnValue({
+      vi.mocked(localStorageManager.getProfile).mockReturnValue({
         id: mockLearnerId,
         name: 'Test Learner',
         conceptsCovered: new Set(),
@@ -129,7 +129,7 @@ describe('useLearnerProgress - Grading Integration', () => {
       solvedSet.add(firstProblemId);
       solvedSet.add(firstProblemId);
 
-      vi.mocked(storage.getProfile).mockReturnValue({
+      vi.mocked(localStorageManager.getProfile).mockReturnValue({
         id: mockLearnerId,
         name: 'Test Learner',
         conceptsCovered: new Set(),
@@ -161,7 +161,7 @@ describe('useLearnerProgress - Grading Integration', () => {
       // 4. InteractionEvent with successful=true is saved
       // 5. updateProfileStatsFromEvent adds problemId to solvedProblemIds
       
-      vi.mocked(storage.getProfile).mockReturnValue({
+      vi.mocked(localStorageManager.getProfile).mockReturnValue({
         id: mockLearnerId,
         name: 'Test Learner',
         conceptsCovered: new Set(),
@@ -189,7 +189,7 @@ describe('useLearnerProgress - Grading Integration', () => {
       // Event is either 'error' type or 'execution' with successful=false
       // updateProfileStatsFromEvent does NOT add problemId
       
-      vi.mocked(storage.getProfile).mockReturnValue({
+      vi.mocked(localStorageManager.getProfile).mockReturnValue({
         id: mockLearnerId,
         name: 'Test Learner',
         conceptsCovered: new Set(),
@@ -214,7 +214,7 @@ describe('useLearnerProgress - Grading Integration', () => {
 
     it('should track solvedCount across multiple problems', () => {
       // Simulates learner solving multiple different problems
-      vi.mocked(storage.getProfile).mockReturnValue({
+      vi.mocked(localStorageManager.getProfile).mockReturnValue({
         id: mockLearnerId,
         name: 'Test Learner',
         conceptsCovered: new Set(),
@@ -243,7 +243,7 @@ describe('useLearnerProgress - Grading Integration', () => {
       // Simulates page reload - storage.getProfile returns persisted data
       const persistedSolvedIds = new Set([firstProblemId, secondProblemId]);
       
-      vi.mocked(storage.getProfile).mockReturnValue({
+      vi.mocked(localStorageManager.getProfile).mockReturnValue({
         id: mockLearnerId,
         name: 'Test Learner',
         conceptsCovered: new Set(),
@@ -269,7 +269,7 @@ describe('useLearnerProgress - Grading Integration', () => {
 
     it('should handle empty/null solvedProblemIds gracefully on restore', () => {
       // Simulates new learner or corrupted data
-      vi.mocked(storage.getProfile).mockReturnValue({
+      vi.mocked(localStorageManager.getProfile).mockReturnValue({
         id: mockLearnerId,
         name: 'Test Learner',
         conceptsCovered: new Set(),
@@ -293,7 +293,7 @@ describe('useLearnerProgress - Grading Integration', () => {
 
     it('should handle missing profile gracefully (new learner)', () => {
       // Simulates completely new learner - no profile exists
-      vi.mocked(storage.getProfile).mockReturnValue(null);
+      vi.mocked(localStorageManager.getProfile).mockReturnValue(null);
 
       const { result } = renderHook(() =>
         useLearnerProgress({ learnerId: 'new-learner', currentProblemId: firstProblemId })
@@ -314,7 +314,7 @@ describe('useLearnerProgress - Grading Integration', () => {
       // Create solved set with 5 problems
       const solvedIds = new Set(sqlProblems.slice(0, 5).map(p => p.id));
 
-      vi.mocked(storage.getProfile).mockReturnValue({
+      vi.mocked(localStorageManager.getProfile).mockReturnValue({
         id: mockLearnerId,
         name: 'Test Learner',
         conceptsCovered: new Set(),
@@ -336,7 +336,7 @@ describe('useLearnerProgress - Grading Integration', () => {
     });
 
     it('should report currentProblemNumber correctly', () => {
-      vi.mocked(storage.getProfile).mockReturnValue({
+      vi.mocked(localStorageManager.getProfile).mockReturnValue({
         id: mockLearnerId,
         name: 'Test Learner',
         conceptsCovered: new Set(),
@@ -370,7 +370,7 @@ describe('useLearnerProgress - Grading Integration', () => {
       // Impact: solvedProblemIds contains problem that shouldn't be solved
       // Mitigation: This test documents the risk - hook will show it as solved
       
-      vi.mocked(storage.getProfile).mockReturnValue({
+      vi.mocked(localStorageManager.getProfile).mockReturnValue({
         id: mockLearnerId,
         name: 'Test Learner',
         conceptsCovered: new Set(),
@@ -401,7 +401,7 @@ describe('useLearnerProgress - Grading Integration', () => {
       // Impact: solvedProblemIds doesn't contain problem that should be solved
       // Mitigation: This test documents the risk - hook will show it as unsolved
       
-      vi.mocked(storage.getProfile).mockReturnValue({
+      vi.mocked(localStorageManager.getProfile).mockReturnValue({
         id: mockLearnerId,
         name: 'Test Learner',
         conceptsCovered: new Set(),

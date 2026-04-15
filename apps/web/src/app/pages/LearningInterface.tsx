@@ -45,7 +45,8 @@ import {
   Eye,
   LogOut,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  XCircle
 } from 'lucide-react';
 
 import { Card } from '../components/ui/card';
@@ -65,7 +66,7 @@ import { useScreenReaderAnnouncer } from '../components/shared/ScreenReaderAnnou
 import { sqlProblems } from '../data/problems';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
-import { useLocation } from 'react-router';
+import { useLocation, Link } from 'react-router';
 import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync } from '../lib/storage';
 import { useAuth } from '../lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
@@ -122,17 +123,17 @@ const STRATEGY_OPTIONS: Array<{ value: LearnerProfile['currentStrategy']; label:
 
 // Difficulty color mapping
 const difficultyColors = {
-  beginner: 'bg-green-100 text-green-800 border-green-200',
-  intermediate: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  advanced: 'bg-red-100 text-red-800 border-red-200'
+  beginner: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800',
+  intermediate: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-200',
+  advanced: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-200 dark:border-red-800'
 };
 
 // Week 5: Profile badge color mapping
 const profileBadgeColors: Record<string, { bg: string; text: string; border: string; icon: string }> = {
-  aggressive: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200', icon: 'text-blue-600' },
-  adaptive: { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-200', icon: 'text-green-600' },
-  conservative: { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-200', icon: 'text-yellow-600' },
-  'explanation-first': { bg: 'bg-purple-100', text: 'text-purple-700', border: 'border-purple-200', icon: 'text-purple-600' }
+  aggressive: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800', icon: 'text-blue-600 dark:text-blue-400' },
+  adaptive: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-700 dark:text-green-300', border: 'border-green-200 dark:border-green-800', icon: 'text-green-600 dark:text-green-400' },
+  conservative: { bg: 'bg-amber-50 dark:bg-amber-900/30', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800', icon: 'text-amber-600 dark:text-amber-400' },
+  'explanation-first': { bg: 'bg-purple-100 dark:bg-purple-900/30', text: 'text-purple-700 dark:text-purple-300', border: 'border-purple-200 dark:border-purple-800', icon: 'text-purple-600 dark:text-purple-400' }
 };
 
 // Week 5: Profile display names
@@ -253,7 +254,7 @@ export function resolvePracticeDraftState(args: {
     if (isMeaningfulDraft(sessionDraft)) {
       return { problem, draft: sessionDraft };
     }
-    if (!fallbackAnyDraft && typeof sessionDraft === 'string' && sessionDraft.trim().length > 0) {
+    if (!fallbackAnyDraft && sessionDraft) {
       fallbackAnyDraft = { problem, draft: sessionDraft };
     }
   }
@@ -263,7 +264,7 @@ export function resolvePracticeDraftState(args: {
     if (isMeaningfulDraft(anySessionDraft)) {
       return { problem, draft: anySessionDraft };
     }
-    if (!fallbackAnyDraft && typeof anySessionDraft === 'string' && anySessionDraft.trim().length > 0) {
+    if (!fallbackAnyDraft && anySessionDraft) {
       fallbackAnyDraft = { problem, draft: anySessionDraft };
     }
   }
@@ -304,7 +305,7 @@ function DependencyWarningToast({ onClose }: DependencyWarningToastProps) {
       aria-live="polite"
       data-testid="dependency-warning-toast"
     >
-      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-amber-800 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 max-w-sm">
+      <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 max-w-sm">
         <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
           <Sparkles className="w-4 h-4 text-amber-600" />
         </div>
@@ -974,7 +975,20 @@ export function LearningInterface() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
         const runButton = document.querySelector('[data-testid="run-query-btn"]') as HTMLButtonElement;
-        runButton?.click();
+        if (runButton && !runButton.disabled) {
+          runButton.click();
+        }
+        // If button not found or disabled, shortcut is a no-op (SQL engine still loading)
+        return;
+      }
+
+      // Ctrl+/ or Cmd+/ to request a hint
+      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+        e.preventDefault();
+        const hintButton = document.querySelector('[data-testid="hint-action-button"]') as HTMLButtonElement;
+        if (hintButton && !hintButton.disabled) {
+          hintButton.click();
+        }
         return;
       }
 
@@ -989,6 +1003,19 @@ export function LearningInterface() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Lightweight browser-compatibility gate (non-blocking)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    const safariVersion = isSafari
+      ? parseInt(navigator.userAgent.match(/Version\/(\d+)/)?.[1] || '0', 10)
+      : Infinity;
+    const hasWasm = typeof WebAssembly === 'object' && typeof WebAssembly.compile === 'function';
+    if ((isSafari && safariVersion < 14) || !hasWasm) {
+      console.warn('[BrowserGate] Unsupported browser detected. Safari < 14 or WebAssembly disabled.');
+    }
   }, []);
 
   // Effect: Session configuration assignment/loading (Week 6 + Workstream 3/6 redesign)
@@ -1092,7 +1119,11 @@ export function LearningInterface() {
       // Initialize learner profile if doesn't exist
       let profile = storage.getProfile(learnerId);
       if (!profile) {
-        profile = storage.createDefaultProfile(learnerId, 'adaptive-medium');
+        // Do NOT eagerly create a default profile here.
+        // hydrateLearner (in account mode) or updateProfileStatsFromEvent
+        // will create it with proper solved state when needed.
+        // Creating an empty profile here races with backend hydration and
+        // can overwrite progress that hasn't been loaded yet.
       }
 
       // Prefer active session from storage (hydrated from backend in account mode).
@@ -1238,7 +1269,7 @@ export function LearningInterface() {
     return () => {
       cancelled = true;
     };
-  }, [learnerId, isHydrating, isRoleLoading, persistedPracticeUiState]);
+  }, [learnerId, isHydrating, isRoleLoading]);
 
   // Effect 2: Background analysis - handles trace analysis lifecycle
   useEffect(() => {
@@ -1428,6 +1459,18 @@ export function LearningInterface() {
       return;
     }
     setCurrentProblem(problem);
+
+    // Persist last active problem so returning students resume here
+    setUiState<PracticePageUiState>(
+      'practice',
+      { role: isInstructor ? 'instructor' : 'student', actorId: learnerId },
+      {
+        currentProblemId: problem.id,
+        activeConceptId,
+        activeConceptTitle,
+        subtypeOverride,
+      }
+    );
 
     // Paper Data Contract: Flush any pending code change telemetry before switching
     flushCodeChangeTelemetry();
@@ -2194,6 +2237,12 @@ export function LearningInterface() {
     return allInteractions.filter(i => i.problemId === currentProblem.id);
   }, [learnerId, currentProblem.id, solvedRefreshKey]);
 
+  const problemAttempts = useMemo(() => {
+    return allProblemInteractions
+      .filter(i => i.eventType === 'execution' || i.eventType === 'error')
+      .sort((a, b) => b.timestamp - a.timestamp);
+  }, [allProblemInteractions]);
+
   // Unified progress model - single source of truth for all progress metrics
   const progress = useLearnerProgress({
     learnerId,
@@ -2279,7 +2328,7 @@ export function LearningInterface() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="container mx-auto px-4 py-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-4">
@@ -2301,7 +2350,7 @@ export function LearningInterface() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Week 5: Dependency Warning Toast */}
         {showDependencyWarning && (
           <DependencyWarningToast onClose={() => setShowDependencyWarning(false)} />
@@ -2326,7 +2375,7 @@ export function LearningInterface() {
                 variant="secondary" 
                 size="sm"
                 onClick={exitPreviewMode}
-                className="bg-white text-purple-700 hover:bg-purple-50 border-0 font-medium"
+                className="bg-white dark:bg-gray-800 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/30 border-0 font-medium"
                 aria-label="Exit Student Preview mode and return to instructor dashboard"
               >
                 <LogOut className="size-4 mr-2" aria-hidden="true" />
@@ -2338,7 +2387,7 @@ export function LearningInterface() {
 
         <div className={cn(
           "border-b",
-          isStudent ? "bg-gradient-to-r from-blue-50 to-white border-blue-100" : "bg-amber-50 border-amber-200"
+          isStudent ? "bg-gradient-to-r from-blue-50 to-white dark:from-blue-950 dark:to-gray-900 border-blue-100 dark:border-blue-800" : "bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800"
         )}>
           <div className="container mx-auto px-4 py-4">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -2374,7 +2423,7 @@ export function LearningInterface() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h1 className="text-2xl font-bold text-gray-900">SQL Learning Lab</h1>
-                      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">
+                      <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">
                         Instructor Mode
                       </Badge>
                     </div>
@@ -2386,7 +2435,7 @@ export function LearningInterface() {
                 {/* Enhanced Session Timer */}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg">
                       {isTimerPaused ? (
                         <Pause className="size-4 text-amber-500" />
                       ) : (
@@ -2416,9 +2465,9 @@ export function LearningInterface() {
                 {isStudent && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-lg border border-green-200">
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-200 dark:border-green-800">
                         <Target className="size-4 text-green-600" />
-                        <span className="text-sm font-medium text-green-700">
+                        <span className="text-sm font-medium text-green-700 dark:text-green-300">
                           Solved: {solvedCount} / {totalProblems}
                         </span>
                         <div className="w-16 h-2 bg-green-200 rounded-full overflow-hidden">
@@ -2442,9 +2491,9 @@ export function LearningInterface() {
                     <TooltipTrigger asChild>
                       <div className={cn(
                         "flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-medium cursor-help transition-all hover:shadow-sm",
-                        profileBadgeColors[currentProfileId]?.bg || 'bg-gray-100',
-                        profileBadgeColors[currentProfileId]?.text || 'text-gray-700',
-                        profileBadgeColors[currentProfileId]?.border || 'border-gray-200'
+                        profileBadgeColors[currentProfileId]?.bg || 'bg-gray-100 dark:bg-gray-800',
+                        profileBadgeColors[currentProfileId]?.text || 'text-gray-700 dark:text-gray-300',
+                        profileBadgeColors[currentProfileId]?.border || 'border-gray-200 dark:border-gray-700'
                       )}>
                         <Zap className={cn(
                           "size-3",
@@ -2529,40 +2578,44 @@ export function LearningInterface() {
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Main problem area */}
-            <div className="lg:col-span-2 space-y-4 min-w-0">
-              <Card className="p-6">
-                <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="flex-1 min-w-0">
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <span className="text-sm text-gray-500 font-medium">
+            <div className="lg:col-span-2 space-y-4 xl:grid xl:grid-cols-2 xl:gap-4 xl:space-y-0 min-w-0">
+              {/* Left sub-column: Problem description + schema */}
+              <div className="space-y-4 xl:max-h-[calc(100vh-200px)] xl:overflow-y-auto">
+                <Card className="p-6">
+                <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between">
+                  <div className="flex-auto min-w-0 space-y-4">
+                    <div className="space-y-2">
+                      <span className="text-sm text-gray-500 font-medium block">
                         Problem {currentProblemNumber} of {totalProblems}
                       </span>
-                      <h2 className="text-xl font-bold">{currentProblem.title}</h2>
-                      <Badge 
-                        variant="outline"
-                        className={`w-fit ${difficultyColors[currentProblem.difficulty]}`}
-                      >
-                        {currentProblem.difficulty}
-                      </Badge>
-                      {isCurrentProblemSolved && (
-                        <Badge className="bg-green-100 text-green-800 border-green-200">
-                          <Check className="size-3 mr-1" />
-                          Solved
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="text-xl font-bold">{currentProblem.title}</h2>
+                        <Badge 
+                          variant="outline"
+                          className={`w-fit ${difficultyColors[currentProblem.difficulty]}`}
+                        >
+                          {currentProblem.difficulty}
                         </Badge>
-                      )}
+                        {isCurrentProblemSolved && (
+                          <Badge className="bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800">
+                            <Check className="size-3 mr-1" />
+                            Solved
+                          </Badge>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-gray-700">{currentProblem.description}</p>
+                    <p className="text-gray-700 dark:text-gray-200">{currentProblem.description}</p>
                     
                     {/* Next Problem callout after correct answer */}
                     {isCurrentProblemSolved && hasNextProblem && (
-                      <div className="mt-2 flex items-center gap-2 text-green-700 text-sm font-medium">
+                      <div className="flex items-center gap-2 text-green-700 dark:text-green-300 text-sm font-medium">
                         <CheckCircle className="size-4" />
                         <span>Correct!</span>
                         <Button 
                           variant="link" 
                           size="sm" 
                           onClick={handleNextProblem} 
-                          className="text-green-700 underline p-0 h-auto"
+                          className="text-green-700 dark:text-green-300 underline p-0 h-auto transition-colors"
                         >
                           Next Problem →
                         </Button>
@@ -2570,7 +2623,7 @@ export function LearningInterface() {
                     )}
                     
                     {/* Concept tags */}
-                    <div className="flex flex-wrap gap-1.5 mt-3">
+                    <div className="flex flex-wrap gap-1.5">
                       {currentProblem.concepts.map(conceptId => {
                         const concept = getConceptById(conceptId);
                         return (
@@ -2594,22 +2647,22 @@ export function LearningInterface() {
                     
                     {/* Week 6: Condition indicator - subtle experimental condition badge */}
                     {sessionConfig && (
-                      <div className="flex items-center gap-2 mt-3 text-xs">
-                        <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded">
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded">
                           Condition: {sessionConfig.conditionId}
                         </span>
                         {sessionConfig.textbookDisabled && (
-                          <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded">
+                          <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded dark:bg-amber-900/30 dark:text-amber-300">
                             Textbook Disabled
                           </span>
                         )}
                         {sessionConfig.immediateExplanationMode && (
-                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">
+                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded dark:bg-blue-900/30 dark:text-blue-300">
                             Explanation-First Mode
                           </span>
                         )}
                         {sessionConfig.adaptiveLadderDisabled && (
-                          <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded">
+                          <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded dark:bg-purple-900/30 dark:text-purple-300">
                             Static Ladder
                           </span>
                         )}
@@ -2650,9 +2703,9 @@ export function LearningInterface() {
                         return (
                           <div key={difficulty}>
                             <div className={`px-2 py-1.5 text-xs font-semibold uppercase tracking-wide ${
-                              difficulty === 'beginner' ? 'text-green-700 bg-green-50' :
+                              difficulty === 'beginner' ? 'text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30' :
                               difficulty === 'intermediate' ? 'text-yellow-700 bg-yellow-50' :
-                              'text-red-700 bg-red-50'
+                              'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30'
                             }`}>
                               {difficulty} — {solvedInDifficulty} of {problems.length} solved
                             </div>
@@ -2663,7 +2716,7 @@ export function LearningInterface() {
                                   <div className="flex items-center gap-2 w-full">
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-1.5">
-                                        <span className={`font-medium truncate ${solved ? 'text-green-700' : ''}`}>
+                                        <span className={`font-medium truncate ${solved ? 'text-green-700 dark:text-green-300' : ''}`}>
                                           {problem.title}
                                         </span>
                                         {solved && (
@@ -2697,7 +2750,7 @@ export function LearningInterface() {
                   </div>
                 </div>
 
-                <div className="mb-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800 mb-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="flex items-center gap-1 cursor-help">
@@ -2726,7 +2779,7 @@ export function LearningInterface() {
 
                 {/* Instructor Controls - only visible in instructor mode */}
                 {isInstructor && (
-                  <Card className="p-4 mb-4 bg-amber-50 border-amber-200">
+                  <Card className="p-4 mb-4 bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800">
                     <h3 className="font-semibold text-sm mb-3">Instructor Controls</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
@@ -2775,15 +2828,57 @@ export function LearningInterface() {
                   </Card>
                 )}
 
-                <div className="mb-4">
-                  <h3 className="font-semibold text-sm mb-2">Database Schema:</h3>
-                  <pre className="bg-gray-100 p-3 rounded text-xs overflow-x-auto">
-                    {currentProblem.schema}
-                  </pre>
-                </div>
-              </Card>
+                <details className="mb-4 group" open>
+                  <summary className="font-semibold text-sm cursor-pointer select-none flex items-center gap-1 hover:text-blue-700">
+                    <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
+                    Database Schema
+                  </summary>
+                  <div className="overflow-hidden transition-all duration-200">
+                    <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded text-xs overflow-x-auto mt-2">
+                      {currentProblem.schema}
+                    </pre>
+                  </div>
+                </details>
 
-              <div className="h-[300px] sm:h-[350px] md:h-[450px] lg:h-[550px] max-h-[60vh]">
+                <details className="mb-4 group">
+                  <summary className="font-semibold text-sm cursor-pointer select-none flex items-center gap-1 hover:text-blue-700">
+                    <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
+                    Attempt History ({problemAttempts.length})
+                  </summary>
+                  <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
+                    {problemAttempts.map((attempt) => (
+                      <div key={attempt.id} className="text-xs border rounded p-2 bg-gray-50 dark:bg-gray-800">
+                        <div className="flex items-center gap-2 mb-1">
+                          {attempt.successful ? (
+                            <CheckCircle className="size-3 text-green-600" />
+                          ) : (
+                            <XCircle className="size-3 text-red-600" />
+                          )}
+                          <span className="font-medium">
+                            {attempt.successful ? 'Correct' : 'Incorrect'}
+                          </span>
+                          <span className="text-gray-400 ml-auto">
+                            {new Date(attempt.timestamp).toLocaleTimeString()}
+                          </span>
+                        </div>
+                        {attempt.code && (
+                          <code className="block font-mono text-[10px] truncate">{attempt.code}</code>
+                        )}
+                        {attempt.error && (
+                          <p className="text-red-600 truncate mt-0.5">{attempt.error}</p>
+                        )}
+                      </div>
+                    ))}
+                    {problemAttempts.length === 0 && (
+                      <p className="text-xs text-gray-500">No attempts yet.</p>
+                    )}
+                  </div>
+                </details>
+              </Card>
+            </div>
+
+            <div className="xl:h-[calc(100vh-200px)]">
+              <div className="h-[300px] sm:h-[350px] md:h-[450px] lg:h-[550px] max-h-[60vh] xl:h-full xl:max-h-full">
                 <SQLEditor
                   key={currentProblem.id}
                   problem={currentProblem}
@@ -2794,8 +2889,9 @@ export function LearningInterface() {
                 />
               </div>
             </div>
+          </div>
 
-            {/* Sidebar with hints */}
+          {/* Sidebar with hints */}
             <div className="space-y-4 min-w-0">
               <HintSystem
                 key={`${learnerId}:${sessionId}:${currentProblem.id}:${instructorSubtypeOverride || 'auto'}`}
@@ -2861,12 +2957,15 @@ export function LearningInterface() {
                     <p className="text-xs text-gray-500">Creating your note...</p>
                   )}
                   {generationError && (
-                    <p className="text-xs text-amber-700">{generationError}</p>
+                    <p className="text-xs text-amber-700 dark:text-amber-300">{generationError}</p>
                   )}
                   {notesActionMessage && (
-                    <div className="text-xs text-green-700 bg-green-50 p-2 rounded border border-green-200">
-                      <p className="font-medium">{notesActionMessage}</p>
-                      <Link to="/textbook" className="text-blue-600 hover:underline mt-1 inline-block">
+                    <div className="text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 p-3 rounded-lg border border-green-300 dark:border-green-800 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="size-5 text-green-600 flex-shrink-0" />
+                        <p className="font-medium">{notesActionMessage}</p>
+                      </div>
+                      <Link to="/textbook" className="text-blue-600 hover:underline mt-2 inline-flex items-center gap-1 text-xs">
                         View in My Textbook →
                       </Link>
                     </div>
@@ -2888,7 +2987,7 @@ export function LearningInterface() {
                 const status = checkPrerequisites(conceptId, profile.conceptsCovered);
                 return !status.ready;
               }) && (
-                <Card className="p-4 bg-amber-50 border-amber-200">
+                <Card className="p-4 bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertCircle className="size-4 text-amber-600" />
                     <h3 className="font-semibold text-amber-900">Prerequisites Needed</h3>
@@ -2902,11 +3001,11 @@ export function LearningInterface() {
                       
                       return (
                         <div key={conceptId} className="text-sm">
-                          <p className="text-amber-800 font-medium">
+                          <p className="text-amber-800 dark:text-amber-300 font-medium">
                             {conceptId.replace(/-/g, ' ')}
                           </p>
                           {status.missing.length > 0 && (
-                            <p className="text-amber-700 text-xs mt-0.5">
+                            <p className="text-amber-700 dark:text-amber-300 text-xs mt-0.5">
                               Missing: {status.missing.slice(0, 2).join(', ')}
                               {status.missing.length > 2 && ` +${status.missing.length - 2} more`}
                             </p>
@@ -2940,7 +3039,7 @@ export function LearningInterface() {
                           </p>
                         </div>
                         {rec.priority === 'high' && (
-                          <span className="flex-shrink-0 px-1.5 py-0.5 bg-red-100 text-red-700 text-[10px] rounded">
+                          <span className="flex-shrink-0 px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-[10px] rounded">
                             High
                           </span>
                         )}
@@ -2952,7 +3051,7 @@ export function LearningInterface() {
                       <span>Progress: {learningPath.progressPercentage}%</span>
                       <span>{learningPath.completedConcepts}/{learningPath.totalConcepts} concepts</span>
                     </div>
-                    <div className="mt-1.5 h-1.5 bg-blue-200 rounded-full overflow-hidden">
+                    <div className="mt-1.5 h-2 bg-blue-200 dark:bg-blue-900/30 rounded-full overflow-hidden">
                       <div 
                         className="h-full bg-blue-500 rounded-full transition-all"
                         style={{ width: `${learningPath.progressPercentage}%` }}
@@ -2979,9 +3078,9 @@ export function LearningInterface() {
                   <div
                     className={cn(
                       'text-right text-xs font-medium capitalize',
-                      sessionSyncStatus === 'confirmed' && 'text-green-700',
-                      sessionSyncStatus === 'pending' && 'text-amber-700',
-                      sessionSyncStatus === 'failed' && 'text-red-700',
+                      sessionSyncStatus === 'confirmed' && 'text-green-700 dark:text-green-300',
+                      sessionSyncStatus === 'pending' && 'text-amber-700 dark:text-amber-300',
+                      sessionSyncStatus === 'failed' && 'text-red-700 dark:text-red-300',
                       sessionSyncStatus === 'checking' && 'text-gray-600',
                     )}
                     title={sessionSyncError}
@@ -3006,9 +3105,9 @@ export function LearningInterface() {
                         variant="outline" 
                         className={cn(
                           "text-xs",
-                          hdiLevel === 'low' && "bg-green-100 text-green-800 border-green-300",
-                          hdiLevel === 'medium' && "bg-yellow-100 text-yellow-800 border-yellow-300",
-                          hdiLevel === 'high' && "bg-red-100 text-red-800 border-red-300"
+                          hdiLevel === 'low' && "bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800",
+                          hdiLevel === 'medium' && "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-800",
+                          hdiLevel === 'high' && "bg-red-100 text-red-800 border-red-300 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800"
                         )}
                       >
                         {hdiLevel === 'low' && <Check className="size-3 mr-1" />}
@@ -3051,7 +3150,7 @@ export function LearningInterface() {
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-600 w-12 shrink-0">HPA</span>
-                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                          <div className="flex-1 h-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-indigo-500 rounded-full"
                               style={{ width: `${hdiComponents.hpa * 100}%` }}
@@ -3073,7 +3172,7 @@ export function LearningInterface() {
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-600 w-12 shrink-0">AED</span>
-                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                          <div className="flex-1 h-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-indigo-500 rounded-full"
                               style={{ width: `${hdiComponents.aed * 100}%` }}
@@ -3095,7 +3194,7 @@ export function LearningInterface() {
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-600 w-12 shrink-0">ER</span>
-                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                          <div className="flex-1 h-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-indigo-500 rounded-full"
                               style={{ width: `${hdiComponents.er * 100}%` }}
@@ -3117,7 +3216,7 @@ export function LearningInterface() {
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-600 w-12 shrink-0">REAE</span>
-                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                          <div className="flex-1 h-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-indigo-500 rounded-full"
                               style={{ width: `${hdiComponents.reae * 100}%` }}
@@ -3139,7 +3238,7 @@ export function LearningInterface() {
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-gray-600 w-12 shrink-0">IWH</span>
-                          <div className="flex-1 h-1.5 bg-indigo-100 rounded-full overflow-hidden">
+                          <div className="flex-1 h-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-green-500 rounded-full"
                               style={{ width: `${hdiComponents.iwh * 100}%` }}
@@ -3186,11 +3285,11 @@ export function LearningInterface() {
                 <div className="space-y-2 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="text-slate-600">Run query</span>
-                    <kbd className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-slate-700 font-mono">Ctrl+Enter</kbd>
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 font-mono text-xs shadow-sm">Ctrl+Enter</kbd>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-600">Focus problem</span>
-                    <kbd className="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-slate-700 font-mono">Ctrl+/</kbd>
+                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 font-mono text-xs shadow-sm">Ctrl+/</kbd>
                   </div>
                 </div>
               </Card>

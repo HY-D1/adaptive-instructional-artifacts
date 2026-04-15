@@ -234,4 +234,70 @@ describe('SQL Grading Tolerance (Root Cause C)', () => {
       expect(comparison.differences.some(d => d.includes('Row count mismatch'))).toBe(true);
     });
   });
+
+  describe('Column Alias Case Insensitivity', () => {
+    test('accepts Order_Count when expected is order_count', async () => {
+      const executor = new SQLExecutor();
+      try {
+        await executor.initialize(`
+          CREATE TABLE orders (user_id INTEGER, product TEXT);
+          INSERT INTO orders VALUES (1, 'A'), (1, 'B'), (2, 'C');
+        `);
+
+        const result = await executor.executeQuery(
+          'SELECT user_id, COUNT(*) AS Order_Count FROM orders GROUP BY user_id HAVING COUNT(*) >= 2'
+        );
+        const studentRows = executor.formatResults(result);
+        const expectedRows = [{ user_id: 1, order_count: 2 }];
+
+        const comparison = executor.compareResults(studentRows, expectedRows);
+        expect(comparison.match).toBe(true);
+      } finally {
+        executor.close();
+      }
+    });
+
+    test('accepts AVG_PRICE when expected is avg_price', async () => {
+      const executor = new SQLExecutor();
+      try {
+        await executor.initialize(`
+          CREATE TABLE products (category TEXT, price REAL);
+          INSERT INTO products VALUES ('A', 10.0), ('A', 20.0);
+        `);
+
+        const result = await executor.executeQuery(
+          'SELECT category, AVG(price) AS AVG_PRICE FROM products GROUP BY category'
+        );
+        const studentRows = executor.formatResults(result);
+        const expectedRows = [{ category: 'A', avg_price: 15.0 }];
+
+        const comparison = executor.compareResults(studentRows, expectedRows);
+        expect(comparison.match).toBe(true);
+      } finally {
+        executor.close();
+      }
+    });
+
+    test('still rejects when VALUES differ despite case-insensitive column match', () => {
+      const studentRows = [{ Order_Count: 5 }];
+      const expectedRows = [{ order_count: 3 }];
+
+      const executor = new SQLExecutor();
+      const comparison = executor.compareResults(studentRows, expectedRows);
+      expect(comparison.match).toBe(false);
+      executor.close();
+    });
+
+    test('shows cell-level diff when column case differs but values differ', () => {
+      const studentRows = [{ Order_Count: 5, user_id: 1 }];
+      const expectedRows = [{ order_count: 3, user_id: 1 }];
+
+      const executor = new SQLExecutor();
+      const comparison = executor.compareResults(studentRows, expectedRows);
+      expect(comparison.match).toBe(false);
+      expect(comparison.differences.some(d => d.includes('Row mismatch'))).toBe(true);
+      expect(comparison.differences.some(d => d.includes('order_count'))).toBe(true);
+      executor.close();
+    });
+  });
 });

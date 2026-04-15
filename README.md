@@ -1,158 +1,163 @@
 # SQL-Adapt
 
-An adaptive learning environment for SQL that personalizes hints, explanations, and a dynamic "My Textbook" based on each learner's interaction traces.
+An adaptive SQL learning platform that personalizes hints, explanations, and study notes based on each student's mistakes and progress.
 
-SQL-Adapt combines structured SQL practice with an intelligent orchestration layer. As students work through problems, the system observes their errors, help-seeking behavior, and concept coverage, then adapts the level and type of support it provides — from concise micro-hints to full textbook-style explanations with source citations.
+Students practice SQL problems with real-time feedback. When they struggle, the system escalates support from quick hints to full explanations — then saves those explanations into a personal textbook. Instructors monitor progress across their class. Researchers export interaction traces for analysis.
 
-**Built for:** students learning SQL, instructors running supervised cohorts, and researchers analyzing learning traces.
-
----
-
-## For Students
-
-- **Practice SQL problems** with immediate execution feedback
-- **Progressive hint escalation** that adapts to your mistakes
-- **A personal textbook** that accumulates and organizes explanations from your learning journey
-- **On-demand review** of concepts and mistakes through the adaptive notebook
-
-## For Instructors
-
-- **Monitor student progress** and concept coverage through a dedicated dashboard
-- **View interaction traces** to understand individual and cohort learning patterns
-- **Export research data** for offline analysis and evidence building
-- **Run staged beta cohorts** with documented observation forms and telemetry audits
+**Live at:** [adaptive-instructional-artifacts.vercel.app](https://adaptive-instructional-artifacts.vercel.app)
 
 ---
 
-## Core Capabilities
-
-| Capability | Description |
-|------------|-------------|
-| **Adaptive Practice Support** | Learners receive scaffolded SQL problems with feedback tied to 23 error subtypes and 30 concepts. |
-| **Hint Escalation** | A guidance ladder moves learners from L1 micro-hints through L3 strategic hints to full LLM-grounded textbook units when struggle persists. |
-| **Personalized Notes / Textbook** | The system accumulates explanations from learner traces, de-duplicates them, and surfaces them in a "My Textbook" view. |
-| **Instructor Oversight** | Role-based access gives instructors a dashboard with coverage maps, traces, and exportable data. |
-| **Logging & Research Instrumentation** | Every interaction is logged to an immutable event schema for replay, analysis, and reproducibility. |
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Web App (Vite + React)                                         │
-│  - Student practice interface                                   │
-│  - Instructor dashboard                                         │
-│  - Adaptive hint & textbook UI                                  │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │
-┌─────────────────────────────▼───────────────────────────────────┐
-│  Server (Express + Neon PostgreSQL)                             │
-│  - Auth & sessions                                              │
-│  - Interaction persistence                                      │
-│  - Corpus & textbook API                                        │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │
-┌─────────────────────────────▼───────────────────────────────────┐
-│  Data & Storage Layer                                           │
-│  - Neon PostgreSQL (production)                                 │
-│  - localStorage (offline / static mode)                         │
-│  - Event log with UUIDv7 trace IDs                              │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │
-┌─────────────────────────────▼───────────────────────────────────┐
-│  Corpus & Content Layer                                         │
-│  - Static textbook assets (`apps/web/public/textbook-static/`)  │
-│  - PDF ingest pipeline (`tools/pdf_ingest/`)                    │
-│  - Concept maps & SQL-Engage taxonomy                           │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │
-┌─────────────────────────────▼───────────────────────────────────┐
-│  Operational & Runbook Layer                                    │
-│  - Beta launch runbooks (`docs/runbooks/`)                      │
-│  - Verification & audit scripts (`scripts/`)                    │
-│  - CI/CD regression gates (`.github/workflows/`)                │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Quick Start (Local Development)
-
-**Prerequisites:** Node.js 20+ (LTS recommended)
+## Quick Start
 
 ```bash
-# Install dependencies
-npm run install:all
-
-# Run frontend only (uses localStorage)
-npm run dev
-
-# Or run full stack (frontend + backend)
-npm run dev:full
+# Prerequisites: Node.js 22+
+npm install
+npm run dev              # Frontend only (localStorage mode)
+npm run dev:full         # Frontend + backend (Neon PostgreSQL)
 ```
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
-
-For backend persistence, copy and customize the environment files:
+Open [http://localhost:5173](http://localhost:5173). For backend mode, copy `.env.example` files:
 
 ```bash
 cp apps/web/.env.example apps/web/.env.local
 cp apps/server/.env.example apps/server/.env.local
 ```
 
-See [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) for a full variable reference.
+See [docs/deployment/ENVIRONMENT.md](docs/deployment/ENVIRONMENT.md) for variable reference.
 
 ---
 
-## Repository Layout
+## How It Works
 
-| Directory | Purpose |
-|-----------|---------|
-| `apps/web` | Vite + React frontend |
-| `apps/server` | Express backend |
-| `docs/runbooks` | Operations and launch runbooks |
-| `scripts` | Verification, audit, and research scripts (see [`scripts/README.md`](scripts/README.md)) |
-| `tools/pdf_ingest` | Corpus ingestion tooling |
+```
+Student attempts SQL → System checks answer
+                          ↓
+                    Wrong? → Hint (Level 1: nudge)
+                          ↓
+                    Still stuck? → Hint (Level 2: strategy)
+                          ↓
+                    Still stuck? → Full explanation + save to textbook
+                          ↓
+                    Solved → Track progress, update concept coverage
+```
+
+The system adapts based on 23 SQL error subtypes and 30 concepts from the SQL-Engage taxonomy. An LLM generates contextual explanations when available; deterministic templates provide fallback.
+
+---
+
+## Architecture
+
+| Layer | Tech | Purpose |
+|-------|------|---------|
+| **Frontend** | Vite + React + TypeScript | Student practice, instructor dashboard, textbook |
+| **Backend** | Express on Vercel Functions | Auth, persistence, LLM proxy, research export |
+| **Database** | Neon PostgreSQL | Users, sessions, interactions, textbook units |
+| **SQL Engine** | sql.js (WebAssembly) | In-browser SQL execution for practice problems |
+| **LLM** | Groq (via backend proxy) | Contextual hint/explanation generation |
+| **Offline** | localStorage + sync queue | Works without backend, syncs when available |
+
+### Repository Layout
+
+```
+apps/web/           → Vite + React frontend
+apps/server/        → Express backend (Vercel-compatible)
+docs/               → Project documentation
+tests/e2e/          → Playwright end-to-end tests
+tests/unit/         → Additional unit tests
+scripts/            → Verification, audit, and research scripts
+```
 
 ---
 
 ## Deployment
 
-SQL-Adapt deploys as two Vercel projects:
+Two Vercel projects:
 
-1. **Frontend** — built from repo root with Vite (`npm run build`), output to `dist/app`
-2. **Backend** — Express server in `apps/server/` (`npm run server:build`)
+1. **Frontend** — `npm run build` → `dist/app/`
+2. **Backend** — `apps/server/` → Vercel Functions
 
-For step-by-step instructions, see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md). For the capability matrix across local, hosted, and full-stack modes, see [`docs/DEPLOYMENT_MODES.md`](docs/DEPLOYMENT_MODES.md).
+```bash
+npm run build            # Build frontend
+npm run server:build     # Build backend
+npm run integrity:scan   # Pre-deploy verification
+```
 
-### Environment Variables
+See [docs/deployment/DEPLOYMENT.md](docs/deployment/DEPLOYMENT.md) for step-by-step instructions.
 
-Production deployments require both frontend build-time variables (`VITE_*`) and backend runtime configuration (database URL, CORS origins, auth codes). See [`apps/web/.env.example`](apps/web/.env.example), [`apps/server/.env.example`](apps/server/.env.example), and [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) for details.
+---
+
+## Testing
+
+```bash
+npm run test:unit                    # Vitest unit tests (~1800 tests)
+npm run test:e2e                     # Playwright E2E tests (~160 tests)
+npm run test:e2e:weekly              # CI regression suite
+npm run replay:gate                  # Replay determinism check
+```
+
+---
+
+## Key Features
+
+**For Students**
+- 32 SQL problems across beginner → advanced difficulty
+- Progressive hint escalation (3 levels) that adapts to your errors
+- Personal "My Textbook" that accumulates explanations from your learning
+- Cross-device progress persistence via Neon backend
+
+**For Instructors**
+- Class dashboard with student progress and concept coverage
+- Section-based enrollment with signup codes
+- Student textbook preview
+- Research data export
+
+**For Researchers**
+- Immutable interaction event log with 31 event types
+- Counterfactual replay across escalation strategies
+- Multi-armed bandit for strategy optimization
+- Hint Dependency Index (HDI) for measuring help-seeking behavior
+
+---
+
+## Documentation
+
+All documentation is in [`docs/`](docs/INDEX.md):
+
+| Section | Contents |
+|---------|----------|
+| [Deployment](docs/deployment/) | Environment setup, deployment modes, Vercel configuration |
+| [Architecture](docs/architecture/) | Data persistence, progress model, system design |
+| [Research](docs/research/) | Experimental design, logging spec, escalation policies |
+| [Operations](docs/operations/) | Current status, beta launch, incident response |
 
 ---
 
 ## Contributing
 
-- Keep changes minimal and reversible.
-- Do not modify LLM/AI runtime logic without explicit approval.
-- Run `npm run integrity:scan` before commits.
-- Update `docs/runbooks/status.md` when making operational changes.
+1. Read [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for working rules
+2. Keep changes minimal — no unrelated refactors
+3. Run `npm run integrity:scan` before committing
+4. Update `docs/CHANGELOG.md` with your changes
+5. Suggest commits; do not auto-push
 
 ---
 
-## Current Verified Status
+## Status
 
-> **Last verified: 2026-04-03** — Ready for controlled staged beta. See [`docs/runbooks/status.md`](docs/runbooks/status.md) for the latest detailed checkpoint.
+**Last verified:** 2026-04-10
 
-- **Build:** Verified
-- **Tests:** 1,100+ passing (unit + E2E)
-- **Production deployment:** Live on Vercel
-- **Telemetry:** 31 event types instrumented
-- **Beta docs:** Complete runbook suite in `docs/runbooks/`
+| Metric | Value |
+|--------|-------|
+| Unit tests | 1,800+ passing |
+| E2E tests | 160+ passing |
+| Build time | 2.7s |
+| Production | Live on Vercel |
+| Students | 259 enrolled across 3 sections |
+| Interactions | 120,000+ events in Neon |
 
 ---
 
 ## License
 
-MIT License — see [LICENSE](LICENSE)
+MIT — see [LICENSE](LICENSE)

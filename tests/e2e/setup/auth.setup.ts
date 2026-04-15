@@ -560,6 +560,21 @@ setup.describe('@auth-setup', () => {
   setup.beforeAll(async () => {
     requireDeterministicEnvForDeployed();
 
+    // Skip auth setup entirely if backend is not reachable (local dev / CI without backend)
+    try {
+      const preflight = await runNeonPreflight(API_BASE_URL);
+      console.log(
+        `[auth-setup] frontendBaseUrl=${FRONTEND_BASE_URL} apiBaseUrl=${API_BASE_URL} ` +
+        `dbMode=${String(preflight.persistenceStatus.dbMode)} ` +
+        `resolvedEnvSource=${String(preflight.persistenceStatus.resolvedEnvSource)}`,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.log(`[auth-setup] Backend unreachable, skipping auth setup. ${message}`);
+      setup.skip();
+      return;
+    }
+
     // Try to provision deterministic credentials via test-seed endpoint
     if (IS_DEPLOYED_AUTH_TARGET && !process.env.E2E_STUDENT_CLASS_CODE) {
       _testSeedCredentials = await provisionTestSeedCredentials();
@@ -567,13 +582,6 @@ setup.describe('@auth-setup', () => {
         console.log('[auth-setup] Using test-seed credentials for deployed auth');
       }
     }
-
-    const preflight = await runNeonPreflight(API_BASE_URL);
-    console.log(
-      `[auth-setup] frontendBaseUrl=${FRONTEND_BASE_URL} apiBaseUrl=${API_BASE_URL} ` +
-      `dbMode=${String(preflight.persistenceStatus.dbMode)} ` +
-      `resolvedEnvSource=${String(preflight.persistenceStatus.resolvedEnvSource)}`,
-    );
   });
 
   setup('capture student auth state', async ({ page, playwright }) => {

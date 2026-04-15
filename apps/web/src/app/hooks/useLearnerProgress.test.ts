@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useLearnerProgress } from './useLearnerProgress';
-import { storage } from '../lib/storage';
+import { storage as localStorageManager } from '../lib/storage/storage';
 import { sqlProblems } from '../data/problems';
 
-// Mock the storage module
-vi.mock('../lib/storage', () => ({
+// Mock the local storage module
+vi.mock('../lib/storage/storage', () => ({
   storage: {
     getProfile: vi.fn(),
   },
@@ -21,7 +21,7 @@ describe('useLearnerProgress', () => {
   });
 
   it('should return correct total problems count', () => {
-    vi.mocked(storage.getProfile).mockReturnValue(null);
+    vi.mocked(localStorageManager.getProfile).mockReturnValue(null);
     
     const { result } = renderHook(() => 
       useLearnerProgress({ learnerId: mockLearnerId, currentProblemId: firstProblemId })
@@ -31,7 +31,7 @@ describe('useLearnerProgress', () => {
   });
 
   it('should return correct current problem number (1-based)', () => {
-    vi.mocked(storage.getProfile).mockReturnValue(null);
+    vi.mocked(localStorageManager.getProfile).mockReturnValue(null);
     
     const { result: firstResult } = renderHook(() => 
       useLearnerProgress({ learnerId: mockLearnerId, currentProblemId: firstProblemId })
@@ -45,7 +45,7 @@ describe('useLearnerProgress', () => {
   });
 
   it('should return solved count of 0 when no problems solved', () => {
-    vi.mocked(storage.getProfile).mockReturnValue({
+    vi.mocked(localStorageManager.getProfile).mockReturnValue({
       id: mockLearnerId,
       name: 'Test Learner',
       conceptsCovered: new Set(),
@@ -69,7 +69,7 @@ describe('useLearnerProgress', () => {
   });
 
   it('should return correct solved count when problems are solved', () => {
-    vi.mocked(storage.getProfile).mockReturnValue({
+    vi.mocked(localStorageManager.getProfile).mockReturnValue({
       id: mockLearnerId,
       name: 'Test Learner',
       conceptsCovered: new Set(),
@@ -93,7 +93,7 @@ describe('useLearnerProgress', () => {
   });
 
   it('should correctly identify unsolved current problem', () => {
-    vi.mocked(storage.getProfile).mockReturnValue({
+    vi.mocked(localStorageManager.getProfile).mockReturnValue({
       id: mockLearnerId,
       name: 'Test Learner',
       conceptsCovered: new Set(),
@@ -120,7 +120,7 @@ describe('useLearnerProgress', () => {
     const beginnerProblems = sqlProblems.filter(p => p.difficulty === 'beginner');
     const solvedBeginnerIds = beginnerProblems.slice(0, 2).map(p => p.id);
 
-    vi.mocked(storage.getProfile).mockReturnValue({
+    vi.mocked(localStorageManager.getProfile).mockReturnValue({
       id: mockLearnerId,
       name: 'Test Learner',
       conceptsCovered: new Set(),
@@ -144,7 +144,7 @@ describe('useLearnerProgress', () => {
   });
 
   it('should handle empty learnerId gracefully', () => {
-    vi.mocked(storage.getProfile).mockReturnValue(null);
+    vi.mocked(localStorageManager.getProfile).mockReturnValue(null);
 
     const { result } = renderHook(() => 
       useLearnerProgress({ learnerId: '', currentProblemId: firstProblemId })
@@ -156,7 +156,7 @@ describe('useLearnerProgress', () => {
   });
 
   it('should handle null profile gracefully', () => {
-    vi.mocked(storage.getProfile).mockReturnValue(null);
+    vi.mocked(localStorageManager.getProfile).mockReturnValue(null);
 
     const { result } = renderHook(() => 
       useLearnerProgress({ learnerId: mockLearnerId, currentProblemId: firstProblemId })

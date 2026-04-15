@@ -22,7 +22,7 @@
  */
 
 import { useMemo, useCallback } from 'react';
-import { storage } from '../lib/storage';
+import { storage as localStorageManager } from '../lib/storage/storage';
 import { sqlProblems } from '../data/problems';
 
 export interface LearnerProgress {
@@ -75,7 +75,7 @@ export function useLearnerProgress(options: UseLearnerProgressOptions): LearnerP
       return hydratedSolvedIds;
     }
     if (!learnerId) return new Set<string>();
-    const profile = storage.getProfile(learnerId);
+    const profile = localStorageManager.getProfile(learnerId);
     return profile?.solvedProblemIds ?? new Set<string>();
   }, [learnerId, refreshKey, hydratedSolvedIds]);
 

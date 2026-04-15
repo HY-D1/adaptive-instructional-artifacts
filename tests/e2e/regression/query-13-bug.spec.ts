@@ -38,7 +38,7 @@ test.describe('Query 13 Grading Regression Tests', () => {
     await page.click('[data-testid="run-query-btn"]');
     
     // Wait for results to appear
-    await page.waitForSelector('[data-testid="query-results"], .text-green-600:has-text("Output matches"), .text-green-600:has-text("Results match")', { timeout: 10000 });
+    await page.waitForSelector('h3:has-text("Results"), .text-green-600:has-text("Output matches")', { timeout: 10000 });
     
     // Verify success message appears
     const successMessage = page.locator('.text-green-600:has-text("Output matches"), .text-green-600:has-text("Results match")');

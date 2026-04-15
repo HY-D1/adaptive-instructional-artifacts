@@ -18,7 +18,7 @@ async function executeQuery(page: import('@playwright/test').Page, sql?: string)
     await page.fill('[data-testid="sql-editor"] textarea, .cm-editor textarea', sql);
   }
   await page.locator('[data-testid="run-query-btn"]').click();
-  await page.waitForSelector('[data-testid="query-results"], [data-testid="result-correct"], [data-testid="result-incorrect"]', { timeout: 15000 });
+  await page.waitForSelector('h3:has-text("Results")', { timeout: 15000 });
 }
 
 async function waitForProblemLoad(page: import('@playwright/test').Page) {

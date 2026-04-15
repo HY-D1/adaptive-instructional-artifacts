@@ -338,8 +338,8 @@ const chatInteractions = useMemo(
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="border-b bg-white">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="border-b bg-white dark:bg-gray-900 dark:border-gray-700">
           <div className="container mx-auto px-4 py-4">
             <Skeleton className="h-8 w-48" />
           </div>
@@ -355,8 +355,8 @@ const chatInteractions = useMemo(
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-        <div className="border-b bg-white">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+        <div className="border-b bg-white dark:bg-gray-900 dark:border-gray-700">
           <div className="container mx-auto px-4 py-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex items-center gap-4">
@@ -377,28 +377,28 @@ const chatInteractions = useMemo(
                     My Textbook
                   </h1>
                   {isStudent ? (
-                    <p className="text-gray-600 text-sm">My learning journey: your personalized SQL notes and progress</p>
+                    <p className="text-gray-600 dark:text-gray-300 text-sm">My learning journey: your personalized SQL notes and progress</p>
                   ) : (
-                    <p className="text-gray-600 text-sm">Your personalized SQL learning notes</p>
+                    <p className="text-gray-600 dark:text-gray-300 text-sm">Your personalized SQL learning notes</p>
                   )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 {/* View Mode Toggle */}
                 <div className="flex items-center gap-2 mr-2">
-                  <span className="text-sm text-gray-500">View by:</span>
-                  <div className="flex rounded-lg border bg-white overflow-hidden">
+                  <span className="text-sm text-gray-500 dark:text-gray-400">View by:</span>
+                  <div className="flex rounded-lg border bg-white dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
                     <button
                       onClick={() => setViewMode('concepts')}
                       data-testid="textbook-view-concepts"
-                      className={`px-3 py-1.5 text-sm ${viewMode === 'concepts' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                      className={`px-3 py-1.5 text-sm ${viewMode === 'concepts' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
                     >
                       Concepts
                     </button>
                     <button
                       onClick={() => setViewMode('problems')}
                       data-testid="textbook-view-problems"
-                      className={`px-3 py-1.5 text-sm ${viewMode === 'problems' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+                      className={`px-3 py-1.5 text-sm ${viewMode === 'problems' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
                     >
                       Problems
                     </button>
@@ -409,9 +409,9 @@ const chatInteractions = useMemo(
                   <div className="hidden sm:flex items-center gap-3 mr-2">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
                           <BookOpen className="size-4 text-blue-600" />
-                          <span className="text-sm font-medium text-blue-700" data-testid="textbook-total-notes-count">
+                          <span className="text-sm font-medium text-blue-700 dark:text-blue-300" data-testid="textbook-total-notes-count">
                             {learningStats.totalUnits} notes
                           </span>
                         </div>
@@ -422,9 +422,9 @@ const chatInteractions = useMemo(
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 rounded-lg border border-green-200">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-200 dark:border-green-800">
                           <TrendingUp className="size-4 text-green-600" />
-                          <span className="text-sm font-medium text-green-700">
+                          <span className="text-sm font-medium text-green-700 dark:text-green-300">
                             {learningStats.conceptsCovered} concepts
                           </span>
                         </div>
@@ -435,9 +435,9 @@ const chatInteractions = useMemo(
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 rounded-lg border border-purple-200">
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 dark:bg-purple-900/30 rounded-lg border border-purple-200 dark:border-purple-800">
                           <Filter className="size-4 text-purple-600" />
-                          <span className="text-sm font-medium text-purple-700">
+                          <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
                             {learningStats.problemLinkedNotes} problem-linked
                           </span>
                         </div>
@@ -452,9 +452,9 @@ const chatInteractions = useMemo(
                 {isInstructor && (
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg border">
-                        <GraduationCap className="size-4 text-gray-600" />
-                        <span className="text-sm text-gray-700">Viewing: {learnerId.slice(0, 20)}...</span>
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg border dark:border-gray-700">
+                        <GraduationCap className="size-4 text-gray-600 dark:text-gray-300" />
+                        <span className="text-sm text-gray-700 dark:text-gray-200">Viewing: {learnerId.slice(0, 20)}...</span>
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
@@ -470,14 +470,14 @@ const chatInteractions = useMemo(
         <div className="container mx-auto px-4 py-6 flex-1 min-h-0 flex flex-col gap-4">
           {/* Student welcome card */}
           {isStudent && (
-            <Card className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
+            <Card className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
               <div className="flex items-start gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
                   <Sparkles className="size-5 text-blue-600" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-blue-900">Your Personal Study Guide</h3>
-                  <p className="text-sm text-blue-700 mt-1">
+                  <h3 className="font-semibold text-blue-900 dark:text-blue-200">Your Personal Study Guide</h3>
+                  <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
                     This page collects helpful explanations and notes created just for you as you practice SQL. 
                     Review them anytime to reinforce your learning!
                   </p>
@@ -489,7 +489,7 @@ const chatInteractions = useMemo(
           {/* Instructor info card */}
           {isInstructor && (
             <Card className="p-3">
-              <p className="text-xs text-gray-700">
+              <p className="text-xs text-gray-700 dark:text-gray-200">
                 Units are ordered by concept prerequisites, with misconception and spaced-review insights derived from your trace evidence.
               </p>
             </Card>
@@ -506,20 +506,20 @@ const chatInteractions = useMemo(
               />
             ) : (
               <div className="space-y-4">
-                <h2 className="text-lg font-semibold text-gray-800">Learning by Problem</h2>
+                <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Learning by Problem</h2>
                 {unitsByProblem.size === 0 ? (
                   <Card className="p-8 text-center">
-                    <BookOpen className="size-12 mx-auto mb-3 text-gray-300" />
-                    <p className="text-gray-500">No notes yet. Start practicing to build your textbook!</p>
+                    <BookOpen className="size-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+                    <p className="text-gray-500 dark:text-gray-400">No notes yet. Start practicing to build your textbook!</p>
                   </Card>
                 ) : (
                   Array.from(unitsByProblem.entries()).map(([pid, units]) => (
-                    <div key={pid} className="border rounded-lg bg-white overflow-hidden">
-                      <div className="bg-gray-50 px-4 py-3 border-b flex items-center justify-between">
-                        <h3 className="font-medium text-gray-900">
+                    <div key={pid} className="border rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
+                      <div className="bg-gray-50 dark:bg-gray-800/50 px-4 py-3 border-b dark:border-gray-700 flex items-center justify-between">
+                        <h3 className="font-medium text-gray-900 dark:text-gray-100">
                           {problemNames.get(pid) || pid}
                         </h3>
-                        <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full">
+                        <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded-full">
                           {units.length} notes
                         </span>
                       </div>
@@ -528,21 +528,21 @@ const chatInteractions = useMemo(
                           <div key={unit.id} className="text-sm" data-testid="textbook-problem-note-item">
                             <div className="flex items-center gap-2 mb-1">
                               <span className={`text-xs px-1.5 py-0.5 rounded ${
-                                unit.type === 'hint' ? 'bg-amber-100 text-amber-700' :
-                                unit.type === 'explanation' ? 'bg-blue-100 text-blue-700' :
-                                'bg-gray-100 text-gray-700'
+                                unit.type === 'hint' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' :
+                                unit.type === 'explanation' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
+                                'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                               }`}>
                                 {unit.type}
                               </span>
-                              <span className="font-medium text-gray-800">{unit.title}</span>
+                              <span className="font-medium text-gray-800 dark:text-gray-100">{unit.title}</span>
                             </div>
-                            <p className="text-gray-600 line-clamp-2">{unit.content}</p>
+                            <p className="text-gray-600 dark:text-gray-300 line-clamp-2">{unit.content}</p>
                           </div>
                         ))}
                         {units.length > 3 && (
                           <button 
                             onClick={() => setViewMode('concepts')}
-                            className="text-sm text-blue-600 hover:text-blue-700"
+                            className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                           >
                             + {units.length - 3} more
                           </button>
@@ -555,23 +555,23 @@ const chatInteractions = useMemo(
                 {/* Chat History Section */}
                 {chatsByProblem.size > 0 && (
                   <div className="mt-8 space-y-4">
-                    <h2 className="text-lg font-semibold text-gray-800">Chat History by Problem</h2>
+                    <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Chat History by Problem</h2>
                     {Array.from(chatsByProblem.entries()).map(([pid, chats]) => (
-                      <div key={`chat-${pid}`} className="border rounded-lg bg-white overflow-hidden">
-                        <div className="bg-blue-50 px-4 py-3 border-b flex items-center justify-between">
-                          <h3 className="font-medium text-gray-900 flex items-center gap-2">
+                      <div key={`chat-${pid}`} className="border rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 overflow-hidden">
+                        <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-3 border-b dark:border-gray-700 flex items-center justify-between">
+                          <h3 className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
                             <MessageCircle className="size-4 text-blue-500" />
                             {problemNames.get(pid) || pid}
                           </h3>
-                          <span className="text-xs text-gray-500 bg-blue-100 px-2 py-0.5 rounded-full">
+                          <span className="text-xs text-gray-500 dark:text-gray-400 bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 rounded-full">
                             {chats.length} chats
                           </span>
                         </div>
                         <div className="p-4 space-y-3 max-h-64 overflow-y-auto">
                           {chats.slice(0, 5).map(chat => (
-                            <div key={chat.id} className="text-sm border-b border-gray-100 pb-2 last:border-0">
+                            <div key={chat.id} className="text-sm border-b border-gray-100 dark:border-gray-700 pb-2 last:border-0">
                               <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs text-gray-500">
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
                                   {new Date(chat.timestamp).toLocaleString()}
                                 </span>
                                 {chat.chatQuickChip && (
@@ -580,12 +580,12 @@ const chatInteractions = useMemo(
                                   </Badge>
                                 )}
                               </div>
-                              <p className="font-medium text-gray-800 mb-1">Q: {chat.chatMessage}</p>
-                              <p className="text-gray-600 line-clamp-2">A: {chat.chatResponse}</p>
+                              <p className="font-medium text-gray-800 dark:text-gray-100 mb-1">Q: {chat.chatMessage}</p>
+                              <p className="text-gray-600 dark:text-gray-300 line-clamp-2">A: {chat.chatResponse}</p>
                             </div>
                           ))}
                           {chats.length > 5 && (
-                            <p className="text-sm text-blue-600 text-center">
+                            <p className="text-sm text-blue-600 dark:text-blue-400 text-center">
                               + {chats.length - 5} more chats
                             </p>
                           )}
@@ -609,7 +609,7 @@ const chatInteractions = useMemo(
                       <Clock className="size-4" />
                       Trace Attempts
                     </h2>
-                    <p className="text-xs text-gray-600">Filterable attempt log for evidence link targets</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">Filterable attempt log for evidence link targets</p>
                   </div>
                   <div className="flex items-center gap-2">
                     {selectedAttemptId && !selectedAttemptExists && (
@@ -626,7 +626,7 @@ const chatInteractions = useMemo(
                       variant="outline"
                       size="sm"
                       onClick={() => setShowFilters(!showFilters)}
-                      className={showFilters ? 'bg-gray-100' : ''}
+                      className={showFilters ? 'bg-gray-100 dark:bg-gray-800' : ''}
                       data-testid="textbook-toggle-filters"
                     >
                       <Filter className="size-4 mr-1.5" />
@@ -637,7 +637,7 @@ const chatInteractions = useMemo(
 
                 {/* Search and filters */}
                 {showFilters && (
-                  <div className="flex flex-col sm:flex-row gap-3 p-3 bg-gray-50 rounded-lg">
+                  <div className="flex flex-col sm:flex-row gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                     <div className="relative flex-1">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
                       <Input
@@ -652,7 +652,7 @@ const chatInteractions = useMemo(
                           type="button"
                           aria-label="Clear textbook search"
                           onClick={() => setSearchQuery('')}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-400"
                         >
                           <X className="size-4" />
                         </button>
@@ -661,7 +661,7 @@ const chatInteractions = useMemo(
                     
                     <Select value={selectedSubtype} onValueChange={handleSubtypeChange}>
                       <SelectTrigger className="w-full sm:w-[200px]">
-                        <Tag className="size-4 mr-2 text-gray-400" />
+                        <Tag className="size-4 mr-2 text-gray-400 dark:text-gray-500" />
                         <SelectValue placeholder="Filter by subtype" />
                       </SelectTrigger>
                       <SelectContent>
@@ -686,7 +686,7 @@ const chatInteractions = useMemo(
                 {/* Active filters display */}
                 {hasActiveFilters && (
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs text-gray-500">Active filters:</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">Active filters:</span>
                     {searchQuery && (
                       <Badge variant="secondary" className="text-xs">
                         Search: &ldquo;{searchQuery}&rdquo;
@@ -716,8 +716,8 @@ const chatInteractions = useMemo(
               </div>
 
               {filteredAttempts.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Clock className="size-12 mx-auto mb-3 text-gray-300" />
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <Clock className="size-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
                   <p className="text-sm">
                     {hasActiveFilters 
                       ? 'No attempts match the current filters.' 
@@ -739,20 +739,20 @@ const chatInteractions = useMemo(
                         key={interaction.id}
                         className={`rounded-lg border p-3 text-sm transition-all ${
                           isSelected 
-                            ? 'border-blue-300 bg-blue-50 shadow-sm' 
-                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                            ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 shadow-sm' 
+                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/50'
                         }`}
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-medium font-mono text-xs text-gray-700">
+                            <span className="font-medium font-mono text-xs text-gray-700 dark:text-gray-200">
                               {interaction.id.slice(0, 16)}...
                             </span>
                             <Badge variant="outline" className="text-xs">{subtype}</Badge>
                           </div>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <span className="text-xs text-gray-500 cursor-help">
+                              <span className="text-xs text-gray-500 dark:text-gray-400 cursor-help">
                                 {new Date(interaction.timestamp).toLocaleString()}
                               </span>
                             </TooltipTrigger>
@@ -761,7 +761,7 @@ const chatInteractions = useMemo(
                             </TooltipContent>
                           </Tooltip>
                         </div>
-                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-600">
+                        <div className="flex items-center gap-2 mt-2 text-xs text-gray-600 dark:text-gray-300">
                           <span className="font-medium">{interaction.problemId}</span>
                           <span className="text-gray-400">•</span>
                           <Badge variant="secondary" className="text-xs">
@@ -788,7 +788,7 @@ const chatInteractions = useMemo(
                     <Clock className="size-4" />
                     Recent Activity
                   </h3>
-                  <p className="text-xs text-gray-600 mt-1">
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
                     {filteredAttempts.length} practice attempts recorded
                   </p>
                 </div>

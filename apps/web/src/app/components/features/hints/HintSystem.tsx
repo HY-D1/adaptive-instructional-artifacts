@@ -239,6 +239,12 @@ export function HintSystem({
     // then fall back to the error subtype prop from the parent.
     const subtypeForSave = activeHintSubtype || errorSubtypeId || null;
 
+    // Resolve subtype: active hint > error prop
+    // Do NOT fall back to the first concept of the problem — saving without
+    // any learner interaction (no hints, no errors) must show a visible error
+    // rather than silently saving unrelated content.
+    const subtypeForSaveWithFallback = subtypeForSave;
+
     try {
       // Week 3 D8: Log guidance request for textbook
       storage.logGuidanceRequest({
@@ -249,20 +255,20 @@ export function HintSystem({
         sessionId
       });
 
-      // Build retrieval bundle for context
-      const problem = getProblemById(problemId);
-      if (problem) {
-        if (!subtypeForSave) {
-          setSaveToNotesError('No concept context found. Try submitting a query first so the system can identify what to save.');
-          setIsAddingToTextbook(false);
-          return;
-        }
+      if (!subtypeForSaveWithFallback) {
+        setSaveToNotesError('No concept context found. Try submitting a query first so the system can identify what to save.');
+        setIsAddingToTextbook(false);
+        return;
+      }
 
+      // Build retrieval bundle for context
+      const problemForSave = getProblemById(problemId);
+      if (problemForSave) {
         const bundle = buildRetrievalBundle({
           learnerId,
-          problem,
+          problem: problemForSave,
           interactions: recentInteractions,
-          lastErrorSubtypeId: subtypeForSave || undefined
+          lastErrorSubtypeId: subtypeForSaveWithFallback || undefined
         });
 
         // Week 3 D8: Log escalation to rung 3
@@ -291,7 +297,7 @@ export function HintSystem({
 
         // Trigger escalation, passing the resolved subtype explicitly so the
         // parent does not need to infer it from interaction history.
-        onEscalate?.(bundle.triggerInteractionIds, subtypeForSave || undefined);
+        onEscalate?.(bundle.triggerInteractionIds, subtypeForSaveWithFallback || undefined);
 
         // Update state to rung 3
         setCurrentRung(3);
@@ -310,10 +316,7 @@ export function HintSystem({
       } else {
         // No problem context — still fire the callback so the parent can save
         // using whatever subtype context it has available.
-        onEscalate?.([], subtypeForSave || undefined);
-        if (!subtypeForSave) {
-          setSaveToNotesError('No concept context found. Try submitting a query first so the system can identify what to save.');
-        }
+        onEscalate?.([], subtypeForSaveWithFallback || undefined);
       }
     } catch (err) {
       setSaveToNotesError((err as Error).message || 'Failed to save note. Please try again.');
@@ -491,9 +494,9 @@ export function HintSystem({
     const explanationEvents = problemTrace.filter(
       (interaction) => interaction.eventType === 'explanation_view'
     );
-    const latestHelpEvent = [...hintEvents, ...explanationEvents]
-      .sort((a, b) => a.timestamp - b.timestamp)
-      .at(-1);
+    const sortedHelpEvents = [...hintEvents, ...explanationEvents]
+      .sort((a, b) => a.timestamp - b.timestamp);
+    const latestHelpEvent = sortedHelpEvents[sortedHelpEvents.length - 1];
     
     if (hintEvents.length > 0) {
       // Reconstruct hints from saved hint events
@@ -1234,7 +1237,7 @@ export function HintSystem({
       <Card className="p-6 text-center" data-testid="hint-panel">
         <Lightbulb className="size-12 mx-auto text-gray-300 mb-4" aria-hidden="true" />
         <h3 className="font-semibold text-lg mb-2">Hints Unavailable</h3>
-        <p className="text-gray-600 text-sm">
+        <p className="text-gray-600 dark:text-gray-300 text-sm">
           Create a learner profile to access personalized hints and explanations.
         </p>
       </Card>
@@ -1270,12 +1273,12 @@ export function HintSystem({
       {/* Clean header with title and rung */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-amber-50 rounded-lg">
+          <div className="p-1.5 bg-amber-50 dark:bg-amber-900/30 rounded-lg">
             <Lightbulb className="size-4 text-amber-500" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">Guidance Ladder</h3>
-            <p className="text-xs text-gray-500">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Guidance Ladder</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               {showExplanation 
                 ? `Explain • ${Math.min(hints.length, 3)}/3`
                 : `Hint ${hintProgress} of 3`
@@ -1331,19 +1334,19 @@ export function HintSystem({
       )}
       
       {hints.length === 0 ? (
-        <div data-testid="hint-empty-state" className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 p-6 text-center">
-          <div className="p-2 bg-amber-50 rounded-full w-fit mx-auto mb-3">
+        <div data-testid="hint-empty-state" className="rounded-lg border border-dashed border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 p-6 text-center">
+          <div className="p-2 bg-amber-50 dark:bg-amber-900/30 rounded-full w-fit mx-auto mb-3">
             <HelpCircle className="size-5 text-amber-500" />
           </div>
-          <p className="text-sm font-medium text-gray-700 mb-1">Need help?</p>
-          <p className="text-xs text-gray-500">Request a hint to get personalized guidance</p>
-          <div className="mt-3 flex items-center justify-center gap-1 text-[10px] text-gray-400">
+          <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Need help?</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Request a hint to get personalized guidance</p>
+          <div className="mt-3 flex items-center justify-center gap-1 text-[10px] text-gray-400 dark:text-gray-500">
             <span>Progresses through</span>
-            <span className="font-medium text-amber-600">L1</span>
+            <span className="font-medium text-amber-600 dark:text-amber-400">L1</span>
             <span>→</span>
-            <span className="font-medium text-amber-600">L2</span>
+            <span className="font-medium text-amber-600 dark:text-amber-400">L2</span>
             <span>→</span>
-            <span className="font-medium text-amber-600">L3</span>
+            <span className="font-medium text-amber-600 dark:text-amber-400">L3</span>
           </div>
         </div>
       ) : (
@@ -1359,10 +1362,10 @@ export function HintSystem({
             
             return (
               <div key={idx} className={cn(
-                "rounded-lg border-l-4 bg-white shadow-sm overflow-hidden",
+                "rounded-lg border-l-4 bg-white dark:bg-gray-800 shadow-sm overflow-hidden",
                 isEnhanced 
-                  ? "border-l-purple-400 border-purple-100" 
-                  : "border-l-blue-400 border-gray-100"
+                  ? "border-l-purple-400 border-purple-100 dark:border-purple-900/30" 
+                  : "border-l-blue-400 border-gray-100 dark:border-gray-700"
               )} data-testid={`hint-card-${idx}`}>
                 {/* Inner card for cleaner separation */}
                 <div className="p-4">
@@ -1372,9 +1375,9 @@ export function HintSystem({
                       {/* Level badge - compact */}
                       <span className={cn(
                         "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                        idx === 0 ? "bg-green-100 text-green-700" :
-                        idx === 1 ? "bg-amber-100 text-amber-700" :
-                        "bg-red-100 text-red-700"
+                        idx === 0 ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300" :
+                        idx === 1 ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300" :
+                        "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
                       )}>
                         <span data-testid={`hint-label-${idx + 1}`}>{`Hint ${idx + 1}`}</span>
                         <span className="ml-1 opacity-70">{`L${idx + 1}`}</span>
@@ -1382,7 +1385,7 @@ export function HintSystem({
                       
                       {/* AI badge only - most important, compact */}
                       {isEnhanced && usesLLM && (
-                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
                           <Sparkles className="size-3" />
                           AI
                         </span>
@@ -1404,7 +1407,7 @@ export function HintSystem({
                     {hasPdfSources && (
                       <button
                         onClick={() => setExpandedHintIndex(isExpanded ? null : idx)}
-                        className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 transition-colors"
+                        className="flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
                         aria-expanded={isExpanded}
                         aria-controls={`hint-sources-${idx}`}
                       >
@@ -1427,7 +1430,7 @@ export function HintSystem({
                   
                   {/* Hint content - improved readability */}
                   <div className={cn(
-                    "prose prose-sm max-w-none",
+                    "prose prose-sm max-w-none animate-in fade-in duration-300",
                     isEnhanced ? "prose-purple" : "prose-blue"
                   )}>
                     {hint.startsWith('##') ? (
@@ -1435,18 +1438,18 @@ export function HintSystem({
                       <div 
                         className={cn(
                           "text-sm leading-7 whitespace-pre-wrap",
-                          isEnhanced ? "text-gray-800" : "text-gray-800"
+                          isEnhanced ? "text-gray-800 dark:text-gray-100" : "text-gray-800 dark:text-gray-100"
                         )}
                         dangerouslySetInnerHTML={{ 
                           __html: DOMPurify.sanitize(
                             hint
-                              .replace(/## (.+)/g, '<h3 class="font-semibold text-base mt-3 mb-2 text-gray-900">$1</h3>')
-                              .replace(/\*\*(.+?)\*\*/g, '<strong class="text-gray-900">$1</strong>')
+                              .replace(/## (.+)/g, '<h3 class="font-semibold text-base mt-3 mb-2 text-gray-900 dark:text-gray-100">$1</h3>')
+                              .replace(/\*\*(.+?)\*\*/g, '<strong class="text-gray-900 dark:text-gray-100">$1</strong>')
                               .replace(/\*(.+?)\*/g, '<em>$1</em>')
                               .replace(/_(.+?)_/g, '<em>$1</em>')
-                              .replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs text-gray-800">$1</code>')
+                              .replace(/`(.+?)`/g, '<code class="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-sm text-gray-800 dark:text-gray-100">$1</code>')
                               .replace(/- (.+)/g, '<li class="ml-4 mb-1">$1</li>')
-                              .replace(/```sql\n([\s\S]*?)```/g, '<pre class="bg-gray-900 text-gray-100 p-3 rounded text-xs overflow-x-auto my-2"><code>$1</code></pre>')
+                              .replace(/```sql\n([\s\S]*?)```/g, '<pre class="bg-gray-900 text-gray-100 p-3 rounded text-sm overflow-x-auto my-2"><code>$1</code></pre>')
                               .replace(/\n\n/g, '<br/>'),
                             {
                               ALLOWED_TAGS: ['h3', 'strong', 'em', 'code', 'pre', 'li', 'br'],
@@ -1459,15 +1462,15 @@ export function HintSystem({
                       <p 
                         className={cn(
                           "text-sm leading-7 whitespace-pre-wrap",
-                          isEnhanced ? "text-gray-800" : "text-gray-800"
+                          isEnhanced ? "text-gray-800 dark:text-gray-100" : "text-gray-800 dark:text-gray-100"
                         )}
                         dangerouslySetInnerHTML={{
                           __html: DOMPurify.sanitize(
                             hint
-                              .replace(/\*\*(.+?)\*\*/g, '<strong class="text-gray-900">$1</strong>')
+                              .replace(/\*\*(.+?)\*\*/g, '<strong class="text-gray-900 dark:text-gray-100">$1</strong>')
                               .replace(/\*(.+?)\*/g, '<em>$1</em>')
                               .replace(/_(.+?)_/g, '<em>$1</em>')
-                              .replace(/`(.+?)`/g, '<code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs text-gray-800">$1</code>'),
+                              .replace(/`(.+?)`/g, '<code class="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded text-sm text-gray-800 dark:text-gray-100">$1</code>'),
                             {
                               ALLOWED_TAGS: ['strong', 'em', 'code'],
                               ALLOWED_ATTR: ['class']
@@ -1479,8 +1482,8 @@ export function HintSystem({
                   </div>
                   
                   {/* WS12: Hint helpfulness feedback */}
-                  <div className="mt-4 pt-3 border-t border-gray-100">
-                    <p className="text-[11px] text-gray-500 mb-2">Was this hint helpful?</p>
+                  <div className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2">Was this hint helpful?</p>
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => {
@@ -1490,8 +1493,8 @@ export function HintSystem({
                         className={cn(
                           "flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-colors",
                           hintRatings[idx] === 'helpful'
-                            ? "bg-green-100 text-green-700"
-                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                            : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                         )}
                         aria-label="This hint was helpful"
                       >
@@ -1506,8 +1509,8 @@ export function HintSystem({
                         className={cn(
                           "flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition-colors",
                           hintRatings[idx] === 'not_helpful'
-                            ? "bg-red-100 text-red-700"
-                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+                            : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
                         )}
                         aria-label="This hint was not helpful"
                       >
@@ -1519,8 +1522,8 @@ export function HintSystem({
 
                   {/* Collapsible sources - only shown when expanded */}
                   {isExpanded && hasPdfSources && (
-                    <div id={`hint-sources-${idx}`} className="mt-4 pt-3 border-t border-gray-100">
-                      <p className="text-[11px] text-gray-500 italic mb-2 flex items-center gap-1">
+                    <div id={`hint-sources-${idx}`} className="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+                      <p className="text-sm text-gray-500 dark:text-gray-400 italic mb-2 flex items-center gap-1">
                         <BookOpen className="size-3" />
                         Content from SQL Course Textbook used to generate this hint:
                       </p>
@@ -1528,20 +1531,20 @@ export function HintSystem({
                         {pdfPassages.map((passage, pidx) => (
                           <div 
                             key={passage.chunkId} 
-                            className="p-3 bg-gray-50 border border-gray-100 rounded-md"
+                            className="p-3 bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 rounded-md"
                           >
-                            <div className="flex items-center gap-1.5 text-[10px] text-gray-500 mb-1.5">
+                            <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-gray-400 mb-1.5">
                               <FileText className="size-3" />
                               <span className="font-medium">{passage.docId}</span>
                               <span>·</span>
                               <span>Page {passage.page}</span>
                               {passage.score > 0 && (
-                                <span className="text-gray-400">
+                                <span className="text-gray-400 dark:text-gray-500">
                                   (relevance: {(passage.score * 100).toFixed(0)}%)
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-gray-700 leading-relaxed line-clamp-4">
+                            <p className="text-sm text-gray-700 dark:text-gray-200 leading-relaxed line-clamp-4">
                               {passage.text}
                             </p>
                           </div>
@@ -1595,7 +1598,7 @@ export function HintSystem({
           </TooltipTrigger>
           <TooltipContent side="bottom">
             <p>Get a hint to help solve the problem</p>
-            <p className="text-xs text-gray-400">Progresses through L1 → L2 → L3 hints</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">Progresses through L1 → L2 → L3 hints</p>
           </TooltipContent>
         </Tooltip>
         {/* Week 6: Conditionally hide Add to Textbook button if textbookDisabled */}
@@ -1610,7 +1613,7 @@ export function HintSystem({
                 'w-full h-9 text-sm px-2 rounded-md font-medium',
                 'inline-flex items-center justify-center gap-1 transition-colors',
                 (!profile || !sessionId)
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                   : 'bg-purple-600 text-white hover:bg-purple-700'
               )}
             >
@@ -1629,7 +1632,7 @@ export function HintSystem({
           </TooltipTrigger>
           <TooltipContent side="bottom" className="max-w-xs">
             <p className="font-medium">Save to My Textbook</p>
-            <p className="text-xs text-gray-400 mt-1">Creates a study note you can review later — find all your notes in My Textbook</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Creates a study note you can review later — find all your notes in My Textbook</p>
           </TooltipContent>
         </Tooltip>
         )}
@@ -1640,10 +1643,10 @@ export function HintSystem({
         <div
           role="alert"
           aria-live="assertive"
-          className="rounded-md bg-red-50 border border-red-200 px-3 py-2 flex items-start gap-2"
+          className="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2 flex items-start gap-2"
         >
           <AlertCircle className="size-4 text-red-500 shrink-0 mt-0.5" />
-          <p className="text-xs text-red-700">{saveToNotesError}</p>
+          <p className="text-sm text-red-700 dark:text-red-300">{saveToNotesError}</p>
         </div>
       )}
 
@@ -1651,27 +1654,27 @@ export function HintSystem({
         <div
           role="alert"
           aria-live="assertive"
-          className="rounded-md bg-red-50 border border-red-200 px-3 py-2 flex items-start gap-2"
+          className="rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-3 py-2 flex items-start gap-2"
           data-testid="hint-runtime-error"
         >
           <AlertCircle className="size-4 text-red-500 shrink-0 mt-0.5" />
-          <p className="text-xs text-red-700">{hintRuntimeError}</p>
+          <p className="text-sm text-red-700 dark:text-red-300">{hintRuntimeError}</p>
         </div>
       )}
 
       {showExplanation && (
-        <div className="rounded-md bg-emerald-50 border border-emerald-100 px-3 py-2">
+        <div className="rounded-md bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 px-3 py-2">
           {autoEscalationInfo.triggered ? (
             <>
-              <p className="text-xs font-medium text-emerald-800">
+              <p className="text-sm font-medium text-emerald-800 dark:text-emerald-300">
                 📚 Full Explanation Unlocked
               </p>
-              <p className="text-xs text-emerald-700 mt-1">
+              <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-1">
                 After {autoEscalationInfo.helpRequestCount} help requests, we're providing a complete worked example to help you master this concept.
               </p>
             </>
           ) : (
-            <p className="text-xs text-emerald-700">
+            <p className="text-sm text-emerald-700 dark:text-emerald-300">
               Explanation has been generated for this help flow.
             </p>
           )}

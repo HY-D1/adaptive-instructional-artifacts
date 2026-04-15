@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EnhancedHint, EnhancedRetrievalBundle, RetrievalSignalMeta } from './types';
+import { getGenericFallbackHint } from './safety';
 
 const mocks = vi.hoisted(() => ({
   checkAvailableResources: vi.fn(),
@@ -244,5 +245,42 @@ describe('hint-service Groq-first generator policy', () => {
     expect(result.content).toBe('Cached refined fallback hint');
     expect(result.llmGenerated).toBe(false);
     expect(mocks.resolveRefinedHintForProblem).toHaveBeenCalled();
+  });
+});
+
+describe('getGenericFallbackHint improved quality', () => {
+  test('rung 1 for group-by gives grouping nudge', () => {
+    const hint = getGenericFallbackHint(1, 'missing-group-by');
+    expect(hint).toContain('grouping');
+    expect(hint.length).toBeLessThanOrEqual(100);
+  });
+
+  test('rung 2 for join asks guiding question', () => {
+    const hint = getGenericFallbackHint(2, 'missing-join-condition');
+    expect(hint).toContain('?');
+    expect(hint.length).toBeLessThanOrEqual(220);
+  });
+
+  test('rung 3 for aggregation includes pattern', () => {
+    const hint = getGenericFallbackHint(3, 'aggregation-error');
+    expect(hint).toContain('GROUP BY');
+    expect(hint).toContain('___');
+    expect(hint.length).toBeLessThanOrEqual(420);
+  });
+
+  test('rung 1 for alias gives column name nudge', () => {
+    const hint = getGenericFallbackHint(1, 'column-alias-mismatch');
+    expect(hint).toContain('column');
+  });
+
+  test('rung 3 for alias includes AS pattern', () => {
+    const hint = getGenericFallbackHint(3, 'column-alias-mismatch');
+    expect(hint).toContain('AS');
+  });
+
+  test('unknown subtype still produces valid hint', () => {
+    const hint = getGenericFallbackHint(2, 'some-unknown-error');
+    expect(hint.length).toBeGreaterThan(10);
+    expect(hint.length).toBeLessThanOrEqual(220);
   });
 });
