@@ -485,9 +485,12 @@ export class SQLExecutor {
 
           if (actualVals.length !== expectedVals.length) continue;
 
-          // Value-only matching applies whenever the first pass failed and column counts match.
-          // This handles both unaliased SQL expressions (e.g. UPPER(emp_name)) and different
-          // aliases (e.g. avg_price vs average_price) as long as the values are correct.
+          // Value-only matching applies when at least one side contains SQL expressions
+          // (e.g. UPPER(emp_name), COUNT(*)) so that alias differences are forgiven for
+          // computed columns, but plain column-name mismatches are still rejected.
+          const hasSqlExpression = actualKeys.some(key => key.includes('(') || key.includes(')')) ||
+                                   expectedKeys.some(key => key.includes('(') || key.includes(')'));
+          if (!hasSqlExpression) continue;
 
           let allMatch = true;
           for (let v = 0; v < actualVals.length; v++) {
