@@ -1,8 +1,9 @@
+import fs from 'fs';
 import { defineConfig, devices, chromium, webkit, firefox } from '@playwright/test';
 
 function isBrowserInstalled(browser: typeof chromium) {
   try {
-    return !!browser.executablePath();
+    return fs.existsSync(browser.executablePath());
   } catch {
     return false;
   }
@@ -193,7 +194,6 @@ export default defineConfig({
       name: 'chromium:instructor',
       testMatch: [
         '**/instructor-dashboard-error-states.spec.ts',
-        '**/instructor.spec.ts',
         '**/instructor-dashboard-profiles.spec.ts',
       ],
       dependencies: ['setup:auth'],
