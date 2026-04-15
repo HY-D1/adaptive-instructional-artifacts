@@ -544,10 +544,16 @@ async function buildUnitFromStructuredOutput(
     `Common pitfall: ${(output.common_pitfall || 'Not found in provided sources.').trim()}`
   ].join('\n');
 
+  // Cap generated textbook content to prevent unbounded length
+  const MAX_TEXTBOOK_LENGTH = 1200;
+  const finalMarkdown = markdown.length > MAX_TEXTBOOK_LENGTH
+    ? `${markdown.slice(0, MAX_TEXTBOOK_LENGTH).trimEnd()}\n\n_(Content truncated for length)_`
+    : markdown;
+
   // Store markdown (not HTML) - rendering happens at display time
   // This makes the data format consistent and portable
   // SECURITY: Sanitize to prevent XSS in case markdown contains HTML
-  const content = DOMPurify.sanitize(markdown, {
+  const content = DOMPurify.sanitize(finalMarkdown, {
     ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'a', 'div', 'span', 'table', 'thead', 'tbody', 'tr', 'td', 'th'],
     ALLOWED_ATTR: ['href', 'title', 'class', 'target']
   });

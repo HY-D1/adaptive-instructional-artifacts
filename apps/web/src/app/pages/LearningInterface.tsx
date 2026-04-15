@@ -45,7 +45,8 @@ import {
   Eye,
   LogOut,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  XCircle
 } from 'lucide-react';
 
 import { Card } from '../components/ui/card';
@@ -253,7 +254,7 @@ export function resolvePracticeDraftState(args: {
     if (isMeaningfulDraft(sessionDraft)) {
       return { problem, draft: sessionDraft };
     }
-    if (!fallbackAnyDraft && typeof sessionDraft === 'string' && sessionDraft.trim().length > 0) {
+    if (!fallbackAnyDraft && sessionDraft) {
       fallbackAnyDraft = { problem, draft: sessionDraft };
     }
   }
@@ -263,7 +264,7 @@ export function resolvePracticeDraftState(args: {
     if (isMeaningfulDraft(anySessionDraft)) {
       return { problem, draft: anySessionDraft };
     }
-    if (!fallbackAnyDraft && typeof anySessionDraft === 'string' && anySessionDraft.trim().length > 0) {
+    if (!fallbackAnyDraft && anySessionDraft) {
       fallbackAnyDraft = { problem, draft: anySessionDraft };
     }
   }
@@ -981,6 +982,16 @@ export function LearningInterface() {
         return;
       }
 
+      // Ctrl+/ or Cmd+/ to request a hint
+      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+        e.preventDefault();
+        const hintButton = document.querySelector('[data-testid="hint-action-button"]') as HTMLButtonElement;
+        if (hintButton && !hintButton.disabled) {
+          hintButton.click();
+        }
+        return;
+      }
+
       // Other shortcuts — skip if in input/textarea (editor handles its own keys)
       if (
         e.target instanceof HTMLInputElement ||
@@ -992,6 +1003,19 @@ export function LearningInterface() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Lightweight browser-compatibility gate (non-blocking)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    const safariVersion = isSafari
+      ? parseInt(navigator.userAgent.match(/Version\/(\d+)/)?.[1] || '0', 10)
+      : Infinity;
+    const hasWasm = typeof WebAssembly === 'object' && typeof WebAssembly.compile === 'function';
+    if ((isSafari && safariVersion < 14) || !hasWasm) {
+      console.warn('[BrowserGate] Unsupported browser detected. Safari < 14 or WebAssembly disabled.');
+    }
   }, []);
 
   // Effect: Session configuration assignment/loading (Week 6 + Workstream 3/6 redesign)
@@ -1435,6 +1459,18 @@ export function LearningInterface() {
       return;
     }
     setCurrentProblem(problem);
+
+    // Persist last active problem so returning students resume here
+    setUiState<PracticePageUiState>(
+      'practice',
+      { role: isInstructor ? 'instructor' : 'student', actorId: learnerId },
+      {
+        currentProblemId: problem.id,
+        activeConceptId,
+        activeConceptTitle,
+        subtypeOverride,
+      }
+    );
 
     // Paper Data Contract: Flush any pending code change telemetry before switching
     flushCodeChangeTelemetry();
@@ -2201,6 +2237,12 @@ export function LearningInterface() {
     return allInteractions.filter(i => i.problemId === currentProblem.id);
   }, [learnerId, currentProblem.id, solvedRefreshKey]);
 
+  const problemAttempts = useMemo(() => {
+    return allProblemInteractions
+      .filter(i => i.eventType === 'execution' || i.eventType === 'error')
+      .sort((a, b) => b.timestamp - a.timestamp);
+  }, [allProblemInteractions]);
+
   // Unified progress model - single source of truth for all progress metrics
   const progress = useLearnerProgress({
     learnerId,
@@ -2795,6 +2837,41 @@ export function LearningInterface() {
                     <pre className="bg-gray-100 dark:bg-gray-800 p-3 rounded text-xs overflow-x-auto mt-2">
                       {currentProblem.schema}
                     </pre>
+                  </div>
+                </details>
+
+                <details className="mb-4 group">
+                  <summary className="font-semibold text-sm cursor-pointer select-none flex items-center gap-1 hover:text-blue-700">
+                    <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
+                    Attempt History ({problemAttempts.length})
+                  </summary>
+                  <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
+                    {problemAttempts.map((attempt) => (
+                      <div key={attempt.id} className="text-xs border rounded p-2 bg-gray-50 dark:bg-gray-800">
+                        <div className="flex items-center gap-2 mb-1">
+                          {attempt.successful ? (
+                            <CheckCircle className="size-3 text-green-600" />
+                          ) : (
+                            <XCircle className="size-3 text-red-600" />
+                          )}
+                          <span className="font-medium">
+                            {attempt.successful ? 'Correct' : 'Incorrect'}
+                          </span>
+                          <span className="text-gray-400 ml-auto">
+                            {new Date(attempt.timestamp).toLocaleTimeString()}
+                          </span>
+                        </div>
+                        {attempt.code && (
+                          <code className="block font-mono text-[10px] truncate">{attempt.code}</code>
+                        )}
+                        {attempt.error && (
+                          <p className="text-red-600 truncate mt-0.5">{attempt.error}</p>
+                        )}
+                      </div>
+                    ))}
+                    {problemAttempts.length === 0 && (
+                      <p className="text-xs text-gray-500">No attempts yet.</p>
+                    )}
                   </div>
                 </details>
               </Card>

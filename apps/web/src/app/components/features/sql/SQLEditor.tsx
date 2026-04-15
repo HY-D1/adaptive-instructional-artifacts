@@ -464,7 +464,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
               )}
             </div>
             
-            <div className="flex-1 overflow-hidden relative" aria-label="SQL code editor" role="region">
+            <div className="flex-1 overflow-hidden relative min-h-[150px]" aria-label="SQL code editor" role="region">
               {/* Initialization Loading Overlay */}
               {initStatus === 'loading' && (
                 <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm z-10 flex items-center justify-center">

@@ -142,6 +142,7 @@ export type RetrievalSignalMeta = {
   retrievalConfidence: number;
   retrievedSourceIds: string[];
   retrievedChunkIds: string[];
+  fallbackReason?: string | null;
 };
 
 /**

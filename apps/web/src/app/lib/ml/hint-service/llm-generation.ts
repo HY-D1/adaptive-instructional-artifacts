@@ -12,6 +12,7 @@ import type { EnhancedRetrievalBundle, HintGenerationOptions } from './types';
 import { applyHintSafetyLayer } from './safety';
 import { generateSqlEngageFallbackHint, mergeFallbackReasons } from './fallback';
 import { generateTextbookEnhancedHint } from './textbook-generation';
+import { getCachedHint, saveCachedHint } from './hint-cache';
 import { MIN_RETRIEVAL_CONFIDENCE } from './types';
 
 /**
@@ -30,6 +31,31 @@ export async function generateLLMEnhancedHint(
   retrievalSignals: RetrievalSignalMeta
 ): Promise<EnhancedHint> {
   const { rung, errorSubtypeId } = options;
+
+  // Check local cache first so previously-generated LLM hints survive LLM outages
+  const cached = getCachedHint(retrievalBundle.problem.id, errorSubtypeId || 'unknown', rung);
+  if (cached) {
+    return {
+      content: cached.content,
+      rung,
+      sources: {
+        sqlEngage: false,
+        textbook: false,
+        llm: true,
+        pdfPassages: false,
+      },
+      conceptIds: cached.conceptIds,
+      sourceRefIds: [],
+      textbookUnits: [],
+      llmGenerated: true,
+      confidence: 0.85,
+      retrievalConfidence: retrievalSignals.retrievalConfidence,
+      fallbackReason: 'cache_hit',
+      safetyFilterApplied: false,
+      retrievedSourceIds: cached.retrievedSourceIds,
+      retrievedChunkIds: retrievalSignals.retrievedChunkIds,
+    };
+  }
 
   // Check if LLM is actually available
   const llmAvailable = await isLLMAvailable();
@@ -80,6 +106,18 @@ export async function generateLLMEnhancedHint(
       adaptiveOutput = retryOutput;
       safety = retrySafety;
     }
+
+    // Cache successful LLM hints for resilience when LLM is later unavailable
+    saveCachedHint(
+      retrievalBundle.problem.id,
+      errorSubtypeId || 'unknown',
+      rung,
+      {
+        content: safety.content,
+        conceptIds: adaptiveOutput.conceptIds,
+        retrievedSourceIds: retrievalSignals.retrievedSourceIds,
+      }
+    );
 
     return {
       content: safety.content,
@@ -217,7 +255,7 @@ function buildLearningSignals(
   );
   const failedRunCount = Math.max(failedInteractions.length, trace?.errorCount ?? 0);
   const retryCount = Math.max(Math.max(0, failedRunCount - 1), trace?.retryCount ?? 0);
-  const latestFailedInteraction = failedInteractions.at(-1);
+  const latestFailedInteraction = failedInteractions.slice(-1)[0];
   const latestIssue =
     latestFailedInteraction?.error ||
     latestFailedInteraction?.errorSubtypeId ||

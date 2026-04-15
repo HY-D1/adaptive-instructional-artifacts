@@ -485,10 +485,9 @@ export class SQLExecutor {
 
           if (actualVals.length !== expectedVals.length) continue;
 
-          // Only apply value-only matching if actual columns look like SQL expressions
-          // (contain parentheses like "UPPER(emp_name)", "COUNT(*)", etc.)
-          const hasSqlExpression = actualKeys.some(key => key.includes('(') || key.includes(')'));
-          if (!hasSqlExpression) continue;
+          // Value-only matching applies whenever the first pass failed and column counts match.
+          // This handles both unaliased SQL expressions (e.g. UPPER(emp_name)) and different
+          // aliases (e.g. avg_price vs average_price) as long as the values are correct.
 
           let allMatch = true;
           for (let v = 0; v < actualVals.length; v++) {
