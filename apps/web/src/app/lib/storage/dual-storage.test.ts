@@ -18,6 +18,7 @@ const logInteractionsBatchKeepaliveMock = vi.fn<(events: unknown[]) => Promise<{
 const saveProfileMock = vi.fn<(profile: unknown) => Promise<boolean>>();
 const updateProblemProgressMock = vi.fn<(learnerId: string, problemId: string, update: unknown) => Promise<unknown>>();
 const getAllProblemProgressMock = vi.fn<(learnerId: string) => Promise<Array<{ problemId: string; solved: boolean }>>>();
+const createLearnerMock = vi.fn<(profile: unknown) => Promise<boolean>>();
 
 function createBackendProfile(overrides: Partial<LearnerProfile> = {}): LearnerProfile {
   return {
@@ -60,6 +61,7 @@ beforeAll(async () => {
       logInteractionsBatchKeepalive: logInteractionsBatchKeepaliveMock,
       saveProfile: saveProfileMock,
       updateProblemProgress: updateProblemProgressMock,
+      createLearner: createLearnerMock,
     },
   }));
 
@@ -99,6 +101,7 @@ beforeEach(() => {
   saveProfileMock.mockReset().mockResolvedValue(true);
   updateProblemProgressMock.mockReset().mockResolvedValue({ success: true });
   getAllProblemProgressMock.mockReset().mockResolvedValue([]);
+  createLearnerMock.mockReset().mockResolvedValue(true);
 });
 
 describe('dual-storage critical write semantics', () => {
@@ -245,7 +248,7 @@ describe('dual-storage critical write semantics', () => {
     }
   });
 
-  it('preserves a locally solved problem when backend hydration is stale', async () => {
+  it('preserves a locally solved problem when explicit backend hydration is stale', async () => {
     const localProfile = createBackendProfile({
       solvedProblemIds: new Set(['problem-9']),
     });
@@ -258,13 +261,13 @@ describe('dual-storage critical write semantics', () => {
     const immediateProfile = dualStorageModule.dualStorage.getProfile('learner-1');
     expect(immediateProfile?.solvedProblemIds.has('problem-9')).toBe(true);
 
-    await vi.waitFor(() => {
-      expect(getProfileMock).toHaveBeenCalledWith('learner-1');
-      expect(dualStorageModule.dualStorage.getProfile('learner-1')?.solvedProblemIds.has('problem-9')).toBe(true);
-    });
+    await dualStorageModule.dualStorage.hydrateLearner('learner-1');
+
+    expect(getProfileMock).toHaveBeenCalledWith('learner-1');
+    expect(dualStorageModule.dualStorage.getProfile('learner-1')?.solvedProblemIds.has('problem-9')).toBe(true);
   });
 
-  it('keeps solved state after stale hydration and later backend catch-up', async () => {
+  it('keeps solved state across repeated explicit hydrations and later backend catch-up', async () => {
     dualStorageModule.dualStorage.saveProfile(createBackendProfile({
       solvedProblemIds: new Set(['problem-9']),
     }));
@@ -277,17 +280,14 @@ describe('dual-storage critical write semantics', () => {
         solvedProblemIds: new Set(['problem-9']),
       }));
 
-    dualStorageModule.dualStorage.getProfile('learner-1');
-    await vi.waitFor(() => {
-      expect(getProfileMock).toHaveBeenCalledTimes(1);
-    });
+    await dualStorageModule.dualStorage.hydrateLearner('learner-1', { force: true });
+    expect(getProfileMock).toHaveBeenCalledTimes(1);
 
     const afterStaleHydration = dualStorageModule.dualStorage.getProfile('learner-1');
     expect(afterStaleHydration?.solvedProblemIds.has('problem-9')).toBe(true);
 
-    await vi.waitFor(() => {
-      expect(getProfileMock).toHaveBeenCalledTimes(2);
-    });
+    await dualStorageModule.dualStorage.hydrateLearner('learner-1', { force: true });
+    expect(getProfileMock).toHaveBeenCalledTimes(2);
     expect(dualStorageModule.dualStorage.getProfile('learner-1')?.solvedProblemIds.has('problem-9')).toBe(true);
   });
 
@@ -897,6 +897,33 @@ describe('dual-storage critical write semantics', () => {
 
     expect(status.backendConfirmed).toBe(true);
     expect(status.pendingSync).toBe(false);
+  });
+
+  it('does not fetch backend profile data from synchronous getters', () => {
+    const localProfile = createBackendProfile({
+      solvedProblemIds: new Set(['problem-2']),
+    });
+    dualStorageModule.dualStorage.saveProfile(localProfile);
+
+    getProfileMock.mockClear();
+    const immediateProfile = dualStorageModule.dualStorage.getProfile('learner-1');
+
+    expect(immediateProfile?.solvedProblemIds.has('problem-2')).toBe(true);
+    expect(getProfileMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps saveUserProfile local-only in backend account mode', () => {
+    const profile = {
+      id: 'learner-1',
+      name: 'Learner 1',
+      role: 'student' as const,
+      createdAt: 1_700_000_000_000,
+    };
+
+    dualStorageModule.dualStorage.saveUserProfile(profile);
+
+    expect(createLearnerMock).not.toHaveBeenCalled();
+    expect(dualStorageModule.dualStorage.getUserProfile()).toEqual(profile);
   });
 });
 

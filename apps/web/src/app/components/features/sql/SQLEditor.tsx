@@ -638,7 +638,12 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
                   )}
                 </>
               ) : (
-                <div className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+                <div
+                  className="p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg"
+                  data-testid="sql-error-alert"
+                  role="alert"
+                  aria-live="polite"
+                >
                   <div className="flex items-start gap-3">
                     <div className="p-1.5 bg-red-100 rounded-full shrink-0">
                       <AlertCircle className="size-5 text-red-600" />

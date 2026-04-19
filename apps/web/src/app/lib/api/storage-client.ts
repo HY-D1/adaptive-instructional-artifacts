@@ -529,6 +529,9 @@ export async function createLearner(profile: UserProfile): Promise<boolean> {
       role: profile.role,
     }),
   });
+  if (!response.success && response.error === 'User already exists') {
+    return true;
+  }
   return response.success;
 }
 

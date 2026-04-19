@@ -4,7 +4,7 @@
  * localStorage is used as offline cache and fallback only
  * 
  * Key behaviors:
- * - getUserProfile: Try backend first, fall back to localStorage if offline
+ * - getUserProfile: Read local cache synchronously
  * - saveInteraction: Send to backend first, cache in localStorage, queue if offline
  * - All writes: Attempt backend first, fallback to localStorage + offline queue
  */
@@ -903,41 +903,15 @@ class DualStorageManager {
   saveUserProfile(profile: UserProfile): { success: boolean; quotaExceeded?: boolean } {
     // Always save to localStorage as cache (synchronous)
     const localResult = localStorageManager.saveUserProfile(profile);
-    
-    // Backend sync in background
-    if (this.shouldUseBackend()) {
-      storageClient.createLearner(profile).then(success => {
-        if (!success) {
-          // Backend failed, add to offline queue
-          this.queueProfileForRetry(profile, '[DualStorage] Backend saveUserProfile failed, queued for retry.', 'profile');
-        }
-      }).catch(error => {
-        this.queueProfileForRetry(profile, '[DualStorage] Backend saveUserProfile failed, queued for retry.', 'profile', error);
-      });
-    }
-    
+
+    // In backend account mode, auth/signup already owns user creation. Keep this
+    // cache write local-only to avoid render-path 409 conflicts against /api/learners.
     return localResult;
   }
 
   getUserProfile(): UserProfile | null {
-    // Try backend FIRST (primary source of truth) - async in background
-    if (this.shouldUseBackend()) {
-      const localProfile = localStorageManager.getUserProfile();
-      const learnerId = localProfile?.id;
-      
-      if (learnerId) {
-        storageClient.getLearner(learnerId).then(backendProfile => {
-          if (backendProfile) {
-            // Sync to localStorage for offline access
-            localStorageManager.saveUserProfile(backendProfile);
-          }
-        }).catch(error => {
-          console.warn('[DualStorage] Backend getUserProfile failed, using localStorage:', error);
-        });
-      }
-    }
-    
-    // Always return localStorage data immediately (synchronous)
+    // Read local cache synchronously. Backend refresh belongs in explicit
+    // hydration/auth flows, not getters that are called during render.
     return localStorageManager.getUserProfile();
   }
 
@@ -2129,34 +2103,8 @@ class DualStorageManager {
    * Backend is PRIMARY source of truth (synced in background)
    */
   getProfile(learnerId: string): LearnerProfile | null {
-    // Try backend FIRST (primary source of truth) - async in background
-    if (this.shouldUseBackend()) {
-      storageClient.getProfile(learnerId).then(backendProfile => {
-        if (backendProfile) {
-          // Merge solvedProblemIds by union with local before saving
-          // This prevents wiping locally-correct solved state with empty backend set during transition
-          const localProfile = localStorageManager.getProfile(learnerId);
-          if (localProfile?.solvedProblemIds?.size && !backendProfile.solvedProblemIds?.size) {
-            // Backend has empty solved set but local has data - keep local data
-            console.log('[DualStorage] Preserving local solvedProblemIds during backend sync');
-            backendProfile.solvedProblemIds = new Set(localProfile.solvedProblemIds);
-          } else if (localProfile?.solvedProblemIds?.size && backendProfile.solvedProblemIds?.size) {
-            // Both have data - merge by union
-            const mergedSolvedIds = new Set([
-              ...Array.from(localProfile.solvedProblemIds),
-              ...Array.from(backendProfile.solvedProblemIds),
-            ]);
-            backendProfile.solvedProblemIds = mergedSolvedIds;
-          }
-          // Sync to localStorage for offline access
-          localStorageManager.saveProfile(backendProfile);
-        }
-      }).catch(err => {
-        console.warn('[DualStorage] Failed to get profile from backend, using localStorage:', err);
-      });
-    }
-    
-    // Always return localStorage data immediately (synchronous)
+    // Read local cache synchronously. Backend refresh belongs in explicit
+    // hydration flows so render paths do not fan out requests.
     return localStorageManager.getProfile(learnerId);
   }
 
@@ -2164,20 +2112,6 @@ class DualStorageManager {
    * Get all learner profiles (for instructor dashboard)
    */
   getAllProfiles(): LearnerProfile[] {
-    // Try backend FIRST (primary source of truth) - async in background
-    if (this.shouldUseBackend()) {
-      storageClient.getAllProfiles().then(profiles => {
-        if (profiles.length > 0) {
-          // Sync each profile to localStorage
-          for (const profile of profiles) {
-            localStorageManager.saveProfile(profile);
-          }
-        }
-      }).catch(err => {
-        console.warn('[DualStorage] Failed to get profiles from backend:', err);
-      });
-    }
-    
     return localStorageManager
       .getAllProfiles()
       .map((profile: { id: string }) => localStorageManager.getProfile(profile.id))
@@ -2449,12 +2383,6 @@ class DualStorageManager {
 
       for (const profile of profiles) {
         localStorageManager.saveProfile(profile);
-      }
-
-      for (const learner of learners) {
-        if (learner?.learner?.id) {
-          await this.hydrateLearner(learner.learner.id);
-        }
       }
 
       const sectionCount = overview?.sections?.length ?? 0;

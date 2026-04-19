@@ -15,6 +15,10 @@ import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
 import { resolveLogoutLearnerId } from '../lib/auth/logout-learner';
 import { useToast } from '../components/ui/toast';
 import { CommandMenu } from '../components/shared/CommandMenu';
+import {
+  canOpenWelcomeModal,
+  shouldAutoShowWelcomeModal,
+} from '../lib/welcome-modal-visibility';
 import { 
   isResearchUnsafe, 
   getResearchRuntimeMode, 
@@ -352,8 +356,23 @@ export function RootLayout() {
   // RESEARCH-4: Startup readiness check
   const [researchReadiness, setResearchReadiness] = useState<ResearchReadiness | null>(null);
   const [isCheckingReadiness, setIsCheckingReadiness] = useState(true);
+  const canOpenWelcome = canOpenWelcomeModal({
+    pathname: location.pathname,
+    authBackendConfigured: AUTH_BACKEND_CONFIGURED,
+    isAuthenticated: Boolean(authUser),
+  });
+  const shouldAutoShowWelcome = shouldAutoShowWelcomeModal({
+    pathname: location.pathname,
+    authBackendConfigured: AUTH_BACKEND_CONFIGURED,
+    isAuthenticated: Boolean(authUser),
+  });
 
   useEffect(() => {
+    if (!shouldAutoShowWelcome) {
+      setShowWelcome(false);
+      return;
+    }
+
     try {
       const hasSeenWelcome = localStorage.getItem('sql-adapt-welcome-seen');
       const hasDisabledWelcome = localStorage.getItem('sql-adapt-welcome-disabled');
@@ -365,7 +384,7 @@ export function RootLayout() {
       // Show welcome modal if we can't check status
       setShowWelcome(true);
     }
-  }, []);
+  }, [shouldAutoShowWelcome]);
   
   // RESEARCH-4: Check research readiness on app startup
   useEffect(() => {
@@ -389,6 +408,9 @@ export function RootLayout() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
+      if (!canOpenWelcome) {
+        return;
+      }
       setShowWelcome(true);
     }
     
@@ -396,7 +418,7 @@ export function RootLayout() {
     if (e.key === 'Escape' && showWelcome) {
       setShowWelcome(false);
     }
-  }, [showWelcome]);
+  }, [canOpenWelcome, showWelcome]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -691,37 +713,41 @@ export function RootLayout() {
 
               {/* Right side actions */}
               <div className="flex items-center gap-2">
-                {/* Keyboard shortcut hint - desktop only */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <kbd className="hidden lg:inline-flex items-center gap-1 px-2 py-1 text-xs font-mono bg-gray-100 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 border rounded">
-                      <Keyboard className="size-3" />
-                      ?
-                    </kbd>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Press ? for help</p>
-                  </TooltipContent>
-                </Tooltip>
+                {canOpenWelcome && (
+                  <>
+                    {/* Keyboard shortcut hint - desktop only */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <kbd className="hidden lg:inline-flex items-center gap-1 px-2 py-1 text-xs font-mono bg-gray-100 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 border rounded">
+                          <Keyboard className="size-3" />
+                          ?
+                        </kbd>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Press ? for help</p>
+                      </TooltipContent>
+                    </Tooltip>
 
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowWelcome(true)}
-                      className="touch-manipulation"
-                      aria-label="Open help and keyboard shortcuts"
-                    >
-                      <HelpCircle className="size-4 mr-2 hidden sm:block" />
-                      <span className="hidden sm:inline">Help</span>
-                      <HelpCircle className="size-5 sm:hidden" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Show help & keyboard shortcuts</p>
-                  </TooltipContent>
-                </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowWelcome(true)}
+                          className="touch-manipulation"
+                          aria-label="Open help and keyboard shortcuts"
+                        >
+                          <HelpCircle className="size-4 mr-2 hidden sm:block" />
+                          <span className="hidden sm:inline">Help</span>
+                          <HelpCircle className="size-5 sm:hidden" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Show help & keyboard shortcuts</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </>
+                )}
 
                 {/* Switch User button - only for instructors */}
                 {isInstructor && (

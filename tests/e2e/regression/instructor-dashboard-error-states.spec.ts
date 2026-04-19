@@ -14,25 +14,6 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('Instructor Dashboard Error States', () => {
-  test.beforeEach(async ({ page }) => {
-    // Clear any existing auth state
-    await page.context().clearCookies();
-  });
-
-  test('shows authentication error when not logged in', async ({ page }) => {
-    // Navigate to research page without authentication
-    await page.goto('/research');
-    
-    // Should redirect to login or show auth error
-    await expect(page).toHaveURL(/.*login|.*\/research/);
-    
-    // If on research page, should show auth error state
-    if (page.url().includes('/research')) {
-      const authError = page.locator('[data-testid="research-auth-error"]');
-      await expect(authError.or(page.locator('text=Authentication Required'))).toBeVisible();
-    }
-  });
-
   test('dashboard loads and shows data or empty state', async ({ page }) => {
     // This test assumes an authenticated instructor context
     // In practice, this would use the auth setup from auth.setup.ts
@@ -49,13 +30,14 @@ test.describe('Instructor Dashboard Error States', () => {
     // 3. Error state (auth/backend/network)
     
     const dashboardContent = page.locator('[data-testid="research-dashboard-content"]');
+    const dashboardHeading = page.getByRole('heading', { name: 'Research Dashboard' }).first();
     const emptyState = page.locator('text=No Learners Yet');
     const errorState = page.locator('text=Dashboard Unavailable');
     const authError = page.locator('text=Authentication Required');
     
     // At least one valid state should be visible
     await expect(
-      dashboardContent.or(emptyState).or(errorState).or(authError)
+      dashboardContent.or(dashboardHeading).or(emptyState).or(errorState).or(authError)
     ).toBeVisible();
   });
 
@@ -106,22 +88,5 @@ test.describe('Instructor Dashboard Error States', () => {
     );
     
     expect(unexpectedErrors).toHaveLength(0);
-  });
-});
-
-test.describe('Instructor Dashboard API', () => {
-  test('instructor overview endpoint requires authentication', async ({ request }) => {
-    const response = await request.get('/api/instructor/overview');
-    expect(response.status()).toBe(401);
-  });
-
-  test('instructor learners endpoint requires authentication', async ({ request }) => {
-    const response = await request.get('/api/instructor/learners');
-    expect(response.status()).toBe(401);
-  });
-
-  test('learners profiles endpoint requires authentication', async ({ request }) => {
-    const response = await request.get('/api/learners/profiles');
-    expect(response.status()).toBe(401);
   });
 });

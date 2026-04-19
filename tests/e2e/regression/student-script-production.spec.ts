@@ -196,7 +196,7 @@ test.describe('@deployed-auth-smoke production student walkthrough', () => {
     // Step 1: Wrong attempt with visible feedback.
     await replaceEditorText(page, "SELECT product FROM orders WHERE amount >");
     await page.getByRole('button', { name: 'Run Query' }).click();
-    const errorBanner = page.locator('[class*="text-red"], .text-red-600, [class*="error"]').first();
+    const errorBanner = page.getByTestId('sql-error-alert').first();
     await expect(errorBanner).toBeVisible({ timeout: 10_000 });
 
     const localAfterError = await getLocalInteractions(page);
