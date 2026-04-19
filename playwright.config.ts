@@ -210,6 +210,7 @@ export default defineConfig({
             testMatch: [
               '**/instructor-dashboard-error-states.spec.ts',
               '**/instructor-dashboard-profiles.spec.ts',
+              '**/instructor-dashboard-analytics-summary.spec.ts',
             ],
             dependencies: ['setup:auth'],
             use: {

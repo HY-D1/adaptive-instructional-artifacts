@@ -9,6 +9,8 @@ const getInteractionsByUserMock = vi.fn();
 const getInteractionByIdMock = vi.fn();
 const validateResearchEventMock = vi.fn();
 const validateResearchBatchForWriteMock = vi.fn();
+const getSectionForLearnerInInstructorScopeMock = vi.fn();
+const getSectionForStudentMock = vi.fn();
 
 vi.mock('../../../apps/server/src/db/neon.js', () => ({
   createInteraction: createInteractionMock,
@@ -24,8 +26,8 @@ vi.mock('../../../apps/server/src/db/index.js', () => ({
 }));
 
 vi.mock('../../../apps/server/src/db/sections.js', () => ({
-  getSectionForLearnerInInstructorScope: vi.fn(),
-  getSectionForStudent: vi.fn(),
+  getSectionForLearnerInInstructorScope: getSectionForLearnerInInstructorScopeMock,
+  getSectionForStudent: getSectionForStudentMock,
 }));
 
 function getRouteHandler(
@@ -36,7 +38,8 @@ function getRouteHandler(
   const layer = router.stack?.find(
     (entry) => entry.route?.path === path && entry.route?.methods?.[method],
   );
-  const handle = layer?.route?.stack?.[0]?.handle;
+  const stack = layer?.route?.stack ?? [];
+  const handle = stack[stack.length - 1]?.handle;
   if (!handle) {
     throw new Error(`Route handler not found for ${method.toUpperCase()} ${path}`);
   }
@@ -71,6 +74,35 @@ async function invokeJsonHandler(
   return { status: statusCode, json: payload };
 }
 
+async function invokeGetHandler(
+  handler: Function,
+  query: Record<string, unknown>,
+  auth?: { learnerId: string; role: 'student' | 'instructor' },
+): Promise<{ status: number; json: unknown }> {
+  let statusCode = 200;
+  let payload: unknown = null;
+  const req = {
+    method: 'GET',
+    baseUrl: '/api/interactions',
+    path: '/',
+    query,
+    auth,
+  } as Record<string, unknown>;
+  const res = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    json(data: unknown) {
+      payload = data;
+      return this;
+    },
+  } as Record<string, unknown>;
+
+  await handler(req, res);
+  return { status: statusCode, json: payload };
+}
+
 beforeEach(() => {
   createInteractionMock.mockReset();
   updateProblemProgressMock.mockReset();
@@ -79,6 +111,8 @@ beforeEach(() => {
   getInteractionByIdMock.mockReset();
   validateResearchEventMock.mockReset();
   validateResearchBatchForWriteMock.mockReset();
+  getSectionForLearnerInInstructorScopeMock.mockReset();
+  getSectionForStudentMock.mockReset();
 });
 
 afterEach(() => {
@@ -140,5 +174,62 @@ describe('neon-interactions single-event contract', () => {
       }),
     );
     expect(createInteractionMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps GET /api/interactions scoped to the authenticated learner', async () => {
+    const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
+    const getInteractions = getRouteHandler(
+      neonInteractionsRouter as unknown as {
+        stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }>;
+      },
+      'get',
+      '/',
+    );
+
+    getSectionForStudentMock.mockResolvedValue({ id: 'section-1' });
+    getInteractionsByUserMock.mockResolvedValue({
+      interactions: [
+        {
+          id: 'event-1',
+          learnerId: 'learner-1',
+          eventType: 'execution',
+          problemId: 'problem-1',
+        },
+      ],
+      total: 1,
+    });
+
+    const result = await invokeGetHandler(
+      getInteractions,
+      { learnerId: 'spoofed-learner', limit: '25', offset: '0' },
+      { learnerId: 'learner-1', role: 'student' },
+    );
+
+    expect(result.status).toBe(403);
+
+    const ownResult = await invokeGetHandler(
+      getInteractions,
+      { limit: '25', offset: '0' },
+      { learnerId: 'learner-1', role: 'student' },
+    );
+
+    expect(ownResult.status).toBe(200);
+    expect(getInteractionsByUserMock).toHaveBeenCalledWith('learner-1', {
+      sessionId: undefined,
+      eventType: undefined,
+      problemId: undefined,
+      limit: 25,
+      offset: 0,
+    });
+    expect(ownResult.json).toEqual(
+      expect.objectContaining({
+        success: true,
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            learnerId: 'learner-1',
+          }),
+        ]),
+      }),
+    );
   });
 });

@@ -51,13 +51,13 @@ import {
   TooltipTrigger,
 } from '../components/ui/tooltip';
 import { storage, broadcastSync, setDebugProfileWithSync, setDebugStrategyWithSync } from '../lib/storage';
+import { storageClient, type InstructorAnalyticsSummary } from '../lib/api/storage-client';
 import { buildInstructorLearnerRows, filterInteractionsByLearners } from '../lib/counts/selectors';
 import { getUiState, setUiState } from '../lib/ui-state';
 import { seedDemoDataset, resetDemoDataset, hasDemoData } from '../lib/demo/demo-seed';
 import { useUserRole } from '../hooks/useUserRole';
 import { useAuth } from '../lib/auth-context';
 import { useAllLearnerProfiles } from '../hooks/useLearnerProfile';
-import learnerProfileClient from '../lib/api/learner-profile-client';
 import type { LearnerProfile, InteractionEvent } from '../types';
 
 // Helper function to safely format dates
@@ -112,6 +112,8 @@ const DEMO_ADAPTIVE_DATA = {
   ],
   banditPulls: { fast: 45, slow: 32, adaptive: 78 }
 };
+
+const MAX_INSTRUCTOR_ANALYTICS_INTERACTIONS = 5000;
 
 // Mock class statistics
 interface ClassStats {
@@ -168,12 +170,13 @@ export function InstructorDashboard() {
   const {
     profiles: backendProfiles,
     isLoading: isProfilesLoading,
-    averageConceptCoverage: backendAvgCoverage,
   } = useAllLearnerProfiles({ authTrigger: authUser?.learnerId });
   
   const [profiles, setProfiles] = useState<LearnerProfile[]>([]);
   const [interactions, setInteractions] = useState<InteractionEvent[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
+  const [backendSummary, setBackendSummary] = useState<InstructorAnalyticsSummary | null>(null);
+  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [demoDataExists, setDemoDataExists] = useState(false);
@@ -196,7 +199,7 @@ export function InstructorDashboard() {
   // Check backend availability
   useEffect(() => {
     const checkBackend = async () => {
-      const available = await learnerProfileClient.checkBackendHealth();
+      const available = await storageClient.checkBackendHealth();
       setIsBackendAvailable(available);
     };
     checkBackend();
@@ -214,34 +217,66 @@ export function InstructorDashboard() {
     }
   }, [isStudent, isRoleLoading, navigate]);
 
-  // Load data from backend or fallback to local storage
-  // PERFORMANCE: Uses lazy hydration - backend call is async, local data shown immediately
   useEffect(() => {
     const loadData = async () => {
       setIsDataLoading(true);
+      setFallbackNotice(null);
 
-      // Load local data immediately for fast initial render
       const allProfiles = storage.getAllProfiles().map(p => storage.getProfile(p.id)).filter(Boolean) as LearnerProfile[];
       const allInteractions = storage.getAllInteractions();
-      
-      // Use backend profiles if already available, otherwise use local
       const effectiveProfiles = backendProfiles.length > 0 ? backendProfiles : allProfiles;
+
       setProfiles(effectiveProfiles);
       setInteractions(allInteractions);
-      
-      // Mark loading complete - backend hydration happens in background
-      setIsDataLoading(false);
 
-      // Lazy backend hydration - non-blocking for UI
-      if (isBackendAvailable) {
-        storage.hydrateInstructorDashboard().catch((error) => {
-          console.warn('[InstructorDashboard] Background hydration failed:', error);
-        });
+      if (!isBackendAvailable || authUser?.role !== 'instructor') {
+        setBackendSummary(null);
+        setIsDataLoading(false);
+        return;
+      }
+
+      try {
+        const [summary, analyticsInteractions] = await Promise.all([
+          storageClient.getInstructorAnalyticsSummary(),
+          storageClient.getInstructorAnalyticsInteractions({
+            limit: MAX_INSTRUCTOR_ANALYTICS_INTERACTIONS,
+            offset: 0,
+          }),
+        ]);
+
+        if (summary) {
+          setBackendSummary(summary);
+        } else {
+          setBackendSummary(null);
+          setFallbackNotice('Showing cached local dashboard data because backend analytics are unavailable.');
+        }
+
+        setInteractions(analyticsInteractions.events);
+
+        storage.cacheProfiles(effectiveProfiles);
+      } catch (error) {
+        console.warn('[InstructorDashboard] Failed to load backend analytics, using local fallback:', error);
+        setBackendSummary(null);
+        setFallbackNotice('Showing cached local dashboard data because backend analytics could not be loaded.');
+      } finally {
+        setIsDataLoading(false);
       }
     };
-    
+
+    if (isRoleLoading || isStudent) {
+      return;
+    }
+
     void loadData();
-  }, [isBackendAvailable, backendProfiles]);
+  }, [authUser?.role, backendProfiles, isBackendAvailable, isRoleLoading, isStudent]);
+
+  useEffect(() => {
+    if (isBackendAvailable) {
+      storage.hydrateInstructorDashboard().catch((error) => {
+        console.warn('[InstructorDashboard] Background hydration failed:', error);
+      });
+    }
+  }, [isBackendAvailable]);
 
   // Toast auto-hide
   useEffect(() => {
@@ -272,7 +307,7 @@ export function InstructorDashboard() {
   }, [profiles]);
 
   const hasProfileData = normalizedProfiles.length > 0;
-  const showDemoData = DEMO_MODE && !hasProfileData && interactions.length === 0;
+  const showDemoData = DEMO_MODE && !authUser && !isBackendAvailable && !hasProfileData && interactions.length === 0;
   const dashboardRows = useMemo(() => {
     if (hasProfileData) {
       return buildInstructorLearnerRows(normalizedProfiles);
@@ -304,19 +339,18 @@ export function InstructorDashboard() {
   // Calculate class statistics
   const classStats: ClassStats = useMemo(() => {
     const studentList = dashboardRows;
-    const totalStudents = studentList.length;
-    const activeToday = studentList.filter((student) => Date.now() - student.lastActive < 86400000).length;
-    
-    // Calculate average progress based on concept coverage
-    // Use backend aggregate only when local row-level data is unavailable.
-    const avgProgress = !hasProfileData && isBackendAvailable && backendAvgCoverage > 0
-      ? Math.round((backendAvgCoverage / 6) * 100)
+    const totalStudents = backendSummary?.totalStudents ?? studentList.length;
+    const activeToday = backendSummary?.activeToday
+      ?? studentList.filter((student) => Date.now() - student.lastActive < 86400000).length;
+
+    const avgProgress = typeof backendSummary?.avgConceptCoverage === 'number'
+      ? backendSummary.avgConceptCoverage
       : dashboardRows.length > 0
         ? Math.round(dashboardRows.reduce((sum, row) => sum + row.conceptsCount, 0) / dashboardRows.length / 6 * 100)
         : (showDemoData ? 45 : 0);
 
-    // Keep count source aligned with the currently displayed learner scope.
-    const totalInteractions = scopedInteractions.length + (showDemoData ? DEMO_STATS.interactions : 0);
+    const totalInteractions = backendSummary?.totalInteractions
+      ?? (scopedInteractions.length + (showDemoData ? DEMO_STATS.interactions : 0));
 
     // Analyze common errors from real data
     const errorCounts = scopedInteractions
@@ -370,7 +404,7 @@ export function InstructorDashboard() {
       commonErrors: commonErrors.length > 0 ? commonErrors : [],
       conceptMastery
     };
-  }, [dashboardRows, hasProfileData, isBackendAvailable, backendAvgCoverage, scopedInteractions, showDemoData]);
+  }, [backendSummary, dashboardRows, scopedInteractions, showDemoData]);
 
   // Memoized helper to calculate student adaptive profiles
   const studentAdaptiveProfiles = useMemo(() => {
@@ -688,6 +722,12 @@ export function InstructorDashboard() {
           <AlertDescription>
             You do not have permission to access this page.
           </AlertDescription>
+        </Alert>
+      )}
+      {fallbackNotice && (
+        <Alert className="m-4 max-w-7xl mx-auto border-amber-200 bg-amber-50 text-amber-900">
+          <AlertTitle>Using Cached Data</AlertTitle>
+          <AlertDescription>{fallbackNotice}</AlertDescription>
         </Alert>
       )}
       {/* Header */}

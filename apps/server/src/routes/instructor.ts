@@ -1,10 +1,13 @@
 import { Router, type Request, type Response } from 'express';
 import {
   getInteractionsByUser,
+  getInteractionsByUsers,
   getTextbookUnitsByUser,
   getUserById,
   getInteractionAggregatesByUsers,
   getTextbookUnitCountsByUsers,
+  getActiveLearnerCountsByUsers,
+  getLearnerProfilesByIds,
 } from '../db/neon.js';
 import {
   getInstructorScopedLearnerIds,
@@ -17,7 +20,6 @@ const router = Router();
 
 // Export limits and defaults
 const EXPORT_CONFIG = {
-  MAX_LEARNER_IDS: 50,
   MAX_INTERACTIONS_PER_LEARNER: 10000,
   DEFAULT_PER_PAGE: 1000,
   MAX_PER_PAGE: 5000,
@@ -25,6 +27,8 @@ const EXPORT_CONFIG = {
 };
 
 router.use(requireInstructor);
+
+const INSTRUCTOR_ANALYTICS_CONCEPT_TOTAL = 6;
 
 router.get('/overview', async (req: Request, res: Response) => {
   try {
@@ -69,6 +73,142 @@ router.get('/overview', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('[instructor/overview]', error);
     res.status(500).json({ success: false, error: 'Failed to fetch instructor overview' });
+  }
+});
+
+router.get('/analytics/summary', async (req: Request, res: Response) => {
+  const startedAt = Date.now();
+  try {
+    const instructorId = req.auth!.learnerId;
+    const [learnerIds, sections] = await Promise.all([
+      getInstructorScopedLearnerIds(instructorId),
+      getOwnedSectionsByInstructor(instructorId),
+    ]);
+
+    const [interactionAggregates, textbookCounts, activeLearnerCounts, profiles] = await Promise.all([
+      getInteractionAggregatesByUsers(learnerIds),
+      getTextbookUnitCountsByUsers(learnerIds),
+      getActiveLearnerCountsByUsers(learnerIds),
+      getLearnerProfilesByIds(learnerIds),
+    ]);
+
+    let totalTextbookUnits = 0;
+    for (const count of textbookCounts.values()) {
+      totalTextbookUnits += count;
+    }
+
+    const conceptCoverageTotal = profiles.reduce(
+      (sum, profile) => sum + (Array.isArray(profile.conceptsCovered) ? profile.conceptsCovered.length : 0),
+      0,
+    );
+    const averageConceptCoverageCount =
+      learnerIds.length > 0 ? conceptCoverageTotal / learnerIds.length : 0;
+    const averageConceptCoverage = Math.round(
+      learnerIds.length > 0
+        ? (averageConceptCoverageCount / INSTRUCTOR_ANALYTICS_CONCEPT_TOTAL) * 100
+        : 0,
+    );
+
+    console.info('[instructor/analytics/summary]', {
+      instructorId,
+      learnerCount: learnerIds.length,
+      profileCount: profiles.length,
+      totalInteractions: interactionAggregates.totalCount,
+      durationMs: Date.now() - startedAt,
+    });
+
+    res.json({
+      success: true,
+      data: {
+        sections: sections.map((section) => ({
+          id: section.id,
+          name: section.name,
+          studentSignupCode: section.studentSignupCode,
+        })),
+        totalStudents: learnerIds.length,
+        activeToday: activeLearnerCounts.last24Hours,
+        avgConceptCoverage: averageConceptCoverage,
+        avgConceptCoverageCount: averageConceptCoverageCount,
+        totalInteractions: interactionAggregates.totalCount,
+        totalTextbookUnits,
+        interactionsByType: interactionAggregates.interactionsByType ?? {},
+        recentActivity: {
+          interactionLast24Hours: interactionAggregates.last24Hours ?? 0,
+          interactionLast7Days: interactionAggregates.last7Days ?? 0,
+          interactionLast30Days: interactionAggregates.last30Days ?? 0,
+          activeLearnersLast24Hours: activeLearnerCounts.last24Hours,
+          activeLearnersLast7Days: activeLearnerCounts.last7Days,
+          activeLearnersLast30Days: activeLearnerCounts.last30Days,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('[instructor/analytics/summary]', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch instructor analytics summary' });
+  }
+});
+
+router.get('/analytics/interactions', async (req: Request, res: Response) => {
+  const startedAt = Date.now();
+  try {
+    const instructorId = req.auth!.learnerId;
+    const scopedLearnerIds = await getInstructorScopedLearnerIds(instructorId);
+    const requestedLearnerId =
+      typeof req.query.learnerId === 'string' && req.query.learnerId.trim().length > 0
+        ? req.query.learnerId.trim()
+        : null;
+
+    if (requestedLearnerId && !scopedLearnerIds.includes(requestedLearnerId)) {
+      res.status(403).json({ success: false, error: 'Access denied: learner not in your section' });
+      return;
+    }
+
+    const targetLearnerIds = requestedLearnerId ? [requestedLearnerId] : scopedLearnerIds;
+    const limit = Math.min(5000, Math.max(1, parseInt((req.query.limit as string) || '1000', 10)));
+    const offset = Math.max(0, parseInt((req.query.offset as string) || '0', 10));
+    const startDate =
+      typeof req.query.start === 'string' && req.query.start.trim().length > 0
+        ? new Date(req.query.start).toISOString()
+        : undefined;
+    const endDate =
+      typeof req.query.end === 'string' && req.query.end.trim().length > 0
+        ? new Date(req.query.end).toISOString()
+        : undefined;
+
+    const result = await getInteractionsByUsers(targetLearnerIds, {
+      sessionId: req.query.sessionId as string | undefined,
+      eventType: req.query.eventType as string | undefined,
+      problemId: req.query.problemId as string | undefined,
+      startDate,
+      endDate,
+      limit,
+      offset,
+    });
+
+    console.info('[instructor/analytics/interactions]', {
+      instructorId,
+      requestedLearnerId,
+      scopedLearnerCount: targetLearnerIds.length,
+      returned: result.interactions.length,
+      total: result.total,
+      offset,
+      limit,
+      durationMs: Date.now() - startedAt,
+    });
+
+    res.json({
+      success: true,
+      data: result.interactions,
+      pagination: {
+        total: result.total,
+        limit,
+        offset,
+        hasMore: offset + result.interactions.length < result.total,
+      },
+    });
+  } catch (error) {
+    console.error('[instructor/analytics/interactions]', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch instructor analytics interactions' });
   }
 });
 
@@ -155,24 +295,11 @@ router.get('/learner/:id', async (req: Request, res: Response) => {
 });
 
 router.get('/export', async (req: Request, res: Response) => {
+  const startedAt = Date.now();
   try {
     const instructorId = req.auth!.learnerId;
     const learnerIds = await getInstructorScopedLearnerIds(instructorId);
     const sections = await getOwnedSectionsByInstructor(instructorId);
-
-    // 1. Check learner ID limit
-    if (learnerIds.length > EXPORT_CONFIG.MAX_LEARNER_IDS) {
-      res.status(400).json({
-        success: false,
-        error: `Too many learners to export. Maximum allowed: ${EXPORT_CONFIG.MAX_LEARNER_IDS}. Please use pagination or filter learners.`,
-        code: 'LEARNER_LIMIT_EXCEEDED',
-        details: {
-          requested: learnerIds.length,
-          maximum: EXPORT_CONFIG.MAX_LEARNER_IDS,
-        },
-      });
-      return;
-    }
 
     // Parse pagination parameters
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
@@ -250,6 +377,17 @@ router.get('/export', async (req: Request, res: Response) => {
         `Interaction limit (${EXPORT_CONFIG.MAX_INTERACTIONS_PER_LEARNER}) reached for ${learnersWithLimitReached.length} learner(s). Data may be incomplete.`
       );
     }
+
+    console.info('[instructor/export]', {
+      instructorId,
+      totalLearnersInScope: learnerIds.length,
+      returnedLearners: learners.length,
+      interactionCount: interactions.length,
+      page,
+      perPage,
+      hasMoreLearners,
+      durationMs: Date.now() - startedAt,
+    });
 
     // Streaming response for large exports
     if (useStreaming) {

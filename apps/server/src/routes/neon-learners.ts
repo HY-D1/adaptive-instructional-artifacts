@@ -14,10 +14,15 @@ router.get('/profiles', requireInstructor, async (req: Request, res: Response) =
   try {
     const instructorUserId = req.auth!.learnerId;
     const scopedLearnerIds = await getInstructorScopedLearnerIds(instructorUserId);
-    const profiles = await Promise.all(
-      scopedLearnerIds.map((learnerId) => db.getLearnerProfile(learnerId))
-    );
-    res.json({ success: true, data: profiles.filter(Boolean) });
+    const startedAt = Date.now();
+    const profiles = await db.getLearnerProfilesByIds(scopedLearnerIds);
+    console.info('[learners/profiles]', {
+      instructorUserId,
+      scopedLearnerCount: scopedLearnerIds.length,
+      returnedProfiles: profiles.length,
+      durationMs: Date.now() - startedAt,
+    });
+    res.json({ success: true, data: profiles });
   } catch (error) {
     console.error('Error fetching scoped profiles:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch profiles' });

@@ -363,6 +363,33 @@ interface InstructorLearnerItem {
   lastInteractionAt: string | null;
 }
 
+export interface InstructorAnalyticsSummary {
+  sections: InstructorSection[];
+  totalStudents: number;
+  activeToday: number;
+  avgConceptCoverage: number;
+  avgConceptCoverageCount: number;
+  totalInteractions: number;
+  totalTextbookUnits: number;
+  interactionsByType: Record<string, number>;
+  recentActivity: {
+    interactionLast24Hours: number;
+    interactionLast7Days: number;
+    interactionLast30Days: number;
+    activeLearnersLast24Hours: number;
+    activeLearnersLast7Days: number;
+    activeLearnersLast30Days: number;
+  };
+}
+
+export interface InstructorAnalyticsInteractions {
+  events: InteractionEvent[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}
+
 export interface RemoteCorpusDocument {
   docId: string;
   title: string;
@@ -1307,6 +1334,64 @@ export async function getInstructorOverview(): Promise<InstructorOverview | null
   return response.data;
 }
 
+export async function getInstructorAnalyticsSummary(): Promise<InstructorAnalyticsSummary | null> {
+  const response = await fetchApi<InstructorAnalyticsSummary>('/instructor/analytics/summary');
+  if (!response.success || !response.data) return null;
+  return response.data;
+}
+
+export async function getInstructorAnalyticsInteractions(options?: {
+  learnerId?: string;
+  start?: Date;
+  end?: Date;
+  sessionId?: string;
+  eventType?: string;
+  problemId?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<InstructorAnalyticsInteractions> {
+  const params = new URLSearchParams();
+  if (options?.learnerId) params.set('learnerId', options.learnerId);
+  if (options?.start) params.set('start', options.start.toISOString());
+  if (options?.end) params.set('end', options.end.toISOString());
+  if (options?.sessionId) params.set('sessionId', options.sessionId);
+  if (options?.eventType) params.set('eventType', options.eventType);
+  if (options?.problemId) params.set('problemId', options.problemId);
+  if (options?.limit) params.set('limit', options.limit.toString());
+  if (options?.offset) params.set('offset', options.offset.toString());
+
+  const response = await fetchApi<BackendInteraction[]>(
+    `/instructor/analytics/interactions?${params.toString()}`,
+  );
+
+  if (!response.success || !response.data) {
+    return {
+      events: [],
+      total: 0,
+      limit: options?.limit ?? 0,
+      offset: options?.offset ?? 0,
+      hasMore: false,
+    };
+  }
+
+  const eventsPayload = Array.isArray(response.data)
+    ? response.data
+    : Array.isArray((response.data as unknown as { data?: BackendInteraction[] }).data)
+      ? (response.data as unknown as { data: BackendInteraction[] }).data
+      : [];
+  const pagination = (response as ApiResponse<BackendInteraction[]> & {
+    pagination?: { total?: number; limit?: number; offset?: number; hasMore?: boolean };
+  }).pagination;
+
+  return {
+    events: eventsPayload.map(convertToFrontendEvent),
+    total: typeof pagination?.total === 'number' ? pagination.total : eventsPayload.length,
+    limit: typeof pagination?.limit === 'number' ? pagination.limit : (options?.limit ?? eventsPayload.length),
+    offset: typeof pagination?.offset === 'number' ? pagination.offset : (options?.offset ?? 0),
+    hasMore: Boolean(pagination?.hasMore),
+  };
+}
+
 export async function getInstructorLearners(): Promise<InstructorLearnerItem[]> {
   const response = await fetchApi<InstructorLearnerItem[]>('/instructor/learners');
   if (!response.success || !response.data) return [];
@@ -1351,6 +1436,109 @@ export async function getInstructorExport(): Promise<unknown | null> {
   const response = await fetchApi<unknown>('/instructor/export');
   if (!response.success || !response.data) return null;
   return response.data;
+}
+
+interface InstructorExportPage {
+  exportedAt: string;
+  exportMetadata: {
+    actorRole: string;
+    actorId: string;
+    sectionIds: string[];
+    sectionNames: string[];
+  };
+  pagination: {
+    page: number;
+    perPage: number;
+    hasMore: boolean;
+    totalLearners: number;
+    returnedLearners: number;
+  };
+  summary: {
+    learnerCount: number;
+    interactionCount: number;
+    textbookUnitCount: number;
+    fieldsPreserved: string[];
+  };
+  learners: BackendLearner[];
+  interactions: BackendInteraction[];
+  textbookUnits: Array<{ learnerId: string; units: BackendUnit[] }>;
+}
+
+export async function getCompleteInstructorExport(perPage: number = 50): Promise<{
+  exportedAt: string;
+  exportMetadata: InstructorExportPage['exportMetadata'];
+  pagination: InstructorExportPage['pagination'];
+  summary: InstructorExportPage['summary'];
+  learners: BackendLearner[];
+  interactions: BackendInteraction[];
+  textbookUnits: Array<{ learnerId: string; units: BackendUnit[] }>;
+  warnings?: string[];
+} | null> {
+  if (!USE_BACKEND) {
+    return null;
+  }
+
+  const allLearners: BackendLearner[] = [];
+  const allInteractions: BackendInteraction[] = [];
+  const allTextbookUnits: Array<{ learnerId: string; units: BackendUnit[] }> = [];
+  const warnings = new Set<string>();
+
+  let page = 1;
+  let firstPageData: InstructorExportPage | null = null;
+  let hasMore = true;
+
+  while (hasMore) {
+    const response = await fetchApi<InstructorExportPage>(
+      `/instructor/export?page=${page}&perPage=${perPage}`,
+    );
+
+    if (!response.success || !response.data) {
+      return null;
+    }
+
+    const pageData = response.data;
+    if (!firstPageData) {
+      firstPageData = pageData;
+    }
+
+    allLearners.push(...pageData.learners);
+    allInteractions.push(...pageData.interactions);
+    allTextbookUnits.push(...pageData.textbookUnits);
+
+    const responseWarnings = (response as ApiResponse<InstructorExportPage> & { warnings?: string[] }).warnings;
+    for (const warning of responseWarnings ?? []) {
+      warnings.add(warning);
+    }
+
+    hasMore = pageData.pagination.hasMore;
+    page += 1;
+  }
+
+  if (!firstPageData) {
+    return null;
+  }
+
+  return {
+    exportedAt: firstPageData.exportedAt,
+    exportMetadata: firstPageData.exportMetadata,
+    pagination: {
+      ...firstPageData.pagination,
+      page: 1,
+      perPage,
+      hasMore: false,
+      returnedLearners: allLearners.length,
+    },
+    summary: {
+      ...firstPageData.summary,
+      learnerCount: allLearners.length,
+      interactionCount: allInteractions.length,
+      textbookUnitCount: allTextbookUnits.reduce((sum, entry) => sum + entry.units.length, 0),
+    },
+    learners: allLearners,
+    interactions: allInteractions,
+    textbookUnits: allTextbookUnits,
+    warnings: warnings.size > 0 ? Array.from(warnings) : undefined,
+  };
 }
 
 export async function getLearnerTrajectory(learnerId: string): Promise<{
@@ -1539,9 +1727,12 @@ export const storageClient = {
   getClassStats,
   getLearnerTrajectory,
   getInstructorOverview,
+  getInstructorAnalyticsSummary,
+  getInstructorAnalyticsInteractions,
   getInstructorLearners,
   getInstructorLearnerDetail,
   getInstructorExport,
+  getCompleteInstructorExport,
   fetchCorpusManifest,
   fetchCorpusManifestWithUnits,
   fetchCorpusUnit,

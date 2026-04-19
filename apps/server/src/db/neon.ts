@@ -1122,6 +1122,63 @@ export async function getInteractionsByUser(
   };
 }
 
+export async function getInteractionsByUsers(
+  userIds: string[],
+  options?: GetInteractionsOptions
+): Promise<{ interactions: Interaction[]; total: number }> {
+  const db = getDb();
+  const ids = Array.from(new Set(userIds.filter(Boolean)));
+
+  if (ids.length === 0) {
+    return { interactions: [], total: 0 };
+  }
+
+  const conditions = [db`user_id = ANY(${ids})`];
+  if (options?.sessionId) conditions.push(db`session_id = ${options.sessionId}`);
+  if (options?.eventType) conditions.push(db`event_type = ${options.eventType}`);
+  if (options?.problemId) conditions.push(db`problem_id = ${options.problemId}`);
+  if (options?.startDate) conditions.push(db`timestamp >= ${options.startDate}`);
+  if (options?.endDate) conditions.push(db`timestamp <= ${options.endDate}`);
+
+  const whereClause = conditions.reduce((acc, cond, index) =>
+    index === 0 ? cond : db`${acc} AND ${cond}`, db``
+  );
+
+  const [countResult] = await db`
+    SELECT COUNT(*) as count
+    FROM interaction_events
+    WHERE ${whereClause}
+  `;
+  const total = parseInt(countResult?.count as string, 10) || 0;
+
+  const limit = options?.limit;
+  const offset = options?.offset ?? 0;
+
+  let query;
+  if (limit !== undefined) {
+    query = db`
+      SELECT * FROM interaction_events
+      WHERE ${whereClause}
+      ORDER BY timestamp DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+  } else {
+    query = db`
+      SELECT * FROM interaction_events
+      WHERE ${whereClause}
+      ORDER BY timestamp DESC
+      OFFSET ${offset}
+    `;
+  }
+
+  const results = await query;
+
+  return {
+    interactions: results.map(rowToInteraction),
+    total,
+  };
+}
+
 export async function getInteractionById(id: string): Promise<Interaction | null> {
   const db = getDb();
   const [result] = await db`SELECT * FROM interaction_events WHERE id = ${id}`;
@@ -1131,6 +1188,12 @@ export async function getInteractionById(id: string): Promise<Interaction | null
 export interface InteractionAggregates {
   totalCount: number;
   interactionsByType: Record<string, number>;
+  last24Hours: number;
+  last7Days: number;
+  last30Days: number;
+}
+
+export interface ActiveLearnerCounts {
   last24Hours: number;
   last7Days: number;
   last30Days: number;
@@ -1192,6 +1255,42 @@ export async function getInteractionAggregatesByUsers(
     last24Hours,
     last7Days,
     last30Days,
+  };
+}
+
+export async function getActiveLearnerCountsByUsers(
+  userIds: string[],
+  referenceTime: number = Date.now()
+): Promise<ActiveLearnerCounts> {
+  const db = getDb();
+  const ids = Array.from(new Set(userIds.filter(Boolean)));
+
+  if (ids.length === 0) {
+    return {
+      last24Hours: 0,
+      last7Days: 0,
+      last30Days: 0,
+    };
+  }
+
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const cutoff24h = new Date(referenceTime - msPerDay).toISOString();
+  const cutoff7d = new Date(referenceTime - 7 * msPerDay).toISOString();
+  const cutoff30d = new Date(referenceTime - 30 * msPerDay).toISOString();
+
+  const [row] = await db`
+    SELECT
+      COUNT(DISTINCT user_id) FILTER (WHERE timestamp >= ${cutoff24h}) as active_24h,
+      COUNT(DISTINCT user_id) FILTER (WHERE timestamp >= ${cutoff7d}) as active_7d,
+      COUNT(DISTINCT user_id) FILTER (WHERE timestamp >= ${cutoff30d}) as active_30d
+    FROM interaction_events
+    WHERE user_id = ANY(${ids})
+  `;
+
+  return {
+    last24Hours: Number(row?.active_24h || 0),
+    last7Days: Number(row?.active_7d || 0),
+    last30Days: Number(row?.active_30d || 0),
   };
 }
 
@@ -1649,6 +1748,48 @@ export async function getAllLearnerProfiles(): Promise<LearnerProfile[]> {
     lastActive: row.last_activity_at ? new Date(row.last_activity_at).getTime() : Date.now(),
     extendedData: parseJson(row.profile_data) || {},
   }));
+}
+
+export async function getLearnerProfilesByIds(learnerIds: string[]): Promise<LearnerProfile[]> {
+  const db = getDb();
+  const ids = Array.from(new Set(learnerIds.filter(Boolean)));
+
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const results = await db`
+    SELECT * FROM learner_profiles
+    WHERE learner_id = ANY(${ids})
+  `;
+  const solvedProblemIdsByLearner = await getSolvedProblemIdsByLearner(ids);
+
+  const profilesById = new Map<string, LearnerProfile>(
+    results.map((row) => [
+      row.learner_id,
+      {
+        id: row.learner_id,
+        name: row.name,
+        conceptsCovered: parseJson(row.concept_coverage) || [],
+        conceptCoverageEvidence: parseJson(row.concept_evidence) || {},
+        errorHistory: parseJson(row.error_history) || {},
+        solvedProblemIds: solvedProblemIdsByLearner.get(row.learner_id) || [],
+        interactionCount: row.interaction_count || 0,
+        currentStrategy: row.strategy || 'default',
+        preferences: parseJson(row.preferences) || {
+          escalationThreshold: 3,
+          aggregationDelay: 30000,
+        },
+        createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
+        lastActive: row.last_activity_at ? new Date(row.last_activity_at).getTime() : Date.now(),
+        extendedData: parseJson(row.profile_data) || {},
+      },
+    ]),
+  );
+
+  return ids
+    .map((id) => profilesById.get(id))
+    .filter((profile): profile is LearnerProfile => Boolean(profile));
 }
 
 /**

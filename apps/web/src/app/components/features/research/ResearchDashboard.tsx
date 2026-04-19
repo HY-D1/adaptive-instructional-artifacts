@@ -26,6 +26,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '../../ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../ui/tooltip';
@@ -317,6 +318,7 @@ export function ResearchDashboard() {
     message: string;
   } | null>(null);
   const [scopeEmpty, setScopeEmpty] = useState(false);
+  const [dataNotice, setDataNotice] = useState<string | null>(null);
   const [selectedMasteryLearner, setSelectedMasteryLearner] = useState<string>('');
   const uiActorId = storage.getUserProfile()?.id || 'unknown';
 
@@ -329,7 +331,7 @@ export function ResearchDashboard() {
     // Detect hosted mode on mount
     setHostedMode(isHostedMode());
     void loadData();
-  }, []);
+  }, [timeRange]);
 
   useEffect(() => {
     storage.setPolicyReplayMode(policyReplayMode);
@@ -363,20 +365,28 @@ export function ResearchDashboard() {
   const loadData = async () => {
     setHydrationError(null);
     setScopeEmpty(false);
+    setDataNotice(null);
 
     try {
-      // Fetch profiles directly from backend API (not localStorage)
-      const apiProfiles = await storageClient.getAllProfiles();
+      const [summary, apiProfiles] = await Promise.all([
+        storageClient.getInstructorAnalyticsSummary(),
+        storageClient.getAllProfiles(),
+      ]);
 
-      if (apiProfiles.length === 0) {
-        // Check if this is an auth issue or genuinely empty
+      if (!summary) {
         const healthy = await storageClient.fetchBackendHealth();
         if (!healthy) {
           setHydrationError({ type: 'network', message: 'Backend unavailable' });
         } else {
-          setScopeEmpty(true);
+          setHydrationError({ type: 'backend', message: 'Instructor analytics unavailable' });
         }
-        // Still set empty data so UI renders properly
+        setInteractions([]);
+        setProfiles([]);
+        return;
+      }
+
+      if (summary.totalStudents === 0) {
+        setScopeEmpty(true);
         setInteractions([]);
         setProfiles([]);
         return;
@@ -395,29 +405,42 @@ export function ResearchDashboard() {
       }));
       setProfiles(frontendProfiles);
 
-      // Fetch interactions for scoped learners via research API
-      // Use paginated endpoint to avoid loading all events at once
-      const learnerIds = frontendProfiles.map(p => p.id);
       const allInteractions: InteractionEvent[] = [];
+      const range = TIME_RANGES.find(r => r.value === timeRange);
+      const start = range?.days
+        ? new Date(Date.now() - range.days * 24 * 60 * 60 * 1000)
+        : undefined;
+      const pageSize = 2000;
+      const maxInteractions = 10000;
+      let offset = 0;
+      let total = 0;
+      let hasMore = true;
 
-      // Fetch interactions in batches of learners to avoid overwhelming the API
-      const BATCH_SIZE = 10;
-      for (let i = 0; i < learnerIds.length; i += BATCH_SIZE) {
-        const batch = learnerIds.slice(i, i + BATCH_SIZE);
-        const batchResults = await Promise.all(
-          batch.map(id => storageClient.getInteractions(id, { limit: 200 }))
-        );
-        for (const result of batchResults) {
-          allInteractions.push(...result.events);
+      while (hasMore && allInteractions.length < maxInteractions) {
+        const remaining = maxInteractions - allInteractions.length;
+        const result = await storageClient.getInstructorAnalyticsInteractions({
+          start,
+          limit: Math.min(pageSize, remaining),
+          offset,
+        });
+        allInteractions.push(...result.events);
+        total = result.total;
+        hasMore = result.hasMore;
+        offset += result.events.length;
+        if (result.events.length === 0) {
+          break;
         }
       }
 
       setInteractions(allInteractions);
 
-      // Also cache profiles to localStorage for other components
-      for (const profile of apiProfiles) {
-        storage.saveProfile(profile);
+      if (total > allInteractions.length) {
+        setDataNotice(
+          `Loaded ${allInteractions.length.toLocaleString()} of ${total.toLocaleString()} interactions for ${range?.label || 'the selected range'}. Use export for full history.`,
+        );
       }
+
+      storage.cacheProfiles(frontendProfiles);
 
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -425,6 +448,7 @@ export function ResearchDashboard() {
       console.error('[ResearchDashboard] Data load failed:', error);
 
       // Fallback to localStorage
+      setDataNotice('Showing cached local research data because backend analytics could not be loaded.');
       setInteractions(storage.getAllInteractions());
       const loadedProfiles = storage
         .getAllProfiles()
@@ -514,9 +538,13 @@ export function ResearchDashboard() {
     let url: string | null = null;
     
     try {
-      const data = exportAllHistory
-        ? storage.exportAllData()
-        : storage.exportData();
+      const data = storageClient.isBackendAvailable()
+        ? await storageClient.getCompleteInstructorExport()
+        : (exportAllHistory ? storage.exportAllData() : storage.exportData());
+
+      if (!data) {
+        throw new Error('Backend export unavailable');
+      }
       
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
       url = URL.createObjectURL(blob);
@@ -1648,6 +1676,12 @@ export function ResearchDashboard() {
   return (
     <TooltipProvider delayDuration={100}>
       <div className="space-y-6">
+        {dataNotice && (
+          <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+            <AlertTitle>Analytics Notice</AlertTitle>
+            <AlertDescription>{dataNotice}</AlertDescription>
+          </Alert>
+        )}
         <Card className="p-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
             <div>

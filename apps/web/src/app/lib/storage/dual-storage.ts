@@ -2076,6 +2076,19 @@ class DualStorageManager {
   }
 
   /**
+   * Cache a backend-fetched profile locally without mutating backend truth.
+   */
+  cacheProfile(profile: LearnerProfile): void {
+    localStorageManager.saveProfile(profile);
+  }
+
+  cacheProfiles(profiles: LearnerProfile[]): void {
+    for (const profile of profiles) {
+      localStorageManager.saveProfile(profile);
+    }
+  }
+
+  /**
    * Create and persist a default learner profile.
    * Keeps localStorage creation synchronous, then mirrors to backend when available.
    */
