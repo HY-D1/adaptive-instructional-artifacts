@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 
 import { AdaptiveTextbook } from '../components/features/textbook/AdaptiveTextbook';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -25,6 +26,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/toolti
 import { Skeleton } from '../components/ui/skeleton';
 import { conceptNodes } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
+import { useAllLearnerProfiles } from '../hooks/useLearnerProfile';
 import { getTextbookSummaryCounts } from '../lib/counts/selectors';
 import { storage } from '../lib/storage';
 import { useAuth } from '../lib/auth-context';
@@ -56,8 +58,9 @@ interface TextbookUiState {
 export function TextbookPage() {
   const navigate = useNavigate();
   const { isStudent, isInstructor, profile, isLoading: isRoleLoading } = useUserRole();
-  const { isHydrating } = useAuth();
+  const { isHydrating, user: authUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
+  const [learnerContextNotice, setLearnerContextNotice] = useState<string | null>(null);
 
   // Use the actual user's ID as the learner ID (aligned with LearningInterface)
   // For students: always use their own profile ID
@@ -65,24 +68,71 @@ export function TextbookPage() {
   const cachedProfileId = storage.getUserProfile()?.id;
   const userLearnerId = profile?.id || cachedProfileId || (AUTH_BACKEND_CONFIGURED ? '' : 'learner-1');
   const urlLearnerId = searchParams.get('learnerId');
-  
-  // Students always see their own data; instructors can view others via URL
-  const learnerId = isStudent 
-    ? userLearnerId 
-    : (urlLearnerId || userLearnerId);
   const selectedUnitId = searchParams.get('unitId') || undefined;
   const selectedAttemptId = searchParams.get('attemptId') || undefined;
   const selectedSubtypeParam = searchParams.get('subtype');
+
+  // Storage change listener for reactive updates
+  const [storageVersion, setStorageVersion] = useState(0);
+  const [isHydratingTextbook, setIsHydratingTextbook] = useState(true);
+
+  const { profiles: instructorProfiles } = useAllLearnerProfiles({
+    authTrigger: authUser?.learnerId,
+    enabled: isInstructor,
+  });
+
+  const fallbackInstructorProfiles = useMemo(() => {
+    if (!isInstructor) return [];
+    return storage.getAllProfiles()
+      .map((candidate) => storage.getProfile(candidate.id))
+      .filter(Boolean);
+  }, [isInstructor, storageVersion]);
+
+  const instructorLearnerOptions = useMemo(() => {
+    if (!isInstructor) return [];
+
+    const merged = new Map<string, { id: string; name: string; secondaryLabel?: string }>();
+    const addProfile = (candidate: { id: string; name?: string | null } | null | undefined) => {
+      if (!candidate?.id) return;
+      const trimmedName = candidate.name?.trim();
+      merged.set(candidate.id, {
+        id: candidate.id,
+        name: trimmedName || candidate.id,
+        secondaryLabel: trimmedName && trimmedName !== candidate.id ? candidate.id : undefined,
+      });
+    };
+
+    instructorProfiles.forEach(addProfile);
+    fallbackInstructorProfiles.forEach(addProfile);
+    addProfile({ id: userLearnerId, name: profile?.name || userLearnerId });
+
+    return Array.from(merged.values()).sort((left, right) => left.name.localeCompare(right.name));
+  }, [isInstructor, instructorProfiles, fallbackInstructorProfiles, userLearnerId, profile?.name]);
+
+  const instructorLearnerIds = useMemo(
+    () => new Set(instructorLearnerOptions.map((option) => option.id)),
+    [instructorLearnerOptions]
+  );
+
+  const shouldDeferInstructorValidation =
+    isInstructor &&
+    Boolean(urlLearnerId) &&
+    instructorLearnerOptions.length === 0;
+
+  // Students always see their own data; instructors can view others via URL
+  const learnerId = isStudent
+    ? userLearnerId
+    : urlLearnerId
+      ? (shouldDeferInstructorValidation || instructorLearnerIds.has(urlLearnerId) ? urlLearnerId : userLearnerId)
+      : userLearnerId;
+
+  const activeLearnerOption = instructorLearnerOptions.find((option) => option.id === learnerId);
 
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'concepts' | 'problems'>('concepts');
-
-  // Storage change listener for reactive updates
-  const [storageVersion, setStorageVersion] = useState(0);
-  const [isHydratingTextbook, setIsHydratingTextbook] = useState(true);
   
   useEffect(() => {
     if (isHydrating || isHydratingTextbook || (AUTH_BACKEND_CONFIGURED && (isRoleLoading || !learnerId))) {
@@ -172,9 +222,36 @@ export function TextbookPage() {
     setSearchParams(next, options);
   }, [searchParams, setSearchParams]);
 
+  useEffect(() => {
+    if (!isInstructor || !urlLearnerId || shouldDeferInstructorValidation) {
+      return;
+    }
+
+    if (instructorLearnerIds.has(urlLearnerId)) {
+      setLearnerContextNotice(null);
+      return;
+    }
+
+    setLearnerContextNotice('The selected learner is no longer available. Showing your textbook instead.');
+    updateParams({
+      learnerId: userLearnerId,
+      unitId: undefined,
+      attemptId: undefined,
+      subtype: undefined,
+    }, { replace: true });
+  }, [
+    instructorLearnerIds,
+    isInstructor,
+    shouldDeferInstructorValidation,
+    updateParams,
+    urlLearnerId,
+    userLearnerId,
+  ]);
+
   const handleLearnerChange = (value: string) => {
     // Only instructors can switch learners
     if (isStudent) return;
+    setLearnerContextNotice(null);
     updateParams({
       learnerId: value,
       unitId: undefined,
@@ -450,17 +527,36 @@ const chatInteractions = useMemo(
                 )}
                 {/* Learner selector - only for instructors */}
                 {isInstructor && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg border dark:border-gray-700">
-                        <GraduationCap className="size-4 text-gray-600 dark:text-gray-300" />
-                        <span className="text-sm text-gray-700 dark:text-gray-200">Viewing: {learnerId.slice(0, 20)}...</span>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Instructor view: viewing learner {learnerId}</p>
-                    </TooltipContent>
-                  </Tooltip>
+                  <div className="flex min-w-[240px] items-center gap-2">
+                    <GraduationCap className="size-4 shrink-0 text-gray-600 dark:text-gray-300" />
+                    {instructorLearnerOptions.length > 0 ? (
+                      <Select value={learnerId} onValueChange={handleLearnerChange}>
+                        <SelectTrigger className="w-full bg-white dark:bg-gray-800" aria-label="Select learner textbook">
+                          <SelectValue placeholder="Select learner" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {instructorLearnerOptions.map((option) => (
+                            <SelectItem key={option.id} value={option.id}>
+                              {option.secondaryLabel ? `${option.name} · ${option.secondaryLabel}` : option.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center gap-2 rounded-lg border bg-gray-100 px-3 py-1.5 dark:border-gray-700 dark:bg-gray-800">
+                            <span className="text-sm text-gray-700 dark:text-gray-200">
+                              Viewing: {activeLearnerOption?.name || learnerId}
+                            </span>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Instructor view: viewing learner {activeLearnerOption?.name || learnerId}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
@@ -468,6 +564,12 @@ const chatInteractions = useMemo(
         </div>
 
         <div className="container mx-auto px-4 py-6 flex-1 min-h-0 flex flex-col gap-4">
+          {learnerContextNotice && (
+            <Alert className="border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+              <AlertDescription>{learnerContextNotice}</AlertDescription>
+            </Alert>
+          )}
+
           {/* Student welcome card */}
           {isStudent && (
             <Card className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">

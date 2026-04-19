@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { listConcepts } from '../lib/content/concept-loader';
-import { BookOpen, Clock, GraduationCap, Search } from 'lucide-react';
+import { BookOpen, Clock, GraduationCap, Search, X } from 'lucide-react';
 import { CommandTrigger } from '../components/shared/CommandMenu';
+import { Input } from '../components/ui/input';
 
 export function ConceptLibraryPage() {
   const [concepts, setConcepts] = useState<Array<{id: string; title: string; difficulty: string}>>([]);
@@ -37,10 +38,10 @@ export function ConceptLibraryPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="flex items-center gap-3 text-gray-600">
           <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-          Loading textbook...
+          Loading concepts...
         </div>
       </div>
     );
@@ -99,12 +100,45 @@ export function ConceptLibraryPage() {
           </div>
         </div>
         
-        {/* Search - using Command Palette */}
-        <div className="mb-6">
+        {/* Search */}
+        <div className="mb-6 space-y-3">
+          <div className="max-w-xl space-y-2">
+            <label htmlFor="concept-library-search" className="block text-sm font-medium text-gray-700">
+              Search Concepts
+            </label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                id="concept-library-search"
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Filter concepts by name or concept id"
+                className="pl-10 pr-10"
+                aria-describedby="concept-library-search-help"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600"
+                  aria-label="Clear concept search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <p id="concept-library-search-help" className="text-sm text-gray-500">
+              Filter the concepts on this page. Use global search to jump anywhere in the app.
+            </p>
+          </div>
           <div className="flex items-center gap-3">
-            <CommandTrigger className="flex-1 max-w-md justify-start" />
-            <span className="text-sm text-gray-500 hidden sm:inline">
-              or press <kbd className="px-1.5 py-0.5 text-xs font-medium text-gray-600 bg-gray-100 rounded">⌘K</kbd>
+            <CommandTrigger className="justify-start" />
+            <span className="text-sm text-gray-500">
+              Global search
+              <span className="hidden sm:inline">
+                {' '}<kbd className="px-1.5 py-0.5 text-xs font-medium text-gray-600 bg-gray-100 rounded">⌘K</kbd>
+              </span>
             </span>
           </div>
           {searchQuery && (

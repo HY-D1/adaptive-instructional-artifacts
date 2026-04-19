@@ -59,8 +59,13 @@ export function ConceptDetailPage() {
       <header className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
-            <Link to="/concepts" className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-              <ChevronLeft className="w-5 h-5 text-gray-600" />
+            <Link
+              to="/concepts"
+              aria-label="Back to concept library"
+              className="inline-flex items-center gap-2 rounded-lg p-2 text-gray-700 transition-colors hover:bg-gray-100"
+            >
+              <ChevronLeft className="w-5 h-5 text-gray-600" aria-hidden="true" />
+              <span className="hidden sm:inline text-sm font-medium">Back to Concepts</span>
             </Link>
             <div className="flex-1 min-w-0">
               <h1 className="text-2xl font-bold text-gray-900 truncate">{concept.title}</h1>

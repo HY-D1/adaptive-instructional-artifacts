@@ -50,6 +50,10 @@ chat-history/
 .claude/
 .claude-plugin/
 
+# Codex / OpenAI agent configuration
+.codex/
+.agents/
+
 # But KEEP the production-grade quality-loop system
 .kimi/
 .cursor/
@@ -153,4 +157,13 @@ apps/server/dist/
 .env*.local
 .local/
 .env.pdf-local
+# Neon export data and dumps
 .neon
+neon-export/
+neon-dump/
+neon-backup/
+neon_export*
+export_neon*
+*.neon.sql
+*.neon.dump
+*.neon-export.*

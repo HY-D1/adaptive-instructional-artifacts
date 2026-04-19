@@ -255,12 +255,15 @@ export function AuthPage() {
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
                     id="login-email"
+                    name="email"
                     type="email"
                     placeholder="you@example.com"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     className="pl-10"
                     autoFocus
+                    autoComplete="email"
+                    spellCheck={false}
                     required
                   />
                 </div>
@@ -271,11 +274,13 @@ export function AuthPage() {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
                     id="login-password"
+                    name="current-password"
                     type={showPassword ? 'text' : 'password'}
                     placeholder="••••••••"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     className="pl-10 pr-10"
+                    autoComplete="current-password"
                     required
                   />
                   <button
@@ -328,12 +333,14 @@ export function AuthPage() {
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
                     id="signup-name"
+                    name="name"
                     type="text"
                     placeholder="Your name"
                     value={signupName}
                     onChange={(e) => setSignupName(e.target.value)}
                     className="pl-10"
                     autoFocus
+                    autoComplete="name"
                     required
                   />
                 </div>
@@ -344,11 +351,14 @@ export function AuthPage() {
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
                     id="signup-email"
+                    name="email"
                     type="email"
                     placeholder="you@example.com"
                     value={signupEmail}
                     onChange={(e) => setSignupEmail(e.target.value)}
                     className="pl-10"
+                    autoComplete="email"
+                    spellCheck={false}
                     required
                   />
                 </div>
@@ -359,6 +369,7 @@ export function AuthPage() {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <Input
                     id="signup-password"
+                    name="new-password"
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Min. 8 characters"
                     value={signupPassword}
@@ -368,6 +379,7 @@ export function AuthPage() {
                       setPasswordStrength(checkPasswordStrength(value));
                     }}
                     className="pl-10 pr-10"
+                    autoComplete="new-password"
                     required
                   />
                   <button
@@ -449,6 +461,7 @@ export function AuthPage() {
                   </p>
                   <Input
                     id="signup-code"
+                    name={signupRole === 'student' ? 'class-code' : 'instructor-code'}
                     type="password"
                     placeholder={signupRole === 'student' ? 'Enter the class code' : 'Enter the instructor code'}
                     value={signupRole === 'student' ? signupClassCode : signupInstructorCode}
@@ -459,6 +472,8 @@ export function AuthPage() {
                       }
                       setSignupInstructorCode(e.target.value);
                     }}
+                    autoComplete="off"
+                    spellCheck={false}
                     required
                   />
                 </div>

@@ -340,6 +340,7 @@ export function CommandTrigger({ className, variant = 'default' }: CommandTrigge
   return (
     <button
       onClick={openMenu}
+      aria-label="Open global search"
       className={cn(
         "flex items-center gap-2 px-3 py-2 rounded-lg",
         "bg-white border border-gray-200 hover:border-gray-300 hover:bg-gray-50",
