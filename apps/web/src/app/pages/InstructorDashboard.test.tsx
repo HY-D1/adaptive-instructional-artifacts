@@ -69,6 +69,14 @@ const baseProfile = {
   lastActive: Date.now(),
 };
 
+const analyticsEvent = {
+  id: 'evt-1',
+  learnerId: 'learner-1',
+  timestamp: Date.now(),
+  eventType: 'execution',
+  problemId: 'problem-1',
+};
+
 describe('InstructorDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -98,7 +106,7 @@ describe('InstructorDashboard', () => {
 
     mockStorageClient.checkBackendHealth.mockResolvedValue(true);
     mockStorageClient.getInstructorAnalyticsInteractions.mockResolvedValue({
-      events: [],
+      events: [analyticsEvent],
       total: 44,
       limit: 5000,
       offset: 0,
@@ -151,6 +159,47 @@ describe('InstructorDashboard', () => {
     );
 
     expect(await screen.findByText('Using Cached Data')).toBeTruthy();
-    expect(screen.getByText('Showing cached local dashboard data because backend analytics could not be loaded.')).toBeTruthy();
+    expect(screen.getByText('Showing cached local dashboard data because some backend analytics could not be loaded. Missing analytics will continue syncing in the background.')).toBeTruthy();
   });
+
+  it('keeps local metrics visible and upgrades to backend summary after a retry succeeds', async () => {
+    mockStorageClient.getInstructorAnalyticsSummary
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        sections: [{ id: 'section-1', name: 'Section 1', studentSignupCode: 'ABC123' }],
+        totalStudents: 55,
+        activeToday: 21,
+        avgConceptCoverage: 21,
+        avgConceptCoverageCount: 1.26,
+        totalInteractions: 44,
+        totalTextbookUnits: 12,
+        interactionsByType: { execution: 30, error: 14 },
+        recentActivity: {
+          interactionLast24Hours: 12,
+          interactionLast7Days: 30,
+          interactionLast30Days: 44,
+          activeLearnersLast24Hours: 21,
+          activeLearnersLast7Days: 34,
+          activeLearnersLast30Days: 55,
+        },
+      });
+
+    render(
+      <MemoryRouter>
+        <InstructorDashboard />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('instructor-total-students-value').textContent).toBe('1');
+    });
+    expect(screen.getByText('Using Cached Data')).toBeTruthy();
+
+    await new Promise((resolve) => setTimeout(resolve, 2100));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('instructor-total-students-value').textContent).toBe('55');
+    });
+    expect(screen.queryByText('Using Cached Data')).toBeNull();
+  }, 10000);
 });

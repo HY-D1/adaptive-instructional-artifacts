@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
 import {
@@ -114,6 +114,9 @@ const DEMO_ADAPTIVE_DATA = {
 };
 
 const MAX_INSTRUCTOR_ANALYTICS_INTERACTIONS = 5000;
+const ANALYTICS_RETRY_DELAYS_MS = [2000, 5000, 15000] as const;
+
+type AnalyticsSliceStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 // Mock class statistics
 interface ClassStats {
@@ -169,14 +172,14 @@ export function InstructorDashboard() {
   // Use backend profiles with automatic synchronization
   const {
     profiles: backendProfiles,
-    isLoading: isProfilesLoading,
   } = useAllLearnerProfiles({ authTrigger: authUser?.learnerId });
   
   const [profiles, setProfiles] = useState<LearnerProfile[]>([]);
   const [interactions, setInteractions] = useState<InteractionEvent[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [backendSummary, setBackendSummary] = useState<InstructorAnalyticsSummary | null>(null);
-  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null);
+  const [summaryStatus, setSummaryStatus] = useState<AnalyticsSliceStatus>('idle');
+  const [interactionsStatus, setInteractionsStatus] = useState<AnalyticsSliceStatus>('idle');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [demoDataExists, setDemoDataExists] = useState(false);
@@ -195,6 +198,8 @@ export function InstructorDashboard() {
     }
   }, [reason]);
   const [isBackendAvailable, setIsBackendAvailable] = useState(false);
+  const summaryRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const interactionsRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Check backend availability
   useEffect(() => {
@@ -218,57 +223,142 @@ export function InstructorDashboard() {
   }, [isStudent, isRoleLoading, navigate]);
 
   useEffect(() => {
-    const loadData = async () => {
-      setIsDataLoading(true);
-      setFallbackNotice(null);
-
-      const allProfiles = storage.getAllProfiles().map(p => storage.getProfile(p.id)).filter(Boolean) as LearnerProfile[];
-      const allInteractions = storage.getAllInteractions();
-      const effectiveProfiles = backendProfiles.length > 0 ? backendProfiles : allProfiles;
-
-      setProfiles(effectiveProfiles);
-      setInteractions(allInteractions);
-
-      if (!isBackendAvailable || authUser?.role !== 'instructor') {
-        setBackendSummary(null);
-        setIsDataLoading(false);
-        return;
-      }
-
-      try {
-        const [summary, analyticsInteractions] = await Promise.all([
-          storageClient.getInstructorAnalyticsSummary(),
-          storageClient.getInstructorAnalyticsInteractions({
-            limit: MAX_INSTRUCTOR_ANALYTICS_INTERACTIONS,
-            offset: 0,
-          }),
-        ]);
-
-        if (summary) {
-          setBackendSummary(summary);
-        } else {
-          setBackendSummary(null);
-          setFallbackNotice('Showing cached local dashboard data because backend analytics are unavailable.');
-        }
-
-        setInteractions(analyticsInteractions.events);
-
-        storage.cacheProfiles(effectiveProfiles);
-      } catch (error) {
-        console.warn('[InstructorDashboard] Failed to load backend analytics, using local fallback:', error);
-        setBackendSummary(null);
-        setFallbackNotice('Showing cached local dashboard data because backend analytics could not be loaded.');
-      } finally {
-        setIsDataLoading(false);
-      }
-    };
-
     if (isRoleLoading || isStudent) {
       return;
     }
 
-    void loadData();
-  }, [authUser?.role, backendProfiles, isBackendAvailable, isRoleLoading, isStudent]);
+    const allProfiles = storage.getAllProfiles().map(p => storage.getProfile(p.id)).filter(Boolean) as LearnerProfile[];
+    const allInteractions = storage.getAllInteractions();
+    const effectiveProfiles = backendProfiles.length > 0 ? backendProfiles : allProfiles;
+
+    setProfiles(effectiveProfiles);
+    if (interactionsStatus !== 'ready') {
+      setInteractions(allInteractions);
+    }
+    if (backendProfiles.length > 0) {
+      storage.cacheProfiles(backendProfiles);
+    }
+    setIsDataLoading(false);
+  }, [backendProfiles, interactionsStatus, isRoleLoading, isStudent]);
+
+  useEffect(() => {
+    if (summaryRetryTimeoutRef.current) {
+      clearTimeout(summaryRetryTimeoutRef.current);
+      summaryRetryTimeoutRef.current = null;
+    }
+
+    if (!isBackendAvailable || authUser?.role !== 'instructor' || isRoleLoading || isStudent) {
+      setSummaryStatus('idle');
+      setBackendSummary(null);
+      return;
+    }
+
+    let cancelled = false;
+    let retryAttempt = 0;
+
+    const loadSummary = async () => {
+      if (cancelled) return;
+
+      setSummaryStatus('loading');
+
+      try {
+        const summary = await storageClient.getInstructorAnalyticsSummary();
+        if (cancelled) return;
+
+        if (summary) {
+          setBackendSummary(summary);
+          setSummaryStatus('ready');
+          return;
+        }
+
+        setBackendSummary(null);
+        setSummaryStatus('error');
+      } catch (error) {
+        if (cancelled) return;
+        console.warn('[InstructorDashboard] Failed to load backend summary, continuing with cached data:', error);
+        setSummaryStatus('error');
+      }
+
+      const delay = ANALYTICS_RETRY_DELAYS_MS[Math.min(retryAttempt, ANALYTICS_RETRY_DELAYS_MS.length - 1)];
+      retryAttempt += 1;
+      summaryRetryTimeoutRef.current = setTimeout(loadSummary, delay);
+    };
+
+    void loadSummary();
+
+    return () => {
+      cancelled = true;
+      if (summaryRetryTimeoutRef.current) {
+        clearTimeout(summaryRetryTimeoutRef.current);
+        summaryRetryTimeoutRef.current = null;
+      }
+    };
+  }, [authUser?.learnerId, authUser?.role, isBackendAvailable, isRoleLoading, isStudent]);
+
+  useEffect(() => {
+    if (interactionsRetryTimeoutRef.current) {
+      clearTimeout(interactionsRetryTimeoutRef.current);
+      interactionsRetryTimeoutRef.current = null;
+    }
+
+    if (!isBackendAvailable || authUser?.role !== 'instructor' || isRoleLoading || isStudent) {
+      setInteractionsStatus('idle');
+      return;
+    }
+
+    let cancelled = false;
+    let retryAttempt = 0;
+
+    const loadInteractions = async () => {
+      if (cancelled) return;
+
+      setInteractionsStatus('loading');
+
+      try {
+        const analyticsInteractions = await storageClient.getInstructorAnalyticsInteractions({
+          limit: MAX_INSTRUCTOR_ANALYTICS_INTERACTIONS,
+          offset: 0,
+        });
+
+        if (cancelled) return;
+
+        const hasVerifiedEmptyState =
+          analyticsInteractions.events.length === 0
+          && analyticsInteractions.total === 0
+          && backendSummary?.totalInteractions === 0;
+
+        if (analyticsInteractions.events.length > 0 || hasVerifiedEmptyState) {
+          setInteractions(analyticsInteractions.events);
+          setInteractionsStatus('ready');
+          return;
+        }
+
+        setInteractionsStatus('error');
+
+        const delay = ANALYTICS_RETRY_DELAYS_MS[Math.min(retryAttempt, ANALYTICS_RETRY_DELAYS_MS.length - 1)];
+        retryAttempt += 1;
+        interactionsRetryTimeoutRef.current = setTimeout(loadInteractions, delay);
+      } catch (error) {
+        if (cancelled) return;
+        console.warn('[InstructorDashboard] Failed to load backend interactions, continuing with cached data:', error);
+        setInteractionsStatus('error');
+
+        const delay = ANALYTICS_RETRY_DELAYS_MS[Math.min(retryAttempt, ANALYTICS_RETRY_DELAYS_MS.length - 1)];
+        retryAttempt += 1;
+        interactionsRetryTimeoutRef.current = setTimeout(loadInteractions, delay);
+      }
+    };
+
+    void loadInteractions();
+
+    return () => {
+      cancelled = true;
+      if (interactionsRetryTimeoutRef.current) {
+        clearTimeout(interactionsRetryTimeoutRef.current);
+        interactionsRetryTimeoutRef.current = null;
+      }
+    };
+  }, [authUser?.learnerId, authUser?.role, backendSummary?.totalInteractions, isBackendAvailable, isRoleLoading, isStudent]);
 
   useEffect(() => {
     if (isBackendAvailable) {
@@ -308,6 +398,21 @@ export function InstructorDashboard() {
 
   const hasProfileData = normalizedProfiles.length > 0;
   const showDemoData = DEMO_MODE && !authUser && !isBackendAvailable && !hasProfileData && interactions.length === 0;
+  const fallbackNotice = useMemo(() => {
+    const shouldShowFallback = isBackendAvailable
+      && authUser?.role === 'instructor'
+      && (summaryStatus !== 'ready' || interactionsStatus !== 'ready');
+
+    if (!shouldShowFallback) {
+      return null;
+    }
+
+    if (summaryStatus === 'error' || interactionsStatus === 'error') {
+      return 'Showing cached local dashboard data because some backend analytics could not be loaded. Missing analytics will continue syncing in the background.';
+    }
+
+    return 'Showing cached local dashboard data while additional backend analytics are still loading.';
+  }, [authUser?.role, interactionsStatus, isBackendAvailable, summaryStatus]);
   const dashboardRows = useMemo(() => {
     if (hasProfileData) {
       return buildInstructorLearnerRows(normalizedProfiles);
@@ -699,7 +804,7 @@ export function InstructorDashboard() {
     setShowResetConfirm(false);
   };
 
-  if (isRoleLoading || isDataLoading || isProfilesLoading) {
+  if (isRoleLoading || isDataLoading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto space-y-6">

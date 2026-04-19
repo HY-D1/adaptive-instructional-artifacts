@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -133,6 +133,14 @@ const backendProfiles = [
   },
 ];
 
+const analyticsEvent = {
+  id: 'evt-1',
+  learnerId: 'learner-1',
+  timestamp: Date.now(),
+  eventType: 'execution',
+  problemId: 'problem-1',
+};
+
 describe('ResearchDashboard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -173,8 +181,8 @@ describe('ResearchDashboard', () => {
     });
     mockStorageClient.getAllProfiles.mockResolvedValue(backendProfiles);
     mockStorageClient.getInstructorAnalyticsInteractions.mockResolvedValue({
-      events: [],
-      total: 0,
+      events: [analyticsEvent],
+      total: 3,
       limit: 2000,
       offset: 0,
       hasMore: false,
@@ -200,4 +208,50 @@ describe('ResearchDashboard', () => {
 
     expect(mockStorage.saveProfile).not.toHaveBeenCalled();
   });
+
+  it('renders available data when summary analytics are unavailable', async () => {
+    mockStorageClient.getInstructorAnalyticsSummary.mockResolvedValue(null);
+
+    render(<ResearchDashboard />);
+
+    expect(await screen.findByText('Research Dashboard')).toBeTruthy();
+    expect(screen.getByText(/Showing cached local research data because some backend analytics could not be loaded\./)).toBeTruthy();
+    expect(screen.queryByText('Dashboard Unavailable')).toBeNull();
+  });
+
+  it('retries missing summary analytics in the background and clears the fallback notice after recovery', async () => {
+    mockStorageClient.getInstructorAnalyticsSummary
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        sections: [{ id: 'section-1', name: 'Section 1', studentSignupCode: 'ABC123' }],
+        totalStudents: 1,
+        activeToday: 1,
+        avgConceptCoverage: 17,
+        avgConceptCoverageCount: 1,
+        totalInteractions: 3,
+        totalTextbookUnits: 0,
+        interactionsByType: { execution: 3 },
+        recentActivity: {
+          interactionLast24Hours: 3,
+          interactionLast7Days: 3,
+          interactionLast30Days: 3,
+          activeLearnersLast24Hours: 1,
+          activeLearnersLast7Days: 1,
+          activeLearnersLast30Days: 1,
+        },
+      });
+
+    render(<ResearchDashboard />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Research Dashboard')).toBeTruthy();
+    });
+    expect(screen.getByText(/Showing cached local research data because some backend analytics could not be loaded\./)).toBeTruthy();
+
+    await new Promise((resolve) => setTimeout(resolve, 2100));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Showing cached local research data because some backend analytics could not be loaded\./)).toBeNull();
+    });
+  }, 10000);
 });

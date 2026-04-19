@@ -181,6 +181,7 @@ import {
 } from 'lucide-react';
 import { storage } from '../../../lib/storage';
 import * as storageClient from '../../../lib/api/storage-client';
+import type { InstructorAnalyticsSummary } from '../../../lib/api/storage-client';
 import { InteractionEvent, LearnerProfile, ExperimentCondition, PdfIndexDocument } from '../../../types';
 import { type ReflectionQualityScore } from '../../../lib/content/self-explanation-scorer';
 import { orchestrator, ReplayDecisionPoint, AutoEscalationMode } from '../../../lib/adaptive-orchestrator';
@@ -236,6 +237,31 @@ const TIME_RANGES = [
   { value: '30d', label: 'Last 30 Days', days: 30 },
   { value: '90d', label: 'Last 90 Days', days: 90 }
 ];
+
+const ANALYTICS_RETRY_DELAYS_MS = [2000, 5000, 15000] as const;
+
+type AnalyticsSliceStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+function normalizeLearnerProfile(profile: LearnerProfile): LearnerProfile {
+  return {
+    ...profile,
+    conceptsCovered: profile.conceptsCovered instanceof Set ? profile.conceptsCovered : new Set(profile.conceptsCovered || []),
+    conceptCoverageEvidence: profile.conceptCoverageEvidence instanceof Map
+      ? profile.conceptCoverageEvidence
+      : new Map(Object.entries(profile.conceptCoverageEvidence || {})),
+    errorHistory: profile.errorHistory instanceof Map
+      ? profile.errorHistory
+      : new Map(Object.entries(profile.errorHistory || {})),
+  };
+}
+
+function getCachedResearchProfiles(): LearnerProfile[] {
+  return storage
+    .getAllProfiles()
+    .map((profile: { id: string }) => storage.getProfile(profile.id))
+    .filter((profile): profile is LearnerProfile => Boolean(profile))
+    .map((profile) => normalizeLearnerProfile(profile));
+}
 
 // Chart colors
 const CHART_COLORS = {
@@ -313,14 +339,21 @@ export function ResearchDashboard() {
   
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
-  const [hydrationError, setHydrationError] = useState<{
-    type: 'auth' | 'backend' | 'scope_empty' | 'network';
-    message: string;
-  } | null>(null);
-  const [scopeEmpty, setScopeEmpty] = useState(false);
-  const [dataNotice, setDataNotice] = useState<string | null>(null);
+  const [backendSummary, setBackendSummary] = useState<InstructorAnalyticsSummary | null>(null);
+  const [profilesStatus, setProfilesStatus] = useState<AnalyticsSliceStatus>('idle');
+  const [summaryStatus, setSummaryStatus] = useState<AnalyticsSliceStatus>('idle');
+  const [interactionsStatus, setInteractionsStatus] = useState<AnalyticsSliceStatus>('idle');
+  const [interactionTotal, setInteractionTotal] = useState<number | null>(null);
+  const [backendHealthOk, setBackendHealthOk] = useState<boolean | null>(null);
+  const [refreshNonce, setRefreshNonce] = useState(0);
   const [selectedMasteryLearner, setSelectedMasteryLearner] = useState<string>('');
   const uiActorId = storage.getUserProfile()?.id || 'unknown';
+  const backendConfigured = storageClient.isBackendAvailable();
+  const hasInitializedRefreshRef = useRef(false);
+  const activeTimeRange = useMemo(
+    () => TIME_RANGES.find((range) => range.value === timeRange),
+    [timeRange],
+  );
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 500);
@@ -328,10 +361,13 @@ export function ResearchDashboard() {
   }, []);
 
   useEffect(() => {
-    // Detect hosted mode on mount
     setHostedMode(isHostedMode());
-    void loadData();
-  }, [timeRange]);
+    if (!hasInitializedRefreshRef.current) {
+      hasInitializedRefreshRef.current = true;
+      return;
+    }
+    setRefreshNonce((previous) => previous + 1);
+  }, [timeRange, uiActorId]);
 
   useEffect(() => {
     storage.setPolicyReplayMode(policyReplayMode);
@@ -362,102 +398,29 @@ export function ResearchDashboard() {
     );
   }, [uiActorId, selectedLearner, timeRange, activeTab]);
 
-  const loadData = async () => {
-    setHydrationError(null);
-    setScopeEmpty(false);
-    setDataNotice(null);
+  const loadData = useCallback(() => {
+    setRefreshNonce((previous) => previous + 1);
+  }, []);
 
-    try {
-      const [summary, apiProfiles] = await Promise.all([
-        storageClient.getInstructorAnalyticsSummary(),
-        storageClient.getAllProfiles(),
-      ]);
-
-      if (!summary) {
-        const healthy = await storageClient.fetchBackendHealth();
-        if (!healthy) {
-          setHydrationError({ type: 'network', message: 'Backend unavailable' });
-        } else {
-          setHydrationError({ type: 'backend', message: 'Instructor analytics unavailable' });
-        }
-        setInteractions([]);
-        setProfiles([]);
-        return;
-      }
-
-      if (summary.totalStudents === 0) {
-        setScopeEmpty(true);
-        setInteractions([]);
-        setProfiles([]);
-        return;
-      }
-
-      // Use API profiles directly (already scoped to instructor's sections)
-      const frontendProfiles: LearnerProfile[] = apiProfiles.map(p => ({
-        ...p,
-        conceptsCovered: p.conceptsCovered instanceof Set ? p.conceptsCovered : new Set(p.conceptsCovered || []),
-        conceptCoverageEvidence: p.conceptCoverageEvidence instanceof Map
-          ? p.conceptCoverageEvidence
-          : new Map(Object.entries(p.conceptCoverageEvidence || {})),
-        errorHistory: p.errorHistory instanceof Map
-          ? p.errorHistory
-          : new Map(Object.entries(p.errorHistory || {})),
-      }));
-      setProfiles(frontendProfiles);
-
-      const allInteractions: InteractionEvent[] = [];
-      const range = TIME_RANGES.find(r => r.value === timeRange);
-      const start = range?.days
-        ? new Date(Date.now() - range.days * 24 * 60 * 60 * 1000)
-        : undefined;
-      const pageSize = 2000;
-      const maxInteractions = 10000;
-      let offset = 0;
-      let total = 0;
-      let hasMore = true;
-
-      while (hasMore && allInteractions.length < maxInteractions) {
-        const remaining = maxInteractions - allInteractions.length;
-        const result = await storageClient.getInstructorAnalyticsInteractions({
-          start,
-          limit: Math.min(pageSize, remaining),
-          offset,
-        });
-        allInteractions.push(...result.events);
-        total = result.total;
-        hasMore = result.hasMore;
-        offset += result.events.length;
-        if (result.events.length === 0) {
-          break;
-        }
-      }
-
-      setInteractions(allInteractions);
-
-      if (total > allInteractions.length) {
-        setDataNotice(
-          `Loaded ${allInteractions.length.toLocaleString()} of ${total.toLocaleString()} interactions for ${range?.label || 'the selected range'}. Use export for full history.`,
-        );
-      }
-
-      storage.cacheProfiles(frontendProfiles);
-
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      setHydrationError({ type: 'backend', message });
-      console.error('[ResearchDashboard] Data load failed:', error);
-
-      // Fallback to localStorage
-      setDataNotice('Showing cached local research data because backend analytics could not be loaded.');
-      setInteractions(storage.getAllInteractions());
-      const loadedProfiles = storage
-        .getAllProfiles()
-        .map((profile: { id: string }) => storage.getProfile(profile.id))
-        .filter((profile): profile is LearnerProfile => Boolean(profile));
-      setProfiles(loadedProfiles);
+  const refreshBackendHealth = useCallback(async () => {
+    if (!backendConfigured) {
+      setBackendHealthOk(false);
+      return false;
     }
 
+    const healthy = await storageClient.fetchBackendHealth();
+    const isHealthy = Boolean(healthy);
+    setBackendHealthOk(isHealthy);
+    return isHealthy;
+  }, [backendConfigured]);
+
+  useEffect(() => {
+    setBackendHealthOk(backendConfigured ? null : false);
+    setInteractionTotal(null);
+    setProfiles(getCachedResearchProfiles());
+    setInteractions(storage.getAllInteractions());
     setPolicyReplayMode(storage.getPolicyReplayMode());
+
     const pdfIndex = storage.getPdfIndex();
     if (pdfIndex) {
       setPdfIndexSummary(formatPdfIndexSummary(pdfIndex));
@@ -466,10 +429,207 @@ export function ResearchDashboard() {
     } else {
       resetPdfIndexState('idle');
     }
-    if (!selectedTraceLearner && profiles[0]) {
-      setSelectedTraceLearner(profiles[0].id);
+  }, [backendConfigured, refreshNonce, uiActorId]);
+
+  useEffect(() => {
+    if (!backendConfigured) {
+      setSummaryStatus('idle');
+      return;
     }
-  };
+
+    let cancelled = false;
+    let retryAttempt = 0;
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const loadSummary = async () => {
+      if (cancelled) return;
+
+      setSummaryStatus('loading');
+
+      try {
+        const summary = await storageClient.getInstructorAnalyticsSummary();
+        if (cancelled) return;
+
+        if (summary) {
+          setBackendSummary(summary);
+          setSummaryStatus('ready');
+          setBackendHealthOk(true);
+          return;
+        }
+
+        setSummaryStatus('error');
+      } catch (error) {
+        if (cancelled) return;
+        console.error('[ResearchDashboard] Failed to load instructor summary:', error);
+        setSummaryStatus('error');
+      }
+
+      await refreshBackendHealth();
+      if (cancelled) return;
+
+      const delay = ANALYTICS_RETRY_DELAYS_MS[Math.min(retryAttempt, ANALYTICS_RETRY_DELAYS_MS.length - 1)];
+      retryAttempt += 1;
+      retryTimeout = setTimeout(loadSummary, delay);
+    };
+
+    void loadSummary();
+
+    return () => {
+      cancelled = true;
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
+    };
+  }, [backendConfigured, refreshBackendHealth, refreshNonce, uiActorId]);
+
+  useEffect(() => {
+    if (!backendConfigured) {
+      setProfilesStatus('idle');
+      return;
+    }
+
+    let cancelled = false;
+    let retryAttempt = 0;
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const loadProfiles = async () => {
+      if (cancelled) return;
+
+      setProfilesStatus('loading');
+
+      try {
+        const apiProfiles = await storageClient.getAllProfiles();
+        if (cancelled) return;
+
+        const frontendProfiles = apiProfiles.map((profile) => normalizeLearnerProfile(profile));
+        const confirmedEmptyScope = frontendProfiles.length === 0 && backendSummary?.totalStudents === 0;
+
+        if (frontendProfiles.length > 0 || confirmedEmptyScope) {
+          setProfiles(frontendProfiles);
+          if (frontendProfiles.length > 0) {
+            storage.cacheProfiles(frontendProfiles);
+          }
+          setProfilesStatus('ready');
+          setBackendHealthOk(true);
+          return;
+        }
+
+        setProfilesStatus('error');
+      } catch (error) {
+        if (cancelled) return;
+        console.error('[ResearchDashboard] Failed to load instructor profiles:', error);
+        setProfilesStatus('error');
+      }
+
+      await refreshBackendHealth();
+      if (cancelled) return;
+
+      const delay = ANALYTICS_RETRY_DELAYS_MS[Math.min(retryAttempt, ANALYTICS_RETRY_DELAYS_MS.length - 1)];
+      retryAttempt += 1;
+      retryTimeout = setTimeout(loadProfiles, delay);
+    };
+
+    void loadProfiles();
+
+    return () => {
+      cancelled = true;
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
+    };
+  }, [backendConfigured, backendSummary?.totalStudents, refreshBackendHealth, refreshNonce, uiActorId]);
+
+  useEffect(() => {
+    if (!backendConfigured) {
+      setInteractionsStatus('idle');
+      return;
+    }
+
+    let cancelled = false;
+    let retryAttempt = 0;
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const loadInteractions = async () => {
+      if (cancelled) return;
+
+      setInteractionsStatus('loading');
+
+      try {
+        const allInteractions: InteractionEvent[] = [];
+        const start = activeTimeRange?.days
+          ? new Date(Date.now() - activeTimeRange.days * 24 * 60 * 60 * 1000)
+          : undefined;
+        const pageSize = 2000;
+        const maxInteractions = 10000;
+        let offset = 0;
+        let total = 0;
+        let hasMore = true;
+
+        while (hasMore && allInteractions.length < maxInteractions) {
+          const remaining = maxInteractions - allInteractions.length;
+          const result = await storageClient.getInstructorAnalyticsInteractions({
+            start,
+            limit: Math.min(pageSize, remaining),
+            offset,
+          });
+
+          if (cancelled) return;
+
+          allInteractions.push(...result.events);
+          total = result.total;
+          hasMore = result.hasMore;
+          offset += result.events.length;
+
+          if (result.events.length === 0) {
+            break;
+          }
+        }
+
+        const confirmedEmptyInteractions =
+          allInteractions.length === 0
+          && total === 0
+          && (backendSummary?.totalInteractions === 0 || backendSummary?.totalStudents === 0);
+
+        if (allInteractions.length > 0 || confirmedEmptyInteractions) {
+          setInteractions(allInteractions);
+          setInteractionTotal(total);
+          setInteractionsStatus('ready');
+          setBackendHealthOk(true);
+          return;
+        }
+
+        setInteractionsStatus('error');
+      } catch (error) {
+        if (cancelled) return;
+        console.error('[ResearchDashboard] Failed to load instructor interactions:', error);
+        setInteractionsStatus('error');
+      }
+
+      await refreshBackendHealth();
+      if (cancelled) return;
+
+      const delay = ANALYTICS_RETRY_DELAYS_MS[Math.min(retryAttempt, ANALYTICS_RETRY_DELAYS_MS.length - 1)];
+      retryAttempt += 1;
+      retryTimeout = setTimeout(loadInteractions, delay);
+    };
+
+    void loadInteractions();
+
+    return () => {
+      cancelled = true;
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+      }
+    };
+  }, [
+    activeTimeRange?.days,
+    backendConfigured,
+    backendSummary?.totalInteractions,
+    backendSummary?.totalStudents,
+    refreshBackendHealth,
+    refreshNonce,
+    uiActorId,
+  ]);
 
   // Helper to reset PDF index state (extracted to avoid duplication)
   const resetPdfIndexState = (status: 'idle' | 'error', errorMessage?: string) => {
@@ -499,6 +659,84 @@ export function ResearchDashboard() {
       setSelectedTraceLearner(safeProfiles[0]?.id || '');
     }
   }, [profiles, selectedTraceLearner]);
+
+  const hasUsableData = profiles.length > 0 || interactions.length > 0;
+  const scopeEmpty =
+    backendConfigured
+    && summaryStatus === 'ready'
+    && backendSummary?.totalStudents === 0
+    && profiles.length === 0
+    && interactions.length === 0;
+  const hasPendingAnalytics =
+    backendConfigured
+    && (profilesStatus !== 'ready' || summaryStatus !== 'ready' || interactionsStatus !== 'ready');
+  const hydrationError = useMemo(() => {
+    if (scopeEmpty || hasUsableData) {
+      return null;
+    }
+
+    if (!backendConfigured) {
+      return { type: 'network' as const, message: 'Backend unavailable' };
+    }
+
+    if (profilesStatus === 'loading' || summaryStatus === 'loading' || interactionsStatus === 'loading') {
+      return null;
+    }
+
+    if (backendHealthOk === false) {
+      return { type: 'network' as const, message: 'Backend unavailable' };
+    }
+
+    if (profilesStatus === 'error' || summaryStatus === 'error' || interactionsStatus === 'error') {
+      return { type: 'backend' as const, message: 'Instructor analytics unavailable' };
+    }
+
+    return null;
+  }, [
+    backendConfigured,
+    backendHealthOk,
+    hasUsableData,
+    interactionsStatus,
+    profilesStatus,
+    scopeEmpty,
+    summaryStatus,
+  ]);
+  const dataNotice = useMemo(() => {
+    const messages: string[] = [];
+
+    if (hasUsableData && hasPendingAnalytics) {
+      if (profilesStatus === 'error' || summaryStatus === 'error' || interactionsStatus === 'error') {
+        messages.push('Showing cached local research data because some backend analytics could not be loaded. Missing analytics will continue syncing in the background.');
+      } else {
+        messages.push('Showing cached local research data while additional backend analytics are still loading.');
+      }
+    }
+
+    if (interactionTotal !== null && interactionTotal > interactions.length) {
+      messages.push(
+        `Loaded ${interactions.length.toLocaleString()} of ${interactionTotal.toLocaleString()} interactions for ${activeTimeRange?.label || 'the selected range'}. Use export for full history.`,
+      );
+    }
+
+    return messages.length > 0 ? messages.join(' ') : null;
+  }, [
+    activeTimeRange?.label,
+    hasPendingAnalytics,
+    hasUsableData,
+    interactionTotal,
+    interactions.length,
+    interactionsStatus,
+    profilesStatus,
+    summaryStatus,
+  ]);
+  const shouldShowSkeleton =
+    isLoading
+    || (
+      !hasUsableData
+      && !scopeEmpty
+      && !hydrationError
+      && (profilesStatus === 'loading' || summaryStatus === 'loading' || interactionsStatus === 'loading')
+    );
 
   // Filter interactions by time range
   const getFilteredByTimeRange = useCallback((data: InteractionEvent[]) => {
@@ -1577,7 +1815,7 @@ export function ResearchDashboard() {
     }
   })();
 
-  if (isLoading) {
+  if (shouldShowSkeleton) {
     return (
       <div className="space-y-6 p-6">
         <Skeleton className="h-32" />

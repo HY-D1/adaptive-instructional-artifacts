@@ -85,11 +85,29 @@ router.get('/analytics/summary', async (req: Request, res: Response) => {
       getOwnedSectionsByInstructor(instructorId),
     ]);
 
+    const withSummaryDiagnostics = async <T>(
+      helperName: string,
+      operation: () => Promise<T>,
+    ): Promise<T> => {
+      try {
+        return await operation();
+      } catch (error) {
+        console.error('[instructor/analytics/summary/helper_failed]', {
+          instructorId,
+          helperName,
+          learnerCount: learnerIds.length,
+          durationMs: Date.now() - startedAt,
+          error: error instanceof Error ? error.message : 'unknown',
+        });
+        throw error;
+      }
+    };
+
     const [interactionAggregates, textbookCounts, activeLearnerCounts, profiles] = await Promise.all([
-      getInteractionAggregatesByUsers(learnerIds),
-      getTextbookUnitCountsByUsers(learnerIds),
-      getActiveLearnerCountsByUsers(learnerIds),
-      getLearnerProfilesByIds(learnerIds),
+      withSummaryDiagnostics('getInteractionAggregatesByUsers', () => getInteractionAggregatesByUsers(learnerIds)),
+      withSummaryDiagnostics('getTextbookUnitCountsByUsers', () => getTextbookUnitCountsByUsers(learnerIds)),
+      withSummaryDiagnostics('getActiveLearnerCountsByUsers', () => getActiveLearnerCountsByUsers(learnerIds)),
+      withSummaryDiagnostics('getLearnerProfilesByIds', () => getLearnerProfilesByIds(learnerIds)),
     ]);
 
     let totalTextbookUnits = 0;

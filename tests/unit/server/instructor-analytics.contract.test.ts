@@ -219,4 +219,44 @@ describe('instructor analytics contract', () => {
       error: 'Access denied: learner not in your section',
     });
   });
+
+  it('logs the failing summary helper before returning a 500', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { instructorRouter } = await import('../../../apps/server/src/routes/instructor');
+    const getSummary = getRouteHandler(
+      instructorRouter as unknown as {
+        stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }>;
+      },
+      'get',
+      '/analytics/summary',
+    );
+
+    getInteractionAggregatesByUsersMock.mockRejectedValue(new Error('aggregate query failed'));
+    getTextbookUnitCountsByUsersMock.mockResolvedValue(new Map());
+    getActiveLearnerCountsByUsersMock.mockResolvedValue({
+      last24Hours: 0,
+      last7Days: 0,
+      last30Days: 0,
+    });
+    getLearnerProfilesByIdsMock.mockResolvedValue([]);
+
+    const result = await invokeGetHandler(getSummary, '/analytics/summary');
+
+    expect(result.status).toBe(500);
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      '[instructor/analytics/summary/helper_failed]',
+      expect.objectContaining({
+        instructorId: 'instructor-1',
+        helperName: 'getInteractionAggregatesByUsers',
+        learnerCount: 2,
+        error: 'aggregate query failed',
+      }),
+    );
+    expect(result.json).toEqual({
+      success: false,
+      error: 'Failed to fetch instructor analytics summary',
+    });
+
+    consoleErrorSpy.mockRestore();
+  });
 });
