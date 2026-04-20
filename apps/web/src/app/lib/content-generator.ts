@@ -7,7 +7,7 @@ import {
   PdfCitation
 } from '../types';
 import { createInputHash, stableStringify } from './utils/hash';
-import { generateWithLLM } from './llm-client';
+import { generateWithLLM } from './api/llm-client';
 import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
 import { renderPrompt, TemplateId } from '../prompts/templates';
 import { storage } from './storage';
@@ -484,7 +484,9 @@ async function buildUnitFromStructuredOutput(
     sourceInteractionIds: Array.from(new Set(options.triggerInteractionIds)),
     lastErrorSubtypeId: options.bundle.lastErrorSubtypeId,
     provenance: {
+      provider: 'ollama',
       model,
+      sourceMix: [],
       params,
       templateId: options.templateId,
       inputHash,
@@ -561,7 +563,9 @@ function buildFallbackUnit(
     sourceInteractionIds: Array.from(new Set(options.triggerInteractionIds)),
     lastErrorSubtypeId: options.bundle.lastErrorSubtypeId,
     provenance: {
+      provider: 'ollama',
       model,
+      sourceMix: [],
       params,
       templateId: options.templateId,
       inputHash,

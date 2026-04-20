@@ -42,6 +42,8 @@ export async function saveHintToTextbook(
     lastErrorSubtypeId: errorSubtype,
     problemId, // Store which problem this hint belongs to
     provenance: {
+      provider: 'ollama',
+      sourceMix: ['llm-local'],
       templateId: `adaptive-hint-rung-${rung}`,
       model: 'llm-local',
       params: { temperature: 0.7, top_p: 0.9, stream: false, timeoutMs: 30000 },

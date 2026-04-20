@@ -76,7 +76,10 @@ export async function generateEnhancedHint(options: HintGenerationOptions): Prom
     return buildRefinedHint(rung, refinedHintResult, retrievalSignals, retrievalBundle);
   }
 
-  const refinedFallbackReason = mergeFallbackReasons(llmFallbackReason, refinedHintResult.rejectReason);
+  const refinedFallbackReason = mergeFallbackReasons(
+    llmFallbackReason,
+    'rejectReason' in refinedHintResult ? refinedHintResult.rejectReason : undefined
+  );
 
   // Check retrieval confidence - if too low, use fallback
   if (retrievalSignals.retrievalConfidence < MIN_RETRIEVAL_CONFIDENCE) {

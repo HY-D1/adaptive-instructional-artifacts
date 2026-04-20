@@ -18,6 +18,7 @@ import {
   generatePaperSummary,
   comparisonsToCsv,
   type DependencyMetrics,
+  type PolicyComparisonSummary,
 } from './dependency-metrics';
 import type { InteractionEvent } from '../../types';
 
@@ -318,10 +319,11 @@ describe('generatePaperSummary', () => {
     expect(summary.generatedAt).toBeDefined();
     expect(summary.formula).toContain('HDI =');
     expect(summary.componentWeights).toBeDefined();
-    expect(summary.policies).toHaveLength(2);
-    expect(summary.policies[0]).toHaveProperty('policy');
-    expect(summary.policies[0]).toHaveProperty('explanations');
-    expect(summary.policies[0]).toHaveProperty('hdi');
+    const policies = summary.policies as Array<Record<string, unknown>>;
+    expect(policies).toHaveLength(2);
+    expect(policies[0]).toHaveProperty('policy');
+    expect(policies[0]).toHaveProperty('explanations');
+    expect(policies[0]).toHaveProperty('hdi');
   });
 });
 

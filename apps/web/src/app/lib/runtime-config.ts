@@ -316,7 +316,7 @@ export async function checkResearchReadiness(): Promise<ResearchReadiness> {
   const persistenceEndpoint = `${apiUrl}/system/persistence-status`;
   
   const [healthResult, persistenceResult] = await Promise.all([
-    fetchBackendHealth(apiBase),
+    fetchBackendHealth(apiBase!),
     checkPersistenceStatus(apiUrl),
   ]);
   

@@ -181,7 +181,7 @@ export function importAllData(
   }
 
   // Import reinforcement schedules
-  if (backup.reinforcementSchedules?.length > 0) {
+  if ((backup.reinforcementSchedules?.length ?? 0) > 0) {
     try {
       const result = safeSet(
         'sql-learning-reinforcement-schedules',
@@ -211,7 +211,7 @@ export function importAllData(
   }
 
   // Import settings
-  if (backup.settings?.lastActive) {
+  if (backup.settings?.lastActive && typeof backup.settings.lastActive === 'string') {
     localStorage.setItem('sql-adapt-last-active', backup.settings.lastActive);
   }
   if (backup.settings?.sessionConfig) {

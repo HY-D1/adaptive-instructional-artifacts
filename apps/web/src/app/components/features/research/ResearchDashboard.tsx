@@ -1726,7 +1726,7 @@ export function ResearchDashboard() {
   }, [filteredInteractions]);
 
   // Normalization helpers for safe data access
-  const safeArray = <T,>(value: unknown): T[] => Array.isArray(value) ? value : [];
+  const safeArray = <T,>(value: T[] | unknown): T[] => Array.isArray(value) ? value as T[] : [];
   const safeRecord = (value: unknown): Record<string, number> => {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       return value as Record<string, number>;
@@ -1740,14 +1740,14 @@ export function ResearchDashboard() {
   
   // Normalize week5Analytics to prevent crashes with empty/partial/legacy data
   const safeWeek5Analytics = {
-    week5Events: safeArray(week5Analytics.week5Events),
-    profileDistributionData: safeArray(week5Analytics.profileDistributionData),
-    banditArmData: safeArray(week5Analytics.banditArmData),
-    banditRewardData: safeArray(week5Analytics.banditRewardData),
-    hdiBins: safeArray(week5Analytics.hdiBins),
-    highHDIAlerts: safeArray(week5Analytics.highHDIAlerts),
-    profileEffectivenessData: safeArray(week5Analytics.profileEffectivenessData),
-    conditionStats: safeArray(week5Analytics.conditionStats),
+    week5Events: safeArray<InteractionEvent>(week5Analytics.week5Events),
+    profileDistributionData: safeArray<ProfileDistributionData>(week5Analytics.profileDistributionData),
+    banditArmData: safeArray<BanditArmData>(week5Analytics.banditArmData),
+    banditRewardData: safeArray<BanditRewardData>(week5Analytics.banditRewardData),
+    hdiBins: safeArray<{ range: string; min: number; max: number; count: number }>(week5Analytics.hdiBins),
+    highHDIAlerts: safeArray<HighHDIAlert>(week5Analytics.highHDIAlerts),
+    profileEffectivenessData: safeArray<ProfileEffectivenessData>(week5Analytics.profileEffectivenessData),
+    conditionStats: safeArray<{ condition: string; sessionCount: number; learnerCount: number; avgHDI: number; avgHdiDisplay: string }>(week5Analytics.conditionStats),
     reinforcementStats: week5Analytics.reinforcementStats ? {
       totalScheduled: safeNumber(week5Analytics.reinforcementStats.totalScheduled),
       totalShown: safeNumber(week5Analytics.reinforcementStats.totalShown),
@@ -1755,7 +1755,7 @@ export function ResearchDashboard() {
       responseRate: safeNumber(week5Analytics.reinforcementStats.responseRate),
       averageRetentionScore: safeNumber(week5Analytics.reinforcementStats.averageRetentionScore),
     } : null,
-    reinforcementTimeline: safeArray(week5Analytics.reinforcementTimeline),
+    reinforcementTimeline: safeArray<ReinforcementDataPoint>(week5Analytics.reinforcementTimeline),
     qualityStats: week5Analytics.qualityStats ? {
       averageQuality: safeNumber(week5Analytics.qualityStats.averageQuality),
       totalScored: safeNumber(week5Analytics.qualityStats.totalScored),
@@ -1781,7 +1781,7 @@ export function ResearchDashboard() {
         medium: safeNumber(week5Analytics.violationStats?.bySeverity?.medium),
         high: safeNumber(week5Analytics.violationStats?.bySeverity?.high),
       },
-      recent: safeArray(week5Analytics.violationStats?.recent),
+      recent: safeArray<{ conceptAttempted: string; missingPrerequisites: string[]; severity: 'low' | 'medium' | 'high'; timestamp: number; learnerId: string }>(week5Analytics.violationStats?.recent),
     },
   };
 
@@ -3214,34 +3214,36 @@ export function ResearchDashboard() {
             {/* Component 10: Knowledge Consolidation Analytics */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Reinforcement Stats Overview */}
-              <Card className="p-6">
-                <h3 className="font-semibold mb-4 flex items-center gap-2">
-                  <BookOpen className="size-5 text-blue-600" />
-                  Reinforcement Overview
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-600 mb-1">Total Scheduled</p>
-                    <p className="text-2xl font-bold text-blue-900">{safeWeek5Analytics.reinforcementStats.totalScheduled}</p>
+              {safeWeek5Analytics.reinforcementStats && (
+                <Card className="p-6">
+                  <h3 className="font-semibold mb-4 flex items-center gap-2">
+                    <BookOpen className="size-5 text-blue-600" />
+                    Reinforcement Overview
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-blue-50 rounded-lg">
+                      <p className="text-sm text-blue-600 mb-1">Total Scheduled</p>
+                      <p className="text-2xl font-bold text-blue-900">{safeWeek5Analytics.reinforcementStats.totalScheduled}</p>
+                    </div>
+                    <div className="p-4 bg-green-50 rounded-lg">
+                      <p className="text-sm text-green-600 mb-1">Response Rate</p>
+                      <p className="text-2xl font-bold text-green-900">
+                        {(safeWeek5Analytics.reinforcementStats.responseRate * 100).toFixed(0)}%
+                      </p>
+                    </div>
+                    <div className="p-4 bg-purple-50 rounded-lg">
+                      <p className="text-sm text-purple-600 mb-1">Prompts Shown</p>
+                      <p className="text-2xl font-bold text-purple-900">{safeWeek5Analytics.reinforcementStats.totalShown}</p>
+                    </div>
+                    <div className="p-4 bg-amber-50 rounded-lg">
+                      <p className="text-sm text-amber-600 mb-1">Avg Retention Score</p>
+                      <p className="text-2xl font-bold text-amber-900">
+                        {(safeWeek5Analytics.reinforcementStats.averageRetentionScore * 100).toFixed(0)}%
+                      </p>
+                    </div>
                   </div>
-                  <div className="p-4 bg-green-50 rounded-lg">
-                    <p className="text-sm text-green-600 mb-1">Response Rate</p>
-                    <p className="text-2xl font-bold text-green-900">
-                      {(safeWeek5Analytics.reinforcementStats.responseRate * 100).toFixed(0)}%
-                    </p>
-                  </div>
-                  <div className="p-4 bg-purple-50 rounded-lg">
-                    <p className="text-sm text-purple-600 mb-1">Prompts Shown</p>
-                    <p className="text-2xl font-bold text-purple-900">{safeWeek5Analytics.reinforcementStats.totalShown}</p>
-                  </div>
-                  <div className="p-4 bg-amber-50 rounded-lg">
-                    <p className="text-sm text-amber-600 mb-1">Avg Retention Score</p>
-                    <p className="text-2xl font-bold text-amber-900">
-                      {(safeWeek5Analytics.reinforcementStats.averageRetentionScore * 100).toFixed(0)}%
-                    </p>
-                  </div>
-                </div>
-              </Card>
+                </Card>
+              )}
 
               {/* Retention Level Distribution */}
               <Card className="p-6">
@@ -3541,7 +3543,7 @@ function isCommandLine(line: string): boolean {
   );
 }
 
-function PdfIndexErrorDisplay({ error }: { error: string }): JSX.Element {
+function PdfIndexErrorDisplay({ error }: { error: string }): React.JSX.Element {
   const lines = error.split('\n');
   return (
     <>

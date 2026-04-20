@@ -1714,6 +1714,8 @@ export const storageClient = {
   // Interactions
   logInteraction,
   logInteractionsBatch,
+  logInteractionsBatchVerified,
+  logInteractionsBatchKeepalive,
   getInteractions,
   // Textbook
   getTextbook,

@@ -46,7 +46,7 @@ export function generateTextbookEnhancedHint(
   if (textbookUnits && textbookUnits.length > 0) {
     const unitRefs = textbookUnits
       .slice(0, 2)
-      .map((u) => `"${u.title}"`)
+      .map((u: { title: string }) => `"${u.title}"`)
       .join(' and ');
     content += ` See ${unitRefs} in your Textbook for related examples.`;
   }
@@ -62,7 +62,7 @@ export function generateTextbookEnhancedHint(
       llm: false,
       pdfPassages: retrievalSignals.retrievedChunkIds.length > 0,
     },
-    conceptIds: retrievalBundle.conceptCandidates.map((c) => c.id),
+    conceptIds: retrievalBundle.conceptCandidates.map((c: { id: string }) => c.id),
     sourceRefIds: retrievalSignals.retrievedSourceIds,
     textbookUnits: textbookUnits?.slice(0, 2),
     llmGenerated: false,

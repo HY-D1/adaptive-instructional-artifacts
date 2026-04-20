@@ -191,20 +191,7 @@ function ResearchUnsafeBlocker() {
  */
 interface ResearchReadinessBlockerProps {
   reason?: string;
-  diagnostics: {
-    envConfigured: boolean;
-    backendReachable: boolean;
-    dbMode?: string;
-    isNeon: boolean;
-    persistenceEnabled: boolean;
-    backendContractVersion?: string;
-    // Extended diagnostics
-    apiBaseUrl?: string;
-    healthEndpoint?: string;
-    persistenceEndpoint?: string;
-    healthError?: string;
-    persistenceError?: string;
-  };
+  diagnostics: ResearchReadiness['diagnostics'];
 }
 
 function ResearchReadinessBlocker({ reason, diagnostics }: ResearchReadinessBlockerProps) {
@@ -641,7 +628,12 @@ export function RootLayout() {
         {shouldBlockForReadiness && (
           <ResearchReadinessBlocker 
             reason={researchReadiness?.reason} 
-            diagnostics={researchReadiness?.diagnostics} 
+            diagnostics={researchReadiness?.diagnostics ?? {
+              envConfigured: false,
+              backendReachable: false,
+              isNeon: false,
+              persistenceEnabled: false,
+            }} 
           />
         )}
 

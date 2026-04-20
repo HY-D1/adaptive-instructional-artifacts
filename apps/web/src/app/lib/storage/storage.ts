@@ -58,6 +58,29 @@ import {
 import { reinforcementManager } from '../content/reinforcement-manager';
 import { scoreSelfExplanation, type ReflectionQualityScore } from '../content/self-explanation-scorer';
 import learnerProfileClient from '../api/learner-profile-client';
+import type {
+  ConceptCoverageEvidence,
+  GuidanceEscalationTrigger,
+  GuidanceRequestType,
+  InstructionalUnit,
+  InteractionEvent,
+  LearnerProfile,
+  LLMCacheRecord,
+  PdfCitation,
+  PdfIndexChunk,
+  PdfIndexDocument,
+  PdfIndexProvenance,
+  PdfSourceDoc,
+  ReinforcementSchedule,
+  RungLevel,
+  SaveTextbookUnitResult,
+  ScheduledPrompt,
+  SessionConfig,
+  TextbookUnitAction,
+  UnitProvenance,
+  UserProfile,
+  UserRole,
+} from '@/app/types';
 
 /**
  * StorageManager - Local storage manager for interaction traces and learner state
@@ -2337,7 +2360,9 @@ class StorageManager {
     return {
       ...(existing || {}),
       ...(incoming || {}),
+      provider: incoming?.provider || existing?.provider || 'ollama',
       model: incoming?.model || existing?.model || 'unknown',
+      sourceMix: this.mergeIds(incoming?.sourceMix, existing?.sourceMix),
       params: incoming?.params || existing?.params || { temperature: 0.7, top_p: 0.9, stream: false, timeoutMs: 30000 },
       templateId: incoming?.templateId || existing?.templateId || 'template-unknown',
       inputHash: incoming?.inputHash || existing?.inputHash || '',

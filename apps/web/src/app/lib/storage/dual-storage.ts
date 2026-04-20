@@ -1760,7 +1760,13 @@ class DualStorageManager {
     sessionEndConfirmed: boolean;
     error?: string;
   }> {
-    const result = {
+    const result: {
+      interactionsFlushed: number;
+      interactionsConfirmed: number;
+      sessionEndSent: boolean;
+      sessionEndConfirmed: boolean;
+      error?: string;
+    } = {
       interactionsFlushed: 0,
       interactionsConfirmed: 0,
       sessionEndSent: false,
@@ -2234,7 +2240,7 @@ class DualStorageManager {
       if (
         hydratedSessionId &&
         hydratedProblemId &&
-        typeof session.currentCode === 'string' &&
+        typeof session?.currentCode === 'string' &&
         session.currentCode.trim().length > 0
       ) {
         localStorageManager.savePracticeDraft(

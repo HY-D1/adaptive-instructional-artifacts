@@ -262,6 +262,8 @@ This query returns only active users who are 18 or older.
         contentFormat: 'markdown',
         sourceInteractionIds: ['demo-1-error-1', 'demo-1-escalate-1'],
         provenance: {
+          provider: 'ollama',
+          sourceMix: ['sql-engage-template'],
           model: 'sql-engage-template',
           templateId: 'where-001',
           inputHash: 'sql-engage-v3',
@@ -303,6 +305,8 @@ WHERE age BETWEEN 18 AND 65
         contentFormat: 'markdown',
         sourceInteractionIds: ['demo-1-exec-2'],
         provenance: {
+          provider: 'ollama',
+          sourceMix: ['llm-generated'],
           model: 'llm-generated',
           templateId: 'demo',
           inputHash: 'demo-hash',
@@ -352,6 +356,8 @@ WHERE o.total > 100;
         contentFormat: 'markdown',
         sourceInteractionIds: ['demo-2-error-1', 'demo-2-expl-view-1'],
         provenance: {
+          provider: 'ollama',
+          sourceMix: ['sql-engage-template'],
           model: 'sql-engage-template',
           templateId: 'join-001',
           inputHash: 'sql-engage-join-001',

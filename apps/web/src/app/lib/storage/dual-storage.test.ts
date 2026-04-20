@@ -1,4 +1,4 @@
-import type { LearnerProfile } from '@/app/types';
+import type { LearnerProfile, InteractionEvent } from '@/app/types';
 import { beforeAll, beforeEach, afterAll, describe, expect, it, vi } from 'vitest';
 
 type DualStorageModule = typeof import('./dual-storage');
@@ -154,7 +154,7 @@ describe('dual-storage critical write semantics', () => {
       problemId: 'problem-1',
       fromRung: 1,
       toRung: 2,
-      trigger: 'error',
+      trigger: 'repeated_error',
       evidence: {
         errorCount: 2,
         retryCount: 1,
@@ -1099,7 +1099,7 @@ describe('dual-storage progress persistence sync', () => {
       eventType: 'execution',
       successful: true,
       code: 'SELECT 1',
-    });
+    } as InteractionEvent);
 
     // Wait a bit to ensure no progress update was called
     await new Promise(resolve => setTimeout(resolve, 50));

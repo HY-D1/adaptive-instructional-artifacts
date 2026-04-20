@@ -65,7 +65,7 @@ describe('llm-client provider-neutral runtime', () => {
     const llmClient = await import('./llm-client');
     expect(typeof (llmClient as Record<string, unknown>).getLLMStatus).toBe('function');
 
-    const status = await (llmClient as Record<string, () => Promise<unknown>>).getLLMStatus();
+    const status = await (llmClient as unknown as Record<string, () => Promise<unknown>>).getLLMStatus();
 
     expect(status).toMatchObject({
       enabled: true,
@@ -105,7 +105,7 @@ describe('llm-client provider-neutral runtime', () => {
     const llmClient = await import('./llm-client');
     expect(typeof (llmClient as Record<string, unknown>).generateWithLLM).toBe('function');
 
-    const result = await (llmClient as Record<string, (prompt: string) => Promise<unknown>>).generateWithLLM('Explain this');
+    const result = await (llmClient as unknown as Record<string, (prompt: string) => Promise<unknown>>).generateWithLLM('Explain this');
 
     expect(result).toMatchObject({ text: 'Short answer' });
     const request = fetchMock.mock.calls[1]?.[1] as RequestInit;
@@ -124,7 +124,7 @@ describe('llm-client provider-neutral runtime', () => {
     const llmClient = await import('./llm-client');
     expect(typeof (llmClient as Record<string, unknown>).getLLMStatus).toBe('function');
 
-    const status = await (llmClient as Record<string, () => Promise<Record<string, unknown>>>).getLLMStatus();
+    const status = await (llmClient as unknown as Record<string, () => Promise<Record<string, unknown>>>).getLLMStatus();
 
     expect(status.enabled).toBe(false);
     expect(status.available).toBe(false);

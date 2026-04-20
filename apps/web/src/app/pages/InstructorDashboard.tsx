@@ -58,7 +58,7 @@ import { seedDemoDataset, resetDemoDataset, hasDemoData } from '../lib/demo/demo
 import { useUserRole } from '../hooks/useUserRole';
 import { useAuth } from '../lib/auth-context';
 import { useAllLearnerProfiles } from '../hooks/useLearnerProfile';
-import type { LearnerProfile, InteractionEvent } from '../types';
+import type { LearnerProfile, InteractionEvent, ConceptCoverageEvidence } from '../types';
 
 // Helper function to safely format dates
 function formatLastActive(timestamp: number | undefined): string {
@@ -81,9 +81,9 @@ function formatLastActive(timestamp: number | undefined): string {
 const DEMO_MODE = import.meta.env.DEV; // Only show demo data in development
 
 const DEMO_STUDENTS = [
-  { id: 'demo-1', name: 'Alice Chen (Demo)', email: 'alice.chen@school.edu', lastActive: Date.now() - 3600000 },
-  { id: 'demo-2', name: 'Bob Martinez (Demo)', email: 'bob.m@school.edu', lastActive: Date.now() - 7200000 },
-  { id: 'demo-3', name: 'Carol Williams (Demo)', email: 'carol.w@school.edu', lastActive: Date.now() - 1800000 },
+  { id: 'demo-1', name: 'Alice Chen (Demo)', email: 'alice.chen@school.edu', lastActive: Date.now() - 3600000, solvedCount: 3 },
+  { id: 'demo-2', name: 'Bob Martinez (Demo)', email: 'bob.m@school.edu', lastActive: Date.now() - 7200000, solvedCount: 1 },
+  { id: 'demo-3', name: 'Carol Williams (Demo)', email: 'carol.w@school.edu', lastActive: Date.now() - 1800000, solvedCount: 5 },
 ];
 
 const DEMO_STATS = {
@@ -385,14 +385,14 @@ export function InstructorDashboard() {
       createdAt: p.createdAt || Date.now(),
       lastActive: p.lastActive || p.createdAt || Date.now(),
       // Ensure conceptsCovered is a Set (backend returns array)
-      conceptsCovered: p.conceptsCovered instanceof Set ? p.conceptsCovered : new Set(p.conceptsCovered || []),
+      conceptsCovered: p.conceptsCovered instanceof Set ? p.conceptsCovered : new Set<string>(p.conceptsCovered || []),
       // Ensure Maps are properly initialized
       conceptCoverageEvidence: p.conceptCoverageEvidence instanceof Map 
         ? p.conceptCoverageEvidence 
-        : new Map(Object.entries(p.conceptCoverageEvidence || {})),
+        : new Map<string, ConceptCoverageEvidence>(Object.entries(p.conceptCoverageEvidence || {})),
       errorHistory: p.errorHistory instanceof Map 
         ? p.errorHistory 
-        : new Map(Object.entries(p.errorHistory || {})),
+        : new Map<string, number>(Object.entries(p.errorHistory || {})),
     }));
   }, [profiles]);
 
@@ -427,6 +427,7 @@ export function InstructorDashboard() {
       lastActive: student.lastActive,
       conceptsCount: (student.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0) % 4) + 1,
       conceptIds: [],
+      solvedCount: student.solvedCount,
       isActive: Date.now() - student.lastActive < 60 * 60 * 1000,
     }));
   }, [hasProfileData, normalizedProfiles, showDemoData]);
