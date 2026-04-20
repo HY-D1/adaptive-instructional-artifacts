@@ -159,7 +159,7 @@ describe('InstructorDashboard', () => {
     );
 
     expect(await screen.findByText('Using Cached Data')).toBeTruthy();
-    expect(screen.getByText('Showing cached local dashboard data because some backend analytics could not be loaded. Missing analytics will continue syncing in the background.')).toBeTruthy();
+    expect(await screen.findByText('Showing cached local dashboard data because some backend analytics could not be loaded. Missing analytics will continue syncing in the background.')).toBeTruthy();
   });
 
   it('keeps local metrics visible and upgrades to backend summary after a retry succeeds', async () => {
