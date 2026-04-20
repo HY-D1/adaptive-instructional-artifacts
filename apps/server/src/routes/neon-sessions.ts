@@ -116,8 +116,11 @@ router.get('/:learnerId/active', async (req: Request, res: Response) => {
   try {
     const session = await db.getActiveSession(req.params.learnerId);
 
+    // Return 200 with null data when no active session exists.
+    // This is expected for learners without a current session
+    // and avoids browser console noise from 404 errors during hydration.
     if (!session) {
-      res.status(404).json({ success: false, error: 'No active session' });
+      res.json({ success: true, data: null });
       return;
     }
 

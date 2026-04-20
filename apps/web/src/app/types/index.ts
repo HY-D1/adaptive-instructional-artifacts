@@ -235,6 +235,12 @@ export type InteractionEvent = {
   sourceConceptId?: string;
   /** Delay bucket: immediate (same session), 3d, 7d, or 14d */
   delayBucket?: 'immediate' | '3d' | '7d' | '14d' | '21d';
+  /** Timestamp when a reinforcement prompt was completed */
+  completedTime?: number;
+  /** Number of retry attempts on the current problem */
+  retryCount?: number;
+  /** Number of hints consumed so far */
+  hintCount?: number;
   
   // Week 6: Experimental condition tracking
   conditionId?: string;

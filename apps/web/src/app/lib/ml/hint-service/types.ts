@@ -4,10 +4,10 @@
  * Core type definitions for the enhanced hint generation system.
  */
 
-import type { InteractionEvent, InstructionalUnit, SQLProblem, RetrievedChunkInfo } from '../../types';
-import type { SqlEngageRecord } from '../../data/sql-engage';
+import type { InteractionEvent, InstructionalUnit, SQLProblem, RetrievedChunkInfo } from '../../../types';
+import type { SqlEngageRecord } from '../../../data/sql-engage';
 import type { GuidanceRung } from '../guidance-ladder';
-import type { RetrievalBundle } from '../content/retrieval-bundle';
+import type { RetrievalBundle } from '../../content/retrieval-bundle';
 
 /**
  * Available resource types for hint generation

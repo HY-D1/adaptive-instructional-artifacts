@@ -82,6 +82,15 @@ const retrievalBundle: EnhancedRetrievalBundle = {
   },
   conceptSourceRefs: [],
   textbookUnits: [],
+  problem: {
+    id: 'problem-1',
+    title: 'Select All Users',
+    description: 'Select all users from the users table',
+    difficulty: 'beginner',
+    concepts: ['select-basic'],
+    schema: 'CREATE TABLE users (id INTEGER, name TEXT);',
+    expectedQuery: 'SELECT * FROM users',
+  },
 };
 
 const retrievalSignals: RetrievalSignalMeta = {

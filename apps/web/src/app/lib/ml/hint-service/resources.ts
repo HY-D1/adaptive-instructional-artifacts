@@ -129,7 +129,7 @@ export function findRelevantTextbookUnits(
   return scored.filter((s) => s.score > 0).slice(0, 3).map((s) => s.unit);
 }
 
-import type { InstructionalUnit } from '../../types';
+import type { InstructionalUnit } from '../../../types';
 
 /**
  * Get a human-readable description of the current hint strategy

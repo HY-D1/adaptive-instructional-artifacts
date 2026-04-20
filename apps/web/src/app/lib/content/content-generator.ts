@@ -595,7 +595,9 @@ async function buildUnitFromStructuredOutput(
     sourceInteractionIds: Array.from(new Set(options.triggerInteractionIds)),
     lastErrorSubtypeId: options.bundle.lastErrorSubtypeId,
     provenance: {
+      provider: 'ollama',
       model,
+      sourceMix: [],
       params,
       templateId: options.templateId,
       inputHash,
@@ -684,7 +686,9 @@ function buildFallbackUnit(
     sourceInteractionIds: Array.from(new Set(options.triggerInteractionIds)),
     lastErrorSubtypeId: options.bundle.lastErrorSubtypeId,
     provenance: {
+      provider: 'ollama',
       model,
+      sourceMix: [],
       params,
       templateId: options.templateId,
       inputHash,

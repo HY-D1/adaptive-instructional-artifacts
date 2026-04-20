@@ -13,10 +13,9 @@ const problems: SQLProblem[] = [
     description: 'First problem',
     difficulty: 'beginner',
     concepts: ['select-basics'],
-    initialQuery: 'SELECT 1',
-    expectedOutput: [],
-    solution: 'SELECT 1',
-    explanation: 'One',
+    schema: 'CREATE TABLE users (id INT, name TEXT);',
+    expectedQuery: 'SELECT 1',
+    expectedResult: [],
   },
   {
     id: 'problem-2',
@@ -24,10 +23,9 @@ const problems: SQLProblem[] = [
     description: 'Second problem',
     difficulty: 'beginner',
     concepts: ['where-filtering'],
-    initialQuery: 'SELECT 2',
-    expectedOutput: [],
-    solution: 'SELECT 2',
-    explanation: 'Two',
+    schema: 'CREATE TABLE users (id INT, name TEXT);',
+    expectedQuery: 'SELECT 2',
+    expectedResult: [],
   },
 ];
 

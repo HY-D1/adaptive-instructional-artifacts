@@ -171,7 +171,7 @@ test.describe('@deployed-auth-smoke Student journey with real auth', () => {
     await page.getByRole('button', { name: 'Run Query' }).click();
 
     await expect(
-      page.locator('[class*="text-red"], .text-red-600, [class*="error"]').first(),
+      page.getByTestId('sql-error-alert').first(),
     ).toBeVisible({ timeout: 10_000 });
 
     // ── Step 3: Request hint ───────────────────────────────────────────────────

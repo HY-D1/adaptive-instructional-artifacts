@@ -470,7 +470,7 @@ export class ReinforcementManager {
       sessionId: storage.getActiveSessionId(),
       learnerId: schedule.learnerId,
       timestamp: schedule.createdAt,
-      eventType: 'reinforcement_scheduling',
+      eventType: 'reinforcement_scheduled',
       problemId: 'reinforcement',
       scheduleId: schedule.id,
       unitId: unit.id,

@@ -116,12 +116,15 @@ describe('ReinforcementManager', () => {
 
       const unit: InstructionalUnit = {
         id: 'unit-test',
+        type: 'explanation',
         conceptId: 'concept-test',
         conceptIds: ['concept-test'],
         title: 'Test Unit',
-        content: { definition: 'Test content', examples: [], commonMistakes: [] },
-        difficulty: 'beginner',
-        estimatedStudyTime: 5,
+        content: 'Test content',
+        prerequisites: [],
+        addedTimestamp: Date.now(),
+        sourceInteractionIds: [],
+
       };
 
       // Should not throw
@@ -145,12 +148,15 @@ describe('ReinforcementManager', () => {
     it('preserves functionality when storage operations fail', () => {
       const unit: InstructionalUnit = {
         id: 'unit-storage-fail',
+        type: 'explanation',
         conceptId: 'concept-fail',
         conceptIds: ['concept-fail'],
         title: 'Storage Fail Test',
-        content: { definition: 'Test', examples: [], commonMistakes: [] },
-        difficulty: 'beginner',
-        estimatedStudyTime: 5,
+        content: 'Test',
+        prerequisites: [],
+        addedTimestamp: Date.now(),
+        sourceInteractionIds: [],
+
       };
 
       // First call should work (storage available)
@@ -204,12 +210,15 @@ describe('ReinforcementManager', () => {
     it('maintains existing scheduleForUnit behavior', () => {
       const unit: InstructionalUnit = {
         id: 'unit-compat',
+        type: 'explanation',
         conceptId: 'concept-compat',
         conceptIds: ['concept-compat'],
         title: 'Compatibility Test Unit',
-        content: { definition: 'Test content', examples: [], commonMistakes: [] },
-        difficulty: 'intermediate',
-        estimatedStudyTime: 10,
+        content: 'Test content',
+        prerequisites: [],
+        addedTimestamp: Date.now(),
+        sourceInteractionIds: [],
+
       };
 
       const schedule = manager.scheduleForUnit(unit, 'learner-compat', { useTestDelays: true });
@@ -224,21 +233,27 @@ describe('ReinforcementManager', () => {
     it('maintains existing getSchedulesByLearner behavior', () => {
       const unit1: InstructionalUnit = {
         id: 'unit-1',
+        type: 'explanation',
         conceptId: 'concept-1',
         conceptIds: ['concept-1'],
         title: 'Unit 1',
-        content: { definition: 'Test', examples: [], commonMistakes: [] },
-        difficulty: 'beginner',
-        estimatedStudyTime: 5,
+        content: 'Test',
+        prerequisites: [],
+        addedTimestamp: Date.now(),
+        sourceInteractionIds: [],
+
       };
       const unit2: InstructionalUnit = {
         id: 'unit-2',
+        type: 'explanation',
         conceptId: 'concept-2',
         conceptIds: ['concept-2'],
         title: 'Unit 2',
-        content: { definition: 'Test', examples: [], commonMistakes: [] },
-        difficulty: 'beginner',
-        estimatedStudyTime: 5,
+        content: 'Test',
+        prerequisites: [],
+        addedTimestamp: Date.now(),
+        sourceInteractionIds: [],
+
       };
 
       manager.scheduleForUnit(unit1, 'learner-a', { useTestDelays: true });
@@ -282,12 +297,15 @@ describe('ReinforcementManager', () => {
     it('supports test delays option', () => {
       const unit: InstructionalUnit = {
         id: 'unit-test-delays',
+        type: 'explanation',
         conceptId: 'concept-test',
         conceptIds: ['concept-test'],
         title: 'Test Unit',
-        content: { definition: 'Test', examples: [], commonMistakes: [] },
-        difficulty: 'beginner',
-        estimatedStudyTime: 5,
+        content: 'Test',
+        prerequisites: [],
+        addedTimestamp: Date.now(),
+        sourceInteractionIds: [],
+
       };
 
       const schedule = manager.scheduleForUnit(unit, 'learner-1', { useTestDelays: true });
@@ -302,12 +320,15 @@ describe('ReinforcementManager', () => {
     it('supports custom delays option', () => {
       const unit: InstructionalUnit = {
         id: 'unit-custom-delays',
+        type: 'explanation',
         conceptId: 'concept-test',
         conceptIds: ['concept-test'],
         title: 'Test Unit',
-        content: { definition: 'Test', examples: [], commonMistakes: [] },
-        difficulty: 'beginner',
-        estimatedStudyTime: 5,
+        content: 'Test',
+        prerequisites: [],
+        addedTimestamp: Date.now(),
+        sourceInteractionIds: [],
+
       };
 
       const schedule = manager.scheduleForUnit(unit, 'learner-1', {
@@ -322,12 +343,15 @@ describe('ReinforcementManager', () => {
     it('uses production delays by default', () => {
       const unit: InstructionalUnit = {
         id: 'unit-prod-delays',
+        type: 'explanation',
         conceptId: 'concept-test',
         conceptIds: ['concept-test'],
         title: 'Test Unit',
-        content: { definition: 'Test', examples: [], commonMistakes: [] },
-        difficulty: 'beginner',
-        estimatedStudyTime: 5,
+        content: 'Test',
+        prerequisites: [],
+        addedTimestamp: Date.now(),
+        sourceInteractionIds: [],
+
       };
 
       const schedule = manager.scheduleForUnit(unit, 'learner-1');
@@ -355,12 +379,15 @@ describe('ReinforcementManager', () => {
     it('filters stats by learner ID', () => {
       const unit: InstructionalUnit = {
         id: 'unit-stats',
+        type: 'explanation',
         conceptId: 'concept-stats',
         conceptIds: ['concept-stats'],
         title: 'Stats Test Unit',
-        content: { definition: 'Test', examples: [], commonMistakes: [] },
-        difficulty: 'beginner',
-        estimatedStudyTime: 5,
+        content: 'Test',
+        prerequisites: [],
+        addedTimestamp: Date.now(),
+        sourceInteractionIds: [],
+
       };
 
       manager.scheduleForUnit(unit, 'learner-stats', { useTestDelays: true });

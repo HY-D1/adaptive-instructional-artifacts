@@ -197,7 +197,9 @@ export function generateMinimalFallbackUnit(
     sourceInteractionIds: params.triggerInteractionIds,
     lastErrorSubtypeId: normalizedSubtype,
     provenance: {
+      provider: 'ollama',
       model: 'minimal-fallback',
+      sourceMix: [],
       params: {
         temperature: 0,
         top_p: 1,
@@ -337,7 +339,9 @@ export function assembleQuickUnit(
     sourceInteractionIds: options.triggerInteractionIds,
     lastErrorSubtypeId: normalizedSubtype,
     provenance: {
+      provider: 'ollama',
       model: 'quick-assembler',
+      sourceMix: [],
       params: {
         temperature: 0,
         top_p: 1,

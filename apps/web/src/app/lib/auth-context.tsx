@@ -24,6 +24,7 @@ import {
 import type { AuthUser, AuthResult, LogoutResult } from './api/auth-client';
 import { storage } from './storage/index';
 import { clearUiStateForActor } from './ui-state';
+import learnerProfileClient from './api/learner-profile-client';
 
 // ============================================================================
 // Context types
@@ -130,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         syncInfo.previousLearnerId !== authUser.learnerId;
       
       if (hasLegacyData) {
+        learnerProfileClient.clearCache();
         console.info('[auth_hydration_legacy_detected]', {
           previousLearnerId: syncInfo.previousLearnerId,
           newLearnerId: authUser.learnerId,
@@ -185,6 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (result.success && result.user) {
       if (user?.learnerId && user.learnerId !== result.user.learnerId) {
         clearUiStateForActor(user.learnerId);
+        learnerProfileClient.clearCache();
       }
       const syncInfo = syncToLocalStorage(result.user);
       await hydrateFromBackend(result.user, syncInfo);
@@ -206,6 +209,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user?.learnerId) {
       clearUiStateForActor(user.learnerId);
     }
+    learnerProfileClient.clearCache();
     setUser(null);
     storage.clearUserProfile();
     return { success: true };
@@ -223,6 +227,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (result.success && result.user) {
       if (user?.learnerId && user.learnerId !== result.user.learnerId) {
         clearUiStateForActor(user.learnerId);
+        learnerProfileClient.clearCache();
       }
       const syncInfo = syncToLocalStorage(result.user);
       await hydrateFromBackend(result.user, syncInfo);

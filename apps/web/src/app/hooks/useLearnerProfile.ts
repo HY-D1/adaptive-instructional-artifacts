@@ -215,7 +215,7 @@ export function useLearnerProfile(
 /**
  * Hook for managing all learner profiles (instructor view)
  */
-export function useAllLearnerProfiles(options?: { authTrigger?: string }): {
+export function useAllLearnerProfiles(options?: { authTrigger?: string; enabled?: boolean }): {
   profiles: LearnerProfile[];
   isLoading: boolean;
   error: Error | null;
@@ -245,8 +245,13 @@ export function useAllLearnerProfiles(options?: { authTrigger?: string }): {
   }, []);
   
   useEffect(() => {
+    if (options?.enabled === false) {
+      setProfiles([]);
+      setIsLoading(false);
+      return;
+    }
     loadProfiles();
-  }, [loadProfiles, options?.authTrigger]);
+  }, [loadProfiles, options?.authTrigger, options?.enabled]);
   
   // Calculate aggregate stats
   const totalInteractionCount = profiles.reduce(

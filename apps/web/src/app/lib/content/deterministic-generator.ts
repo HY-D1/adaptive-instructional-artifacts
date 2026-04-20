@@ -418,7 +418,9 @@ export async function generateDeterministicExplanation(
     sourceInteractionIds: params.triggerInteractionIds,
     lastErrorSubtypeId: normalizedSubtype,
     provenance: {
+      provider: 'ollama',
       model: 'deterministic-generator',
+      sourceMix: [],
       params: {
         temperature: 0,
         top_p: 1,

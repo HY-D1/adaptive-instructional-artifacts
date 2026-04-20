@@ -50,6 +50,10 @@ chat-history/
 .claude/
 .claude-plugin/
 
+# Codex / OpenAI agent configuration
+.codex/
+.agents/
+
 # But KEEP the production-grade quality-loop system
 .kimi/
 .cursor/
@@ -77,8 +81,13 @@ PROFILE_VALIDATION_TEST_REPORT.md
 !docs/PROGRESS_AUDIT_REPORT.md
 !docs/PROGRESS_MODEL.md
 !docs/research/*.md
-!docs/audit/*.md
+# AI-generated audit reports — transient, do not track
+docs/audit/
+docs/audits/
 !docs/reports/*.md
+# AI-generated reports (except curated runbooks)
+!docs/runbooks/*.md
+!docs/runbooks/**/*.md
 !docs/runbooks/*.md
 !docs/runbooks/**/*.md
 
@@ -153,4 +162,13 @@ apps/server/dist/
 .env*.local
 .local/
 .env.pdf-local
+# Neon export data and dumps
 .neon
+neon-export/
+neon-dump/
+neon-backup/
+neon_export*
+export_neon*
+*.neon.sql
+*.neon.dump
+*.neon-export.*

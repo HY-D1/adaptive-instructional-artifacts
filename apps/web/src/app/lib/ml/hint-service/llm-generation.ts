@@ -78,7 +78,7 @@ export async function generateLLMEnhancedHint(
     rung: rung as 1 | 2 | 3,
     errorSubtype: errorSubtypeId || 'general',
     problem: retrievalBundle.problem,
-    previousHints: retrievalBundle.hintHistory.slice(-3),
+    previousHints: retrievalBundle.hintHistory.map((h) => h.hintText).slice(-3),
     textbookUnits: retrievalBundle.textbookUnits || [],
     pdfPassages: retrievalBundle.pdfPassages,
     sqlEngageRecords: [], // Populated from retrieval bundle if needed

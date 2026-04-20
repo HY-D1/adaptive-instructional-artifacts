@@ -28,6 +28,10 @@ const IS_CI = !!process.env.CI;
  */
 const DEPLOYED_BASE_URL = process.env.PLAYWRIGHT_BASE_URL;
 const BASE_URL = DEPLOYED_BASE_URL || LOCAL_BASE_URL;
+const HAS_DEPLOYED_API_BASE = Boolean(
+  process.env.PLAYWRIGHT_API_BASE_URL?.trim() || process.env.VITE_API_BASE_URL?.trim(),
+);
+const ENABLE_AUTH_PROJECTS = !DEPLOYED_BASE_URL || HAS_DEPLOYED_API_BASE;
 
 /**
  * VERCEL_AUTOMATION_BYPASS_SECRET — required to access Vercel Preview
@@ -100,25 +104,29 @@ export default defineConfig({
     // Runs once before any auth-dependent project.
     // Creates playwright/.auth/student.json and playwright/.auth/instructor.json.
     // Fails fast when backend/auth prerequisites are missing for launch-proof runs.
-    {
-      name: 'setup:auth',
-      testMatch: '**/setup/auth.setup.ts',
-      use: {
-        ...devices['Desktop Chrome'],
-        // Enable third-party cookies for cross-origin auth between preview deployments
-        // Chromium flags to disable cookie restrictions in headless/incognito mode
-        launchOptions: {
-          args: [
-            '--disable-web-security',
-            '--disable-features=IsolateOrigins,site-per-process,SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure,ImprovedCookieControls,ImprovedCookieControlsForThirdPartyCookieBlocking',
-          ],
-        },
-        contextOptions: {
-          bypassCSP: true,
-          ignoreHTTPSErrors: true,
-        },
-      },
-    },
+    ...(ENABLE_AUTH_PROJECTS
+      ? [
+          {
+            name: 'setup:auth',
+            testMatch: '**/setup/auth.setup.ts',
+            use: {
+              ...devices['Desktop Chrome'],
+              // Enable third-party cookies for cross-origin auth between preview deployments
+              // Chromium flags to disable cookie restrictions in headless/incognito mode
+              launchOptions: {
+                args: [
+                  '--disable-web-security',
+                  '--disable-features=IsolateOrigins,site-per-process,SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure,ImprovedCookieControls,ImprovedCookieControlsForThirdPartyCookieBlocking',
+                ],
+              },
+              contextOptions: {
+                bypassCSP: true,
+                ignoreHTTPSErrors: true,
+              },
+            },
+          },
+        ]
+      : []),
 
     // ── Main test suite (no auth dependency) ────────────────────────────────────
     // Runs all specs EXCEPT the auth setup and the auth-dependent smoke.
@@ -131,6 +139,7 @@ export default defineConfig({
         '**/deployed-auth-smoke.spec.ts',
         '**/student-multi-device-persistence.spec.ts',
         '**/instructor-section-scope.spec.ts',
+        '**/instructor-dashboard-error-states.spec.ts',
         '**/instructor-dashboard-profiles.spec.ts',
         '**/api-authz.spec.ts',
         '**/hint-stability-beta.spec.ts',
@@ -171,36 +180,45 @@ export default defineConfig({
     // Runs AFTER setup:auth. Each test context starts with the student JWT
     // cookie + localStorage profile pre-loaded — no UI login needed per test.
     // Tests self-skip when the auth file contains no cookies (backend absent).
-    {
-      name: 'chromium:auth',
-      testMatch: [
-        '**/deployed-auth-smoke.spec.ts',
-        '**/student-multi-device-persistence.spec.ts',
-        '**/student-script-production.spec.ts',
-        '**/instructor-section-scope.spec.ts',
-        '**/api-authz.spec.ts',
-        '**/hint-stability-beta.spec.ts',
-      ],
-      dependencies: ['setup:auth'],
-      use: {
-        ...devices['Desktop Chrome'],
-        storageState: STUDENT_AUTH_FILE,
-      },
-    },
+    ...(ENABLE_AUTH_PROJECTS
+      ? [
+          {
+            name: 'chromium:auth',
+            testMatch: [
+              '**/deployed-auth-smoke.spec.ts',
+              '**/student-multi-device-persistence.spec.ts',
+              '**/student-script-production.spec.ts',
+              '**/instructor-section-scope.spec.ts',
+              '**/api-authz.spec.ts',
+              '**/hint-stability-beta.spec.ts',
+            ],
+            dependencies: ['setup:auth'],
+            use: {
+              ...devices['Desktop Chrome'],
+              storageState: STUDENT_AUTH_FILE,
+            },
+          },
+        ]
+      : []),
 
     // ── Auth-backed instructor tests ────────────────────────────────────────────
     // Runs AFTER setup:auth. Uses instructor JWT for instructor-only routes.
-    {
-      name: 'chromium:instructor',
-      testMatch: [
-        '**/instructor-dashboard-error-states.spec.ts',
-        '**/instructor-dashboard-profiles.spec.ts',
-      ],
-      dependencies: ['setup:auth'],
-      use: {
-        ...devices['Desktop Chrome'],
-        storageState: INSTRUCTOR_AUTH_FILE,
-      },
-    },
+    ...(ENABLE_AUTH_PROJECTS
+      ? [
+          {
+            name: 'chromium:instructor',
+            testMatch: [
+              '**/instructor-dashboard-error-states.spec.ts',
+              '**/instructor-dashboard-profiles.spec.ts',
+              '**/instructor-dashboard-analytics-summary.spec.ts',
+            ],
+            dependencies: ['setup:auth'],
+            use: {
+              ...devices['Desktop Chrome'],
+              storageState: INSTRUCTOR_AUTH_FILE,
+            },
+          },
+        ]
+      : []),
   ]
 });

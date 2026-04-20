@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { LearnerProfile, InteractionEvent } from '@/app/types';
+import type { LearnerProfile, InteractionEvent, ConceptCoverageEvidence } from '@/app/types';
 
 // Mock the storage-client module
 const isBackendAvailableMock = vi.fn<() => Promise<boolean>>();
@@ -250,16 +250,16 @@ describe('Progress Persistence - Storage Layer Integration', () => {
       getProfileMock.mockResolvedValueOnce({
         id: learnerId,
         name: 'Test Learner',
-        conceptsCovered: new Set(),
-        conceptCoverageEvidence: new Map(),
-        errorHistory: new Map(),
-        solvedProblemIds: new Set(['problem-1', 'problem-2']),
+        conceptsCovered: new Set<string>(),
+        conceptCoverageEvidence: new Map() as Map<string, ConceptCoverageEvidence>,
+        errorHistory: new Map() as Map<string, number>,
+        solvedProblemIds: new Set<string>(['problem-1', 'problem-2']),
         interactionCount: 5,
         currentStrategy: 'adaptive-medium',
         preferences: { escalationThreshold: 3, aggregationDelay: 5000 },
         createdAt: Date.now(),
         lastActive: Date.now(),
-      });
+      } as LearnerProfile);
 
       // Hydrate learner to fetch from backend
       await dualStorage.hydrateLearner(learnerId);
@@ -287,7 +287,7 @@ describe('Progress Persistence - Storage Layer Integration', () => {
       const progress = await getAllProblemProgressMock(learnerId);
 
       expect(progress).toHaveLength(3);
-      expect(progress.filter((p: { solved: boolean }) => p.solved)).toHaveLength(2);
+      expect((progress as Array<{ solved: boolean }>).filter((p) => p.solved)).toHaveLength(2);
     });
   });
 
@@ -309,16 +309,16 @@ describe('Progress Persistence - Storage Layer Integration', () => {
       getProfileMock.mockResolvedValueOnce({
         id: learnerId,
         name: 'Test Learner',
-        conceptsCovered: new Set(),
-        conceptCoverageEvidence: new Map(),
-        errorHistory: new Map(),
-        solvedProblemIds: new Set(),
+        conceptsCovered: new Set<string>(),
+        conceptCoverageEvidence: new Map() as Map<string, ConceptCoverageEvidence>,
+        errorHistory: new Map() as Map<string, number>,
+        solvedProblemIds: new Set<string>(),
         interactionCount: 0,
         currentStrategy: 'adaptive-medium',
         preferences: { escalationThreshold: 3, aggregationDelay: 5000 },
         createdAt: Date.now(),
         lastActive: Date.now(),
-      });
+      } as LearnerProfile);
       getSessionMock.mockResolvedValueOnce({
         sessionId: backendSessionId,
         currentProblemId: 'problem-5',
@@ -347,16 +347,16 @@ describe('Progress Persistence - Storage Layer Integration', () => {
       getProfileMock.mockResolvedValueOnce({
         id: learnerId,
         name: 'Test Learner',
-        conceptsCovered: new Set(),
-        conceptCoverageEvidence: new Map(),
-        errorHistory: new Map(),
-        solvedProblemIds: new Set(),
+        conceptsCovered: new Set<string>(),
+        conceptCoverageEvidence: new Map() as Map<string, ConceptCoverageEvidence>,
+        errorHistory: new Map() as Map<string, number>,
+        solvedProblemIds: new Set<string>(),
         interactionCount: 0,
         currentStrategy: 'adaptive-medium',
         preferences: { escalationThreshold: 3, aggregationDelay: 5000 },
         createdAt: Date.now(),
         lastActive: Date.now(),
-      });
+      } as LearnerProfile);
       getSessionMock.mockResolvedValueOnce({
         sessionId: backendSessionId,
         currentProblemId: 'problem-10',
@@ -418,16 +418,16 @@ describe('Progress Persistence - Storage Layer Integration', () => {
       const backendProfile = {
         id: learnerId,
         name: 'Test Learner',
-        conceptsCovered: new Set(),
-        conceptCoverageEvidence: new Map(),
-        errorHistory: new Map(),
-        solvedProblemIds: new Set(['problem-1', 'problem-2']),
+        conceptsCovered: new Set<string>(),
+        conceptCoverageEvidence: new Map() as Map<string, ConceptCoverageEvidence>,
+        errorHistory: new Map() as Map<string, number>,
+        solvedProblemIds: new Set<string>(['problem-1', 'problem-2']),
         interactionCount: 5,
         currentStrategy: 'adaptive-medium',
         preferences: { escalationThreshold: 3, aggregationDelay: 5000 },
         createdAt: Date.now(),
         lastActive: Date.now(),
-      };
+      } as LearnerProfile;
       getProfileMock.mockResolvedValueOnce(backendProfile);
 
       // Save to localStorage first (simulating hydration completed)
@@ -461,7 +461,7 @@ describe('Progress Persistence - Storage Layer Integration', () => {
 
       // Backend returns correct progress regardless of origin
       expect(progress).toHaveLength(2);
-      expect(progress.every((p: { solved: boolean }) => p.solved)).toBe(true);
+      expect((progress as Array<{ solved: boolean }>).every((p) => p.solved)).toBe(true);
     });
   });
 

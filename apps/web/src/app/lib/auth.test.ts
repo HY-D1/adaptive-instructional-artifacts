@@ -94,7 +94,7 @@ function makeFetch(response: FetchMockResponse) {
 const AUTH_BASE = 'http://localhost:3001/api/auth';
 
 async function mockSignup(
-  fetchFn: ReturnType<typeof vi.fn>,
+  fetchFn: (url: string, init: RequestInit) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>,
   params: {
     name: string;
     email: string;
@@ -110,21 +110,21 @@ async function mockSignup(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(params),
   });
-  const data = await res.json();
-  if (!res.ok) return { success: false, error: data.error };
-  return { success: true, user: data.user };
+  const data = (await res.json()) as Record<string, unknown>;
+  if (!res.ok) return { success: false, error: data.error as string };
+  return { success: true, user: data.user as Record<string, unknown> };
 }
 
-async function mockLogin(fetchFn: ReturnType<typeof vi.fn>, email: string, password: string) {
+async function mockLogin(fetchFn: (url: string, init: RequestInit) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>, email: string, password: string) {
   const res = await fetchFn(`${AUTH_BASE}/login`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
   });
-  const data = await res.json();
-  if (!res.ok) return { success: false, error: data.error };
-  return { success: true, user: data.user };
+  const data = (await res.json()) as Record<string, unknown>;
+  if (!res.ok) return { success: false, error: data.error as string };
+  return { success: true, user: data.user as Record<string, unknown> };
 }
 
 describe('auth-client: signup', () => {

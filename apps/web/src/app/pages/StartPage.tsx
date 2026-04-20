@@ -13,6 +13,7 @@ import { storage } from '../lib/storage';
 import { isInstructorModeAvailable, isHostedMode, logRuntimeConfig } from '../lib/runtime-config';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
 import { useAuth } from '../lib/auth-context';
+import { DEPLOYMENT_GUIDE_URL } from '../lib/docs-links';
 import type { UserRole, UserProfile } from '../types';
 
 /**
@@ -507,8 +508,8 @@ export function StartPage() {
                 <strong>Running in static hosting mode.</strong>{' '}
                 LLM and PDF features require a backend server. 
                 See{' '}
-                <a 
-                  href="https://github.com/your-org/sql-adapt#deployment" 
+                <a
+                  href={DEPLOYMENT_GUIDE_URL}
                   target="_blank" 
                   rel="noopener noreferrer"
                   className="underline hover:text-blue-900"

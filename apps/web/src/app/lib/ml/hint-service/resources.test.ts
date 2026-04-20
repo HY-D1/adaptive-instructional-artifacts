@@ -56,7 +56,7 @@ describe('hint-service resource availability', () => {
     const resourcesModule = await import('./resources');
     expect(typeof (resourcesModule as Record<string, unknown>).checkAvailableResourcesAsync).toBe('function');
 
-    const resources = await (resourcesModule as Record<string, (learnerId: string) => Promise<Record<string, boolean>>>).checkAvailableResourcesAsync('learner-1');
+    const resources = await (resourcesModule as unknown as Record<string, (learnerId: string) => Promise<Record<string, boolean>>>).checkAvailableResourcesAsync('learner-1');
 
     expect(resources.llm).toBe(false);
   });

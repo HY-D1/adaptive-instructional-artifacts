@@ -14,10 +14,15 @@ router.get('/profiles', requireInstructor, async (req: Request, res: Response) =
   try {
     const instructorUserId = req.auth!.learnerId;
     const scopedLearnerIds = await getInstructorScopedLearnerIds(instructorUserId);
-    const profiles = await Promise.all(
-      scopedLearnerIds.map((learnerId) => db.getLearnerProfile(learnerId))
-    );
-    res.json({ success: true, data: profiles.filter(Boolean) });
+    const startedAt = Date.now();
+    const profiles = await db.getLearnerProfilesByIds(scopedLearnerIds);
+    console.info('[learners/profiles]', {
+      instructorUserId,
+      scopedLearnerCount: scopedLearnerIds.length,
+      returnedProfiles: profiles.length,
+      durationMs: Date.now() - startedAt,
+    });
+    res.json({ success: true, data: profiles });
   } catch (error) {
     console.error('Error fetching scoped profiles:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch profiles' });
@@ -280,18 +285,10 @@ router.get('/:id/profile', async (req: Request, res: Response) => {
   try {
     const profile = await db.getLearnerProfile(req.params.id);
 
-    if (!profile) {
-      // Return 404 but also return a default profile structure
-      // This allows the frontend to handle missing profiles gracefully
-      res.status(404).json({
-        success: false,
-        error: 'Profile not found',
-        data: null,
-      });
-      return;
-    }
-
-    res.json({ success: true, data: profile });
+    // Return 200 with null data when profile doesn't exist.
+    // This is expected for learners who haven't created a profile yet
+    // and avoids browser console noise from 404 errors during hydration.
+    res.json({ success: true, data: profile || null });
   } catch (error) {
     console.error('Error fetching learner profile:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch learner profile' });

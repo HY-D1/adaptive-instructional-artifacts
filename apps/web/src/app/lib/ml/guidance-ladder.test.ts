@@ -142,6 +142,7 @@ describe('guidance-ladder', () => {
           name: 'Fast Escalator',
           description: 'Aggressive escalation',
           thresholds: { escalate: 2, aggregate: 3 },
+          triggers: { timeStuck: 120000, rungExhausted: 2, repeatedError: 1 },
         };
 
         const state: GuidanceLadderState = {
@@ -284,7 +285,7 @@ describe('guidance-ladder', () => {
         errorCount: 3,
         timeSpentMs: 120000,
         hintCount: 2,
-      });
+      }, ['concept-1']);
 
       expect(newState.currentRung).toBe(2);
       expect(newState.lastEscalationTrigger).toBe('rung_exhausted');
@@ -305,7 +306,7 @@ describe('guidance-ladder', () => {
         errorCount: 5,
         timeSpentMs: 300000,
         hintCount: 3,
-      });
+      }, ['concept-1']);
 
       expect(newState.currentRung).toBe(3);
       expect(newState.escalationHistory).toHaveLength(1);
@@ -322,7 +323,7 @@ describe('guidance-ladder', () => {
         errorCount: 0,
         timeSpentMs: 0,
         hintCount: 0,
-      });
+      }, ['concept-1']);
 
       expect(newState.currentRung).toBe(3);
       expect(newState.escalationHistory).toHaveLength(0);
@@ -347,7 +348,7 @@ describe('guidance-ladder', () => {
         errorCount: 5,
         timeSpentMs: 300000,
         hintCount: 3,
-      });
+      }, ['concept-1']);
 
       expect(newState.escalationHistory).toHaveLength(2);
       expect(newState.escalationHistory[0].fromRung).toBe(1);
@@ -494,6 +495,7 @@ describe('guidance-ladder', () => {
         name: 'Fast Escalator',
         description: 'Aggressive escalation',
         thresholds: { escalate: 2, aggregate: 3 },
+        triggers: { timeStuck: 120000, rungExhausted: 2, repeatedError: 1 },
       };
 
       const state: GuidanceLadderState = {

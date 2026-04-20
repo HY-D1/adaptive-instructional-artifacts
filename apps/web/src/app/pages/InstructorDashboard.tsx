@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
 import {
@@ -51,14 +51,14 @@ import {
   TooltipTrigger,
 } from '../components/ui/tooltip';
 import { storage, broadcastSync, setDebugProfileWithSync, setDebugStrategyWithSync } from '../lib/storage';
+import { storageClient, type InstructorAnalyticsSummary } from '../lib/api/storage-client';
 import { buildInstructorLearnerRows, filterInteractionsByLearners } from '../lib/counts/selectors';
 import { getUiState, setUiState } from '../lib/ui-state';
 import { seedDemoDataset, resetDemoDataset, hasDemoData } from '../lib/demo/demo-seed';
 import { useUserRole } from '../hooks/useUserRole';
 import { useAuth } from '../lib/auth-context';
 import { useAllLearnerProfiles } from '../hooks/useLearnerProfile';
-import learnerProfileClient from '../lib/api/learner-profile-client';
-import type { LearnerProfile, InteractionEvent } from '../types';
+import type { LearnerProfile, InteractionEvent, ConceptCoverageEvidence } from '../types';
 
 // Helper function to safely format dates
 function formatLastActive(timestamp: number | undefined): string {
@@ -81,9 +81,9 @@ function formatLastActive(timestamp: number | undefined): string {
 const DEMO_MODE = import.meta.env.DEV; // Only show demo data in development
 
 const DEMO_STUDENTS = [
-  { id: 'demo-1', name: 'Alice Chen (Demo)', email: 'alice.chen@school.edu', lastActive: Date.now() - 3600000 },
-  { id: 'demo-2', name: 'Bob Martinez (Demo)', email: 'bob.m@school.edu', lastActive: Date.now() - 7200000 },
-  { id: 'demo-3', name: 'Carol Williams (Demo)', email: 'carol.w@school.edu', lastActive: Date.now() - 1800000 },
+  { id: 'demo-1', name: 'Alice Chen (Demo)', email: 'alice.chen@school.edu', lastActive: Date.now() - 3600000, solvedCount: 3 },
+  { id: 'demo-2', name: 'Bob Martinez (Demo)', email: 'bob.m@school.edu', lastActive: Date.now() - 7200000, solvedCount: 1 },
+  { id: 'demo-3', name: 'Carol Williams (Demo)', email: 'carol.w@school.edu', lastActive: Date.now() - 1800000, solvedCount: 5 },
 ];
 
 const DEMO_STATS = {
@@ -112,6 +112,11 @@ const DEMO_ADAPTIVE_DATA = {
   ],
   banditPulls: { fast: 45, slow: 32, adaptive: 78 }
 };
+
+const MAX_INSTRUCTOR_ANALYTICS_INTERACTIONS = 5000;
+const ANALYTICS_RETRY_DELAYS_MS = [2000, 5000, 15000] as const;
+
+type AnalyticsSliceStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 // Mock class statistics
 interface ClassStats {
@@ -167,13 +172,14 @@ export function InstructorDashboard() {
   // Use backend profiles with automatic synchronization
   const {
     profiles: backendProfiles,
-    isLoading: isProfilesLoading,
-    averageConceptCoverage: backendAvgCoverage,
   } = useAllLearnerProfiles({ authTrigger: authUser?.learnerId });
   
   const [profiles, setProfiles] = useState<LearnerProfile[]>([]);
   const [interactions, setInteractions] = useState<InteractionEvent[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
+  const [backendSummary, setBackendSummary] = useState<InstructorAnalyticsSummary | null>(null);
+  const [summaryStatus, setSummaryStatus] = useState<AnalyticsSliceStatus>('idle');
+  const [interactionsStatus, setInteractionsStatus] = useState<AnalyticsSliceStatus>('idle');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [demoDataExists, setDemoDataExists] = useState(false);
@@ -192,11 +198,13 @@ export function InstructorDashboard() {
     }
   }, [reason]);
   const [isBackendAvailable, setIsBackendAvailable] = useState(false);
+  const summaryRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const interactionsRetryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Check backend availability
   useEffect(() => {
     const checkBackend = async () => {
-      const available = await learnerProfileClient.checkBackendHealth();
+      const available = await storageClient.checkBackendHealth();
       setIsBackendAvailable(available);
     };
     checkBackend();
@@ -214,34 +222,151 @@ export function InstructorDashboard() {
     }
   }, [isStudent, isRoleLoading, navigate]);
 
-  // Load data from backend or fallback to local storage
-  // PERFORMANCE: Uses lazy hydration - backend call is async, local data shown immediately
   useEffect(() => {
-    const loadData = async () => {
-      setIsDataLoading(true);
+    if (isRoleLoading || isStudent) {
+      return;
+    }
 
-      // Load local data immediately for fast initial render
-      const allProfiles = storage.getAllProfiles().map(p => storage.getProfile(p.id)).filter(Boolean) as LearnerProfile[];
-      const allInteractions = storage.getAllInteractions();
-      
-      // Use backend profiles if already available, otherwise use local
-      const effectiveProfiles = backendProfiles.length > 0 ? backendProfiles : allProfiles;
-      setProfiles(effectiveProfiles);
+    const allProfiles = storage.getAllProfiles().map(p => storage.getProfile(p.id)).filter(Boolean) as LearnerProfile[];
+    const allInteractions = storage.getAllInteractions();
+    const effectiveProfiles = backendProfiles.length > 0 ? backendProfiles : allProfiles;
+
+    setProfiles(effectiveProfiles);
+    if (interactionsStatus !== 'ready') {
       setInteractions(allInteractions);
-      
-      // Mark loading complete - backend hydration happens in background
-      setIsDataLoading(false);
+    }
+    if (backendProfiles.length > 0) {
+      storage.cacheProfiles(backendProfiles);
+    }
+    setIsDataLoading(false);
+  }, [backendProfiles, interactionsStatus, isRoleLoading, isStudent]);
 
-      // Lazy backend hydration - non-blocking for UI
-      if (isBackendAvailable) {
-        storage.hydrateInstructorDashboard().catch((error) => {
-          console.warn('[InstructorDashboard] Background hydration failed:', error);
-        });
+  useEffect(() => {
+    if (summaryRetryTimeoutRef.current) {
+      clearTimeout(summaryRetryTimeoutRef.current);
+      summaryRetryTimeoutRef.current = null;
+    }
+
+    if (!isBackendAvailable || authUser?.role !== 'instructor' || isRoleLoading || isStudent) {
+      setSummaryStatus('idle');
+      setBackendSummary(null);
+      return;
+    }
+
+    let cancelled = false;
+    let retryAttempt = 0;
+
+    const loadSummary = async () => {
+      if (cancelled) return;
+
+      setSummaryStatus('loading');
+
+      try {
+        const summary = await storageClient.getInstructorAnalyticsSummary();
+        if (cancelled) return;
+
+        if (summary) {
+          setBackendSummary(summary);
+          setSummaryStatus('ready');
+          return;
+        }
+
+        setBackendSummary(null);
+        setSummaryStatus('error');
+      } catch (error) {
+        if (cancelled) return;
+        console.warn('[InstructorDashboard] Failed to load backend summary, continuing with cached data:', error);
+        setSummaryStatus('error');
+      }
+
+      const delay = ANALYTICS_RETRY_DELAYS_MS[Math.min(retryAttempt, ANALYTICS_RETRY_DELAYS_MS.length - 1)];
+      retryAttempt += 1;
+      summaryRetryTimeoutRef.current = setTimeout(loadSummary, delay);
+    };
+
+    void loadSummary();
+
+    return () => {
+      cancelled = true;
+      if (summaryRetryTimeoutRef.current) {
+        clearTimeout(summaryRetryTimeoutRef.current);
+        summaryRetryTimeoutRef.current = null;
       }
     };
-    
-    void loadData();
-  }, [isBackendAvailable, backendProfiles]);
+  }, [authUser?.learnerId, authUser?.role, isBackendAvailable, isRoleLoading, isStudent]);
+
+  useEffect(() => {
+    if (interactionsRetryTimeoutRef.current) {
+      clearTimeout(interactionsRetryTimeoutRef.current);
+      interactionsRetryTimeoutRef.current = null;
+    }
+
+    if (!isBackendAvailable || authUser?.role !== 'instructor' || isRoleLoading || isStudent) {
+      setInteractionsStatus('idle');
+      return;
+    }
+
+    let cancelled = false;
+    let retryAttempt = 0;
+
+    const loadInteractions = async () => {
+      if (cancelled) return;
+
+      setInteractionsStatus('loading');
+
+      try {
+        const analyticsInteractions = await storageClient.getInstructorAnalyticsInteractions({
+          limit: MAX_INSTRUCTOR_ANALYTICS_INTERACTIONS,
+          offset: 0,
+        });
+
+        if (cancelled) return;
+
+        const hasVerifiedEmptyState =
+          analyticsInteractions.events.length === 0
+          && analyticsInteractions.total === 0
+          && backendSummary?.totalInteractions === 0;
+
+        if (analyticsInteractions.events.length > 0 || hasVerifiedEmptyState) {
+          setInteractions(analyticsInteractions.events);
+          setInteractionsStatus('ready');
+          return;
+        }
+
+        setInteractionsStatus('error');
+
+        const delay = ANALYTICS_RETRY_DELAYS_MS[Math.min(retryAttempt, ANALYTICS_RETRY_DELAYS_MS.length - 1)];
+        retryAttempt += 1;
+        interactionsRetryTimeoutRef.current = setTimeout(loadInteractions, delay);
+      } catch (error) {
+        if (cancelled) return;
+        console.warn('[InstructorDashboard] Failed to load backend interactions, continuing with cached data:', error);
+        setInteractionsStatus('error');
+
+        const delay = ANALYTICS_RETRY_DELAYS_MS[Math.min(retryAttempt, ANALYTICS_RETRY_DELAYS_MS.length - 1)];
+        retryAttempt += 1;
+        interactionsRetryTimeoutRef.current = setTimeout(loadInteractions, delay);
+      }
+    };
+
+    void loadInteractions();
+
+    return () => {
+      cancelled = true;
+      if (interactionsRetryTimeoutRef.current) {
+        clearTimeout(interactionsRetryTimeoutRef.current);
+        interactionsRetryTimeoutRef.current = null;
+      }
+    };
+  }, [authUser?.learnerId, authUser?.role, backendSummary?.totalInteractions, isBackendAvailable, isRoleLoading, isStudent]);
+
+  useEffect(() => {
+    if (isBackendAvailable) {
+      storage.hydrateInstructorDashboard().catch((error) => {
+        console.warn('[InstructorDashboard] Background hydration failed:', error);
+      });
+    }
+  }, [isBackendAvailable]);
 
   // Toast auto-hide
   useEffect(() => {
@@ -260,19 +385,34 @@ export function InstructorDashboard() {
       createdAt: p.createdAt || Date.now(),
       lastActive: p.lastActive || p.createdAt || Date.now(),
       // Ensure conceptsCovered is a Set (backend returns array)
-      conceptsCovered: p.conceptsCovered instanceof Set ? p.conceptsCovered : new Set(p.conceptsCovered || []),
+      conceptsCovered: p.conceptsCovered instanceof Set ? p.conceptsCovered : new Set<string>(p.conceptsCovered || []),
       // Ensure Maps are properly initialized
       conceptCoverageEvidence: p.conceptCoverageEvidence instanceof Map 
         ? p.conceptCoverageEvidence 
-        : new Map(Object.entries(p.conceptCoverageEvidence || {})),
+        : new Map<string, ConceptCoverageEvidence>(Object.entries(p.conceptCoverageEvidence || {})),
       errorHistory: p.errorHistory instanceof Map 
         ? p.errorHistory 
-        : new Map(Object.entries(p.errorHistory || {})),
+        : new Map<string, number>(Object.entries(p.errorHistory || {})),
     }));
   }, [profiles]);
 
   const hasProfileData = normalizedProfiles.length > 0;
-  const showDemoData = DEMO_MODE && !hasProfileData && interactions.length === 0;
+  const showDemoData = DEMO_MODE && !authUser && !isBackendAvailable && !hasProfileData && interactions.length === 0;
+  const fallbackNotice = useMemo(() => {
+    const shouldShowFallback = isBackendAvailable
+      && authUser?.role === 'instructor'
+      && (summaryStatus !== 'ready' || interactionsStatus !== 'ready');
+
+    if (!shouldShowFallback) {
+      return null;
+    }
+
+    if (summaryStatus === 'error' || interactionsStatus === 'error') {
+      return 'Showing cached local dashboard data because some backend analytics could not be loaded. Missing analytics will continue syncing in the background.';
+    }
+
+    return 'Showing cached local dashboard data while additional backend analytics are still loading.';
+  }, [authUser?.role, interactionsStatus, isBackendAvailable, summaryStatus]);
   const dashboardRows = useMemo(() => {
     if (hasProfileData) {
       return buildInstructorLearnerRows(normalizedProfiles);
@@ -287,6 +427,7 @@ export function InstructorDashboard() {
       lastActive: student.lastActive,
       conceptsCount: (student.id.split('').reduce((a, b) => a + b.charCodeAt(0), 0) % 4) + 1,
       conceptIds: [],
+      solvedCount: student.solvedCount,
       isActive: Date.now() - student.lastActive < 60 * 60 * 1000,
     }));
   }, [hasProfileData, normalizedProfiles, showDemoData]);
@@ -304,19 +445,18 @@ export function InstructorDashboard() {
   // Calculate class statistics
   const classStats: ClassStats = useMemo(() => {
     const studentList = dashboardRows;
-    const totalStudents = studentList.length;
-    const activeToday = studentList.filter((student) => Date.now() - student.lastActive < 86400000).length;
-    
-    // Calculate average progress based on concept coverage
-    // Use backend aggregate only when local row-level data is unavailable.
-    const avgProgress = !hasProfileData && isBackendAvailable && backendAvgCoverage > 0
-      ? Math.round((backendAvgCoverage / 6) * 100)
+    const totalStudents = backendSummary?.totalStudents ?? studentList.length;
+    const activeToday = backendSummary?.activeToday
+      ?? studentList.filter((student) => Date.now() - student.lastActive < 86400000).length;
+
+    const avgProgress = typeof backendSummary?.avgConceptCoverage === 'number'
+      ? backendSummary.avgConceptCoverage
       : dashboardRows.length > 0
         ? Math.round(dashboardRows.reduce((sum, row) => sum + row.conceptsCount, 0) / dashboardRows.length / 6 * 100)
         : (showDemoData ? 45 : 0);
 
-    // Keep count source aligned with the currently displayed learner scope.
-    const totalInteractions = scopedInteractions.length + (showDemoData ? DEMO_STATS.interactions : 0);
+    const totalInteractions = backendSummary?.totalInteractions
+      ?? (scopedInteractions.length + (showDemoData ? DEMO_STATS.interactions : 0));
 
     // Analyze common errors from real data
     const errorCounts = scopedInteractions
@@ -370,7 +510,7 @@ export function InstructorDashboard() {
       commonErrors: commonErrors.length > 0 ? commonErrors : [],
       conceptMastery
     };
-  }, [dashboardRows, hasProfileData, isBackendAvailable, backendAvgCoverage, scopedInteractions, showDemoData]);
+  }, [backendSummary, dashboardRows, scopedInteractions, showDemoData]);
 
   // Memoized helper to calculate student adaptive profiles
   const studentAdaptiveProfiles = useMemo(() => {
@@ -665,7 +805,7 @@ export function InstructorDashboard() {
     setShowResetConfirm(false);
   };
 
-  if (isRoleLoading || isDataLoading || isProfilesLoading) {
+  if (isRoleLoading || isDataLoading) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto space-y-6">
@@ -688,6 +828,12 @@ export function InstructorDashboard() {
           <AlertDescription>
             You do not have permission to access this page.
           </AlertDescription>
+        </Alert>
+      )}
+      {fallbackNotice && (
+        <Alert className="m-4 max-w-7xl mx-auto border-amber-200 bg-amber-50 text-amber-900">
+          <AlertTitle>Using Cached Data</AlertTitle>
+          <AlertDescription>{fallbackNotice}</AlertDescription>
         </Alert>
       )}
       {/* Header */}
