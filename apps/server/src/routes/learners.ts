@@ -313,18 +313,12 @@ router.get('/:id/profile', async (req, res) => {
     const { id } = req.params;
     const profile = await getLearnerProfile(id);
 
-    if (!profile) {
-      const response: ApiResponse<never> = {
-        success: false,
-        error: 'Profile not found',
-      };
-      res.status(404).json(response);
-      return;
-    }
-
-    const response: ApiResponse<LearnerProfile> = {
+    // Return 200 with null data when profile doesn't exist.
+    // This is expected for learners who haven't created a profile yet
+    // and avoids browser console noise from 404 errors during hydration.
+    const response: ApiResponse<LearnerProfile | null> = {
       success: true,
-      data: profile,
+      data: profile || null,
     };
     res.json(response);
   } catch (error) {

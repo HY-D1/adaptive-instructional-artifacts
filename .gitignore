@@ -81,8 +81,13 @@ PROFILE_VALIDATION_TEST_REPORT.md
 !docs/PROGRESS_AUDIT_REPORT.md
 !docs/PROGRESS_MODEL.md
 !docs/research/*.md
-!docs/audit/*.md
+# AI-generated audit reports — transient, do not track
+docs/audit/
+docs/audits/
 !docs/reports/*.md
+# AI-generated reports (except curated runbooks)
+!docs/runbooks/*.md
+!docs/runbooks/**/*.md
 !docs/runbooks/*.md
 !docs/runbooks/**/*.md
 
