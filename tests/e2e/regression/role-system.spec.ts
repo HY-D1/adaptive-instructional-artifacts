@@ -339,8 +339,8 @@ test.describe('@weekly Role System', () => {
       // Act - Access textbook with learnerId
       await page.goto('/textbook?learnerId=learner-1');
       
-      // Assert - Should stay on textbook page with query param
-      await expect(page).toHaveURL(/\/textbook\?learnerId=learner-1$/);
+      // Assert - Instructor without access to learner-1 gets redirected to their own view
+      await expect(page).toHaveURL(/\/textbook\?learnerId=user-instructor-inspect$/);
     });
   });
 

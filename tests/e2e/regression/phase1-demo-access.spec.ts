@@ -162,16 +162,15 @@ test.describe('@weekly @no-external Phase 1 Demo Access Contract', () => {
     // Act - Access textbook with learnerId query parameter
     await page.goto('/textbook?learnerId=learner-1');
     
-    // Assert - Stays on textbook page with query param intact
-    await expect(page).toHaveURL(/\/textbook\?learnerId=learner-1$/);
+    // Assert - Instructor without access to learner-1 gets redirected to their own view
+    await expect(page).toHaveURL(/\/textbook\?learnerId=demo-instructor-003$/);
     
     // Assert - Textbook content is visible
     await expect(page.getByRole('heading', { name: /My Textbook|My Learning Journey/i })).toBeVisible();
     
-    // Assert - Page indicates learner inspection mode (if UI supports it)
-    // This may vary based on implementation, so we just verify URL and basic content
+    // Assert - Page shows the instructor's own learner context
     const url = page.url();
-    expect(url).toContain('learnerId=learner-1');
+    expect(url).toContain('learnerId=demo-instructor-003');
   });
 
   // ===========================================================================
