@@ -12,40 +12,28 @@
  * multiple problems have similar difficulty.
  */
 
-import { SQLProblem, SQLProblemTopic } from '../types';
+import { SQLProblem } from '../types';
 import { sqlProblems } from '../data/problems';
 import { storage } from './storage/storage';
+import {
+  getCompositeDifficulty,
+  getFirstProblem,
+  getProblemsByDifficultyRank,
+  getDifficultyLabel,
+} from './problem-ranking';
 
-const DIFFICULTY_VALUES: Record<string, number> = {
-  beginner: 1,
-  intermediate: 2,
-  advanced: 3,
-};
+// Re-export pure ranking utilities so consumers don't need a second import.
+export { getCompositeDifficulty, getFirstProblem, getProblemsByDifficultyRank, getDifficultyLabel };
 
 /** Topic order for fallback progression when scores are tied */
-const TOPIC_ORDER: SQLProblemTopic[] = [
+const TOPIC_ORDER = [
   'basics',
   'filtering',
   'joining',
   'aggregation',
   'functions',
   'advanced',
-];
-
-/**
- * Calculate a composite difficulty score for a problem.
- * Lower score = easier problem.
- */
-export function getCompositeDifficulty(problem: SQLProblem): number {
-  const baseDifficulty = DIFFICULTY_VALUES[problem.difficulty] ?? 2;
-  const topicLevel = problem.topicDifficultyLevel ?? 2;
-  const conceptCount = problem.concepts?.length ?? 1;
-
-  // Weighted formula: base difficulty is the strongest signal,
-  // topic level provides intra-topic gradation,
-  // concept count adds complexity penalty.
-  return baseDifficulty * 10 + topicLevel * 3 + conceptCount * 2;
-}
+] as const;
 
 /**
  * Get the next recommended problem for a learner using global
@@ -101,31 +89,6 @@ export function getNextProblem(
 }
 
 /**
- * Get the first problem a new learner should see.
- * Always returns the globally easiest problem.
- */
-export function getFirstProblem(): SQLProblem {
-  const scored = sqlProblems.map(p => ({
-    problem: p,
-    score: getCompositeDifficulty(p),
-  }));
-
-  scored.sort((a, b) => {
-    if (a.score !== b.score) {
-      return a.score - b.score;
-    }
-    const topicIndexA = TOPIC_ORDER.indexOf(a.problem.topic);
-    const topicIndexB = TOPIC_ORDER.indexOf(b.problem.topic);
-    if (topicIndexA !== topicIndexB) {
-      return topicIndexA - topicIndexB;
-    }
-    return a.problem.id.localeCompare(b.problem.id);
-  });
-
-  return scored[0].problem;
-}
-
-/**
  * Check if a problem is available (not locked) for a learner.
  * Currently all problems are available; prerequisites are enforced
  * at the concept level by the learning-path engine.
@@ -136,35 +99,4 @@ export function isProblemAvailable(
 ): boolean {
   // All problems are available; the sequencing engine controls order.
   return true;
-}
-
-/**
- * Get a human-readable difficulty label from a composite score.
- */
-export function getDifficultyLabel(score: number): string {
-  if (score <= 18) return 'Very Easy';
-  if (score <= 25) return 'Easy';
-  if (score <= 32) return 'Medium';
-  if (score <= 40) return 'Hard';
-  return 'Very Hard';
-}
-
-/**
- * Get the full list of problems sorted by composite difficulty.
- * Useful for displaying a curriculum map.
- */
-export function getProblemsByDifficultyRank(): SQLProblem[] {
-  return [...sqlProblems].sort((a, b) => {
-    const scoreA = getCompositeDifficulty(a);
-    const scoreB = getCompositeDifficulty(b);
-    if (scoreA !== scoreB) {
-      return scoreA - scoreB;
-    }
-    const topicIndexA = TOPIC_ORDER.indexOf(a.topic);
-    const topicIndexB = TOPIC_ORDER.indexOf(b.topic);
-    if (topicIndexA !== topicIndexB) {
-      return topicIndexA - topicIndexB;
-    }
-    return a.id.localeCompare(b.id);
-  });
 }

@@ -65,6 +65,7 @@ import { useLLMSettings } from '../components/shared/LLMSettingsHelper';
 import { useScreenReaderAnnouncer } from '../components/shared/ScreenReaderAnnouncer';
 import { sqlProblems } from '../data/problems';
 import { getNextProblem, getProblemsByDifficultyRank } from '../lib/adaptive-problem-selector';
+import { getFirstProblem } from '../lib/problem-ranking';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
 import { useLocation, Link } from 'react-router';
@@ -395,7 +396,7 @@ export function LearningInterface() {
   // Use actual user profile ID for data isolation (aligned with TextbookPage)
   const learnerId = profile?.id || cachedProfileId || (AUTH_BACKEND_CONFIGURED ? '' : 'learner-1');
   const [sessionId, setSessionId] = useState('');
-  const [currentProblem, setCurrentProblem] = useState<SQLProblem>(sqlProblems[0]);
+  const [currentProblem, setCurrentProblem] = useState<SQLProblem>(getFirstProblem());
   const [activeConceptId, setActiveConceptId] = useState<string | null>(null);
   const [activeConceptTitle, setActiveConceptTitle] = useState<string | null>(null);
   const [sqlDraft, setSqlDraft] = useState(DEFAULT_SQL_EDITOR_CODE);
