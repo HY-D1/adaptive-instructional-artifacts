@@ -2908,7 +2908,7 @@ export function LearningInterface() {
             </div>
 
             <div className="xl:h-[calc(100vh-200px)]">
-              <div className="h-[300px] sm:h-[350px] md:h-[450px] lg:h-[550px] max-h-[60vh] xl:h-full xl:max-h-full">
+              <div className="h-[300px] sm:h-[350px] md:h-[450px] lg:h-[500px] max-h-[65vh] xl:h-full xl:max-h-full">
                 <SQLEditor
                   key={currentProblem.id}
                   problem={currentProblem}
