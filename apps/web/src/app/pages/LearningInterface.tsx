@@ -64,7 +64,7 @@ import { ReinforcementPrompt } from '../components/features/reinforcement/Reinfo
 import { useLLMSettings } from '../components/shared/LLMSettingsHelper';
 import { useScreenReaderAnnouncer } from '../components/shared/ScreenReaderAnnouncer';
 import { sqlProblems } from '../data/problems';
-import { getNextProblem, getProblemsByDifficultyRank } from '../lib/adaptive-problem-selector';
+import { getProblemsByDifficultyRank } from '../lib/adaptive-problem-selector';
 import { getFirstProblem } from '../lib/problem-ranking';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
@@ -2270,11 +2270,12 @@ export function LearningInterface() {
   const rankedProblems = useMemo(() => getProblemsByDifficultyRank(), []);
 
   const handleNextProblem = useCallback(() => {
-    const nextProblem = getNextProblem(learnerId, currentProblem.id);
-    if (nextProblem) {
-      handleProblemChange(nextProblem.id);
+    const currentIndex = rankedProblems.findIndex(p => p.id === currentProblem.id);
+    const nextIndex = currentIndex + 1;
+    if (nextIndex < rankedProblems.length) {
+      handleProblemChange(rankedProblems[nextIndex].id);
     }
-  }, [learnerId, currentProblem.id, handleProblemChange]);
+  }, [currentProblem.id, rankedProblems, handleProblemChange]);
 
   const handlePreviousProblem = useCallback(() => {
     const currentIndex = rankedProblems.findIndex(p => p.id === currentProblem.id);
@@ -2285,9 +2286,9 @@ export function LearningInterface() {
   }, [currentProblem.id, rankedProblems, handleProblemChange]);
 
   const hasNextProblem = useMemo(() => {
-    const nextProblem = getNextProblem(learnerId, currentProblem.id);
-    return nextProblem !== null;
-  }, [learnerId, currentProblem.id]);
+    const currentIndex = rankedProblems.findIndex(p => p.id === currentProblem.id);
+    return currentIndex >= 0 && currentIndex < rankedProblems.length - 1;
+  }, [currentProblem.id, rankedProblems]);
 
   const hasPreviousProblem = useMemo(() => {
     const currentIndex = rankedProblems.findIndex(p => p.id === currentProblem.id);

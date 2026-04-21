@@ -134,6 +134,26 @@ describe('adaptive-problem-selector', () => {
       expect(next).toBeNull();
     });
 
+    it('should never return the current problem itself', () => {
+      vi.mocked(storage.getProfile).mockReturnValue({
+        id: mockLearnerId,
+        name: 'Test',
+        conceptsCovered: new Set(),
+        conceptCoverageEvidence: new Map(),
+        errorHistory: new Map(),
+        solvedProblemIds: new Set(),
+        interactionCount: 0,
+        currentStrategy: 'adaptive-medium',
+        preferences: { escalationThreshold: 2, aggregationDelay: 300000 },
+      });
+
+      const ranked = getProblemsByDifficultyRank();
+      const easiest = ranked[0];
+      const next = getNextProblem(mockLearnerId, easiest.id);
+      expect(next).toBeDefined();
+      expect(next?.id).not.toBe(easiest.id);
+    });
+
     it('should prefer staying in the same topic when difficulty is similar', () => {
       // Solve all but two problems in the same topic
       const basicsProblems = sqlProblems.filter(p => p.topic === 'basics');

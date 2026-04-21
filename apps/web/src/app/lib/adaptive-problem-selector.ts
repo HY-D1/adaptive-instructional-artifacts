@@ -54,8 +54,9 @@ export function getNextProblem(
   const currentTopic = currentProblem?.topic;
 
   // Gather all unsolved problems with their scores
+  // Exclude the current problem so we never recommend staying on the same problem
   const unsolved = sqlProblems
-    .filter(p => !solvedProblemIds.has(p.id))
+    .filter(p => !solvedProblemIds.has(p.id) && p.id !== currentProblemId)
     .map(p => {
       let score = getCompositeDifficulty(p);
 
