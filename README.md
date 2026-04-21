@@ -1,30 +1,43 @@
 # SQL-Adapt
 
+[![Vercel](https://img.shields.io/badge/Vercel-Live-black?logo=vercel)](https://adaptive-instructional-artifacts.vercel.app)
+[![Node.js](https://img.shields.io/badge/Node.js-22+-green?logo=node.js)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/React-18-61dafb?logo=react)](https://react.dev/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?logo=typescript)](https://www.typescriptlang.org/)
+
 An adaptive SQL learning platform that personalizes hints, explanations, and study notes based on each student's mistakes and progress.
 
 Students practice SQL problems with real-time feedback. When they struggle, the system escalates support from quick hints to full explanations — then saves those explanations into a personal textbook. Instructors monitor progress across their class. Researchers export interaction traces for analysis.
 
-**Live at:** [adaptive-instructional-artifacts.vercel.app](https://adaptive-instructional-artifacts.vercel.app)
+**Live:** [adaptive-instructional-artifacts.vercel.app](https://adaptive-instructional-artifacts.vercel.app)
 
 ---
 
 ## Quick Start
 
 ```bash
-# Prerequisites: Node.js 22+
+# Prerequisites: Node.js 22+ (see .nvmrc)
 npm install
-npm run dev              # Frontend only (localStorage mode)
-npm run dev:full         # Frontend + backend (Neon PostgreSQL)
+cd apps/server && npm install
+
+# Frontend only — localStorage mode, no backend needed
+npm run dev
+
+# Full stack — frontend + backend + Neon PostgreSQL
+npm run dev:full
 ```
 
-Open [http://localhost:5173](http://localhost:5173). For backend mode, copy `.env.example` files:
+Open [http://localhost:5173](http://localhost:5173).
+
+For full-stack mode, copy and configure environment variables first:
 
 ```bash
+cp .env.example .env.local
 cp apps/web/.env.example apps/web/.env.local
 cp apps/server/.env.example apps/server/.env.local
 ```
 
-See [docs/deployment/ENVIRONMENT.md](docs/deployment/ENVIRONMENT.md) for variable reference.
+See [HANDOFF.md](HANDOFF.md) for complete setup instructions.
 
 ---
 
@@ -48,9 +61,9 @@ The system adapts based on 23 SQL error subtypes and 30 concepts from the SQL-En
 
 ## Architecture
 
-| Layer | Tech | Purpose |
-|-------|------|---------|
-| **Frontend** | Vite + React + TypeScript | Student practice, instructor dashboard, textbook |
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| **Frontend** | Vite + React 18 + TypeScript | Student practice, instructor dashboard, textbook |
 | **Backend** | Express on Vercel Functions | Auth, persistence, LLM proxy, research export |
 | **Database** | Neon PostgreSQL | Users, sessions, interactions, textbook units |
 | **SQL Engine** | sql.js (WebAssembly) | In-browser SQL execution for practice problems |
@@ -66,34 +79,6 @@ docs/               → Project documentation
 tests/e2e/          → Playwright end-to-end tests
 tests/unit/         → Additional unit tests
 scripts/            → Verification, audit, and research scripts
-```
-
----
-
-## Deployment
-
-Two Vercel projects:
-
-1. **Frontend** — `npm run build` → `dist/app/`
-2. **Backend** — `apps/server/` → Vercel Functions
-
-```bash
-npm run build            # Build frontend
-npm run server:build     # Build backend
-npm run integrity:scan   # Pre-deploy verification
-```
-
-See [docs/deployment/DEPLOYMENT.md](docs/deployment/DEPLOYMENT.md) for step-by-step instructions.
-
----
-
-## Testing
-
-```bash
-npm run test:unit                    # Vitest unit tests (~1800 tests)
-npm run test:e2e                     # Playwright E2E tests (~160 tests)
-npm run test:e2e:weekly              # CI regression suite
-npm run replay:gate                  # Replay determinism check
 ```
 
 ---
@@ -120,16 +105,46 @@ npm run replay:gate                  # Replay determinism check
 
 ---
 
+## Deployment
+
+Two Vercel projects + Neon PostgreSQL:
+
+1. **Frontend** — `npm run build` → `dist/app/`
+2. **Backend** — `apps/server/` → Vercel Functions
+
+```bash
+npm run build            # Build frontend
+npm run server:build     # Build backend
+npm run integrity:scan   # Pre-deploy verification
+```
+
+See [docs/handoff/DEPLOYMENT.md](docs/handoff/DEPLOYMENT.md) for step-by-step instructions.
+
+---
+
+## Testing
+
+```bash
+npm run test:unit                    # Vitest unit tests
+npm run test:e2e                     # Playwright E2E tests
+npm run test:e2e:weekly              # CI regression suite
+npm run replay:gate                  # Replay determinism check
+```
+
+---
+
 ## Documentation
 
-All documentation is in [`docs/`](docs/INDEX.md):
-
-| Section | Contents |
-|---------|----------|
-| [Deployment](docs/deployment/) | Environment setup, deployment modes, Vercel configuration |
-| [Architecture](docs/architecture/) | Data persistence, progress model, system design |
-| [Research](docs/research/) | Experimental design, logging spec, escalation policies |
-| [Operations](docs/operations/) | Current status, beta launch, incident response |
+| Document | What's In It |
+|----------|-------------|
+| [HANDOFF.md](HANDOFF.md) | **Start here.** Master handoff document with architecture overview, setup, and links |
+| [docs/handoff/FRONTEND.md](docs/handoff/FRONTEND.md) | React app, routing, state management, components, build |
+| [docs/handoff/BACKEND.md](docs/handoff/BACKEND.md) | Express API, routes, middleware, auth, LLM proxy |
+| [docs/handoff/DATABASE.md](docs/handoff/DATABASE.md) | Neon schema, tables, indexes, migrations |
+| [docs/handoff/DEPLOYMENT.md](docs/handoff/DEPLOYMENT.md) | Vercel config, CI/CD, env vars, two-project setup |
+| [docs/deployment/MODES.md](docs/deployment/MODES.md) | Local vs hosted vs full-stack capability matrix |
+| [docs/architecture/PERSISTENCE.md](docs/architecture/PERSISTENCE.md) | Where each piece of data lives |
+| [docs/research/](docs/research/) | Research instrumentation and experimental design |
 
 ---
 
@@ -140,21 +155,6 @@ All documentation is in [`docs/`](docs/INDEX.md):
 3. Run `npm run integrity:scan` before committing
 4. Update `docs/CHANGELOG.md` with your changes
 5. Suggest commits; do not auto-push
-
----
-
-## Status
-
-**Last verified:** 2026-04-10
-
-| Metric | Value |
-|--------|-------|
-| Unit tests | 1,800+ passing |
-| E2E tests | 160+ passing |
-| Build time | 2.7s |
-| Production | Live on Vercel |
-| Students | 259 enrolled across 3 sections |
-| Interactions | 120,000+ events in Neon |
 
 ---
 

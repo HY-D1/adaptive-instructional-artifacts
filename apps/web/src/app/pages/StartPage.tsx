@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
-import { BookOpen, BarChart3, Database, GraduationCap, Lock, LogIn } from 'lucide-react';
+import { BookOpen, BarChart3, Database, GraduationCap, Lock, LogIn, FlaskConical, ArrowRight } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
@@ -14,6 +14,8 @@ import { isInstructorModeAvailable, isHostedMode, logRuntimeConfig } from '../li
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
 import { useAuth } from '../lib/auth-context';
 import { DEPLOYMENT_GUIDE_URL } from '../lib/docs-links';
+import { projects } from '../lib/projects-data';
+import { ProjectCard } from '../components/features/projects/ProjectCard';
 import type { UserRole, UserProfile } from '../types';
 
 /**
@@ -520,6 +522,30 @@ export function StartPage() {
               </p>
             </div>
           )}
+
+          {/* Research Modules Preview */}
+          <div className="mt-10 pt-8 border-t border-gray-100 dark:border-gray-800">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <FlaskConical className="size-5 text-primary" />
+                <h2 className="text-lg font-semibold">Research Modules</h2>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate('/projects')}
+                className="text-primary hover:text-primary hover:bg-primary/5"
+              >
+                View All
+                <ArrowRight className="size-4 ml-1" />
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {projects.slice(0, 3).map((project) => (
+                <ProjectCard key={project.id} project={project} compact />
+              ))}
+            </div>
+          </div>
 
           {/* Footer */}
           <div className="mt-8 text-center">

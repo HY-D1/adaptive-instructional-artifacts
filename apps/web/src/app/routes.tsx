@@ -6,6 +6,7 @@ import { RootLayout } from './pages/RootLayout';
 import { TextbookPage } from './pages/TextbookPage';
 import { AuthPage } from './pages/AuthPage';
 import { ResearchPage } from './pages/ResearchPage';
+import { ProjectsPage } from './pages/ProjectsPage';
 import { InstructorDashboard } from './pages/InstructorDashboard';
 import { StartPage } from './pages/StartPage';
 import { LearningInterface } from './pages/LearningInterface';
@@ -155,6 +156,12 @@ function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
 }
 
 export const router = createBrowserRouter([
+  // Public routes — no layout wrapper, no auth required
+  {
+    path: 'projects',
+    Component: ProjectsPage,
+    errorElement: <RouteError />,
+  },
   // Main app routes - nested under RootLayout with navigation
   {
     path: '/',

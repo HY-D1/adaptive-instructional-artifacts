@@ -12,6 +12,7 @@ playwright-report-*/
 playwright-report */
 .mcp.json
 test-results/
+.playwright-mcp/
 # Playwright auth state — captured cookies/localStorage, never commit
 playwright/.auth/*.json
 coverage/
