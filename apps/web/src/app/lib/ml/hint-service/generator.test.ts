@@ -90,6 +90,8 @@ const retrievalBundle: EnhancedRetrievalBundle = {
     concepts: ['select-basic'],
     schema: 'CREATE TABLE users (id INTEGER, name TEXT);',
     expectedQuery: 'SELECT * FROM users',
+    topic: 'basics',
+    topicDifficultyLevel: 1,
   },
 };
 

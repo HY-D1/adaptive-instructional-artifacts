@@ -27,7 +27,9 @@ const problem: SQLProblem = {
   concepts: ['select-basic'],
   schema: 'CREATE TABLE users(id INTEGER, name TEXT);',
   expectedQuery: 'SELECT name FROM users;',
-  expectedResult: []
+  expectedResult: [],
+  topic: 'basics',
+  topicDifficultyLevel: 1,
 };
 
 const buildInteractions = (hintEventId: string): InteractionEvent[] => [

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { storage } from './storage';
+import type { InteractionEvent } from '../../types';
 
 afterEach(() => {
   localStorage.clear();
@@ -188,7 +189,7 @@ describe('telemetry export contract', () => {
       sessionId: 'session-1',
       timestamp: 1_700_000_000_000,
       eventType: 'session_end',
-    });
+    } as unknown as InteractionEvent);
 
     const exported = storage.exportData({ allHistory: true });
     expect(exported.interactions).toHaveLength(1);
