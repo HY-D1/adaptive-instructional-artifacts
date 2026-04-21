@@ -3,6 +3,7 @@ import { renderHook } from '@testing-library/react';
 import { useLearnerProgress } from './useLearnerProgress';
 import { storage as localStorageManager } from '../lib/storage/storage';
 import { sqlProblems } from '../data/problems';
+import { getProblemsByDifficultyRank } from '../lib/adaptive-problem-selector';
 
 // Mock the local storage module
 vi.mock('../lib/storage/storage', () => ({
@@ -30,18 +31,22 @@ describe('useLearnerProgress', () => {
     expect(result.current.totalProblems).toBe(sqlProblems.length);
   });
 
-  it('should return correct current problem number (1-based)', () => {
+  it('should return correct current problem number (1-based) in difficulty-ranked order', () => {
     vi.mocked(localStorageManager.getProfile).mockReturnValue(null);
+    const ranked = getProblemsByDifficultyRank();
     
     const { result: firstResult } = renderHook(() => 
       useLearnerProgress({ learnerId: mockLearnerId, currentProblemId: firstProblemId })
     );
+    // First problem in original array should be position 1 in ranked order (it's the easiest)
     expect(firstResult.current.currentProblemNumber).toBe(1);
 
     const { result: ninthResult } = renderHook(() => 
       useLearnerProgress({ learnerId: mockLearnerId, currentProblemId: ninthProblemId })
     );
-    expect(ninthResult.current.currentProblemNumber).toBe(9);
+    // Ninth problem in original array — look up its position in ranked order
+    const expectedRank = ranked.findIndex(p => p.id === ninthProblemId) + 1;
+    expect(ninthResult.current.currentProblemNumber).toBe(expectedRank);
   });
 
   it('should return solved count of 0 when no problems solved', () => {
