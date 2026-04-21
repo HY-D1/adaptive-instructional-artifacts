@@ -37,7 +37,7 @@ cp apps/web/.env.example apps/web/.env.local
 cp apps/server/.env.example apps/server/.env.local
 ```
 
-See [HANDOFF.md](HANDOFF.md) for complete setup instructions.
+See [docs/deployment/GUIDE.md](docs/deployment/GUIDE.md) for complete setup instructions.
 
 ---
 
@@ -118,7 +118,7 @@ npm run server:build     # Build backend
 npm run integrity:scan   # Pre-deploy verification
 ```
 
-See [docs/handoff/DEPLOYMENT.md](docs/handoff/DEPLOYMENT.md) for step-by-step instructions.
+See [docs/deployment/GUIDE.md](docs/deployment/GUIDE.md) for step-by-step instructions.
 
 ---
 
@@ -137,11 +137,7 @@ npm run replay:gate                  # Replay determinism check
 
 | Document | What's In It |
 |----------|-------------|
-| [HANDOFF.md](HANDOFF.md) | **Start here.** Master handoff document with architecture overview, setup, and links |
-| [docs/handoff/FRONTEND.md](docs/handoff/FRONTEND.md) | React app, routing, state management, components, build |
-| [docs/handoff/BACKEND.md](docs/handoff/BACKEND.md) | Express API, routes, middleware, auth, LLM proxy |
-| [docs/handoff/DATABASE.md](docs/handoff/DATABASE.md) | Neon schema, tables, indexes, migrations |
-| [docs/handoff/DEPLOYMENT.md](docs/handoff/DEPLOYMENT.md) | Vercel config, CI/CD, env vars, two-project setup |
+| [docs/deployment/GUIDE.md](docs/deployment/GUIDE.md) | Deployment guide: Vercel config, CI/CD, env vars, two-project setup |
 | [docs/deployment/MODES.md](docs/deployment/MODES.md) | Local vs hosted vs full-stack capability matrix |
 | [docs/architecture/PERSISTENCE.md](docs/architecture/PERSISTENCE.md) | Where each piece of data lives |
 | [docs/research/](docs/research/) | Research instrumentation and experimental design |
