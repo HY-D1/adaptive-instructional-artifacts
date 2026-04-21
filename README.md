@@ -37,10 +37,6 @@ cp apps/web/.env.example apps/web/.env.local
 cp apps/server/.env.example apps/server/.env.local
 ```
 
-See [docs/deployment/GUIDE.md](docs/deployment/GUIDE.md) for complete setup instructions.
-
----
-
 ## How It Works
 
 ```
@@ -70,12 +66,73 @@ The system adapts based on 23 SQL error subtypes and 30 concepts from the SQL-En
 | **LLM** | Groq (via backend proxy) | Contextual hint/explanation generation |
 | **Offline** | localStorage + sync queue | Works without backend, syncs when available |
 
+### Frontend Architecture
+
+**Pages & Routing** (React Router v7)
+- `StartPage` — Landing + signup/login
+- `LearningInterface` — Core SQL practice with Monaco Editor
+- `TextbookPage` — Personal accumulated explanations
+- `InstructorDashboard` — Class progress + section management
+- `ConceptLibraryPage` / `ConceptDetailPage` — SQL concept reference
+- `ResearchPage` — Data export for studies
+
+**Key Modules**
+- `adaptive-orchestrator.ts` — Escalation logic: error analysis → hint level selection → LLM/template content generation
+- `adaptive-problem-selector.ts` — Problem recommendation based on concept coverage and past performance
+- `content-generator.ts` — LLM prompt construction with error context + concept metadata
+- `storage/` — Dual-write layer: localStorage (offline) + Neon sync queue
+- `auth-context.tsx` — JWT auth with automatic token refresh
+
+### Backend Architecture
+
+**Express on Vercel Functions**
+- Auth middleware — JWT validation, role checks (student/instructor/researcher)
+- Route modules:
+  - `auth.ts` — Signup, login, token refresh
+  - `learners.ts` / `sessions.ts` — Progress tracking
+  - `interactions.ts` — Event ingestion (31 event types)
+  - `textbooks.ts` — CRUD for personal textbook units
+  - `instructor.ts` — Class dashboards, section enrollment
+  - `llm.ts` — Groq proxy with prompt templates
+  - `research.ts` — Export interaction traces
+
+**Database Layer**
+- Neon PostgreSQL (production) with connection pooling
+- SQLite3 fallback for local dev (zero external deps)
+- Auto-migration on server startup
+
+### Data Flow
+
+```
+Student writes SQL → sql.js executes in browser
+       ↓
+Error? → classify into 23 subtypes
+       ↓
+Adaptive Orchestrator selects hint level (1-3)
+       ↓
+Level 3? → LLM generates contextual explanation
+       ↓
+Save to textbook + log interaction event
+       ↓
+Background sync to Neon (if online)
+```
+
+### Offline-First Design
+
+- **localStorage** as primary cache: profiles, interactions queue, textbook, practice drafts
+- **Neon** as system of record: hydrates on login, syncs in background
+- **Drafts** are local-only; everything else syncs when connection returns
+- Works fully without backend in `localStorage` mode
+
 ### Repository Layout
 
 ```
 apps/web/           → Vite + React frontend
-apps/server/        → Express backend (Vercel-compatible)
-docs/               → Project documentation
+  src/app/lib/      → Core logic (adaptive engine, storage, auth)
+  src/app/routes/   → Page components
+apps/server/        → Express backend (Vercel Functions)
+  src/routes/       → API endpoints
+  src/db/           → Neon/SQLite abstractions
 tests/e2e/          → Playwright end-to-end tests
 tests/unit/         → Additional unit tests
 scripts/            → Verification, audit, and research scripts
@@ -118,10 +175,6 @@ npm run server:build     # Build backend
 npm run integrity:scan   # Pre-deploy verification
 ```
 
-See [docs/deployment/GUIDE.md](docs/deployment/GUIDE.md) for step-by-step instructions.
-
----
-
 ## Testing
 
 ```bash
@@ -130,19 +183,6 @@ npm run test:e2e                     # Playwright E2E tests
 npm run test:e2e:weekly              # CI regression suite
 npm run replay:gate                  # Replay determinism check
 ```
-
----
-
-## Documentation
-
-| Document | What's In It |
-|----------|-------------|
-| [docs/deployment/GUIDE.md](docs/deployment/GUIDE.md) | Deployment guide: Vercel config, CI/CD, env vars, two-project setup |
-| [docs/deployment/MODES.md](docs/deployment/MODES.md) | Local vs hosted vs full-stack capability matrix |
-| [docs/architecture/PERSISTENCE.md](docs/architecture/PERSISTENCE.md) | Where each piece of data lives |
-| [docs/research/](docs/research/) | Research instrumentation and experimental design |
-
----
 
 ## Contributing
 
