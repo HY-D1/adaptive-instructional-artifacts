@@ -1,6 +1,6 @@
 import { LLMGenerationParams } from '../../types';
 import { isDemoMode, shouldAttemptLLM } from '../utils/demo-mode';
-import { isBackendConfigured, isHostedMode, getLLMUnavailableError } from '../runtime-config';
+import { isBackendConfigured, isHostedMode, getLLMUnavailableError, getApiBaseUrl } from '../runtime-config';
 
 export const OLLAMA_MODEL = 'qwen3:4b';
 export const OLLAMA_FALLBACK_MODEL = 'llama3.2:3b';
@@ -23,9 +23,10 @@ const PROBE_WARMUP_TIMEOUT_MS = 30000;
 /**
  * Base URL for API requests
  * In development, this is empty (same origin with Vite proxy)
- * In production, this should point to the backend server
+ * In production, this should point to the backend server.
+ * getApiBaseUrl() resolves the same-origin sentinel to '' (relative paths).
  */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE_URL = getApiBaseUrl() ?? '';
 
 /**
  * Options for LLM generation
@@ -136,7 +137,9 @@ function isTimeoutError(error: unknown): boolean {
 }
 
 function canReachBackendProxy(): boolean {
-  return Boolean(API_BASE_URL) || Boolean(import.meta.env.DEV);
+  // isBackendConfigured() is true for the same-origin sentinel (where
+  // API_BASE_URL is '') as well as an explicit backend URL.
+  return isBackendConfigured() || Boolean(import.meta.env.DEV);
 }
 
 function parseProvider(value: unknown): LLMProvider | undefined {

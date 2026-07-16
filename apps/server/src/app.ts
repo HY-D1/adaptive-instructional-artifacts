@@ -54,6 +54,14 @@ export const RESEARCH_CONTRACT_VERSION = 'v2.2.0';
 let schemaInitPromise: Promise<void> | null = null;
 
 export function ensureSchemaInitialized(): Promise<void> {
+  // initializeSchema() issues ~40 sequential CREATE TABLE/INDEX round-trips to
+  // Neon. On serverless this runs on every cold start (awaited per-request via
+  // the middleware below), adding significant latency. When the schema is
+  // provisioned out-of-band (`npm run db:init:neon`), set AUTO_SCHEMA_INIT=false
+  // to skip it. Default (unset) preserves the previous auto-init behavior.
+  if (process.env.AUTO_SCHEMA_INIT === 'false') {
+    return Promise.resolve();
+  }
   if (!schemaInitPromise) {
     schemaInitPromise = initializeSchema().catch(async (error) => {
       schemaInitPromise = null;

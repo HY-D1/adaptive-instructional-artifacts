@@ -15,12 +15,14 @@ import type {
 } from '@/app/types';
 import { withCsrfHeader } from './csrf-client';
 import { safeSet } from '../storage/safe-storage';
+import { getApiBaseUrl } from '../runtime-config';
 
 // API Configuration
 // VITE_API_BASE_URL is the canonical env var (e.g. https://my-api.vercel.app — no trailing /api)
-const _API_BASE = import.meta.env.VITE_API_BASE_URL;
-const API_URL = _API_BASE ? `${_API_BASE}/api` : 'http://localhost:3001/api';
-const USE_BACKEND = !!_API_BASE;
+// getApiBaseUrl() resolves the same-origin sentinel to '' (relative paths).
+const _API_BASE = getApiBaseUrl();
+const API_URL = _API_BASE !== undefined ? `${_API_BASE}/api` : 'http://localhost:3001/api';
+const USE_BACKEND = _API_BASE !== undefined;
 
 // Cache configuration
 const CACHE_KEY = 'sql-adapt-profile-cache';
