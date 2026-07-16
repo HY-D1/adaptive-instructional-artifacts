@@ -92,13 +92,18 @@ export const PDF_INDEX_CHUNKS_FILENAME = 'chunks.json';
  * Base URL for API requests
  * In development, this is empty (same origin with Vite proxy)
  * In production, this should point to the backend server
- * 
+ *
  * NOTE: This file is imported by vite.config.ts (Node.js context) where
  * import.meta.env is not available. We safely check for its existence.
+ *
+ * The 'same-origin' sentinel (see runtime-config's SAME_ORIGIN_API_SENTINEL) is
+ * resolved to '' here so endpoints become relative paths. It is inlined rather
+ * than imported to keep this module safe to load in the Node/vite.config context.
  */
-const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) 
-  ? import.meta.env.VITE_API_BASE_URL 
+const _RAW_API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL)
+  ? import.meta.env.VITE_API_BASE_URL
   : '';
+const API_BASE_URL = _RAW_API_BASE.trim().toLowerCase() === 'same-origin' ? '' : _RAW_API_BASE;
 
 /**
  * API endpoint for loading PDF index

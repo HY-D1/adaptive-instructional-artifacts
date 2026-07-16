@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import crypto from 'node:crypto';
+import { getCookieBaseOptions } from './cookie-config.js';
 
 export const CSRF_COOKIE_NAME = 'sql_adapt_csrf';
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -9,22 +10,22 @@ export function createCsrfToken(): string {
 }
 
 export function setCsrfCookie(res: Response, token: string): void {
-  const isProd = process.env.NODE_ENV === 'production';
+  const { sameSite, secure } = getCookieBaseOptions();
   res.cookie(CSRF_COOKIE_NAME, token, {
     httpOnly: false,
-    secure: isProd,
-    sameSite: isProd ? 'none' : 'lax',
+    secure,
+    sameSite,
     maxAge: 30 * 24 * 60 * 60 * 1000,
     path: '/',
   });
 }
 
 export function clearCsrfCookie(res: Response): void {
-  const isProd = process.env.NODE_ENV === 'production';
+  const { sameSite, secure } = getCookieBaseOptions();
   res.clearCookie(CSRF_COOKIE_NAME, {
     path: '/',
-    secure: isProd,
-    sameSite: isProd ? 'none' : 'lax',
+    secure,
+    sameSite,
   });
 }
 
