@@ -8,22 +8,22 @@
  * Policy Version: learner-bandit-v1
  */
 
-import { MultiArmedBandit, BanditArm } from './multi-armed-bandit';
+import { MultiArmedBandit, BanditArm } from "./multi-armed-bandit";
 import {
   calculateReward,
   RewardComponents,
   calculateIndependentSuccess,
   calculateErrorReduction,
   calculateTimeEfficiency,
-} from './reward-calculator';
+} from "./reward-calculator";
 import {
   FAST_ESCALATOR,
   SLOW_ESCALATOR,
   ADAPTIVE_ESCALATOR,
   EXPLANATION_FIRST,
   type EscalationProfile,
-} from './escalation-profiles';
-import type { InteractionEvent } from '../../types';
+} from "./escalation-profiles";
+import type { InteractionEvent } from "../../types";
 
 /**
  * Bandit arm IDs and their corresponding escalation profiles
@@ -31,7 +31,7 @@ import type { InteractionEvent } from '../../types';
 export const BANDIT_ARM_PROFILES = {
   aggressive: FAST_ESCALATOR,
   conservative: SLOW_ESCALATOR,
-  'explanation-first': EXPLANATION_FIRST,
+  "explanation-first": EXPLANATION_FIRST,
   adaptive: ADAPTIVE_ESCALATOR,
 } as const;
 
@@ -42,10 +42,10 @@ export type BanditArmId = keyof typeof BANDIT_ARM_PROFILES;
  * Used for UI display when profile override is active
  */
 export const PROFILE_TO_ARM_ID: Record<string, BanditArmId> = {
-  'fast-escalator': 'aggressive',
-  'slow-escalator': 'conservative',
-  'adaptive-escalator': 'adaptive',
-  'explanation-first': 'explanation-first',
+  "fast-escalator": "aggressive",
+  "slow-escalator": "conservative",
+  "adaptive-escalator": "adaptive",
+  "explanation-first": "explanation-first",
 };
 
 /**
@@ -87,22 +87,29 @@ export interface ArmStatistics {
  */
 export class LearnerBanditManager {
   private bandits: Map<string, MultiArmedBandit> = new Map();
-  private armIds: string[] = ['aggressive', 'conservative', 'explanation-first', 'adaptive'];
+  private armIds: string[] = [
+    "aggressive",
+    "conservative",
+    "explanation-first",
+    "adaptive",
+  ];
+  private readonly sharedPoolKey = "__shared_pool__";
 
   /**
-   * Get or create a bandit for a learner
+   * Get or create a bandit for a learner.
    *
-   * If the learner doesn't have a bandit yet, creates a new one
-   * with all four escalation profile arms.
+   * The pooled bandit uses a single shared bandit instance across learners so
+   * outcomes contribute to the same exploration/exploitation state for the
+   * configured pool.
    *
    * @param learnerId - Unique identifier for the learner
-   * @returns MultiArmedBandit instance for this learner
+   * @returns MultiArmedBandit instance for the shared pool
    */
   getBanditForLearner(learnerId: string): MultiArmedBandit {
-    if (!this.bandits.has(learnerId)) {
-      this.bandits.set(learnerId, new MultiArmedBandit(this.armIds));
+    if (!this.bandits.has(this.sharedPoolKey)) {
+      this.bandits.set(this.sharedPoolKey, new MultiArmedBandit(this.armIds));
     }
-    return this.bandits.get(learnerId)!;
+    return this.bandits.get(this.sharedPoolKey)!;
   }
 
   /**
@@ -143,16 +150,29 @@ export class LearnerBanditManager {
    * @param armId - Bandit arm that was used
    * @param outcome - Learning outcome data
    */
-  recordOutcome(learnerId: string, armId: BanditArmId, outcome: LearningOutcome): void {
+  recordOutcome(
+    learnerId: string,
+    armId: BanditArmId,
+    outcome: LearningOutcome,
+  ): void {
     const bandit = this.getBanditForLearner(learnerId);
 
     // Calculate reward components
     const components: RewardComponents = {
-      independentSuccess: calculateIndependentSuccess(outcome.usedExplanation, outcome.solved),
-      errorReduction: calculateErrorReduction(outcome.errorCount, outcome.baselineErrors),
+      independentSuccess: calculateIndependentSuccess(
+        outcome.usedExplanation,
+        outcome.solved,
+      ),
+      errorReduction: calculateErrorReduction(
+        outcome.errorCount,
+        outcome.baselineErrors,
+      ),
       delayedRetention: 0, // Not available immediately
       dependencyPenalty: -outcome.hdiScore, // Negative because it's a penalty
-      timeEfficiency: calculateTimeEfficiency(outcome.timeSpentMs, outcome.medianTimeMs),
+      timeEfficiency: calculateTimeEfficiency(
+        outcome.timeSpentMs,
+        outcome.medianTimeMs,
+      ),
     };
 
     // Calculate reward
@@ -189,40 +209,70 @@ export class LearnerBanditManager {
   }
 
   /**
-   * Reset a learner's bandit (e.g., for a new session)
-   *
-   * Removes the learner's bandit from the manager, causing a new
-   * one to be created on next access.
+   * Reset the shared pool bandit (e.g., for a new experiment run).
    *
    * @param learnerId - Unique identifier for the learner
    */
   resetLearner(learnerId: string): void {
-    this.bandits.delete(learnerId);
+    this.bandits.delete(this.sharedPoolKey);
   }
 
   /**
-   * Get all learner IDs with bandits
+   * Serialize the shared bandit state for a learner/pool.
    *
-   * @returns Array of learner IDs
+   * @param learnerId - Unique identifier for the learner
+   * @returns Serializable bandit state
+   */
+  serializeBanditStateForLearner(
+    learnerId: string,
+  ): ReturnType<MultiArmedBandit["serialize"]> | null {
+    const bandit = this.getBanditForLearner(learnerId);
+    return bandit.serialize();
+  }
+
+  /**
+   * Restore a pooled bandit state for a learner.
+   *
+   * @param learnerId - Unique identifier for the learner
+   * @param state - Serialized bandit state
+   */
+  deserializeBanditState(
+    learnerId: string,
+    state: ReturnType<MultiArmedBandit["serialize"]> | null,
+  ): void {
+    if (!state) {
+      this.bandits.delete(this.sharedPoolKey);
+      return;
+    }
+
+    const bandit = new MultiArmedBandit(this.armIds);
+    bandit.deserialize(state);
+    this.bandits.set(this.sharedPoolKey, bandit);
+  }
+
+  /**
+   * Get the keys for the managed pooled bandits.
+   *
+   * @returns Array of pool keys
    */
   getLearnerIds(): string[] {
     return Array.from(this.bandits.keys());
   }
 
   /**
-   * Check if a learner has a bandit
+   * Check if a learner has access to the shared bandit.
    *
    * @param learnerId - Unique identifier for the learner
-   * @returns True if learner has a bandit
+   * @returns True if the shared pool bandit exists
    */
   hasBandit(learnerId: string): boolean {
-    return this.bandits.has(learnerId);
+    return this.bandits.has(this.sharedPoolKey);
   }
 
   /**
-   * Get the total number of learners managed
+   * Get the total number of managed pooled bandits.
    *
-   * @returns Number of learners
+   * @returns Number of pooled bandits
    */
   getLearnerCount(): number {
     return this.bandits.size;
@@ -271,4 +321,4 @@ export const banditManager = new LearnerBanditManager();
  * This should be updated when the implementation changes
  * to ensure reproducibility.
  */
-export const LEARNER_BANDIT_MANAGER_VERSION = 'learner-bandit-v1';
+export const LEARNER_BANDIT_MANAGER_VERSION = "learner-bandit-v1";

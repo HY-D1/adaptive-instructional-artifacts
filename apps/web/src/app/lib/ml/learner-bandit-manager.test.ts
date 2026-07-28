@@ -32,21 +32,42 @@ describe('LearnerBanditManager', () => {
     expect(bandit1).toBe(bandit2);
   });
 
-  it('should create different bandits for different learners', () => {
+  it('should share a pooled bandit across learners by default', () => {
     const bandit1 = manager.getBanditForLearner('learner-1');
     const bandit2 = manager.getBanditForLearner('learner-2');
-    expect(bandit1).not.toBe(bandit2);
+    expect(bandit1).toBe(bandit2);
   });
 
-  it('should track multiple learners', () => {
+  it('should track pooled bandit state', () => {
     manager.getBanditForLearner('learner-1');
     manager.getBanditForLearner('learner-2');
     manager.getBanditForLearner('learner-3');
-    
-    expect(manager.getLearnerCount()).toBe(3);
-    expect(manager.getLearnerIds()).toContain('learner-1');
-    expect(manager.getLearnerIds()).toContain('learner-2');
-    expect(manager.getLearnerIds()).toContain('learner-3');
+
+    expect(manager.getLearnerCount()).toBe(1);
+    expect(manager.getLearnerIds()).toContain('__shared_pool__');
+  });
+
+  it('should serialize and restore pooled bandit state across manager instances', () => {
+    const selection = manager.selectProfileForLearner('learner-1');
+
+    manager.recordOutcome('learner-1', selection.armId, {
+      solved: true,
+      usedExplanation: false,
+      errorCount: 1,
+      baselineErrors: 3,
+      timeSpentMs: 5000,
+      medianTimeMs: 10000,
+      hdiScore: 0.2,
+    });
+
+    const serialized = manager.serializeBanditStateForLearner('learner-1');
+    const restoredManager = new LearnerBanditManager();
+    restoredManager.deserializeBanditState('learner-1', serialized);
+
+    const restoredStats = restoredManager.getLearnerStats('learner-1');
+    const restoredPullCount = restoredStats.find((stat) => stat.armId === selection.armId)?.pullCount ?? 0;
+
+    expect(restoredPullCount).toBe(1);
   });
 
   it('should check if learner has bandit', () => {
@@ -295,7 +316,7 @@ describe('LearnerBanditManager', () => {
     manager.getBanditForLearner('learner-1');
     manager.getBanditForLearner('learner-2');
     
-    expect(manager.getLearnerCount()).toBe(2);
+    expect(manager.getLearnerCount()).toBe(1);
     
     manager.clearAll();
     
