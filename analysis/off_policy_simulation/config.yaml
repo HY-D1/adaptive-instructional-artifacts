@@ -1,0 +1,16 @@
+random_seed: 7
+section_id_allowlist: []
+
+fixed_schedule:
+  first_n_attempts: 3
+  first_arm: conservative
+  second_arm: explanation-first
+
+propensity:
+  method: thompson_sampling_monte_carlo
+  n_simulations: 5000
+  fallback_method: matching
+
+mock_data:
+  n_sessions: 3
+  attempts_per_session: 4
