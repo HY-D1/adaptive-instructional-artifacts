@@ -680,7 +680,7 @@ export function RootLayout() {
               <Link
                 to={isInstructor ? '/instructor-dashboard' : '/practice'}
                 className="flex items-center gap-2 shrink-0"
-                aria-label={`SQL-Adapt ${isInstructor ? 'Instructor' : 'Student'} — Schema Atlas home`}
+                aria-label={`SQL-Adapt ${isInstructor ? 'Instructor' : 'Student'} — home`}
               >
                 <BrandMark compact inverse />
                 {isStudent && (

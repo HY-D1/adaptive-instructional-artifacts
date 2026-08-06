@@ -45,7 +45,7 @@ export function ProjectsPage() {
       <header className="atlas-public-nav border-b bg-white dark:bg-gray-900 dark:border-gray-700">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between gap-4">
-            <Link to="/" aria-label="Schema Atlas home — SQL-Adapt learning system">
+            <Link to="/" aria-label="SQL-Adapt home">
               <BrandMark compact />
             </Link>
             <div className="flex items-center gap-3">
@@ -75,7 +75,7 @@ export function ProjectsPage() {
             <div className="max-w-3xl mx-auto text-center">
             <div className="inline-flex items-center gap-2 text-primary text-sm font-medium mb-6 font-mono uppercase tracking-[0.12em]">
               <Database className="size-4" />
-              Schema Atlas research
+              SQL-Adapt research
             </div>
             <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
               Adaptive SQL Learning

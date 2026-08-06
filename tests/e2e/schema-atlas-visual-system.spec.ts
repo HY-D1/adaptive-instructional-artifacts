@@ -30,7 +30,7 @@ async function setProfile(page: Page, profile: TestProfile | null) {
 async function expectAtlasLandmarks(page: Page, expectedShell: AtlasShell) {
   const banner = page.getByRole('banner');
   await expect(banner).toHaveCount(1);
-  await expect(banner.getByText('Schema Atlas', { exact: true })).toBeVisible();
+  await expect(banner.getByText('SQL-Adapt', { exact: true })).toBeVisible();
   await expect(page.getByRole('main')).toHaveCount(1);
 
   const shells = page.locator('[data-atlas-shell]');
