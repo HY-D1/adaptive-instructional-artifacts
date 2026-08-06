@@ -39,6 +39,7 @@ import { resolveDbEnv, resolveEnvironment, resolveDbTarget } from './db/env-reso
 import { optionalAuth, requireAuth, requireInstructor } from './middleware/auth.js';
 import { requireCsrf } from './middleware/csrf.js';
 import { generalApiLimiter, researchRateLimiter } from './middleware/rate-limit.js';
+import { getDatabaseReadiness, isDatabaseRouteAllowed } from './db/readiness.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../.env');
@@ -49,21 +50,52 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-export const RESEARCH_CONTRACT_VERSION = 'v2.2.0';
+export const RESEARCH_CONTRACT_VERSION = 'v2.3.0';
+
+export const DATABASE_BACKED_ROUTE_PREFIXES = [
+  '/api/learners',
+  '/api/interactions',
+  '/api/textbooks',
+  '/api/sessions',
+  '/api/auth',
+  '/api/research',
+  '/api/instructor',
+  '/api/corpus',
+] as const;
 
 let schemaInitPromise: Promise<void> | null = null;
 
-export function ensureSchemaInitialized(): Promise<void> {
-  // initializeSchema() issues ~40 sequential CREATE TABLE/INDEX round-trips to
-  // Neon. On serverless this runs on every cold start (awaited per-request via
-  // the middleware below), adding significant latency. When the schema is
-  // provisioned out-of-band (`npm run db:init:neon`), set AUTO_SCHEMA_INIT=false
-  // to skip it. Default (unset) preserves the previous auto-init behavior.
-  if (process.env.AUTO_SCHEMA_INIT === 'false') {
-    return Promise.resolve();
+export interface PrepareDatabaseRuntimeOptions {
+  usingNeon?: boolean;
+  env?: Record<string, string | undefined>;
+  inspectReadiness?: typeof getDatabaseReadiness;
+  initializeSchema?: () => Promise<void>;
+}
+
+export async function prepareDatabaseRuntime(
+  options: PrepareDatabaseRuntimeOptions = {},
+): Promise<void> {
+  const usingNeon = options.usingNeon ?? isUsingNeon();
+  const env = options.env ?? process.env;
+  const inspectReadiness = options.inspectReadiness ?? getDatabaseReadiness;
+  const initialize = options.initializeSchema ?? initializeSchema;
+
+  if (usingNeon) {
+    // Runtime Neon startup is always inspection-only. DDL is available only
+    // through the guarded db:init:neon/db:migrate command path.
+    await inspectReadiness();
+    return;
   }
+
+  if (env.AUTO_SCHEMA_INIT === 'false') {
+    return;
+  }
+  await initialize();
+}
+
+export function ensureSchemaInitialized(): Promise<void> {
   if (!schemaInitPromise) {
-    schemaInitPromise = initializeSchema().catch(async (error) => {
+    schemaInitPromise = prepareDatabaseRuntime().catch(async (error) => {
       schemaInitPromise = null;
       await closeDb();
       throw error;
@@ -165,15 +197,6 @@ app.use(optionalAuth);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-app.use(async (_req: Request, _res: Response, next: NextFunction) => {
-  try {
-    await ensureSchemaInitialized();
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
-
 app.use((req: Request, _res: Response, next: NextFunction) => {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] ${req.method} ${req.path}`);
@@ -197,20 +220,13 @@ app.get('/health', async (_req: Request, res: Response) => {
   const environment = resolveEnvironment();
   const dbTarget = resolveDbTarget();
 
-  // Check actual database connectivity
-  let dbStatus: 'ok' | 'error' = 'ok';
+  const readinessStart = Date.now();
+  const readiness = await getDatabaseReadiness();
+  const routesEnabled = isDatabaseRouteAllowed(readiness);
+  const dbStatus: 'ok' | 'error' = routesEnabled ? 'ok' : 'error';
   let dbLatencyMs: number | undefined;
   if (isUsingNeon()) {
-    const startTime = Date.now();
-    try {
-      const { getDb } = await import('./db/neon.js');
-      const db = getDb();
-      await db`SELECT 1`;
-      dbLatencyMs = Date.now() - startTime;
-    } catch (error) {
-      dbStatus = 'error';
-      console.error('[health] Database connectivity check failed:', error);
-    }
+    dbLatencyMs = Date.now() - readinessStart;
   }
 
   const response: Record<string, unknown> = {
@@ -226,28 +242,74 @@ app.get('/health', async (_req: Request, res: Response) => {
       latencyMs: dbLatencyMs,
     },
     features: featureStatus,
+    readiness,
   };
 
   const statusCode = dbStatus === 'ok' ? 200 : 503;
   res.status(statusCode).json(response);
 });
 
-app.get('/api/system/persistence-status', (_req: Request, res: Response) => {
+app.get('/api/system/persistence-status', async (_req: Request, res: Response) => {
   const neon = isUsingNeon();
   const { source } = resolveDbEnv();
   const environment = resolveEnvironment();
   const dbTarget = resolveDbTarget();
 
-  res.json({
+  const readiness = await getDatabaseReadiness();
+  const persistenceRoutesEnabled = isDatabaseRouteAllowed(readiness);
+
+  res.status(persistenceRoutesEnabled ? 200 : 503).json({
     backendReachable: true,
     dbMode: neon ? 'neon' : 'sqlite',
     resolvedEnvSource: source,
     dbTarget,
     environment,
-    persistenceRoutesEnabled: true,
+    persistenceRoutesEnabled,
     researchContractVersion: RESEARCH_CONTRACT_VERSION,
+    readiness,
   });
 });
+
+export async function databaseReadinessGate(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  // Logout is cookie-only and still passes through the auth router's CSRF
+  // validation. Keep this exact method/path available so degraded persistence
+  // cannot trap a user in an authenticated browser session.
+  if (
+    req.method === 'POST'
+    && req.baseUrl === '/api/auth'
+    && req.path === '/logout'
+  ) {
+    next();
+    return;
+  }
+
+  try {
+    const readiness = await getDatabaseReadiness();
+    if (!isDatabaseRouteAllowed(readiness)) {
+      res.status(503).json({
+        success: false,
+        error: 'Database readiness check failed',
+        readiness,
+      });
+      return;
+    }
+
+    // SQLite is the local fallback and may initialize lazily. Neon runtime
+    // requests are inspection-only; preview provisioning is an explicit task.
+    if (!isUsingNeon()) {
+      await ensureSchemaInitialized();
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+app.use([...DATABASE_BACKED_ROUTE_PREFIXES], databaseReadinessGate);
 
 const usingNeon = isUsingNeon();
 

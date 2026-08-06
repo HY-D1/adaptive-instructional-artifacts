@@ -18,6 +18,10 @@ import {
   getCsrfHeaders,
 } from './csrf-client';
 import { isResearchSafe, getResearchRuntimeMode, getApiBaseUrl } from '../runtime-config';
+import {
+  getActiveSyncPrincipalSnapshot,
+  isActiveSyncPrincipalSnapshot,
+} from '../storage/sync-owner';
 
 // API Configuration
 // VITE_API_BASE_URL is the canonical env var (e.g. https://my-api.vercel.app — no trailing /api)
@@ -470,6 +474,7 @@ async function fetchApi<T>(
 ): Promise<ApiResponse<T>> {
   const url = `${API_URL}${endpoint}`;
   const authMeUrl = `${API_URL}/auth/me`;
+  const principalSnapshot = getActiveSyncPrincipalSnapshot();
 
   const executeRequest = async (requestOptions: RequestInit): Promise<Response> => {
     const headers = new Headers(requestOptions.headers || {});
@@ -497,10 +502,31 @@ async function fetchApi<T>(
       typeof errorData.error === 'string' &&
       errorData.error.toLowerCase().includes('csrf')
     ) {
-      const refreshed = await refreshCsrfTokenFromAuthMe(authMeUrl);
-      if (refreshed) {
-        response = await executeRequest(withCsrfHeader(options));
-        errorData = await response.json().catch(() => ({} as { error?: string; message?: string }));
+      let retriedResponse: Response | null = null;
+      let retriedErrorData: typeof errorData | null = null;
+      const expectedIdentity = principalSnapshot.principal
+        ? {
+            accountId: principalSnapshot.principal.accountId,
+            learnerId: principalSnapshot.principal.learnerId,
+          }
+        : null;
+
+      if (expectedIdentity && isActiveSyncPrincipalSnapshot(principalSnapshot)) {
+        const refreshed = await refreshCsrfTokenFromAuthMe(authMeUrl, {
+          expectedIdentity,
+          isCurrent: () => isActiveSyncPrincipalSnapshot(principalSnapshot),
+          onRefreshed: async () => {
+            if (!isActiveSyncPrincipalSnapshot(principalSnapshot)) return;
+            retriedResponse = await executeRequest(withCsrfHeader(options));
+            retriedErrorData = await retriedResponse
+              .json()
+              .catch(() => ({} as { error?: string; message?: string }));
+          },
+        });
+        if (refreshed && retriedResponse && retriedErrorData) {
+          response = retriedResponse;
+          errorData = retriedErrorData;
+        }
       }
     }
 

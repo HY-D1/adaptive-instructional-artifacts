@@ -193,6 +193,35 @@ describe('safe-storage', () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain('Serialization failed');
     });
+
+    it('surfaces quota failure without evicting durable sync stores', () => {
+      const durable = {
+        'sql-adapt-offline-queue': '[{"id":"queued"}]',
+        'sql-adapt-pending-interactions': '[{"id":"pending"}]',
+        'sql-adapt-dead-letter': '[{"id":"dead"}]',
+        'sql-adapt-profile-cache': JSON.stringify({
+          learner: { synced: false, pendingUpdates: [{ id: 'profile-pending' }] },
+        }),
+      };
+      for (const [key, value] of Object.entries(durable)) {
+        localStorage.setItem(key, value);
+      }
+      const original = localStorage.setItem.bind(localStorage);
+      const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+        if (key === 'quota-target') {
+          throw new DOMException('Storage full', 'QuotaExceededError');
+        }
+        return original(key, value);
+      });
+
+      const result = safeSet('quota-target', { value: 'cannot-fit' });
+      setItem.mockRestore();
+
+      expect(result).toMatchObject({ success: false, quotaExceeded: true });
+      for (const [key, value] of Object.entries(durable)) {
+        expect(localStorage.getItem(key)).toBe(value);
+      }
+    });
   });
 
   // ============================================================================
@@ -343,6 +372,25 @@ describe('safe-storage', () => {
       const evicted = evictRecoverableCaches(1000);
 
       expect(evicted).toEqual([]);
+    });
+
+    it('never treats durable sync stores or pending profile updates as recoverable', () => {
+      const durableKeys = [
+        'sql-adapt-offline-queue',
+        'sql-adapt-pending-interactions',
+        'sql-adapt-dead-letter',
+        'sql-adapt-profile-cache',
+      ];
+      durableKeys.forEach((key) => {
+        localStorage.setItem(key, JSON.stringify({ pendingUpdates: [{ id: key }] }));
+      });
+
+      const evicted = evictRecoverableCaches(Number.MAX_SAFE_INTEGER);
+
+      expect(evicted).not.toEqual(expect.arrayContaining(durableKeys));
+      durableKeys.forEach((key) => {
+        expect(localStorage.getItem(key)).not.toBeNull();
+      });
     });
   });
 
