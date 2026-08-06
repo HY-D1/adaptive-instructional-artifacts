@@ -131,7 +131,7 @@ test.describe('@no-external Valid Profile IDs', () => {
       // Verify profile_assigned event with debug_override reason
       const profileEvent = await getLatestProfileEvent(page);
       expect(profileEvent).toBeDefined();
-      expect(profileEvent.payload?.profile).toBe(profile.id);
+      expect(profileEvent.payload?.profileId).toBe(profile.id);
       expect(profileEvent.payload?.strategy).toBe('static'); // debug override reports as static
       expect(profileEvent.payload?.reason).toBe('debug_override');
 
@@ -170,6 +170,9 @@ test.describe('@no-external Valid Profile IDs', () => {
   test('valid profiles persist correctly across different profiles', async ({ page }) => {
     const appliedProfiles: string[] = [];
 
+    await setupStudentProfile(page, 'PersistAcrossProfiles');
+    await navigateToPractice(page);
+
     for (const profile of VALID_PROFILES) {
       // Clear and set new profile
       await page.evaluate(() => {
@@ -185,8 +188,8 @@ test.describe('@no-external Valid Profile IDs', () => {
       await page.waitForTimeout(500);
 
       const profileEvent = await getLatestProfileEvent(page);
-      if (profileEvent?.payload?.profile) {
-        appliedProfiles.push(profileEvent.payload.profile);
+      if (profileEvent?.payload?.profileId) {
+        appliedProfiles.push(profileEvent.payload.profileId);
       }
     }
 
@@ -228,11 +231,11 @@ test.describe('@no-external Invalid Profile IDs', () => {
       expect(profileEvent).toBeDefined();
       
       // Should NOT be the invalid value
-      expect(profileEvent.payload?.profile).not.toBe(invalid.value);
+      expect(profileEvent.payload?.profileId).not.toBe(invalid.value);
       
       // Should be a valid profile ID from strategy assignment
       const validProfileIds = VALID_PROFILES.map(p => p.id);
-      expect(validProfileIds).toContain(profileEvent.payload?.profile);
+      expect(validProfileIds).toContain(profileEvent.payload?.profileId);
       
       // Should use strategy-based assignment (not debug_override)
       expect(profileEvent.payload?.strategy).not.toBe('debug_override');
@@ -252,7 +255,7 @@ test.describe('@no-external Invalid Profile IDs', () => {
 
     // Verify no alert was triggered and page is functional
     const profileEvent = await getLatestProfileEvent(page);
-    expect(profileEvent.payload?.profile).not.toBe(xssPayload);
+    expect(profileEvent.payload?.profileId).not.toBe(xssPayload);
     
     // Page should be fully functional
     await executeWithError(page);
@@ -276,9 +279,9 @@ test.describe('@no-external Invalid Profile IDs', () => {
     await navigateToPractice(page);
 
     const profileEvent = await getLatestProfileEvent(page);
-    expect(profileEvent.payload?.profile).not.toBe('FAST-ESCALATOR');
+    expect(profileEvent.payload?.profileId).not.toBe('FAST-ESCALATOR');
     // Should fall back to strategy-based assignment
-    expect(['fast-escalator', 'slow-escalator', 'adaptive-escalator']).toContain(profileEvent.payload?.profile);
+    expect(['fast-escalator', 'slow-escalator', 'adaptive-escalator']).toContain(profileEvent.payload?.profileId);
   });
 
   test('whitespace variations are rejected', async ({ page }) => {
@@ -290,16 +293,20 @@ test.describe('@no-external Invalid Profile IDs', () => {
       'fast-escalator\n',
     ];
 
+    await setupStudentProfile(page, 'WhitespaceRejection');
+    await navigateToPractice(page);
+
     for (const wsProfile of whitespaceProfiles) {
       await page.evaluate((value) => {
         localStorage.setItem('sql-adapt-debug-profile', value);
       }, wsProfile);
 
       await page.reload();
+      await expect(page.getByRole('heading', { name: 'Practice SQL', exact: true })).toBeVisible({ timeout: 10000 });
       await page.waitForTimeout(500);
 
       const profileEvent = await getLatestProfileEvent(page);
-      expect(profileEvent.payload?.profile).not.toBe(wsProfile.trim());
+      expect(profileEvent.payload?.profileId).not.toBe(wsProfile.trim());
     }
   });
 });
@@ -326,7 +333,7 @@ test.describe('@no-external Profile Override Flow', () => {
     await navigateToPractice(page);
 
     let profileEvent = await getLatestProfileEvent(page);
-    expect(profileEvent.payload?.profile).toBe('fast-escalator');
+    expect(profileEvent.payload?.profileId).toBe('fast-escalator');
     expect(profileEvent.payload?.reason).toBe('debug_override');
 
     // Step 3: Clear override
@@ -355,7 +362,7 @@ test.describe('@no-external Profile Override Flow', () => {
 
     const profileEvent = await getLatestProfileEvent(page);
     // Override should take precedence
-    expect(profileEvent.payload?.profile).toBe('slow-escalator');
+    expect(profileEvent.payload?.profileId).toBe('slow-escalator');
     expect(profileEvent.payload?.reason).toBe('debug_override');
     
     // Should not be a bandit selection
@@ -393,7 +400,7 @@ test.describe('@no-external Profile Override Flow', () => {
 
     const profileEvent = await getLatestProfileEvent(page);
     // Override should take precedence over diagnostic assignment
-    expect(profileEvent.payload?.profile).toBe('slow-escalator');
+    expect(profileEvent.payload?.profileId).toBe('slow-escalator');
     expect(profileEvent.payload?.reason).toBe('debug_override');
   });
 
@@ -411,7 +418,7 @@ test.describe('@no-external Profile Override Flow', () => {
 
     // Verify profile was applied
     const profileEvent = await getLatestProfileEvent(page);
-    expect(profileEvent.payload?.profile).toBe('explanation-first');
+    expect(profileEvent.payload?.profileId).toBe('explanation-first');
   });
 });
 
@@ -436,7 +443,7 @@ test.describe('@no-external Profile Persistence', () => {
 
     // Verify initial assignment
     let profileEvent = await getLatestProfileEvent(page);
-    expect(profileEvent.payload?.profile).toBe('adaptive-escalator');
+    expect(profileEvent.payload?.profileId).toBe('adaptive-escalator');
 
     // Refresh page
     await page.reload();
@@ -445,7 +452,7 @@ test.describe('@no-external Profile Persistence', () => {
 
     // Verify profile still applied after refresh
     profileEvent = await getLatestProfileEvent(page);
-    expect(profileEvent.payload?.profile).toBe('adaptive-escalator');
+    expect(profileEvent.payload?.profileId).toBe('adaptive-escalator');
 
     // Verify localStorage still has the override
     const savedProfile = await page.evaluate(() => {
@@ -473,7 +480,7 @@ test.describe('@no-external Profile Persistence', () => {
 
     // Verify profile still applied
     const profileEvent = await getLatestProfileEvent(page);
-    expect(profileEvent.payload?.profile).toBe('fast-escalator');
+    expect(profileEvent.payload?.profileId).toBe('fast-escalator');
   });
 
   test('clearing localStorage removes profile override', async ({ page }) => {
@@ -487,7 +494,7 @@ test.describe('@no-external Profile Persistence', () => {
 
     // Verify profile was applied
     let profileEvent = await getLatestProfileEvent(page);
-    expect(profileEvent.payload?.profile).toBe('slow-escalator');
+    expect(profileEvent.payload?.profileId).toBe('slow-escalator');
 
     // Clear localStorage
     await page.evaluate(() => {
@@ -591,7 +598,7 @@ test.describe('@no-external Concurrent Modifications', () => {
     expect(savedProfile).toBe('fast-escalator');
 
     const profileEvent = await getLatestProfileEvent(page);
-    expect(profileEvent.payload?.profile).toBe('fast-escalator');
+    expect(profileEvent.payload?.profileId).toBe('fast-escalator');
   });
 
   test('separate browser contexts have isolated storage', async ({ browser }) => {
@@ -672,8 +679,8 @@ test.describe('@no-external Edge Cases and Error Handling', () => {
     await navigateToPractice(page);
 
     const profileEvent = await getLatestProfileEvent(page);
-    expect(profileEvent.payload?.profile).not.toBe(longProfileId);
-    expect(VALID_PROFILES.map(p => p.id)).toContain(profileEvent.payload?.profile);
+    expect(profileEvent.payload?.profileId).not.toBe(longProfileId);
+    expect(VALID_PROFILES.map(p => p.id)).toContain(profileEvent.payload?.profileId);
   });
 
   test('unicode characters in profile ID are rejected', async ({ page }) => {
@@ -684,16 +691,20 @@ test.describe('@no-external Edge Cases and Error Handling', () => {
       'fast\u0000escalator', // null byte
     ];
 
+    await setupStudentProfile(page, 'UnicodeRejection');
+    await navigateToPractice(page);
+
     for (const profileId of unicodeProfiles) {
       await page.evaluate((value) => {
         localStorage.setItem('sql-adapt-debug-profile', value);
       }, profileId);
 
       await page.reload();
+      await expect(page.getByRole('heading', { name: 'Practice SQL', exact: true })).toBeVisible({ timeout: 10000 });
       await page.waitForTimeout(500);
 
       const profileEvent = await getLatestProfileEvent(page);
-      expect(profileEvent.payload?.profile).not.toBe(profileId);
+      expect(profileEvent.payload?.profileId).not.toBe(profileId);
     }
   });
 
@@ -715,7 +726,7 @@ test.describe('@no-external Edge Cases and Error Handling', () => {
     // Should fall back to strategy-based assignment
     const profileEvent = await getLatestProfileEvent(page);
     expect(profileEvent).toBeDefined();
-    expect(VALID_PROFILES.map(p => p.id)).toContain(profileEvent.payload?.profile);
+    expect(VALID_PROFILES.map(p => p.id)).toContain(profileEvent.payload?.profileId);
   });
 
   test('null localStorage value is handled', async ({ page }) => {
@@ -747,7 +758,7 @@ test.describe('@no-external Edge Cases and Error Handling', () => {
       await page.waitForTimeout(500);
 
       const profileEvent = await getLatestProfileEvent(page);
-      expect(profileEvent.payload?.profile).toBe(profiles[i]);
+      expect(profileEvent.payload?.profileId).toBe(profiles[i]);
     }
 
     // Verify all events were logged
@@ -865,7 +876,7 @@ test.describe('@no-external Profile Validation Summary', () => {
 
         // Check result
         const profileEvent = await getLatestProfileEvent(page);
-        const applied = profileEvent?.payload?.profile === value;
+        const applied = profileEvent?.payload?.profileId === value;
 
         results.push({
           value: value.substring(0, 30),
