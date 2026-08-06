@@ -15,6 +15,7 @@ import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
 import { resolveLogoutLearnerId } from '../lib/auth/logout-learner';
 import { useToast } from '../components/ui/toast';
 import { CommandMenu } from '../components/shared/CommandMenu';
+import { BrandMark } from '../components/layout/BrandMark';
 import {
   canOpenWelcomeModal,
   shouldAutoShowWelcomeModal,
@@ -27,6 +28,13 @@ import {
   checkResearchReadiness,
   type ResearchReadiness 
 } from '../lib/runtime-config';
+
+const GATEWAY_PATHNAMES = new Set(['/', '/login', '/signup']);
+
+function normalizeShellPathname(pathname: string): string {
+  const withoutTrailingSlashes = pathname.replace(/\/+$/, '');
+  return (withoutTrailingSlashes || '/').toLowerCase();
+}
 
 /**
  * Sync toast notification component
@@ -440,6 +448,7 @@ export function RootLayout() {
   const isResearchPage = location.pathname === '/research';
   const isInstructorPage = location.pathname === '/instructor-dashboard';
   const isSettingsPage = location.pathname === '/settings';
+  const isGatewayRoute = GATEWAY_PATHNAMES.has(normalizeShellPathname(location.pathname));
   
   const clearScopedUiState = useCallback(() => {
     const actorId = syncedProfile?.id || storage.getUserProfile()?.id;
@@ -620,7 +629,10 @@ export function RootLayout() {
       >
         Skip to main content
       </a>
-      <div className="flex flex-col h-screen">
+      <div
+        className={isGatewayRoute ? 'atlas-app atlas-gateway-host' : 'atlas-app flex flex-col h-screen'}
+        data-atlas-shell={isGatewayRoute ? undefined : 'app'}
+      >
         {/* Research Unsafe Blocker - BLOCKS ALL INTERACTIONS */}
         {isResearchUnsafeMode && <ResearchUnsafeBlocker />}
         
@@ -657,21 +669,28 @@ export function RootLayout() {
           />
         )}
 
-        <nav className="border-b bg-white dark:bg-gray-900 dark:border-gray-700 sticky top-0 z-40">
-          <div className="container mx-auto px-4">
-            <div className="flex items-center justify-between h-16">
+        {!isGatewayRoute && (
+          <header
+            className="atlas-app-nav border-b bg-white dark:bg-gray-900 dark:border-gray-700 sticky top-0 z-40"
+          >
+            <nav aria-label="Primary navigation">
+              <div className="container mx-auto px-4">
+                <div className="flex items-center justify-between h-16">
               {/* Logo */}
-              <Link to={isInstructor ? '/instructor-dashboard' : '/practice'} className="flex items-center gap-2 shrink-0">
-                <Code className="size-6 text-blue-600" />
-                <span className="font-bold text-lg hidden sm:block">SQL-Adapt</span>
+              <Link
+                to={isInstructor ? '/instructor-dashboard' : '/practice'}
+                className="flex items-center gap-2 shrink-0"
+                aria-label={`SQL-Adapt ${isInstructor ? 'Instructor' : 'Student'} — Schema Atlas home`}
+              >
+                <BrandMark compact inverse />
                 {isStudent && (
-                  <span className="hidden sm:flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                  <span className="atlas-role-tag hidden sm:flex">
                     <GraduationCap className="size-3" />
                     Student
                   </span>
                 )}
                 {isInstructor && (
-                  <span className="hidden sm:flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                  <span className="atlas-role-tag atlas-role-tag--instructor hidden sm:flex">
                     <BarChart3 className="size-3" />
                     Instructor
                   </span>
@@ -679,7 +698,7 @@ export function RootLayout() {
               </Link>
 
               {/* Desktop Navigation */}
-              <div className="hidden md:flex items-center gap-1">
+              <div className="hidden lg:flex items-center gap-1">
                 {navItems.map((item) => (
                   <Tooltip key={item.to}>
                     <TooltipTrigger asChild>
@@ -750,7 +769,7 @@ export function RootLayout() {
                         size="sm"
                         onClick={handleSwitchUser}
                         disabled={isLoggingOut}
-                        className="touch-manipulation hidden md:flex"
+                        className="touch-manipulation hidden lg:flex"
                         aria-label="Switch User"
                       >
                         <Users className="size-4 mr-2 hidden sm:block" />
@@ -771,7 +790,7 @@ export function RootLayout() {
                       size="sm"
                       onClick={() => { void handleLogout(); }}
                       disabled={isLoggingOut}
-                      className="touch-manipulation hidden md:flex"
+                      className="touch-manipulation hidden lg:flex"
                       aria-label="Logout"
                     >
                       <LogOut className="size-4 mr-2 hidden sm:block" />
@@ -787,7 +806,7 @@ export function RootLayout() {
 
                 {/* Mobile menu */}
                 <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-                  <SheetTrigger asChild className="md:hidden">
+                  <SheetTrigger asChild className="lg:hidden">
                     <Button variant="ghost" size="sm" className="touch-manipulation" aria-label="Open navigation menu">
                       <Menu className="size-5" />
                     </Button>
@@ -795,7 +814,7 @@ export function RootLayout() {
                   <SheetContent side="right" className="w-[85vw] max-w-[350px]">
                     <div className="flex flex-col h-full">
                       <div className="flex items-center justify-between py-4 border-b">
-                        <span className="font-bold text-lg">Menu</span>
+                        <BrandMark compact />
                       </div>
                       <div className="flex-1 py-4 space-y-2">
                         {navItems.map((item) => (
@@ -863,26 +882,34 @@ export function RootLayout() {
                     </div>
                   </SheetContent>
                 </Sheet>
+                </div>
               </div>
             </div>
-          </div>
-          {logoutError && (
-            <div className="border-t border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-2 text-sm text-red-700 dark:text-red-300" role="alert">
-              {logoutError}
-            </div>
-          )}
-        </nav>
+            </nav>
+            {logoutError && (
+              <div className="border-t border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-4 py-2 text-sm text-red-700 dark:text-red-300" role="alert">
+                {logoutError}
+              </div>
+            )}
+          </header>
+        )}
 
         {/* Global Command Menu (⌘+K) */}
-        <CommandMenu />
+        {!isGatewayRoute && <CommandMenu />}
 
-        <main
-          id="main-content"
-          tabIndex={-1}
-          className="flex-1 overflow-auto relative h-full outline-none"
-        >
-          <Outlet />
-        </main>
+        {isGatewayRoute ? (
+          <div id="main-content" tabIndex={-1} className="atlas-gateway-host outline-none">
+            <Outlet />
+          </div>
+        ) : (
+          <main
+            id="main-content"
+            tabIndex={-1}
+            className="atlas-main flex-1 overflow-auto relative h-full outline-none"
+          >
+            <Outlet />
+          </main>
+        )}
       </div>
     </TooltipProvider>
   );

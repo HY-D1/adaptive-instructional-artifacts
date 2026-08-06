@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { GatewayShell } from '../components/layout/GatewayShell';
 import { cn } from '../components/ui/utils';
 import { useAuth } from '../lib/auth-context';
 import { AUTH_ENABLED } from '../lib/api/auth-client';
@@ -65,8 +66,8 @@ export function AuthPage() {
 
   if (isResearchUnsafeMode) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-red-50 p-4">
-        <Card className="w-full max-w-md border-red-300">
+      <GatewayShell>
+        <Card className="atlas-gateway-panel atlas-auth-panel border-red-300">
           <CardHeader>
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
@@ -92,14 +93,14 @@ export function AuthPage() {
             </Button>
           </CardContent>
         </Card>
-      </div>
+      </GatewayShell>
     );
   }
 
   if (!AUTH_ENABLED) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <Card className="w-full max-w-md">
+      <GatewayShell>
+        <Card className="atlas-gateway-panel atlas-auth-panel">
           <CardHeader>
             <CardTitle>Account system not available</CardTitle>
             <CardDescription>
@@ -112,7 +113,7 @@ export function AuthPage() {
             </Button>
           </CardContent>
         </Card>
-      </div>
+      </GatewayShell>
     );
   }
 
@@ -201,39 +202,26 @@ export function AuthPage() {
   // ---- Render ---------------------------------------------------------------
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header */}
-      <header className="bg-white border-b">
-        <div className="container mx-auto px-4 h-16 flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-            <Database className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="font-bold text-xl text-gray-900">SQL-Adapt</h1>
-            <p className="text-xs text-gray-500">Learning System</p>
-          </div>
+    <GatewayShell>
+      <section className="atlas-gateway-panel atlas-auth-panel">
+        <div className="atlas-gateway-heading">
+          <h2 className="text-2xl font-bold text-gray-900">
+            {tab === 'login' ? 'Welcome back' : 'Create your account'}
+          </h2>
+          <p className="text-gray-500 text-sm mt-1">
+            {tab === 'login'
+              ? 'Sign in to continue your progress'
+              : 'Track your SQL progress across devices'}
+          </p>
         </div>
-      </header>
 
-      <main className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-md">
-          <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">
-              {tab === 'login' ? 'Welcome back' : 'Create your account'}
-            </h2>
-            <p className="text-gray-500 text-sm mt-1">
-              {tab === 'login'
-                ? 'Sign in to continue your progress'
-                : 'Track your SQL progress across devices'}
-            </p>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex border-b border-gray-200 mb-6">
+        {/* Tabs */}
+        <div className="atlas-gateway-tabs flex border-b border-gray-200 mb-6">
             {(['login', 'signup'] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
+                aria-pressed={tab === t}
                 className={cn(
                   'flex-1 py-3 text-sm font-medium transition-colors',
                   tab === t
@@ -244,7 +232,7 @@ export function AuthPage() {
                 {t === 'login' ? 'Sign In' : 'Create Account'}
               </button>
             ))}
-          </div>
+        </div>
 
           {/* ---- LOGIN FORM ---- */}
           {tab === 'login' && (
@@ -520,9 +508,8 @@ export function AuthPage() {
               Auth API target: <code className="bg-gray-100 px-1 rounded">{apiBaseUrl}</code>
             </div>
           )}
-        </div>
-      </main>
-    </div>
+      </section>
+    </GatewayShell>
   );
 }
 

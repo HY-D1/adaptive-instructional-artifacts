@@ -9,10 +9,10 @@ import {
   Database,
 } from 'lucide-react';
 import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
 import { ProjectCard } from '../components/features/projects/ProjectCard';
+import { BrandMark } from '../components/layout/BrandMark';
 import { projects } from '../lib/projects-data';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 
 const researchAreas = [
   { label: 'Adaptive Learning', icon: Sparkles },
@@ -34,47 +34,48 @@ export function ProjectsPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="atlas-public-shell min-h-screen bg-background" data-atlas-shell="public">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[60] focus:px-4 focus:py-2 focus:bg-white focus:text-blue-700 focus:rounded-lg focus:shadow-lg focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+      >
+        Skip to main content
+      </a>
       {/* Header */}
-      <div className="border-b bg-white dark:bg-gray-900 dark:border-gray-700">
+      <header className="atlas-public-nav border-b bg-white dark:bg-gray-900 dark:border-gray-700">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate('/')}
-              className="shrink-0"
-            >
-              <ArrowLeft className="size-4 mr-2" />
-              Back
-            </Button>
-            <div>
-              <h1 className="text-xl font-bold flex items-center gap-2">
-                <Database className="size-5 text-primary" />
+          <div className="flex items-center justify-between gap-4">
+            <Link to="/" aria-label="Schema Atlas home — SQL-Adapt learning system">
+              <BrandMark compact />
+            </Link>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => navigate('/')}
+                className="shrink-0"
+              >
+                <ArrowLeft className="size-4 mr-2" />
+                Back
+              </Button>
+              <span className="h-5 w-px bg-border" aria-hidden="true" />
+              <h1 className="text-base sm:text-xl font-bold flex items-center gap-2">
+                <Database className="size-5 text-primary hidden sm:block" />
                 Research
               </h1>
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
       {/* Hero */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-gray-950 dark:via-gray-900 dark:to-slate-900">
-        <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]">
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage:
-                'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)',
-              backgroundSize: '2rem 2rem',
-            }}
-          />
-        </div>
-        <div className="container mx-auto px-4 py-16 md:py-20 relative">
-          <div className="max-w-3xl mx-auto text-center">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/5 dark:bg-primary/10 text-primary text-sm font-medium mb-6">
+      <main id="main-content" tabIndex={-1} className="outline-none">
+        <section className="atlas-public-intro">
+          <div className="container mx-auto px-4 py-16 md:py-20 relative">
+            <div className="max-w-3xl mx-auto text-center">
+            <div className="inline-flex items-center gap-2 text-primary text-sm font-medium mb-6 font-mono uppercase tracking-[0.12em]">
               <Database className="size-4" />
-              SQL-Adapt
+              Schema Atlas research
             </div>
             <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
               Adaptive SQL Learning
@@ -87,26 +88,22 @@ export function ProjectsPage() {
               a 23-error-subtype taxonomy and LLM-augmented retrieval.
             </p>
 
-            {/* Research area pills */}
-            <div className="flex flex-wrap justify-center gap-2">
+            {/* Research areas */}
+            <div className="atlas-research-areas" aria-label="Research areas">
               {researchAreas.map((area) => (
-                <Badge
-                  key={area.label}
-                  variant="outline"
-                  className="px-3 py-1.5 text-sm font-normal rounded-full border-primary/20 hover:bg-primary/5 transition-colors cursor-default"
-                >
+                <span key={area.label}>
                   <area.icon className="size-3.5 mr-1.5" />
                   {area.label}
-                </Badge>
+                </span>
               ))}
             </div>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
       {/* Mission statement card */}
       <section className="container mx-auto px-4 -mt-6 relative z-10">
-        <div className="max-w-3xl mx-auto bg-primary text-primary-foreground rounded-xl p-6 md:p-8 shadow-lg">
+        <div className="atlas-mission-band max-w-3xl mx-auto p-6 md:p-8">
           <p className="text-base md:text-lg leading-relaxed">
             SQL-Adapt tracks how learners think in real time, adapts to where they
             struggle, and refuses to short-circuit the effort that drives genuine growth.
@@ -150,6 +147,7 @@ export function ProjectsPage() {
           </div>
         </div>
       </section>
+      </main>
 
       {/* Footer */}
       <footer className="border-t dark:border-gray-700">

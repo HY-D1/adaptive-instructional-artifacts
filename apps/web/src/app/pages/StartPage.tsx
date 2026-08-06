@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
-import { BookOpen, BarChart3, Database, GraduationCap, Lock, LogIn, FlaskConical, ArrowRight } from 'lucide-react';
+import { BookOpen, BarChart3, GraduationCap, Lock, LogIn, FlaskConical, ArrowRight } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
@@ -16,6 +16,7 @@ import { useAuth } from '../lib/auth-context';
 import { DEPLOYMENT_GUIDE_URL } from '../lib/docs-links';
 import { projects } from '../lib/projects-data';
 import { ProjectCard } from '../components/features/projects/ProjectCard';
+import { GatewayShell } from '../components/layout/GatewayShell';
 import type { UserRole, UserProfile } from '../types';
 
 /**
@@ -184,12 +185,12 @@ export function StartPage() {
   // Show loading spinner while checking for existing profile
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex items-center gap-3 text-gray-500">
-          <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      <GatewayShell>
+        <div className="atlas-loading" role="status" aria-live="polite">
+          <div className="atlas-loading__spinner w-6 h-6 border-2 border-t-transparent rounded-full animate-spin" />
           <span>Loading...</span>
         </div>
-      </div>
+      </GatewayShell>
     );
   }
 
@@ -198,35 +199,21 @@ export function StartPage() {
   const hostedMode = isHostedMode();
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Redirect Alert (P1-003) */}
-      {showRedirectAlert && (
-        <Alert variant="destructive" className="m-4 max-w-2xl self-center">
-          <AlertDescription>
-            {reason === 'unauthorized'
-              ? 'Please sign in to access this page.'
-              : 'You do not have permission to access this page.'}
-          </AlertDescription>
-        </Alert>
-      )}
-      {/* Header */}
-      <header className="bg-white border-b">
-        <div className="container mx-auto px-4 h-16 flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-            <Database className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="font-bold text-xl text-gray-900">SQL-Adapt</h1>
-            <p className="text-xs text-gray-500">Learning System</p>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-2xl">
+    <GatewayShell>
+      <div className="atlas-gateway-stack">
+        {/* Redirect Alert (P1-003) */}
+        {showRedirectAlert && (
+          <Alert variant="destructive">
+            <AlertDescription>
+              {reason === 'unauthorized'
+                ? 'Please sign in to access this page.'
+                : 'You do not have permission to access this page.'}
+            </AlertDescription>
+          </Alert>
+        )}
+        <section className="atlas-gateway-panel atlas-start-panel">
           {/* Welcome Title */}
-          <div className="text-center mb-8">
+          <div className="atlas-gateway-heading mb-8">
             <h2 className="text-3xl font-bold text-gray-900 mb-3">
               SQL-Adapt Learning System
             </h2>
@@ -555,9 +542,9 @@ export function StartPage() {
                 : 'Your progress will be saved locally on this device'}
             </p>
           </div>
-        </div>
-      </main>
-    </div>
+        </section>
+      </div>
+    </GatewayShell>
   );
 }
 
