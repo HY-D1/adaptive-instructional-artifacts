@@ -9,13 +9,14 @@
  */
 
 import { withCsrfHeader, setCsrfToken, clearCsrfToken } from './csrf-client';
-import { isResearchSafe, getResearchRuntimeMode } from '../runtime-config';
+import { isResearchSafe, getResearchRuntimeMode, getApiBaseUrl, isBackendConfigured } from '../runtime-config';
 
-const _API_BASE = import.meta.env.VITE_API_BASE_URL;
-const AUTH_BASE = _API_BASE ? `${_API_BASE}/api/auth` : 'http://localhost:3001/api/auth';
+// '' for same-origin (relative /api/auth), a URL otherwise, undefined when unset.
+const _API_BASE = getApiBaseUrl();
+const AUTH_BASE = _API_BASE !== undefined ? `${_API_BASE}/api/auth` : 'http://localhost:3001/api/auth';
 
 /** True only when a backend API is configured */
-export const AUTH_BACKEND_CONFIGURED = !!_API_BASE;
+export const AUTH_BACKEND_CONFIGURED = isBackendConfigured();
 export const AUTH_ENABLED = AUTH_BACKEND_CONFIGURED || import.meta.env.DEV;
 
 /** Research-safe flag - true when backend is configured for data durability */

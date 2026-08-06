@@ -13,6 +13,7 @@ import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { JWT_SECRET } from '../config.js';
 import { getSectionForLearnerInInstructorScope } from '../db/sections.js';
+import { getCookieBaseOptions } from './cookie-config.js';
 
 // ============================================================================
 // Types
@@ -54,22 +55,22 @@ export function verifyToken(token: string): AuthPayload | null {
 }
 
 export function setAuthCookie(res: Response, token: string): void {
-  const isProd = process.env.NODE_ENV === 'production';
+  const { sameSite, secure } = getCookieBaseOptions();
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: isProd,
-    sameSite: isProd ? 'none' : 'lax',
+    secure,
+    sameSite,
     maxAge: COOKIE_MAX_AGE_MS,
     path: '/',
   });
 }
 
 export function clearAuthCookie(res: Response): void {
-  const isProd = process.env.NODE_ENV === 'production';
+  const { sameSite, secure } = getCookieBaseOptions();
   res.clearCookie(COOKIE_NAME, {
     path: '/',
-    secure: isProd,
-    sameSite: isProd ? 'none' : 'lax',
+    secure,
+    sameSite,
     httpOnly: true,
   });
 }

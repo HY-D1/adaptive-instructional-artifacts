@@ -52,7 +52,7 @@ test.describe('@no-external Escalation Profiles E2E', () => {
       expect(profileAssignedEvent).toBeDefined();
       expect(profileAssignedEvent.payload?.strategy).toBe('static');
       expect(['fast-escalator', 'slow-escalator', 'adaptive-escalator']).toContain(
-        profileAssignedEvent.payload?.profile
+        profileAssignedEvent.profileId
       );
     });
 
@@ -73,7 +73,7 @@ test.describe('@no-external Escalation Profiles E2E', () => {
       });
       const firstProfile = firstInteractions.find(
         (e: any) => e.eventType === 'profile_assigned'
-      )?.payload?.profile;
+      )?.profileId;
 
       // Clear and revisit with same name
       await page.evaluate(() => {
@@ -92,7 +92,7 @@ test.describe('@no-external Escalation Profiles E2E', () => {
       });
       const secondProfile = secondInteractions.find(
         (e: any) => e.eventType === 'profile_assigned'
-      )?.payload?.profile;
+      )?.profileId;
 
       // Should be the same profile (deterministic)
       expect(secondProfile).toBe(firstProfile);
@@ -121,7 +121,7 @@ test.describe('@no-external Escalation Profiles E2E', () => {
 
         const profile = interactions.find(
           (e: any) => e.eventType === 'profile_assigned'
-        )?.payload?.profile;
+        )?.profileId;
 
         if (profile) {
           assignedProfiles.push(profile);
