@@ -45,7 +45,7 @@ test.describe('@no-external Profile Assignment Flow', () => {
       const firstProfileEvent = firstInteractions.find((e: any) => e.eventType === 'profile_assigned');
       expect(firstProfileEvent).toBeDefined();
       expect(firstProfileEvent.payload?.strategy).toBe('static');
-      const firstProfileId = firstProfileEvent.payload?.profile;
+      const firstProfileId = firstProfileEvent.payload?.profileId;
 
       // Clear profile assignment events but keep learner identity
       await page.evaluate(() => {
@@ -66,7 +66,7 @@ test.describe('@no-external Profile Assignment Flow', () => {
       expect(secondProfileEvent).toBeDefined();
       
       // Verify same profile assigned for same learner (deterministic)
-      expect(secondProfileEvent.payload?.profile).toBe(firstProfileId);
+      expect(secondProfileEvent.payload?.profileId).toBe(firstProfileId);
       expect(secondProfileEvent.payload?.strategy).toBe('static');
     });
 
@@ -103,9 +103,9 @@ test.describe('@no-external Profile Assignment Flow', () => {
         
         // Validate profile is one of the expected ones
         const validProfiles = ['fast-escalator', 'slow-escalator', 'adaptive-escalator'];
-        expect(validProfiles).toContain(profileEvent.payload?.profile);
+        expect(validProfiles).toContain(profileEvent.payload?.profileId);
         
-        assignedProfiles.push(profileEvent.payload?.profile);
+        assignedProfiles.push(profileEvent.payload?.profileId);
       }
 
       // Verify we got valid profiles for both learners
@@ -143,7 +143,7 @@ test.describe('@no-external Profile Assignment Flow', () => {
       const firstInteractions = await page.evaluate(() => {
         return JSON.parse(window.localStorage.getItem('sql-learning-interactions') || '[]');
       });
-      const firstProfile = firstInteractions.find((e: any) => e.eventType === 'profile_assigned')?.payload?.profile;
+      const firstProfile = firstInteractions.find((e: any) => e.eventType === 'profile_assigned')?.payload?.profileId;
       expect(firstProfile).toBeDefined();
 
       // Simulate session clear but keep localStorage (simulates browser restart)
@@ -351,7 +351,7 @@ test.describe('@no-external Profile Assignment Flow', () => {
       
       // Verify fast escalator profile is being used
       const lastProfileEvent = profileEvents[profileEvents.length - 1];
-      expect(['fast-escalator', 'debug_override']).toContain(lastProfileEvent.payload?.profile);
+      expect(['fast-escalator', 'debug_override']).toContain(lastProfileEvent.payload?.profileId);
     });
 
     test('slow escalator allows 5 errors before escalation', async ({ page }) => {
@@ -467,7 +467,7 @@ test.describe('@no-external Profile Assignment Flow', () => {
       const profileEvent = interactions.find((e: any) => e.eventType === 'profile_assigned');
       expect(profileEvent).toBeDefined();
       expect(profileEvent.payload?.strategy).toBe('bandit');
-      expect(profileEvent.payload?.profile).toBeDefined();
+      expect(profileEvent.payload?.profileId).toBeDefined();
 
       // Verify arm selection logged (bandit arm selection)
       const armSelectEvents = interactions.filter((e: any) => e.eventType === 'bandit_arm_selected');
@@ -708,7 +708,7 @@ test.describe('@no-external Profile Assignment Flow', () => {
       expect(profileEvent.timestamp).toBeDefined();
       expect(profileEvent.timestamp).toBeGreaterThan(0);
       expect(profileEvent.payload).toBeDefined();
-      expect(profileEvent.payload.profile).toBeDefined();
+      expect(profileEvent.payload.profileId).toBeDefined();
       expect(profileEvent.payload.strategy).toBeDefined();
       expect(profileEvent.payload.reason).toBeDefined();
       expect(['static', 'diagnostic', 'bandit', 'debug_override']).toContain(profileEvent.payload.strategy);

@@ -722,7 +722,8 @@ test.describe('@no-external HDI Calculator E2E', () => {
       window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: learnerId,
         name: 'Clear Test Learner',
-        role: 'student',
+        // The HDI debug panel (and its clear control) is instructor-only.
+        role: 'instructor',
         createdAt: baseTime
       }));
       
@@ -777,7 +778,10 @@ test.describe('@no-external HDI Calculator E2E', () => {
       const clearButton = page.locator('[data-testid="hdi-clear-button"]');
       await expect(clearButton).toBeEnabled();
       await clearButton.click();
-      
+
+      // The clear action asks for confirmation before deleting history.
+      await page.getByRole('button', { name: 'Clear History', exact: true }).click();
+
       // Verify HDI now shows N/A
       await expect(hdiScoreElement).toHaveText('N/A');
       await expect(eventCountElement).toHaveText('0');

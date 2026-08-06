@@ -281,8 +281,16 @@ test.describe('@no-external Multi-Armed Bandit E2E', () => {
     await replaceEditorText(page, 'SELECT * FROM users;');
     await page.getByRole('button', { name: 'Run Query' }).click();
 
-    // Wait for success indicator - use more specific selector
-    await expect(page.locator('[data-testid="execution-success"], [data-testid="success-message"]').first()).toBeVisible({ timeout: 10000 });
+    // Wait until the successful execution event is durably recorded; the
+    // results UI exposes no stable success testid, and the bandit's reward
+    // path reads these events anyway.
+    await expect
+      .poll(async () => page.evaluate(() => {
+        const raw = window.localStorage.getItem('sql-learning-interactions');
+        const events = raw ? JSON.parse(raw) : [];
+        return events.some((e: any) => e.eventType === 'execution' && e.successful === true);
+      }), { timeout: 10000 })
+      .toBe(true);
 
     // Navigate back to settings
     await page.goto('/settings');
