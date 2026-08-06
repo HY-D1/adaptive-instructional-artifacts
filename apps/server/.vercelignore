@@ -7,8 +7,10 @@
 .env.*
 !.env.example
 
-# Local SQLite data
-data/
+# Local SQLite data files. The data/ DIRECTORY itself (tracked via
+# data/.gitkeep) must ship with the deployment: src/app.ts checks for it at
+# module scope and creating it on a read-only serverless filesystem crashes
+# the function.
 *.db
 *.sqlite
 *.sqlite3

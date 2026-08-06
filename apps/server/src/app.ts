@@ -46,8 +46,14 @@ const envPath = path.resolve(__dirname, '../.env');
 dotenv.config({ path: envPath });
 
 const DATA_DIR = path.resolve(__dirname, '../data');
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+} catch {
+  // Serverless filesystems are read-only outside /tmp. The data directory is
+  // only used by local SQLite mode, which never runs on those deployments,
+  // so a failed create must not crash function startup.
 }
 
 export const RESEARCH_CONTRACT_VERSION = 'v2.3.0';
