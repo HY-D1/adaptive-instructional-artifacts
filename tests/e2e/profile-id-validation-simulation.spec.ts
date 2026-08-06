@@ -306,7 +306,10 @@ test.describe('@no-external Invalid Profile IDs', () => {
       await page.waitForTimeout(500);
 
       const profileEvent = await getLatestProfileEvent(page);
-      expect(profileEvent.payload?.profileId).not.toBe(wsProfile.trim());
+      // A whitespace variant must not be honored as a debug override; the app
+      // falls back to strategy-based assignment, which can coincidentally pick
+      // the same profile id, so assert on the assignment reason instead.
+      expect(profileEvent.payload?.reason).not.toBe('debug_override');
     }
   });
 });
