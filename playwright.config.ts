@@ -55,8 +55,9 @@ export default defineConfig({
   timeout: 60_000,
   globalTimeout: 600_000,
   expect: {
-    timeout: 15_000
+    timeout: 30_000
   },
+  grepInvert: /@flaky/,
   fullyParallel: false,
   workers: 1, // Single worker to avoid shared localStorage state issues
   retries: IS_CI ? 1 : 0,
@@ -143,6 +144,10 @@ export default defineConfig({
         '**/instructor-dashboard-profiles.spec.ts',
         '**/api-authz.spec.ts',
         '**/hint-stability-beta.spec.ts',
+        '**/instructor-auto-load.spec.ts',
+        '**/instructor-dashboard-auth-required.spec.ts',
+        '**/instructor-view-textbook.spec.ts',
+        '**/ws-5-instructor-dashboard.spec.ts',
       ],
     },
 

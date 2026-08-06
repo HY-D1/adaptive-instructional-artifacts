@@ -21,6 +21,8 @@ const retrievalBundle: EnhancedRetrievalBundle = {
     schema: 'CREATE TABLE users (id INTEGER, name TEXT);',
     expectedQuery: 'SELECT * FROM users;',
     expectedResult: [],
+    topic: 'basics',
+    topicDifficultyLevel: 1,
   },
   learnerId: 'learner-1',
   problemId: 'problem-1',

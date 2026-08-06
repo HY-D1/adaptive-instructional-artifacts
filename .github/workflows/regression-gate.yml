@@ -49,7 +49,6 @@ jobs:
       
       - name: Install dependencies
         run: |
-          npm cache clean --force
           npm ci
           # Verify vite is installed
           if [ ! -f "node_modules/.bin/vite" ]; then
@@ -223,7 +222,6 @@ jobs:
       
       - name: Install dependencies
         run: |
-          npm cache clean --force
           npm ci
           cd apps/server && npm ci
 
@@ -260,9 +258,7 @@ jobs:
           cache: npm
       
       - name: Install dependencies
-        run: |
-          npm cache clean --force
-          npm ci
+        run: npm ci
       
       - name: Build application
         run: npx vite build --config apps/web/vite.config.ts
@@ -280,5 +276,4 @@ jobs:
           echo "Build verified successfully"
       
       - name: Type check
-        run: npx tsc --noEmit || echo "Type check completed with warnings"
-        continue-on-error: true
+        run: npx tsc --noEmit

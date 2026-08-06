@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { loginAsInstructor, loginAsStudent } from '../helpers/auth';
+import { waitForEditorReady } from '../../helpers/test-helpers';
 
 test.describe('Instructor View Student Textbook @hardening', () => {
   test('textbook shows student notes when instructor views it', async ({ page }) => {
@@ -8,7 +9,7 @@ test.describe('Instructor View Student Textbook @hardening', () => {
     
     // Navigate to practice and add a note
     await page.goto('/practice');
-    await page.waitForSelector('[data-testid="practice-page"]', { timeout: 15000 });
+    await waitForEditorReady(page, 30000);
     
     // Get a hint to enable Save to Notes
     const hintButton = page.locator('button:has-text("Get Hint")');

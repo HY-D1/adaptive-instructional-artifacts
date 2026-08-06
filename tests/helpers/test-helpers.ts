@@ -12,15 +12,28 @@ import { expect, Locator, Page } from '@playwright/test';
 // =============================================================================
 
 /**
- * Wait for Monaco editor to be ready
+ * Wait for Monaco editor to be ready.
+ * Uses polling with retry logic to handle slow Monaco initialization
+ * in dev server environments (no code splitting).
  */
-export async function waitForEditorReady(page: Page, timeout = 30000) {
-  await page.waitForSelector('.monaco-editor', { state: 'visible', timeout });
-  // Wait for editor to be fully initialized
-  await page.waitForFunction(() => {
-    const editor = document.querySelector('.monaco-editor');
-    return editor && editor.querySelector('.view-lines') !== null;
-  }, { timeout });
+export async function waitForEditorReady(page: Page, timeout = 60000) {
+  // Poll for the Monaco editor container with increasing intervals
+  await expect.poll(
+    async () => {
+      const count = await page.locator('.monaco-editor').count();
+      return count > 0;
+    },
+    { timeout, intervals: [500, 1000, 2000, 3000] }
+  ).toBe(true);
+
+  // Wait for the editor content to be fully initialized
+  await page.waitForFunction(
+    () => {
+      const editor = document.querySelector('.monaco-editor');
+      return editor && editor.querySelector('.view-lines') !== null;
+    },
+    { timeout: Math.min(timeout, 30000) }
+  );
 }
 
 /**

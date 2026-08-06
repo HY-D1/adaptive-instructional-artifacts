@@ -11,6 +11,17 @@ Navigation hub for SQL-Adapt documentation.
 | [CONTRIBUTING.md](CONTRIBUTING.md) | How to work on this project — rules, checklists, commit conventions |
 | [CHANGELOG.md](CHANGELOG.md) | What changed and when |
 
+## Handoff & Developer Reference
+
+> **New developer? Start at [HANDOFF.md](../HANDOFF.md)**, then dive into these.
+
+| Document | What's In It |
+|----------|-------------|
+| [handoff/FRONTEND.md](handoff/FRONTEND.md) | React app, routing, state management, components, build system |
+| [handoff/BACKEND.md](handoff/BACKEND.md) | Express API, routes, middleware, auth, LLM proxy |
+| [handoff/DATABASE.md](handoff/DATABASE.md) | Neon schema, all tables, indexes, migrations |
+| [handoff/DEPLOYMENT.md](handoff/DEPLOYMENT.md) | Vercel config, CI/CD, env vars, two-project setup |
+
 ## Deployment
 
 | Document | What's In It |

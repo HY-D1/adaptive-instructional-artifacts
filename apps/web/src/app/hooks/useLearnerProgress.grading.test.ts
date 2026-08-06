@@ -17,6 +17,7 @@ import { renderHook } from '@testing-library/react';
 import { useLearnerProgress } from './useLearnerProgress';
 import { storage as localStorageManager } from '../lib/storage/storage';
 import { sqlProblems } from '../data/problems';
+import { getProblemsByDifficultyRank } from '../lib/adaptive-problem-selector';
 
 // Mock the local storage module
 vi.mock('../lib/storage/storage', () => ({
@@ -350,17 +351,21 @@ describe('useLearnerProgress - Grading Integration', () => {
         lastActive: Date.now(),
       });
 
+      const ranked = getProblemsByDifficultyRank();
+
       // First problem should be position 1
       const { result: result1 } = renderHook(() =>
         useLearnerProgress({ learnerId: mockLearnerId, currentProblemId: sqlProblems[0]?.id })
       );
       expect(result1.current.currentProblemNumber).toBe(1);
 
-      // Tenth problem should be position 10
+      // Tenth problem in original array — look up its position in ranked order
+      const tenthProblemId = sqlProblems[9]?.id;
+      const expectedRank = ranked.findIndex(p => p.id === tenthProblemId) + 1;
       const { result: result10 } = renderHook(() =>
-        useLearnerProgress({ learnerId: mockLearnerId, currentProblemId: sqlProblems[9]?.id })
+        useLearnerProgress({ learnerId: mockLearnerId, currentProblemId: tenthProblemId })
       );
-      expect(result10.current.currentProblemNumber).toBe(10);
+      expect(result10.current.currentProblemNumber).toBe(expectedRank);
     });
   });
 

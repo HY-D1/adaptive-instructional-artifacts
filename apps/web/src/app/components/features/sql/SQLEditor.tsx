@@ -465,7 +465,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
             </div>
             
             <div className="flex-1 overflow-hidden relative min-h-[150px]" aria-label="SQL code editor" role="region">
-              {/* Initialization Loading Overlay */}
+              {/* Initialization Loading Overlay -->
               {initStatus === 'loading' && (
                 <div className="absolute inset-0 bg-gray-900/50 backdrop-blur-sm z-10 flex items-center justify-center">
                   <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-lg flex items-center gap-3">
@@ -547,8 +547,28 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
                   scrollBeyondLastLine: false,
                   automaticLayout: true,
                   readOnly: initStatus !== 'ready',
+                  // Tablet-friendly: reduce visual clutter on smaller screens
+                  renderLineHighlightOnlyWhenFocus: true,
+                  overviewRulerLanes: 0,
+                  hideCursorInOverviewRuler: true,
+                  renderWhitespace: 'none',
+                  // Ensure the editor is usable with touch
+                  quickSuggestions: false,
                 }}
               />
+            </div>
+            {/* Bottom quick-action bar for tablet — always visible below editor */}
+            <div className="lg:hidden border-t p-2 flex justify-center bg-gray-50/50 shrink-0">
+              <Button
+                onClick={handleExecute}
+                disabled={isExecuting || !code.trim() || initStatus !== 'ready'}
+                size="sm"
+                data-testid="run-query-btn-bottom"
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                <Play className="size-4 mr-2" />
+                {isExecuting ? 'Executing...' : 'Run Query'}
+              </Button>
             </div>
           </div>
         </Card>

@@ -16,6 +16,8 @@ const problems: SQLProblem[] = [
     schema: 'CREATE TABLE users (id INT, name TEXT);',
     expectedQuery: 'SELECT 1',
     expectedResult: [],
+    topic: 'basics',
+    topicDifficultyLevel: 1,
   },
   {
     id: 'problem-2',
@@ -26,6 +28,8 @@ const problems: SQLProblem[] = [
     schema: 'CREATE TABLE users (id INT, name TEXT);',
     expectedQuery: 'SELECT 2',
     expectedResult: [],
+    topic: 'basics',
+    topicDifficultyLevel: 1,
   },
 ];
 
