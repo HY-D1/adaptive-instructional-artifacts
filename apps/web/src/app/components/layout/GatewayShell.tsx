@@ -35,13 +35,9 @@ export function GatewayShell({ children, footer }: GatewayShellProps) {
       </div>
 
       <header className="atlas-gateway__header">
-        <Link to="/" aria-label="Schema Atlas home — SQL-Adapt learning system">
+        <Link to="/" aria-label="SQL-Adapt home">
           <BrandMark />
         </Link>
-        <span className="atlas-gateway__status">
-          <span aria-hidden="true" />
-          Learning workspace
-        </span>
       </header>
 
       <main className="atlas-gateway__main">{children}</main>
