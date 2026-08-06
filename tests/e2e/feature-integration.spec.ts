@@ -153,12 +153,12 @@ async function submitCorrectQuery(page: Page) {
 }
 
 async function requestHint(page: Page) {
-  // Click hint button if available
-  const hintButton = page.locator('button').filter({ hasText: /hint/i }).first();
-  if (await hintButton.isVisible().catch(() => false)) {
-    await hintButton.click();
-    await page.waitForTimeout(300);
-  }
+  const hintButton = page.getByRole('button', {
+    name: /^(Request Hint|Next Hint|Get More Help)$/,
+  });
+  await expect(hintButton).toBeVisible();
+  await hintButton.click();
+  await page.waitForTimeout(300);
 }
 
 async function escalateHint(page: Page) {
@@ -227,14 +227,20 @@ test.describe('@no-external HDI + LearningInterface Integration', () => {
     const afterErrorHDI = await getHDI(page);
     expect(afterErrorHDI).toBeGreaterThanOrEqual(initialHDI);
     
-    // Request hint - HPA component should increase
+    // Request hint - verify the request was recorded.
     await requestHint(page);
-    const fullHDI = await getFullHDI(page);
-    expect(fullHDI.hpa).toBeGreaterThan(0);
+    const guidanceRequests = await page.evaluate(() => {
+      const interactions = JSON.parse(window.localStorage.getItem('sql-learning-interactions') || '[]');
+      return interactions.filter((interaction: { eventType: string }) => interaction.eventType === 'guidance_request');
+    });
+    expect(guidanceRequests).toHaveLength(1);
+    const beforeExecutionHDI = await getFullHDI(page);
+    expect(beforeExecutionHDI.hpa).toBe(0);
     
-    // Solve correctly - IWH component may increase
+    // Solve correctly - an execution is required before HPA can be non-zero.
     await submitCorrectQuery(page);
     const finalFullHDI = await getFullHDI(page);
+    expect(finalFullHDI.hpa).toBeGreaterThan(0);
     expect(finalFullHDI.hdi).toBeGreaterThanOrEqual(0);
     expect(finalFullHDI.hdi).toBeLessThanOrEqual(1);
   });
@@ -287,7 +293,7 @@ test.describe('@no-external HDI + LearningInterface Integration', () => {
     
     // Navigate to settings and back
     await page.goto('/settings');
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true, level: 1 })).toBeVisible();
     
     await page.goto('/practice');
     await waitForEditorReady(page);
@@ -634,7 +640,7 @@ test.describe('@no-external Edge Case Integrations', () => {
     await setupTest(page);
   });
 
-  test('corrupted interactions data + HDI - handles gracefully', async ({ page }) => {
+  test('corrupted interactions data + HDI recovers to a valid trace', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: 'corrupted-learner',
@@ -654,21 +660,20 @@ test.describe('@no-external Edge Case Integrations', () => {
     const pageTitle = await page.title();
     expect(pageTitle).toBeTruthy();
     
-    // HDI calculation should handle gracefully
-    const hdi = await page.evaluate(() => {
-      try {
-        const interactions = JSON.parse(window.localStorage.getItem('sql-learning-interactions') || '[]');
-        return Array.isArray(interactions) ? interactions.length : -1;
-      } catch {
-        return -1; // Error state
-      }
+    // Storage recovery should replace the malformed payload with a usable trace.
+    const recoveredInteractions = await page.evaluate(() => {
+      const interactions = JSON.parse(window.localStorage.getItem('sql-learning-interactions') || '[]');
+      return {
+        isArray: Array.isArray(interactions),
+        count: interactions.length,
+      };
     });
-    
-    // Should handle error state
-    expect(hdi).toBe(-1);
+
+    expect(recoveredInteractions.isArray).toBe(true);
+    expect(recoveredInteractions.count).toBeGreaterThan(0);
   });
 
-  test('empty interactions + HDI - returns zero', async ({ page }) => {
+  test('empty interactions + HDI has zero components and baseline score', async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
         id: 'empty-learner',
@@ -685,8 +690,8 @@ test.describe('@no-external Edge Case Integrations', () => {
     
     const hdi = await getFullHDI(page);
     
-    // All components should be 0
-    expect(hdi.hdi).toBe(0);
+    // With no successful executions, IWH is 0; its inverted baseline weight is 0.134.
+    expect(hdi.hdi).toBe(0.134);
     expect(hdi.hpa).toBe(0);
     expect(hdi.aed).toBe(0);
     expect(hdi.er).toBe(0);

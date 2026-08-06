@@ -82,10 +82,10 @@ export default defineConfig({
     ? {}
     : {
         webServer: {
-          // In CI: use preview server with existing build (build done in workflow)
+          // In CI: build an explicit test-mode bundle, then preview it.
           // Local: use dev server
           command: IS_CI
-            ? `npx vite preview --config apps/web/vite.config.ts --host ${HOST} --port ${PORT} --outDir ../../dist/app`
+            ? `VITE_TEST_MODE=true npx vite build --config apps/web/vite.config.ts && npx vite preview --config apps/web/vite.config.ts --host ${HOST} --port ${PORT} --outDir ../../dist/app`
             : `npm run dev -- --host ${HOST} --port ${PORT}`,
           url: LOCAL_BASE_URL,
           reuseExistingServer: !IS_CI,

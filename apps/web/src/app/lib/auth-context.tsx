@@ -203,15 +203,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await getMe();
       result = await apiLogout();
     }
-    if (!result.success && AUTH_BACKEND_CONFIGURED && result.status !== 401) {
-      return result;
-    }
+    // Idempotent teardown: always clear local auth state first so a failed
+    // server logout (403/500/network) can never trap the user in a
+    // half-logged-in screen. A 401 means the session was already gone.
     if (user?.learnerId) {
       clearUiStateForActor(user.learnerId);
     }
     learnerProfileClient.clearCache();
     setUser(null);
     storage.clearUserProfile();
+    // Surface a genuine server-side failure to the caller; local state is
+    // cleared regardless of what we return here.
+    if (!result.success && AUTH_BACKEND_CONFIGURED && result.status !== 401) {
+      return result;
+    }
     return { success: true };
   }, [user]);
 

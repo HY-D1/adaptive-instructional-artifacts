@@ -97,11 +97,34 @@ export function isHostedMode(): boolean {
 }
 
 /**
+ * Sentinel value for VITE_API_BASE_URL. When set, API calls target the app's
+ * own origin using relative paths (e.g. `/api/...`) instead of a separate
+ * backend host. Paired with a Vercel rewrite so auth cookies are first-party
+ * (SameSite=Lax) rather than cross-site.
+ */
+export const SAME_ORIGIN_API_SENTINEL = 'same-origin';
+
+/**
+ * Raw VITE_API_BASE_URL, normalized so empty strings read as unconfigured.
+ * May be the same-origin sentinel.
+ */
+function getRawApiBaseUrl(): string | undefined {
+  const raw = import.meta.env.VITE_API_BASE_URL;
+  return raw && raw.length > 0 ? raw : undefined;
+}
+
+/**
+ * True when API calls should target the app's own origin via relative paths.
+ */
+export function isSameOriginApi(): boolean {
+  return getRawApiBaseUrl()?.trim().toLowerCase() === SAME_ORIGIN_API_SENTINEL;
+}
+
+/**
  * Check if backend API is configured
  */
 export function isBackendConfigured(): boolean {
-  const apiUrl = import.meta.env.VITE_API_BASE_URL;
-  return !!apiUrl && apiUrl.length > 0;
+  return getRawApiBaseUrl() !== undefined;
 }
 
 /**
@@ -276,7 +299,9 @@ export async function checkResearchReadiness(): Promise<ResearchReadiness> {
   const startTime = performance.now();
   const envConfigured = isBackendConfigured();
   const apiBase = getApiBaseUrl();
-  const apiUrl = apiBase ? `${apiBase}/api` : undefined;
+  // apiBase is '' for same-origin (relative paths), a URL otherwise, or
+  // undefined when unconfigured — so guard on undefined, not truthiness.
+  const apiUrl = apiBase !== undefined ? `${apiBase}/api` : undefined;
 
   // Log startup API base URL in production (non-secret diagnostic)
   if (import.meta.env.PROD) {
@@ -434,10 +459,14 @@ export async function checkResearchReadiness(): Promise<ResearchReadiness> {
 }
 
 /**
- * Get the backend API base URL
+ * Get the backend API base URL for building request URLs.
+ * Returns '' for the same-origin sentinel (callers append `/api/...` to get a
+ * relative path), the configured URL otherwise, or undefined when unconfigured.
  */
 export function getApiBaseUrl(): string | undefined {
-  return import.meta.env.VITE_API_BASE_URL;
+  const raw = getRawApiBaseUrl();
+  if (raw === undefined) return undefined;
+  return isSameOriginApi() ? '' : raw;
 }
 
 /**

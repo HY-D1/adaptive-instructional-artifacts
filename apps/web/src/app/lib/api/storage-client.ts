@@ -17,13 +17,14 @@ import {
   refreshCsrfTokenFromAuthMe,
   getCsrfHeaders,
 } from './csrf-client';
-import { isResearchSafe, getResearchRuntimeMode } from '../runtime-config';
+import { isResearchSafe, getResearchRuntimeMode, getApiBaseUrl } from '../runtime-config';
 
 // API Configuration
 // VITE_API_BASE_URL is the canonical env var (e.g. https://my-api.vercel.app — no trailing /api)
-const _API_BASE = import.meta.env.VITE_API_BASE_URL;
-const API_URL = _API_BASE ? `${_API_BASE}/api` : 'http://localhost:3001/api';
-const USE_BACKEND = !!_API_BASE;
+// getApiBaseUrl() resolves the same-origin sentinel to '' (relative paths).
+const _API_BASE = getApiBaseUrl();
+const API_URL = _API_BASE !== undefined ? `${_API_BASE}/api` : 'http://localhost:3001/api';
+const USE_BACKEND = _API_BASE !== undefined;
 
 /** Research-safe flag - true when backend is configured for data durability */
 export const BACKEND_RESEARCH_SAFE = isResearchSafe();
@@ -70,7 +71,7 @@ export interface BackendHealth {
  * RESEARCH-4: Used for startup readiness verification
  */
 export async function checkPersistenceStatus(): Promise<PersistenceStatus | null> {
-  if (!_API_BASE) return null;
+  if (_API_BASE === undefined) return null;
   
   try {
     const response = await fetch(`${API_URL}/system/persistence-status`, {
@@ -93,7 +94,7 @@ export async function checkPersistenceStatus(): Promise<PersistenceStatus | null
  * RESEARCH-4: Used for startup readiness verification
  */
 export async function fetchBackendHealth(): Promise<BackendHealth | null> {
-  if (!_API_BASE) return null;
+  if (_API_BASE === undefined) return null;
   
   try {
     const response = await fetch(`${_API_BASE}/health`, {

@@ -198,10 +198,14 @@ export async function seedValidProfile(page: Page, learnerId: string) {
 // =============================================================================
 
 /**
- * Common test setup - clears storage and sets welcome flag
+ * Common test setup - clears storage once and sets the welcome flag.
+ *
+ * The reset runs in the initial document only, so data intentionally created
+ * by a test remains available across later navigations and refreshes.
  */
 export async function setupTest(page: Page) {
-  await page.addInitScript(() => {
+  await page.goto('/');
+  await page.evaluate(() => {
     window.localStorage.clear();
     window.sessionStorage.clear();
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
@@ -210,6 +214,7 @@ export async function setupTest(page: Page) {
 
 /**
  * Complete the StartPage authentication flow for tests
+ * - Navigates to StartPage from a fresh or previously navigated page
  * - Waits for StartPage heading
  * - Enters username
  * - Selects Student role
@@ -226,6 +231,9 @@ export async function completeStartPageFlow(page: Page, username: string = 'Test
     window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
     window.localStorage.setItem('sql-adapt-welcome-disabled', 'true');
   });
+
+  // Apply the storage setup and load StartPage before interacting with it.
+  await page.goto('/');
   
   // Wait for StartPage heading
   await expect(page.getByRole('heading', { name: 'SQL-Adapt Learning System' })).toBeVisible({ timeout: 10000 });
@@ -234,7 +242,7 @@ export async function completeStartPageFlow(page: Page, username: string = 'Test
   await page.getByPlaceholder('Enter your username').fill(username);
   
   // Select Student role
-  const studentCard = page.locator('.cursor-pointer').filter({ hasText: 'Student' });
+  const studentCard = page.getByRole('radio', { name: 'Student role', exact: true });
   await studentCard.click();
   
   // Click Get Started
