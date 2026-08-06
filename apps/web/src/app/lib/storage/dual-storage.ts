@@ -274,11 +274,13 @@ class DurablePendingStore {
     this.interactions.set(event.id, pending);
     this.savePending();
 
-    console.info('[telemetry_interaction_pending]', {
-      eventId: event.id,
-      eventType: event.eventType,
-      sessionId: event.sessionId,
-    });
+    if (import.meta.env.DEV) {
+      console.info('[telemetry_interaction_pending]', {
+        eventId: event.id,
+        eventType: event.eventType,
+        sessionId: event.sessionId,
+      });
+    }
   }
 
   /**
@@ -299,7 +301,9 @@ class DurablePendingStore {
    */
   markConfirmedInteraction(id: string): void {
     this.markConfirmed(id);
-    console.info('[telemetry_interaction_confirmed]', { eventId: id });
+    if (import.meta.env.DEV) {
+      console.info('[telemetry_interaction_confirmed]', { eventId: id });
+    }
   }
 
   /**
@@ -502,7 +506,9 @@ class OfflineQueueManager {
 
     // Log queue growth for large backlogs
     if (this.queue.length > CHUNK_SIZE) {
-      console.info('[OfflineQueue] Queue size:', this.queue.length, '- using chunked storage');
+      if (import.meta.env.DEV) {
+        console.info('[OfflineQueue] Queue size:', this.queue.length, '- using chunked storage');
+      }
     }
   }
 
@@ -602,7 +608,9 @@ class OfflineQueueManager {
     // Also try on online event
     if (typeof window !== 'undefined') {
       window.addEventListener('online', () => {
-        console.log('[OfflineQueue] Back online, processing queue...');
+        if (import.meta.env.DEV) {
+          console.log('[OfflineQueue] Back online, processing queue...');
+        }
         this.processQueue();
       });
     }
@@ -837,13 +845,15 @@ class DualStorageManager {
   logQueueStats(): void {
     const stats = this.getQueueStats();
     const pendingStats = this.pendingStore.getStats();
-    // eslint-disable-next-line no-console
-    console.info('[telemetry_queue_stats]', {
-      ...stats,
-      pendingStore: pendingStats,
-      researchMode: this.getResearchMode(),
-      contractVersion: RESEARCH_CONTRACT_VERSION,
-    });
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.info('[telemetry_queue_stats]', {
+        ...stats,
+        pendingStore: pendingStats,
+        researchMode: this.getResearchMode(),
+        contractVersion: RESEARCH_CONTRACT_VERSION,
+      });
+    }
   }
 
   /**
@@ -1665,10 +1675,12 @@ class DualStorageManager {
       return { backendConfirmed: true, pendingSync: false };
     }
 
-    console.info('[telemetry_pagehide_flush_started]', { 
-      sessionId,
-      contractVersion: RESEARCH_CONTRACT_VERSION 
-    });
+    if (import.meta.env.DEV) {
+      console.info('[telemetry_pagehide_flush_started]', { 
+        sessionId,
+        contractVersion: RESEARCH_CONTRACT_VERSION 
+      });
+    }
 
     // RESEARCH-1: Get ALL pending interactions from durable pending store
     // This includes both newly created events and retry queue items
@@ -1733,18 +1745,20 @@ class DualStorageManager {
       ? { backendConfirmed: true, pendingSync: false }
       : { backendConfirmed: false, pendingSync: true, error: 'Keepalive flush incomplete' };
 
-    console.info(
-      allConfirmed 
-        ? '[telemetry_pagehide_flush_confirmed]' 
-        : '[telemetry_pagehide_flush_pending]',
-      { 
-        sessionId, 
-        eventCount: allEvents.length,
-        confirmedCount: flushResult.confirmedIds?.length || 0,
-        pendingSessionEndCount: Math.max(0, pendingSessionEnds.length - confirmedSessionEndIds.length),
-        reason: allConfirmed ? undefined : 'partial_confirmation'
-      }
-    );
+    if (import.meta.env.DEV) {
+      console.info(
+        allConfirmed 
+          ? '[telemetry_pagehide_flush_confirmed]' 
+          : '[telemetry_pagehide_flush_pending]',
+        { 
+          sessionId, 
+          eventCount: allEvents.length,
+          confirmedCount: flushResult.confirmedIds?.length || 0,
+          pendingSessionEndCount: Math.max(0, pendingSessionEnds.length - confirmedSessionEndIds.length),
+          reason: allConfirmed ? undefined : 'partial_confirmation'
+        }
+      );
+    }
 
     return result;
   }
@@ -2200,30 +2214,32 @@ class DualStorageManager {
         ]);
 
         // Log merge details for audit
-        console.info('[hydration_profile_merge]', {
-          ...auditContext,
-          backendSources: {
-            fromProgressTable: solvedIdsFromProgress.size,
-            fromProfileCache: profile.solvedProblemIds?.size ?? 0,
-          },
-          localSource: {
-            beforeCount: localSolvedIds.size,
-          },
-          mergeResult: {
-            afterCount: mergedSolvedIds.size,
-            newProblemsAdded: Math.max(0, mergedSolvedIds.size - Math.max(
-              solvedIdsFromProgress.size,
-              localSolvedIds.size,
-              profile.solvedProblemIds?.size ?? 0
-            )),
-          },
-          preservedFields: [
-            'solvedProblemIds (union merge)',
-            'conceptsCovered (backend authoritative)',
-            'errorHistory (backend authoritative)',
-            'conceptCoverageEvidence (backend authoritative)',
-          ],
-        });
+        if (import.meta.env.DEV) {
+          console.info('[hydration_profile_merge]', {
+            ...auditContext,
+            backendSources: {
+              fromProgressTable: solvedIdsFromProgress.size,
+              fromProfileCache: profile.solvedProblemIds?.size ?? 0,
+            },
+            localSource: {
+              beforeCount: localSolvedIds.size,
+            },
+            mergeResult: {
+              afterCount: mergedSolvedIds.size,
+              newProblemsAdded: Math.max(0, mergedSolvedIds.size - Math.max(
+                solvedIdsFromProgress.size,
+                localSolvedIds.size,
+                profile.solvedProblemIds?.size ?? 0
+              )),
+            },
+            preservedFields: [
+              'solvedProblemIds (union merge)',
+              'conceptsCovered (backend authoritative)',
+              'errorHistory (backend authoritative)',
+              'conceptCoverageEvidence (backend authoritative)',
+            ],
+          });
+        }
 
         profile.solvedProblemIds = mergedSolvedIds;
         localStorageManager.saveProfile(profile);
@@ -2294,36 +2310,40 @@ class DualStorageManager {
           }
           
           // Log background sync audit
-          console.info('[hydration_background_sync]', {
-            learnerId,
-            interactions: {
-              localBefore: beforeCount,
-              backendReceived: interactionsResult.events.length,
-              backendNew: backendNewCount,
-              backendOverwrite: backendOverwriteCount,
-              localAfter: mergedInteractions.length,
-              mergeStrategy: 'id_based_dedup_backend_wins',
-            },
-            textbook: {
-              backendReceived: textbookUnits.length,
-              unitsAdded: textbookUnitsAdded,
-              mergeStrategy: 'id_based_upsert',
-            },
-            durationMs: Date.now() - hydrationStart,
-          });
+          if (import.meta.env.DEV) {
+            console.info('[hydration_background_sync]', {
+              learnerId,
+              interactions: {
+                localBefore: beforeCount,
+                backendReceived: interactionsResult.events.length,
+                backendNew: backendNewCount,
+                backendOverwrite: backendOverwriteCount,
+                localAfter: mergedInteractions.length,
+                mergeStrategy: 'id_based_dedup_backend_wins',
+              },
+              textbook: {
+                backendReceived: textbookUnits.length,
+                unitsAdded: textbookUnitsAdded,
+                mergeStrategy: 'id_based_upsert',
+              },
+              durationMs: Date.now() - hydrationStart,
+            });
+          }
         })
         .catch((syncError) => {
           console.warn('[DualStorage] hydrateLearner background sync failed:', syncError);
         });
 
       // Log immediate hydration completion (background sync continues)
-      console.info('[hydration_immediate_complete]', {
-        learnerId,
-        durationMs: Date.now() - hydrationStart,
-        sessionRestored: !!hydratedSessionId,
-        profileHydrated: !!profile,
-        backgroundSyncInitiated: true,
-      });
+      if (import.meta.env.DEV) {
+        console.info('[hydration_immediate_complete]', {
+          learnerId,
+          durationMs: Date.now() - hydrationStart,
+          sessionRestored: !!hydratedSessionId,
+          profileHydrated: !!profile,
+          backgroundSyncInitiated: true,
+        });
+      }
 
       this.lastHydratedAt[learnerId] = now;
       return true;
@@ -2408,11 +2428,13 @@ class DualStorageManager {
       const learnerCount = learners.length;
       const scopeEmpty = sectionCount === 0 || learnerCount === 0;
 
-      console.log('[DualStorage] Instructor dashboard hydrated', {
-        sectionCount,
-        learnerCount,
-        scopeEmpty,
-      });
+      if (import.meta.env.DEV) {
+        console.log('[DualStorage] Instructor dashboard hydrated', {
+          sectionCount,
+          learnerCount,
+          scopeEmpty,
+        });
+      }
       
       return { 
         ok: true, 
@@ -2498,8 +2520,10 @@ class DualStorageManager {
         storageClient.getAllProfiles().catch(() => []),
       ]).then(([stats, profiles]) => {
         if (stats) {
-          console.log('[DualStorage] Backend stats:', stats);
-          console.log('[DualStorage] Backend profiles:', profiles.length);
+          if (import.meta.env.DEV) {
+            console.log('[DualStorage] Backend stats:', stats);
+            console.log('[DualStorage] Backend profiles:', profiles.length);
+          }
         }
       }).catch(error => {
         console.warn('[DualStorage] Failed to get backend stats:', error);

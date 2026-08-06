@@ -24,6 +24,13 @@
 import { useMemo, useCallback } from 'react';
 import { storage as localStorageManager } from '../lib/storage/storage';
 import { sqlProblems } from '../data/problems';
+import { getProblemsByDifficultyRank } from '../lib/adaptive-problem-selector';
+
+export interface TopicProgress {
+  total: number;
+  solved: number;
+  percent: number;
+}
 
 export interface LearnerProgress {
   /** Total number of problems available */
@@ -49,6 +56,12 @@ export interface LearnerProgress {
   
   /** Get solved count for a specific difficulty level */
   getSolvedCountForDifficulty: (difficulty: string) => number;
+  
+  /** Get progress for a specific topic */
+  getTopicProgress: (topic: string) => TopicProgress;
+  
+  /** Get all topics with their progress */
+  topicProgressMap: Map<string, TopicProgress>;
 }
 
 interface UseLearnerProgressOptions {
@@ -79,9 +92,10 @@ export function useLearnerProgress(options: UseLearnerProgressOptions): LearnerP
     return profile?.solvedProblemIds ?? new Set<string>();
   }, [learnerId, refreshKey, hydratedSolvedIds]);
 
-  // Calculate current problem's 1-based position
+  // Calculate current problem's 1-based position in difficulty-ranked order
   const currentProblemNumber = useMemo(() => {
-    const index = sqlProblems.findIndex(p => p.id === currentProblemId);
+    const ranked = getProblemsByDifficultyRank();
+    const index = ranked.findIndex(p => p.id === currentProblemId);
     return index >= 0 ? index + 1 : 1;
   }, [currentProblemId]);
 
@@ -109,6 +123,28 @@ export function useLearnerProgress(options: UseLearnerProgressOptions): LearnerP
     return problemsInDifficulty.filter(p => solvedProblemIds.has(p.id)).length;
   }, [solvedProblemIds]);
 
+  // Helper to get progress for a specific topic
+  const getTopicProgress = useCallback((topic: string): TopicProgress => {
+    const problemsInTopic = sqlProblems.filter(p => p.topic === topic);
+    const solvedInTopic = problemsInTopic.filter(p => solvedProblemIds.has(p.id)).length;
+    const total = problemsInTopic.length;
+    return {
+      total,
+      solved: solvedInTopic,
+      percent: total > 0 ? Math.round((solvedInTopic / total) * 100) : 0,
+    };
+  }, [solvedProblemIds]);
+
+  // Pre-compute topic progress map
+  const topicProgressMap = useMemo(() => {
+    const map = new Map<string, TopicProgress>();
+    const topics = [...new Set(sqlProblems.map(p => p.topic))];
+    for (const topic of topics) {
+      map.set(topic, getTopicProgress(topic));
+    }
+    return map;
+  }, [getTopicProgress]);
+
   return {
     totalProblems: sqlProblems.length,
     currentProblemNumber,
@@ -118,6 +154,8 @@ export function useLearnerProgress(options: UseLearnerProgressOptions): LearnerP
     isCurrentProblemSolved,
     isProblemSolved,
     getSolvedCountForDifficulty,
+    getTopicProgress,
+    topicProgressMap,
   };
 }
 

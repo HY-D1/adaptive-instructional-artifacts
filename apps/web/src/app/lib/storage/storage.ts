@@ -24,6 +24,7 @@
  * @module Storage
  */
 import { createEventId } from '../utils/event-id';
+import { getProblemRank } from '../problem-ranking';
 import {
   canonicalizeSqlEngageSubtype,
   getConceptIdsForSqlEngageSubtype,
@@ -669,6 +670,16 @@ class StorageManager {
   saveInteraction(event: InteractionEvent): { success: boolean; quotaExceeded?: boolean } {
     const sessionId = event.sessionId || this.getActiveSessionId();
     let normalizedEvent: InteractionEvent = { ...event, sessionId };
+
+    // Inject difficulty-ranked problem number for research telemetry.
+    // Only set if the caller hasn't already provided an explicit value.
+    if (normalizedEvent.problemId && normalizedEvent.problemNumber === undefined) {
+      const rank = getProblemRank(normalizedEvent.problemId);
+      if (rank > 0) {
+        normalizedEvent = { ...normalizedEvent, problemNumber: rank };
+      }
+    }
+
     if (normalizedEvent.eventType === 'hint_view') {
       normalizedEvent = this.normalizeHintViewForExport(normalizedEvent);
     }

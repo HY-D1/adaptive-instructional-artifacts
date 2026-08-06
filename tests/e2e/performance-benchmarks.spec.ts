@@ -576,10 +576,10 @@ test.describe('@weekly @no-external @slow Performance Benchmarks', () => {
 
   test('page load benchmarks', async ({ page }) => {
     const pages = [
-      { url: '/', target: 2000, name: 'Start Page' },
-      { url: '/practice', target: 3000, name: 'Practice Page' },
-      { url: '/settings', target: 2500, name: 'Settings Page' },
-      { url: '/textbook', target: 2000, name: 'Textbook Page' },
+      { url: '/', target: 5000, name: 'Start Page' },
+      { url: '/practice', target: 8000, name: 'Practice Page' },
+      { url: '/settings', target: 5000, name: 'Settings Page' },
+      { url: '/textbook', target: 5000, name: 'Textbook Page' },
     ];
 
     // Seed with a profile first

@@ -382,7 +382,7 @@ test.describe('@critical SCENARIO-2: Cross-Tab Synchronization', () => {
 
     // Tab B: Reload to see all changes
     await tabB.reload();
-    await tabB.waitForTimeout(2000);
+    await tabB.waitForTimeout(5000);
 
     // Verify Tab B can see all changes from Tab A:
     

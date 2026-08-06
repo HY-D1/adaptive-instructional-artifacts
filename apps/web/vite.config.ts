@@ -282,7 +282,7 @@ export default defineConfig({
   },
   build: {
     outDir: path.resolve(__dirname, '../../dist/app'),
-    emptyOutDir: false,
+    emptyOutDir: true,
     rollupOptions: {
       output: {
         manualChunks: {

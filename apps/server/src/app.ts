@@ -8,6 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import fs from 'fs';
 
@@ -127,6 +128,8 @@ if (process.env.VERCEL === '1' || process.env.NODE_ENV === 'production') {
 }
 
 const CORS_ORIGIN_REGEXPS = CORS_ORIGIN_PATTERNS.map((pattern) => wildcardPatternToRegExp(pattern));
+
+app.use(compression());
 
 app.use(cors({
   origin: (origin, callback) => {
