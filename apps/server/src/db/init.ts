@@ -3,7 +3,7 @@
  * Run with: npm run db:init
  */
 
-import { initializeSchema, getDb, closeDb } from './index.js';
+import { initializeSchema, getDb, closeDb, isUsingNeon } from './index.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -22,6 +22,11 @@ async function main(): Promise<void> {
   console.log('🔄 Initializing SQL-Adapt database...\n');
 
   try {
+    if (isUsingNeon()) {
+      throw new Error(
+        'db:init is SQLite-only; use db:init:neon with EXPECTED_NEON_BRANCH_ID for Neon',
+      );
+    }
     ensureDataDirectory();
     await initializeSchema();
     

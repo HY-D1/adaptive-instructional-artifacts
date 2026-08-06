@@ -64,11 +64,12 @@ describe('Progress Persistence - Storage Layer Integration', () => {
 
   describe('SCENARIO 1: Sign up → solve → logout → login → progress restored', () => {
     it('calls updateProblemProgress when execution is successful', async () => {
-      const { dualStorage } = await import('./dual-storage');
+      const { dualStorage, setActiveSyncPrincipal } = await import('./dual-storage');
 
       const learnerId = 'learner-test-1';
       const problemId = 'problem-1';
       const code = 'SELECT * FROM employees';
+      setActiveSyncPrincipal({ accountId: 'account-test-1', learnerId });
 
       // Simulate successful execution event
       const event: InteractionEvent = {
@@ -99,10 +100,11 @@ describe('Progress Persistence - Storage Layer Integration', () => {
     });
 
     it('persists progress to backend with correct problemId', async () => {
-      const { dualStorage } = await import('./dual-storage');
+      const { dualStorage, setActiveSyncPrincipal } = await import('./dual-storage');
 
       const learnerId = 'learner-test-2';
       const problemId = 'problem-join-101';
+      setActiveSyncPrincipal({ accountId: 'account-test-2', learnerId });
 
       updateProblemProgressMock.mockResolvedValueOnce({
         userId: learnerId,
@@ -239,9 +241,10 @@ describe('Progress Persistence - Storage Layer Integration', () => {
 
   describe('SCENARIO 3: Clear localStorage → sign in → progress restored from backend', () => {
     it('rehydrates progress from backend when localStorage is empty', async () => {
-      const { dualStorage } = await import('./dual-storage');
+      const { dualStorage, setActiveSyncPrincipal } = await import('./dual-storage');
 
       const learnerId = 'learner-test-6';
+      setActiveSyncPrincipal({ accountId: 'account-test-6', learnerId });
 
       // localStorage is empty (simulating cleared storage)
       expect(localStorage.getItem('sql-learning-profiles')).toBeNull();
@@ -293,10 +296,11 @@ describe('Progress Persistence - Storage Layer Integration', () => {
 
   describe('SCENARIO 4: Backend has session, local missing → session restores', () => {
     it('hydrates session from backend when localStorage has no session', async () => {
-      const { dualStorage } = await import('./dual-storage');
+      const { dualStorage, setActiveSyncPrincipal } = await import('./dual-storage');
 
       const learnerId = 'learner-test-8';
       const backendSessionId = 'session-backend-123';
+      setActiveSyncPrincipal({ accountId: 'account-test-8', learnerId });
 
       // No local session
       expect(localStorage.getItem('sql-learning-active-session')).toBeNull();
@@ -334,11 +338,12 @@ describe('Progress Persistence - Storage Layer Integration', () => {
     });
 
     it('uses backend session data over stale local data', async () => {
-      const { dualStorage } = await import('./dual-storage');
+      const { dualStorage, setActiveSyncPrincipal } = await import('./dual-storage');
 
       const learnerId = 'learner-test-9';
       const backendSessionId = 'session-backend-456';
       const staleLocalSessionId = 'session-local-789';
+      setActiveSyncPrincipal({ accountId: 'account-test-9', learnerId });
 
       // Set stale local session
       localStorage.setItem('sql-learning-active-session', staleLocalSessionId);
@@ -373,10 +378,11 @@ describe('Progress Persistence - Storage Layer Integration', () => {
 
   describe('SCENARIO 5: Quota exceeded → progress still preserved', () => {
     it('calls updateProblemProgress even when localStorage operations might fail', async () => {
-      const { dualStorage } = await import('./dual-storage');
+      const { dualStorage, setActiveSyncPrincipal } = await import('./dual-storage');
 
       const learnerId = 'learner-test-10';
       const problemId = 'problem-1';
+      setActiveSyncPrincipal({ accountId: 'account-test-10', learnerId });
 
       // Backend is available and working
       updateProblemProgressMock.mockResolvedValueOnce({
@@ -544,10 +550,11 @@ describe('Progress Persistence - Storage Layer Integration', () => {
     });
 
     it('syncs pending progress when backend becomes available', async () => {
-      const { dualStorage } = await import('./dual-storage');
+      const { dualStorage, setActiveSyncPrincipal } = await import('./dual-storage');
 
       const learnerId = 'learner-test-15';
       const problemId = 'problem-1';
+      setActiveSyncPrincipal({ accountId: 'account-test-15', learnerId });
 
       // First, backend is down
       checkBackendHealthMock.mockResolvedValueOnce(false);

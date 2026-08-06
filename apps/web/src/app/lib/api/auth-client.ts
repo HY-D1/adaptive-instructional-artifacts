@@ -8,8 +8,17 @@
  * these functions return no-op results and the app falls back to passcode auth.
  */
 
-import { withCsrfHeader, setCsrfToken, clearCsrfToken } from './csrf-client';
+import {
+  withCsrfHeader,
+  setCsrfToken,
+  clearCsrfToken,
+  runAuthTransportExclusive,
+} from './csrf-client';
 import { isResearchSafe, getResearchRuntimeMode, getApiBaseUrl, isBackendConfigured } from '../runtime-config';
+import {
+  getActiveSyncPrincipalSnapshot,
+  isActiveSyncPrincipalSnapshot,
+} from '../storage/sync-owner';
 
 // '' for same-origin (relative /api/auth), a URL otherwise, undefined when unset.
 const _API_BASE = getApiBaseUrl();
@@ -81,6 +90,11 @@ export interface LogoutResult {
   error?: string;
 }
 
+export type AuthSessionProbeResult =
+  | { state: 'authenticated'; user: AuthUser }
+  | { state: 'unauthenticated' }
+  | { state: 'indeterminate' };
+
 // ============================================================================
 // HTTP helper
 // ============================================================================
@@ -123,7 +137,7 @@ async function authFetch(path: string, init: RequestInit = {}): Promise<Response
 // Auth API calls
 // ============================================================================
 
-export async function signup(params: {
+export function signup(params: {
   name: string;
   email: string;
   password: string;
@@ -131,58 +145,58 @@ export async function signup(params: {
   classCode?: string;
   instructorCode?: string;
 }): Promise<AuthResult> {
-  try {
-    const res = await authFetch('/signup', {
-      method: 'POST',
-      body: JSON.stringify(params),
-    });
-    const data = await res.json();
-    setCsrfToken(data?.csrfToken);
-    if (!res.ok) {
-      const isRateLimit = res.status === 429;
-      return {
-        success: false,
-        error: data.error ?? `HTTP ${res.status}`,
-        details: data.details,
-        rateLimited: isRateLimit,
-        retryAfter: res.headers.get('Retry-After') || data.retryAfter,
-      };
+  return runAuthTransportExclusive(async () => {
+    try {
+      const res = await authFetch('/signup', {
+        method: 'POST',
+        body: JSON.stringify(params),
+      });
+      const data = await res.json();
+      setCsrfToken(data?.csrfToken);
+      if (!res.ok) {
+        const isRateLimit = res.status === 429;
+        return {
+          success: false,
+          error: data.error ?? `HTTP ${res.status}`,
+          details: data.details,
+          rateLimited: isRateLimit,
+          retryAfter: res.headers.get('Retry-After') || data.retryAfter,
+        };
+      }
+      return { success: true, user: data.user };
+    } catch (err) {
+      return { success: false, error: formatNetworkError(err as Error) };
     }
-    return { success: true, user: data.user };
-  } catch (err) {
-    return { success: false, error: formatNetworkError(err as Error) };
-  }
+  });
 }
 
-export async function login(email: string, password: string): Promise<AuthResult> {
-  try {
-    const res = await authFetch('/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await res.json();
-    setCsrfToken(data?.csrfToken);
-    if (!res.ok) {
-      const isRateLimit = res.status === 429;
-      return {
-        success: false,
-        error: data.error ?? `HTTP ${res.status}`,
-        details: data.details,
-        rateLimited: isRateLimit,
-        retryAfter: res.headers.get('Retry-After') || data.retryAfter,
-      };
+export function login(email: string, password: string): Promise<AuthResult> {
+  return runAuthTransportExclusive(async () => {
+    try {
+      const res = await authFetch('/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      setCsrfToken(data?.csrfToken);
+      if (!res.ok) {
+        const isRateLimit = res.status === 429;
+        return {
+          success: false,
+          error: data.error ?? `HTTP ${res.status}`,
+          details: data.details,
+          rateLimited: isRateLimit,
+          retryAfter: res.headers.get('Retry-After') || data.retryAfter,
+        };
+      }
+      return { success: true, user: data.user };
+    } catch (err) {
+      return { success: false, error: formatNetworkError(err as Error) };
     }
-    return { success: true, user: data.user };
-  } catch (err) {
-    return { success: false, error: formatNetworkError(err as Error) };
-  }
+  });
 }
 
-export async function logout(): Promise<LogoutResult> {
-  if (!AUTH_BACKEND_CONFIGURED) {
-    return { success: true };
-  }
-
+async function logoutWithinLane(): Promise<LogoutResult> {
   try {
     const res = await authFetch('/logout', { method: 'POST' });
     if (!res.ok) {
@@ -206,19 +220,85 @@ export async function logout(): Promise<LogoutResult> {
   }
 }
 
-export async function getMe(): Promise<AuthUser | null> {
+interface GetMeWithinLaneOptions {
+  expectedIdentity?: Pick<AuthUser, 'id' | 'learnerId'>;
+  isCurrent?: () => boolean;
+}
+
+async function probeAuthSessionWithinLane(
+  options: GetMeWithinLaneOptions = {},
+): Promise<AuthSessionProbeResult> {
   try {
     const res = await authFetch('/me');
     if (!res.ok) {
-      if (res.status === 401) {
+      if (res.status === 401 && options.isCurrent?.() !== false) {
         clearCsrfToken();
       }
-      return null;
+      return res.status === 401
+        ? { state: 'unauthenticated' }
+        : { state: 'indeterminate' };
     }
-    const data = await res.json();
+    const data = await res.json().catch(() => null as Record<string, unknown> | null);
+    const authenticatedUser = data.success ? data.user as AuthUser | undefined : undefined;
+    if (
+      !authenticatedUser ||
+      options.isCurrent?.() === false ||
+      (options.expectedIdentity && (
+        authenticatedUser.id !== options.expectedIdentity.id ||
+        authenticatedUser.learnerId !== options.expectedIdentity.learnerId
+      ))
+    ) {
+      return { state: 'indeterminate' };
+    }
     setCsrfToken(data?.csrfToken);
-    return data.success ? data.user : null;
+    return { state: 'authenticated', user: authenticatedUser };
   } catch {
-    return null;
+    return { state: 'indeterminate' };
   }
+}
+
+export function logout(): Promise<LogoutResult> {
+  if (!AUTH_BACKEND_CONFIGURED) {
+    return Promise.resolve({ success: true });
+  }
+
+  const principalSnapshot = getActiveSyncPrincipalSnapshot();
+  return runAuthTransportExclusive(async () => {
+    let result = await logoutWithinLane();
+    const expectedPrincipal = principalSnapshot.principal;
+    if (
+      !result.success &&
+      result.status === 403 &&
+      expectedPrincipal &&
+      isActiveSyncPrincipalSnapshot(principalSnapshot)
+    ) {
+      // Refresh and retry inside the same lane so a newer login cannot be
+      // interleaved between the two logout requests.
+      const refreshedSession = await probeAuthSessionWithinLane({
+        expectedIdentity: {
+          id: expectedPrincipal.accountId,
+          learnerId: expectedPrincipal.learnerId,
+        },
+        isCurrent: () => isActiveSyncPrincipalSnapshot(principalSnapshot),
+      });
+      if (
+        refreshedSession.state === 'authenticated' &&
+        isActiveSyncPrincipalSnapshot(principalSnapshot)
+      ) {
+        result = await logoutWithinLane();
+      }
+    }
+    return result;
+  });
+}
+
+export function getMe(): Promise<AuthUser | null> {
+  return runAuthTransportExclusive(async () => {
+    const result = await probeAuthSessionWithinLane();
+    return result.state === 'authenticated' ? result.user : null;
+  });
+}
+
+export function probeAuthSession(): Promise<AuthSessionProbeResult> {
+  return runAuthTransportExclusive(probeAuthSessionWithinLane);
 }

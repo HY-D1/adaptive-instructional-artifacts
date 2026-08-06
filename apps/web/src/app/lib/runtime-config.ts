@@ -10,8 +10,10 @@
  */
 
 // RESEARCH CONTRACT VERSION - Bump when deployment semantics change
-// v2.2.0: Exact backend confirmation, durable pagehide/session_end barriers, bounded hint cache, production batch validation
-export const RESEARCH_CONTRACT_VERSION = 'v2.2.0';
+// v2.3.0: Matched Neon branch readiness is authoritative for research safety.
+export const RESEARCH_CONTRACT_VERSION = 'v2.3.0';
+export const READINESS_CONTRACT_VERSION = 'v1.0.0';
+export const SCHEMA_CONTRACT_VERSION = 'v1.2.0';
 
 /**
  * Research Runtime Mode
@@ -216,7 +218,35 @@ export interface ResearchReadiness {
     persistenceEndpoint?: string;
     healthError?: string;
     persistenceError?: string;
+    readinessState?: PersistenceReadiness['state'];
+    branchValidation?: PersistenceReadiness['branchValidation'];
+    researchReady?: boolean;
   };
+}
+
+export interface PersistenceReadiness {
+  contractVersion: typeof READINESS_CONTRACT_VERSION;
+  schemaContractVersion: typeof SCHEMA_CONTRACT_VERSION;
+  state:
+    | 'ready'
+    | 'local-only'
+    | 'unverified'
+    | 'unavailable'
+    | 'branch-mismatch'
+    | 'schema-incomplete'
+    | 'insufficient-privileges';
+  researchReady: boolean;
+  connectivityReady: boolean;
+  branchValidation:
+    | 'matched'
+    | 'unconfigured'
+    | 'unavailable'
+    | 'mismatched'
+    | 'not-applicable';
+  schemaReady: boolean | null;
+  writePrivilegesReady: boolean | null;
+  requiredTableCount: number;
+  missingTableCount: number | null;
 }
 
 export interface PersistenceStatus {
@@ -225,6 +255,7 @@ export interface PersistenceStatus {
   resolvedEnvSource: string;
   persistenceRoutesEnabled: boolean;
   researchContractVersion?: string;
+  readiness?: PersistenceReadiness;
 }
 
 export interface BackendHealth {
@@ -235,6 +266,7 @@ export interface BackendHealth {
     mode: 'neon' | 'sqlite';
     envSource: string;
   };
+  readiness?: PersistenceReadiness;
 }
 
 /**
@@ -249,15 +281,11 @@ async function checkPersistenceStatus(apiUrl: string): Promise<{ status: Persist
       credentials: 'include',
     });
     
-    if (!response.ok) {
-      return { 
-        status: null, 
-        error: `HTTP ${response.status} ${response.statusText}` 
-      };
-    }
-    
-    const data = await response.json();
-    return { status: data };
+    const data = await response.json() as PersistenceStatus;
+    return {
+      status: data,
+      error: response.ok ? undefined : `HTTP ${response.status} ${response.statusText}`,
+    };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     return { status: null, error: errorMessage };
@@ -275,15 +303,11 @@ async function fetchBackendHealth(apiBase: string): Promise<{ health: BackendHea
       method: 'GET',
     });
     
-    if (!response.ok) {
-      return { 
-        health: null, 
-        error: `HTTP ${response.status} ${response.statusText}` 
-      };
-    }
-    
-    const data = await response.json();
-    return { health: data };
+    const data = await response.json() as BackendHealth;
+    return {
+      health: data,
+      error: response.ok ? undefined : `HTTP ${response.status} ${response.statusText}`,
+    };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     return { health: null, error: errorMessage };
@@ -345,10 +369,11 @@ export async function checkResearchReadiness(): Promise<ResearchReadiness> {
     checkPersistenceStatus(apiUrl),
   ]);
   
-  const backendReachable = !!healthResult.health;
+  const backendReachable = healthResult.health !== null;
   const persistenceStatus = persistenceResult.status;
   const isNeon = persistenceStatus?.dbMode === 'neon';
   const persistenceEnabled = persistenceStatus?.persistenceRoutesEnabled ?? false;
+  const authoritativeReadiness = persistenceStatus?.readiness;
   
   const duration = Math.round(performance.now() - startTime);
   
@@ -361,6 +386,9 @@ export async function checkResearchReadiness(): Promise<ResearchReadiness> {
       dbMode: persistenceStatus?.dbMode ?? 'unknown',
       isNeon,
       persistenceEnabled,
+      readinessState: authoritativeReadiness?.state,
+      branchValidation: authoritativeReadiness?.branchValidation,
+      researchReady: authoritativeReadiness?.researchReady,
       healthError: healthResult.error,
       persistenceError: persistenceResult.error,
     });
@@ -405,16 +433,24 @@ export async function checkResearchReadiness(): Promise<ResearchReadiness> {
       }
     };
   }
-  
-  if (!isNeon) {
+
+  const readinessDiagnostics = authoritativeReadiness
+    ? {
+        readinessState: authoritativeReadiness.state,
+        branchValidation: authoritativeReadiness.branchValidation,
+        researchReady: authoritativeReadiness.researchReady,
+      }
+    : {};
+
+  if (!authoritativeReadiness) {
     return {
       ready: false,
-      reason: `Database mode is ${persistenceStatus.dbMode}, expected neon for research-safe mode`,
+      reason: 'Backend readiness contract unavailable',
       diagnostics: {
         envConfigured: true,
         backendReachable: true,
         dbMode: persistenceStatus.dbMode,
-        isNeon: false,
+        isNeon,
         persistenceEnabled,
         backendContractVersion: persistenceStatus.researchContractVersion,
         apiBaseUrl: apiBase,
@@ -423,21 +459,60 @@ export async function checkResearchReadiness(): Promise<ResearchReadiness> {
       }
     };
   }
-  
-  if (!persistenceEnabled) {
+
+  let contractFailureReason: string | undefined;
+  if (!isNeon) {
+    contractFailureReason = `Database mode is ${persistenceStatus.dbMode}; research-safe mode requires Neon`;
+  } else if (persistenceStatus.researchContractVersion !== RESEARCH_CONTRACT_VERSION) {
+    contractFailureReason = `Research contract version is ${persistenceStatus.researchContractVersion ?? 'missing'}; expected ${RESEARCH_CONTRACT_VERSION}`;
+  } else if (authoritativeReadiness.contractVersion !== READINESS_CONTRACT_VERSION) {
+    contractFailureReason = `Readiness contract version is ${authoritativeReadiness.contractVersion}; expected ${READINESS_CONTRACT_VERSION}`;
+  } else if (authoritativeReadiness.schemaContractVersion !== SCHEMA_CONTRACT_VERSION) {
+    contractFailureReason = `Schema contract version is ${authoritativeReadiness.schemaContractVersion}; expected ${SCHEMA_CONTRACT_VERSION}`;
+  }
+
+  if (contractFailureReason) {
     return {
       ready: false,
-      reason: 'Persistence routes disabled',
+      reason: contractFailureReason,
       diagnostics: {
         envConfigured: true,
         backendReachable: true,
         dbMode: persistenceStatus.dbMode,
-        isNeon: true,
-        persistenceEnabled: false,
+        isNeon,
+        persistenceEnabled,
         backendContractVersion: persistenceStatus.researchContractVersion,
         apiBaseUrl: apiBase,
         healthEndpoint,
         persistenceEndpoint,
+        healthError: healthResult.error,
+        persistenceError: persistenceResult.error,
+        ...readinessDiagnostics,
+      },
+    };
+  }
+
+  if (
+    authoritativeReadiness.state !== 'ready'
+    || authoritativeReadiness.branchValidation !== 'matched'
+    || authoritativeReadiness.researchReady !== true
+  ) {
+    return {
+      ready: false,
+      reason: `Database readiness is ${authoritativeReadiness.state} (${authoritativeReadiness.branchValidation})`,
+      diagnostics: {
+        envConfigured: true,
+        backendReachable: true,
+        dbMode: persistenceStatus.dbMode,
+        isNeon,
+        persistenceEnabled,
+        backendContractVersion: persistenceStatus.researchContractVersion,
+        apiBaseUrl: apiBase,
+        healthEndpoint,
+        persistenceEndpoint,
+        healthError: healthResult.error,
+        persistenceError: persistenceResult.error,
+        ...readinessDiagnostics,
       }
     };
   }
@@ -448,12 +523,13 @@ export async function checkResearchReadiness(): Promise<ResearchReadiness> {
       envConfigured: true,
       backendReachable: true,
       dbMode: 'neon',
-      isNeon: true,
-      persistenceEnabled: true,
+      isNeon,
+      persistenceEnabled,
       backendContractVersion: persistenceStatus.researchContractVersion,
       apiBaseUrl: apiBase,
       healthEndpoint,
       persistenceEndpoint,
+      ...readinessDiagnostics,
     }
   };
 }

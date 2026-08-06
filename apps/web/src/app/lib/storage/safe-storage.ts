@@ -177,9 +177,6 @@ const RECOVERABLE_CACHE_KEYS: string[] = [
   'sql-learning-llm-cache',
   'sql-learning-pdf-index',
   'sql-learning-pdf-uploads',
-  'sql-adapt-offline-queue',
-  'sql-adapt-pending-interactions',
-  'sql-adapt-dead-letter',
 ];
 
 // Session-only keys that can be evicted

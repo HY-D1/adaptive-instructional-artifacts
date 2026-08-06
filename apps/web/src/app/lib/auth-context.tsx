@@ -11,10 +11,11 @@
  * authoritative.
  */
 
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import {
   getMe,
+  probeAuthSession,
   login as apiLogin,
   logout as apiLogout,
   signup as apiSignup,
@@ -24,7 +25,7 @@ import {
 import type { AuthUser, AuthResult, LogoutResult } from './api/auth-client';
 import { storage } from './storage/index';
 import { clearUiStateForActor } from './ui-state';
-import learnerProfileClient from './api/learner-profile-client';
+import { setActiveSyncPrincipal } from './storage/sync-owner';
 
 // ============================================================================
 // Context types
@@ -70,6 +71,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(AUTH_ENABLED);
   const [isHydrating, setIsHydrating] = useState(false);
+  const authOperationRef = useRef(0);
+
+  const beginAuthOperation = useCallback((): number => {
+    authOperationRef.current += 1;
+    setIsHydrating(false);
+    return authOperationRef.current;
+  }, []);
+
+  const isCurrentAuthOperation = useCallback(
+    (operation: number): boolean => authOperationRef.current === operation,
+    [],
+  );
 
   /** 
    * Sync authenticated user into localStorage so existing guards work.
@@ -118,9 +131,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function hydrateFromBackend(
     authUser: AuthUser,
-    syncInfo: { hadExistingProfile: boolean; previousLearnerId: string | null }
+    syncInfo: { hadExistingProfile: boolean; previousLearnerId: string | null },
+    operation: number,
   ): Promise<void> {
-    if (!AUTH_ENABLED) return;
+    if (!AUTH_ENABLED || !isCurrentAuthOperation(operation)) return;
     setIsHydrating(true);
     
     const hydrationStart = Date.now();
@@ -131,7 +145,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         syncInfo.previousLearnerId !== authUser.learnerId;
       
       if (hasLegacyData) {
-        learnerProfileClient.clearCache();
         console.info('[auth_hydration_legacy_detected]', {
           previousLearnerId: syncInfo.previousLearnerId,
           newLearnerId: authUser.learnerId,
@@ -141,9 +154,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       const hydrated = await storage.hydrateLearner(authUser.learnerId);
+      if (!isCurrentAuthOperation(operation)) return;
       
       if (authUser.role === 'instructor') {
         await storage.hydrateInstructorDashboard();
+        if (!isCurrentAuthOperation(operation)) return;
       }
       
       console.info('[auth_hydration_complete]', {
@@ -154,6 +169,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         hadLegacyData: hasLegacyData,
       });
     } catch (error) {
+      if (!isCurrentAuthOperation(operation)) return;
       console.error('[auth_hydration_error]', {
         learnerId: authUser.learnerId,
         error: error instanceof Error ? error.message : 'unknown',
@@ -162,54 +178,96 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Don't throw - login should succeed even if hydration fails
       // The storage layer will fall back to local data
     } finally {
-      setIsHydrating(false);
+      if (isCurrentAuthOperation(operation)) {
+        setIsHydrating(false);
+      }
+    }
+  }
+
+  async function commitAuthenticatedUser(authUser: AuthUser, operation: number): Promise<void> {
+    if (!isCurrentAuthOperation(operation)) return;
+    setActiveSyncPrincipal({
+      accountId: authUser.id,
+      learnerId: authUser.learnerId,
+    });
+    if (user?.learnerId && user.learnerId !== authUser.learnerId) {
+      clearUiStateForActor(user.learnerId);
+    }
+    const syncInfo = syncToLocalStorage(authUser);
+    await hydrateFromBackend(authUser, syncInfo, operation);
+    if (!isCurrentAuthOperation(operation)) return;
+    setUser(authUser);
+  }
+
+  async function reconcileAuthenticatedSession(operation: number): Promise<void> {
+    const session = await probeAuthSession();
+    if (!isCurrentAuthOperation(operation)) return;
+    if (session.state === 'unauthenticated') {
+      setUser(null);
+      return;
+    }
+    if (session.state === 'authenticated') {
+      await commitAuthenticatedUser(session.user, operation);
     }
   }
 
   // On mount: check JWT cookie
   useEffect(() => {
+    const operation = beginAuthOperation();
+    setActiveSyncPrincipal(null);
     if (!AUTH_ENABLED) {
       setIsLoading(false);
       return;
     }
     getMe().then(async (authUser) => {
+      if (!isCurrentAuthOperation(operation)) return;
       if (authUser) {
+        setActiveSyncPrincipal({
+          accountId: authUser.id,
+          learnerId: authUser.learnerId,
+        });
         const syncInfo = syncToLocalStorage(authUser);
-        await hydrateFromBackend(authUser, syncInfo);
+        await hydrateFromBackend(authUser, syncInfo, operation);
+        if (!isCurrentAuthOperation(operation)) return;
         setUser(authUser);
       }
-      setIsLoading(false);
+      if (isCurrentAuthOperation(operation)) {
+        setIsLoading(false);
+      }
     });
+    return () => {
+      if (isCurrentAuthOperation(operation)) {
+        authOperationRef.current += 1;
+      }
+    };
   }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<AuthResult> => {
+    const operation = beginAuthOperation();
+    setIsLoading(false);
+    setActiveSyncPrincipal(null);
     const result = await apiLogin(email, password);
+    if (!isCurrentAuthOperation(operation)) return result;
     if (result.success && result.user) {
-      if (user?.learnerId && user.learnerId !== result.user.learnerId) {
-        clearUiStateForActor(user.learnerId);
-        learnerProfileClient.clearCache();
-      }
-      const syncInfo = syncToLocalStorage(result.user);
-      await hydrateFromBackend(result.user, syncInfo);
-      setUser(result.user);
+      await commitAuthenticatedUser(result.user, operation);
+    } else {
+      await reconcileAuthenticatedSession(operation);
     }
     return result;
-  }, [user]);
+  }, [beginAuthOperation, isCurrentAuthOperation, user]);
 
   const logout = useCallback(async (): Promise<LogoutResult> => {
-    let result = await apiLogout();
-    if (!result.success && result.status === 403 && AUTH_BACKEND_CONFIGURED) {
-      // CSRF token can be stale after long-lived sessions; refresh once and retry.
-      await getMe();
-      result = await apiLogout();
-    }
+    const operation = beginAuthOperation();
+    setIsLoading(false);
+    const result = await apiLogout();
+    if (!isCurrentAuthOperation(operation)) return result;
+    setActiveSyncPrincipal(null);
     // Idempotent teardown: always clear local auth state first so a failed
     // server logout (403/500/network) can never trap the user in a
     // half-logged-in screen. A 401 means the session was already gone.
     if (user?.learnerId) {
       clearUiStateForActor(user.learnerId);
     }
-    learnerProfileClient.clearCache();
     setUser(null);
     storage.clearUserProfile();
     // Surface a genuine server-side failure to the caller; local state is
@@ -218,7 +276,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return result;
     }
     return { success: true };
-  }, [user]);
+  }, [beginAuthOperation, isCurrentAuthOperation, user]);
 
   const signup = useCallback(async (params: {
     name: string;
@@ -228,18 +286,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     classCode?: string;
     instructorCode?: string;
   }): Promise<AuthResult> => {
+    const operation = beginAuthOperation();
+    setIsLoading(false);
+    setActiveSyncPrincipal(null);
     const result = await apiSignup(params);
+    if (!isCurrentAuthOperation(operation)) return result;
     if (result.success && result.user) {
-      if (user?.learnerId && user.learnerId !== result.user.learnerId) {
-        clearUiStateForActor(user.learnerId);
-        learnerProfileClient.clearCache();
-      }
-      const syncInfo = syncToLocalStorage(result.user);
-      await hydrateFromBackend(result.user, syncInfo);
-      setUser(result.user);
+      await commitAuthenticatedUser(result.user, operation);
+    } else {
+      await reconcileAuthenticatedSession(operation);
     }
     return result;
-  }, [user]);
+  }, [beginAuthOperation, isCurrentAuthOperation, user]);
 
   return (
     <AuthContext.Provider
