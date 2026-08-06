@@ -205,6 +205,10 @@ export function AuthPage() {
     <GatewayShell>
       <section className="atlas-gateway-panel atlas-auth-panel">
         <div className="atlas-gateway-heading">
+          <span className="atlas-badge">
+            <span className="atlas-badge__dot atlas-badge__dot--emerald" aria-hidden="true" />
+            Backend connected
+          </span>
           <h2 className="text-2xl font-bold text-gray-900">
             {tab === 'login' ? 'Welcome back' : 'Create your account'}
           </h2>
