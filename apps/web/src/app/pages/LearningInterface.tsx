@@ -64,6 +64,8 @@ import { ReinforcementPrompt } from '../components/features/reinforcement/Reinfo
 import { useLLMSettings } from '../components/shared/LLMSettingsHelper';
 import { useScreenReaderAnnouncer } from '../components/shared/ScreenReaderAnnouncer';
 import { sqlProblems } from '../data/problems';
+import { getProblemsByDifficultyRank } from '../lib/adaptive-problem-selector';
+import { getFirstProblem } from '../lib/problem-ranking';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
 import { useUserRole } from '../hooks/useUserRole';
 import { useLocation, Link } from 'react-router';
@@ -394,7 +396,7 @@ export function LearningInterface() {
   // Use actual user profile ID for data isolation (aligned with TextbookPage)
   const learnerId = profile?.id || cachedProfileId || (AUTH_BACKEND_CONFIGURED ? '' : 'learner-1');
   const [sessionId, setSessionId] = useState('');
-  const [currentProblem, setCurrentProblem] = useState<SQLProblem>(sqlProblems[0]);
+  const [currentProblem, setCurrentProblem] = useState<SQLProblem>(getFirstProblem());
   const [activeConceptId, setActiveConceptId] = useState<string | null>(null);
   const [activeConceptTitle, setActiveConceptTitle] = useState<string | null>(null);
   const [sqlDraft, setSqlDraft] = useState(DEFAULT_SQL_EDITOR_CODE);
@@ -2179,19 +2181,19 @@ export function LearningInterface() {
 
   const timeSpent = Date.now() - startTime;
 
-  // Memoized problem grouping by difficulty
-  const problemsByDifficulty = useMemo(() => 
-    sqlProblems.reduce((acc, problem) => {
-      if (!acc[problem.difficulty]) {
-        acc[problem.difficulty] = [];
+  // Memoized problem grouping by topic for the dropdown
+  const problemsByTopic = useMemo(() => {
+    const ranked = getProblemsByDifficultyRank();
+    return ranked.reduce((acc, problem) => {
+      if (!acc[problem.topic]) {
+        acc[problem.topic] = [];
       }
-      acc[problem.difficulty].push(problem);
+      acc[problem.topic].push(problem);
       return acc;
-    }, {} as Record<string, SQLProblem[]>),
-    []
-  );
+    }, {} as Record<string, SQLProblem[]>);
+  }, []);
 
-  const difficultyOrder = ['beginner', 'intermediate', 'advanced'];
+  const topicOrder: string[] = ['basics', 'filtering', 'joining', 'aggregation', 'functions', 'advanced'];
 
   // Memoized learner session interactions
   const learnerSessionInteractions = useMemo(() => 
@@ -2261,25 +2263,37 @@ export function LearningInterface() {
     isCurrentProblemSolved,
     isProblemSolved,
     getSolvedCountForDifficulty,
+    topicProgressMap,
   } = progress;
 
-  // Navigation handlers
+  // Navigation handlers using adaptive difficulty-based sequencing
+  const rankedProblems = useMemo(() => getProblemsByDifficultyRank(), []);
+
   const handleNextProblem = useCallback(() => {
-    const nextIndex = currentProblemNumber; // already 1-based, so this is correct position for next
-    if (nextIndex < sqlProblems.length) {
-      handleProblemChange(sqlProblems[nextIndex].id);
+    const currentIndex = rankedProblems.findIndex(p => p.id === currentProblem.id);
+    const nextIndex = currentIndex + 1;
+    if (nextIndex < rankedProblems.length) {
+      handleProblemChange(rankedProblems[nextIndex].id);
     }
-  }, [currentProblemNumber, handleProblemChange]);
+  }, [currentProblem.id, rankedProblems, handleProblemChange]);
 
   const handlePreviousProblem = useCallback(() => {
-    const prevIndex = currentProblemNumber - 2; // convert to 0-based, then back one
+    const currentIndex = rankedProblems.findIndex(p => p.id === currentProblem.id);
+    const prevIndex = currentIndex - 1;
     if (prevIndex >= 0) {
-      handleProblemChange(sqlProblems[prevIndex].id);
+      handleProblemChange(rankedProblems[prevIndex].id);
     }
-  }, [currentProblemNumber, handleProblemChange]);
+  }, [currentProblem.id, rankedProblems, handleProblemChange]);
 
-  const hasNextProblem = currentProblemNumber < sqlProblems.length;
-  const hasPreviousProblem = currentProblemNumber > 1;
+  const hasNextProblem = useMemo(() => {
+    const currentIndex = rankedProblems.findIndex(p => p.id === currentProblem.id);
+    return currentIndex >= 0 && currentIndex < rankedProblems.length - 1;
+  }, [currentProblem.id, rankedProblems]);
+
+  const hasPreviousProblem = useMemo(() => {
+    const currentIndex = rankedProblems.findIndex(p => p.id === currentProblem.id);
+    return currentIndex > 0;
+  }, [currentProblem.id, rankedProblems]);
 
   // Memoized error and attempt calculations
   const latestProblemErrorEvent = useMemo(() => 
@@ -2461,7 +2475,7 @@ export function LearningInterface() {
                   </TooltipContent>
                 </Tooltip>
 
-                {/* Student progress indicator - Shows solved count, NOT current position */}
+                {/* Student progress indicator - Shows topic-based progress */}
                 {isStudent && (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -2479,8 +2493,21 @@ export function LearningInterface() {
                       </div>
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>You have solved {solvedCount} of {totalProblems} problems ({solvedPercent}%)</p>
-                      <p className="text-xs text-gray-500 mt-1">This shows your overall completion progress</p>
+                      <p className="font-medium mb-1">Overall: {solvedCount} of {totalProblems} problems ({solvedPercent}%)</p>
+                      <div className="space-y-1 mt-2">
+                        {Array.from(topicProgressMap.entries()).map(([topic, progress]) => (
+                          <div key={topic} className="flex items-center gap-2 text-xs">
+                            <span className="capitalize w-20">{topic}:</span>
+                            <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                              <div 
+                                className="h-full bg-green-500 rounded-full"
+                                style={{ width: `${progress.percent}%` }}
+                              />
+                            </div>
+                            <span>{progress.solved}/{progress.total}</span>
+                          </div>
+                        ))}
+                      </div>
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -2696,18 +2723,21 @@ export function LearningInterface() {
                       </div>
                     </SelectTrigger>
                     <SelectContent className="max-h-[400px] w-[calc(100vw-2rem)] sm:w-auto max-w-[90vw] sm:max-w-[400px]">
-                      {difficultyOrder.map(difficulty => {
-                        const problems = problemsByDifficulty[difficulty];
+                      {topicOrder.map(topic => {
+                        const problems = problemsByTopic[topic];
                         if (!problems?.length) return null;
-                        const solvedInDifficulty = problems.filter(p => isProblemSolved(p.id)).length;
+                        const solvedInTopic = problems.filter(p => isProblemSolved(p.id)).length;
+                        const topicColor = 
+                          topic === 'basics' ? 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30' :
+                          topic === 'filtering' ? 'text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-900/30' :
+                          topic === 'joining' ? 'text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-900/30' :
+                          topic === 'aggregation' ? 'text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/30' :
+                          topic === 'functions' ? 'text-pink-700 dark:text-pink-300 bg-pink-50 dark:bg-pink-900/30' :
+                          'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30';
                         return (
-                          <div key={difficulty}>
-                            <div className={`px-2 py-1.5 text-xs font-semibold uppercase tracking-wide ${
-                              difficulty === 'beginner' ? 'text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30' :
-                              difficulty === 'intermediate' ? 'text-yellow-700 bg-yellow-50' :
-                              'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30'
-                            }`}>
-                              {difficulty} — {solvedInDifficulty} of {problems.length} solved
+                          <div key={topic}>
+                            <div className={`px-2 py-1.5 text-xs font-semibold uppercase tracking-wide ${topicColor}`}>
+                              {topic} — {solvedInTopic} of {problems.length} solved
                             </div>
                             {problems.map(problem => {
                               const solved = isProblemSolved(problem.id);
@@ -2724,7 +2754,7 @@ export function LearningInterface() {
                                         )}
                                       </div>
                                       <span className="text-xs text-gray-500">
-                                        {problem.concepts.length} concept{problem.concepts.length !== 1 ? 's' : ''}
+                                        {problem.concepts.length} concept{problem.concepts.length !== 1 ? 's' : ''} • Level {problem.topicDifficultyLevel}
                                       </span>
                                     </div>
                                   </div>
@@ -2878,7 +2908,7 @@ export function LearningInterface() {
             </div>
 
             <div className="xl:h-[calc(100vh-200px)]">
-              <div className="h-[300px] sm:h-[350px] md:h-[450px] lg:h-[550px] max-h-[60vh] xl:h-full xl:max-h-full">
+              <div className="h-[300px] sm:h-[350px] md:h-[450px] lg:h-[500px] max-h-[65vh] xl:h-full xl:max-h-full">
                 <SQLEditor
                   key={currentProblem.id}
                   problem={currentProblem}

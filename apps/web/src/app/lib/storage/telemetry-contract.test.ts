@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { storage } from './storage';
+import type { InteractionEvent } from '../../types';
 
 afterEach(() => {
   localStorage.clear();
@@ -145,5 +146,53 @@ describe('telemetry export contract', () => {
     expect(sources).toContain('problem');
     expect(sources).toContain('hint');
     expect(sources).toContain('textbook');
+  });
+
+  it('auto-injects problemNumber from difficulty rank when not provided', () => {
+    storage.saveInteraction({
+      id: 'exec-event-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-1',
+      successful: true,
+    });
+
+    const exported = storage.exportData({ allHistory: true });
+    expect(exported.interactions).toHaveLength(1);
+    // problem-1 is the globally easiest problem, so its rank is 1
+    expect(exported.interactions[0].problemNumber).toBe(1);
+  });
+
+  it('preserves explicit problemNumber when provided', () => {
+    storage.saveInteraction({
+      id: 'exec-event-2',
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-1',
+      problemNumber: 42,
+      successful: true,
+    });
+
+    const exported = storage.exportData({ allHistory: true });
+    expect(exported.interactions).toHaveLength(1);
+    expect(exported.interactions[0].problemNumber).toBe(42);
+  });
+
+  it('does not inject problemNumber when problemId is missing', () => {
+    storage.saveInteraction({
+      id: 'session-end-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'session_end',
+    } as unknown as InteractionEvent);
+
+    const exported = storage.exportData({ allHistory: true });
+    expect(exported.interactions).toHaveLength(1);
+    expect(exported.interactions[0].problemNumber).toBeUndefined();
   });
 });

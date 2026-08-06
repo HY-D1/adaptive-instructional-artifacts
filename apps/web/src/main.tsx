@@ -1,5 +1,5 @@
-// Add diagnostic logging for production debugging
-if (typeof window !== 'undefined') {
+// Add diagnostic logging for development debugging only
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
   console.log('[App] Starting up...', {
     env: import.meta.env.MODE,
     apiBaseUrl: import.meta.env.VITE_API_BASE_URL || '(not set)',
@@ -27,9 +27,13 @@ if (!rootElement) {
 }
 
 try {
-  console.log('[App] Mounting React application...');
+  if (import.meta.env.DEV) {
+    console.log('[App] Mounting React application...');
+  }
   createRoot(rootElement).render(<App />);
-  console.log('[App] React application mounted successfully');
+  if (import.meta.env.DEV) {
+    console.log('[App] React application mounted successfully');
+  }
 } catch (error) {
   console.error("[Main] Fatal error rendering application:", error);
   rootElement.innerHTML = `

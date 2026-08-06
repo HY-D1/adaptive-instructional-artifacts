@@ -539,6 +539,8 @@ export type NextHintSelection = {
   templateId?: string;
 };
 
+export type SQLProblemTopic = 'basics' | 'filtering' | 'joining' | 'aggregation' | 'functions' | 'advanced';
+
 export type SQLProblem = {
   id: string;
   title: string;
@@ -550,6 +552,10 @@ export type SQLProblem = {
   expectedResult?: any[];
   gradingMode?: 'result' | 'exec-only';
   hints?: string[];
+  /** Topic category for grouping and scaffolded progression */
+  topic: SQLProblemTopic;
+  /** Difficulty level within the topic (1 = easiest, 5 = hardest) */
+  topicDifficultyLevel: number;
 };
 
 export type ExperimentCondition = {
