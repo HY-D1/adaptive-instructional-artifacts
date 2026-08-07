@@ -1,50 +1,12 @@
 ---
 id: 3nf
 title: Third Normal Form (3NF)
-definition: Eliminating transitive dependencies
+definition: Already in 2NF, and no non-key column depends on another non-key column
 difficulty: intermediate
-estimatedReadTime: 5
-pageReferences: [342, 343, 344, 345, 346, 347, 348, 349, 350, 351, 352, 353]
-chunkIds:
-  - dbms-ramakrishnan-3rd-edition:p342:c1
-  - dbms-ramakrishnan-3rd-edition:p342:c2
-  - dbms-ramakrishnan-3rd-edition:p343:c1
-  - dbms-ramakrishnan-3rd-edition:p343:c2
-  - dbms-ramakrishnan-3rd-edition:p343:c3
-  - dbms-ramakrishnan-3rd-edition:p344:c1
-  - dbms-ramakrishnan-3rd-edition:p344:c2
-  - dbms-ramakrishnan-3rd-edition:p344:c3
-  - dbms-ramakrishnan-3rd-edition:p345:c1
-  - dbms-ramakrishnan-3rd-edition:p345:c2
-  - dbms-ramakrishnan-3rd-edition:p345:c3
-  - dbms-ramakrishnan-3rd-edition:p345:c4
-  - dbms-ramakrishnan-3rd-edition:p346:c1
-  - dbms-ramakrishnan-3rd-edition:p346:c2
-  - dbms-ramakrishnan-3rd-edition:p346:c3
-  - dbms-ramakrishnan-3rd-edition:p347:c1
-  - dbms-ramakrishnan-3rd-edition:p347:c2
-  - dbms-ramakrishnan-3rd-edition:p347:c3
-  - dbms-ramakrishnan-3rd-edition:p348:c1
-  - dbms-ramakrishnan-3rd-edition:p348:c2
-  - dbms-ramakrishnan-3rd-edition:p348:c3
-  - dbms-ramakrishnan-3rd-edition:p349:c1
-  - dbms-ramakrishnan-3rd-edition:p349:c2
-  - dbms-ramakrishnan-3rd-edition:p349:c3
-  - dbms-ramakrishnan-3rd-edition:p350:c1
-  - dbms-ramakrishnan-3rd-edition:p350:c2
-  - dbms-ramakrishnan-3rd-edition:p350:c3
-  - dbms-ramakrishnan-3rd-edition:p351:c1
-  - dbms-ramakrishnan-3rd-edition:p351:c2
-  - dbms-ramakrishnan-3rd-edition:p351:c3
-  - dbms-ramakrishnan-3rd-edition:p352:c1
-  - dbms-ramakrishnan-3rd-edition:p352:c2
-  - dbms-ramakrishnan-3rd-edition:p352:c3
-  - dbms-ramakrishnan-3rd-edition:p353:c1
-  - dbms-ramakrishnan-3rd-edition:p353:c2
-  - dbms-ramakrishnan-3rd-edition:p353:c3
-relatedConcepts:
+estimatedReadTime: 3
+pageReferences: [335, 336, 337]
 tags:
-  - design
+  - database-design
   - normalization
   - 3nf
 sourceDocId: dbms-ramakrishnan-3rd-edition
@@ -53,25 +15,94 @@ sourceDocId: dbms-ramakrishnan-3rd-edition
 # Third Normal Form (3NF)
 
 ## Definition
-Eliminating transitive dependencies
+A table is in third normal form when it is already in second normal form and every non-key column depends only on the key, never on another non-key column.
 
 ## Explanation
-Storing Data: Disks and Files Disk ann Arm movement Structure of a Disk ____ Block Sectors Cylinder - Tracks,.. Platter ~07 characteristic of the disk and cannot be changed. The size of a disk block can be set when the disk is initialized as a multiple of the sector size. An array of disk heads, one per recorded surface, is moved as a unit; when one head is positioned over a block, the other heads are in identical positions with respect to their platters. to read or write a block, a disk head must be positioned on top of the block. Current systems typically allow at most one disk head to read or write at any one time. All the disk heads cannot read or write in parallel~-this technique would increa.se data transfer rates by a factor equal to the number of disk heads and considerably speed up sequential scans. The rea.son they cannot is that it is very difficult to ensure that all the heads are perfectly aligned on the corresponding tracks. Current approaches are both expensive and more
+Third normal form removes the last of the everyday redundancies, the transitive dependency. The name describes the chain: the key determines one column, and that column in turn determines another, so the second one is only indirectly tied to the key.
 
-up sequential scans. The rea.son they cannot is that it is very difficult to ensure that all the heads are perfectly aligned on the corresponding tracks. Current approaches are both expensive and more prone to faults than disks with a single active heacl. In practice, very few commercial products support this capability and then only in a limited way; for example, two disk heads may be able to operate in parallel. A disk controller interfaces a disk drive to the computer. It implements commands to read or write a sector by moving the arm assembly and transferring data to and from the disk surfaces. A checksum is computed for when data is written to a sector and stored with the sector. The checksum is computed again when the data on the sector is read back. If the sector is corrupted or the
+The employees table in the practice database shows the shape of the problem if a department name were stored alongside the department id. Each employee is identified by emp_id, emp_id determines dept_id, and dept_id determines the department name. The name therefore travels with the department, not with the employee, and storing it on every employee row repeats it once per person in that department.
 
-CHAPTER 9 An Example of a Current Disk: The IBM Deskstar 14G~~~Th~l IBM Deskstar 14GPX is a 3.5 inch§.J4.4 GB hfl,rd disk with an average seek time of 9.1 miUisecoudsTmsec) and an average rotationa
+The consequences are the familiar trio of anomalies. Renaming a department requires updating every employee who works there, and a partial update leaves two spellings in circulation. Deleting the last employee of a department erases the only record that the department existed. A newly created department cannot be recorded at all until somebody is hired into it, because there is no employee row to hold the name.
+
+Moving the dependent column into a table keyed by what it truly depends on resolves all three at once, which is why the practice schema keeps departments separate and links to it by dept_id. Third normal form is the level most working schemas aim for: it removes the redundancy that causes real bugs, while stricter forms rarely repay the extra complexity.
 
 ## Examples
-### Example 1
+### A table with a transitive dependency
 ```sql
--- No specific example available in textbook
+CREATE TABLE employees (
+  emp_id INTEGER PRIMARY KEY,
+  emp_name TEXT,
+  dept_id INTEGER,
+  dept_name TEXT
+);
 ```
-No example available for this concept.
+The department name depends on dept_id rather than on emp_id, so it repeats for every employee in the department.
+
+### The same data in third normal form
+```sql
+CREATE TABLE departments (
+  dept_id INTEGER PRIMARY KEY,
+  dept_name TEXT
+);
+
+CREATE TABLE employees (
+  emp_id INTEGER PRIMARY KEY,
+  emp_name TEXT,
+  dept_id INTEGER,
+  FOREIGN KEY (dept_id) REFERENCES departments(dept_id)
+);
+```
+Each department name is stored once, and employees reference it. This is the layout the practice database uses.
+
+### Reading the combined result
+```sql
+SELECT employees.emp_name, departments.dept_name
+FROM employees
+INNER JOIN departments ON departments.dept_id = employees.dept_id;
+```
+A join restores the denormalized view whenever a report needs it, without storing the name repeatedly.
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+### Renaming a department one row at a time
+❌ Incorrect
+```sql
+UPDATE employees
+SET dept_name = 'Platform Engineering'
+WHERE emp_id = 1;
+```
+✅ Correct
+```sql
+UPDATE departments
+SET dept_name = 'Platform Engineering'
+WHERE dept_id = 1;
+```
+💡 Why it happens: With the name duplicated on every employee row, updating one leaves colleagues in a department that now has two names. One row per department removes the risk.
 
----
-*Source: dbms-ramakrishnan-3rd-edition, Pages 342, 343, 344, 345, 346, 347, 348, 349, 350, 351, 352, 353*
+### Losing a department by deleting its last employee
+❌ Incorrect
+```sql
+DELETE FROM employees WHERE emp_id = 6;
+```
+✅ Correct
+```sql
+DELETE FROM employees WHERE emp_id = 6;
+SELECT dept_name FROM departments WHERE dept_id = 4;
+```
+💡 Why it happens: When the name lives only on employee rows, removing the last employee erases the department itself. A separate table keeps it on record regardless of staffing.
+
+### Storing a derived value alongside its source
+❌ Incorrect
+```sql
+CREATE TABLE orders (
+  order_id INTEGER PRIMARY KEY,
+  unit_price REAL,
+  quantity INTEGER,
+  total REAL
+);
+```
+✅ Correct
+```sql
+SELECT order_id, unit_price * quantity AS total
+FROM orders;
+```
+💡 Why it happens: A stored total depends on the other two columns, so any change to either leaves it stale. Compute it when reading instead.
