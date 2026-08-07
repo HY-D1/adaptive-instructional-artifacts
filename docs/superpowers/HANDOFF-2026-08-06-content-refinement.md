@@ -4,6 +4,48 @@
 
 The user pushes and deploys themselves — **do not push, do not merge to main.** Commit locally only. No LLM/AI mentions in commit messages, no co-author trailers.
 
+## Plan status — what to resume
+
+The approved plan is `/Users/harrydai/.claude/plans/can-u-refine-the-lucky-fox.md`. It now
+carries a superseded-status header; this table is the authoritative version.
+
+| Unit | Description | Status |
+|---|---|---|
+| 1 | `estimatedReadTime` for every concept | Done — `5bcdd6d` |
+| 2 | Standalone bugs (problem-30 UNION, source attribution, subqueries difficulty) | Done — `5bcdd6d` |
+| 3-4 | Merge 4 duplicate concept pairs | Done — `c744023` |
+| 5-8 | Rewrite 7 standalone concepts | Done — `c744023` |
+| 9 | Add `postSolveExplanation` to `SQLProblem` | Field declared only — `db6aa58`. Not populated, not rendered, by design |
+| 10 | Wire `HintSystem` to prefer authored hints | **CANCELLED — do not implement** (see below) |
+| 11-12 | Author static hints for all 32 problems | **CANCELLED — do not implement** |
+| 13 | Final verification | **Incomplete — this is the next task** |
+
+Units 10-12 were cancelled after the user clarified that hints are driven by error
+type, not per-problem text. The replacement work (auditing and fixing the
+error-subtype classifier) is done in `db6aa58`.
+
+**To finish unit 13, run the full gate and fix anything it surfaces:**
+
+```
+npm run test:unit                 # last green: 101 files, 2108 passed, 2 skipped
+npm run validate:corpus           # last green: 66/66 resolve
+npm run check:concept-map         # last green
+npm run build && npm run server:build && npm run integrity:scan
+npm run test:e2e:no-external      # ~10 min — NOT re-run since the content commits
+```
+
+The e2e suite is the real gap: it was last green at `adf5c25`, before the three content
+commits landed. Run it first. If a spec fails, fix the actual cause — never by editing
+`playwright.config.ts` (see traps below).
+
+Then do a manual spot-check in a browser: open the 11 rewritten concept pages, confirm
+each shows a real "N min read" value, and confirm the ⌘K command palette shows the
+updated definitions (those come from `concept-map.json`, not the markdown, and are easy
+to forget).
+
+**Unpushed:** local HEAD is `3525c82`; `origin/front_end_test` is at `adf5c25`. Four
+commits are unpushed. The user pushes and deploys themselves — tell them, do not push.
+
 ## Read this first
 
 `SQL-Adapt` is a research artifact behind two paper submissions (CIKM 2026 on interaction traces, RecSys 2026 on bandit hint delivery). The LaTeX for both was shared in the session. The critical constraint, stated directly by the user:
