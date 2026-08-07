@@ -1,73 +1,105 @@
 ---
 id: primary-key
-title: Primary Key Constraint
-definition: Uniquely identifying each row in a table
+title: Primary Keys
+definition: The column or columns whose value uniquely identifies each row in a table
 difficulty: beginner
-estimatedReadTime: 5
-pageReferences: [235, 236, 237, 238, 239, 240, 241, 242, 243]
-chunkIds:
-  - dbms-ramakrishnan-3rd-edition:p235:c1
-  - dbms-ramakrishnan-3rd-edition:p235:c2
-  - dbms-ramakrishnan-3rd-edition:p235:c3
-  - dbms-ramakrishnan-3rd-edition:p236:c1
-  - dbms-ramakrishnan-3rd-edition:p236:c2
-  - dbms-ramakrishnan-3rd-edition:p237:c1
-  - dbms-ramakrishnan-3rd-edition:p237:c2
-  - dbms-ramakrishnan-3rd-edition:p237:c3
-  - dbms-ramakrishnan-3rd-edition:p238:c1
-  - dbms-ramakrishnan-3rd-edition:p238:c2
-  - dbms-ramakrishnan-3rd-edition:p239:c1
-  - dbms-ramakrishnan-3rd-edition:p239:c2
-  - dbms-ramakrishnan-3rd-edition:p240:c1
-  - dbms-ramakrishnan-3rd-edition:p241:c1
-  - dbms-ramakrishnan-3rd-edition:p241:c2
-  - dbms-ramakrishnan-3rd-edition:p242:c1
-  - dbms-ramakrishnan-3rd-edition:p242:c2
-  - dbms-ramakrishnan-3rd-edition:p243:c1
-  - dbms-ramakrishnan-3rd-edition:p243:c2
-  - dbms-ramakrishnan-3rd-edition:p243:c3
-relatedConcepts:
+estimatedReadTime: 3
+pageReferences: [70, 71, 72, 73, 74]
 tags:
   - sql
-  - primary-key
+  - keys
   - constraints
 sourceDocId: dbms-ramakrishnan-3rd-edition
 ---
 
-# Primary Key Constraint
+# Primary Keys
 
 ## Definition
-Uniquely identifying each row in a table
+A primary key is the column, or combination of columns, whose value uniquely identifies every row in a table. No two rows may share it and it can never be NULL.
 
 ## Explanation
-CHAPTER ().. public boolean isClosed() throws SQLException. Checks whether the current connection has already been closed... setAutoCommit and get AutoCommit. vVe already discussed these two functions. Establishing a connection to a data source is a costly operation since it involves several steps, such as establishing a network connection to the data source, authentication, and allocation of resources such as memory. In case an application establishes many different connections from different parties (such as a Web server), connections are often pooled to avoid this overhead. A connection pool is a set of established connections to a data source. Whenever a new connection is needed, one of the connections from the pool is used, instead of creating a new connection to the data source. Connection pooling can be handled either by specialized code in the application, or the optional j avax. sql package, which provides functionality for connection pooling and allows us to set different parameters, such as the capacity of the pool, and shrinkage and growth rates. Most application servers (see Section 7.7.2) implement the j avax.sql package or a proprietary
+A table without a reliable way to identify a single row is difficult to work with. If two people are both named Alice in the same city, an update meant for one of them may hit both. The primary key solves this by guaranteeing that one specific value always points at exactly one row.
 
-and allows us to set different parameters, such as the capacity of the pool, and shrinkage and growth rates. Most application servers (see Section 7.7.2) implement the j avax.sql package or a proprietary variant. 6.3.3 Executing SQL Statements We now discuss how to create and execute SQL statements using JDBC. In the JDBC code examples in this section, we assume that we have a Connection object named con. JDBC supports three different ways of executing statements: statement, PreparedStatement, and CallableStatement. The statement class is the base class for the other two statment classes. It allows us to query the data source with any static or dynamically generated SQL query. We cover the PreparedStatement class here and the CallableStatement class in Section 6.5, when we discuss stored procedures. The PreparedStatem
+The guarantee has two halves that the database enforces on every insert and update. Uniqueness means a value cannot be repeated, so an attempt to insert a duplicate is rejected rather than silently accepted. NOT NULL means the value must actually be present, because a missing identifier could not identify anything. Declaring a column as the primary key applies both automatically, which is why you rarely see them written out separately.
+
+A table has at most one primary key, though that key may span several columns. Such a composite key is the natural choice for a table that records a relationship, such as one row per student per course, where neither column alone is unique but the pair always is.
+
+Choosing the key is a design decision. A natural key uses real data that is already unique, such as an email address. A surrogate key is an arbitrary number the database generates, which is the safer default because real-world values change more often than people expect, and updating a key means updating everything that references it.
 
 ## Examples
-### Example 1: SELECT Example
+### Declare a single-column key
 ```sql
-SELECT query. JDBC has its own cursor mechanism in the form of a ResultSet object, which we discuss next. The execute method is more general than executeQuery and executeUpdate;
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT
+);
 ```
-Example SELECT statement from textbook.
+The id column identifies each user. Uniqueness and NOT NULL both come with the declaration.
 
-### Example 2: SELECT Example
+### Declare a composite key
 ```sql
-SELECT title, price INTO:title,:price FROM Books WHERE author =:author };
+CREATE TABLE enrollments (
+  student_id INTEGER,
+  course_id INTEGER,
+  enrolled_on TEXT,
+  PRIMARY KEY (student_id, course_id)
+);
 ```
-Example SELECT statement from textbook.
+Neither column alone is unique, but the pair is, so a student cannot enrol in the same course twice.
 
-### Example 3: INSERT Example
+### Query by the key to reach one row
 ```sql
-INSERT staternents, as in
-
-Database Application Develop'ment / / initial quantity is always zero String sql = "INSERT INTO Books VALUES('?, 7, '?,?, 0, 7)";
+SELECT name, email
+FROM users
+WHERE id = 3;
 ```
-Example INSERT statement from textbook.
+Because id is the primary key, this returns at most one row, which is what makes targeted reads and updates safe.
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+### Choosing a value that can change
+❌ Incorrect
+```sql
+CREATE TABLE users (
+  email TEXT PRIMARY KEY,
+  name TEXT
+);
+```
+✅ Correct
+```sql
+CREATE TABLE users (
+  id INTEGER PRIMARY KEY,
+  email TEXT UNIQUE,
+  name TEXT
+);
+```
+💡 Why it happens: People do change email addresses, and changing a primary key means updating every row that references it. A surrogate id stays stable while email stays unique.
 
----
-*Source: dbms-ramakrishnan-3rd-edition, Pages 235, 236, 237, 238, 239, 240, 241, 242, 243*
+### Expecting a nullable primary key
+❌ Incorrect
+```sql
+INSERT INTO users (id, name) VALUES (NULL, 'Alice');
+```
+✅ Correct
+```sql
+INSERT INTO users (id, name) VALUES (6, 'Alice');
+```
+💡 Why it happens: A primary key is implicitly NOT NULL, since a missing value cannot identify a row. Supply a value, or let the database generate one.
+
+### Declaring two primary keys instead of one composite key
+❌ Incorrect
+```sql
+CREATE TABLE enrollments (
+  student_id INTEGER PRIMARY KEY,
+  course_id INTEGER PRIMARY KEY
+);
+```
+✅ Correct
+```sql
+CREATE TABLE enrollments (
+  student_id INTEGER,
+  course_id INTEGER,
+  PRIMARY KEY (student_id, course_id)
+);
+```
+💡 Why it happens: A table has only one primary key. To key on two columns, declare a single composite key naming both.

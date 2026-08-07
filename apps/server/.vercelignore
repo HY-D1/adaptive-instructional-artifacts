@@ -1,0 +1,23 @@
+# Deployment upload hygiene for the backend project (rooted at apps/server).
+# The serverless build needs api/**, src/**, package manifests, tsconfig.json,
+# and vercel.json.
+
+# Environment and local auth state
+.env
+.env.*
+!.env.example
+
+# Local SQLite data files. The data/ DIRECTORY itself (tracked via
+# data/.gitkeep) must ship with the deployment: src/app.ts checks for it at
+# module scope and creating it on a read-only serverless filesystem crashes
+# the function.
+*.db
+*.sqlite
+*.sqlite3
+
+# Build output (Vercel builds api/index.ts from source)
+dist/
+
+# OS metadata and local Vercel state
+.DS_Store
+.vercel/

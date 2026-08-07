@@ -1,4 +1,4 @@
-import { ConceptNode, ErrorSubtype, HintTemplate } from '../types';
+import { ConceptNode } from '../types';
 import sqlEngageCsvRaw from './sql_engage_dataset.csv?raw';
 
 // SQL-Engage Knowledge Graph: Concept nodes
@@ -436,18 +436,6 @@ function ensureSqlEngageRow(row: SqlEngageRecord | undefined, canonicalSubtype: 
   };
 }
 
-export function getDeterministicSqlEngageHint(
-  subtype: string,
-  hintLevel: number,
-  seed: string
-): SqlEngageRecord {
-  const canonicalSubtype = canonicalizeSqlEngageSubtype(subtype);
-  const rows = getSqlEngageRowsBySubtype(canonicalSubtype);
-  const sourceRows = rows.length > 0 ? rows : [getFallbackSqlEngageRow()];
-  const index = stableHash(`${canonicalSubtype}|${hintLevel}|${seed}`) % sourceRows.length;
-  return ensureSqlEngageRow(sourceRows[index], canonicalSubtype);
-}
-
 export function getDeterministicSqlEngageAnchor(
   subtype: string,
   seed: string
@@ -549,8 +537,116 @@ export function getConceptIdsForSqlEngageSubtype(subtype?: string): string[] {
   return subtypeToConceptMap[normalized] || [];
 }
 
-export function getMappedSqlEngageSubtypes(): string[] {
-  return Object.keys(subtypeToConceptMap).sort((a, b) => a.localeCompare(b));
+/** SQL keywords a learner is most likely to mistype. */
+const COMMON_SQL_KEYWORDS = [
+  'select', 'from', 'where', 'group', 'order', 'having', 'join', 'inner',
+  'left', 'right', 'outer', 'on', 'insert', 'into', 'values', 'update',
+  'set', 'delete', 'create', 'table', 'distinct', 'limit', 'offset',
+  'union', 'and', 'or', 'not', 'null', 'like', 'between', 'exists', 'as',
+];
+
+/** Levenshtein distance, bounded early since we only care about small edits. */
+function editDistance(a: string, b: string): number {
+  if (Math.abs(a.length - b.length) > 2) return 3;
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  const curr = new Array<number>(b.length + 1).fill(0);
+  for (let i = 1; i <= a.length; i += 1) {
+    curr[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      curr[j] = Math.min(
+        prev[j] + 1,
+        curr[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    for (let j = 0; j <= b.length; j += 1) prev[j] = curr[j];
+  }
+  return prev[b.length];
+}
+
+/**
+ * SQLite reports the offending token as: near "TOKEN": syntax error.
+ * A token one or two edits away from a SQL keyword is a misspelling rather
+ * than a punctuation problem, which is what the learner needs told.
+ */
+function isLikelyMisspelledKeyword(errorMessage: string): boolean {
+  const near = /near\s+"([^"]+)"/i.exec(errorMessage);
+  if (!near) return false;
+  const token = near[1].toLowerCase();
+  if (token.length < 2 || !/^[a-z_]+$/.test(token)) return false;
+  if (COMMON_SQL_KEYWORDS.includes(token)) return false;
+  return COMMON_SQL_KEYWORDS.some((kw) => editDistance(token, kw) <= 2);
+}
+
+/** Removes string literals so identifier scans never match inside a value. */
+function scrubStringLiterals(query: string): string {
+  return query.replace(/'[^']*'/g, "''").replace(/"[^"]*"/g, '""');
+}
+
+/**
+ * A forgotten quote around a string literal. SQLite reads `WHERE name = Alice`
+ * as a column reference and reports `no such column: Alice`, which previously
+ * sent the learner advice about undefined columns.
+ *
+ * Narrow on purpose: the token must appear on the right of a comparison and
+ * nowhere else in the query, so a genuine undefined column — which is normally
+ * also named in the select list — still classifies as one.
+ */
+function isLikelyUnquotedLiteral(errorMessage: string, query: string): boolean {
+  const missing = /no such column:\s*([a-z_][a-z0-9_]*)/i.exec(errorMessage);
+  if (!missing) return false;
+  const token = missing[1];
+  const scrubbed = scrubStringLiterals(query);
+  const asComparisonValue = new RegExp(
+    `(?:=|!=|<>|<=|>=|<|>|\\blike\\b|\\bis\\b)\\s*${token}\\b`,
+    'i'
+  );
+  if (!asComparisonValue.test(scrubbed)) return false;
+  const occurrences = scrubbed.match(new RegExp(`\\b${token}\\b`, 'gi')) || [];
+  return occurrences.length === 1;
+}
+
+/**
+ * SQLite reports both an aggregate used as a row filter and an aggregate nested
+ * inside another aggregate as `misuse of aggregate function COUNT()`, so the
+ * query decides which subtype applies.
+ */
+function aggregateMisuseSubtype(query: string): string {
+  const scrubbed = scrubStringLiterals(query);
+  const where = /\bwhere\b([\s\S]*?)(?:\bgroup\s+by\b|\bhaving\b|\border\s+by\b|\blimit\b|$)/i.exec(
+    scrubbed
+  );
+  if (where && /\b(count|sum|avg|min|max|total|group_concat)\s*\(/i.test(where[1])) {
+    return 'incorrect having clause';
+  }
+  return 'aggregation misuse';
+}
+
+/** Unbalanced parentheses outside of string literals. */
+function hasUnbalancedParens(query: string): boolean {
+  let depth = 0;
+  let inString = false;
+  for (let i = 0; i < query.length; i += 1) {
+    const ch = query[i];
+    if (ch === "'") inString = !inString;
+    if (inString) continue;
+    if (ch === '(') depth += 1;
+    if (ch === ')') depth -= 1;
+    if (depth < 0) return true;
+  }
+  return depth !== 0;
+}
+
+/**
+ * Two bare identifiers adjacent inside a SELECT list, e.g. `SELECT name age city`.
+ * Deliberately narrow: only fires when no comma appears in the select list at all.
+ */
+function isLikelyMissingComma(query: string): boolean {
+  const select = /select\s+(.+?)\s+from\b/is.exec(query);
+  if (!select) return false;
+  const list = select[1].trim();
+  if (list.includes(',') || list.includes('*') || list.includes('(')) return false;
+  return /^[a-z_][a-z0-9_]*(\s+[a-z_][a-z0-9_]*){2,}$/i.test(list);
 }
 
 function isLikelyWrongPositioning(query: string): boolean {
@@ -590,6 +686,22 @@ function isLikelyIncompleteQuery(query: string): boolean {
 export function normalizeSqlErrorSubtype(errorMessage: string, query: string = ''): string {
   const error = errorMessage.toLowerCase();
 
+  // An unquoted string literal masquerades as an undefined column, so this is
+  // checked before the column branch below.
+  if (isLikelyUnquotedLiteral(error, query)) {
+    return canonicalizeSqlEngageSubtype('missing quotes');
+  }
+  // HAVING without GROUP BY. SQLite rejects it with a message that matches none
+  // of the generic syntax patterns, so it previously fell through to the
+  // 'incomplete query' fallback.
+  if (/having clause on a non-aggregate query/i.test(error)) {
+    return canonicalizeSqlEngageSubtype('incorrect having clause');
+  }
+  // An aggregate used as a row filter, or nested inside another aggregate.
+  // Same fallthrough problem as above.
+  if (/misuse of aggregate function|misuse of aggregate/i.test(error)) {
+    return canonicalizeSqlEngageSubtype(aggregateMisuseSubtype(query));
+  }
   // Column-related errors - expanded pattern coverage
   if (/no such column|unknown column|has no column named|column not found|does not exist.*column|invalid column|referenced column/i.test(error)) {
     return canonicalizeSqlEngageSubtype('undefined column');
@@ -618,16 +730,30 @@ export function normalizeSqlErrorSubtype(errorMessage: string, query: string = '
   if (/datatype mismatch|type mismatch|cannot convert|incompatible types|invalid.*type/i.test(error)) {
     return canonicalizeSqlEngageSubtype('data type mismatch');
   }
-  // Constraint violation patterns
+  // Constraint violations (UNIQUE / NOT NULL / FOREIGN KEY / CHECK).
+  // NOTE: the SQL-Engage dataset has no constraint category, so the former
+  // 'constraint violation' label was not canonical and every constraint error
+  // silently fell through to the 'incomplete query' fallback. 'data type
+  // mismatch' is the closest dataset-backed label: both describe a value that
+  // the schema refuses to accept. Revisit if the taxonomy gains a constraint
+  // subtype — see the handoff note on error-taxonomy coverage.
   if (/constraint failed|unique constraint|foreign key constraint|check constraint|not null constraint/i.test(error)) {
-    return canonicalizeSqlEngageSubtype('constraint violation');
+    return canonicalizeSqlEngageSubtype('data type mismatch');
   }
-  // Division by zero and arithmetic errors
+  // Division by zero and arithmetic errors. Kept for engines that raise them:
+  // SQLite returns NULL for `age / 0` rather than erroring, so this branch is
+  // inert against sql.js. Verified by execution.
   if (/division by zero|divide by zero|arithmetic error|numeric overflow/i.test(error)) {
     return canonicalizeSqlEngageSubtype('operator misuse');
   }
-  // LIKE pattern errors
-  if (/like pattern|escape sequence|invalid escape/i.test(error)) {
+  // Operator misuse: a malformed LIKE ... ESCAPE is the one shape sql.js
+  // actually reports. The generic 'like pattern'/'invalid escape' wordings below
+  // match no SQLite message, so the real one is matched first.
+  if (
+    /escape expression must be a single character/i.test(error) ||
+    /like or glob pattern too complex/i.test(error) ||
+    /like pattern|escape sequence|invalid escape/i.test(error)
+  ) {
     return canonicalizeSqlEngageSubtype('operator misuse');
   }
   // Index-related errors
@@ -638,171 +764,34 @@ export function normalizeSqlErrorSubtype(errorMessage: string, query: string = '
   if (/no such view|view.*not found|invalid view/i.test(error)) {
     return canonicalizeSqlEngageSubtype('undefined table');
   }
-  // Missing comma patterns
-  if (/near\s*"[^"]*"\s*: syntax error|missing comma|expected comma/i.test(error)) {
-    return canonicalizeSqlEngageSubtype('missing commas');
-  }
-  // Unmatched brackets/parentheses
-  if (/unmatched.*bracket|unmatched.*parenthes|unclosed.*paren|mismatched.*bracket/i.test(error)) {
+  // Unmatched brackets/parentheses. Checked before the generic syntax-error
+  // branches because SQLite reports an unclosed paren as an ordinary
+  // `near "...": syntax error`, with no mention of brackets.
+  if (
+    /unmatched.*bracket|unmatched.*parenthes|unclosed.*paren|mismatched.*bracket/i.test(error) ||
+    (/syntax error|unrecognized token/i.test(error) && hasUnbalancedParens(query))
+  ) {
     return canonicalizeSqlEngageSubtype('unmatched brackets');
+  }
+  // A mistyped keyword is a spelling problem, not a punctuation one. SQLite
+  // surfaces both as the same `near "TOKEN": syntax error`, so the token is
+  // compared against the SQL keyword list before falling through.
+  if (/syntax error/i.test(error) && isLikelyMisspelledKeyword(error)) {
+    return canonicalizeSqlEngageSubtype('misspelling');
+  }
+  // Missing commas. Narrowed to queries whose select list really does hold
+  // adjacent bare identifiers: the previous pattern matched every SQLite
+  // syntax error, so keyword typos were reported to learners as comma errors.
+  if (/missing comma|expected comma/i.test(error) || (/syntax error/i.test(error) && isLikelyMissingComma(query))) {
+    return canonicalizeSqlEngageSubtype('missing commas');
   }
 
   // Safe fallback to a canonical subtype guaranteed in the SQL-Engage dataset.
   return canonicalizeSqlEngageSubtype(DEFAULT_SUBTYPE_FALLBACK);
 }
 
-// Error subtypes mapped to concepts
-export const errorSubtypes: ErrorSubtype[] = [
-  {
-    id: 'missing-from',
-    pattern: /no such table|FROM/i,
-    conceptIds: ['select-basic'],
-    severity: 'high',
-    description: 'Missing or incorrect FROM clause'
-  },
-  {
-    id: 'syntax-select',
-    pattern: /syntax error.*SELECT/i,
-    conceptIds: ['select-basic'],
-    severity: 'medium',
-    description: 'Syntax error in SELECT statement'
-  },
-  {
-    id: 'ambiguous-column',
-    pattern: /ambiguous column/i,
-    conceptIds: ['joins'],
-    severity: 'medium',
-    description: 'Column name exists in multiple tables without table prefix'
-  },
-  {
-    id: 'join-condition-missing',
-    pattern: /ON.*expected|cartesian/i,
-    conceptIds: ['joins'],
-    severity: 'high',
-    description: 'Missing or incorrect JOIN condition'
-  },
-  {
-    id: 'group-by-error',
-    pattern: /not in GROUP BY|aggregate/i,
-    conceptIds: ['aggregation'],
-    severity: 'high',
-    description: 'Column not in GROUP BY or aggregate function'
-  },
-  {
-    id: 'where-syntax',
-    pattern: /syntax error.*WHERE/i,
-    conceptIds: ['where-clause'],
-    severity: 'medium',
-    description: 'Syntax error in WHERE clause'
-  }
-];
-
-// Guidance Ladder: Progressive hint templates
-export const hintTemplates: HintTemplate[] = [
-  // Basic SELECT hints
-  {
-    id: 'hint-select-1',
-    conceptId: 'select-basic',
-    errorSubtypeId: 'missing-from',
-    hintLevel: 1,
-    content: 'Remember: Every SELECT statement needs a FROM clause to specify which table to query.',
-    nextAction: 'stay'
-  },
-  {
-    id: 'hint-select-2',
-    conceptId: 'select-basic',
-    errorSubtypeId: 'missing-from',
-    hintLevel: 2,
-    content: 'The structure is: SELECT columns FROM table_name. Check if your table name is spelled correctly.',
-    nextAction: 'escalate'
-  },
-  {
-    id: 'hint-select-3',
-    conceptId: 'select-basic',
-    errorSubtypeId: 'syntax-select',
-    hintLevel: 1,
-    content: 'Check your SELECT syntax. Are you using commas correctly between column names?',
-    nextAction: 'stay'
-  },
-  
-  // JOIN hints
-  {
-    id: 'hint-join-1',
-    conceptId: 'joins',
-    errorSubtypeId: 'ambiguous-column',
-    hintLevel: 1,
-    content: 'When joining tables, prefix column names with table names (e.g., users.id) to avoid ambiguity.',
-    nextAction: 'stay'
-  },
-  {
-    id: 'hint-join-2',
-    conceptId: 'joins',
-    errorSubtypeId: 'ambiguous-column',
-    hintLevel: 2,
-    content: 'Use table aliases for cleaner code: SELECT u.name, o.id FROM users u JOIN orders o ...',
-    nextAction: 'escalate'
-  },
-  {
-    id: 'hint-join-3',
-    conceptId: 'joins',
-    errorSubtypeId: 'join-condition-missing',
-    hintLevel: 1,
-    content: 'Your JOIN is missing an ON condition. Specify how the tables should be connected.',
-    nextAction: 'stay'
-  },
-  {
-    id: 'hint-join-4',
-    conceptId: 'joins',
-    errorSubtypeId: 'join-condition-missing',
-    hintLevel: 2,
-    content: 'JOIN syntax: FROM table1 JOIN table2 ON table1.column = table2.column',
-    nextAction: 'escalate'
-  },
-  
-  // Aggregation hints
-  {
-    id: 'hint-agg-1',
-    conceptId: 'aggregation',
-    errorSubtypeId: 'group-by-error',
-    hintLevel: 1,
-    content: 'When using GROUP BY, every column in SELECT must either be in GROUP BY or inside an aggregate function.',
-    nextAction: 'stay'
-  },
-  {
-    id: 'hint-agg-2',
-    conceptId: 'aggregation',
-    errorSubtypeId: 'group-by-error',
-    hintLevel: 2,
-    content: 'Aggregate functions: COUNT(), SUM(), AVG(), MAX(), MIN(). Group by the non-aggregated columns.',
-    nextAction: 'escalate'
-  },
-  
-  // WHERE clause hints
-  {
-    id: 'hint-where-1',
-    conceptId: 'where-clause',
-    errorSubtypeId: 'where-syntax',
-    hintLevel: 1,
-    content: 'Check your WHERE clause syntax. Are you using comparison operators correctly (=, >, <, !=)?',
-    nextAction: 'stay'
-  }
-];
-
 // Helper functions to retrieve from SQL-Engage
 export function getConceptById(id: string): ConceptNode | undefined {
   return conceptNodes.find(c => c.id === id);
 }
 
-export function getErrorSubtype(errorMessage: string): ErrorSubtype | undefined {
-  return errorSubtypes.find(e => e.pattern.test(errorMessage));
-}
-
-export function getHintsForError(errorSubtypeId: string, level: number = 1): HintTemplate[] {
-  return hintTemplates.filter(h => 
-    h.errorSubtypeId === errorSubtypeId && h.hintLevel <= level
-  );
-}
-
-export function getConceptsByIds(ids: string[]): ConceptNode[] {
-  return conceptNodes.filter(c => ids.includes(c.id));
-}

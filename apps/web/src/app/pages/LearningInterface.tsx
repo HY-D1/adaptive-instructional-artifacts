@@ -67,6 +67,7 @@ import { sqlProblems } from '../data/problems';
 import { getProblemsByDifficultyRank } from '../lib/adaptive-problem-selector';
 import { getFirstProblem } from '../lib/problem-ranking';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
+import { classifySemanticSqlIssue } from '../lib/sql-semantic-classifier';
 import { useUserRole } from '../hooks/useUserRole';
 import { useLocation, Link } from 'react-router';
 import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync } from '../lib/storage';
@@ -1535,7 +1536,12 @@ export function LearningInterface() {
         (interaction) =>
           interaction.sessionId === sessionId &&
           interaction.problemId === currentProblem.id &&
-          interaction.eventType === 'error'
+          // An engine error, or a query that ran but answered wrongly. Both now
+          // carry a subtype, and the most recent mistake is what a hint should
+          // target.
+          (interaction.eventType === 'error' ||
+            (interaction.eventType === 'execution' && interaction.successful === false)) &&
+          Boolean(interaction.sqlEngageSubtype || interaction.errorSubtypeId)
       )
       .sort((a, b) => b.timestamp - a.timestamp)[0];
 
@@ -1700,9 +1706,23 @@ export function LearningInterface() {
     // If not provided, fall back to result.success (no SQL errors)
     const actuallyCorrect = isCorrect ?? result.success;
     
+    // An engine error arrives with its own subtype from normalizeSqlErrorSubtype.
+    // A query that ran but answered wrongly arrived with none, which is why 12 of
+    // the 23 canonical subtypes could never be emitted and the hint pipeline —
+    // which selects on subtype — had nothing to target for those attempts.
+    const semanticSubtype =
+      result.success && !actuallyCorrect
+        ? classifySemanticSqlIssue({
+            query,
+            expectedQuery: currentProblem.expectedQuery
+          })
+        : null;
+
     const resolvedSubtype = !result.success
       ? canonicalizeSqlEngageSubtype(instructorSubtypeOverride || result.errorSubtypeId)
-      : undefined;
+      : semanticSubtype
+        ? canonicalizeSqlEngageSubtype(instructorSubtypeOverride || semanticSubtype)
+        : undefined;
     const event: InteractionEvent = {
       id: createEventId('event', 'execution'),
       sessionId,
@@ -1747,8 +1767,16 @@ export function LearningInterface() {
     }
 
     if (result.success) {
-      setLastError(undefined);
-      setLastErrorEventId(undefined);
+      // A query that ran but answered wrongly keeps its subtype instead of
+      // clearing it, so a hint can target the actual mistake. eventType stays
+      // 'execution', so error-event counts and the bandit reward are unchanged.
+      if (actuallyCorrect) {
+        setLastError(undefined);
+        setLastErrorEventId(undefined);
+      } else if (resolvedSubtype) {
+        setLastError(resolvedSubtype);
+        setLastErrorEventId(event.id);
+      }
       // Keep escalationTriggered=true so Save to Notes stays visible after solving
       setNotesActionMessage(undefined);
       setGenerationError(undefined);
@@ -2608,11 +2636,11 @@ export function LearningInterface() {
             <div className="lg:col-span-2 space-y-4 xl:grid xl:grid-cols-2 xl:gap-4 xl:space-y-0 min-w-0">
               {/* Left sub-column: Problem description + schema */}
               <div className="space-y-4 xl:max-h-[calc(100vh-200px)] xl:overflow-y-auto">
-                <Card className="p-6">
+                <Card className="p-6 atlas-panel-border">
                 <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between">
                   <div className="flex-auto min-w-0 space-y-4">
                     <div className="space-y-2">
-                      <span className="text-sm text-gray-500 font-medium block">
+                      <span className="atlas-label block">
                         Problem {currentProblemNumber} of {totalProblems}
                       </span>
                       <div className="flex flex-wrap items-center gap-2">

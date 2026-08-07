@@ -42,6 +42,54 @@ def test_enrich_text_sanitizes_list_literal_common_mistakes(monkeypatch: pytest.
     assert "']" not in result.common_mistakes_refined
 
 
+def test_detects_the_error_class_a_passage_teaches() -> None:
+    assert mlx_enricher._detect_error_class("Use GROUP BY with COUNT to aggregate per department.") == "grouping"
+    assert mlx_enricher._detect_error_class("An inner join matches rows on a foreign key.") == "joining"
+    assert mlx_enricher._detect_error_class("ORDER BY sorts the result set ascending or descending.") == "ordering"
+    assert mlx_enricher._detect_error_class("SELECT DISTINCT removes duplicate rows.") == "duplicates"
+    assert mlx_enricher._detect_error_class("A relation is a set of tuples.") is None
+
+
+def test_deterministic_hints_speak_to_the_detected_error_class() -> None:
+    grouping = mlx_enricher._deterministic_hints(
+        "Aggregate sales per region.",
+        "GROUP BY collapses rows that share a value.",
+        error_class="grouping",
+    )
+    generic = mlx_enricher._deterministic_hints(
+        "A relation is a set of tuples.",
+        "Relations hold tuples.",
+        error_class=None,
+    )
+
+    rung_one, rung_two, rung_three = grouping
+    # The three rungs are the guidance ladder: a nudge, a question, then an
+    # explicit scaffold. Identical text across rungs would flatten escalation
+    # depth, which the papers measure.
+    assert len({rung_one, rung_two, rung_three}) == 3
+    assert rung_two.rstrip().endswith("?")
+    assert "___" in rung_three
+    assert len(rung_one) <= 110
+    assert len(rung_two) <= 210
+
+    # A grouping passage must not fall back to the generic opener.
+    assert "group" in rung_one.lower() or "group" in rung_two.lower()
+    assert grouping[0] != generic[0]
+
+
+def test_prompt_states_the_ladder_and_the_detected_error_class() -> None:
+    prompt = mlx_enricher._build_prompt("Use GROUP BY with COUNT to aggregate per department.")
+
+    # Rung semantics have to be in the prompt or the model returns three
+    # paraphrases of the same hint.
+    assert "micro-hint" in prompt
+    assert "guiding question" in prompt
+    assert "grouping" in prompt
+    # The implemented ladder is GuidanceRung = 1 | 2 | 3, so a fourth hint field
+    # would have no consumer.
+    assert "hint_v4" not in prompt
+
+
 def test_enrich_text_uses_deterministic_fallback_when_models_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(mlx_enricher, "_call_ollama_json", lambda _prompt, _model: None)
 

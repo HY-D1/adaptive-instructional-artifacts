@@ -38,6 +38,7 @@ import type { BanditArmId } from '../lib/ml/learner-bandit-manager';
 import { assignProfile } from '../lib/ml/escalation-profiles';
 import type { AssignmentStrategy } from '../lib/ml/escalation-profiles';
 import { storage, broadcastSync } from '../lib/storage';
+import { isTestEnvironment } from '../lib/runtime-config';
 import type { InteractionEvent, SessionConfig } from '../types';
 import {
   loadSessionConfig,
@@ -48,7 +49,9 @@ import { calculateHDIData, filterOutHDIEvents, formatHDIDetailed } from '../lib/
 import { Switch } from '../components/ui/switch';
 
 // DEV mode check
-const isDev = import.meta.env.DEV;
+// Debug/testing controls render in dev builds and in the E2E test build,
+// which is a production-style bundle served with VITE_TEST_MODE=true.
+const isDev = import.meta.env.DEV || isTestEnvironment();
 
 // Profile override options
 const PROFILE_OPTIONS = [
@@ -56,6 +59,7 @@ const PROFILE_OPTIONS = [
   { id: 'fast-escalator', label: 'Fast Escalator' },
   { id: 'slow-escalator', label: 'Slow Escalator' },
   { id: 'adaptive-escalator', label: 'Adaptive' },
+  { id: 'explanation-first', label: 'Explanation First' },
 ] as const;
 
 type ProfileOverrideId = (typeof PROFILE_OPTIONS)[number]['id'];

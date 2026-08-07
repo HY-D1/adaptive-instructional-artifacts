@@ -1,70 +1,10 @@
 ---
 id: joins
 title: SQL Joins
-definition: Combining data from multiple tables using INNER JOIN, LEFT JOIN, RIGHT JOIN, and FULL JOIN
+definition: Combining rows from two or more tables by matching values in a shared column
 difficulty: intermediate
-estimatedReadTime: 5
-pageReferences: [140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160]
-chunkIds:
-  - dbms-ramakrishnan-3rd-edition:p140:c1
-  - dbms-ramakrishnan-3rd-edition:p140:c2
-  - dbms-ramakrishnan-3rd-edition:p140:c3
-  - dbms-ramakrishnan-3rd-edition:p141:c1
-  - dbms-ramakrishnan-3rd-edition:p141:c2
-  - dbms-ramakrishnan-3rd-edition:p141:c3
-  - dbms-ramakrishnan-3rd-edition:p142:c1
-  - dbms-ramakrishnan-3rd-edition:p142:c2
-  - dbms-ramakrishnan-3rd-edition:p142:c3
-  - dbms-ramakrishnan-3rd-edition:p143:c1
-  - dbms-ramakrishnan-3rd-edition:p143:c2
-  - dbms-ramakrishnan-3rd-edition:p144:c1
-  - dbms-ramakrishnan-3rd-edition:p144:c2
-  - dbms-ramakrishnan-3rd-edition:p144:c3
-  - dbms-ramakrishnan-3rd-edition:p145:c1
-  - dbms-ramakrishnan-3rd-edition:p145:c2
-  - dbms-ramakrishnan-3rd-edition:p146:c1
-  - dbms-ramakrishnan-3rd-edition:p146:c2
-  - dbms-ramakrishnan-3rd-edition:p147:c1
-  - dbms-ramakrishnan-3rd-edition:p147:c2
-  - dbms-ramakrishnan-3rd-edition:p148:c1
-  - dbms-ramakrishnan-3rd-edition:p148:c2
-  - dbms-ramakrishnan-3rd-edition:p148:c3
-  - dbms-ramakrishnan-3rd-edition:p149:c1
-  - dbms-ramakrishnan-3rd-edition:p149:c2
-  - dbms-ramakrishnan-3rd-edition:p149:c3
-  - dbms-ramakrishnan-3rd-edition:p150:c1
-  - dbms-ramakrishnan-3rd-edition:p150:c2
-  - dbms-ramakrishnan-3rd-edition:p150:c3
-  - dbms-ramakrishnan-3rd-edition:p151:c1
-  - dbms-ramakrishnan-3rd-edition:p151:c2
-  - dbms-ramakrishnan-3rd-edition:p151:c3
-  - dbms-ramakrishnan-3rd-edition:p152:c1
-  - dbms-ramakrishnan-3rd-edition:p152:c2
-  - dbms-ramakrishnan-3rd-edition:p152:c3
-  - dbms-ramakrishnan-3rd-edition:p153:c1
-  - dbms-ramakrishnan-3rd-edition:p153:c2
-  - dbms-ramakrishnan-3rd-edition:p153:c3
-  - dbms-ramakrishnan-3rd-edition:p154:c1
-  - dbms-ramakrishnan-3rd-edition:p154:c2
-  - dbms-ramakrishnan-3rd-edition:p154:c3
-  - dbms-ramakrishnan-3rd-edition:p155:c1
-  - dbms-ramakrishnan-3rd-edition:p155:c2
-  - dbms-ramakrishnan-3rd-edition:p156:c1
-  - dbms-ramakrishnan-3rd-edition:p156:c2
-  - dbms-ramakrishnan-3rd-edition:p156:c3
-  - dbms-ramakrishnan-3rd-edition:p157:c1
-  - dbms-ramakrishnan-3rd-edition:p157:c2
-  - dbms-ramakrishnan-3rd-edition:p157:c3
-  - dbms-ramakrishnan-3rd-edition:p158:c1
-  - dbms-ramakrishnan-3rd-edition:p158:c2
-  - dbms-ramakrishnan-3rd-edition:p158:c3
-  - dbms-ramakrishnan-3rd-edition:p159:c1
-  - dbms-ramakrishnan-3rd-edition:p159:c2
-  - dbms-ramakrishnan-3rd-edition:p159:c3
-  - dbms-ramakrishnan-3rd-edition:p160:c1
-  - dbms-ramakrishnan-3rd-edition:p160:c2
-  - dbms-ramakrishnan-3rd-edition:p160:c3
-relatedConcepts:
+estimatedReadTime: 4
+pageReferences: [140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150]
 tags:
   - sql
   - joins
@@ -75,25 +15,85 @@ sourceDocId: dbms-ramakrishnan-3rd-edition
 # SQL Joins
 
 ## Definition
-Combining data from multiple tables using INNER JOIN, LEFT JOIN, RIGHT JOIN, and FULL JOIN
+A join combines rows from two tables by matching values in a column they share, so a single query can return data that lives in both.
 
 ## Explanation
-Relational Algebra and CalC'ul1L8 H15 • Set-difference: R- 8 returns a relation instance containing all tuples that occur in R but not in 8. The relations Rand 8 must be union-compatible, and the schema of the result is defined to be identical to the schema of R. • Cross-product: R x 8 returns a relation instance whose schema contains all the fields of R (in the same order as they appear in R) followed by all the fields of 8 (in the same order as they appear in 8). The result of R x 8 contains OIle tuple (1', s) (the concatenation of tuples rand s) for each pair of tuples l' E R, S E 8. The cross-product opertion is sometimes called Cartesian product. \\Te use the convention that the fields of R x 8 inherit names from the corresponding fields of Rand 8. It is possible for both Rand 8 to contain one or more fields having the same name; this situation creates a naming confi'ict. The corresponding fields in R x 8 are unnamed and are referred
+Relational databases deliberately split information across tables to avoid repeating it. In the practice database, users holds one row per person and orders holds one row per purchase, connected because orders.user_id stores the id of the user who placed the order. Without a join you can list people or list purchases, but you cannot say who bought what. A join is how you put them back together.
 
-possible for both Rand 8 to contain one or more fields having the same name; this situation creates a naming confi'ict. The corresponding fields in R x 8 are unnamed and are referred to solely by position. In the preceding definitions, note that each operator can be applied to relation instances that are computed using a relational algebra (sub)expression. We now illustrate these definitions through several examples. The union of 81 and 82 is shown in inherited from 81. 82 has the same field names, of course, since it is also an instance of Sailors. In general, fields of 82 may have different names; recall that we require only domains to match. Note that the result is a set of tuples. TUples that appear in both 81 and 82 appear only once in 81 U 82. Also, 81 uRI is not a valid operation because the two relations are not union-compatible. The intersection of 81 and 82 is shown in is shown in Dustin 45.0 Lubber 55.5 Rusty 35.0 yuppy 35.0 guppy 35.0 31 u 52 The result of the
+INNER JOIN keeps only rows that match on both sides. If a person has never ordered, that person is absent from the result, and an order pointing at a user who no longer exists is absent too. Reach for it when you only care about complete pairs.
 
-the two relations are not union-compatible. The intersecti
+LEFT JOIN keeps every row from the left table and fills the right-hand columns with NULL when nothing matches. Use it when the left table is the population you care about and the right side is optional detail, such as listing all users with their order counts including people who have ordered nothing. RIGHT JOIN is the mirror image, and FULL OUTER JOIN keeps unmatched rows from both sides.
+
+The ON clause states the matching rule, and it is worth separating from WHERE: ON decides how rows pair up, while WHERE filters what survives after pairing. With INNER JOIN the difference rarely shows, but with LEFT JOIN a condition on the right-hand table placed in WHERE silently discards the unmatched rows and collapses it back into an inner join.
 
 ## Examples
-### Example 1
+### Pair each order with the person who placed it
 ```sql
--- No specific example available in textbook
+SELECT users.name, orders.product, orders.amount
+FROM users
+INNER JOIN orders ON orders.user_id = users.id;
 ```
-No example available for this concept.
+Only users who actually ordered appear. Charlie has no matching order rows, so he is left out entirely.
+
+### Count orders per user, keeping everyone
+```sql
+SELECT users.name, COUNT(orders.order_id) AS order_count
+FROM users
+LEFT JOIN orders ON orders.user_id = users.id
+GROUP BY users.id, users.name;
+```
+Every user appears. Charlie shows a count of 0 because COUNT skips the NULLs produced by the unmatched join.
+
+### Join on a column both tables define
+```sql
+SELECT employees.emp_name, departments.dept_name
+FROM employees
+INNER JOIN departments ON employees.dept_id = departments.dept_id;
+```
+Both tables have a dept_id column, so each reference is qualified with its table name to stay unambiguous.
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+### Filtering the optional table in WHERE
+❌ Incorrect
+```sql
+SELECT users.name, orders.amount
+FROM users
+LEFT JOIN orders ON orders.user_id = users.id
+WHERE orders.amount > 100;
+```
+✅ Correct
+```sql
+SELECT users.name, orders.amount
+FROM users
+LEFT JOIN orders ON orders.user_id = users.id AND orders.amount > 100;
+```
+💡 Why it happens: WHERE runs after the join, and a NULL amount is never greater than 100, so unmatched users get dropped. Conditions on the optional side belong in ON.
 
----
-*Source: dbms-ramakrishnan-3rd-edition, Pages 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 160*
+### Listing tables without a matching rule
+❌ Incorrect
+```sql
+SELECT users.name, orders.product
+FROM users, orders;
+```
+✅ Correct
+```sql
+SELECT users.name, orders.product
+FROM users
+INNER JOIN orders ON orders.user_id = users.id;
+```
+💡 Why it happens: With no matching rule the database pairs every row with every row. Four users and six orders return 24 rows instead of the 6 real purchases.
+
+### Leaving a shared column name unqualified
+❌ Incorrect
+```sql
+SELECT emp_name, dept_id
+FROM employees
+INNER JOIN departments ON employees.dept_id = departments.dept_id;
+```
+✅ Correct
+```sql
+SELECT employees.emp_name, employees.dept_id
+FROM employees
+INNER JOIN departments ON employees.dept_id = departments.dept_id;
+```
+💡 Why it happens: Both tables define dept_id, so on its own the name is ambiguous and the query is rejected. Prefix the column with the table you mean.

@@ -10,6 +10,7 @@
       "title": "Introduction to MySQL",
       "definition": "Overview of MySQL database management system and relational databases",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         1,
         2,
@@ -186,6 +187,7 @@
       "title": "Relational Databases",
       "definition": "Tables, rows, columns, keys, and relationships in relational databases",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         21,
         22,
@@ -340,6 +342,7 @@
       "title": "SELECT Statement",
       "definition": "Retrieving data from a single table with column selection and aliases",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         73,
         74,
@@ -526,194 +529,11 @@
         "source_doc_id": "murachs-mysql-3rd-edition"
       }
     },
-    "murachs-mysql-3rd-edition/where-clause-murach": {
-      "title": "WHERE Clause",
-      "definition": "Filtering rows with comparison operators, AND, OR, NOT, IN, BETWEEN, LIKE",
-      "difficulty": "beginner",
-      "pageNumbers": [
-        85,
-        86,
-        87,
-        88,
-        89,
-        90,
-        91,
-        92,
-        93,
-        94,
-        95,
-        96,
-        97,
-        98,
-        99,
-        100,
-        101,
-        102,
-        103,
-        104,
-        105,
-        106,
-        107
-      ],
-      "chunkIds": {
-        "definition": [
-          "murachs-mysql-3rd-edition:p85:c1",
-          "murachs-mysql-3rd-edition:p85:c2",
-          "murachs-mysql-3rd-edition:p85:c3",
-          "murachs-mysql-3rd-edition:p86:c1",
-          "murachs-mysql-3rd-edition:p86:c2",
-          "murachs-mysql-3rd-edition:p86:c3",
-          "murachs-mysql-3rd-edition:p87:c1",
-          "murachs-mysql-3rd-edition:p87:c2",
-          "murachs-mysql-3rd-edition:p88:c1",
-          "murachs-mysql-3rd-edition:p88:c2",
-          "murachs-mysql-3rd-edition:p88:c3",
-          "murachs-mysql-3rd-edition:p89:c1",
-          "murachs-mysql-3rd-edition:p89:c2",
-          "murachs-mysql-3rd-edition:p90:c1",
-          "murachs-mysql-3rd-edition:p90:c2",
-          "murachs-mysql-3rd-edition:p91:c1",
-          "murachs-mysql-3rd-edition:p91:c2"
-        ],
-        "examples": [
-          "murachs-mysql-3rd-edition:p93:c1",
-          "murachs-mysql-3rd-edition:p93:c2",
-          "murachs-mysql-3rd-edition:p94:c1",
-          "murachs-mysql-3rd-edition:p94:c2",
-          "murachs-mysql-3rd-edition:p94:c3",
-          "murachs-mysql-3rd-edition:p95:c1",
-          "murachs-mysql-3rd-edition:p95:c2",
-          "murachs-mysql-3rd-edition:p95:c3",
-          "murachs-mysql-3rd-edition:p96:c1",
-          "murachs-mysql-3rd-edition:p96:c2",
-          "murachs-mysql-3rd-edition:p96:c3",
-          "murachs-mysql-3rd-edition:p97:c1",
-          "murachs-mysql-3rd-edition:p97:c2",
-          "murachs-mysql-3rd-edition:p98:c1",
-          "murachs-mysql-3rd-edition:p98:c2",
-          "murachs-mysql-3rd-edition:p98:c3",
-          "murachs-mysql-3rd-edition:p99:c1",
-          "murachs-mysql-3rd-edition:p99:c2",
-          "murachs-mysql-3rd-edition:p100:c1",
-          "murachs-mysql-3rd-edition:p100:c2",
-          "murachs-mysql-3rd-edition:p101:c1",
-          "murachs-mysql-3rd-edition:p101:c2",
-          "murachs-mysql-3rd-edition:p102:c1",
-          "murachs-mysql-3rd-edition:p102:c2",
-          "murachs-mysql-3rd-edition:p102:c3",
-          "murachs-mysql-3rd-edition:p102:c4"
-        ],
-        "commonMistakes": [
-          "murachs-mysql-3rd-edition:p103:c1",
-          "murachs-mysql-3rd-edition:p103:c2",
-          "murachs-mysql-3rd-edition:p104:c1",
-          "murachs-mysql-3rd-edition:p104:c2",
-          "murachs-mysql-3rd-edition:p105:c1",
-          "murachs-mysql-3rd-edition:p105:c2",
-          "murachs-mysql-3rd-edition:p106:c1",
-          "murachs-mysql-3rd-edition:p106:c2",
-          "murachs-mysql-3rd-edition:p107:c1",
-          "murachs-mysql-3rd-edition:p107:c2"
-        ]
-      },
-      "relatedConcepts": [],
-      "practiceProblemIds": [],
-      "sourceDocId": "murachs-mysql-3rd-edition",
-      "tags": [
-        "mysql",
-        "where",
-        "filtering"
-      ],
-      "provenance": {
-        "chunks": [
-          "murachs-mysql-3rd-edition:p96:c2",
-          "murachs-mysql-3rd-edition:p102:c3",
-          "murachs-mysql-3rd-edition:p103:c1",
-          "murachs-mysql-3rd-edition:p94:c3",
-          "murachs-mysql-3rd-edition:p100:c2",
-          "murachs-mysql-3rd-edition:p105:c1",
-          "murachs-mysql-3rd-edition:p99:c1",
-          "murachs-mysql-3rd-edition:p89:c1",
-          "murachs-mysql-3rd-edition:p99:c2",
-          "murachs-mysql-3rd-edition:p86:c1",
-          "murachs-mysql-3rd-edition:p98:c3",
-          "murachs-mysql-3rd-edition:p89:c2",
-          "murachs-mysql-3rd-edition:p101:c1",
-          "murachs-mysql-3rd-edition:p107:c2",
-          "murachs-mysql-3rd-edition:p103:c2",
-          "murachs-mysql-3rd-edition:p88:c1",
-          "murachs-mysql-3rd-edition:p105:c2",
-          "murachs-mysql-3rd-edition:p107:c1",
-          "murachs-mysql-3rd-edition:p88:c3",
-          "murachs-mysql-3rd-edition:p85:c1",
-          "murachs-mysql-3rd-edition:p98:c1",
-          "murachs-mysql-3rd-edition:p97:c1",
-          "murachs-mysql-3rd-edition:p87:c1",
-          "murachs-mysql-3rd-edition:p96:c3",
-          "murachs-mysql-3rd-edition:p90:c2",
-          "murachs-mysql-3rd-edition:p104:c2",
-          "murachs-mysql-3rd-edition:p91:c2",
-          "murachs-mysql-3rd-edition:p90:c1",
-          "murachs-mysql-3rd-edition:p98:c2",
-          "murachs-mysql-3rd-edition:p91:c1",
-          "murachs-mysql-3rd-edition:p102:c4",
-          "murachs-mysql-3rd-edition:p101:c2",
-          "murachs-mysql-3rd-edition:p95:c3",
-          "murachs-mysql-3rd-edition:p86:c2",
-          "murachs-mysql-3rd-edition:p87:c2",
-          "murachs-mysql-3rd-edition:p106:c2",
-          "murachs-mysql-3rd-edition:p97:c2",
-          "murachs-mysql-3rd-edition:p96:c1",
-          "murachs-mysql-3rd-edition:p102:c2",
-          "murachs-mysql-3rd-edition:p85:c2",
-          "murachs-mysql-3rd-edition:p104:c1",
-          "murachs-mysql-3rd-edition:p95:c2",
-          "murachs-mysql-3rd-edition:p94:c1",
-          "murachs-mysql-3rd-edition:p95:c1",
-          "murachs-mysql-3rd-edition:p94:c2",
-          "murachs-mysql-3rd-edition:p106:c1",
-          "murachs-mysql-3rd-edition:p85:c3",
-          "murachs-mysql-3rd-edition:p93:c1",
-          "murachs-mysql-3rd-edition:p88:c2",
-          "murachs-mysql-3rd-edition:p102:c1",
-          "murachs-mysql-3rd-edition:p86:c3",
-          "murachs-mysql-3rd-edition:p100:c1",
-          "murachs-mysql-3rd-edition:p93:c2"
-        ],
-        "pages": [
-          85,
-          86,
-          87,
-          88,
-          89,
-          90,
-          91,
-          92,
-          93,
-          94,
-          95,
-          96,
-          97,
-          98,
-          99,
-          100,
-          101,
-          102,
-          103,
-          104,
-          105,
-          106,
-          107
-        ],
-        "blocks": [],
-        "extraction_method": "pymupdf",
-        "source_doc_id": "murachs-mysql-3rd-edition"
-      }
-    },
     "murachs-mysql-3rd-edition/order-by-murach": {
       "title": "ORDER BY Clause",
       "definition": "Sorting query results by one or more columns, ascending and descending",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         101,
         102,
@@ -836,194 +656,11 @@
         "source_doc_id": "murachs-mysql-3rd-edition"
       }
     },
-    "murachs-mysql-3rd-edition/joins-murach": {
-      "title": "Joining Tables",
-      "definition": "Inner joins, outer joins, and cross joins in MySQL",
-      "difficulty": "intermediate",
-      "pageNumbers": [
-        117,
-        118,
-        119,
-        120,
-        121,
-        122,
-        123,
-        124,
-        125,
-        126,
-        127,
-        128,
-        129,
-        130,
-        131,
-        132,
-        133,
-        134,
-        135,
-        136,
-        137,
-        138,
-        139
-      ],
-      "chunkIds": {
-        "definition": [
-          "murachs-mysql-3rd-edition:p117:c1",
-          "murachs-mysql-3rd-edition:p117:c2",
-          "murachs-mysql-3rd-edition:p118:c1",
-          "murachs-mysql-3rd-edition:p118:c2",
-          "murachs-mysql-3rd-edition:p119:c1",
-          "murachs-mysql-3rd-edition:p119:c2",
-          "murachs-mysql-3rd-edition:p120:c1",
-          "murachs-mysql-3rd-edition:p120:c2",
-          "murachs-mysql-3rd-edition:p120:c3",
-          "murachs-mysql-3rd-edition:p120:c4",
-          "murachs-mysql-3rd-edition:p121:c1",
-          "murachs-mysql-3rd-edition:p121:c2",
-          "murachs-mysql-3rd-edition:p121:c3",
-          "murachs-mysql-3rd-edition:p122:c1",
-          "murachs-mysql-3rd-edition:p122:c2",
-          "murachs-mysql-3rd-edition:p122:c3"
-        ],
-        "examples": [
-          "murachs-mysql-3rd-edition:p123:c1",
-          "murachs-mysql-3rd-edition:p123:c2",
-          "murachs-mysql-3rd-edition:p124:c1",
-          "murachs-mysql-3rd-edition:p124:c2",
-          "murachs-mysql-3rd-edition:p125:c1",
-          "murachs-mysql-3rd-edition:p125:c2",
-          "murachs-mysql-3rd-edition:p125:c3",
-          "murachs-mysql-3rd-edition:p126:c1",
-          "murachs-mysql-3rd-edition:p126:c2",
-          "murachs-mysql-3rd-edition:p127:c1",
-          "murachs-mysql-3rd-edition:p127:c2",
-          "murachs-mysql-3rd-edition:p128:c1",
-          "murachs-mysql-3rd-edition:p128:c2",
-          "murachs-mysql-3rd-edition:p129:c1",
-          "murachs-mysql-3rd-edition:p129:c2",
-          "murachs-mysql-3rd-edition:p130:c1",
-          "murachs-mysql-3rd-edition:p130:c2",
-          "murachs-mysql-3rd-edition:p131:c1",
-          "murachs-mysql-3rd-edition:p131:c2",
-          "murachs-mysql-3rd-edition:p131:c3",
-          "murachs-mysql-3rd-edition:p132:c1",
-          "murachs-mysql-3rd-edition:p132:c2",
-          "murachs-mysql-3rd-edition:p133:c1",
-          "murachs-mysql-3rd-edition:p133:c2",
-          "murachs-mysql-3rd-edition:p134:c1",
-          "murachs-mysql-3rd-edition:p134:c2",
-          "murachs-mysql-3rd-edition:p134:c3"
-        ],
-        "commonMistakes": [
-          "murachs-mysql-3rd-edition:p135:c1",
-          "murachs-mysql-3rd-edition:p135:c2",
-          "murachs-mysql-3rd-edition:p136:c1",
-          "murachs-mysql-3rd-edition:p136:c2",
-          "murachs-mysql-3rd-edition:p137:c1",
-          "murachs-mysql-3rd-edition:p137:c2",
-          "murachs-mysql-3rd-edition:p138:c1",
-          "murachs-mysql-3rd-edition:p138:c2",
-          "murachs-mysql-3rd-edition:p139:c1",
-          "murachs-mysql-3rd-edition:p139:c2"
-        ]
-      },
-      "relatedConcepts": [],
-      "practiceProblemIds": [],
-      "sourceDocId": "murachs-mysql-3rd-edition",
-      "tags": [
-        "mysql",
-        "joins",
-        "relationships"
-      ],
-      "provenance": {
-        "chunks": [
-          "murachs-mysql-3rd-edition:p127:c2",
-          "murachs-mysql-3rd-edition:p119:c2",
-          "murachs-mysql-3rd-edition:p133:c1",
-          "murachs-mysql-3rd-edition:p132:c1",
-          "murachs-mysql-3rd-edition:p129:c1",
-          "murachs-mysql-3rd-edition:p138:c1",
-          "murachs-mysql-3rd-edition:p118:c2",
-          "murachs-mysql-3rd-edition:p138:c2",
-          "murachs-mysql-3rd-edition:p137:c1",
-          "murachs-mysql-3rd-edition:p133:c2",
-          "murachs-mysql-3rd-edition:p128:c1",
-          "murachs-mysql-3rd-edition:p135:c2",
-          "murachs-mysql-3rd-edition:p124:c1",
-          "murachs-mysql-3rd-edition:p139:c1",
-          "murachs-mysql-3rd-edition:p134:c2",
-          "murachs-mysql-3rd-edition:p121:c3",
-          "murachs-mysql-3rd-edition:p123:c2",
-          "murachs-mysql-3rd-edition:p134:c1",
-          "murachs-mysql-3rd-edition:p131:c1",
-          "murachs-mysql-3rd-edition:p125:c1",
-          "murachs-mysql-3rd-edition:p128:c2",
-          "murachs-mysql-3rd-edition:p129:c2",
-          "murachs-mysql-3rd-edition:p135:c1",
-          "murachs-mysql-3rd-edition:p120:c3",
-          "murachs-mysql-3rd-edition:p130:c2",
-          "murachs-mysql-3rd-edition:p137:c2",
-          "murachs-mysql-3rd-edition:p121:c2",
-          "murachs-mysql-3rd-edition:p127:c1",
-          "murachs-mysql-3rd-edition:p125:c3",
-          "murachs-mysql-3rd-edition:p136:c1",
-          "murachs-mysql-3rd-edition:p134:c3",
-          "murachs-mysql-3rd-edition:p118:c1",
-          "murachs-mysql-3rd-edition:p122:c1",
-          "murachs-mysql-3rd-edition:p120:c1",
-          "murachs-mysql-3rd-edition:p124:c2",
-          "murachs-mysql-3rd-edition:p131:c3",
-          "murachs-mysql-3rd-edition:p120:c4",
-          "murachs-mysql-3rd-edition:p123:c1",
-          "murachs-mysql-3rd-edition:p131:c2",
-          "murachs-mysql-3rd-edition:p132:c2",
-          "murachs-mysql-3rd-edition:p136:c2",
-          "murachs-mysql-3rd-edition:p125:c2",
-          "murachs-mysql-3rd-edition:p120:c2",
-          "murachs-mysql-3rd-edition:p117:c1",
-          "murachs-mysql-3rd-edition:p130:c1",
-          "murachs-mysql-3rd-edition:p121:c1",
-          "murachs-mysql-3rd-edition:p117:c2",
-          "murachs-mysql-3rd-edition:p126:c1",
-          "murachs-mysql-3rd-edition:p122:c3",
-          "murachs-mysql-3rd-edition:p139:c2",
-          "murachs-mysql-3rd-edition:p126:c2",
-          "murachs-mysql-3rd-edition:p119:c1",
-          "murachs-mysql-3rd-edition:p122:c2"
-        ],
-        "pages": [
-          117,
-          118,
-          119,
-          120,
-          121,
-          122,
-          123,
-          124,
-          125,
-          126,
-          127,
-          128,
-          129,
-          130,
-          131,
-          132,
-          133,
-          134,
-          135,
-          136,
-          137,
-          138,
-          139
-        ],
-        "blocks": [],
-        "extraction_method": "pymupdf",
-        "source_doc_id": "murachs-mysql-3rd-edition"
-      }
-    },
     "murachs-mysql-3rd-edition/inner-join-murach": {
       "title": "Inner Join",
       "definition": "Matching rows from two or more tables",
       "difficulty": "beginner",
+      "estimatedReadTime": 3,
       "pageNumbers": [
         117,
         118,
@@ -1138,6 +775,7 @@
       "title": "Outer Join",
       "definition": "Left, right, and full outer joins in MySQL",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         129,
         130,
@@ -1262,6 +900,7 @@
       "title": "INSERT Statement",
       "definition": "Adding rows to tables with INSERT INTO and INSERT SELECT",
       "difficulty": "beginner",
+      "estimatedReadTime": 3,
       "pageNumbers": [
         149,
         150,
@@ -1402,6 +1041,7 @@
       "title": "UPDATE Statement",
       "definition": "Modifying existing data with UPDATE and UPDATE JOIN",
       "difficulty": "beginner",
+      "estimatedReadTime": 7,
       "pageNumbers": [
         165,
         166,
@@ -1534,6 +1174,7 @@
       "title": "DELETE Statement",
       "definition": "Removing rows with DELETE and DELETE JOIN",
       "difficulty": "beginner",
+      "estimatedReadTime": 3,
       "pageNumbers": [
         177,
         178,
@@ -1628,6 +1269,7 @@
       "title": "MySQL Data Types",
       "definition": "Numeric, string, date/time, and large object data types",
       "difficulty": "beginner",
+      "estimatedReadTime": 27,
       "pageNumbers": [
         193,
         194,
@@ -1776,6 +1418,7 @@
       "title": "MySQL Functions",
       "definition": "String, numeric, date/time, and conversion functions",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         217,
         218,
@@ -1930,6 +1573,7 @@
       "title": "String Functions",
       "definition": "CONCAT, SUBSTRING, LENGTH, TRIM, UPPER, LOWER, and more",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         218,
         219,
@@ -2030,6 +1674,7 @@
       "title": "Date and Time Functions",
       "definition": "NOW, CURDATE, DATE_FORMAT, DATE_ADD, DATEDIFF, and more",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         228,
         229,
@@ -2128,6 +1773,7 @@
       "title": "Aggregate Functions",
       "definition": "COUNT, SUM, AVG, MAX, MIN, and DISTINCT aggregates",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         241,
         242,
@@ -2270,152 +1916,11 @@
         "source_doc_id": "murachs-mysql-3rd-edition"
       }
     },
-    "murachs-mysql-3rd-edition/group-by-murach": {
-      "title": "GROUP BY Clause",
-      "definition": "Grouping data for aggregate calculations",
-      "difficulty": "intermediate",
-      "pageNumbers": [
-        253,
-        254,
-        255,
-        256,
-        257,
-        258,
-        259,
-        260,
-        261,
-        262,
-        263,
-        264,
-        265,
-        266,
-        267
-      ],
-      "chunkIds": {
-        "definition": [
-          "murachs-mysql-3rd-edition:p253:c1",
-          "murachs-mysql-3rd-edition:p254:c1",
-          "murachs-mysql-3rd-edition:p254:c2",
-          "murachs-mysql-3rd-edition:p254:c3",
-          "murachs-mysql-3rd-edition:p254:c4",
-          "murachs-mysql-3rd-edition:p255:c1",
-          "murachs-mysql-3rd-edition:p255:c2",
-          "murachs-mysql-3rd-edition:p255:c3",
-          "murachs-mysql-3rd-edition:p256:c1",
-          "murachs-mysql-3rd-edition:p256:c2",
-          "murachs-mysql-3rd-edition:p256:c3",
-          "murachs-mysql-3rd-edition:p256:c4"
-        ],
-        "examples": [
-          "murachs-mysql-3rd-edition:p257:c1",
-          "murachs-mysql-3rd-edition:p257:c2",
-          "murachs-mysql-3rd-edition:p258:c1",
-          "murachs-mysql-3rd-edition:p258:c2",
-          "murachs-mysql-3rd-edition:p258:c3",
-          "murachs-mysql-3rd-edition:p258:c4",
-          "murachs-mysql-3rd-edition:p259:c1",
-          "murachs-mysql-3rd-edition:p259:c2",
-          "murachs-mysql-3rd-edition:p260:c1",
-          "murachs-mysql-3rd-edition:p260:c2",
-          "murachs-mysql-3rd-edition:p260:c3",
-          "murachs-mysql-3rd-edition:p261:c1",
-          "murachs-mysql-3rd-edition:p261:c2",
-          "murachs-mysql-3rd-edition:p262:c1",
-          "murachs-mysql-3rd-edition:p262:c2",
-          "murachs-mysql-3rd-edition:p262:c3",
-          "murachs-mysql-3rd-edition:p263:c1",
-          "murachs-mysql-3rd-edition:p263:c2",
-          "murachs-mysql-3rd-edition:p264:c1",
-          "murachs-mysql-3rd-edition:p264:c2",
-          "murachs-mysql-3rd-edition:p264:c3",
-          "murachs-mysql-3rd-edition:p264:c4"
-        ],
-        "commonMistakes": [
-          "murachs-mysql-3rd-edition:p265:c1",
-          "murachs-mysql-3rd-edition:p265:c2",
-          "murachs-mysql-3rd-edition:p265:c3",
-          "murachs-mysql-3rd-edition:p266:c1",
-          "murachs-mysql-3rd-edition:p266:c2",
-          "murachs-mysql-3rd-edition:p267:c1"
-        ]
-      },
-      "relatedConcepts": [],
-      "practiceProblemIds": [],
-      "sourceDocId": "murachs-mysql-3rd-edition",
-      "tags": [
-        "mysql",
-        "group-by",
-        "aggregation"
-      ],
-      "provenance": {
-        "chunks": [
-          "murachs-mysql-3rd-edition:p262:c1",
-          "murachs-mysql-3rd-edition:p256:c1",
-          "murachs-mysql-3rd-edition:p259:c2",
-          "murachs-mysql-3rd-edition:p260:c2",
-          "murachs-mysql-3rd-edition:p258:c1",
-          "murachs-mysql-3rd-edition:p261:c2",
-          "murachs-mysql-3rd-edition:p260:c3",
-          "murachs-mysql-3rd-edition:p264:c4",
-          "murachs-mysql-3rd-edition:p256:c4",
-          "murachs-mysql-3rd-edition:p264:c2",
-          "murachs-mysql-3rd-edition:p266:c1",
-          "murachs-mysql-3rd-edition:p258:c2",
-          "murachs-mysql-3rd-edition:p254:c4",
-          "murachs-mysql-3rd-edition:p264:c1",
-          "murachs-mysql-3rd-edition:p256:c2",
-          "murachs-mysql-3rd-edition:p259:c1",
-          "murachs-mysql-3rd-edition:p262:c2",
-          "murachs-mysql-3rd-edition:p256:c3",
-          "murachs-mysql-3rd-edition:p258:c3",
-          "murachs-mysql-3rd-edition:p261:c1",
-          "murachs-mysql-3rd-edition:p262:c3",
-          "murachs-mysql-3rd-edition:p263:c2",
-          "murachs-mysql-3rd-edition:p254:c1",
-          "murachs-mysql-3rd-edition:p267:c1",
-          "murachs-mysql-3rd-edition:p255:c3",
-          "murachs-mysql-3rd-edition:p266:c2",
-          "murachs-mysql-3rd-edition:p264:c3",
-          "murachs-mysql-3rd-edition:p254:c2",
-          "murachs-mysql-3rd-edition:p257:c2",
-          "murachs-mysql-3rd-edition:p263:c1",
-          "murachs-mysql-3rd-edition:p257:c1",
-          "murachs-mysql-3rd-edition:p253:c1",
-          "murachs-mysql-3rd-edition:p260:c1",
-          "murachs-mysql-3rd-edition:p265:c2",
-          "murachs-mysql-3rd-edition:p254:c3",
-          "murachs-mysql-3rd-edition:p265:c3",
-          "murachs-mysql-3rd-edition:p255:c1",
-          "murachs-mysql-3rd-edition:p258:c4",
-          "murachs-mysql-3rd-edition:p265:c1",
-          "murachs-mysql-3rd-edition:p255:c2"
-        ],
-        "pages": [
-          253,
-          254,
-          255,
-          256,
-          257,
-          258,
-          259,
-          260,
-          261,
-          262,
-          263,
-          264,
-          265,
-          266,
-          267
-        ],
-        "blocks": [],
-        "extraction_method": "pymupdf",
-        "source_doc_id": "murachs-mysql-3rd-edition"
-      }
-    },
     "murachs-mysql-3rd-edition/having-murach": {
       "title": "HAVING Clause",
       "definition": "Filtering groups based on aggregate values",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         265,
         266,
@@ -2508,156 +2013,11 @@
         "source_doc_id": "murachs-mysql-3rd-edition"
       }
     },
-    "murachs-mysql-3rd-edition/subqueries-murach": {
-      "title": "Subqueries",
-      "definition": "Single-row, multi-row, and correlated subqueries in MySQL",
-      "difficulty": "intermediate",
-      "pageNumbers": [
-        277,
-        278,
-        279,
-        280,
-        281,
-        282,
-        283,
-        284,
-        285,
-        286,
-        287,
-        288,
-        289,
-        290,
-        291,
-        292,
-        293,
-        294
-      ],
-      "chunkIds": {
-        "definition": [
-          "murachs-mysql-3rd-edition:p277:c1",
-          "murachs-mysql-3rd-edition:p277:c2",
-          "murachs-mysql-3rd-edition:p278:c1",
-          "murachs-mysql-3rd-edition:p278:c2",
-          "murachs-mysql-3rd-edition:p278:c3",
-          "murachs-mysql-3rd-edition:p278:c4",
-          "murachs-mysql-3rd-edition:p279:c1",
-          "murachs-mysql-3rd-edition:p279:c2",
-          "murachs-mysql-3rd-edition:p279:c3",
-          "murachs-mysql-3rd-edition:p280:c1",
-          "murachs-mysql-3rd-edition:p280:c2",
-          "murachs-mysql-3rd-edition:p281:c1",
-          "murachs-mysql-3rd-edition:p281:c2"
-        ],
-        "examples": [
-          "murachs-mysql-3rd-edition:p282:c1",
-          "murachs-mysql-3rd-edition:p282:c2",
-          "murachs-mysql-3rd-edition:p283:c1",
-          "murachs-mysql-3rd-edition:p283:c2",
-          "murachs-mysql-3rd-edition:p284:c1",
-          "murachs-mysql-3rd-edition:p284:c2",
-          "murachs-mysql-3rd-edition:p284:c3",
-          "murachs-mysql-3rd-edition:p285:c1",
-          "murachs-mysql-3rd-edition:p285:c2",
-          "murachs-mysql-3rd-edition:p286:c1",
-          "murachs-mysql-3rd-edition:p286:c2",
-          "murachs-mysql-3rd-edition:p286:c3",
-          "murachs-mysql-3rd-edition:p287:c1",
-          "murachs-mysql-3rd-edition:p287:c2",
-          "murachs-mysql-3rd-edition:p288:c1",
-          "murachs-mysql-3rd-edition:p288:c2",
-          "murachs-mysql-3rd-edition:p289:c1",
-          "murachs-mysql-3rd-edition:p290:c1",
-          "murachs-mysql-3rd-edition:p290:c2",
-          "murachs-mysql-3rd-edition:p290:c3"
-        ],
-        "commonMistakes": [
-          "murachs-mysql-3rd-edition:p291:c1",
-          "murachs-mysql-3rd-edition:p292:c1",
-          "murachs-mysql-3rd-edition:p293:c1",
-          "murachs-mysql-3rd-edition:p293:c2",
-          "murachs-mysql-3rd-edition:p294:c1",
-          "murachs-mysql-3rd-edition:p294:c2"
-        ]
-      },
-      "relatedConcepts": [],
-      "practiceProblemIds": [],
-      "sourceDocId": "murachs-mysql-3rd-edition",
-      "tags": [
-        "mysql",
-        "subqueries",
-        "advanced"
-      ],
-      "provenance": {
-        "chunks": [
-          "murachs-mysql-3rd-edition:p278:c2",
-          "murachs-mysql-3rd-edition:p277:c1",
-          "murachs-mysql-3rd-edition:p288:c1",
-          "murachs-mysql-3rd-edition:p291:c1",
-          "murachs-mysql-3rd-edition:p288:c2",
-          "murachs-mysql-3rd-edition:p281:c2",
-          "murachs-mysql-3rd-edition:p286:c3",
-          "murachs-mysql-3rd-edition:p282:c1",
-          "murachs-mysql-3rd-edition:p290:c1",
-          "murachs-mysql-3rd-edition:p278:c1",
-          "murachs-mysql-3rd-edition:p280:c2",
-          "murachs-mysql-3rd-edition:p284:c3",
-          "murachs-mysql-3rd-edition:p285:c2",
-          "murachs-mysql-3rd-edition:p281:c1",
-          "murachs-mysql-3rd-edition:p277:c2",
-          "murachs-mysql-3rd-edition:p287:c1",
-          "murachs-mysql-3rd-edition:p278:c3",
-          "murachs-mysql-3rd-edition:p284:c2",
-          "murachs-mysql-3rd-edition:p283:c2",
-          "murachs-mysql-3rd-edition:p293:c1",
-          "murachs-mysql-3rd-edition:p290:c2",
-          "murachs-mysql-3rd-edition:p278:c4",
-          "murachs-mysql-3rd-edition:p293:c2",
-          "murachs-mysql-3rd-edition:p292:c1",
-          "murachs-mysql-3rd-edition:p294:c1",
-          "murachs-mysql-3rd-edition:p282:c2",
-          "murachs-mysql-3rd-edition:p285:c1",
-          "murachs-mysql-3rd-edition:p284:c1",
-          "murachs-mysql-3rd-edition:p294:c2",
-          "murachs-mysql-3rd-edition:p280:c1",
-          "murachs-mysql-3rd-edition:p290:c3",
-          "murachs-mysql-3rd-edition:p279:c3",
-          "murachs-mysql-3rd-edition:p283:c1",
-          "murachs-mysql-3rd-edition:p289:c1",
-          "murachs-mysql-3rd-edition:p286:c2",
-          "murachs-mysql-3rd-edition:p286:c1",
-          "murachs-mysql-3rd-edition:p279:c1",
-          "murachs-mysql-3rd-edition:p279:c2",
-          "murachs-mysql-3rd-edition:p287:c2"
-        ],
-        "pages": [
-          277,
-          278,
-          279,
-          280,
-          281,
-          282,
-          283,
-          284,
-          285,
-          286,
-          287,
-          288,
-          289,
-          290,
-          291,
-          292,
-          293,
-          294
-        ],
-        "blocks": [],
-        "extraction_method": "pymupdf",
-        "source_doc_id": "murachs-mysql-3rd-edition"
-      }
-    },
     "murachs-mysql-3rd-edition/correlated-subquery-murach": {
       "title": "Correlated Subqueries",
       "definition": "Subqueries that reference outer query columns",
       "difficulty": "advanced",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         289,
         290,
@@ -2761,6 +2121,7 @@
       "title": "UNION and UNION ALL",
       "definition": "Combining results from multiple SELECT statements",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         301,
         302,
@@ -2865,8 +2226,9 @@
     },
     "murachs-mysql-3rd-edition/create-table-murach": {
       "title": "Creating Tables",
-      "definition": "CREATE TABLE with columns, data types, and constraints",
+      "definition": "Defining a new table with CREATE TABLE, naming its columns, data types, and constraints",
       "difficulty": "beginner",
+      "estimatedReadTime": 18,
       "pageNumbers": [
         317,
         318,
@@ -2927,9 +2289,10 @@
       "practiceProblemIds": [],
       "sourceDocId": "murachs-mysql-3rd-edition",
       "tags": [
-        "mysql",
+        "sql",
         "ddl",
-        "create-table"
+        "create-table",
+        "mysql"
       ],
       "provenance": {
         "chunks": [
@@ -2991,6 +2354,7 @@
       "title": "Altering Tables",
       "definition": "ALTER TABLE to add, modify, and drop columns",
       "difficulty": "intermediate",
+      "estimatedReadTime": 3,
       "pageNumbers": [
         333,
         334,
@@ -3103,6 +2467,7 @@
       "title": "Constraints",
       "definition": "PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK, and NOT NULL",
       "difficulty": "intermediate",
+      "estimatedReadTime": 16,
       "pageNumbers": [
         345,
         346,
@@ -3239,6 +2604,7 @@
       "title": "Views",
       "definition": "Creating and using views in MySQL",
       "difficulty": "intermediate",
+      "estimatedReadTime": 10,
       "pageNumbers": [
         381,
         382,
@@ -3367,6 +2733,7 @@
       "title": "Stored Procedures",
       "definition": "Creating and using stored procedures in MySQL",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         401,
         402,
@@ -3489,6 +2856,7 @@
       "title": "Stored Functions",
       "definition": "Creating user-defined functions in MySQL",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         417,
         418,
@@ -3589,6 +2957,7 @@
       "title": "Triggers",
       "definition": "Automatic actions on INSERT, UPDATE, DELETE",
       "difficulty": "advanced",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         429,
         430,
@@ -3712,6 +3081,7 @@
       "title": "Events",
       "definition": "Scheduled tasks in MySQL",
       "difficulty": "advanced",
+      "estimatedReadTime": 3,
       "pageNumbers": [
         441,
         442,
@@ -3819,6 +3189,7 @@
       "title": "Transactions",
       "definition": "ACID properties, COMMIT, ROLLBACK, and savepoints",
       "difficulty": "intermediate",
+      "estimatedReadTime": 25,
       "pageNumbers": [
         457,
         458,
@@ -3959,6 +3330,7 @@
       "title": "Transaction Isolation Levels",
       "definition": "READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE",
       "difficulty": "advanced",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         471,
         472,
@@ -4068,6 +3440,7 @@
       "title": "User Management",
       "definition": "Creating users, granting privileges, and roles",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         487,
         488,
@@ -4184,6 +3557,7 @@
       "title": "Backup and Restore",
       "definition": "Database backup strategies and restoration procedures",
       "difficulty": "intermediate",
+      "estimatedReadTime": 14,
       "pageNumbers": [
         505,
         506,
@@ -4298,6 +3672,7 @@
       "title": "Introduction to Relational Databases",
       "definition": "Overview of database systems, relational model basics, and data independence",
       "difficulty": "beginner",
+      "estimatedReadTime": 4,
       "pageNumbers": [
         1,
         2,
@@ -4382,6 +3757,7 @@
       "title": "Data Independence",
       "definition": "Logical and physical data independence - how DBMS separates data from applications",
       "difficulty": "beginner",
+      "estimatedReadTime": 2,
       "pageNumbers": [
         15,
         16,
@@ -4454,6 +3830,7 @@
       "title": "Entity-Relationship Model",
       "definition": "Modeling database structure using entities, relationships, and attributes",
       "difficulty": "intermediate",
+      "estimatedReadTime": 15,
       "pageNumbers": [
         25,
         26,
@@ -4586,6 +3963,7 @@
       "title": "ER Diagrams",
       "definition": "Visual representation of entity-relationship models",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         35,
         36,
@@ -4708,6 +4086,7 @@
       "title": "Cardinality Constraints",
       "definition": "Specifying how many instances of one entity relate to instances of another",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         45,
         46,
@@ -4848,6 +4227,7 @@
       "title": "Relational Algebra",
       "definition": "Formal language for manipulating relations using operations like selection, projection, and join",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         75,
         76,
@@ -5040,6 +4420,7 @@
       "title": "Selection and Projection",
       "definition": "Basic relational algebra operations for filtering rows and selecting columns",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         78,
         79,
@@ -5164,6 +4545,7 @@
       "title": "Set Operations in SQL",
       "definition": "UNION, INTERSECT, and EXCEPT operations in relational algebra and SQL",
       "difficulty": "intermediate",
+      "estimatedReadTime": 7,
       "pageNumbers": [
         93,
         94,
@@ -5284,6 +4666,7 @@
       "title": "Introduction to SQL",
       "definition": "Structured Query Language for managing relational databases",
       "difficulty": "beginner",
+      "estimatedReadTime": 7,
       "pageNumbers": [
         115,
         116,
@@ -5414,8 +4797,9 @@
     },
     "dbms-ramakrishnan-3rd-edition/select-basic": {
       "title": "SELECT Statement Basics",
-      "definition": "Retrieving data from one or more tables using the SELECT statement",
+      "definition": "Retrieving specific columns and rows from a table with SELECT",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         115,
         116,
@@ -5475,7 +4859,7 @@
       "tags": [
         "sql",
         "select",
-        "fundamentals"
+        "basics"
       ],
       "provenance": {
         "chunks": [
@@ -5531,9 +4915,10 @@
       }
     },
     "dbms-ramakrishnan-3rd-edition/where-clause": {
-      "title": "WHERE Clause and Filtering",
-      "definition": "Filtering rows using conditions with WHERE, comparison operators, and logical operators",
+      "title": "WHERE Clause",
+      "definition": "Filtering which rows a query returns by testing a condition against each row",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         120,
         121,
@@ -5603,8 +4988,8 @@
       "sourceDocId": "dbms-ramakrishnan-3rd-edition",
       "tags": [
         "sql",
-        "where",
-        "filtering"
+        "filtering",
+        "where"
       ],
       "provenance": {
         "chunks": [
@@ -5672,8 +5057,9 @@
     },
     "dbms-ramakrishnan-3rd-edition/joins": {
       "title": "SQL Joins",
-      "definition": "Combining data from multiple tables using INNER JOIN, LEFT JOIN, RIGHT JOIN, and FULL JOIN",
+      "definition": "Combining rows from two or more tables by matching values in a shared column",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         140,
         141,
@@ -5864,6 +5250,7 @@
       "title": "INNER JOIN",
       "definition": "Retrieving matching rows from two or more tables",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         140,
         141,
@@ -5976,6 +5363,7 @@
       "title": "OUTER JOIN",
       "definition": "Retrieving all rows from one table and matching rows from another (LEFT, RIGHT, FULL)",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         148,
         149,
@@ -6110,6 +5498,7 @@
       "title": "Aggregate Functions",
       "definition": "Computing summary values with COUNT, SUM, AVG, MAX, MIN",
       "difficulty": "beginner",
+      "estimatedReadTime": 5,
       "pageNumbers": [
         165,
         166,
@@ -6262,8 +5651,9 @@
     },
     "dbms-ramakrishnan-3rd-edition/group-by": {
       "title": "GROUP BY Clause",
-      "definition": "Grouping rows with common values for aggregate calculations",
+      "definition": "Collapsing rows that share a value into groups and computing one aggregate result per group",
       "difficulty": "intermediate",
+      "estimatedReadTime": 9,
       "pageNumbers": [
         175,
         176,
@@ -6332,8 +5722,8 @@
       "sourceDocId": "dbms-ramakrishnan-3rd-edition",
       "tags": [
         "sql",
-        "group-by",
-        "aggregation"
+        "aggregation",
+        "group-by"
       ],
       "provenance": {
         "chunks": [
@@ -6402,6 +5792,7 @@
       "title": "HAVING Clause",
       "definition": "Filtering groups based on aggregate conditions",
       "difficulty": "intermediate",
+      "estimatedReadTime": 17,
       "pageNumbers": [
         183,
         184,
@@ -6516,8 +5907,9 @@
     },
     "dbms-ramakrishnan-3rd-edition/subqueries": {
       "title": "Subqueries",
-      "definition": "Nested queries - using SELECT statements within other SQL statements",
-      "difficulty": "intermediate",
+      "definition": "Nesting one SELECT inside another so the inner result feeds the outer query",
+      "difficulty": "advanced",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         195,
         196,
@@ -6597,7 +5989,7 @@
       "tags": [
         "sql",
         "subqueries",
-        "nested"
+        "nested-queries"
       ],
       "provenance": {
         "chunks": [
@@ -6676,6 +6068,7 @@
       "title": "Correlated Subqueries",
       "definition": "Subqueries that reference columns from the outer query",
       "difficulty": "advanced",
+      "estimatedReadTime": 6,
       "pageNumbers": [
         205,
         206,
@@ -6809,6 +6202,7 @@
       "title": "CREATE TABLE",
       "definition": "Creating database tables with column definitions and constraints",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         225,
         226,
@@ -6945,6 +6339,7 @@
       "title": "SQL Data Types",
       "definition": "Integer, decimal, character, date/time, and blob data types in SQL",
       "difficulty": "beginner",
+      "estimatedReadTime": 3,
       "pageNumbers": [
         228,
         229,
@@ -7075,6 +6470,7 @@
       "title": "Integrity Constraints",
       "definition": "PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK, and NOT NULL constraints",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         235,
         236,
@@ -7218,9 +6614,10 @@
       }
     },
     "dbms-ramakrishnan-3rd-edition/primary-key": {
-      "title": "Primary Key Constraint",
-      "definition": "Uniquely identifying each row in a table",
+      "title": "Primary Keys",
+      "definition": "The column or columns whose value uniquely identifies each row in a table",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         235,
         236,
@@ -7265,7 +6662,7 @@
       "sourceDocId": "dbms-ramakrishnan-3rd-edition",
       "tags": [
         "sql",
-        "primary-key",
+        "keys",
         "constraints"
       ],
       "provenance": {
@@ -7308,9 +6705,10 @@
       }
     },
     "dbms-ramakrishnan-3rd-edition/foreign-key": {
-      "title": "Foreign Key Constraint",
-      "definition": "Maintaining referential integrity between related tables",
+      "title": "Foreign Keys",
+      "definition": "A column that references another table's primary key, keeping related rows consistent",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         240,
         241,
@@ -7373,8 +6771,9 @@
       "sourceDocId": "dbms-ramakrishnan-3rd-edition",
       "tags": [
         "sql",
-        "foreign-key",
-        "referential-integrity"
+        "keys",
+        "constraints",
+        "relationships"
       ],
       "provenance": {
         "chunks": [
@@ -7437,6 +6836,7 @@
       "title": "INSERT Statement",
       "definition": "Adding new rows to database tables",
       "difficulty": "beginner",
+      "estimatedReadTime": 5,
       "pageNumbers": [
         260,
         261,
@@ -7557,6 +6957,7 @@
       "title": "UPDATE Statement",
       "definition": "Modifying existing data in tables",
       "difficulty": "beginner",
+      "estimatedReadTime": 3,
       "pageNumbers": [
         268,
         269,
@@ -7679,6 +7080,7 @@
       "title": "DELETE Statement",
       "definition": "Removing rows from database tables",
       "difficulty": "beginner",
+      "estimatedReadTime": 2,
       "pageNumbers": [
         275,
         276,
@@ -7791,6 +7193,7 @@
       "title": "SQL Views",
       "definition": "Virtual tables based on the result of a query - stored SELECT statements",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         295,
         296,
@@ -7955,6 +7358,7 @@
       "title": "Database Normalization",
       "definition": "Organizing data to reduce redundancy and improve integrity (1NF, 2NF, 3NF, BCNF)",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         325,
         326,
@@ -8143,8 +7547,9 @@
     },
     "dbms-ramakrishnan-3rd-edition/1nf": {
       "title": "First Normal Form (1NF)",
-      "definition": "Eliminating repeating groups and ensuring atomic values",
-      "difficulty": "beginner",
+      "definition": "Every column holds a single atomic value, with no repeating groups or lists inside a cell",
+      "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         328,
         329,
@@ -8197,7 +7602,7 @@
       "practiceProblemIds": [],
       "sourceDocId": "dbms-ramakrishnan-3rd-edition",
       "tags": [
-        "design",
+        "database-design",
         "normalization",
         "1nf"
       ],
@@ -8251,8 +7656,9 @@
     },
     "dbms-ramakrishnan-3rd-edition/2nf": {
       "title": "Second Normal Form (2NF)",
-      "definition": "Eliminating partial dependencies on composite keys",
+      "definition": "Already in 1NF, and every non-key column depends on the whole composite key rather than part of it",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         335,
         336,
@@ -8312,7 +7718,7 @@
       "practiceProblemIds": [],
       "sourceDocId": "dbms-ramakrishnan-3rd-edition",
       "tags": [
-        "design",
+        "database-design",
         "normalization",
         "2nf"
       ],
@@ -8373,8 +7779,9 @@
     },
     "dbms-ramakrishnan-3rd-edition/3nf": {
       "title": "Third Normal Form (3NF)",
-      "definition": "Eliminating transitive dependencies",
+      "definition": "Already in 2NF, and no non-key column depends on another non-key column",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         342,
         343,
@@ -8437,7 +7844,7 @@
       "practiceProblemIds": [],
       "sourceDocId": "dbms-ramakrishnan-3rd-edition",
       "tags": [
-        "design",
+        "database-design",
         "normalization",
         "3nf"
       ],
@@ -8503,6 +7910,7 @@
       "title": "Database Transactions",
       "definition": "Atomic units of work that maintain database consistency (ACID properties)",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         355,
         356,
@@ -8697,6 +8105,7 @@
       "title": "ACID Properties",
       "definition": "Atomicity, Consistency, Isolation, Durability - guarantees for transaction processing",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         355,
         356,
@@ -8827,6 +8236,7 @@
       "title": "Transaction Isolation Levels",
       "definition": "READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE",
       "difficulty": "advanced",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         365,
         366,
@@ -8976,6 +8386,7 @@
       "title": "Database Indexes",
       "definition": "Data structures that improve the speed of data retrieval operations",
       "difficulty": "intermediate",
+      "estimatedReadTime": 5,
       "pageNumbers": [
         385,
         386,
@@ -9120,6 +8531,7 @@
       "title": "SQL Authorization",
       "definition": "GRANT and REVOKE statements for controlling access to database objects",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         405,
         406,

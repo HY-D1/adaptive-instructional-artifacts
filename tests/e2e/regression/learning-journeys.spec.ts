@@ -84,7 +84,9 @@ test.describe('@no-external Complete Learning Journeys', () => {
 
       // Step 2: Switch to Problem 2, make error but fix without hints
       await page.getByTestId('problem-select-trigger').click();
-      await page.getByRole('option', { name: /Problem 2/i }).first().click();
+      // Problem options render real problem titles; pick the second problem
+      // positionally instead of by a "Problem N" label.
+      await page.getByRole('option').nth(1).click();
       await page.waitForTimeout(500);
 
       // Make an error
@@ -106,7 +108,7 @@ test.describe('@no-external Complete Learning Journeys', () => {
 
       // Step 3: Continue with minimal hint usage
       await page.getByTestId('problem-select-trigger').click();
-      await page.getByRole('option', { name: /Problem 3/i }).first().click();
+      await page.getByRole('option').nth(2).click();
       await page.waitForTimeout(500);
 
       await replaceEditorText(page, 'SELECT COUNT(*) FROM users');
@@ -173,10 +175,14 @@ test.describe('@no-external Complete Learning Journeys', () => {
   test.describe('Journey 2: Dependent Learner (High HDI)', () => {
     test('dependent learner HDI increases and triggers intervention', async ({ page }) => {
       const learnerId = 'dependent-learner-1';
-      
+
       await page.addInitScript((id: string) => {
+        // Init scripts re-run on every navigation; reset only once so state
+        // seeded after the first load survives later gotos.
+        if (window.sessionStorage.getItem('__journey-init-done')) return;
         window.localStorage.clear();
         window.sessionStorage.clear();
+        window.sessionStorage.setItem('__journey-init-done', '1');
         window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
         window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
           id,
@@ -238,10 +244,13 @@ test.describe('@no-external Complete Learning Journeys', () => {
 
     test('high HDI learner sees dependency warning after hint requests', async ({ page }) => {
       const learnerId = 'high-hdi-warning';
-      
+
       await page.addInitScript((id: string) => {
+        // One-time reset; see note in the sibling journey test above.
+        if (window.sessionStorage.getItem('__journey-init-done')) return;
         window.localStorage.clear();
         window.sessionStorage.clear();
+        window.sessionStorage.setItem('__journey-init-done', '1');
         window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
         window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
           id,
@@ -605,10 +614,13 @@ test.describe('@no-external Complete Learning Journeys', () => {
 
     test('events → HDI → interventions chain works', async ({ page }) => {
       const learnerId = 'hdi-chain-test';
-      
+
       await page.addInitScript((id: string) => {
+        // One-time reset; see note in the Journey 2 test above.
+        if (window.sessionStorage.getItem('__journey-init-done')) return;
         window.localStorage.clear();
         window.sessionStorage.clear();
+        window.sessionStorage.setItem('__journey-init-done', '1');
         window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
         window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
           id,
@@ -725,10 +737,13 @@ test.describe('@no-external Complete Learning Journeys', () => {
 
     test('localStorage state is consistent across pages', async ({ page }) => {
       const learnerId = 'storage-consistency';
-      
+
       await page.addInitScript((id: string) => {
+        // One-time reset; see note in the Journey 2 test above.
+        if (window.sessionStorage.getItem('__journey-init-done')) return;
         window.localStorage.clear();
         window.sessionStorage.clear();
+        window.sessionStorage.setItem('__journey-init-done', '1');
         window.localStorage.setItem('sql-adapt-welcome-seen', 'true');
         window.localStorage.setItem('sql-adapt-user-profile', JSON.stringify({
           id,

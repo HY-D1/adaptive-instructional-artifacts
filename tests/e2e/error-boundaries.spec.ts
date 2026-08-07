@@ -512,7 +512,7 @@ test.describe('@no-external @weekly Accessibility During Errors', () => {
     await page.goto('/');
     
     // Try to submit without filling required fields
-    await page.click('text=/student/i');
+    await page.getByRole('radio', { name: 'Student role' }).click();
     
     // Check for ARIA attributes on error messages if present
     const alertElements = await page.locator('[role="alert"]').count();

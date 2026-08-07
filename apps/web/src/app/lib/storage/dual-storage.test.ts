@@ -16,9 +16,23 @@ const logInteractionsBatchMock = vi.fn<(events: unknown[]) => Promise<boolean>>(
 const logInteractionsBatchVerifiedMock = vi.fn<(events: unknown[]) => Promise<{ confirmed: string[]; failed: string[] }>>();
 const logInteractionsBatchKeepaliveMock = vi.fn<(events: unknown[]) => Promise<{ success: boolean; confirmedIds?: string[] }>>();
 const saveProfileMock = vi.fn<(profile: unknown) => Promise<boolean>>();
+const updateProfileFromEventMock = vi.fn<(learnerId: string, event: unknown) => Promise<unknown>>();
 const updateProblemProgressMock = vi.fn<(learnerId: string, problemId: string, update: unknown) => Promise<unknown>>();
 const getAllProblemProgressMock = vi.fn<(learnerId: string) => Promise<Array<{ problemId: string; solved: boolean }>>>();
 const createLearnerMock = vi.fn<(profile: unknown) => Promise<boolean>>();
+const getInstructorOverviewMock = vi.fn<() => Promise<{ sections?: unknown[] } | null>>();
+const getInstructorLearnersMock = vi.fn<() => Promise<unknown[]>>();
+const getAllProfilesMock = vi.fn<() => Promise<LearnerProfile[]>>();
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
 
 function createBackendProfile(overrides: Partial<LearnerProfile> = {}): LearnerProfile {
   return {
@@ -60,8 +74,12 @@ beforeAll(async () => {
       logInteractionsBatchVerified: logInteractionsBatchVerifiedMock,
       logInteractionsBatchKeepalive: logInteractionsBatchKeepaliveMock,
       saveProfile: saveProfileMock,
+      updateProfileFromEvent: updateProfileFromEventMock,
       updateProblemProgress: updateProblemProgressMock,
       createLearner: createLearnerMock,
+      getInstructorOverview: getInstructorOverviewMock,
+      getInstructorLearners: getInstructorLearnersMock,
+      getAllProfiles: getAllProfilesMock,
     },
   }));
 
@@ -76,6 +94,10 @@ afterAll(() => {
 
 beforeEach(() => {
   localStorage.clear();
+  dualStorageModule.setActiveSyncPrincipal({
+    accountId: 'account-test',
+    learnerId: 'learner-1',
+  });
   isBackendAvailableMock.mockReset().mockResolvedValue(true);
   checkBackendHealthMock.mockReset().mockResolvedValue(true);
   saveSessionMock.mockReset().mockResolvedValue(true);
@@ -99,12 +121,26 @@ beforeEach(() => {
     return { success: true, confirmedIds };
   });
   saveProfileMock.mockReset().mockResolvedValue(true);
+  updateProfileFromEventMock.mockReset().mockResolvedValue(null);
   updateProblemProgressMock.mockReset().mockResolvedValue({ success: true });
   getAllProblemProgressMock.mockReset().mockResolvedValue([]);
   createLearnerMock.mockReset().mockResolvedValue(true);
+  getInstructorOverviewMock.mockReset().mockResolvedValue({ sections: [] });
+  getInstructorLearnersMock.mockReset().mockResolvedValue([]);
+  getAllProfilesMock.mockReset().mockResolvedValue([]);
 });
 
 describe('dual-storage critical write semantics', () => {
+  it('exposes an in-memory authenticated sync principal without changing storage keys', () => {
+    const storageModule = dualStorageModule as DualStorageModule & {
+      setActiveSyncPrincipal?: (principal: { accountId: string; learnerId: string } | null) => void;
+      getActiveSyncPrincipal?: () => { accountId: string; learnerId: string; syncOwnerId: string } | null;
+    };
+
+    expect(storageModule.setActiveSyncPrincipal).toBeTypeOf('function');
+    expect(storageModule.getActiveSyncPrincipal).toBeTypeOf('function');
+  });
+
   it('forwards helper-created research interactions to the backend with core identifiers', async () => {
     localStorage.setItem('sql-learning-active-session', 'session-research-helper');
     await dualStorageModule.dualStorage.checkHealth();
@@ -748,6 +784,51 @@ describe('dual-storage critical write semantics', () => {
     });
   });
 
+  it('preserves a malformed pending session-end root instead of replacing it', () => {
+    const malformedRoot = '{"unexpected":"object-root"}';
+    localStorage.setItem('sql-adapt-pending-session-ends', malformedRoot);
+
+    const result = dualStorageModule.dualStorage.queueSessionEnd({
+      id: 'session-end-malformed-root',
+      learnerId: 'learner-1',
+      sessionId: 'session-malformed-root',
+      timestamp: 1_700_000_010_000,
+      eventType: 'session_end',
+      problemId: 'problem-1',
+    });
+
+    expect(result.success).toBe(false);
+    expect(localStorage.getItem('sql-adapt-pending-session-ends')).toBe(malformedRoot);
+  });
+
+  it('keeps a pending session-end record when backend confirmation cannot be cleared locally', async () => {
+    const event = {
+      id: 'session-end-clear-proof',
+      learnerId: 'learner-1',
+      sessionId: 'session-clear-proof',
+      timestamp: 1_700_000_010_000,
+      eventType: 'session_end' as const,
+      problemId: 'problem-1',
+    };
+    const original = localStorage.setItem.bind(localStorage);
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'sql-adapt-pending-session-ends' && value === '[]') {
+        throw new DOMException('session-end clear blocked', 'QuotaExceededError');
+      }
+      return original(key, value);
+    });
+
+    const result = await dualStorageModule.dualStorage.emitSessionEnd(event);
+    setItem.mockRestore();
+
+    expect(result).toMatchObject({
+      backendConfirmed: true,
+      pendingSync: true,
+      error: expect.stringContaining('could not be cleared'),
+    });
+    expect(localStorage.getItem('sql-adapt-pending-session-ends')).toContain(event.id);
+  });
+
   // RESEARCH-4: Flush verification requires exact ID matching
   // This test verifies that ensureSessionInteractionsPersisted compares local and backend IDs exactly
   it('verifies session persistence using exact id equality', async () => {
@@ -927,6 +1008,2132 @@ describe('dual-storage critical write semantics', () => {
   });
 });
 
+describe('dual-storage authenticated sync ownership', () => {
+  const ownerA = 'v1:["account-A","learner-shared"]';
+  const ownerB = 'v1:["account-B","learner-shared"]';
+
+  function readQueue(): Array<Record<string, unknown>> {
+    return JSON.parse(localStorage.getItem('sql-adapt-offline-queue') ?? '[]');
+  }
+
+  it('normalizes the active session before creating a durable helper-event envelope', async () => {
+    const request = deferred<{ success: boolean; confirmed?: boolean }>();
+    logInteractionMock.mockReturnValueOnce(request.promise);
+    await dualStorageModule.dualStorage.checkHealth();
+    dualStorageModule.dualStorage.setActiveSessionId('session-normalized-before-pending');
+    const sendInteractionToBackend = (
+      dualStorageModule.dualStorage as unknown as {
+        sendInteractionToBackend(event: InteractionEvent, source: string): void;
+      }
+    ).sendInteractionToBackend.bind(dualStorageModule.dualStorage);
+
+    sendInteractionToBackend({
+      id: 'normalize-before-pending',
+      learnerId: 'learner-1',
+      sessionId: '',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-normalized-before-pending',
+    }, 'normalization regression');
+
+    expect(JSON.parse(localStorage.getItem('sql-adapt-pending-interactions') ?? '[]')).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'normalize-before-pending',
+          sessionId: 'session-normalized-before-pending',
+          event: expect.objectContaining({ sessionId: 'session-normalized-before-pending' }),
+        }),
+      ]),
+    );
+    expect(logInteractionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'session-normalized-before-pending' }),
+    );
+    request.resolve({ success: false, confirmed: false });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  it('does not send a critical textbook write unless its retry envelope persists', async () => {
+    await dualStorageModule.dualStorage.checkHealth();
+    const original = localStorage.setItem.bind(localStorage);
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'sql-adapt-offline-queue') {
+        throw new DOMException('textbook queue blocked', 'QuotaExceededError');
+      }
+      return original(key, value);
+    });
+
+    const write = await dualStorageModule.dualStorage.saveTextbookUnitCritical('learner-1', {
+      id: 'unit-proof-required',
+      type: 'hint',
+      conceptId: 'joins',
+      title: 'Proof required',
+      content: 'Durable before send',
+      prerequisites: [],
+      sourceInteractionIds: [],
+      addedTimestamp: 1_700_000_000_000,
+    });
+    setItem.mockRestore();
+
+    expect(write.status).toMatchObject({ backendConfirmed: false, pendingSync: false });
+    expect(write.status.error).toContain('retry');
+    expect(saveTextbookUnitMock).not.toHaveBeenCalled();
+  });
+
+  it('does not send a critical session write unless its retry envelope persists', async () => {
+    await dualStorageModule.dualStorage.checkHealth();
+    const original = localStorage.setItem.bind(localStorage);
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'sql-adapt-offline-queue') {
+        throw new DOMException('session queue blocked', 'QuotaExceededError');
+      }
+      return original(key, value);
+    });
+
+    const status = await dualStorageModule.dualStorage.ensureSessionPersisted(
+      'learner-1',
+      'session-proof-required',
+    );
+    setItem.mockRestore();
+
+    expect(status).toMatchObject({ backendConfirmed: false, pendingSync: false });
+    expect(status.error).toContain('retry');
+    expect(saveSessionMock).not.toHaveBeenCalled();
+  });
+
+  it('retains two noncritical retry envelopes created in the same millisecond', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-08-06T22:00:00.000Z'));
+      dualStorageModule.setActiveSyncPrincipal(null);
+      const unit = {
+        id: 'same-ms-unit',
+        type: 'hint' as const,
+        conceptId: 'joins',
+        title: 'Same millisecond',
+        content: 'Both retries are durable.',
+        prerequisites: [],
+        sourceInteractionIds: [],
+        addedTimestamp: Date.now(),
+      };
+
+      dualStorageModule.dualStorage.saveTextbookUnit('learner-same-ms', unit);
+      dualStorageModule.dualStorage.saveTextbookUnit('learner-same-ms', unit);
+
+      const retries = readQueue().filter((item) =>
+        item.type === 'textbookUnit' &&
+        (item.data as { unit?: { id?: string } } | undefined)?.unit?.id === unit.id,
+      );
+      expect(retries).toHaveLength(2);
+      expect(new Set(retries.map((item) => item.id)).size).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('reports a noncritical retry-envelope persistence failure', () => {
+    dualStorageModule.setActiveSyncPrincipal(null);
+    const original = localStorage.setItem.bind(localStorage);
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'sql-adapt-offline-queue') {
+        throw new DOMException('background queue blocked', 'QuotaExceededError');
+      }
+      return original(key, value);
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(() => dualStorageModule.dualStorage.saveTextbookUnit('learner-background-proof', {
+      id: 'background-proof-unit',
+      type: 'hint',
+      conceptId: 'joins',
+      title: 'Background proof',
+      content: 'Local copy remains available.',
+      prerequisites: [],
+      sourceInteractionIds: [],
+      addedTimestamp: 1_700_000_000_000,
+    })).not.toThrow();
+    setItem.mockRestore();
+
+    expect(consoleError).toHaveBeenCalledWith(
+      '[DualStorage] Textbook retry envelope could not be persisted.',
+    );
+    expect(saveTextbookUnitMock).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
+  it('keeps local writes durable but sends nothing while the principal is null', async () => {
+    dualStorageModule.setActiveSyncPrincipal(null);
+
+    const status = await dualStorageModule.dualStorage.saveInteractionCritical({
+      id: 'owner-null-event',
+      learnerId: 'learner-null-only',
+      sessionId: 'session-owner-null',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-owner-null',
+      successful: true,
+    });
+
+    expect(status).toMatchObject({ backendConfirmed: false, pendingSync: true });
+    expect(logInteractionMock).not.toHaveBeenCalled();
+    expect(logInteractionsBatchVerifiedMock).not.toHaveBeenCalled();
+    expect(checkBackendHealthMock).not.toHaveBeenCalled();
+    expect(dualStorageModule.dualStorage.getAllInteractions()).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'owner-null-event' })]),
+    );
+    const queued = readQueue().find((item) => item.id === 'owner-null-event');
+    expect(queued).toBeTruthy();
+    expect(Object.prototype.hasOwnProperty.call(queued ?? {}, 'syncOwnerId')).toBe(false);
+  });
+
+  it('processes and removes only the active owner when event ids collide', async () => {
+    checkBackendHealthMock.mockResolvedValue(false);
+
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    await dualStorageModule.dualStorage.saveInteractionCritical({
+      id: 'owner-collision-event',
+      learnerId: 'learner-shared',
+      sessionId: 'session-owner-A',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-A',
+      successful: true,
+    });
+
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-B', learnerId: 'learner-shared' });
+    await dualStorageModule.dualStorage.saveInteractionCritical({
+      id: 'owner-collision-event',
+      learnerId: 'learner-shared',
+      sessionId: 'session-owner-B',
+      timestamp: 1_700_000_001_000,
+      eventType: 'execution',
+      problemId: 'problem-B',
+      successful: false,
+    });
+
+    let collisionQueue = readQueue().filter((item) => item.id === 'owner-collision-event');
+    expect(collisionQueue.map((item) => item.syncOwnerId)).toEqual([ownerA, ownerB]);
+
+    checkBackendHealthMock.mockResolvedValue(true);
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    await dualStorageModule.dualStorage.processOfflineQueue();
+
+    expect(logInteractionsBatchVerifiedMock).toHaveBeenCalledTimes(1);
+    const sentEvents = logInteractionsBatchVerifiedMock.mock.calls[0][0] as Array<Record<string, unknown>>;
+    expect(sentEvents).toEqual([
+      expect.objectContaining({ id: 'owner-collision-event', problemId: 'problem-A' }),
+    ]);
+    expect(sentEvents[0]).not.toHaveProperty('syncOwnerId');
+
+    collisionQueue = readQueue().filter((item) => item.id === 'owner-collision-event');
+    expect(collisionQueue).toEqual([
+      expect.objectContaining({ syncOwnerId: ownerB }),
+    ]);
+  });
+
+  it('stops a queued write batch when the authenticated owner changes mid-flight', async () => {
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    checkBackendHealthMock.mockResolvedValue(false);
+    await dualStorageModule.dualStorage.checkHealth();
+
+    dualStorageModule.dualStorage.saveProfile(createBackendProfile({
+      id: 'owner-switch-profile-1',
+      name: 'Owner switch 1',
+    }));
+    dualStorageModule.dualStorage.saveProfile(createBackendProfile({
+      id: 'owner-switch-profile-2',
+      name: 'Owner switch 2',
+    }));
+
+    checkBackendHealthMock.mockResolvedValue(true);
+    saveProfileMock.mockImplementationOnce(async () => {
+      dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-B', learnerId: 'learner-shared' });
+      return true;
+    });
+
+    await dualStorageModule.dualStorage.processOfflineQueue();
+
+    expect(saveProfileMock).toHaveBeenCalledTimes(1);
+    expect(readQueue()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'profile',
+          syncOwnerId: ownerA,
+          data: expect.objectContaining({ id: 'owner-switch-profile-2' }),
+        }),
+      ]),
+    );
+  });
+
+  it('preserves local interaction collisions across owners during hydration', async () => {
+    const learnerId = 'learner-shared';
+    await dualStorageModule.dualStorage.checkHealth();
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId });
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'hydrate-owner-collision',
+      learnerId,
+      sessionId: 'session-hydrate-A',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-hydrate-A',
+      successful: true,
+    });
+    await vi.waitFor(() => {
+      const confirmed = JSON.parse(
+        localStorage.getItem('sql-adapt-pending-confirmed') ?? '[]',
+      ) as Array<{ id?: string }>;
+      expect(confirmed.filter((item) => item.id === 'hydrate-owner-collision')).toHaveLength(1);
+    });
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-B', learnerId });
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'hydrate-owner-collision',
+      learnerId,
+      sessionId: 'session-hydrate-B',
+      timestamp: 1_700_000_001_000,
+      eventType: 'execution',
+      problemId: 'problem-hydrate-B',
+      successful: false,
+    });
+    await vi.waitFor(() => {
+      const confirmed = JSON.parse(
+        localStorage.getItem('sql-adapt-pending-confirmed') ?? '[]',
+      ) as Array<{ id?: string }>;
+      expect(confirmed.filter((item) => item.id === 'hydrate-owner-collision')).toHaveLength(2);
+    });
+    getInteractionsMock.mockResolvedValueOnce({
+      events: [{
+        id: 'hydrate-owner-collision',
+        learnerId,
+        sessionId: 'session-hydrate-B',
+        timestamp: 1_700_000_001_000,
+        eventType: 'execution',
+        problemId: 'problem-hydrate-B',
+        successful: false,
+      }],
+      total: 1,
+    });
+
+    await dualStorageModule.dualStorage.hydrateLearner(learnerId, { force: true });
+    await vi.waitFor(() => expect(getInteractionsMock).toHaveBeenCalledWith(learnerId, { limit: 5000 }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const collisions = dualStorageModule.dualStorage
+      .getAllInteractions()
+      .filter((event) => event.id === 'hydrate-owner-collision');
+    expect(collisions).toHaveLength(2);
+    expect(collisions.map((event) => event.problemId)).toEqual([
+      'problem-hydrate-A',
+      'problem-hydrate-B',
+    ]);
+  });
+
+  it('stamps exact-self legacy ownership before sending and leaves other legacy learners local', async () => {
+    checkBackendHealthMock.mockResolvedValue(false);
+    dualStorageModule.setActiveSyncPrincipal(null);
+
+    await dualStorageModule.dualStorage.saveInteractionCritical({
+      id: 'legacy-exact-self',
+      learnerId: 'learner-shared',
+      sessionId: 'session-legacy-self',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-self',
+      error: 'self error',
+    });
+    await dualStorageModule.dualStorage.saveInteractionCritical({
+      id: 'legacy-selected-student',
+      learnerId: 'student-selected',
+      sessionId: 'session-selected-student',
+      timestamp: 1_700_000_001_000,
+      eventType: 'error',
+      problemId: 'problem-selected',
+      error: 'selected error',
+    });
+
+    checkBackendHealthMock.mockResolvedValue(true);
+    logInteractionsBatchVerifiedMock.mockImplementationOnce(async (events: unknown[]) => {
+      const persisted = readQueue().find((item) => item.id === 'legacy-exact-self');
+      expect(persisted?.syncOwnerId).toBe(ownerA);
+      const ids = events.map((event) => String((event as { id: string }).id));
+      return { confirmed: ids, failed: [] };
+    });
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    await dualStorageModule.dualStorage.processOfflineQueue();
+
+    expect(logInteractionsBatchVerifiedMock).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'legacy-exact-self' }),
+    ]);
+    expect(readQueue()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'legacy-selected-student' }),
+      ]),
+    );
+    const selected = readQueue().find((item) => item.id === 'legacy-selected-student');
+    expect(Object.prototype.hasOwnProperty.call(selected ?? {}, 'syncOwnerId')).toBe(false);
+  });
+
+  it('gates manual, keepalive, reconciliation, and pending session-end sends without a principal', async () => {
+    checkBackendHealthMock.mockResolvedValue(false);
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    await dualStorageModule.dualStorage.saveInteractionCritical({
+      id: 'owner-gated-event',
+      learnerId: 'learner-shared',
+      sessionId: 'session-owner-gated',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-gated',
+      successful: true,
+    });
+    dualStorageModule.dualStorage.queueSessionEnd({
+      id: 'owner-gated-session-end',
+      learnerId: 'learner-shared',
+      sessionId: 'session-owner-gated',
+      timestamp: 1_700_000_001_000,
+      eventType: 'session_end',
+      problemId: 'problem-gated',
+    });
+
+    checkBackendHealthMock.mockResolvedValue(true);
+    checkBackendHealthMock.mockClear();
+    dualStorageModule.setActiveSyncPrincipal(null);
+    await dualStorageModule.dualStorage.processOfflineQueue();
+    await dualStorageModule.dualStorage.flushWithKeepalive('session-owner-gated');
+    await dualStorageModule.dualStorage.flushPendingSessionEnds();
+    await dualStorageModule.dualStorage.ensureSessionInteractionsPersisted(
+      'learner-shared',
+      'session-owner-gated',
+    );
+
+    expect(checkBackendHealthMock).not.toHaveBeenCalled();
+    expect(logInteractionMock).not.toHaveBeenCalled();
+    expect(logInteractionsBatchMock).not.toHaveBeenCalled();
+    expect(logInteractionsBatchVerifiedMock).not.toHaveBeenCalled();
+    expect(logInteractionsBatchKeepaliveMock).not.toHaveBeenCalled();
+    expect(getInteractionsMock).not.toHaveBeenCalled();
+    expect(localStorage.getItem('sql-adapt-pending-session-ends')).toContain('owner-gated-session-end');
+  });
+
+  it('tags newly created instructor-selected records to the instructor owner', async () => {
+    dualStorageModule.setActiveSyncPrincipal({
+      accountId: 'instructor-account',
+      learnerId: 'instructor-learner',
+    });
+
+    await dualStorageModule.dualStorage.saveInteractionCritical({
+      id: 'instructor-selected-new',
+      learnerId: 'selected-student',
+      sessionId: 'session-selected-new',
+      timestamp: 1_700_000_000_000,
+      eventType: 'profile_adjusted',
+      problemId: 'problem-selected',
+    });
+
+    expect(logInteractionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'instructor-selected-new', learnerId: 'selected-student' }),
+    );
+    expect(logInteractionMock.mock.calls[0][0]).not.toHaveProperty('syncOwnerId');
+    const confirmed = JSON.parse(localStorage.getItem('sql-adapt-pending-confirmed') ?? '[]') as Array<Record<string, unknown>>;
+    expect(confirmed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'instructor-selected-new',
+          syncOwnerId: 'v1:["instructor-account","instructor-learner"]',
+        }),
+      ]),
+    );
+  });
+
+  it('keeps profile, textbook, and session writes local and queued while unauthenticated', async () => {
+    dualStorageModule.setActiveSyncPrincipal(null);
+    const profile = createBackendProfile({ id: 'owner-null-profile' });
+    const unit = {
+      id: 'owner-null-unit',
+      type: 'hint' as const,
+      conceptId: 'select-basic',
+      conceptIds: ['select-basic'],
+      title: 'Owner-safe unit',
+      content: 'Local only',
+      contentFormat: 'markdown' as const,
+      sourceInteractionIds: [],
+      status: 'primary' as const,
+      prerequisites: [],
+      addedTimestamp: 1_700_000_000_000,
+    };
+
+    dualStorageModule.dualStorage.saveProfile(profile);
+    dualStorageModule.dualStorage.updateProfileFromEvent('owner-null-profile', {
+      id: 'owner-null-profile-event',
+      learnerId: 'owner-null-profile',
+      sessionId: 'owner-null-profile-session',
+      timestamp: 1_700_000_000_100,
+      eventType: 'error',
+      problemId: 'problem-owner-null-profile',
+      errorSubtypeId: 'syntax',
+    });
+    dualStorageModule.dualStorage.saveTextbookUnit('owner-null-profile', unit);
+    dualStorageModule.dualStorage.saveTextbookUnitV2('owner-null-profile', {
+      conceptIds: ['joins'],
+      type: 'hint',
+      title: 'Owner-safe V2 unit',
+      content: 'Local V2 only',
+      sourceInteractionIds: [],
+    });
+    const criticalTextbook = await dualStorageModule.dualStorage.saveTextbookUnitCritical(
+      'owner-null-profile',
+      { ...unit, id: 'owner-null-unit-critical' },
+    );
+    dualStorageModule.dualStorage.startSession('owner-null-profile');
+    const sessionStatus = await dualStorageModule.dualStorage.ensureSessionPersisted(
+      'owner-null-profile',
+      'owner-null-session',
+    );
+
+    expect(sessionStatus).toMatchObject({ backendConfirmed: false, pendingSync: true });
+    expect(criticalTextbook.status).toMatchObject({ backendConfirmed: false, pendingSync: true });
+    expect(checkBackendHealthMock).not.toHaveBeenCalled();
+    expect(saveProfileMock).not.toHaveBeenCalled();
+    expect(saveTextbookUnitMock).not.toHaveBeenCalled();
+    expect(saveSessionMock).not.toHaveBeenCalled();
+    expect(readQueue()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: 'profile' }),
+        expect.objectContaining({
+          type: 'profile',
+          data: expect.objectContaining({
+            interactionCount: 1,
+            conceptsCovered: [],
+            errorHistory: [['syntax', 1]],
+          }),
+        }),
+        expect.objectContaining({ type: 'textbookUnit' }),
+        expect.objectContaining({
+          type: 'textbookUnit',
+          data: expect.objectContaining({
+            unit: expect.objectContaining({ title: 'Owner-safe V2 unit' }),
+          }),
+        }),
+        expect.objectContaining({ type: 'session' }),
+      ]),
+    );
+    for (const item of readQueue().filter((entry) =>
+      ['profile', 'textbookUnit', 'session'].includes(String(entry.type)),
+    )) {
+      expect(Object.prototype.hasOwnProperty.call(item, 'syncOwnerId')).toBe(false);
+    }
+  });
+
+  it('blocks explicit learner and instructor hydration while no sync principal is active', async () => {
+    dualStorageModule.setActiveSyncPrincipal(null);
+
+    await expect(dualStorageModule.dualStorage.hydrateLearner('learner-no-owner', { force: true })).resolves.toBe(false);
+    await expect(dualStorageModule.dualStorage.getBackendSessionSnapshot('learner-no-owner')).resolves.toBeNull();
+    await expect(dualStorageModule.dualStorage.hydrateInstructorDashboard()).resolves.toMatchObject({
+      ok: false,
+      error: 'auth',
+    });
+
+    expect(checkBackendHealthMock).not.toHaveBeenCalled();
+    expect(getProfileMock).not.toHaveBeenCalled();
+    expect(getSessionMock).not.toHaveBeenCalled();
+    expect(getInteractionsMock).not.toHaveBeenCalled();
+  });
+
+  it('does not send or remove a queued session end when the owner changes after reconciliation', async () => {
+    const event: InteractionEvent = {
+      id: 'session-end-owner-race',
+      learnerId: 'learner-shared',
+      sessionId: 'session-owner-race',
+      timestamp: 1_700_000_000_000,
+      eventType: 'session_end',
+      problemId: 'problem-owner-race',
+    };
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    dualStorageModule.dualStorage.queueSessionEnd(event);
+    const pending = JSON.parse(
+      localStorage.getItem('sql-adapt-pending-session-ends') ?? '[]',
+    ) as Array<Record<string, unknown>>;
+    const reconciliation = vi
+      .spyOn(dualStorageModule.dualStorage, 'ensureSessionInteractionsPersisted')
+      .mockResolvedValue({ backendConfirmed: true, pendingSync: false, missingInteractionIds: [] });
+    const health = deferred<boolean>();
+    checkBackendHealthMock.mockReturnValueOnce(health.promise);
+
+    const write = (
+      dualStorageModule.dualStorage as unknown as {
+        writeQueuedSessionEnd(item: Record<string, unknown>): Promise<{ backendConfirmed: boolean; pendingSync: boolean }>;
+      }
+    ).writeQueuedSessionEnd(pending[0]);
+    await vi.waitFor(() => expect(checkBackendHealthMock).toHaveBeenCalled());
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-B', learnerId: 'learner-shared' });
+    health.resolve(true);
+
+    await expect(write).resolves.toMatchObject({ backendConfirmed: false, pendingSync: true });
+    expect(logInteractionMock).not.toHaveBeenCalled();
+    expect(localStorage.getItem('sql-adapt-pending-session-ends')).toContain('session-end-owner-race');
+    reconciliation.mockRestore();
+  });
+
+  it('does not batch or confirm reconciliation records after an owner switch', async () => {
+    const learnerId = 'learner-shared';
+    const sessionId = 'session-reconcile-race';
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId });
+    await dualStorageModule.dualStorage.checkHealth();
+    logInteractionMock.mockImplementationOnce(() => new Promise(() => undefined));
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'reconcile-owner-race',
+      learnerId,
+      sessionId,
+      timestamp: 1_700_000_000_000,
+      eventType: 'hint_view',
+      problemId: 'problem-reconcile-race',
+      hintId: 'hint-race',
+    });
+    const snapshot = deferred<{ events: unknown[]; total: number }>();
+    getInteractionsMock.mockReturnValueOnce(snapshot.promise);
+
+    const reconciliation = dualStorageModule.dualStorage.ensureSessionInteractionsPersisted(learnerId, sessionId);
+    await vi.waitFor(() => expect(getInteractionsMock).toHaveBeenCalledWith(learnerId, { sessionId, limit: 5000 }));
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-B', learnerId });
+    snapshot.resolve({ events: [], total: 0 });
+
+    await expect(reconciliation).resolves.toMatchObject({ backendConfirmed: false, pendingSync: true });
+    expect(logInteractionsBatchMock).not.toHaveBeenCalled();
+    expect(localStorage.getItem('sql-adapt-pending-interactions')).toContain('reconcile-owner-race');
+  });
+
+  it('retains pending verification records when the owner switches during keepalive', async () => {
+    const learnerId = 'learner-shared';
+    const sessionId = 'session-keepalive-race';
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId });
+    checkBackendHealthMock.mockResolvedValueOnce(false);
+    await dualStorageModule.dualStorage.saveInteractionCritical({
+      id: 'keepalive-owner-race',
+      learnerId,
+      sessionId,
+      timestamp: 1_700_000_000_000,
+      eventType: 'hint_view',
+      problemId: 'problem-keepalive-race',
+      hintId: 'hint-race',
+    });
+    const keepalive = deferred<{ success: boolean; confirmedIds?: string[] }>();
+    logInteractionsBatchKeepaliveMock.mockReturnValueOnce(keepalive.promise);
+
+    const flush = dualStorageModule.dualStorage.flushPendingWithVerification(sessionId);
+    await vi.waitFor(() => expect(logInteractionsBatchKeepaliveMock).toHaveBeenCalledTimes(1));
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-B', learnerId });
+    keepalive.resolve({ success: true, confirmedIds: ['keepalive-owner-race'] });
+
+    await expect(flush).resolves.toMatchObject({ error: expect.stringContaining('account') });
+    expect(logInteractionsBatchKeepaliveMock).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem('sql-adapt-pending-interactions')).toContain('keepalive-owner-race');
+  });
+
+  it('does not accept a stale interaction confirmation after an A-to-B-to-A principal cycle', async () => {
+    const learnerId = 'learner-shared';
+    const request = deferred<{ success: boolean; confirmed?: boolean }>();
+    logInteractionMock.mockReturnValueOnce(request.promise);
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId });
+
+    const write = dualStorageModule.dualStorage.saveInteractionCritical({
+      id: 'interaction-aba-race',
+      learnerId,
+      sessionId: 'session-interaction-aba',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-interaction-aba',
+      error: 'stale confirmation',
+    });
+    await vi.waitFor(() => expect(logInteractionMock).toHaveBeenCalledTimes(1));
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-B', learnerId });
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId });
+    request.resolve({ success: true, confirmed: true });
+
+    await expect(write).resolves.toMatchObject({
+      backendConfirmed: false,
+      pendingSync: true,
+      error: expect.stringContaining('account changed'),
+    });
+    expect(localStorage.getItem('sql-adapt-pending-interactions')).toContain('interaction-aba-race');
+    expect(localStorage.getItem('sql-adapt-pending-confirmed') ?? '').not.toContain('interaction-aba-race');
+  });
+
+  it('does not accept a stale textbook confirmation after an A-to-B-to-A principal cycle', async () => {
+    const learnerId = 'learner-shared';
+    const request = deferred<boolean>();
+    saveTextbookUnitMock.mockReturnValueOnce(request.promise);
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId });
+
+    const write = dualStorageModule.dualStorage.saveTextbookUnitCritical(learnerId, {
+      id: 'textbook-aba-race',
+      type: 'hint',
+      conceptId: 'joins',
+      conceptIds: ['joins'],
+      title: 'Stale textbook confirmation',
+      content: 'This response belongs to the earlier authentication epoch.',
+      contentFormat: 'markdown',
+      sourceInteractionIds: [],
+      status: 'primary',
+      prerequisites: [],
+      addedTimestamp: 1_700_000_000_000,
+    });
+    await vi.waitFor(() => expect(saveTextbookUnitMock).toHaveBeenCalledTimes(1));
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-B', learnerId });
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId });
+    request.resolve(true);
+
+    await expect(write).resolves.toMatchObject({
+      status: {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: expect.stringContaining('account changed'),
+      },
+    });
+    expect(readQueue()).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'textbookUnit',
+        syncOwnerId: ownerA,
+        data: expect.objectContaining({ learnerId }),
+      }),
+    ]));
+  });
+
+  it('does not accept a stale session confirmation after an A-to-B-to-A principal cycle', async () => {
+    const learnerId = 'learner-shared';
+    const request = deferred<boolean>();
+    saveSessionMock.mockReturnValueOnce(request.promise);
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId });
+
+    const write = dualStorageModule.dualStorage.ensureSessionPersisted(
+      learnerId,
+      'session-aba-race',
+    );
+    await vi.waitFor(() => expect(saveSessionMock).toHaveBeenCalledTimes(1));
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-B', learnerId });
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId });
+    request.resolve(true);
+
+    await expect(write).resolves.toMatchObject({
+      backendConfirmed: false,
+      pendingSync: true,
+      error: expect.stringContaining('account changed'),
+    });
+    expect(readQueue()).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'session',
+        syncOwnerId: ownerA,
+        data: expect.objectContaining({ learnerId }),
+      }),
+    ]));
+  });
+
+  it('discards a backend session snapshot after the owner changes in flight', async () => {
+    const session = deferred<Record<string, unknown> | null>();
+    getSessionMock.mockReturnValueOnce(session.promise);
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+
+    const snapshot = dualStorageModule.dualStorage.getBackendSessionSnapshot('learner-shared');
+    await vi.waitFor(() => expect(getSessionMock).toHaveBeenCalledWith('learner-shared'));
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-B', learnerId: 'learner-shared' });
+    session.resolve({ sessionId: 'session-owner-A' });
+
+    await expect(snapshot).resolves.toBeNull();
+  });
+
+  it('does not merge textbook callback data after the owner changes in flight', async () => {
+    const textbook = deferred<unknown[]>();
+    getTextbookMock.mockReturnValueOnce(textbook.promise);
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    await dualStorageModule.dualStorage.checkHealth();
+
+    dualStorageModule.dualStorage.getTextbook('learner-shared');
+    await vi.waitFor(() => expect(getTextbookMock).toHaveBeenCalledWith('learner-shared'));
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-B', learnerId: 'learner-shared' });
+    textbook.resolve([{
+      id: 'unit-owner-A',
+      type: 'hint',
+      conceptId: 'joins',
+      conceptIds: ['joins'],
+      title: 'Owner A unit',
+      content: 'Private owner A content',
+      contentFormat: 'markdown',
+      sourceInteractionIds: [],
+      status: 'primary',
+      prerequisites: [],
+      addedTimestamp: 1_700_000_000_000,
+    }]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(localStorage.getItem('sql-learning-textbook') ?? '').not.toContain('unit-owner-A');
+  });
+
+  it('does not merge instructor dashboard results after the owner changes in flight', async () => {
+    const profiles = deferred<LearnerProfile[]>();
+    getAllProfilesMock.mockReturnValueOnce(profiles.promise);
+    getInstructorOverviewMock.mockResolvedValueOnce({ sections: [{}] });
+    getInstructorLearnersMock.mockResolvedValueOnce([{}]);
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'instructor-A' });
+
+    const hydration = dualStorageModule.dualStorage.hydrateInstructorDashboard();
+    await vi.waitFor(() => expect(getAllProfilesMock).toHaveBeenCalled());
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-B', learnerId: 'instructor-B' });
+    profiles.resolve([createBackendProfile({ id: 'student-owner-A', name: 'Owner A student' })]);
+
+    await expect(hydration).resolves.toMatchObject({ ok: false, error: 'auth' });
+    expect(dualStorageModule.dualStorage.getProfile('student-owner-A')).toBeNull();
+  });
+
+  it('shares one durable pending store so profile confirmation cannot erase another owner pending event', async () => {
+    checkBackendHealthMock.mockResolvedValue(false);
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-B', learnerId: 'learner-shared' });
+    await dualStorageModule.dualStorage.saveInteractionCritical({
+      id: 'pending-survives-profile-confirm',
+      learnerId: 'learner-shared',
+      sessionId: 'session-pending-B',
+      timestamp: 1_700_000_000_000,
+      eventType: 'hint_view',
+      problemId: 'problem-pending-B',
+      hintId: 'hint-B',
+    });
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    dualStorageModule.dualStorage.saveProfile(createBackendProfile({
+      id: 'profile-owner-A',
+      name: 'Owner A profile',
+    }));
+
+    checkBackendHealthMock.mockResolvedValue(true);
+    await dualStorageModule.dualStorage.processOfflineQueue();
+
+    expect(localStorage.getItem('sql-adapt-pending-interactions')).toContain('pending-survives-profile-confirm');
+  });
+
+  it('does not send a claimed legacy offline item when its owner stamp cannot persist', async () => {
+    dualStorageModule.setActiveSyncPrincipal(null);
+    checkBackendHealthMock.mockResolvedValueOnce(false);
+    await dualStorageModule.dualStorage.saveInteractionCritical({
+      id: 'queue-claim-persist-failure',
+      learnerId: 'learner-shared',
+      sessionId: 'session-queue-claim',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-queue-claim',
+      error: 'legacy queue',
+    });
+    const original = localStorage.setItem.bind(localStorage);
+    let blockedWrites = 0;
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'sql-adapt-offline-queue') {
+        blockedWrites += 1;
+        throw new DOMException('queue write blocked', 'QuotaExceededError');
+      }
+      return original(key, value);
+    });
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const offlineQueue = (
+      dualStorageModule.dualStorage as unknown as {
+        offlineQueue: { getPending(): unknown[] };
+      }
+    ).offlineQueue;
+    let eligible: unknown[] | undefined;
+    let error: unknown;
+    try {
+      eligible = offlineQueue.getPending();
+    } catch (caught) {
+      error = caught;
+    } finally {
+      setItem.mockRestore();
+    }
+
+    expect(error).toBeUndefined();
+    expect(blockedWrites).toBeGreaterThan(0);
+    expect(eligible).toEqual([]);
+    expect(logInteractionsBatchVerifiedMock).not.toHaveBeenCalled();
+    const queue = JSON.parse(localStorage.getItem('sql-adapt-offline-queue') ?? '[]') as Array<Record<string, unknown>>;
+    const item = queue.find((entry) => entry.id === 'queue-claim-persist-failure');
+    expect(Object.prototype.hasOwnProperty.call(item ?? {}, 'syncOwnerId')).toBe(false);
+  });
+
+  it('does not expose a claimed legacy pending interaction when its owner stamp cannot persist', async () => {
+    dualStorageModule.setActiveSyncPrincipal(null);
+    checkBackendHealthMock.mockResolvedValueOnce(false);
+    await dualStorageModule.dualStorage.saveInteractionCritical({
+      id: 'pending-claim-persist-failure',
+      learnerId: 'learner-shared',
+      sessionId: 'session-pending-claim',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-pending-claim',
+      error: 'legacy pending',
+    });
+    const original = localStorage.setItem.bind(localStorage);
+    let blockedWrites = 0;
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'sql-adapt-pending-interactions') {
+        blockedWrites += 1;
+        throw new DOMException('pending write blocked', 'QuotaExceededError');
+      }
+      return original(key, value);
+    });
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+
+    let result: Awaited<ReturnType<typeof dualStorageModule.dualStorage.flushPendingWithVerification>> | undefined;
+    let error: unknown;
+    try {
+      result = await dualStorageModule.dualStorage.flushPendingWithVerification('session-pending-claim');
+    } catch (caught) {
+      error = caught;
+    } finally {
+      setItem.mockRestore();
+    }
+
+    expect(error).toBeUndefined();
+    expect(blockedWrites).toBeGreaterThan(0);
+    expect(result).toMatchObject({ error: expect.any(String) });
+    expect(logInteractionsBatchKeepaliveMock).not.toHaveBeenCalled();
+    const pending = JSON.parse(localStorage.getItem('sql-adapt-pending-interactions') ?? '[]') as Array<Record<string, unknown>>;
+    const item = pending.find((entry) => entry.id === 'pending-claim-persist-failure');
+    expect(Object.prototype.hasOwnProperty.call(item ?? {}, 'syncOwnerId')).toBe(false);
+  });
+
+  it('does not send a claimed legacy session end when its owner stamp cannot persist', async () => {
+    dualStorageModule.setActiveSyncPrincipal(null);
+    dualStorageModule.dualStorage.queueSessionEnd({
+      id: 'session-claim-persist-failure',
+      learnerId: 'learner-shared',
+      sessionId: 'session-claim-persist-failure',
+      timestamp: 1_700_000_000_000,
+      eventType: 'session_end',
+      problemId: 'problem-session-claim',
+    });
+    const original = localStorage.setItem.bind(localStorage);
+    let blockedWrites = 0;
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'sql-adapt-pending-session-ends') {
+        blockedWrites += 1;
+        throw new DOMException('session end write blocked', 'QuotaExceededError');
+      }
+      return original(key, value);
+    });
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+
+    let result: Awaited<ReturnType<typeof dualStorageModule.dualStorage.flushPendingSessionEnds>> | undefined;
+    let error: unknown;
+    try {
+      result = await dualStorageModule.dualStorage.flushPendingSessionEnds();
+    } catch (caught) {
+      error = caught;
+    } finally {
+      setItem.mockRestore();
+    }
+
+    expect(error).toBeUndefined();
+    expect(blockedWrites).toBeGreaterThan(0);
+    expect(result).toMatchObject({ backendConfirmed: false, pendingSync: true });
+    expect(logInteractionMock).not.toHaveBeenCalled();
+    const pending = JSON.parse(localStorage.getItem('sql-adapt-pending-session-ends') ?? '[]') as Array<Record<string, unknown>>;
+    expect(Object.prototype.hasOwnProperty.call(pending[0] ?? {}, 'syncOwnerId')).toBe(false);
+  });
+
+  it('keeps absent and malformed same-id pending envelopes distinct across reload and persistence', () => {
+    localStorage.setItem('sql-adapt-pending-interactions', JSON.stringify([
+      {
+        id: 'legacy-malformed-collision',
+        event: {
+          id: 'legacy-malformed-collision',
+          learnerId: 'learner-shared',
+          sessionId: 'session-legacy',
+          timestamp: 1_700_000_000_000,
+          eventType: 'error',
+          problemId: 'problem-legacy',
+        },
+        status: 'backend_pending',
+        timestamp: 1_700_000_000_000,
+        retryCount: 0,
+        sessionId: 'session-legacy',
+        eventType: 'error',
+      },
+      {
+        id: 'legacy-malformed-collision',
+        event: {
+          id: 'legacy-malformed-collision',
+          learnerId: 'learner-shared',
+          sessionId: 'session-malformed',
+          timestamp: 1_700_000_001_000,
+          eventType: 'error',
+          problemId: 'problem-malformed',
+        },
+        status: 'backend_pending',
+        timestamp: 1_700_000_001_000,
+        retryCount: 0,
+        sessionId: 'session-malformed',
+        eventType: 'error',
+        syncOwnerId: { malformed: true },
+      },
+    ]));
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const PendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: { constructor: new () => {
+        getAllPending(): Array<{ event: InteractionEvent }>;
+        add(event: InteractionEvent): void;
+      } } }
+    ).pendingStore.constructor;
+    const reloaded = new PendingStore();
+
+    expect(reloaded.getAllPending().map((entry) => entry.event.sessionId)).toEqual(['session-legacy']);
+    reloaded.add({
+      id: 'persist-trigger',
+      learnerId: 'learner-shared',
+      sessionId: 'session-trigger',
+      timestamp: 1_700_000_002_000,
+      eventType: 'error',
+      problemId: 'problem-trigger',
+    });
+    const stored = JSON.parse(localStorage.getItem('sql-adapt-pending-interactions') ?? '[]') as Array<{
+      id: string;
+      syncOwnerId?: unknown;
+    }>;
+    expect(stored.filter((entry) => entry.id === 'legacy-malformed-collision')).toHaveLength(2);
+    expect(stored.some((entry) => Object.prototype.hasOwnProperty.call(entry, 'syncOwnerId'))).toBe(true);
+    expect(stored.some((entry) => !Object.prototype.hasOwnProperty.call(entry, 'syncOwnerId'))).toBe(false);
+  });
+
+  it('persists the complete staged collection before exposing a legacy claim over 100 records', () => {
+    const target = {
+      id: 'legacy-complete-claim',
+      event: {
+        id: 'legacy-complete-claim',
+        learnerId: 'learner-shared',
+        sessionId: 'session-complete-claim',
+        timestamp: 1_700_000_000_000,
+        eventType: 'error',
+        problemId: 'problem-complete-claim',
+      },
+      status: 'backend_pending',
+      timestamp: 1_700_000_000_000,
+      retryCount: 0,
+      sessionId: 'session-complete-claim',
+      eventType: 'error',
+    };
+    const retained = Array.from({ length: 104 }, (_, index) => ({
+      id: `other-owner-${index}`,
+      event: {
+        id: `other-owner-${index}`,
+        learnerId: 'learner-shared',
+        sessionId: `session-other-${index}`,
+        timestamp: 1_700_000_001_000 + index,
+        eventType: 'error',
+        problemId: `problem-other-${index}`,
+      },
+      status: 'backend_pending',
+      timestamp: 1_700_000_001_000 + index,
+      retryCount: 0,
+      sessionId: `session-other-${index}`,
+      eventType: 'error',
+      syncOwnerId: `v1:["other-${index}","learner-shared"]`,
+    }));
+    localStorage.setItem('sql-adapt-pending-interactions', JSON.stringify([target, ...retained]));
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const PendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: { constructor: new () => {
+        getAllPending(): Array<{ id: string; syncOwnerId?: string }>;
+      } } }
+    ).pendingStore.constructor;
+    const store = new PendingStore();
+
+    expect(store.getAllPending()).toEqual([
+      expect.objectContaining({ id: target.id, syncOwnerId: ownerA }),
+    ]);
+    const persisted = JSON.parse(localStorage.getItem('sql-adapt-pending-interactions') ?? '[]') as Array<{
+      id: string;
+      syncOwnerId?: string;
+    }>;
+    expect(persisted).toHaveLength(105);
+    expect(new Set(persisted.map((item) => item.id)).size).toBe(105);
+    expect(persisted.find((item) => item.id === target.id)?.syncOwnerId).toBe(ownerA);
+  });
+
+  it.each([
+    ['missing', undefined],
+    ['different', 'different-event-fingerprint'],
+  ])('fails closed when a %s confirmed fingerprint conflicts with a legacy claim', (_label, eventFingerprint) => {
+    const rawPending = JSON.stringify([{
+      id: 'confirmed-claim-conflict',
+      event: {
+        id: 'confirmed-claim-conflict',
+        learnerId: 'learner-shared',
+        sessionId: 'session-legacy-conflict',
+        timestamp: 1_700_000_000_000,
+        eventType: 'error',
+        problemId: 'problem-legacy-conflict',
+      },
+      status: 'backend_pending',
+      timestamp: 1_700_000_000_000,
+      retryCount: 0,
+      sessionId: 'session-legacy-conflict',
+      eventType: 'error',
+    }]);
+    localStorage.setItem('sql-adapt-pending-interactions', rawPending);
+    localStorage.setItem('sql-adapt-pending-confirmed', JSON.stringify([{
+      id: 'confirmed-claim-conflict',
+      confirmedAt: 1_700_000_100_000,
+      syncOwnerId: ownerA,
+      ...(eventFingerprint ? { eventFingerprint } : {}),
+    }]));
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const PendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: { constructor: new () => {
+        getAllPending(): unknown[];
+        didLastClaimPersistenceFail(): boolean;
+      } } }
+    ).pendingStore.constructor;
+    const store = new PendingStore();
+
+    expect(store.getAllPending()).toEqual([]);
+    expect(store.didLastClaimPersistenceFail()).toBe(true);
+    expect(localStorage.getItem('sql-adapt-pending-interactions')).toBe(rawPending);
+  });
+
+  it('coordinates an exact legacy queue and pending twin so it is confirmed only once', () => {
+    const event = {
+      id: 'legacy-exact-twin',
+      learnerId: 'learner-shared',
+      sessionId: 'session-exact-twin',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-exact-twin',
+    } satisfies InteractionEvent;
+    localStorage.setItem('sql-adapt-pending-confirmed', '[]');
+    localStorage.setItem('sql-adapt-pending-interactions', JSON.stringify([{
+      id: event.id,
+      event,
+      status: 'backend_pending',
+      timestamp: event.timestamp,
+      retryCount: 0,
+      sessionId: event.sessionId,
+      eventType: event.eventType,
+    }]));
+    localStorage.setItem('sql-adapt-offline-queue', JSON.stringify([{
+      id: event.id,
+      type: 'interaction',
+      data: event,
+      retries: 0,
+      timestamp: event.timestamp,
+      status: 'queued_locally',
+      errorCount: 0,
+    }]));
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const PendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: { constructor: new () => object } }
+    ).pendingStore.constructor;
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (store: object) => {
+        getPending(): Array<{ id: string; syncOwnerId?: string }>;
+        removeBatch(ids: string[], syncOwnerId?: string): void;
+      } } }
+    ).offlineQueue.constructor;
+    const pendingStore = new PendingStore();
+    const queue = new QueueManager(pendingStore);
+
+    expect(queue.getPending()).toEqual([
+      expect.objectContaining({ id: event.id, syncOwnerId: ownerA }),
+    ]);
+    expect(JSON.parse(localStorage.getItem('sql-adapt-pending-interactions') ?? '[]')).toEqual([
+      expect.objectContaining({ id: event.id, syncOwnerId: ownerA }),
+    ]);
+    expect(JSON.parse(localStorage.getItem('sql-adapt-offline-queue') ?? '[]')).toEqual([
+      expect.objectContaining({ id: event.id, syncOwnerId: ownerA }),
+    ]);
+
+    queue.removeBatch([event.id], ownerA);
+
+    expect(JSON.parse(localStorage.getItem('sql-adapt-pending-interactions') ?? '[]')).toEqual([]);
+    const confirmed = JSON.parse(localStorage.getItem('sql-adapt-pending-confirmed') ?? '[]') as Array<{
+      eventFingerprint?: string;
+    }>;
+    expect(confirmed[0]?.eventFingerprint).toEqual(expect.any(String));
+    expect(queue.getPending()).toEqual([]);
+  });
+
+  it('retains pending and queue sources when confirmed proof cannot persist', () => {
+    const event = {
+      id: 'confirmation-proof-failure',
+      learnerId: 'learner-shared',
+      sessionId: 'session-confirmation-proof-failure',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-confirmation-proof-failure',
+    } satisfies InteractionEvent;
+    const rawPending = JSON.stringify([{
+      id: event.id,
+      event,
+      status: 'backend_pending',
+      timestamp: event.timestamp,
+      retryCount: 0,
+      sessionId: event.sessionId,
+      eventType: event.eventType,
+      syncOwnerId: ownerA,
+    }]);
+    const rawQueue = JSON.stringify([{
+      id: event.id,
+      type: 'interaction',
+      data: event,
+      retries: 0,
+      timestamp: event.timestamp,
+      status: 'queued_locally',
+      errorCount: 0,
+      syncOwnerId: ownerA,
+    }]);
+    localStorage.setItem('sql-adapt-pending-confirmed', '[]');
+    localStorage.setItem('sql-adapt-pending-interactions', rawPending);
+    localStorage.setItem('sql-adapt-offline-queue', rawQueue);
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const PendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: { constructor: new () => object } }
+    ).pendingStore.constructor;
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (store: object) => {
+        removeBatch(ids: string[], syncOwnerId?: string): void;
+      } } }
+    ).offlineQueue.constructor;
+    const queue = new QueueManager(new PendingStore());
+    const original = localStorage.setItem.bind(localStorage);
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'sql-adapt-pending-confirmed') {
+        throw new DOMException('confirmed proof blocked', 'QuotaExceededError');
+      }
+      return original(key, value);
+    });
+
+    queue.removeBatch([event.id], ownerA);
+    setItem.mockRestore();
+
+    expect(localStorage.getItem('sql-adapt-pending-confirmed')).toBe('[]');
+    expect(localStorage.getItem('sql-adapt-pending-interactions')).toBe(rawPending);
+    expect(localStorage.getItem('sql-adapt-offline-queue')).toBe(rawQueue);
+  });
+
+  it('persists a generic payload proof before removing a noninteraction queue item', () => {
+    const profile = {
+      id: 'learner-shared',
+      name: 'Queued profile',
+      conceptsCovered: [],
+      conceptCoverageEvidence: [],
+      errorHistory: [],
+      solvedProblemIds: [],
+      interactionCount: 0,
+      currentStrategy: 'adaptive-medium',
+      preferences: { escalationThreshold: 3, aggregationDelay: 5000 },
+    };
+    const rawQueue = JSON.stringify([{
+      id: 'generic-profile-proof',
+      type: 'profile',
+      data: profile,
+      retries: 0,
+      timestamp: 1_700_000_000_000,
+      status: 'queued_locally',
+      errorCount: 0,
+      syncOwnerId: ownerA,
+    }]);
+    localStorage.setItem('sql-adapt-pending-confirmed', '[null]');
+    localStorage.setItem('sql-adapt-pending-interactions', '[]');
+    localStorage.setItem('sql-adapt-offline-queue', rawQueue);
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const PendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: { constructor: new () => object } }
+    ).pendingStore.constructor;
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (store: object) => {
+        getPending(): unknown[];
+        remove(id: string, syncOwnerId?: string): void;
+      } } }
+    ).offlineQueue.constructor;
+    const queue = new QueueManager(new PendingStore());
+    const original = localStorage.setItem.bind(localStorage);
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'sql-adapt-offline-queue') {
+        throw new DOMException('queue removal blocked', 'QuotaExceededError');
+      }
+      return original(key, value);
+    });
+
+    queue.remove('generic-profile-proof', ownerA);
+    setItem.mockRestore();
+
+    expect(localStorage.getItem('sql-adapt-offline-queue')).toBe(rawQueue);
+    expect(queue.getPending()).toEqual([]);
+    expect(JSON.parse(localStorage.getItem('sql-adapt-pending-confirmed') ?? '[]')).toEqual([
+      null,
+      expect.objectContaining({
+        id: 'generic-profile-proof',
+        syncOwnerId: ownerA,
+        payloadFingerprint: expect.any(String),
+      }),
+    ]);
+  });
+
+  it('blocks a queue twin behind a malformed same-owner confirmed collision', () => {
+    const event = {
+      id: 'malformed-confirmed-owner-collision',
+      learnerId: 'learner-shared',
+      sessionId: 'session-malformed-confirmed-owner-collision',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-malformed-confirmed-owner-collision',
+    } satisfies InteractionEvent;
+    const rawConfirmed = JSON.stringify([{
+      id: event.id,
+      confirmedAt: 'invalid',
+      syncOwnerId: ownerA,
+      eventFingerprint: 'unknown',
+    }]);
+    const rawQueue = JSON.stringify([{
+      id: event.id,
+      type: 'interaction',
+      data: event,
+      retries: 0,
+      timestamp: event.timestamp,
+      status: 'queued_locally',
+      errorCount: 0,
+      syncOwnerId: ownerA,
+    }]);
+    localStorage.setItem('sql-adapt-pending-confirmed', rawConfirmed);
+    localStorage.setItem('sql-adapt-pending-interactions', '[]');
+    localStorage.setItem('sql-adapt-offline-queue', rawQueue);
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const PendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: { constructor: new () => object } }
+    ).pendingStore.constructor;
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (store: object) => {
+        getPending(): unknown[];
+      } } }
+    ).offlineQueue.constructor;
+
+    expect(new QueueManager(new PendingStore()).getPending()).toEqual([]);
+    expect(localStorage.getItem('sql-adapt-pending-confirmed')).toBe(rawConfirmed);
+    expect(localStorage.getItem('sql-adapt-offline-queue')).toBe(rawQueue);
+  });
+
+  it('rolls back a staged pending twin claim when queue ownership cannot persist', () => {
+    const event = {
+      id: 'two-store-claim-rollback',
+      learnerId: 'learner-shared',
+      sessionId: 'session-two-store-claim-rollback',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-two-store-claim-rollback',
+    } satisfies InteractionEvent;
+    const rawPending = JSON.stringify([{
+      id: event.id,
+      event,
+      status: 'backend_pending',
+      timestamp: event.timestamp,
+      retryCount: 0,
+      sessionId: event.sessionId,
+      eventType: event.eventType,
+    }]);
+    const rawQueue = JSON.stringify([{
+      id: event.id,
+      type: 'interaction',
+      data: event,
+      retries: 0,
+      timestamp: event.timestamp,
+      status: 'queued_locally',
+      errorCount: 0,
+    }]);
+    localStorage.setItem('sql-adapt-pending-confirmed', '[]');
+    localStorage.setItem('sql-adapt-pending-interactions', rawPending);
+    localStorage.setItem('sql-adapt-offline-queue', rawQueue);
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const PendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: { constructor: new () => object } }
+    ).pendingStore.constructor;
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (store: object) => {
+        getPending(): unknown[];
+      } } }
+    ).offlineQueue.constructor;
+    const queue = new QueueManager(new PendingStore());
+    const original = localStorage.setItem.bind(localStorage);
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'sql-adapt-offline-queue') {
+        throw new DOMException('queue claim blocked', 'QuotaExceededError');
+      }
+      return original(key, value);
+    });
+
+    expect(queue.getPending()).toEqual([]);
+    setItem.mockRestore();
+
+    expect(localStorage.getItem('sql-adapt-pending-interactions')).toBe(rawPending);
+    expect(localStorage.getItem('sql-adapt-offline-queue')).toBe(rawQueue);
+  });
+
+  it('fails closed across accounts when queue-claim persistence and pending rollback both fail', () => {
+    const event = {
+      id: 'two-store-double-failure',
+      learnerId: 'learner-shared',
+      sessionId: 'session-two-store-double-failure',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-two-store-double-failure',
+    } satisfies InteractionEvent;
+    const legacyPending = {
+      id: event.id,
+      event,
+      status: 'backend_pending',
+      timestamp: event.timestamp,
+      retryCount: 0,
+      sessionId: event.sessionId,
+      eventType: event.eventType,
+    };
+    const legacyQueue = {
+      id: event.id,
+      type: 'interaction',
+      data: event,
+      retries: 0,
+      timestamp: event.timestamp,
+      status: 'queued_locally',
+      errorCount: 0,
+    };
+    localStorage.setItem('sql-adapt-pending-confirmed', '[]');
+    localStorage.setItem('sql-adapt-pending-interactions', JSON.stringify([legacyPending]));
+    localStorage.setItem('sql-adapt-offline-queue', JSON.stringify([legacyQueue]));
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const PendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: { constructor: new () => object } }
+    ).pendingStore.constructor;
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (store: object) => {
+        getPending(): Array<{ id: string; syncOwnerId?: string }>;
+      } } }
+    ).offlineQueue.constructor;
+    const queueA = new QueueManager(new PendingStore());
+    const original = localStorage.setItem.bind(localStorage);
+    let pendingWrites = 0;
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'sql-adapt-pending-interactions') {
+        pendingWrites += 1;
+        if (pendingWrites > 1) {
+          throw new DOMException('pending rollback blocked', 'QuotaExceededError');
+        }
+      }
+      if (key === 'sql-adapt-offline-queue') {
+        throw new DOMException('queue claim blocked', 'QuotaExceededError');
+      }
+      return original(key, value);
+    });
+
+    expect(queueA.getPending()).toEqual([]);
+    setItem.mockRestore();
+    expect(JSON.parse(localStorage.getItem('sql-adapt-pending-interactions') ?? '[]')).toEqual([
+      expect.objectContaining({ id: event.id, syncOwnerId: ownerA }),
+    ]);
+    expect(JSON.parse(localStorage.getItem('sql-adapt-offline-queue') ?? '[]')).toEqual([legacyQueue]);
+
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-B', learnerId: 'learner-shared' });
+    expect(new QueueManager(new PendingStore()).getPending()).toEqual([]);
+
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    expect(new QueueManager(new PendingStore()).getPending()).toEqual([
+      expect.objectContaining({ id: event.id, syncOwnerId: ownerA }),
+    ]);
+  });
+
+  it('does not confirm or remove a generic queue item through a same-id pending interaction', () => {
+    const event = {
+      id: 'cross-type-confirmation-collision',
+      learnerId: 'learner-shared',
+      sessionId: 'session-cross-type-confirmation',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-cross-type-confirmation',
+    } satisfies InteractionEvent;
+    const rawPending = JSON.stringify([{
+      id: event.id,
+      event,
+      status: 'backend_pending',
+      timestamp: event.timestamp,
+      retryCount: 0,
+      sessionId: event.sessionId,
+      eventType: event.eventType,
+      syncOwnerId: ownerA,
+    }]);
+    const rawQueue = JSON.stringify([{
+      id: event.id,
+      type: 'session',
+      data: {
+        learnerId: 'learner-shared',
+        data: { startTime: '2026-08-06T00:00:00.000Z', lastActivity: '2026-08-06T00:00:01.000Z' },
+      },
+      retries: 0,
+      timestamp: event.timestamp,
+      status: 'queued_locally',
+      errorCount: 0,
+      syncOwnerId: ownerA,
+    }]);
+    localStorage.setItem('sql-adapt-pending-confirmed', '[]');
+    localStorage.setItem('sql-adapt-pending-interactions', rawPending);
+    localStorage.setItem('sql-adapt-offline-queue', rawQueue);
+    const PendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: { constructor: new () => object } }
+    ).pendingStore.constructor;
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (store: object) => {
+        remove(id: string, syncOwnerId?: string): boolean;
+      } } }
+    ).offlineQueue.constructor;
+    const queue = new QueueManager(new PendingStore());
+
+    expect(queue.remove(event.id, ownerA)).toBe(false);
+    expect(localStorage.getItem('sql-adapt-pending-interactions')).toBe(rawPending);
+    expect(localStorage.getItem('sql-adapt-offline-queue')).toBe(rawQueue);
+    expect(localStorage.getItem('sql-adapt-pending-confirmed')).toBe('[]');
+  });
+
+  it('retains complete confirmed history and malformed records beyond 100 entries', () => {
+    const retained = Array.from({ length: 104 }, (_, index) => ({
+      id: `confirmed-retained-${index}`,
+      confirmedAt: 1_700_000_000_000 + index,
+      syncOwnerId: `v1:["other-${index}","learner-shared"]`,
+      payloadFingerprint: `retained-${index}`,
+    }));
+    const profile = {
+      id: 'learner-shared',
+      name: 'Confirmed complete',
+      conceptsCovered: [],
+      conceptCoverageEvidence: [],
+      errorHistory: [],
+      solvedProblemIds: [],
+      interactionCount: 0,
+      currentStrategy: 'adaptive-medium',
+      preferences: { escalationThreshold: 3, aggregationDelay: 5000 },
+    };
+    localStorage.setItem('sql-adapt-pending-confirmed', JSON.stringify([null, ...retained]));
+    localStorage.setItem('sql-adapt-pending-interactions', '[]');
+    localStorage.setItem('sql-adapt-offline-queue', JSON.stringify([{
+      id: 'confirmed-complete-new',
+      type: 'profile',
+      data: profile,
+      retries: 0,
+      timestamp: 1_700_000_100_000,
+      status: 'queued_locally',
+      errorCount: 0,
+      syncOwnerId: ownerA,
+    }]));
+    const PendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: { constructor: new () => object } }
+    ).pendingStore.constructor;
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (store: object) => {
+        remove(id: string, syncOwnerId?: string): boolean;
+      } } }
+    ).offlineQueue.constructor;
+
+    expect(new QueueManager(new PendingStore()).remove('confirmed-complete-new', ownerA)).toBe(true);
+    const confirmed = JSON.parse(localStorage.getItem('sql-adapt-pending-confirmed') ?? '[]') as unknown[];
+    expect(confirmed).toHaveLength(106);
+    expect(confirmed[0]).toBeNull();
+    expect(confirmed).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'confirmed-retained-0' }),
+      expect.objectContaining({ id: 'confirmed-retained-103' }),
+      expect.objectContaining({ id: 'confirmed-complete-new', syncOwnerId: ownerA }),
+    ]));
+  });
+
+  it('does not expose retry metadata that failed to persist', () => {
+    const event = {
+      id: 'retry-metadata-proof',
+      learnerId: 'learner-shared',
+      sessionId: 'session-retry-metadata-proof',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-retry-metadata-proof',
+    } satisfies InteractionEvent;
+    const rawQueue = JSON.stringify([{
+      id: event.id,
+      type: 'interaction',
+      data: event,
+      retries: 0,
+      timestamp: event.timestamp,
+      status: 'queued_locally',
+      errorCount: 0,
+      syncOwnerId: ownerA,
+    }]);
+    localStorage.setItem('sql-adapt-pending-confirmed', '[]');
+    localStorage.setItem('sql-adapt-pending-interactions', '[]');
+    localStorage.setItem('sql-adapt-offline-queue', rawQueue);
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const PendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: { constructor: new () => object } }
+    ).pendingStore.constructor;
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (store: object) => {
+        incrementRetry(id: string, syncOwnerId?: string, error?: Error): void;
+        getPending(): Array<{ retries: number; status: string }>;
+      } } }
+    ).offlineQueue.constructor;
+    const queue = new QueueManager(new PendingStore());
+    const original = localStorage.setItem.bind(localStorage);
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'sql-adapt-offline-queue') {
+        throw new DOMException('retry metadata blocked', 'QuotaExceededError');
+      }
+      return original(key, value);
+    });
+
+    queue.incrementRetry(event.id, ownerA, new Error('offline'));
+    setItem.mockRestore();
+
+    expect(localStorage.getItem('sql-adapt-offline-queue')).toBe(rawQueue);
+    expect(queue.getPending()).toEqual([
+      expect.objectContaining({ retries: 0, status: 'queued_locally' }),
+    ]);
+  });
+
+  it.each([
+    ['pending', 'sql-adapt-pending-interactions'],
+    ['confirmed', 'sql-adapt-pending-confirmed'],
+  ])('blocks a valid queue record when the %s storage root is malformed', (_label, malformedKey) => {
+    const event = {
+      id: `malformed-root-${_label}`,
+      learnerId: 'learner-shared',
+      sessionId: `session-malformed-root-${_label}`,
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: `problem-malformed-root-${_label}`,
+    } satisfies InteractionEvent;
+    localStorage.setItem('sql-adapt-pending-confirmed', '[]');
+    localStorage.setItem('sql-adapt-pending-interactions', '[]');
+    localStorage.setItem(malformedKey, '{}');
+    localStorage.setItem('sql-adapt-offline-queue', JSON.stringify([{
+      id: event.id,
+      type: 'interaction',
+      data: event,
+      retries: 0,
+      timestamp: event.timestamp,
+      status: 'queued_locally',
+      errorCount: 0,
+      syncOwnerId: ownerA,
+    }]));
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const PendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: { constructor: new () => object } }
+    ).pendingStore.constructor;
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (store: object) => {
+        getPending(): unknown[];
+      } } }
+    ).offlineQueue.constructor;
+
+    expect(new QueueManager(new PendingStore()).getPending()).toEqual([]);
+    expect(localStorage.getItem(malformedKey)).toBe('{}');
+  });
+
+  it('does not expose malformed per-type queue payloads or dead-letter status', () => {
+    const event = {
+      id: 'dead-letter-in-queue',
+      learnerId: 'learner-shared',
+      sessionId: 'session-dead-letter-in-queue',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-dead-letter-in-queue',
+    } satisfies InteractionEvent;
+    const raw = JSON.stringify([
+      {
+        id: 'bad-profile',
+        type: 'profile',
+        data: {
+          id: 'learner-shared', name: 'Malformed queued profile', interactionCount: 1,
+          conceptsCovered: ['joins', 42], conceptCoverageEvidence: [], errorHistory: [], solvedProblemIds: [],
+          currentStrategy: 'adaptive-medium', preferences: { escalationThreshold: 3, aggregationDelay: 5000 },
+        },
+        retries: 0, timestamp: 1, status: 'queued_locally', errorCount: 0, syncOwnerId: ownerA,
+      },
+      {
+        id: 'bad-textbook', type: 'textbookUnit',
+        data: { learnerId: 'learner-shared', unit: { id: 'partial-only' } },
+        retries: 0, timestamp: 2, status: 'queued_locally', errorCount: 0, syncOwnerId: ownerA,
+      },
+      {
+        id: 'bad-session', type: 'session',
+        data: { learnerId: 'learner-shared', data: { startTime: '', lastActivity: '' } },
+        retries: 0, timestamp: 3, status: 'queued_locally', errorCount: 0, syncOwnerId: ownerA,
+      },
+      { id: event.id, type: 'interaction', data: event, retries: 0, timestamp: 4, status: 'dead_letter', errorCount: 0, syncOwnerId: ownerA },
+      {
+        id: 'missing-stored-session',
+        type: 'interaction',
+        data: { ...event, id: 'missing-stored-session', sessionId: undefined },
+        retries: 0,
+        timestamp: 5,
+        status: 'queued_locally',
+        errorCount: 0,
+        syncOwnerId: ownerA,
+      },
+    ]);
+    localStorage.setItem('sql-adapt-offline-queue', raw);
+    localStorage.setItem('sql-adapt-pending-confirmed', '[]');
+    localStorage.setItem('sql-adapt-pending-interactions', '[]');
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const pendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: object }
+    ).pendingStore;
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (store: object) => {
+        getPending(): unknown[];
+      } } }
+    ).offlineQueue.constructor;
+
+    expect(new QueueManager(pendingStore).getPending()).toEqual([]);
+    expect(localStorage.getItem('sql-adapt-offline-queue')).toBe(raw);
+  });
+
+  it('standard pending writes retain every other-owner and malformed record without truncation', () => {
+    const retained = Array.from({ length: 104 }, (_, index) => ({
+      id: `standard-retained-${index}`,
+      event: {
+        id: `standard-retained-${index}`,
+        learnerId: 'learner-shared',
+        sessionId: `session-standard-retained-${index}`,
+        timestamp: 1_700_000_000_000 + index,
+        eventType: 'error',
+        problemId: `problem-standard-retained-${index}`,
+      },
+      status: 'backend_pending',
+      timestamp: 1_700_000_000_000 + index,
+      retryCount: 0,
+      sessionId: `session-standard-retained-${index}`,
+      eventType: 'error',
+      syncOwnerId: `v1:["other-${index}","learner-shared"]`,
+    }));
+    localStorage.setItem('sql-adapt-pending-confirmed', '[]');
+    localStorage.setItem('sql-adapt-pending-interactions', JSON.stringify([null, ...retained]));
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const PendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: { constructor: new () => {
+        add(event: InteractionEvent): void;
+      } } }
+    ).pendingStore.constructor;
+    const store = new PendingStore();
+
+    store.add({
+      id: 'standard-new-pending',
+      learnerId: 'learner-shared',
+      sessionId: 'session-standard-new-pending',
+      timestamp: 1_700_000_100_000,
+      eventType: 'error',
+      problemId: 'problem-standard-new-pending',
+    });
+
+    const persisted = JSON.parse(localStorage.getItem('sql-adapt-pending-interactions') ?? '[]') as unknown[];
+    expect(persisted).toHaveLength(106);
+    expect(persisted[0]).toBeNull();
+    expect(persisted).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'standard-retained-0' }),
+      expect.objectContaining({ id: 'standard-retained-103' }),
+      expect.objectContaining({ id: 'standard-new-pending', syncOwnerId: ownerA }),
+    ]));
+  });
+
+  it('standard queue writes retain over 100 other-owner and malformed records', () => {
+    const retained = Array.from({ length: 104 }, (_, index) => ({
+      id: `queue-retained-${index}`,
+      type: 'interaction',
+      data: {
+        id: `queue-retained-${index}`,
+        learnerId: 'learner-shared',
+        sessionId: `session-queue-retained-${index}`,
+        timestamp: 1_700_000_000_000 + index,
+        eventType: 'error',
+        problemId: `problem-queue-retained-${index}`,
+      },
+      retries: 0,
+      timestamp: 1_700_000_000_000 + index,
+      status: 'queued_locally',
+      errorCount: 0,
+      syncOwnerId: `v1:["other-${index}","learner-shared"]`,
+    }));
+    localStorage.setItem('sql-adapt-offline-queue', JSON.stringify([null, ...retained]));
+    localStorage.setItem('sql-adapt-pending-confirmed', '[]');
+    localStorage.setItem('sql-adapt-pending-interactions', '[]');
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const pendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: object }
+    ).pendingStore;
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (store: object) => {
+        add(item: { id: string; type: 'interaction'; data: InteractionEvent }): void;
+      } } }
+    ).offlineQueue.constructor;
+    const queue = new QueueManager(pendingStore);
+
+    queue.add({
+      id: 'queue-standard-new',
+      type: 'interaction',
+      data: {
+        id: 'queue-standard-new',
+        learnerId: 'learner-shared',
+        sessionId: 'session-queue-standard-new',
+        timestamp: 1_700_000_100_000,
+        eventType: 'error',
+        problemId: 'problem-queue-standard-new',
+      },
+    });
+
+    const persisted = JSON.parse(localStorage.getItem('sql-adapt-offline-queue') ?? '[]') as unknown[];
+    expect(persisted).toHaveLength(106);
+    expect(persisted[0]).toBeNull();
+    expect(persisted).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'queue-retained-0' }),
+      expect.objectContaining({ id: 'queue-retained-103' }),
+      expect.objectContaining({ id: 'queue-standard-new', syncOwnerId: ownerA }),
+    ]));
+  });
+
+  it('session-end queue writes retain the complete other-owner backlog beyond 100 items', () => {
+    const retained = Array.from({ length: 104 }, (_, index) => ({
+      key: `owner:v1:["other-${index}","learner-shared"]\u0000learner-shared:session-retained-${index}`,
+      event: {
+        id: `session-end-retained-${index}`,
+        learnerId: 'learner-shared',
+        sessionId: `session-retained-${index}`,
+        timestamp: 1_700_000_000_000 + index,
+        eventType: 'session_end',
+        problemId: `problem-session-retained-${index}`,
+      },
+      queuedAt: 1_700_000_000_000 + index,
+      syncOwnerId: `v1:["other-${index}","learner-shared"]`,
+    }));
+    localStorage.setItem('sql-adapt-pending-session-ends', JSON.stringify(retained));
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+
+    expect(dualStorageModule.dualStorage.queueSessionEnd({
+      id: 'session-end-new-complete',
+      learnerId: 'learner-shared',
+      sessionId: 'session-new-complete',
+      timestamp: 1_700_000_100_000,
+      eventType: 'session_end',
+      problemId: 'problem-session-new-complete',
+    })).toMatchObject({ success: true });
+
+    const persisted = JSON.parse(localStorage.getItem('sql-adapt-pending-session-ends') ?? '[]') as Array<{
+      event: { id: string };
+      syncOwnerId?: string;
+    }>;
+    expect(persisted).toHaveLength(105);
+    expect(persisted).toEqual(expect.arrayContaining([
+      expect.objectContaining({ event: expect.objectContaining({ id: 'session-end-retained-0' }) }),
+      expect.objectContaining({ event: expect.objectContaining({ id: 'session-end-retained-103' }) }),
+      expect.objectContaining({
+        event: expect.objectContaining({ id: 'session-end-new-complete' }),
+        syncOwnerId: ownerA,
+      }),
+    ]));
+  });
+
+  it('dead-letter writes retain malformed records and the complete history beyond 50 items', () => {
+    const retained = Array.from({ length: 51 }, (_, index) => ({
+      id: `dead-retained-${index}`,
+      type: 'interaction',
+      data: { retained: index },
+      reason: 'retained',
+      timestamp: 1_700_000_000_000 + index,
+      syncOwnerId: `v1:["other-${index}","learner-shared"]`,
+    }));
+    const event = {
+      id: 'dead-letter-complete-new',
+      learnerId: 'learner-shared',
+      sessionId: 'session-dead-letter-complete-new',
+      timestamp: 1_700_000_100_000,
+      eventType: 'error',
+      problemId: 'problem-dead-letter-complete-new',
+    } satisfies InteractionEvent;
+    localStorage.setItem('sql-adapt-dead-letter', JSON.stringify([null, ...retained]));
+    localStorage.setItem('sql-adapt-offline-queue', JSON.stringify([{
+      id: event.id,
+      type: 'interaction',
+      data: event,
+      retries: 0,
+      timestamp: event.timestamp,
+      status: 'queued_locally',
+      errorCount: 0,
+      syncOwnerId: ownerA,
+    }]));
+    localStorage.setItem('sql-adapt-pending-confirmed', '[]');
+    localStorage.setItem('sql-adapt-pending-interactions', '[]');
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const pendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: object }
+    ).pendingStore;
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (store: object) => {
+        moveToDeadLetter(id: string, reason: string, syncOwnerId?: string): void;
+      } } }
+    ).offlineQueue.constructor;
+    const queue = new QueueManager(pendingStore);
+
+    queue.moveToDeadLetter(event.id, 'new-invalid-record', ownerA);
+
+    const persisted = JSON.parse(localStorage.getItem('sql-adapt-dead-letter') ?? '[]') as unknown[];
+    expect(persisted).toHaveLength(53);
+    expect(persisted[0]).toBeNull();
+    expect(persisted).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'dead-retained-0' }),
+      expect.objectContaining({ id: 'dead-retained-50' }),
+      expect.objectContaining({ id: event.id, reason: 'new-invalid-record', syncOwnerId: ownerA }),
+    ]));
+  });
+
+  it('keeps the queue source and withholds callback when dead-letter proof cannot persist', () => {
+    const event = {
+      id: 'dead-letter-proof-failure',
+      learnerId: 'learner-shared',
+      sessionId: 'session-dead-letter-proof-failure',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-dead-letter-proof-failure',
+    } satisfies InteractionEvent;
+    const rawQueue = JSON.stringify([{
+      id: event.id,
+      type: 'interaction',
+      data: event,
+      retries: 0,
+      timestamp: event.timestamp,
+      status: 'queued_locally',
+      errorCount: 0,
+      syncOwnerId: ownerA,
+    }]);
+    const rawDeadLetter = '[]';
+    localStorage.setItem('sql-adapt-offline-queue', rawQueue);
+    localStorage.setItem('sql-adapt-dead-letter', rawDeadLetter);
+    localStorage.setItem('sql-adapt-pending-confirmed', '[]');
+    localStorage.setItem('sql-adapt-pending-interactions', '[]');
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const pendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: object }
+    ).pendingStore;
+    const callback = vi.fn();
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (
+        store: object,
+        onConfirmed?: unknown,
+        onDeadLetter?: (ids: string[], reason: string, syncOwnerId?: string) => void,
+      ) => {
+        getPending(): unknown[];
+        moveToDeadLetter(id: string, reason: string, syncOwnerId?: string): void;
+      } } }
+    ).offlineQueue.constructor;
+    const queue = new QueueManager(pendingStore, undefined, callback);
+    const original = localStorage.setItem.bind(localStorage);
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'sql-adapt-dead-letter') {
+        throw new DOMException('dead-letter write blocked', 'QuotaExceededError');
+      }
+      return original(key, value);
+    });
+
+    queue.moveToDeadLetter(event.id, 'invalid', ownerA);
+    setItem.mockRestore();
+
+    expect(localStorage.getItem('sql-adapt-dead-letter')).toBe(rawDeadLetter);
+    expect(localStorage.getItem('sql-adapt-offline-queue')).toBe(rawQueue);
+    expect(callback).not.toHaveBeenCalled();
+    expect(queue.getPending()).toEqual([expect.objectContaining({ id: event.id })]);
+  });
+
+  it('rolls back dead-letter proof when source-queue deletion cannot persist', () => {
+    const event = {
+      id: 'dead-letter-source-failure',
+      learnerId: 'learner-shared',
+      sessionId: 'session-dead-letter-source-failure',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-dead-letter-source-failure',
+    } satisfies InteractionEvent;
+    const rawQueue = JSON.stringify([{
+      id: event.id,
+      type: 'interaction',
+      data: event,
+      retries: 0,
+      timestamp: event.timestamp,
+      status: 'queued_locally',
+      errorCount: 0,
+      syncOwnerId: ownerA,
+    }]);
+    const rawDeadLetter = JSON.stringify([null]);
+    localStorage.setItem('sql-adapt-offline-queue', rawQueue);
+    localStorage.setItem('sql-adapt-dead-letter', rawDeadLetter);
+    localStorage.setItem('sql-adapt-pending-confirmed', '[]');
+    localStorage.setItem('sql-adapt-pending-interactions', '[]');
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const pendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: object }
+    ).pendingStore;
+    const callback = vi.fn();
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (
+        store: object,
+        onConfirmed?: unknown,
+        onDeadLetter?: (ids: string[], reason: string, syncOwnerId?: string) => void,
+      ) => {
+        getPending(): unknown[];
+        moveToDeadLetter(id: string, reason: string, syncOwnerId?: string): void;
+      } } }
+    ).offlineQueue.constructor;
+    const queue = new QueueManager(pendingStore, undefined, callback);
+    const original = localStorage.setItem.bind(localStorage);
+    const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'sql-adapt-offline-queue') {
+        throw new DOMException('queue deletion blocked', 'QuotaExceededError');
+      }
+      return original(key, value);
+    });
+
+    queue.moveToDeadLetter(event.id, 'invalid', ownerA);
+    setItem.mockRestore();
+
+    expect(localStorage.getItem('sql-adapt-dead-letter')).toBe(rawDeadLetter);
+    expect(localStorage.getItem('sql-adapt-offline-queue')).toBe(rawQueue);
+    expect(callback).not.toHaveBeenCalled();
+    expect(queue.getPending()).toEqual([expect.objectContaining({ id: event.id })]);
+  });
+
+  it('preserves and does not send differing same-id legacy queue and pending records', () => {
+    const queueEvent = {
+      id: 'legacy-different-twin',
+      learnerId: 'learner-shared',
+      sessionId: 'session-queue-version',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-queue-version',
+    } satisfies InteractionEvent;
+    const pendingEvent = {
+      ...queueEvent,
+      sessionId: 'session-pending-version',
+      timestamp: 1_700_000_001_000,
+      problemId: 'problem-pending-version',
+    };
+    const rawPending = JSON.stringify([{
+      id: pendingEvent.id,
+      event: pendingEvent,
+      status: 'backend_pending',
+      timestamp: pendingEvent.timestamp,
+      retryCount: 0,
+      sessionId: pendingEvent.sessionId,
+      eventType: pendingEvent.eventType,
+    }]);
+    const rawQueue = JSON.stringify([{
+      id: queueEvent.id,
+      type: 'interaction',
+      data: queueEvent,
+      retries: 0,
+      timestamp: queueEvent.timestamp,
+      status: 'queued_locally',
+      errorCount: 0,
+    }]);
+    localStorage.setItem('sql-adapt-pending-confirmed', '[]');
+    localStorage.setItem('sql-adapt-pending-interactions', rawPending);
+    localStorage.setItem('sql-adapt-offline-queue', rawQueue);
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    const PendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: { constructor: new () => object } }
+    ).pendingStore.constructor;
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (store: object) => {
+        getPending(): unknown[];
+      } } }
+    ).offlineQueue.constructor;
+    const queue = new QueueManager(new PendingStore());
+
+    expect(queue.getPending()).toEqual([]);
+    expect(localStorage.getItem('sql-adapt-pending-interactions')).toBe(rawPending);
+    expect(localStorage.getItem('sql-adapt-offline-queue')).toBe(rawQueue);
+  });
+
+  it.each([
+    ['sql-adapt-pending-confirmed', '{}'],
+    ['sql-adapt-pending-confirmed', '[null]'],
+    ['sql-adapt-pending-interactions', '{}'],
+    ['sql-adapt-pending-interactions', '[null]'],
+  ])('keeps malformed %s data inert and byte-for-byte unchanged', (key, raw) => {
+    localStorage.setItem('sql-adapt-pending-confirmed', '[]');
+    localStorage.setItem('sql-adapt-pending-interactions', '[]');
+    localStorage.setItem(key, raw);
+    const PendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: { constructor: new () => {
+        getAllPending(): unknown[];
+      } } }
+    ).pendingStore.constructor;
+
+    expect(() => new PendingStore()).not.toThrow();
+    const store = new PendingStore();
+    expect(store.getAllPending()).toEqual([]);
+    expect(localStorage.getItem(key)).toBe(raw);
+  });
+
+  it.each([
+    ['sql-adapt-offline-queue', '{}'],
+    ['sql-adapt-offline-queue', '[null]'],
+    ['sql-adapt-dead-letter', '{}'],
+    ['sql-adapt-dead-letter', '[null]'],
+  ])('keeps malformed %s records inert and unchanged', (key, raw) => {
+    localStorage.setItem('sql-adapt-offline-queue', '[]');
+    localStorage.setItem('sql-adapt-dead-letter', '[]');
+    localStorage.setItem(key, raw);
+    const pendingStore = (
+      dualStorageModule.dualStorage as unknown as { pendingStore: object }
+    ).pendingStore;
+    const QueueManager = (
+      dualStorageModule.dualStorage as unknown as { offlineQueue: { constructor: new (store: object) => {
+        getPending(): unknown[];
+        getDeadLetter(): unknown[];
+      } } }
+    ).offlineQueue.constructor;
+
+    expect(() => new QueueManager(pendingStore)).not.toThrow();
+    const queue = new QueueManager(pendingStore);
+    expect(queue.getPending()).toEqual([]);
+    expect(queue.getDeadLetter()).toEqual([]);
+    expect(localStorage.getItem(key)).toBe(raw);
+  });
+
+  it('does not treat an active-owner confirmed id as ownership of a different canonical session event', async () => {
+    const learnerId = 'learner-shared';
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId });
+    await dualStorageModule.dualStorage.checkHealth();
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'reconcile-confirmed-collision',
+      learnerId,
+      sessionId: 'session-owner-A-confirmed',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-owner-A',
+      successful: true,
+    });
+    await vi.waitFor(() => {
+      expect(localStorage.getItem('sql-adapt-pending-confirmed')).toContain('reconcile-confirmed-collision');
+    });
+    localStorage.setItem('sql-learning-interactions', JSON.stringify([{
+      id: 'reconcile-confirmed-collision',
+      learnerId,
+      sessionId: 'session-owner-B-canonical',
+      timestamp: 1_700_000_001_000,
+      eventType: 'execution',
+      problemId: 'problem-owner-B',
+      successful: false,
+    }]));
+    getInteractionsMock.mockResolvedValue({ events: [], total: 0 });
+    logInteractionsBatchMock.mockClear();
+
+    const result = await dualStorageModule.dualStorage.ensureSessionInteractionsPersisted(
+      learnerId,
+      'session-owner-B-canonical',
+    );
+
+    expect(result).toMatchObject({ backendConfirmed: false, pendingSync: true });
+    expect(logInteractionsBatchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('dual-storage restore hydration', () => {
   it('finds drafts across opaque backend session ids', () => {
     dualStorageModule.dualStorage.savePracticeDraft(
@@ -985,6 +3192,37 @@ describe('dual-storage restore hydration', () => {
     expect(second).toBe(true);
     expect(forced).toBe(true);
     expect(getSessionMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('scopes the hydration throttle to the authenticated owner', async () => {
+    const learnerId = 'learner-owner-throttle';
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+    await dualStorageModule.dualStorage.hydrateLearner(learnerId, { force: true });
+
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-B', learnerId: 'learner-shared' });
+    await dualStorageModule.dualStorage.hydrateLearner(learnerId);
+
+    expect(getProfileMock).toHaveBeenCalledTimes(2);
+    expect(getSessionMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('discards hydration responses when the authenticated owner changes in flight', async () => {
+    const learnerId = 'learner-owner-race';
+    let resolveProfile: ((profile: LearnerProfile) => void) | undefined;
+    getProfileMock.mockImplementationOnce(
+      () => new Promise<LearnerProfile>((resolve) => {
+        resolveProfile = resolve;
+      }),
+    );
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-A', learnerId: 'learner-shared' });
+
+    const hydration = dualStorageModule.dualStorage.hydrateLearner(learnerId, { force: true });
+    await vi.waitFor(() => expect(getProfileMock).toHaveBeenCalledWith(learnerId));
+    dualStorageModule.setActiveSyncPrincipal({ accountId: 'account-B', learnerId: 'learner-shared' });
+    resolveProfile?.(createBackendProfile({ id: learnerId, name: 'Owner A profile' }));
+
+    await expect(hydration).resolves.toBe(false);
+    expect(dualStorageModule.dualStorage.getProfile(learnerId)).toBeNull();
   });
 
   it('returns backend session snapshot when backend is healthy', async () => {

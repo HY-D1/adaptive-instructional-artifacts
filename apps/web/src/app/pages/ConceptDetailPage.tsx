@@ -3,6 +3,25 @@ import { useEffect, useState } from 'react';
 import { loadConceptContent, getProblemsForConcept, assessConceptQuality, filterSaneExamples, filterLearnerSafeExamples, normalizeMistakes, selectReadableExamples, toLearnerSafeParagraph, type LoadedConcept, type CodeExample, type Mistake, type QualityMetadata } from '../lib/content/concept-loader';
 import { ChevronLeft, BookOpen, Clock, Dumbbell, AlertCircle, CheckCircle, XCircle, Lightbulb, Play, Info } from 'lucide-react';
 
+/**
+ * Display names for the corpus source documents. The two textbooks teach
+ * different SQL dialects, so naming the actual source matters to a learner
+ * comparing textbook syntax against the SQLite practice sandbox.
+ *
+ * The panel names the textbook this topic is drawn from and the pages that
+ * cover it. It deliberately avoids claiming the prose was extracted verbatim,
+ * because some concepts are hand-authored rather than pipeline-extracted.
+ */
+const SOURCE_DOC_NAMES: Record<string, string> = {
+  'dbms-ramakrishnan-3rd-edition': 'Database Management Systems (Ramakrishnan & Gehrke, 3rd ed.)',
+  'murachs-mysql-3rd-edition': "Murach's MySQL (3rd ed.)",
+};
+
+function formatSourceDoc(sourceDocId?: string): string {
+  if (!sourceDocId) return 'the course textbook';
+  return SOURCE_DOC_NAMES[sourceDocId] ?? sourceDocId;
+}
+
 export function ConceptDetailPage() {
   const { '*': conceptId } = useParams<{ '*': string }>();
   const [concept, setConcept] = useState<LoadedConcept | null>(null);
@@ -210,7 +229,7 @@ export function ConceptDetailPage() {
                 Textbook Source
               </h3>
               <p className="text-sm text-blue-800 mb-2">
-                Content extracted from official SQL Course Textbook
+                {formatSourceDoc(concept.sourceDocId)}
               </p>
               <p className="text-xs text-blue-600">
                 Pages: {concept.pageNumbers.join(', ')}

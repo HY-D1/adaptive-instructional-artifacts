@@ -1,0 +1,42 @@
+# Deployment upload hygiene for the frontend project (Vite build at repo root).
+# The build needs package manifests, tsconfig.json, vercel.json, apps/web/**,
+# apps/server/src + apps/server/package.json (scanned by the prebuild
+# integrity gate), and scripts/verification/**.
+# Runtime textbook content is served from apps/web/public/ and must stay
+# included: never add a recursive *.md pattern to this file.
+
+# Environment and local auth state
+.env
+.env.*
+!.env.example
+
+# Local tool state and OS metadata
+.claude/
+.playwright-mcp/
+.vercel/
+.DS_Store
+
+# Prior build output (Vercel rebuilds from source)
+dist/
+apps/server/dist/
+
+# Tests, test tooling, and reports
+tests/
+test-results/
+playwright/
+playwright-report/
+playwright.config.ts
+playwright.vercel.config.ts
+test-setup.ts
+vitest.config.ts
+
+# Documentation, raw textbook sources, and offline ingestion tooling
+docs/
+textbooks/
+tools/
+
+# Local SQLite data
+*.db
+*.sqlite
+*.sqlite3
+apps/server/data/

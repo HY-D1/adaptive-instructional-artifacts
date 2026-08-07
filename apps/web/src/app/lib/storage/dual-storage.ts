@@ -38,6 +38,19 @@ import type {
 } from '@/app/types';
 import type { CreateUnitInput } from './textbook-units';
 import { createEventId } from '../utils/event-id';
+import { getProblemRank } from '../problem-ranking';
+import {
+  canonicalizeSqlEngageSubtype,
+  getDeterministicSqlEngageAnchor,
+  getSqlEngagePolicyVersion,
+} from '../../data/sql-engage';
+import {
+  getActiveSyncPrincipal,
+  isActiveSyncPrincipal,
+  resolveEnvelopeOwnershipForActivePrincipal,
+  type ActiveSyncPrincipal,
+} from './sync-owner';
+export { getActiveSyncPrincipal, setActiveSyncPrincipal } from './sync-owner';
 
 // Configuration
 // VITE_API_BASE_URL is the canonical env var — presence alone enables backend mode
@@ -83,11 +96,15 @@ interface QueuedItem {
   status: EventStatus;
   lastAttempt?: number;
   errorCount: number;
+  syncOwnerId?: string;
 }
 
 interface ConfirmedItem {
   id: string;
   confirmedAt: number;
+  syncOwnerId?: string;
+  eventFingerprint?: string;
+  payloadFingerprint?: string;
 }
 
 interface DeadLetterItem {
@@ -96,6 +113,7 @@ interface DeadLetterItem {
   data: unknown;
   reason: string;
   timestamp: number;
+  syncOwnerId?: string;
 }
 
 interface PendingSessionEnd {
@@ -103,6 +121,13 @@ interface PendingSessionEnd {
   event: InteractionEvent;
   queuedAt: number;
   lastAttemptAt?: number;
+  syncOwnerId?: string;
+}
+
+interface PendingSessionEndCollection {
+  validRoot: boolean;
+  pending: PendingSessionEnd[];
+  unverified: unknown[];
 }
 
 export type CriticalWriteStatus = {
@@ -142,6 +167,409 @@ interface PendingInteraction {
   retryCount: number;       // Number of send attempts
   sessionId: string;
   eventType: string;
+  syncOwnerId?: string;
+}
+
+interface PendingQueueCoordination {
+  original: Map<string, PendingInteraction>;
+  staged: Map<string, PendingInteraction>;
+  changed: boolean;
+}
+
+type ConfirmationState = 'none' | 'confirmed' | 'blocked';
+
+function ownerFields(principal = getActiveSyncPrincipal()): { syncOwnerId?: string } {
+  return principal ? { syncOwnerId: principal.syncOwnerId } : {};
+}
+
+function ownedSyncIdentity(id: string, syncOwnerId?: string): string {
+  return `${syncOwnerId ? `owner:${syncOwnerId}` : 'legacy'}\u0000${id}`;
+}
+
+function envelopeSyncIdentity(id: string, envelope: { syncOwnerId?: unknown }): string {
+  if (!Object.prototype.hasOwnProperty.call(envelope, 'syncOwnerId')) {
+    return ownedSyncIdentity(id);
+  }
+  if (typeof envelope.syncOwnerId === 'string' && envelope.syncOwnerId.length > 0) {
+    return ownedSyncIdentity(id, envelope.syncOwnerId);
+  }
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(envelope.syncOwnerId) ?? String(envelope.syncOwnerId);
+  } catch {
+    serialized = Object.prototype.toString.call(envelope.syncOwnerId);
+  }
+  return `malformed:${typeof envelope.syncOwnerId}:${serialized}\u0000${id}`;
+}
+
+function canonicalEventValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(canonicalEventValue);
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, nested]) => nested !== undefined)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nested]) => [key, canonicalEventValue(nested)]),
+    );
+  }
+  return value;
+}
+
+function normalizeInteractionForSyncIdentity(event: InteractionEvent): InteractionEvent {
+  let normalized = { ...event };
+  if (normalized.problemId && normalized.problemNumber === undefined) {
+    const rank = getProblemRank(normalized.problemId);
+    if (rank > 0) normalized = { ...normalized, problemNumber: rank };
+  }
+  if (normalized.eventType === 'concept_view') {
+    const conceptId = normalized.conceptId || normalized.conceptIds?.[0];
+    normalized = {
+      ...normalized,
+      conceptId,
+      conceptIds: conceptId ? [conceptId] : normalized.conceptIds,
+      source: normalized.source || (normalized.unitId ? 'textbook' : 'problem'),
+    };
+  }
+  if (normalized.eventType === 'hint_view') {
+    const canonicalSubtype = canonicalizeSqlEngageSubtype(
+      normalized.sqlEngageSubtype || normalized.errorSubtypeId || 'incomplete query',
+    );
+    const hintLevel = normalized.hintLevel === 1 || normalized.hintLevel === 2 || normalized.hintLevel === 3
+      ? normalized.hintLevel
+      : typeof normalized.hintLevel === 'number' && Number.isFinite(normalized.hintLevel)
+        ? normalized.hintLevel <= 1 ? 1 : normalized.hintLevel >= 3 ? 3 : 2
+        : 1;
+    const rowSeed = `${normalized.learnerId}|${normalized.problemId}|${canonicalSubtype}`;
+    const fallbackAnchor = getDeterministicSqlEngageAnchor(canonicalSubtype, rowSeed);
+    const sqlEngageRowId = normalized.sqlEngageRowId?.trim() || fallbackAnchor.rowId;
+    normalized = {
+      ...normalized,
+      hintId: normalized.hintId?.trim() ||
+        `sql-engage:${canonicalSubtype}:hint:${sqlEngageRowId}:L${hintLevel}`,
+      hintLevel,
+      hintText: normalized.hintText?.trim() || '[missing-hint-text]',
+      templateId: normalized.templateId?.trim() || 'unverifiable',
+      sqlEngageSubtype: canonicalSubtype,
+      sqlEngageRowId,
+      policyVersion: normalized.policyVersion?.trim() || getSqlEngagePolicyVersion(),
+    };
+  }
+  return normalized;
+}
+
+function isExactInteractionEvent(left: InteractionEvent, right: InteractionEvent): boolean {
+  return JSON.stringify(canonicalEventValue(normalizeInteractionForSyncIdentity(left))) ===
+    JSON.stringify(canonicalEventValue(normalizeInteractionForSyncIdentity(right)));
+}
+
+function serializedFingerprint(value: unknown): string {
+  const serialized = JSON.stringify(canonicalEventValue(value));
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b9;
+  for (let index = 0; index < serialized.length; index += 1) {
+    const code = serialized.charCodeAt(index);
+    first = Math.imul(first ^ code, 0x01000193);
+    second = Math.imul(second ^ code, 0x85ebca6b);
+  }
+  return `${serialized.length}:${(first >>> 0).toString(16)}:${(second >>> 0).toString(16)}`;
+}
+
+function interactionEventFingerprint(event: InteractionEvent): string {
+  return serializedFingerprint(normalizeInteractionForSyncIdentity(event));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function hasValidOptionalOwner(value: Record<string, unknown>): boolean {
+  return !Object.prototype.hasOwnProperty.call(value, 'syncOwnerId') ||
+    (typeof value.syncOwnerId === 'string' && value.syncOwnerId.length > 0);
+}
+
+function isStoredInteractionEvent(value: unknown): value is InteractionEvent {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === 'string' && value.id.length > 0 &&
+    typeof value.learnerId === 'string' && value.learnerId.length > 0 &&
+    typeof value.sessionId === 'string' && value.sessionId.length > 0 &&
+    typeof value.timestamp === 'number' && Number.isFinite(value.timestamp) &&
+    typeof value.eventType === 'string' && value.eventType.length > 0
+  );
+}
+
+function isStoredPendingInteraction(value: unknown): value is PendingInteraction {
+  if (!isRecord(value) || !hasValidOptionalOwner(value) || !isStoredInteractionEvent(value.event)) {
+    return false;
+  }
+  return (
+    typeof value.id === 'string' && value.id === value.event.id &&
+    ['locally_persisted', 'backend_pending', 'backend_confirmed', 'dead_letter'].includes(String(value.status)) &&
+    typeof value.timestamp === 'number' && Number.isFinite(value.timestamp) &&
+    typeof value.retryCount === 'number' && Number.isFinite(value.retryCount) &&
+    typeof value.sessionId === 'string' && value.sessionId === value.event.sessionId &&
+    typeof value.eventType === 'string' && value.eventType === value.event.eventType &&
+    (!Object.prototype.hasOwnProperty.call(value, 'lastAttempt') ||
+      (typeof value.lastAttempt === 'number' && Number.isFinite(value.lastAttempt)))
+  );
+}
+
+function isStoredPendingSessionEnd(value: unknown): value is PendingSessionEnd {
+  if (!isRecord(value) || !hasValidOptionalOwner(value) || !isStoredInteractionEvent(value.event)) {
+    return false;
+  }
+  return (
+    typeof value.key === 'string' && value.key.length > 0 &&
+    value.event.eventType === 'session_end' &&
+    typeof value.queuedAt === 'number' && Number.isFinite(value.queuedAt) &&
+    (!Object.prototype.hasOwnProperty.call(value, 'lastAttemptAt') ||
+      (typeof value.lastAttemptAt === 'number' && Number.isFinite(value.lastAttemptAt)))
+  );
+}
+
+function readPendingSessionEndCollection(): PendingSessionEndCollection {
+  const stored = readStoredArray(PENDING_SESSION_ENDS_KEY);
+  if (!stored.validRoot) {
+    return { validRoot: false, pending: [], unverified: [] };
+  }
+  const pendingByIdentity = new Map<string, PendingSessionEnd>();
+  const unverified: unknown[] = [];
+  const ambiguous = new Set<string>();
+  for (const record of stored.records) {
+    if (!isStoredPendingSessionEnd(record)) {
+      unverified.push(record);
+      continue;
+    }
+    const identity = envelopeSyncIdentity(record.key, record);
+    if (ambiguous.has(identity)) {
+      unverified.push(record);
+      continue;
+    }
+    const existing = pendingByIdentity.get(identity);
+    if (existing) {
+      pendingByIdentity.delete(identity);
+      unverified.push(existing, record);
+      ambiguous.add(identity);
+      continue;
+    }
+    pendingByIdentity.set(identity, record);
+  }
+  return {
+    validRoot: true,
+    pending: [...pendingByIdentity.values()],
+    unverified,
+  };
+}
+
+function isStoredConfirmedItem(value: unknown): value is ConfirmedItem {
+  if (!isRecord(value) || !hasValidOptionalOwner(value)) return false;
+  return (
+    typeof value.id === 'string' && value.id.length > 0 &&
+    typeof value.confirmedAt === 'number' && Number.isFinite(value.confirmedAt) &&
+    (!Object.prototype.hasOwnProperty.call(value, 'eventFingerprint') ||
+      typeof value.eventFingerprint === 'string') &&
+    (!Object.prototype.hasOwnProperty.call(value, 'payloadFingerprint') ||
+      typeof value.payloadFingerprint === 'string')
+  );
+}
+
+function readStoredArray(key: string): { validRoot: boolean; records: unknown[] } {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return { validRoot: true, records: [] };
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? { validRoot: true, records: parsed }
+      : { validRoot: false, records: [] };
+  } catch {
+    return { validRoot: false, records: [] };
+  }
+}
+
+function interactionFromEnvelope(envelope: unknown): InteractionEvent | null {
+  if (isStoredInteractionEvent(envelope)) return envelope;
+  if (!isRecord(envelope)) return null;
+  if (isStoredInteractionEvent(envelope.event)) return envelope.event;
+  if (envelope.type === 'interaction' && isStoredInteractionEvent(envelope.data)) {
+    return envelope.data;
+  }
+  return null;
+}
+
+function queuePayloadFingerprint(envelope: unknown): string | null {
+  if (!isRecord(envelope) || typeof envelope.type !== 'string' ||
+      !Object.prototype.hasOwnProperty.call(envelope, 'data')) {
+    return null;
+  }
+  return serializedFingerprint({ type: envelope.type, data: envelope.data });
+}
+
+function queuedItemLearnerId(item: QueuedItem): string | undefined {
+  switch (item.type) {
+    case 'interaction':
+      return (item.data as Partial<InteractionEvent> | null)?.learnerId;
+    case 'textbookUnit':
+    case 'session':
+      return (item.data as { learnerId?: unknown } | null)?.learnerId as string | undefined;
+    case 'profile':
+      return (item.data as Partial<LearnerProfile> | null)?.id;
+  }
+}
+
+function isUniqueStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) &&
+    value.every((entry): entry is string => typeof entry === 'string') &&
+    new Set(value).size === value.length;
+}
+
+function isStoredEvidenceValue(value: unknown, expectedConceptId: string): boolean {
+  if (!isRecord(value) || value.conceptId !== expectedConceptId ||
+      typeof value.score !== 'number' || !Number.isFinite(value.score) ||
+      value.score < 0 || value.score > 100 ||
+      !['low', 'medium', 'high'].includes(String(value.confidence)) ||
+      typeof value.lastUpdated !== 'number' || !Number.isFinite(value.lastUpdated) ||
+      !isRecord(value.evidenceCounts) ||
+      typeof value.streakCorrect !== 'number' || !Number.isInteger(value.streakCorrect) || value.streakCorrect < 0 ||
+      typeof value.streakIncorrect !== 'number' || !Number.isInteger(value.streakIncorrect) || value.streakIncorrect < 0) {
+    return false;
+  }
+  return [
+    value.evidenceCounts.successfulExecution,
+    value.evidenceCounts.hintViewed,
+    value.evidenceCounts.explanationViewed,
+    value.evidenceCounts.errorEncountered,
+    value.evidenceCounts.notesAdded,
+  ].every((count) => typeof count === 'number' && Number.isInteger(count) && count >= 0);
+}
+
+function isStoredProfilePayload(value: Record<string, unknown>): boolean {
+  if (
+    typeof value.id !== 'string' || value.id.length === 0 ||
+    typeof value.name !== 'string' ||
+    typeof value.interactionCount !== 'number' || !Number.isInteger(value.interactionCount) || value.interactionCount < 0 ||
+    !['hint-only', 'adaptive-low', 'adaptive-medium', 'adaptive-high'].includes(String(value.currentStrategy)) ||
+    !isRecord(value.preferences) ||
+    typeof value.preferences.escalationThreshold !== 'number' || !Number.isFinite(value.preferences.escalationThreshold) ||
+    typeof value.preferences.aggregationDelay !== 'number' || !Number.isFinite(value.preferences.aggregationDelay) ||
+    !isUniqueStringArray(value.conceptsCovered) ||
+    !isUniqueStringArray(value.solvedProblemIds) ||
+    !Array.isArray(value.conceptCoverageEvidence) ||
+    !Array.isArray(value.errorHistory)
+  ) {
+    return false;
+  }
+  const evidenceKeys = new Set<string>();
+  for (const entry of value.conceptCoverageEvidence) {
+    if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' ||
+        evidenceKeys.has(entry[0]) || !isStoredEvidenceValue(entry[1], entry[0])) {
+      return false;
+    }
+    evidenceKeys.add(entry[0]);
+  }
+  const errorKeys = new Set<string>();
+  for (const entry of value.errorHistory) {
+    if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' ||
+        errorKeys.has(entry[0]) || typeof entry[1] !== 'number' ||
+        !Number.isInteger(entry[1]) || entry[1] < 0) {
+      return false;
+    }
+    errorKeys.add(entry[0]);
+  }
+  return (
+    (!Object.prototype.hasOwnProperty.call(value, 'createdAt') ||
+      (typeof value.createdAt === 'number' && Number.isFinite(value.createdAt))) &&
+    (!Object.prototype.hasOwnProperty.call(value, 'lastActive') ||
+      (typeof value.lastActive === 'number' && Number.isFinite(value.lastActive)))
+  );
+}
+
+function isStoredInstructionalUnit(value: unknown): boolean {
+  if (!isRecord(value) ||
+      typeof value.id !== 'string' || value.id.length === 0 ||
+      !['hint', 'explanation', 'example', 'summary'].includes(String(value.type)) ||
+      typeof value.conceptId !== 'string' || value.conceptId.length === 0 ||
+      typeof value.title !== 'string' || typeof value.content !== 'string' ||
+      !isUniqueStringArray(value.prerequisites) ||
+      !isUniqueStringArray(value.sourceInteractionIds) ||
+      typeof value.addedTimestamp !== 'number' || !Number.isFinite(value.addedTimestamp)) {
+    return false;
+  }
+  if (Object.prototype.hasOwnProperty.call(value, 'contentFormat') &&
+      value.contentFormat !== undefined &&
+      !['markdown', 'html'].includes(String(value.contentFormat))) return false;
+  if (Object.prototype.hasOwnProperty.call(value, 'conceptIds') &&
+      value.conceptIds !== undefined &&
+      !isUniqueStringArray(value.conceptIds)) return false;
+  const optionalStringArrays = [
+    'updatedSessionIds',
+    'sourceInteractions',
+    'commonMistakes',
+    'sourceRefIds',
+    'createdFromInteractionIds',
+  ];
+  return optionalStringArrays.every((key) =>
+    !Object.prototype.hasOwnProperty.call(value, key) ||
+    value[key] === undefined ||
+    isUniqueStringArray(value[key]),
+  );
+}
+
+function isStoredQueuedItem(value: unknown): value is QueuedItem {
+  if (!isRecord(value) || !hasValidOptionalOwner(value)) return false;
+  if (
+    typeof value.id !== 'string' || value.id.length === 0 ||
+    !['interaction', 'textbookUnit', 'profile', 'session'].includes(String(value.type)) ||
+    typeof value.retries !== 'number' || !Number.isFinite(value.retries) ||
+    typeof value.timestamp !== 'number' || !Number.isFinite(value.timestamp) ||
+    !['queued_locally', 'sent_unverified', 'backend_confirmed'].includes(String(value.status)) ||
+    typeof value.errorCount !== 'number' || !Number.isFinite(value.errorCount) ||
+    (Object.prototype.hasOwnProperty.call(value, 'lastAttempt') &&
+      (typeof value.lastAttempt !== 'number' || !Number.isFinite(value.lastAttempt)))
+  ) {
+    return false;
+  }
+  if (value.type === 'interaction') {
+    return isStoredInteractionEvent(value.data) && value.data.id === value.id;
+  }
+  if (!isRecord(value.data)) return false;
+  if (value.type === 'textbookUnit') {
+    return (
+      typeof value.data.learnerId === 'string' && value.data.learnerId.length > 0 &&
+      isStoredInstructionalUnit(value.data.unit)
+    );
+  }
+  if (value.type === 'session') {
+    return (
+      typeof value.data.learnerId === 'string' && value.data.learnerId.length > 0 &&
+      isRecord(value.data.data) &&
+      typeof value.data.data.startTime === 'string' && value.data.data.startTime.trim().length > 0 &&
+      typeof value.data.data.lastActivity === 'string' && value.data.data.lastActivity.trim().length > 0
+    );
+  }
+  return isStoredProfilePayload(value.data);
+}
+
+function isStoredDeadLetterItem(value: unknown): value is DeadLetterItem {
+  if (!isRecord(value) || !hasValidOptionalOwner(value)) return false;
+  return (
+    typeof value.id === 'string' && value.id.length > 0 &&
+    typeof value.type === 'string' && value.type.length > 0 &&
+    typeof value.reason === 'string' &&
+    typeof value.timestamp === 'number' && Number.isFinite(value.timestamp) &&
+    Object.prototype.hasOwnProperty.call(value, 'data')
+  );
+}
+
+function serializeQueuedProfile(profile: LearnerProfile): Record<string, unknown> {
+  return {
+    ...profile,
+    conceptsCovered: Array.from(profile.conceptsCovered),
+    conceptCoverageEvidence: Array.from(profile.conceptCoverageEvidence.entries()),
+    errorHistory: Array.from(profile.errorHistory.entries()),
+    solvedProblemIds: Array.from(profile.solvedProblemIds),
+  };
 }
 
 // ============================================================================
@@ -150,7 +578,12 @@ interface PendingInteraction {
 
 class DurablePendingStore {
   private interactions: Map<string, PendingInteraction> = new Map();
-  private confirmedIds: Set<string> = new Set();
+  private confirmedItems: Map<string, ConfirmedItem> = new Map();
+  private lastClaimPersistenceFailed = false;
+  private unverifiedPendingRecords: unknown[] = [];
+  private unverifiedConfirmedRecords: unknown[] = [];
+  private pendingRootValid = true;
+  private confirmedRootValid = true;
 
   constructor() {
     this.loadConfirmed();
@@ -159,106 +592,292 @@ class DurablePendingStore {
 
   // Confirmed IDs management (for deduplication)
   private loadConfirmed(): void {
-    const confirmed = safeGet<ConfirmedItem[]>(PENDING_CONFIRMED_KEY, []);
-    if (confirmed) {
-      this.confirmedIds = new Set(confirmed.map(c => c.id));
-    } else {
-      this.confirmedIds = new Set();
+    const stored = readStoredArray(PENDING_CONFIRMED_KEY);
+    this.confirmedRootValid = stored.validRoot;
+    this.confirmedItems.clear();
+    this.unverifiedConfirmedRecords = [];
+    if (!stored.validRoot) return;
+
+    const ambiguous = new Set<string>();
+    for (const record of stored.records) {
+      if (!isStoredConfirmedItem(record)) {
+        this.unverifiedConfirmedRecords.push(record);
+        continue;
+      }
+      const identity = envelopeSyncIdentity(record.id, record);
+      if (ambiguous.has(identity)) {
+        this.unverifiedConfirmedRecords.push(record);
+        continue;
+      }
+      const existing = this.confirmedItems.get(identity);
+      if (existing) {
+        this.confirmedItems.delete(identity);
+        this.unverifiedConfirmedRecords.push(existing, record);
+        ambiguous.add(identity);
+        continue;
+      }
+      this.confirmedItems.set(identity, record);
     }
   }
 
-  private saveConfirmed(): SafeSetResult {
-    const confirmed: ConfirmedItem[] = Array.from(this.confirmedIds).map(id => ({
-      id,
-      confirmedAt: Date.now(),
-    }));
-    // Critical session data - use memory fallback if quota exceeded
-    const result = safeSet(PENDING_CONFIRMED_KEY, confirmed.slice(-1000), {
-      priority: 'critical',
-      allowEviction: true,
+  private confirmedRecords(confirmedItems = this.confirmedItems): unknown[] {
+    return [...this.unverifiedConfirmedRecords, ...confirmedItems.values()];
+  }
+
+  private saveConfirmed(confirmedItems = this.confirmedItems): SafeSetResult {
+    if (!this.confirmedRootValid) {
+      return { success: false, error: 'Confirmed storage root is malformed' };
+    }
+    try {
+      return safeSet(
+        PENDING_CONFIRMED_KEY,
+        this.confirmedRecords(confirmedItems),
+        { priority: 'critical', allowEviction: false },
+      );
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Confirmed storage write failed' };
+    }
+  }
+
+  private persistedConfirmedCollectionMatches(confirmedItems: Map<string, ConfirmedItem>): boolean {
+    const stored = readStoredArray(PENDING_CONFIRMED_KEY);
+    return stored.validRoot &&
+      JSON.stringify(stored.records) === JSON.stringify(this.confirmedRecords(confirmedItems));
+  }
+
+  private confirmedForOwner(id: string, syncOwnerId: string): ConfirmedItem | undefined {
+    return this.confirmedItems.get(ownedSyncIdentity(id, syncOwnerId));
+  }
+
+  private unverifiedRecordMayBelongToOwner(
+    records: unknown[],
+    id: string,
+    syncOwnerId: string,
+  ): boolean {
+    return records.some((record) => {
+      if (!isRecord(record) || record.id !== id) return false;
+      if (!Object.prototype.hasOwnProperty.call(record, 'syncOwnerId')) return true;
+      return record.syncOwnerId === syncOwnerId;
     });
-    return result;
   }
 
-  isConfirmed(id: string): boolean {
-    return this.confirmedIds.has(id);
+  isEnvelopeConfirmed(envelope: unknown): boolean {
+    const targetOwnerId = isRecord(envelope) &&
+      typeof envelope.syncOwnerId === 'string' && envelope.syncOwnerId.length > 0
+      ? envelope.syncOwnerId
+      : undefined;
+    return this.getEnvelopeConfirmationState(envelope, targetOwnerId) === 'confirmed';
   }
 
-  markConfirmed(id: string): void {
-    this.confirmedIds.add(id);
-    this.interactions.delete(id); // Remove from pending once confirmed
-    this.savePending();
-    this.saveConfirmed();
-  }
-
-  markConfirmedBatch(ids: string[]): void {
-    for (const id of ids) {
-      this.confirmedIds.add(id);
-      this.interactions.delete(id);
+  getEnvelopeConfirmationState(
+    envelope: unknown,
+    targetOwnerId?: string,
+  ): ConfirmationState {
+    if (!this.confirmedRootValid || !isRecord(envelope) || typeof envelope.id !== 'string') {
+      return 'blocked';
     }
-    this.savePending();
-    this.saveConfirmed();
+    const ownerEnvelope = targetOwnerId
+      ? { ...envelope, syncOwnerId: targetOwnerId }
+      : envelope;
+    if (
+      targetOwnerId &&
+      this.unverifiedRecordMayBelongToOwner(
+        this.unverifiedConfirmedRecords,
+        envelope.id,
+        targetOwnerId,
+      )
+    ) {
+      return 'blocked';
+    }
+    const confirmed = this.confirmedItems.get(envelopeSyncIdentity(envelope.id, ownerEnvelope));
+    if (!confirmed) return 'none';
+    const event = interactionFromEnvelope(envelope);
+    if (event) {
+      return confirmed.eventFingerprint &&
+        confirmed.eventFingerprint === interactionEventFingerprint(event)
+        ? 'confirmed'
+        : 'blocked';
+    }
+    const payloadFingerprint = queuePayloadFingerprint(envelope);
+    return confirmed.payloadFingerprint &&
+      payloadFingerprint &&
+      confirmed.payloadFingerprint === payloadFingerprint
+      ? 'confirmed'
+      : 'blocked';
+  }
+
+  markConfirmed(id: string, syncOwnerId?: string, confirmedEnvelope?: unknown): boolean {
+    return this.markConfirmedBatch(
+      [id],
+      syncOwnerId,
+      confirmedEnvelope ? [confirmedEnvelope] : [],
+    );
+  }
+
+  markConfirmedBatch(
+    ids: string[],
+    syncOwnerId?: string,
+    confirmedEnvelopes: unknown[] = [],
+  ): boolean {
+    const envelopesById = new Map(
+      confirmedEnvelopes
+        .filter((envelope): envelope is Record<string, unknown> =>
+          isRecord(envelope) && typeof envelope.id === 'string',
+        )
+        .map((envelope) => [envelope.id as string, envelope]),
+    );
+    const stagedConfirmed = new Map(this.confirmedItems);
+    const stagedPending = new Map(this.interactions);
+    for (const id of ids) {
+      const identity = ownedSyncIdentity(id, syncOwnerId);
+      const pending = stagedPending.get(identity);
+      const existing = stagedConfirmed.get(identity);
+      const confirmedEnvelope = envelopesById.get(id);
+      const envelopeEvent = interactionFromEnvelope(confirmedEnvelope);
+      const envelopePayloadFingerprint = queuePayloadFingerprint(confirmedEnvelope);
+      if (
+        pending && confirmedEnvelope &&
+        ((!envelopeEvent && envelopePayloadFingerprint) ||
+          (envelopeEvent && !isExactInteractionEvent(pending.event, envelopeEvent)))
+      ) {
+        return false;
+      }
+      const proofEvent = pending?.event ?? envelopeEvent;
+      const proofFingerprint = proofEvent ? interactionEventFingerprint(proofEvent) : undefined;
+      const payloadFingerprint = proofEvent ? undefined : envelopePayloadFingerprint;
+      if (
+        (syncOwnerId && this.unverifiedRecordMayBelongToOwner(
+          this.unverifiedConfirmedRecords,
+          id,
+          syncOwnerId,
+        )) ||
+        (existing && proofFingerprint && existing.eventFingerprint !== proofFingerprint) ||
+        (existing && payloadFingerprint && existing.payloadFingerprint !== payloadFingerprint)
+      ) {
+        return false;
+      }
+      stagedConfirmed.set(identity, {
+        id,
+        confirmedAt: Date.now(),
+        ...(syncOwnerId ? { syncOwnerId } : {}),
+        ...(proofFingerprint
+          ? { eventFingerprint: proofFingerprint }
+          : existing?.eventFingerprint
+            ? { eventFingerprint: existing.eventFingerprint }
+            : {}),
+        ...(payloadFingerprint
+          ? { payloadFingerprint }
+          : existing?.payloadFingerprint
+            ? { payloadFingerprint: existing.payloadFingerprint }
+            : {}),
+      });
+      stagedPending.delete(identity);
+    }
+    const proofPersisted = this.saveConfirmed(stagedConfirmed).success &&
+      this.persistedConfirmedCollectionMatches(stagedConfirmed);
+    if (!proofPersisted) return false;
+    this.confirmedItems = stagedConfirmed;
+
+    if (this.pendingRootValid) {
+      const pendingPersisted = this.savePending({ allowEviction: false }, stagedPending).success &&
+        this.persistedPendingCollectionMatches(stagedPending);
+      if (pendingPersisted) {
+        this.interactions = stagedPending;
+      }
+    }
+    return true;
   }
 
   // Pending interactions management
   private loadPending(): void {
-    const pending = safeGet<PendingInteraction[]>(PENDING_INTERACTIONS_KEY, []);
-    if (pending) {
-      for (const item of pending) {
-        // Skip if already confirmed
-        if (!this.confirmedIds.has(item.id)) {
-          this.interactions.set(item.id, item);
-        }
+    const stored = readStoredArray(PENDING_INTERACTIONS_KEY);
+    this.pendingRootValid = stored.validRoot;
+    this.interactions.clear();
+    this.unverifiedPendingRecords = [];
+    if (!stored.validRoot) return;
+
+    const ambiguous = new Set<string>();
+    for (const record of stored.records) {
+      if (!isStoredPendingInteraction(record)) {
+        this.unverifiedPendingRecords.push(record);
+        continue;
       }
-    } else {
-      this.interactions.clear();
+      if (this.isEnvelopeConfirmed(record)) {
+        continue;
+      }
+      const identity = envelopeSyncIdentity(record.id, record);
+      if (ambiguous.has(identity)) {
+        this.unverifiedPendingRecords.push(record);
+        continue;
+      }
+      const existing = this.interactions.get(identity);
+      if (existing) {
+        this.interactions.delete(identity);
+        this.unverifiedPendingRecords.push(existing, record);
+        ambiguous.add(identity);
+        continue;
+      }
+      this.interactions.set(identity, record);
     }
   }
 
-  private savePending(): SafeSetResult {
-    // Filter out confirmed interactions and sort by timestamp
-    const pending = Array.from(this.interactions.values())
-      .filter(item => !this.confirmedIds.has(item.id) && item.status !== 'backend_confirmed')
-      .sort((a, b) => a.timestamp - b.timestamp);
-    
-    // Store in chunks if needed
-    const dataToStore = pending.length > CHUNK_SIZE ? pending.slice(-CHUNK_SIZE) : pending;
-    
-    // Critical session data - use memory fallback if quota exceeded
-    const result = safeSet(PENDING_INTERACTIONS_KEY, dataToStore, {
-      priority: 'critical',
-      allowEviction: true,
-    });
-    
-    if (!result.success && result.quotaExceeded) {
-      // Try with just the most recent
-      const recent = Array.from(this.interactions.values())
-        .filter(item => !this.confirmedIds.has(item.id))
-        .sort((a, b) => b.timestamp - a.timestamp)
-        .slice(0, 50);
-      
-      const retryResult = safeSet(PENDING_INTERACTIONS_KEY, recent, {
-        priority: 'critical',
-        allowEviction: true,
-      });
-      
-      if (!retryResult.success) {
-        console.error('[DurablePendingStore] Failed to save pending interactions', retryResult.error);
-      }
-      return retryResult;
+  private pendingRecords(interactions = this.interactions): unknown[] {
+    return [...this.unverifiedPendingRecords, ...interactions.values()];
+  }
+
+  private savePending(
+    _options: { allowEviction?: boolean } = {},
+    interactions = this.interactions,
+  ): SafeSetResult {
+    if (!this.pendingRootValid) {
+      return { success: false, error: 'Pending interaction storage root is malformed' };
     }
-    
-    return result;
+    try {
+      return safeSet(PENDING_INTERACTIONS_KEY, this.pendingRecords(interactions), {
+        priority: 'critical',
+        allowEviction: false,
+      });
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Pending storage write failed' };
+    }
+  }
+
+  private persistedPendingCollectionMatches(interactions: Map<string, PendingInteraction>): boolean {
+    const stored = readStoredArray(PENDING_INTERACTIONS_KEY);
+    return stored.validRoot &&
+      JSON.stringify(stored.records) === JSON.stringify(this.pendingRecords(interactions));
   }
 
   /**
    * Add a new interaction to the pending store
    * RESEARCH-1: Every interaction starts as 'backend_pending'
    */
-  add(event: InteractionEvent): void {
-    // Skip if already confirmed
-    if (this.confirmedIds.has(event.id)) {
-      return;
+  add(event: InteractionEvent): boolean {
+    if (
+      !this.pendingRootValid ||
+      !this.confirmedRootValid ||
+      !isStoredInteractionEvent(event)
+    ) return false;
+    const principal = getActiveSyncPrincipal();
+    const identity = ownedSyncIdentity(event.id, principal?.syncOwnerId);
+    const envelope = {
+      id: event.id,
+      ...(principal ? { syncOwnerId: principal.syncOwnerId } : {}),
+      event,
+    };
+    const confirmationState = this.getEnvelopeConfirmationState(
+      envelope,
+      principal?.syncOwnerId,
+    );
+    if (confirmationState === 'confirmed') return true;
+    if (confirmationState === 'blocked') return false;
+    if (
+      principal &&
+      this.unverifiedRecordMayBelongToOwner(this.unverifiedPendingRecords, event.id, principal.syncOwnerId)
+    ) return false;
+    const existing = this.interactions.get(identity);
+    if (existing) {
+      return isExactInteractionEvent(existing.event, event);
     }
 
     const pending: PendingInteraction = {
@@ -269,10 +888,15 @@ class DurablePendingStore {
       retryCount: 0,
       sessionId: event.sessionId || 'unknown',
       eventType: event.eventType,
+      ...ownerFields(principal),
     };
 
-    this.interactions.set(event.id, pending);
-    this.savePending();
+    const staged = new Map(this.interactions);
+    staged.set(identity, pending);
+    const persisted = this.savePending({ allowEviction: false }, staged).success &&
+      this.persistedPendingCollectionMatches(staged);
+    if (!persisted) return false;
+    this.interactions = staged;
 
     if (import.meta.env.DEV) {
       console.info('[telemetry_interaction_pending]', {
@@ -281,50 +905,233 @@ class DurablePendingStore {
         sessionId: event.sessionId,
       });
     }
+    return true;
   }
 
   /**
    * Mark an interaction as sent (but not yet confirmed)
    */
-  markSent(id: string): void {
-    const item = this.interactions.get(id);
-    if (item) {
-      item.status = 'backend_pending';
-      item.lastAttempt = Date.now();
-      item.retryCount++;
-      this.savePending();
-    }
+  markSent(id: string, syncOwnerId?: string): boolean {
+    const identity = ownedSyncIdentity(id, syncOwnerId);
+    const item = this.interactions.get(identity);
+    if (!item) return false;
+    const staged = new Map(this.interactions);
+    staged.set(identity, {
+      ...item,
+      status: 'backend_pending',
+      lastAttempt: Date.now(),
+      retryCount: item.retryCount + 1,
+    });
+    const persisted = this.savePending({ allowEviction: false }, staged).success &&
+      this.persistedPendingCollectionMatches(staged);
+    if (persisted) this.interactions = staged;
+    return persisted;
   }
 
   /**
    * Mark an interaction as confirmed by backend
    */
-  markConfirmedInteraction(id: string): void {
-    this.markConfirmed(id);
-    if (import.meta.env.DEV) {
+  markConfirmedInteraction(id: string, syncOwnerId?: string): boolean {
+    const persisted = this.markConfirmed(id, syncOwnerId);
+    if (persisted && import.meta.env.DEV) {
       console.info('[telemetry_interaction_confirmed]', { eventId: id });
     }
+    return persisted;
   }
 
   /**
    * Mark an interaction as dead letter (irrecoverable)
    */
-  markDeadLetter(id: string, reason: string): void {
-    const item = this.interactions.get(id);
-    if (item) {
-      item.status = 'dead_letter';
-      this.savePending();
-      console.error('[telemetry_dead_letter]', { eventId: id, reason });
-    }
+  markDeadLetter(id: string, reason: string, syncOwnerId?: string): boolean {
+    const identity = ownedSyncIdentity(id, syncOwnerId);
+    const item = this.interactions.get(identity);
+    if (!item) return false;
+    const staged = new Map(this.interactions);
+    staged.set(identity, { ...item, status: 'dead_letter' });
+    const persisted = this.savePending({ allowEviction: false }, staged).success &&
+      this.persistedPendingCollectionMatches(staged);
+    if (!persisted) return false;
+    this.interactions = staged;
+    console.error('[telemetry_dead_letter]', { eventId: id, reason });
+    return true;
   }
 
   /**
    * Get all pending interactions (backend_pending status)
    */
   getAllPending(): PendingInteraction[] {
-    return Array.from(this.interactions.values())
-      .filter(item => item.status === 'backend_pending' && !this.confirmedIds.has(item.id))
-      .sort((a, b) => a.timestamp - b.timestamp);
+    this.lastClaimPersistenceFailed = false;
+    if (!this.pendingRootValid || !this.confirmedRootValid) {
+      this.lastClaimPersistenceFailed = true;
+      return [];
+    }
+    const eligible: PendingInteraction[] = [];
+    const originalInteractions = this.interactions;
+    const stagedInteractions = new Map(originalInteractions);
+    const claimedItems: PendingInteraction[] = [];
+    const principal = getActiveSyncPrincipal();
+
+    for (const [identity, item] of originalInteractions) {
+      if (item.status !== 'backend_pending' || this.isEnvelopeConfirmed(item)) {
+        continue;
+      }
+      const ownership = resolveEnvelopeOwnershipForActivePrincipal(item, item.event.learnerId);
+      if (ownership.eligible) {
+        const confirmed = principal
+          ? this.confirmedForOwner(item.id, principal.syncOwnerId)
+          : undefined;
+        if (
+          (principal && this.unverifiedRecordMayBelongToOwner(
+            this.unverifiedConfirmedRecords,
+            item.id,
+            principal.syncOwnerId,
+          )) ||
+          confirmed &&
+          confirmed.eventFingerprint !== interactionEventFingerprint(item.event)
+        ) {
+          this.lastClaimPersistenceFailed = true;
+          continue;
+        }
+        eligible.push(item);
+      } else if (ownership.claimOwnerId) {
+        const targetIdentity = ownedSyncIdentity(item.id, ownership.claimOwnerId);
+        const confirmed = this.confirmedForOwner(item.id, ownership.claimOwnerId);
+        const fingerprint = interactionEventFingerprint(item.event);
+        if (
+          stagedInteractions.has(targetIdentity) ||
+          this.unverifiedRecordMayBelongToOwner(
+            this.unverifiedPendingRecords,
+            item.id,
+            ownership.claimOwnerId,
+          ) ||
+          this.unverifiedRecordMayBelongToOwner(
+            this.unverifiedConfirmedRecords,
+            item.id,
+            ownership.claimOwnerId,
+          ) ||
+          (confirmed && confirmed.eventFingerprint !== fingerprint)
+        ) {
+          this.lastClaimPersistenceFailed = true;
+          continue;
+        }
+        if (confirmed?.eventFingerprint === fingerprint) {
+          continue;
+        }
+        const claimed = { ...item, syncOwnerId: ownership.claimOwnerId };
+        stagedInteractions.delete(identity);
+        stagedInteractions.set(envelopeSyncIdentity(claimed.id, claimed), claimed);
+        claimedItems.push(claimed);
+      }
+    }
+
+    if (claimedItems.length > 0) {
+      const persisted = this.savePending({ allowEviction: false }, stagedInteractions).success &&
+        this.persistedPendingCollectionMatches(stagedInteractions) &&
+        claimedItems.every((claimed) => {
+          const stored = readStoredArray(PENDING_INTERACTIONS_KEY);
+          return stored.validRoot && stored.records.some((record) =>
+            isStoredPendingInteraction(record) &&
+            record.syncOwnerId === claimed.syncOwnerId &&
+            interactionEventFingerprint(record.event) === interactionEventFingerprint(claimed.event),
+          );
+        });
+      if (persisted) {
+        this.interactions = stagedInteractions;
+        eligible.push(...claimedItems);
+      } else {
+        this.lastClaimPersistenceFailed = true;
+      }
+    }
+
+    return eligible.sort((a, b) => a.timestamp - b.timestamp);
+  }
+
+  didLastClaimPersistenceFail(): boolean {
+    return this.lastClaimPersistenceFailed;
+  }
+
+  coordinateQueueInteraction(
+    event: InteractionEvent,
+    syncOwnerId: string,
+    coordination: PendingQueueCoordination,
+    claimingLegacyQueue = false,
+  ): 'ready' | 'confirmed' | 'blocked' {
+    if (!this.pendingRootValid || !this.confirmedRootValid) return 'blocked';
+    if (claimingLegacyQueue) {
+      const hasOtherOwnerCollision = [
+        ...coordination.staged.values(),
+        ...this.confirmedItems.values(),
+        ...this.unverifiedPendingRecords,
+        ...this.unverifiedConfirmedRecords,
+      ].some((record) =>
+        isRecord(record) && record.id === event.id &&
+        typeof record.syncOwnerId === 'string' && record.syncOwnerId.length > 0 &&
+        record.syncOwnerId !== syncOwnerId,
+      );
+      if (hasOtherOwnerCollision) return 'blocked';
+    }
+    const fingerprint = interactionEventFingerprint(event);
+    const confirmed = this.confirmedForOwner(event.id, syncOwnerId);
+    if (confirmed) {
+      return confirmed.eventFingerprint === fingerprint ? 'confirmed' : 'blocked';
+    }
+    if (
+      this.unverifiedRecordMayBelongToOwner(this.unverifiedPendingRecords, event.id, syncOwnerId) ||
+      this.unverifiedRecordMayBelongToOwner(this.unverifiedConfirmedRecords, event.id, syncOwnerId)
+    ) {
+      return 'blocked';
+    }
+
+    const relevant = Array.from(coordination.staged.entries()).filter(([, item]) => {
+      if (item.id !== event.id) return false;
+      if (!Object.prototype.hasOwnProperty.call(item, 'syncOwnerId')) {
+        return item.event.learnerId === event.learnerId;
+      }
+      return item.syncOwnerId === syncOwnerId;
+    });
+    if (relevant.some(([, item]) => interactionEventFingerprint(item.event) !== fingerprint)) {
+      return 'blocked';
+    }
+    const ownedExact = relevant.find(([, item]) => item.syncOwnerId === syncOwnerId);
+    if (ownedExact) return 'ready';
+    const legacyExact = relevant.find(([, item]) =>
+      !Object.prototype.hasOwnProperty.call(item, 'syncOwnerId'),
+    );
+    if (!legacyExact) return 'ready';
+
+    const [legacyIdentity, legacyItem] = legacyExact;
+    const targetIdentity = ownedSyncIdentity(event.id, syncOwnerId);
+    if (coordination.staged.has(targetIdentity)) return 'blocked';
+    const claimed = { ...legacyItem, syncOwnerId };
+    coordination.staged.delete(legacyIdentity);
+    coordination.staged.set(targetIdentity, claimed);
+    coordination.changed = true;
+    return 'ready';
+  }
+
+  beginQueueCoordination(): PendingQueueCoordination {
+    const original = new Map(this.interactions);
+    return { original, staged: new Map(original), changed: false };
+  }
+
+  persistQueueCoordination(coordination: PendingQueueCoordination): boolean {
+    if (!coordination.changed) return true;
+    const persisted = this.savePending({ allowEviction: false }, coordination.staged).success &&
+      this.persistedPendingCollectionMatches(coordination.staged);
+    if (persisted) {
+      this.interactions = coordination.staged;
+    }
+    return persisted;
+  }
+
+  restoreQueueCoordination(coordination: PendingQueueCoordination): boolean {
+    if (!coordination.changed) return true;
+    const restored = this.savePending({ allowEviction: false }, coordination.original).success &&
+      this.persistedPendingCollectionMatches(coordination.original);
+    if (restored) {
+      this.interactions = coordination.original;
+    }
+    return restored;
   }
 
   /**
@@ -339,15 +1146,31 @@ class DurablePendingStore {
    * Get a specific pending interaction
    */
   get(id: string): PendingInteraction | undefined {
-    return this.interactions.get(id);
+    return this.getAllPending().find((item) => item.id === id);
   }
 
   /**
    * Check if an interaction is pending
    */
   isPending(id: string): boolean {
-    const item = this.interactions.get(id);
-    return item !== undefined && item.status === 'backend_pending' && !this.confirmedIds.has(id);
+    return this.getAllPending().some((item) => item.id === id);
+  }
+
+  hasExactPendingEventForActivePrincipal(event: InteractionEvent): boolean {
+    const principal = getActiveSyncPrincipal();
+    if (!principal) return false;
+    return this.getAllPending().some(
+      (item) =>
+        item.syncOwnerId === principal.syncOwnerId &&
+        isExactInteractionEvent(item.event, event),
+    );
+  }
+
+  hasExactConfirmedEventForActivePrincipal(event: InteractionEvent): boolean {
+    const principal = getActiveSyncPrincipal();
+    if (!principal) return false;
+    const confirmed = this.confirmedItems.get(ownedSyncIdentity(event.id, principal.syncOwnerId));
+    return confirmed?.eventFingerprint === interactionEventFingerprint(event);
   }
 
   /**
@@ -409,11 +1232,20 @@ class OfflineQueueManager {
   private isProcessing = false;
   private durableStore: DurablePendingStore;
   private deadLetter: DeadLetterItem[] = [];
-  private onConfirmedCallback?: (ids: string[]) => void;
-  private onDeadLetterCallback?: (ids: string[], reason: string) => void;
+  private unverifiedQueueRecords: unknown[] = [];
+  private unverifiedDeadLetterRecords: unknown[] = [];
+  private queueRootValid = true;
+  private deadLetterRootValid = true;
+  private onConfirmedCallback?: (ids: string[], syncOwnerId?: string) => void;
+  private onDeadLetterCallback?: (ids: string[], reason: string, syncOwnerId?: string) => void;
+  private lastClaimPersistenceFailed = false;
 
-  constructor(onConfirmed?: (ids: string[]) => void, onDeadLetter?: (ids: string[], reason: string) => void) {
-    this.durableStore = new DurablePendingStore();
+  constructor(
+    durableStore: DurablePendingStore,
+    onConfirmed?: (ids: string[], syncOwnerId?: string) => void,
+    onDeadLetter?: (ids: string[], reason: string, syncOwnerId?: string) => void,
+  ) {
+    this.durableStore = durableStore;
     this.onConfirmedCallback = onConfirmed;
     this.onDeadLetterCallback = onDeadLetter;
     this.loadQueue();
@@ -423,174 +1255,406 @@ class OfflineQueueManager {
   }
 
   private loadQueue(): void {
-    this.queue = safeGet<QueuedItem[]>(OFFLINE_QUEUE_KEY, []) ?? [];
-  }
+    const stored = readStoredArray(OFFLINE_QUEUE_KEY);
+    this.queueRootValid = stored.validRoot;
+    this.queue = [];
+    this.unverifiedQueueRecords = [];
+    if (!stored.validRoot) return;
 
-  private saveQueue(): SafeSetResult {
-    // Filter out confirmed items before saving
-    const unconfirmed = this.queue.filter(item => 
-      item.status !== 'backend_confirmed' && !this.durableStore.isConfirmed(item.id)
-    );
-    
-    // Critical session data - use memory fallback if quota exceeded
-    const result = safeSet(OFFLINE_QUEUE_KEY, unconfirmed, {
-      priority: 'critical',
-      allowEviction: true,
-    });
-    
-    if (!result.success && result.quotaExceeded) {
-      // Try to save in chunks
-      return this.saveQueueChunked();
-    }
-    
-    return result;
-  }
-
-  private saveQueueChunked(): SafeSetResult {
-    // Keep only most recent items if storage is limited
-    const recent = this.queue
-      .filter(item => item.status !== 'backend_confirmed')
-      .slice(-CHUNK_SIZE);
-    
-    const result = safeSet(OFFLINE_QUEUE_KEY, recent, {
-      priority: 'critical',
-      allowEviction: true,
-    });
-    
-    if (!result.success) {
-      // Last resort: keep minimal queue
-      const minimal = this.queue.slice(-20);
-      const minimalResult = safeSet(OFFLINE_QUEUE_KEY, minimal, {
-        priority: 'critical',
-        allowEviction: true,
-      });
-      
-      if (!minimalResult.success) {
-        // Memory fallback: queue remains in memory, will be retried on next session
-        console.error('[OfflineQueueManager] Failed to save queue to storage, using memory fallback');
+    const ambiguous = new Set<string>();
+    const byIdentity = new Map<string, QueuedItem>();
+    for (const record of stored.records) {
+      if (!isStoredQueuedItem(record)) {
+        this.unverifiedQueueRecords.push(record);
+        continue;
       }
-      return minimalResult;
+      const identity = envelopeSyncIdentity(record.id, record);
+      if (ambiguous.has(identity)) {
+        this.unverifiedQueueRecords.push(record);
+        continue;
+      }
+      const existing = byIdentity.get(identity);
+      if (existing) {
+        byIdentity.delete(identity);
+        this.unverifiedQueueRecords.push(existing, record);
+        ambiguous.add(identity);
+        continue;
+      }
+      byIdentity.set(identity, record);
     }
-    
-    return result;
+    this.queue = [...byIdentity.values()];
+  }
+
+  private queueRecords(queue = this.queue): unknown[] {
+    return [...this.unverifiedQueueRecords, ...queue];
+  }
+
+  private saveQueue(
+    _options: { allowEviction?: boolean } = {},
+    queue = this.queue,
+  ): SafeSetResult {
+    if (!this.queueRootValid) {
+      return { success: false, error: 'Offline queue storage root is malformed' };
+    }
+    try {
+      return safeSet(OFFLINE_QUEUE_KEY, this.queueRecords(queue), {
+        priority: 'critical',
+        allowEviction: false,
+      });
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Offline queue write failed' };
+    }
+  }
+
+  private persistedQueueCollectionMatches(queue: QueuedItem[]): boolean {
+    const stored = readStoredArray(OFFLINE_QUEUE_KEY);
+    return stored.validRoot &&
+      JSON.stringify(stored.records) === JSON.stringify(this.queueRecords(queue));
   }
 
   private loadDeadLetter(): void {
-    this.deadLetter = safeGet<DeadLetterItem[]>(DEAD_LETTER_KEY, []) ?? [];
-  }
+    const stored = readStoredArray(DEAD_LETTER_KEY);
+    this.deadLetterRootValid = stored.validRoot;
+    this.deadLetter = [];
+    this.unverifiedDeadLetterRecords = [];
+    if (!stored.validRoot) return;
 
-  private saveDeadLetter(): SafeSetResult {
-    // Critical for research data integrity - use memory fallback if quota exceeded
-    return safeSet(DEAD_LETTER_KEY, this.deadLetter.slice(-50), {
-      priority: 'critical',
-      allowEviction: true,
-    });
-  }
-
-  add(item: Omit<QueuedItem, 'retries' | 'timestamp' | 'status' | 'errorCount'>): void {
-    // Check if already confirmed
-    if (this.durableStore.isConfirmed(item.id)) {
-      return;
+    const ambiguous = new Set<string>();
+    const byIdentity = new Map<string, DeadLetterItem>();
+    for (const record of stored.records) {
+      if (!isStoredDeadLetterItem(record)) {
+        this.unverifiedDeadLetterRecords.push(record);
+        continue;
+      }
+      const identity = envelopeSyncIdentity(record.id, record);
+      if (ambiguous.has(identity)) {
+        this.unverifiedDeadLetterRecords.push(record);
+        continue;
+      }
+      const existing = byIdentity.get(identity);
+      if (existing) {
+        byIdentity.delete(identity);
+        this.unverifiedDeadLetterRecords.push(existing, record);
+        ambiguous.add(identity);
+        continue;
+      }
+      byIdentity.set(identity, record);
     }
+    this.deadLetter = [...byIdentity.values()];
+  }
 
+  private deadLetterRecords(deadLetter = this.deadLetter): unknown[] {
+    return [...this.unverifiedDeadLetterRecords, ...deadLetter];
+  }
+
+  private saveDeadLetter(deadLetter = this.deadLetter): SafeSetResult {
+    if (!this.deadLetterRootValid) {
+      return { success: false, error: 'Dead-letter storage root is malformed' };
+    }
+    try {
+      return safeSet(
+        DEAD_LETTER_KEY,
+        this.deadLetterRecords(deadLetter),
+        { priority: 'critical', allowEviction: false },
+      );
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Dead-letter write failed' };
+    }
+  }
+
+  private persistedDeadLetterCollectionMatches(deadLetter: DeadLetterItem[]): boolean {
+    const stored = readStoredArray(DEAD_LETTER_KEY);
+    return stored.validRoot &&
+      JSON.stringify(stored.records) === JSON.stringify(this.deadLetterRecords(deadLetter));
+  }
+
+  private isEnvelopeDeadLettered(envelope: QueuedItem): boolean {
+    const identity = envelopeSyncIdentity(envelope.id, envelope);
+    const proof = this.deadLetter.find((item) => envelopeSyncIdentity(item.id, item) === identity);
+    return Boolean(
+      proof &&
+      queuePayloadFingerprint(proof) === queuePayloadFingerprint(envelope),
+    );
+  }
+
+  add(item: Omit<QueuedItem, 'retries' | 'timestamp' | 'status' | 'errorCount'>): boolean {
+    if (!this.queueRootValid || !this.deadLetterRootValid) return false;
+    const principal = getActiveSyncPrincipal();
+    const syncOwnerId = item.syncOwnerId ?? principal?.syncOwnerId;
     const queueItem: QueuedItem = {
       ...item,
       retries: 0,
       timestamp: Date.now(),
       status: 'queued_locally',
       errorCount: 0,
+      ...(syncOwnerId ? { syncOwnerId } : {}),
     };
-    
-    this.queue.push(queueItem);
-    this.saveQueue();
+    if (!isStoredQueuedItem(queueItem)) return false;
+    const confirmationState = this.durableStore.getEnvelopeConfirmationState(
+      queueItem,
+      syncOwnerId,
+    );
+    if (confirmationState === 'confirmed' || this.isEnvelopeDeadLettered(queueItem)) return true;
+    if (confirmationState === 'blocked') return false;
+    if (this.unverifiedQueueRecords.some((record) =>
+      isRecord(record) && record.id === queueItem.id &&
+      (!Object.prototype.hasOwnProperty.call(record, 'syncOwnerId') || record.syncOwnerId === syncOwnerId),
+    )) return false;
+    if (this.unverifiedDeadLetterRecords.some((record) =>
+      isRecord(record) && record.id === queueItem.id &&
+      (!Object.prototype.hasOwnProperty.call(record, 'syncOwnerId') || record.syncOwnerId === syncOwnerId),
+    )) return false;
+    const identity = envelopeSyncIdentity(queueItem.id, queueItem);
+    const existing = this.queue.find((candidate) =>
+      envelopeSyncIdentity(candidate.id, candidate) === identity,
+    );
+    if (existing) {
+      return queuePayloadFingerprint(existing) === queuePayloadFingerprint(queueItem);
+    }
+
+    const stagedQueue = [...this.queue, queueItem];
+    const persisted = this.saveQueue({ allowEviction: false }, stagedQueue).success &&
+      this.persistedQueueCollectionMatches(stagedQueue);
+    if (!persisted) return false;
+    this.queue = stagedQueue;
 
     // Log queue growth for large backlogs
     if (this.queue.length > CHUNK_SIZE) {
       if (import.meta.env.DEV) {
-        console.info('[OfflineQueue] Queue size:', this.queue.length, '- using chunked storage');
+        console.info('[OfflineQueue] Queue size:', this.queue.length, '- retaining complete durable queue');
       }
     }
+    return true;
   }
 
-  remove(id: string): void {
-    this.queue = this.queue.filter(item => item.id !== id);
-    this.durableStore.markConfirmed(id);
-    this.saveQueue();
+  remove(id: string, syncOwnerId?: string): boolean {
+    const identity = ownedSyncIdentity(id, syncOwnerId);
+    const confirmedEnvelope = this.queue.find(
+      (item) => envelopeSyncIdentity(item.id, item) === identity,
+    );
+    if (!confirmedEnvelope || !this.durableStore.markConfirmed(id, syncOwnerId, confirmedEnvelope)) {
+      return false;
+    }
+    const stagedQueue = this.queue.filter(
+      item => envelopeSyncIdentity(item.id, item) !== identity,
+    );
+    const removedPersisted = this.saveQueue({ allowEviction: false }, stagedQueue).success &&
+      this.persistedQueueCollectionMatches(stagedQueue);
+    if (removedPersisted) {
+      this.queue = stagedQueue;
+    }
+    return true;
   }
 
-  removeBatch(ids: string[]): void {
-    this.queue = this.queue.filter(item => !ids.includes(item.id));
-    this.durableStore.markConfirmedBatch(ids);
-    this.saveQueue();
+  removeBatch(ids: string[], syncOwnerId?: string): boolean {
+    const identities = new Set(ids.map((id) => ownedSyncIdentity(id, syncOwnerId)));
+    const confirmedEnvelopes = this.queue
+      .filter((item) => identities.has(envelopeSyncIdentity(item.id, item)));
+    if (!this.durableStore.markConfirmedBatch(ids, syncOwnerId, confirmedEnvelopes)) return false;
+    const stagedQueue = this.queue.filter(item => !identities.has(envelopeSyncIdentity(item.id, item)));
+    const removedPersisted = this.saveQueue({ allowEviction: false }, stagedQueue).success &&
+      this.persistedQueueCollectionMatches(stagedQueue);
+    if (removedPersisted) {
+      this.queue = stagedQueue;
+    }
     
     // RESEARCH-1: Notify external pending store of confirmations
     if (this.onConfirmedCallback) {
-      this.onConfirmedCallback(ids);
+      this.onConfirmedCallback(ids, syncOwnerId);
     }
+    return true;
   }
 
   getPending(): QueuedItem[] {
-    // Filter out confirmed items
-    return this.queue.filter(item => 
-      item.status !== 'backend_confirmed' && !this.durableStore.isConfirmed(item.id)
-    );
+    this.lastClaimPersistenceFailed = false;
+    if (!this.queueRootValid) {
+      this.lastClaimPersistenceFailed = true;
+      return [];
+    }
+    const originalQueue = this.queue;
+    const stagedQueue = [...originalQueue];
+    const pending: QueuedItem[] = [];
+    const claimedItems: QueuedItem[] = [];
+    const principal = getActiveSyncPrincipal();
+    const coordinationStage = this.durableStore.beginQueueCoordination();
+    originalQueue.forEach((item, index) => {
+      if (
+        item.status === 'backend_confirmed' ||
+        this.durableStore.isEnvelopeConfirmed(item) ||
+        this.isEnvelopeDeadLettered(item)
+      ) {
+        return;
+      }
+      const ownership = resolveEnvelopeOwnershipForActivePrincipal(item, queuedItemLearnerId(item));
+      if (ownership.eligible) {
+        const confirmationState = this.durableStore.getEnvelopeConfirmationState(
+          item,
+          principal?.syncOwnerId,
+        );
+        if (confirmationState === 'blocked') {
+          this.lastClaimPersistenceFailed = true;
+          return;
+        }
+        if (confirmationState === 'confirmed') return;
+        if (item.type === 'interaction' && principal) {
+          const coordinationStatus = this.durableStore.coordinateQueueInteraction(
+            item.data as InteractionEvent,
+            principal.syncOwnerId,
+            coordinationStage,
+          );
+          if (coordinationStatus === 'blocked') {
+            this.lastClaimPersistenceFailed = true;
+            return;
+          }
+          if (coordinationStatus === 'confirmed') return;
+        }
+        pending.push(item);
+      } else if (ownership.claimOwnerId) {
+        const claimed = { ...item, syncOwnerId: ownership.claimOwnerId };
+        const confirmationState = this.durableStore.getEnvelopeConfirmationState(
+          claimed,
+          ownership.claimOwnerId,
+        );
+        if (confirmationState === 'blocked') {
+          this.lastClaimPersistenceFailed = true;
+          return;
+        }
+        if (confirmationState === 'confirmed') return;
+        if (item.type === 'interaction') {
+          const coordinationStatus = this.durableStore.coordinateQueueInteraction(
+            item.data as InteractionEvent,
+            ownership.claimOwnerId,
+            coordinationStage,
+            true,
+          );
+          if (coordinationStatus === 'blocked') {
+            this.lastClaimPersistenceFailed = true;
+            return;
+          }
+          if (coordinationStatus === 'confirmed') return;
+        }
+        stagedQueue[index] = claimed;
+        claimedItems.push(claimed);
+      }
+    });
+    const pendingClaimsPersisted = this.durableStore.persistQueueCoordination(coordinationStage);
+    if (!pendingClaimsPersisted) {
+      this.lastClaimPersistenceFailed = true;
+      return [];
+    }
+    if (claimedItems.length > 0) {
+      const queuePersisted = this.saveQueue({ allowEviction: false }, stagedQueue).success &&
+        this.persistedQueueCollectionMatches(stagedQueue) &&
+        claimedItems.every((claimed) => {
+          const stored = readStoredArray(OFFLINE_QUEUE_KEY);
+          return stored.validRoot && stored.records.some((record) =>
+            isStoredQueuedItem(record) &&
+            record.syncOwnerId === claimed.syncOwnerId &&
+            record.type === claimed.type &&
+            (record.type === 'interaction'
+              ? interactionEventFingerprint(record.data as InteractionEvent) ===
+                interactionEventFingerprint(claimed.data as InteractionEvent)
+              : queuePayloadFingerprint(record) === queuePayloadFingerprint(claimed)),
+          );
+        });
+      if (queuePersisted) {
+        this.queue = stagedQueue;
+        pending.push(...claimedItems);
+      } else {
+        this.durableStore.restoreQueueCoordination(coordinationStage);
+        this.lastClaimPersistenceFailed = true;
+        return [];
+      }
+    }
+    return pending;
+  }
+
+  didLastClaimPersistenceFail(): boolean {
+    return this.lastClaimPersistenceFailed;
   }
 
   getAllUnconfirmed(): QueuedItem[] {
     return this.getPending();
   }
 
-  incrementRetry(id: string, error?: Error): void {
-    const item = this.queue.find(i => i.id === id);
+  incrementRetry(id: string, syncOwnerId?: string, error?: Error): void {
+    const identity = ownedSyncIdentity(id, syncOwnerId);
+    const index = this.queue.findIndex(i => envelopeSyncIdentity(i.id, i) === identity);
+    if (index < 0) return;
+    const item = this.queue[index];
+    const stagedQueue = [...this.queue];
+    stagedQueue[index] = {
+      ...item,
+      retries: item.retries + 1,
+      lastAttempt: Date.now(),
+      status: 'sent_unverified',
+      errorCount: item.errorCount + (error ? 1 : 0),
+    };
+    const persisted = this.saveQueue({ allowEviction: false }, stagedQueue).success &&
+      this.persistedQueueCollectionMatches(stagedQueue);
+    if (persisted) this.queue = stagedQueue;
+  }
+
+  markSent(id: string, syncOwnerId?: string): void {
+    const identity = ownedSyncIdentity(id, syncOwnerId);
+    const index = this.queue.findIndex(i => envelopeSyncIdentity(i.id, i) === identity);
+    if (index < 0) return;
+    const stagedQueue = [...this.queue];
+    stagedQueue[index] = {
+      ...this.queue[index],
+      status: 'sent_unverified',
+      lastAttempt: Date.now(),
+    };
+    const persisted = this.saveQueue({ allowEviction: false }, stagedQueue).success &&
+      this.persistedQueueCollectionMatches(stagedQueue);
+    if (persisted) this.queue = stagedQueue;
+  }
+
+  moveToDeadLetter(id: string, reason: string, syncOwnerId?: string): void {
+    const identity = ownedSyncIdentity(id, syncOwnerId);
+    const item = this.queue.find(i => envelopeSyncIdentity(i.id, i) === identity);
     if (item) {
-      item.retries++;
-      item.lastAttempt = Date.now();
-      item.status = 'sent_unverified';
-      
-      if (error) {
-        item.errorCount++;
+      if (this.unverifiedDeadLetterRecords.some((record) =>
+        isRecord(record) && record.id === id &&
+        (!Object.prototype.hasOwnProperty.call(record, 'syncOwnerId') || record.syncOwnerId === syncOwnerId),
+      )) {
+        return;
       }
-      
-      // RESEARCH-2: Never drop items due to retry count
-      // Only move to dead letter for irrecoverable schema validation failures
-      this.saveQueue();
-    }
-  }
-
-  markSent(id: string): void {
-    const item = this.queue.find(i => i.id === id);
-    if (item) {
-      item.status = 'sent_unverified';
-      item.lastAttempt = Date.now();
-      this.saveQueue();
-    }
-  }
-
-  moveToDeadLetter(id: string, reason: string): void {
-    const item = this.queue.find(i => i.id === id);
-    if (item) {
-      this.deadLetter.push({
+      const originalDeadLetter = [...this.deadLetter];
+      const stagedDeadLetter = [...originalDeadLetter, {
         id: item.id,
         type: item.type,
         data: item.data,
         reason,
         timestamp: Date.now(),
-      });
-      this.saveDeadLetter();
-      
-      // Log for research visibility
+        ...(item.syncOwnerId ? { syncOwnerId: item.syncOwnerId } : {}),
+      }];
+      const proofPersisted = this.saveDeadLetter(stagedDeadLetter).success &&
+        this.persistedDeadLetterCollectionMatches(stagedDeadLetter);
+      if (!proofPersisted) return;
+      this.deadLetter = stagedDeadLetter;
+
+      const stagedQueue = this.queue.filter(item => envelopeSyncIdentity(item.id, item) !== identity);
+      const sourceRemoved = this.saveQueue({ allowEviction: false }, stagedQueue).success &&
+        this.persistedQueueCollectionMatches(stagedQueue);
+      if (!sourceRemoved) {
+        const proofRolledBack = this.saveDeadLetter(originalDeadLetter).success &&
+          this.persistedDeadLetterCollectionMatches(originalDeadLetter);
+        if (proofRolledBack) {
+          this.deadLetter = originalDeadLetter;
+        }
+        return;
+      }
+      this.queue = stagedQueue;
+
       console.error('[telemetry_dead_letter]', {
         eventId: item.id,
         eventType: item.type,
         reason,
       });
-      
-      // Remove from main queue
-      this.queue = this.queue.filter(item => item.id !== id);
-      this.saveQueue();
 
       if (this.onDeadLetterCallback) {
-        this.onDeadLetterCallback([id], reason);
+        this.onDeadLetterCallback([id], reason, syncOwnerId);
       }
     }
   }
@@ -617,7 +1681,8 @@ class OfflineQueueManager {
   }
 
   async processQueue(): Promise<void> {
-    if (this.isProcessing || this.queue.length === 0) {
+    const principal = getActiveSyncPrincipal();
+    if (!principal || this.isProcessing || this.queue.length === 0) {
       return;
     }
 
@@ -626,9 +1691,13 @@ class OfflineQueueManager {
       return;
     }
 
+    if (!isActiveSyncPrincipal(principal)) {
+      return;
+    }
+
     this.isProcessing = true;
-    
-    const pending = this.getPending();
+    try {
+      const pending = this.getPending();
     
     // Process interactions in batches for efficiency
     const interactions = pending.filter(item => item.type === 'interaction');
@@ -636,20 +1705,26 @@ class OfflineQueueManager {
     
     // Process interactions in batches
     for (let i = 0; i < interactions.length; i += BATCH_SIZE) {
+      if (!isActiveSyncPrincipal(principal)) {
+        break;
+      }
       const batch = interactions.slice(i, i + BATCH_SIZE);
       const events = batch.map(item => item.data as InteractionEvent);
       
       try {
         // Use verified batch write
         const result = await storageClient.logInteractionsBatchVerified(events);
+        if (!isActiveSyncPrincipal(principal)) {
+          break;
+        }
         
         if (result.confirmed.length > 0) {
-          this.removeBatch(result.confirmed);
+          this.removeBatch(result.confirmed, principal.syncOwnerId);
         }
 
         if (result.invalid && result.invalid.length > 0) {
           for (const id of result.invalid) {
-            this.moveToDeadLetter(id, 'server_schema_validation_failed');
+            this.moveToDeadLetter(id, 'server_schema_validation_failed', principal.syncOwnerId);
           }
         }
         
@@ -658,19 +1733,25 @@ class OfflineQueueManager {
           if (result.invalid?.includes(id)) {
             continue;
           }
-          this.incrementRetry(id);
+          this.incrementRetry(id, principal.syncOwnerId);
         }
       } catch (error) {
+        if (!isActiveSyncPrincipal(principal)) {
+          break;
+        }
         console.warn('[OfflineQueue] Batch processing failed:', error);
         // Mark all as retry
         for (const item of batch) {
-          this.incrementRetry(item.id, error as Error);
+          this.incrementRetry(item.id, principal.syncOwnerId, error as Error);
         }
       }
     }
     
     // Process other item types individually
     for (const item of others) {
+      if (!isActiveSyncPrincipal(principal)) {
+        break;
+      }
       try {
         let success = false;
         
@@ -689,22 +1770,30 @@ class OfflineQueueManager {
             break;
           }
         }
+        if (!isActiveSyncPrincipal(principal)) {
+          break;
+        }
         
         if (success) {
-          this.remove(item.id);
+          this.remove(item.id, principal.syncOwnerId);
         } else {
-          this.incrementRetry(item.id);
+          this.incrementRetry(item.id, principal.syncOwnerId);
         }
       } catch (error) {
+        if (!isActiveSyncPrincipal(principal)) {
+          break;
+        }
         console.warn('[OfflineQueue] Failed to process item:', error);
-        this.incrementRetry(item.id, error as Error);
+        this.incrementRetry(item.id, principal.syncOwnerId, error as Error);
       }
       
       // Small delay between items to avoid overwhelming the backend
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     
-    this.isProcessing = false;
+    } finally {
+      this.isProcessing = false;
+    }
   }
 }
 
@@ -721,6 +1810,7 @@ class DualStorageManager {
   private lastBackendAckTime: number | null = null;
   private totalConfirmedCount: number = 0;
   private totalFailedCount: number = 0;
+  private pendingSessionEndClaimFailed = false;
 
   private storageTelemetryUnsubscribe?: () => void;
 
@@ -738,14 +1828,9 @@ class DualStorageManager {
     });
     
     this.pendingStore = new DurablePendingStore();  // RESEARCH-1
-    this.offlineQueue = new OfflineQueueManager((ids) => {
-      // RESEARCH-1: When offline queue confirms items, also mark in pending store
+    this.offlineQueue = new OfflineQueueManager(this.pendingStore, undefined, (ids, reason, syncOwnerId) => {
       for (const id of ids) {
-        this.pendingStore.markConfirmedInteraction(id);
-      }
-    }, (ids, reason) => {
-      for (const id of ids) {
-        this.pendingStore.markDeadLetter(id, reason);
+        this.pendingStore.markDeadLetter(id, reason, syncOwnerId);
       }
     });
     
@@ -892,22 +1977,35 @@ class DualStorageManager {
   // User Profile Operations
   // ============================================================================
 
+  private addOfflineQueueItem(
+    item: Omit<QueuedItem, 'retries' | 'timestamp' | 'status' | 'errorCount'>,
+    failureMessage: string,
+  ): boolean {
+    const persisted = this.offlineQueue.add(item);
+    if (!persisted) {
+      console.error(failureMessage);
+    }
+    return persisted;
+  }
+
   private queueProfileForRetry(
     profile: LearnerProfile,
     reason: string,
     idPrefix: 'profile' | 'full-profile' = 'full-profile',
     error?: unknown,
-  ): void {
+    syncOwnerId?: string,
+  ): boolean {
     if (error !== undefined) {
       console.warn(reason, error);
     } else {
       console.warn(reason);
     }
-    this.offlineQueue.add({
-      id: `${idPrefix}-${profile.id}-${Date.now()}`,
+    return this.addOfflineQueueItem({
+      id: `${idPrefix}-${profile.id}-${createEventId('retry')}`,
       type: 'profile',
-      data: profile,
-    });
+      data: serializeQueuedProfile(profile),
+      ...(syncOwnerId ? { syncOwnerId } : {}),
+    }, '[DualStorage] Profile retry envelope could not be persisted.');
   }
 
   saveUserProfile(profile: UserProfile): { success: boolean; quotaExceeded?: boolean } {
@@ -957,27 +2055,63 @@ class DualStorageManager {
     };
   }
 
-  private queueInteractionForRetry(event: InteractionEvent): void {
-    this.offlineQueue.add({
+  private getPersistedInteraction(event: InteractionEvent): InteractionEvent {
+    const persisted = localStorageManager
+      .getInteractionsByLearner(event.learnerId)
+      .slice()
+      .reverse()
+      .find((candidate) =>
+        candidate.id === event.id &&
+        candidate.sessionId === event.sessionId &&
+        candidate.timestamp === event.timestamp &&
+        candidate.eventType === event.eventType,
+      );
+    return persisted ?? event;
+  }
+
+  private queueInteractionForRetry(event: InteractionEvent, syncOwnerId?: string): boolean {
+    return this.addOfflineQueueItem({
       id: event.id,
       type: 'interaction',
       data: event,
-    });
+      ...(syncOwnerId ? { syncOwnerId } : {}),
+    }, '[DualStorage] Interaction retry envelope could not be persisted.');
   }
 
   private sendInteractionToBackend(event: InteractionEvent, source: string): void {
-    if (!this.shouldUseBackend()) {
+    const principal = getActiveSyncPrincipal();
+    const eventForWrite = this.withActiveSessionFallback(event);
+
+    if (!this.config.useBackend) {
       return;
     }
 
-    const eventForWrite = this.withActiveSessionFallback(event);
+    if (!this.pendingStore.add(eventForWrite)) {
+      console.error(`[DualStorage] ${source} remains local because durable pending storage is unavailable`);
+      return;
+    }
+
+    if (!principal || !this.shouldUseBackend()) {
+      this.queueInteractionForRetry(eventForWrite, principal?.syncOwnerId);
+      return;
+    }
+
+    this.pendingStore.markSent(eventForWrite.id, principal.syncOwnerId);
     storageClient.logInteraction(eventForWrite).then(result => {
+      if (!isActiveSyncPrincipal(principal)) {
+        return;
+      }
       if (!result.success || !result.confirmed) {
-        this.queueInteractionForRetry(eventForWrite);
+        this.queueInteractionForRetry(eventForWrite, principal.syncOwnerId);
+      } else {
+        this.pendingStore.markConfirmedInteraction(eventForWrite.id, principal.syncOwnerId);
       }
     }).catch(error => {
+      if (!isActiveSyncPrincipal(principal)) {
+        return;
+      }
       console.warn(`[DualStorage] Backend ${source} failed, queuing for retry:`, error);
-      this.queueInteractionForRetry(eventForWrite);
+      this.queueInteractionForRetry(eventForWrite, principal.syncOwnerId);
     });
   }
 
@@ -1027,10 +2161,16 @@ class DualStorageManager {
     
     // Step 2: Add to durable pending store BEFORE network send
     // This ensures the event is tracked even if the tab closes during send
-    this.pendingStore.add(eventForWrite);
+    const persistedEvent = this.getPersistedInteraction(eventForWrite);
+    const pendingPersisted = this.pendingStore.add(persistedEvent);
+    const principal = getActiveSyncPrincipal();
+    if (this.config.useBackend && !pendingPersisted) {
+      console.error('[DualStorage] Interaction remains local because durable pending storage is unavailable');
+      return localResult;
+    }
     
     // Step 3: Update problem progress for execution events
-    if (this.shouldUseBackend() && eventForWrite.eventType === 'execution' && eventForWrite.problemId) {
+    if (principal && this.shouldUseBackend() && eventForWrite.eventType === 'execution' && eventForWrite.problemId) {
       const progressPayload = {
         solved: eventForWrite.successful === true,
         incrementAttempts: true,
@@ -1047,27 +2187,41 @@ class DualStorageManager {
     }
     
     // Step 4: Send to backend (async in background)
-    if (this.shouldUseBackend()) {
-      this.pendingStore.markSent(eventForWrite.id);
+    if (principal && this.shouldUseBackend()) {
+      this.pendingStore.markSent(eventForWrite.id, principal.syncOwnerId);
       
       storageClient.logInteraction(eventForWrite).then(result => {
+        if (!isActiveSyncPrincipal(principal)) {
+          return;
+        }
         if (result.success && result.confirmed) {
           // Backend confirmed receipt - mark as confirmed
-          this.pendingStore.markConfirmedInteraction(eventForWrite.id);
+          const proofPersisted = this.pendingStore.markConfirmedInteraction(
+            eventForWrite.id,
+            principal.syncOwnerId,
+          );
           this.trackBackendAck();
+          if (!proofPersisted) {
+            console.error('[DualStorage] Backend confirmed interaction but local proof could not persist:', eventForWrite.id);
+          }
         } else {
           // Backend did not confirm - will be retried via pending store
           console.warn('[DualStorage] Backend did not confirm interaction, will retry:', eventForWrite.id);
-          this.queueInteractionForRetry(eventForWrite);
+          this.queueInteractionForRetry(eventForWrite, principal.syncOwnerId);
         }
       }).catch(error => {
+        if (!isActiveSyncPrincipal(principal)) {
+          return;
+        }
         console.warn('[DualStorage] Backend saveInteraction failed, will retry:', error);
         // Event remains in pending store, will be retried
-        this.queueInteractionForRetry(eventForWrite);
+        this.queueInteractionForRetry(eventForWrite, principal.syncOwnerId);
       });
-    } else {
+    } else if (!this.config.useBackend) {
       // No backend - mark as confirmed locally
-      this.pendingStore.markConfirmedInteraction(eventForWrite.id);
+      this.pendingStore.markConfirmedInteraction(eventForWrite.id, principal?.syncOwnerId);
+    } else {
+      this.queueInteractionForRetry(eventForWrite, principal?.syncOwnerId);
     }
     
     return localResult;
@@ -1143,20 +2297,40 @@ class DualStorageManager {
         };
       }
 
-    this.pendingStore.add(eventForWrite);
+    const persistedEvent = this.getPersistedInteraction(eventForWrite);
+    const principal = getActiveSyncPrincipal();
 
     if (!this.config.useBackend) {
-      this.pendingStore.markConfirmedInteraction(eventForWrite.id);
       return { backendConfirmed: true, pendingSync: false };
     }
 
+    if (!this.pendingStore.add(persistedEvent)) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Saved locally, but durable pending ownership could not be persisted.',
+      };
+    }
+
+    if (!principal) {
+      this.queueInteractionForRetry(eventForWrite);
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Saved locally. Authentication is not active; queued for sync.',
+      };
+    }
+
     const healthy = await this.checkHealth();
+    if (!isActiveSyncPrincipal(principal)) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Saved locally. Authenticated account changed before backend sync.',
+      };
+    }
     if (!healthy) {
-      this.offlineQueue.add({
-        id: eventForWrite.id,
-        type: 'interaction',
-        data: eventForWrite,
-      });
+      this.queueInteractionForRetry(eventForWrite, principal.syncOwnerId);
       return {
         backendConfirmed: false,
         pendingSync: true,
@@ -1165,30 +2339,45 @@ class DualStorageManager {
     }
 
     try {
-      this.pendingStore.markSent(eventForWrite.id);
+      this.pendingStore.markSent(eventForWrite.id, principal.syncOwnerId);
       const backendSuccess = await storageClient.logInteraction(eventForWrite);
-      if (backendSuccess.success && backendSuccess.confirmed) {
-        this.pendingStore.markConfirmedInteraction(eventForWrite.id);
-        this.trackBackendAck();
-        return { backendConfirmed: true, pendingSync: false };
+      if (!isActiveSyncPrincipal(principal)) {
+        return {
+          backendConfirmed: false,
+          pendingSync: true,
+          error: 'Saved locally. Authenticated account changed during backend sync.',
+        };
       }
-      this.offlineQueue.add({
-        id: eventForWrite.id,
-        type: 'interaction',
-        data: eventForWrite,
-      });
+      if (backendSuccess.success && backendSuccess.confirmed) {
+        const proofPersisted = this.pendingStore.markConfirmedInteraction(
+          eventForWrite.id,
+          principal.syncOwnerId,
+        );
+        this.trackBackendAck();
+        return proofPersisted
+          ? { backendConfirmed: true, pendingSync: false }
+          : {
+              backendConfirmed: true,
+              pendingSync: true,
+              error: 'Backend confirmed, but local confirmation proof could not be persisted.',
+            };
+      }
+      this.queueInteractionForRetry(eventForWrite, principal.syncOwnerId);
       return {
         backendConfirmed: false,
         pendingSync: true,
         error: 'Saved locally. Backend did not confirm; queued for retry.',
       };
     } catch (error) {
+      if (!isActiveSyncPrincipal(principal)) {
+        return {
+          backendConfirmed: false,
+          pendingSync: true,
+          error: 'Saved locally. Authenticated account changed during backend sync.',
+        };
+      }
       console.warn('[DualStorage] saveInteractionCritical backend failure, queued:', error);
-      this.offlineQueue.add({
-        id: eventForWrite.id,
-        type: 'interaction',
-        data: eventForWrite,
-      });
+      this.queueInteractionForRetry(eventForWrite, principal.syncOwnerId);
       return {
         backendConfirmed: false,
         pendingSync: true,
@@ -1217,29 +2406,45 @@ class DualStorageManager {
   // ============================================================================
 
   saveTextbookUnit(learnerId: string, unit: InstructionalUnit): SaveTextbookUnitResult {
+    const principal = getActiveSyncPrincipal();
+    const localResult = localStorageManager.saveTextbookUnit(learnerId, unit);
     // Send to backend FIRST (primary source of truth) - async in background
-    if (this.shouldUseBackend()) {
+    if (principal && this.shouldUseBackend()) {
       storageClient.saveTextbookUnit(learnerId, unit).then(backendSuccess => {
+        if (!isActiveSyncPrincipal(principal)) {
+          return;
+        }
         if (!backendSuccess) {
           // Backend failed, queue for retry
-          this.offlineQueue.add({
-            id: `textbook-${unit.id}-${Date.now()}`,
+          this.addOfflineQueueItem({
+            id: `textbook-${unit.id}-${createEventId('retry')}`,
             type: 'textbookUnit',
             data: { learnerId, unit },
-          });
+            syncOwnerId: principal.syncOwnerId,
+          }, '[DualStorage] Textbook retry envelope could not be persisted.');
         }
       }).catch(error => {
+        if (!isActiveSyncPrincipal(principal)) {
+          return;
+        }
         console.warn('[DualStorage] Backend saveTextbookUnit failed, queuing for retry:', error);
-        this.offlineQueue.add({
-          id: `textbook-${unit.id}-${Date.now()}`,
+        this.addOfflineQueueItem({
+          id: `textbook-${unit.id}-${createEventId('retry')}`,
           type: 'textbookUnit',
           data: { learnerId, unit },
-        });
+          syncOwnerId: principal.syncOwnerId,
+        }, '[DualStorage] Textbook retry envelope could not be persisted.');
       });
+    } else if (this.config.useBackend) {
+      this.addOfflineQueueItem({
+        id: `textbook-${unit.id}-${createEventId('retry')}`,
+        type: 'textbookUnit',
+        data: { learnerId, unit },
+        ...(principal ? { syncOwnerId: principal.syncOwnerId } : {}),
+      }, '[DualStorage] Textbook retry envelope could not be persisted.');
     }
-    
-    // Always cache in localStorage (synchronous return)
-    return localStorageManager.saveTextbookUnit(learnerId, unit);
+
+    return localResult;
   }
 
   async saveTextbookUnitCritical(
@@ -1264,13 +2469,47 @@ class DualStorageManager {
       return { result, status: { backendConfirmed: true, pendingSync: false } };
     }
 
+    const principal = getActiveSyncPrincipal();
+    const queueId = `textbook-${unit.id}-${createEventId('retry')}`;
+    const queuePersisted = this.offlineQueue.add({
+      id: queueId,
+      type: 'textbookUnit',
+      data: { learnerId, unit },
+      ...(principal ? { syncOwnerId: principal.syncOwnerId } : {}),
+    });
+    if (!queuePersisted) {
+      return {
+        result,
+        status: {
+          backendConfirmed: false,
+          pendingSync: false,
+          error: 'Saved locally, but the durable retry envelope could not be persisted.',
+        },
+      };
+    }
+    if (!principal) {
+      return {
+        result,
+        status: {
+          backendConfirmed: false,
+          pendingSync: true,
+          error: 'Saved locally. Authentication is not active; queued for sync.',
+        },
+      };
+    }
+
     const healthy = await this.checkHealth();
+    if (!isActiveSyncPrincipal(principal)) {
+      return {
+        result,
+        status: {
+          backendConfirmed: false,
+          pendingSync: true,
+          error: 'Saved locally. Authenticated account changed before backend sync.',
+        },
+      };
+    }
     if (!healthy) {
-      this.offlineQueue.add({
-        id: `textbook-${unit.id}-${Date.now()}`,
-        type: 'textbookUnit',
-        data: { learnerId, unit },
-      });
       return {
         result,
         status: {
@@ -1283,14 +2522,29 @@ class DualStorageManager {
 
     try {
       const backendSuccess = await storageClient.saveTextbookUnit(learnerId, unit);
-      if (backendSuccess) {
-        return { result, status: { backendConfirmed: true, pendingSync: false } };
+      if (!isActiveSyncPrincipal(principal)) {
+        return {
+          result,
+          status: {
+            backendConfirmed: false,
+            pendingSync: true,
+            error: 'Saved locally. Authenticated account changed during backend sync.',
+          },
+        };
       }
-      this.offlineQueue.add({
-        id: `textbook-${unit.id}-${Date.now()}`,
-        type: 'textbookUnit',
-        data: { learnerId, unit },
-      });
+      if (backendSuccess) {
+        const proofPersisted = this.offlineQueue.remove(queueId, principal.syncOwnerId);
+        return {
+          result,
+          status: proofPersisted
+            ? { backendConfirmed: true, pendingSync: false }
+            : {
+                backendConfirmed: true,
+                pendingSync: true,
+                error: 'Backend confirmed, but local confirmation proof could not be persisted.',
+              },
+        };
+      }
       return {
         result,
         status: {
@@ -1300,12 +2554,17 @@ class DualStorageManager {
         },
       };
     } catch (error) {
+      if (!isActiveSyncPrincipal(principal)) {
+        return {
+          result,
+          status: {
+            backendConfirmed: false,
+            pendingSync: true,
+            error: 'Saved locally. Authenticated account changed during backend sync.',
+          },
+        };
+      }
       console.warn('[DualStorage] saveTextbookUnitCritical backend failure, queued:', error);
-      this.offlineQueue.add({
-        id: `textbook-${unit.id}-${Date.now()}`,
-        type: 'textbookUnit',
-        data: { learnerId, unit },
-      });
       return {
         result,
         status: {
@@ -1325,40 +2584,55 @@ class DualStorageManager {
   ): SaveTextbookUnitResult & { action: 'created' | 'updated'; why: string; competitionResult?: unknown } {
     // First, save to localStorage (this handles deduplication/competition) - synchronous
     const localResult = localStorageManager.saveTextbookUnitV2(learnerId, input, problemId, useCompetition);
-    
+    const principal = getActiveSyncPrincipal();
+    const unit: InstructionalUnit = {
+      id: localResult.unit.id,
+      type: localResult.unit.type,
+      conceptId: localResult.unit.conceptId,
+      conceptIds: localResult.unit.conceptIds,
+      title: localResult.unit.title,
+      content: localResult.unit.content,
+      contentFormat: localResult.unit.contentFormat,
+      sourceInteractionIds: localResult.unit.sourceInteractionIds,
+      provenance: localResult.unit.provenance,
+      status: localResult.unit.status,
+      prerequisites: localResult.unit.prerequisites,
+      addedTimestamp: localResult.unit.addedTimestamp,
+    };
+
     // Then sync to backend - async in background
-    if (this.shouldUseBackend()) {
-      const unit: InstructionalUnit = {
-        id: localResult.unit.id,
-        type: localResult.unit.type,
-        conceptId: localResult.unit.conceptId,
-        conceptIds: localResult.unit.conceptIds,
-        title: localResult.unit.title,
-        content: localResult.unit.content,
-        contentFormat: localResult.unit.contentFormat,
-        sourceInteractionIds: localResult.unit.sourceInteractionIds,
-        provenance: localResult.unit.provenance,
-        status: localResult.unit.status,
-        prerequisites: localResult.unit.prerequisites,
-        addedTimestamp: localResult.unit.addedTimestamp,
-      };
-      
+    if (principal && this.shouldUseBackend()) {
       storageClient.saveTextbookUnit(learnerId, unit).then(backendSuccess => {
+        if (!isActiveSyncPrincipal(principal)) {
+          return;
+        }
         if (!backendSuccess) {
-          this.offlineQueue.add({
-            id: `textbook-v2-${unit.id}-${Date.now()}`,
+          this.addOfflineQueueItem({
+            id: `textbook-v2-${unit.id}-${createEventId('retry')}`,
             type: 'textbookUnit',
             data: { learnerId, unit },
-          });
+            syncOwnerId: principal.syncOwnerId,
+          }, '[DualStorage] Textbook V2 retry envelope could not be persisted.');
         }
       }).catch(error => {
+        if (!isActiveSyncPrincipal(principal)) {
+          return;
+        }
         console.warn('[DualStorage] Backend saveTextbookUnitV2 failed, queuing for retry:', error);
-        this.offlineQueue.add({
-          id: `textbook-v2-${unit.id}-${Date.now()}`,
+        this.addOfflineQueueItem({
+          id: `textbook-v2-${unit.id}-${createEventId('retry')}`,
           type: 'textbookUnit',
           data: { learnerId, unit },
-        });
+          syncOwnerId: principal.syncOwnerId,
+        }, '[DualStorage] Textbook V2 retry envelope could not be persisted.');
       });
+    } else if (this.config.useBackend) {
+      this.addOfflineQueueItem({
+        id: `textbook-v2-${unit.id}-${createEventId('retry')}`,
+        type: 'textbookUnit',
+        data: { learnerId, unit },
+        ...(principal ? { syncOwnerId: principal.syncOwnerId } : {}),
+      }, '[DualStorage] Textbook V2 retry envelope could not be persisted.');
     }
     
     return localResult;
@@ -1394,9 +2668,13 @@ class DualStorageManager {
   }
 
   getTextbook(learnerId: string): InstructionalUnit[] {
+    const principal = getActiveSyncPrincipal();
     // Try backend FIRST (primary source of truth) - async in background
-    if (this.shouldUseBackend()) {
+    if (principal && this.shouldUseBackend()) {
       storageClient.getTextbook(learnerId).then(backendUnits => {
+        if (!isActiveSyncPrincipal(principal)) {
+          return;
+        }
         if (backendUnits && backendUnits.length > 0) {
           // Sync to localStorage for offline access
           for (const unit of backendUnits) {
@@ -1418,26 +2696,37 @@ class DualStorageManager {
 
   startSession(learnerId: string): string {
     const sessionId = localStorageManager.startSession(learnerId);
-    
-    if (this.shouldUseBackend()) {
+    const principal = getActiveSyncPrincipal();
+    const sessionData = {
+      sessionId,
+      startTime: new Date().toISOString(),
+      lastActivity: new Date().toISOString(),
+    };
+
+    if (principal && this.shouldUseBackend()) {
       try {
-        const sessionData = {
-          sessionId,
-          startTime: new Date().toISOString(),
-          lastActivity: new Date().toISOString(),
-        };
-        
         storageClient.saveSession(learnerId, sessionData).catch(err => {
+          if (!isActiveSyncPrincipal(principal)) {
+            return;
+          }
           console.warn('[DualStorage] Failed to sync session to backend, queuing:', err);
-          this.offlineQueue.add({
-            id: `session-${learnerId}-${Date.now()}`,
+          this.addOfflineQueueItem({
+            id: `session-${learnerId}-${createEventId('retry')}`,
             type: 'session',
             data: { learnerId, data: sessionData },
-          });
+            syncOwnerId: principal.syncOwnerId,
+          }, '[DualStorage] Session retry envelope could not be persisted.');
         });
       } catch (error) {
         console.warn('[DualStorage] Backend startSession failed:', error);
       }
+    } else if (this.config.useBackend) {
+      this.addOfflineQueueItem({
+        id: `session-${learnerId}-${createEventId('retry')}`,
+        type: 'session',
+        data: { learnerId, data: sessionData },
+        ...(principal ? { syncOwnerId: principal.syncOwnerId } : {}),
+      }, '[DualStorage] Session retry envelope could not be persisted.');
     }
     
     return sessionId;
@@ -1447,18 +2736,42 @@ class DualStorageManager {
     if (!this.config.useBackend) {
       return { backendConfirmed: true, pendingSync: false };
     }
-    const healthy = await this.checkHealth();
+    const principal = getActiveSyncPrincipal();
     const sessionData = {
       sessionId,
       startTime: new Date().toISOString(),
       lastActivity: new Date().toISOString(),
     };
+    const queueId = `session-${learnerId}-${createEventId('retry')}`;
+    const queuePersisted = this.offlineQueue.add({
+      id: queueId,
+      type: 'session',
+      data: { learnerId, data: sessionData },
+      ...(principal ? { syncOwnerId: principal.syncOwnerId } : {}),
+    });
+    if (!queuePersisted) {
+      return {
+        backendConfirmed: false,
+        pendingSync: false,
+        error: 'Session remains local, but the durable retry envelope could not be persisted.',
+      };
+    }
+    if (!principal) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Session started locally. Authentication is not active; queued for sync.',
+      };
+    }
+    const healthy = await this.checkHealth();
+    if (!isActiveSyncPrincipal(principal)) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Session started locally. Authenticated account changed before backend sync.',
+      };
+    }
     if (!healthy) {
-      this.offlineQueue.add({
-        id: `session-${learnerId}-${Date.now()}`,
-        type: 'session',
-        data: { learnerId, data: sessionData },
-      });
       return {
         backendConfirmed: false,
         pendingSync: true,
@@ -1467,26 +2780,37 @@ class DualStorageManager {
     }
     try {
       const success = await storageClient.saveSession(learnerId, sessionData);
-      if (success) {
-        return { backendConfirmed: true, pendingSync: false };
+      if (!isActiveSyncPrincipal(principal)) {
+        return {
+          backendConfirmed: false,
+          pendingSync: true,
+          error: 'Session saved locally. Authenticated account changed during backend sync.',
+        };
       }
-      this.offlineQueue.add({
-        id: `session-${learnerId}-${Date.now()}`,
-        type: 'session',
-        data: { learnerId, data: sessionData },
-      });
+      if (success) {
+        const proofPersisted = this.offlineQueue.remove(queueId, principal.syncOwnerId);
+        return proofPersisted
+          ? { backendConfirmed: true, pendingSync: false }
+          : {
+              backendConfirmed: true,
+              pendingSync: true,
+              error: 'Backend confirmed, but local confirmation proof could not be persisted.',
+            };
+      }
       return {
         backendConfirmed: false,
         pendingSync: true,
         error: 'Session saved locally. Backend did not confirm; queued for retry.',
       };
     } catch (error) {
+      if (!isActiveSyncPrincipal(principal)) {
+        return {
+          backendConfirmed: false,
+          pendingSync: true,
+          error: 'Session saved locally. Authenticated account changed during backend sync.',
+        };
+      }
       console.warn('[DualStorage] ensureSessionPersisted backend failure, queued:', error);
-      this.offlineQueue.add({
-        id: `session-${learnerId}-${Date.now()}`,
-        type: 'session',
-        data: { learnerId, data: sessionData },
-      });
       return {
         backendConfirmed: false,
         pendingSync: true,
@@ -1503,8 +2827,17 @@ class DualStorageManager {
       return { backendConfirmed: true, pendingSync: false, missingInteractionIds: [] };
     }
 
+    const principal = getActiveSyncPrincipal();
+    if (!principal) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Authentication is not active. Session interactions remain local.',
+      };
+    }
+
     const healthy = await this.checkHealth();
-    if (!healthy) {
+    if (!healthy || !isActiveSyncPrincipal(principal)) {
       return {
         backendConfirmed: false,
         pendingSync: true,
@@ -1513,15 +2846,55 @@ class DualStorageManager {
     }
 
     await this.offlineQueue.processQueue();
+    if (!isActiveSyncPrincipal(principal)) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Authenticated account changed during interaction reconciliation.',
+      };
+    }
 
-    const localSessionInteractions = localStorageManager
+    const sessionCandidates = localStorageManager
       .getInteractionsByLearner(learnerId)
       .filter((interaction) => interaction.sessionId === sessionId);
+    const idCounts = new Map<string, number>();
+    for (const interaction of sessionCandidates) {
+      idCounts.set(interaction.id, (idCounts.get(interaction.id) ?? 0) + 1);
+    }
+    const localSessionInteractions: InteractionEvent[] = [];
+    const unverifiedCandidates: InteractionEvent[] = [];
+    for (const interaction of sessionCandidates) {
+      const hasUniqueId = idCounts.get(interaction.id) === 1;
+      const hasExactPending = hasUniqueId &&
+        this.pendingStore.hasExactPendingEventForActivePrincipal(interaction);
+      const hasExactConfirmed = hasUniqueId &&
+        this.pendingStore.hasExactConfirmedEventForActivePrincipal(interaction);
+      if (hasExactPending || hasExactConfirmed) {
+        localSessionInteractions.push(interaction);
+      } else {
+        unverifiedCandidates.push(interaction);
+      }
+    }
+    if (unverifiedCandidates.length > 0) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'No exact active-account envelope evidence matches some local session interactions.',
+        missingInteractionIds: unverifiedCandidates.map((interaction) => interaction.id),
+      };
+    }
     if (localSessionInteractions.length === 0) {
       return { backendConfirmed: true, pendingSync: false, missingInteractionIds: [] };
     }
 
     const backendSnapshot = await storageClient.getInteractions(learnerId, { sessionId, limit: 5000 });
+    if (!isActiveSyncPrincipal(principal)) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Authenticated account changed during interaction reconciliation.',
+      };
+    }
     const backendIds = new Set(backendSnapshot.events.map((interaction) => interaction.id));
     const missingInteractions = localSessionInteractions.filter((interaction) => !backendIds.has(interaction.id));
 
@@ -1531,13 +2904,17 @@ class DualStorageManager {
 
     try {
       const batchSuccess = await storageClient.logInteractionsBatch(missingInteractions);
+      if (!isActiveSyncPrincipal(principal)) {
+        return {
+          backendConfirmed: false,
+          pendingSync: true,
+          error: 'Authenticated account changed during interaction reconciliation.',
+          missingInteractionIds: missingInteractions.map((interaction) => interaction.id),
+        };
+      }
       if (!batchSuccess) {
         for (const interaction of missingInteractions) {
-          this.offlineQueue.add({
-            id: interaction.id,
-            type: 'interaction',
-            data: interaction,
-          });
+          this.queueInteractionForRetry(interaction, principal.syncOwnerId);
         }
         return {
           backendConfirmed: false,
@@ -1548,12 +2925,16 @@ class DualStorageManager {
       }
     } catch (error) {
       console.warn('[DualStorage] ensureSessionInteractionsPersisted batch sync failed:', error);
+      if (!isActiveSyncPrincipal(principal)) {
+        return {
+          backendConfirmed: false,
+          pendingSync: true,
+          error: 'Authenticated account changed during interaction reconciliation.',
+          missingInteractionIds: missingInteractions.map((interaction) => interaction.id),
+        };
+      }
       for (const interaction of missingInteractions) {
-        this.offlineQueue.add({
-          id: interaction.id,
-          type: 'interaction',
-          data: interaction,
-        });
+        this.queueInteractionForRetry(interaction, principal.syncOwnerId);
       }
       return {
         backendConfirmed: false,
@@ -1564,6 +2945,14 @@ class DualStorageManager {
     }
 
     const verification = await storageClient.getInteractions(learnerId, { sessionId, limit: 5000 });
+    if (!isActiveSyncPrincipal(principal)) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Authenticated account changed during interaction reconciliation.',
+        missingInteractionIds: missingInteractions.map((interaction) => interaction.id),
+      };
+    }
     const verifiedIds = new Set(verification.events.map((interaction) => interaction.id));
     const stillMissing = localSessionInteractions
       .filter((interaction) => !verifiedIds.has(interaction.id))
@@ -1582,12 +2971,21 @@ class DualStorageManager {
   }
 
   queueSessionEnd(event: InteractionEvent): { success: boolean; quotaExceeded?: boolean } {
-    if (!event.sessionId) {
+    if (!isStoredInteractionEvent(event) || event.eventType !== 'session_end') {
       return { success: false };
     }
 
-    const pending = this.readPendingSessionEnds();
-    const key = this.pendingSessionEndKey(event);
+    const principal = getActiveSyncPrincipal();
+    const stored = readPendingSessionEndCollection();
+    if (!stored.validRoot) return { success: false };
+    const pending = [...stored.pending];
+    const key = this.pendingSessionEndKey(event, principal?.syncOwnerId);
+    if (stored.unverified.some((record) => {
+      if (!isRecord(record)) return false;
+      if (record.key !== key && (!isRecord(record.event) || record.event.id !== event.id)) return false;
+      if (!Object.prototype.hasOwnProperty.call(record, 'syncOwnerId')) return true;
+      return record.syncOwnerId === principal?.syncOwnerId;
+    })) return { success: false };
     const existingIndex = pending.findIndex((item) => item.key === key);
     const existing = existingIndex >= 0 ? pending[existingIndex] : undefined;
     const item: PendingSessionEnd = {
@@ -1595,6 +2993,7 @@ class DualStorageManager {
       event,
       queuedAt: existing?.queuedAt ?? Date.now(),
       lastAttemptAt: existing?.lastAttemptAt,
+      ...ownerFields(principal),
     };
 
     if (existingIndex >= 0) {
@@ -1603,7 +3002,7 @@ class DualStorageManager {
       pending.push(item);
     }
 
-    return this.writePendingSessionEnds(pending.slice(-CHUNK_SIZE));
+    return this.writePendingSessionEnds(pending, stored.unverified);
   }
 
   async flushPendingSessionEnds(): Promise<CriticalWriteStatus> {
@@ -1611,14 +3010,31 @@ class DualStorageManager {
       return { backendConfirmed: true, pendingSync: false };
     }
 
-    const pending = this.readPendingSessionEnds();
+    const principal = getActiveSyncPrincipal();
+    if (!principal) {
+      const stored = readPendingSessionEndCollection();
+      return {
+        backendConfirmed: false,
+        pendingSync: !stored.validRoot || stored.pending.length > 0 || stored.unverified.length > 0,
+        error: 'Authentication is not active. Pending session ends remain local.',
+      };
+    }
+
+    const pending = this.readEligiblePendingSessionEnds();
+    if (this.pendingSessionEndClaimFailed) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Pending session-end ownership could not be persisted; data remains local.',
+      };
+    }
     if (pending.length === 0) {
       return { backendConfirmed: true, pendingSync: false };
     }
 
     let firstFailure: CriticalWriteStatus | undefined;
     for (const item of pending) {
-      const status = await this.writeQueuedSessionEnd(item.event);
+      const status = await this.writeQueuedSessionEnd(item);
       if (!status.backendConfirmed && !firstFailure) {
         firstFailure = status;
       }
@@ -1661,7 +3077,21 @@ class DualStorageManager {
       };
     }
 
-    return this.writeQueuedSessionEnd(event);
+    const principal = getActiveSyncPrincipal();
+    if (!principal) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Saved locally. Authentication is not active; queued for sync.',
+      };
+    }
+
+    const queued = this.readEligiblePendingSessionEnds().find(
+      (item) => item.event.id === event.id && item.syncOwnerId === principal.syncOwnerId,
+    );
+    return queued
+      ? this.writeQueuedSessionEnd(queued)
+      : { backendConfirmed: false, pendingSync: true, error: 'Session end remains queued locally.' };
   }
 
   /**
@@ -1675,6 +3105,15 @@ class DualStorageManager {
       return { backendConfirmed: true, pendingSync: false };
     }
 
+    const principal = getActiveSyncPrincipal();
+    if (!principal) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Authentication is not active. Keepalive data remains local.',
+      };
+    }
+
     if (import.meta.env.DEV) {
       console.info('[telemetry_pagehide_flush_started]', { 
         sessionId,
@@ -1685,12 +3124,26 @@ class DualStorageManager {
     // RESEARCH-1: Get ALL pending interactions from durable pending store
     // This includes both newly created events and retry queue items
     const pendingInteractions = this.pendingStore.getPendingForSession(sessionId);
+    if (this.pendingStore.didLastClaimPersistenceFail()) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Pending interaction ownership could not be persisted; data remains local.',
+      };
+    }
     const events = pendingInteractions.map(p => p.event);
 
     // Also include retry queue items that might not be in pending store
     const retryQueueItems = this.offlineQueue.getAllUnconfirmed().filter(
       item => item.type === 'interaction' && (item.data as InteractionEvent).sessionId === sessionId
     );
+    if (this.offlineQueue.didLastClaimPersistenceFail()) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Offline queue ownership could not be persisted; data remains local.',
+      };
+    }
     const retryEvents = retryQueueItems.map(item => item.data as InteractionEvent);
 
     // Merge and deduplicate by event ID
@@ -1704,19 +3157,33 @@ class DualStorageManager {
     let flushResult: { success: boolean; confirmedIds?: string[] } = { success: allEvents.length === 0, confirmedIds: [] };
     if (allEvents.length > 0) {
       flushResult = await storageClient.logInteractionsBatchKeepalive(allEvents);
+      if (!isActiveSyncPrincipal(principal)) {
+        return {
+          backendConfirmed: false,
+          pendingSync: true,
+          error: 'Authenticated account changed during keepalive flush.',
+        };
+      }
       
       // Only mark confirmed events as confirmed (not all events)
       if (flushResult.success && flushResult.confirmedIds) {
         for (const confirmedId of flushResult.confirmedIds) {
-          this.pendingStore.markConfirmedInteraction(confirmedId);
+          this.pendingStore.markConfirmedInteraction(confirmedId, principal.syncOwnerId);
         }
       }
     }
 
     // Flush pending session_ends only if interactions were confirmed
-    const pendingSessionEnds = this.readPendingSessionEnds().filter(
+    const pendingSessionEnds = this.readEligiblePendingSessionEnds().filter(
       item => item.event.sessionId === sessionId
     );
+    if (this.pendingSessionEndClaimFailed) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Pending session-end ownership could not be persisted; data remains local.',
+      };
+    }
 
     const confirmedInteractionIds = new Set(flushResult.confirmedIds ?? []);
     const interactionsConfirmed = allEvents.length === 0 || (
@@ -1728,9 +3195,19 @@ class DualStorageManager {
     if (interactionsConfirmed) {
       for (const item of pendingSessionEnds) {
         const sessionEndResult = await storageClient.logInteractionsBatchKeepalive([item.event]);
+        if (!isActiveSyncPrincipal(principal)) {
+          return {
+            backendConfirmed: false,
+            pendingSync: true,
+            error: 'Authenticated account changed during session-end keepalive flush.',
+          };
+        }
         if (sessionEndResult.success && sessionEndResult.confirmedIds?.includes(item.event.id)) {
-          this.removePendingSessionEnd(item.event);
-          confirmedSessionEndIds.push(item.event.id);
+          if (this.removePendingSessionEnd(item)) {
+            confirmedSessionEndIds.push(item.event.id);
+          } else {
+            sessionEndFlushComplete = false;
+          }
         } else {
           sessionEndFlushComplete = false;
         }
@@ -1791,8 +3268,18 @@ class DualStorageManager {
       return result;
     }
 
+    const principal = getActiveSyncPrincipal();
+    if (!principal) {
+      result.error = 'Authentication is not active; pending data remains local';
+      return result;
+    }
+
     // Step 1: Get all pending interactions for this session
     const pendingInteractions = this.pendingStore.getPendingForSession(sessionId);
+    if (this.pendingStore.didLastClaimPersistenceFail()) {
+      result.error = 'Pending interaction ownership could not be persisted; data remains local';
+      return result;
+    }
     const events = pendingInteractions.map(p => p.event);
 
     if (events.length > 0) {
@@ -1800,12 +3287,16 @@ class DualStorageManager {
       
       // Step 2: Send via keepalive batch
       const keepaliveSuccess = await storageClient.logInteractionsBatchKeepalive(events);
+      if (!isActiveSyncPrincipal(principal)) {
+        result.error = 'Authenticated account changed during keepalive verification';
+        return result;
+      }
       
       if (keepaliveSuccess.success) {
         const confirmed = new Set(keepaliveSuccess.confirmedIds ?? []);
         for (const event of events) {
           if (confirmed.has(event.id)) {
-            this.pendingStore.markConfirmedInteraction(event.id);
+            this.pendingStore.markConfirmedInteraction(event.id, principal.syncOwnerId);
           }
         }
         result.interactionsConfirmed = events.filter(event => confirmed.has(event.id)).length;
@@ -1824,16 +3315,24 @@ class DualStorageManager {
     const retryQueueItems = this.offlineQueue.getAllUnconfirmed().filter(
       item => item.type === 'interaction' && (item.data as InteractionEvent).sessionId === sessionId
     );
+    if (this.offlineQueue.didLastClaimPersistenceFail()) {
+      result.error = 'Offline queue ownership could not be persisted; data remains local';
+      return result;
+    }
     
     if (retryQueueItems.length > 0) {
       const retryEvents = retryQueueItems.map(item => item.data as InteractionEvent);
       const retrySuccess = await storageClient.logInteractionsBatchKeepalive(retryEvents);
+      if (!isActiveSyncPrincipal(principal)) {
+        result.error = 'Authenticated account changed during keepalive retry';
+        return result;
+      }
       
       if (retrySuccess.success) {
         const confirmed = new Set(retrySuccess.confirmedIds ?? []);
         for (const item of retryQueueItems) {
           if (confirmed.has(item.id)) {
-            this.pendingStore.markConfirmedInteraction(item.id);
+            this.pendingStore.markConfirmedInteraction(item.id, principal.syncOwnerId);
           }
         }
       }
@@ -1841,6 +3340,10 @@ class DualStorageManager {
 
     // Step 4: Check if there are still pending interactions
     const remainingPending = this.pendingStore.getPendingForSession(sessionId);
+    if (this.pendingStore.didLastClaimPersistenceFail()) {
+      result.error = 'Pending interaction ownership could not be persisted; data remains local';
+      return result;
+    }
     if (remainingPending.length > 0) {
       result.error = `${remainingPending.length} interactions still pending after flush`;
       return result;
@@ -1849,19 +3352,35 @@ class DualStorageManager {
     return result;
   }
 
-  private async writeQueuedSessionEnd(event: InteractionEvent): Promise<CriticalWriteStatus> {
-    if (!event.sessionId) {
-      this.removePendingSessionEnd(event);
+  private async writeQueuedSessionEnd(item: PendingSessionEnd): Promise<CriticalWriteStatus> {
+    const event = item.event;
+    const principal = getActiveSyncPrincipal();
+    if (!principal || item.syncOwnerId !== principal.syncOwnerId) {
       return {
         backendConfirmed: false,
-        pendingSync: false,
+        pendingSync: true,
+        error: 'Pending session end belongs to another or unverified account.',
+      };
+    }
+    if (!event.sessionId) {
+      const removed = this.removePendingSessionEnd(item);
+      return {
+        backendConfirmed: false,
+        pendingSync: !removed,
         error: 'Missing sessionId for queued session_end event.',
       };
     }
 
-    this.markPendingSessionEndAttempt(event);
+    this.markPendingSessionEndAttempt(item);
 
     const syncStatus = await this.ensureSessionInteractionsPersisted(event.learnerId, event.sessionId);
+    if (!isActiveSyncPrincipal(principal)) {
+      return {
+        backendConfirmed: false,
+        pendingSync: true,
+        error: 'Authenticated account changed while reconciling session interactions.',
+      };
+    }
     if (!syncStatus.backendConfirmed) {
       return {
         backendConfirmed: false,
@@ -1871,7 +3390,7 @@ class DualStorageManager {
     }
 
     const healthy = await this.checkHealth();
-    if (!healthy) {
+    if (!healthy || !isActiveSyncPrincipal(principal)) {
       return {
         backendConfirmed: false,
         pendingSync: true,
@@ -1881,6 +3400,13 @@ class DualStorageManager {
 
     try {
       const backendSuccess = await storageClient.logInteraction(event);
+      if (!isActiveSyncPrincipal(principal)) {
+        return {
+          backendConfirmed: false,
+          pendingSync: true,
+          error: 'Authenticated account changed while sending session_end.',
+        };
+      }
       if (!backendSuccess.success || !backendSuccess.confirmed) {
         return {
           backendConfirmed: false,
@@ -1889,8 +3415,14 @@ class DualStorageManager {
         };
       }
       localStorageManager.saveInteraction(event);
-      this.removePendingSessionEnd(event);
-      return { backendConfirmed: true, pendingSync: false };
+      const removed = this.removePendingSessionEnd(item);
+      return removed
+        ? { backendConfirmed: true, pendingSync: false }
+        : {
+            backendConfirmed: true,
+            pendingSync: true,
+            error: 'Backend confirmed session_end, but the local pending record could not be cleared.',
+          };
     } catch (error) {
       console.warn('[DualStorage] emitSessionEnd backend failure, kept for retry:', error);
       return {
@@ -1997,60 +3529,123 @@ class DualStorageManager {
     return this.emitSessionEnd(sessionEndEvent);
   }
 
-  private pendingSessionEndKey(event: InteractionEvent): string {
-    return event.sessionId ? `${event.learnerId}:${event.sessionId}` : event.id;
+  private pendingSessionEndKey(event: InteractionEvent, syncOwnerId?: string): string {
+    const baseKey = event.sessionId ? `${event.learnerId}:${event.sessionId}` : event.id;
+    return ownedSyncIdentity(baseKey, syncOwnerId);
   }
 
   private readPendingSessionEnds(): PendingSessionEnd[] {
-    const parsed = safeGet<PendingSessionEnd[]>(PENDING_SESSION_ENDS_KEY, []);
-    if (!parsed || !Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is PendingSessionEnd => {
-      return Boolean(
-        item &&
-        typeof item.key === 'string' &&
-        item.event &&
-        typeof item.event.id === 'string' &&
-        typeof item.event.learnerId === 'string' &&
-        item.event.eventType === 'session_end' &&
-        typeof item.queuedAt === 'number',
-      );
-    });
+    return readPendingSessionEndCollection().pending;
   }
 
-  private writePendingSessionEnds(pending: PendingSessionEnd[]): SafeSetResult {
-    // Critical session data - use memory fallback if quota exceeded
-    const result = safeSet(PENDING_SESSION_ENDS_KEY, pending, {
-      priority: 'critical',
-      allowEviction: true,
-    });
-    
-    if (!result.success && result.quotaExceeded) {
-      // Try with just the most recent items
-      const reducedResult = safeSet(PENDING_SESSION_ENDS_KEY, pending.slice(-20), {
-        priority: 'critical',
-        allowEviction: true,
-      });
-      return reducedResult;
+  private readEligiblePendingSessionEnds(): PendingSessionEnd[] {
+    this.pendingSessionEndClaimFailed = false;
+    const stored = readPendingSessionEndCollection();
+    if (!stored.validRoot) {
+      this.pendingSessionEndClaimFailed = true;
+      return [];
     }
-    
-    return result;
+    const pending = stored.pending;
+    const staged = [...pending];
+    const eligible: PendingSessionEnd[] = [];
+    const claimed: PendingSessionEnd[] = [];
+    const principal = getActiveSyncPrincipal();
+    if (principal && stored.unverified.some((record) => {
+      if (!isRecord(record)) return false;
+      if (Object.prototype.hasOwnProperty.call(record, 'syncOwnerId')) {
+        return record.syncOwnerId === principal.syncOwnerId;
+      }
+      return isRecord(record.event) && record.event.learnerId === principal.learnerId;
+    })) {
+      this.pendingSessionEndClaimFailed = true;
+      return [];
+    }
+    pending.forEach((item, index) => {
+      const ownership = resolveEnvelopeOwnershipForActivePrincipal(item, item.event.learnerId);
+      if (ownership.eligible) {
+        eligible.push(item);
+      } else if (ownership.claimOwnerId) {
+        const claimedItem = {
+          ...item,
+          syncOwnerId: ownership.claimOwnerId,
+          key: this.pendingSessionEndKey(item.event, ownership.claimOwnerId),
+        };
+        staged[index] = claimedItem;
+        claimed.push(claimedItem);
+      }
+    });
+
+    if (claimed.length > 0) {
+      let persisted = false;
+      try {
+        persisted = this.writePendingSessionEnds(staged, stored.unverified).success;
+      } catch {
+        persisted = false;
+      }
+      if (persisted) {
+        eligible.push(...claimed);
+      } else {
+        this.pendingSessionEndClaimFailed = true;
+      }
+    }
+
+    return eligible;
   }
 
-  private markPendingSessionEndAttempt(event: InteractionEvent): void {
-    const key = this.pendingSessionEndKey(event);
-    const pending = this.readPendingSessionEnds();
+  private writePendingSessionEnds(
+    pending: PendingSessionEnd[],
+    unverified = readPendingSessionEndCollection().unverified,
+  ): SafeSetResult {
+    const current = readPendingSessionEndCollection();
+    if (!current.validRoot) {
+      return { success: false, error: 'Pending session-end storage root is malformed' };
+    }
+    const records = [...unverified, ...pending];
+    try {
+      const result = safeSet(PENDING_SESSION_ENDS_KEY, records, {
+        priority: 'critical',
+        allowEviction: false,
+      });
+      if (!result.success) return result;
+      const persisted = readStoredArray(PENDING_SESSION_ENDS_KEY);
+      return persisted.validRoot && JSON.stringify(persisted.records) === JSON.stringify(records)
+        ? result
+        : { success: false, error: 'Pending session-end write could not be verified' };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Pending session-end write failed',
+      };
+    }
+  }
+
+  private markPendingSessionEndAttempt(item: PendingSessionEnd): boolean {
+    const key = item.key;
+    const stored = readPendingSessionEndCollection();
+    if (!stored.validRoot) return false;
+    const pending = [...stored.pending];
     const index = pending.findIndex((item) => item.key === key);
-    if (index < 0) return;
+    if (index < 0) return false;
     pending[index] = {
       ...pending[index],
       lastAttemptAt: Date.now(),
     };
-    this.writePendingSessionEnds(pending);
+    return this.writePendingSessionEnds(pending, stored.unverified).success;
   }
 
-  private removePendingSessionEnd(event: InteractionEvent): void {
-    const key = this.pendingSessionEndKey(event);
-    this.writePendingSessionEnds(this.readPendingSessionEnds().filter((item) => item.key !== key));
+  private removePendingSessionEnd(item: PendingSessionEnd): boolean {
+    const key = item.key;
+    const stored = readPendingSessionEndCollection();
+    if (!stored.validRoot) return false;
+    const index = stored.pending.findIndex((candidate) =>
+      candidate.key === key &&
+      candidate.syncOwnerId === item.syncOwnerId &&
+      isExactInteractionEvent(candidate.event, item.event),
+    );
+    if (index < 0) return false;
+    const staged = [...stored.pending];
+    staged.splice(index, 1);
+    return this.writePendingSessionEnds(staged, stored.unverified).success;
   }
 
   getActiveSessionId(): string {
@@ -2080,15 +3675,42 @@ class DualStorageManager {
    * Save a learner's full profile to backend and localStorage
    */
   saveProfile(profile: LearnerProfile): void {
+    const principal = getActiveSyncPrincipal();
     // Send to backend FIRST (primary source of truth) - async in background
-    if (this.shouldUseBackend()) {
+    if (principal && this.shouldUseBackend()) {
       storageClient.saveProfile(profile).then(success => {
+        if (!isActiveSyncPrincipal(principal)) {
+          return;
+        }
         if (!success) {
-          this.queueProfileForRetry(profile, '[DualStorage] Backend saveProfile failed, queued for retry.');
+          this.queueProfileForRetry(
+            profile,
+            '[DualStorage] Backend saveProfile failed, queued for retry.',
+            'full-profile',
+            undefined,
+            principal.syncOwnerId,
+          );
         }
       }).catch(err => {
-        this.queueProfileForRetry(profile, '[DualStorage] Failed to sync profile to backend, queuing.', 'full-profile', err);
+        if (!isActiveSyncPrincipal(principal)) {
+          return;
+        }
+        this.queueProfileForRetry(
+          profile,
+          '[DualStorage] Failed to sync profile to backend, queuing.',
+          'full-profile',
+          err,
+          principal.syncOwnerId,
+        );
       });
+    } else if (this.config.useBackend) {
+      this.queueProfileForRetry(
+        profile,
+        '[DualStorage] Profile kept locally until authenticated backend sync is available.',
+        'full-profile',
+        undefined,
+        principal?.syncOwnerId,
+      );
     }
     
     // Always cache in localStorage (synchronous)
@@ -2117,15 +3739,42 @@ class DualStorageManager {
     strategy: LearnerProfile['currentStrategy'] = 'adaptive-medium',
   ): LearnerProfile {
     const profile = localStorageManager.createDefaultProfile(learnerId, strategy);
+    const principal = getActiveSyncPrincipal();
 
-    if (this.shouldUseBackend()) {
+    if (principal && this.shouldUseBackend()) {
       storageClient.saveProfile(profile).then(success => {
+        if (!isActiveSyncPrincipal(principal)) {
+          return;
+        }
         if (!success) {
-          this.queueProfileForRetry(profile, '[DualStorage] Backend createDefaultProfile failed, queued for retry.');
+          this.queueProfileForRetry(
+            profile,
+            '[DualStorage] Backend createDefaultProfile failed, queued for retry.',
+            'full-profile',
+            undefined,
+            principal.syncOwnerId,
+          );
         }
       }).catch(err => {
-        this.queueProfileForRetry(profile, '[DualStorage] Failed to sync default profile to backend, queuing.', 'full-profile', err);
+        if (!isActiveSyncPrincipal(principal)) {
+          return;
+        }
+        this.queueProfileForRetry(
+          profile,
+          '[DualStorage] Failed to sync default profile to backend, queuing.',
+          'full-profile',
+          err,
+          principal.syncOwnerId,
+        );
       });
+    } else if (this.config.useBackend) {
+      this.queueProfileForRetry(
+        profile,
+        '[DualStorage] Default profile kept locally until authenticated backend sync is available.',
+        'full-profile',
+        undefined,
+        principal?.syncOwnerId,
+      );
     }
 
     return profile;
@@ -2155,13 +3804,22 @@ class DualStorageManager {
     if (!this.config.useBackend) {
       return false;
     }
+    const principal = getActiveSyncPrincipal();
+    if (!principal) {
+      return false;
+    }
     const now = Date.now();
-    if (!options?.force && this.lastHydratedAt[learnerId] && now - this.lastHydratedAt[learnerId] < 3000) {
+    const hydrationIdentity = ownedSyncIdentity(learnerId, principal.syncOwnerId);
+    if (
+      !options?.force &&
+      this.lastHydratedAt[hydrationIdentity] &&
+      now - this.lastHydratedAt[hydrationIdentity] < 3000
+    ) {
       return true;
     }
 
     const healthy = await this.checkHealth();
-    if (!healthy) {
+    if (!healthy || !isActiveSyncPrincipal(principal)) {
       return false;
     }
 
@@ -2192,6 +3850,10 @@ class DualStorageManager {
         storageClient.getSession(learnerId),
         storageClient.getAllProblemProgress(learnerId),
       ]);
+
+      if (!isActiveSyncPrincipal(principal)) {
+        return false;
+      }
 
       if (profile) {
         // RESEARCH-4: Use problem_progress as authoritative source for solved state
@@ -2274,24 +3936,35 @@ class DualStorageManager {
         storageClient.getTextbook(learnerId),
       ])
         .then(([interactionsResult, textbookUnits]) => {
+          if (!isActiveSyncPrincipal(principal)) {
+            return;
+          }
           const existing = localStorageManager.getAllInteractions();
-          const byId = new Map(existing.map((item) => [item.id, item]));
+          const mergedInteractions = [...existing];
+          const exactRecords = new Set(existing.map((item) => JSON.stringify(item)));
           
           // Track merge statistics for audit
-          const beforeCount = byId.size;
+          const beforeCount = existing.length;
           let backendNewCount = 0;
-          let backendOverwriteCount = 0;
+          let backendExactDuplicateCount = 0;
+          let backendCollisionPreservedCount = 0;
           
           for (const interaction of interactionsResult.events) {
-            if (byId.has(interaction.id)) {
-              backendOverwriteCount++;
+            const serialized = JSON.stringify(interaction);
+            if (exactRecords.has(serialized)) {
+              backendExactDuplicateCount++;
+              continue;
+            }
+            if (mergedInteractions.some((local) => local.id === interaction.id)) {
+              backendCollisionPreservedCount++;
             } else {
               backendNewCount++;
             }
-            byId.set(interaction.id, interaction);
+            mergedInteractions.push(interaction);
+            exactRecords.add(serialized);
           }
           
-          const mergedInteractions = Array.from(byId.values()).sort((a, b) => a.timestamp - b.timestamp);
+          mergedInteractions.sort((a, b) => a.timestamp - b.timestamp);
           
           localStorageManager.importData({
             interactions: mergedInteractions,
@@ -2317,9 +3990,10 @@ class DualStorageManager {
                 localBefore: beforeCount,
                 backendReceived: interactionsResult.events.length,
                 backendNew: backendNewCount,
-                backendOverwrite: backendOverwriteCount,
+                backendExactDuplicates: backendExactDuplicateCount,
+                backendCollisionsPreserved: backendCollisionPreservedCount,
                 localAfter: mergedInteractions.length,
-                mergeStrategy: 'id_based_dedup_backend_wins',
+                mergeStrategy: 'exact_record_dedup_collision_preserving',
               },
               textbook: {
                 backendReceived: textbookUnits.length,
@@ -2345,7 +4019,7 @@ class DualStorageManager {
         });
       }
 
-      this.lastHydratedAt[learnerId] = now;
+      this.lastHydratedAt[hydrationIdentity] = now;
       return true;
     } catch (error) {
       console.error('[DualStorage] hydrateLearner failed:', {
@@ -2367,12 +4041,17 @@ class DualStorageManager {
     if (!this.config.useBackend) {
       return null;
     }
+    const principal = getActiveSyncPrincipal();
+    if (!principal) {
+      return null;
+    }
     const healthy = await this.checkHealth();
-    if (!healthy) {
+    if (!healthy || !isActiveSyncPrincipal(principal)) {
       return null;
     }
     try {
-      return await storageClient.getSession(learnerId);
+      const session = await storageClient.getSession(learnerId);
+      return isActiveSyncPrincipal(principal) ? session : null;
     } catch (error) {
       console.warn('[DualStorage] getBackendSessionSnapshot failed:', error);
       return null;
@@ -2389,9 +4068,13 @@ class DualStorageManager {
     if (!this.config.useBackend) {
       return { ok: false, error: 'backend', message: 'Backend not configured' };
     }
+    const principal = getActiveSyncPrincipal();
+    if (!principal) {
+      return { ok: false, error: 'auth', message: 'Authentication required' };
+    }
     
     const healthy = await this.checkHealth();
-    if (!healthy) {
+    if (!healthy || !isActiveSyncPrincipal(principal)) {
       return { ok: false, error: 'network', message: 'Backend health check failed' };
     }
 
@@ -2401,6 +4084,9 @@ class DualStorageManager {
         storageClient.getInstructorLearners(),
         storageClient.getAllProfiles(),
       ]);
+      if (!isActiveSyncPrincipal(principal)) {
+        return { ok: false, error: 'auth', message: 'Authenticated account changed during hydration' };
+      }
 
       // Check for auth errors (null/empty responses indicate auth failure)
       if (overview === null && learners.length === 0 && profiles.length === 0) {
@@ -2486,11 +4172,44 @@ class DualStorageManager {
       localStorageManager.saveProfile(localProfile);
     }
     
+    const principal = getActiveSyncPrincipal();
     // Send to backend (primary source of truth) - async in background
-    if (this.shouldUseBackend()) {
-      storageClient.updateProfileFromEvent(learnerId, event).catch(err => {
-        console.warn('[DualStorage] Failed to update profile on backend:', err);
+    if (principal && this.shouldUseBackend()) {
+      storageClient.updateProfileFromEvent(learnerId, event).then((updated) => {
+        if (!isActiveSyncPrincipal(principal)) {
+          return;
+        }
+        if (!updated && localProfile) {
+          this.queueProfileForRetry(
+            localProfile,
+            '[DualStorage] Backend profile event update was not confirmed; queued full profile.',
+            'profile',
+            undefined,
+            principal.syncOwnerId,
+          );
+        }
+      }).catch(err => {
+        if (!isActiveSyncPrincipal(principal)) {
+          return;
+        }
+        if (localProfile) {
+          this.queueProfileForRetry(
+            localProfile,
+            '[DualStorage] Failed to update profile on backend; queued full profile.',
+            'profile',
+            err,
+            principal.syncOwnerId,
+          );
+        }
       });
+    } else if (this.config.useBackend && localProfile) {
+      this.queueProfileForRetry(
+        localProfile,
+        '[DualStorage] Profile event update kept locally until authenticated backend sync is available.',
+        'profile',
+        undefined,
+        principal?.syncOwnerId,
+      );
     }
     
     return localProfile;
@@ -2514,11 +4233,15 @@ class DualStorageManager {
     exportedAt: string;
   } {
     // If using backend, try to get all learners' data - async in background
-    if (this.shouldUseBackend()) {
+    const principal = getActiveSyncPrincipal();
+    if (principal && this.shouldUseBackend()) {
       Promise.all([
         storageClient.getClassStats().catch(() => null),
         storageClient.getAllProfiles().catch(() => []),
       ]).then(([stats, profiles]) => {
+        if (!isActiveSyncPrincipal(principal)) {
+          return;
+        }
         if (stats) {
           if (import.meta.env.DEV) {
             console.log('[DualStorage] Backend stats:', stats);
@@ -2526,6 +4249,9 @@ class DualStorageManager {
           }
         }
       }).catch(error => {
+        if (!isActiveSyncPrincipal(principal)) {
+          return;
+        }
         console.warn('[DualStorage] Failed to get backend stats:', error);
       });
     }
@@ -2791,7 +4517,7 @@ class DualStorageManager {
   // ============================================================================
 
   private shouldUseBackend(): boolean {
-    return this.config.useBackend && this.backendHealthy;
+    return this.config.useBackend && this.backendHealthy && getActiveSyncPrincipal() !== null;
   }
 
   private getCurrentLearnerId(): string | null {

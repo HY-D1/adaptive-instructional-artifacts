@@ -423,6 +423,22 @@ export async function initializeSchema(): Promise<void> {
   await db`CREATE INDEX IF NOT EXISTS idx_textbook_unit_event_links_unit_id ON textbook_unit_event_links(unit_id)`;
   await db`CREATE INDEX IF NOT EXISTS idx_textbook_unit_event_links_event_id ON textbook_unit_event_links(event_id)`;
 
+  // Retrieval provenance linking interaction events to textbook units.
+  await db`
+    CREATE TABLE IF NOT EXISTS interaction_textbook_unit_retrievals (
+      id SERIAL PRIMARY KEY,
+      event_id TEXT NOT NULL REFERENCES interaction_events(id) ON DELETE CASCADE,
+      unit_id TEXT NOT NULL,
+      rank INTEGER,
+      source_kind TEXT,
+      score NUMERIC,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await db`CREATE UNIQUE INDEX IF NOT EXISTS idx_retrievals_event_unit ON interaction_textbook_unit_retrievals(event_id, unit_id)`;
+  await db`CREATE INDEX IF NOT EXISTS idx_retrievals_event_id ON interaction_textbook_unit_retrievals(event_id)`;
+  await db`CREATE INDEX IF NOT EXISTS idx_retrievals_unit_id ON interaction_textbook_unit_retrievals(unit_id)`;
+
   // Processed corpus tables (raw PDFs remain local-only; Neon stores processed outputs only)
   await db`CREATE EXTENSION IF NOT EXISTS vector`;
 
@@ -510,7 +526,9 @@ export async function initializeSchema(): Promise<void> {
   await db`CREATE INDEX IF NOT EXISTS idx_corpus_active_runs_run_id ON corpus_active_runs(run_id)`;
   await db`
     INSERT INTO corpus_active_runs (doc_id, run_id, updated_by)
-    VALUES (${DEFAULT_ACTIVE_CORPUS_DOC_ID}, ${DEFAULT_ACTIVE_CORPUS_RUN_ID}, 'initializeSchema:seed')
+    SELECT ${DEFAULT_ACTIVE_CORPUS_DOC_ID}, ${DEFAULT_ACTIVE_CORPUS_RUN_ID}, 'initializeSchema:seed'
+    FROM corpus_documents
+    WHERE doc_id = ${DEFAULT_ACTIVE_CORPUS_DOC_ID}
     ON CONFLICT (doc_id) DO NOTHING
   `;
 

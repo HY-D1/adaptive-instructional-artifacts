@@ -137,10 +137,17 @@ describe('Corpus contract: dual-textbook requirement', () => {
 
     // Thresholds set above the old 3-concept placeholder level to prevent
     // a stub second-textbook slice from silently passing the gate.
-    // Murach: 33 real concepts; Ramakrishnan: 37 real concepts.
+    // Ramakrishnan: 37 real concepts.
+    // Murach: 29 real concepts. This was 33 until four duplicate concepts
+    // (joins, where-clause, subqueries, group-by) were merged into their
+    // Ramakrishnan counterparts, which covered the same topics under a second
+    // id. The floor moved 30 -> 25 to reflect that deliberate deduplication
+    // while still sitting far above the placeholder level this guard exists to
+    // catch. Lower it again only for another reviewed merge, never to make a
+    // shrinking corpus pass quietly.
     // Both thresholds must stay above the placeholder level (3).
     const MIN_CONCEPTS_PER_TEXTBOOK: Record<string, number> = {
-      'murachs-mysql-3rd-edition': 30,
+      'murachs-mysql-3rd-edition': 25,
       'dbms-ramakrishnan-3rd-edition': 20,
     };
 

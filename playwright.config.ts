@@ -53,7 +53,9 @@ export const INSTRUCTOR_AUTH_FILE = 'playwright/.auth/instructor.json';
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 60_000,
-  globalTimeout: 600_000,
+  // 318+ single-worker tests cannot finish inside 10 minutes; the previous
+  // 600s cap silently truncated every full run ("N did not run").
+  globalTimeout: 3_600_000,
   expect: {
     timeout: 30_000
   },
@@ -82,10 +84,10 @@ export default defineConfig({
     ? {}
     : {
         webServer: {
-          // In CI: use preview server with existing build (build done in workflow)
+          // In CI: build an explicit test-mode bundle, then preview it.
           // Local: use dev server
           command: IS_CI
-            ? `npx vite preview --config apps/web/vite.config.ts --host ${HOST} --port ${PORT} --outDir ../../dist/app`
+            ? `VITE_TEST_MODE=true npx vite build --config apps/web/vite.config.ts && npx vite preview --config apps/web/vite.config.ts --host ${HOST} --port ${PORT} --outDir ../../dist/app`
             : `npm run dev -- --host ${HOST} --port ${PORT}`,
           url: LOCAL_BASE_URL,
           reuseExistingServer: !IS_CI,

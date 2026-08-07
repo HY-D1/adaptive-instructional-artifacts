@@ -21,6 +21,24 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 
 -- ============================================================================
+-- Auth accounts (real email/password authentication)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS auth_accounts (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('student', 'instructor')),
+  learner_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_accounts_email ON auth_accounts(email);
+CREATE INDEX IF NOT EXISTS idx_auth_accounts_learner_id ON auth_accounts(learner_id);
+
+-- ============================================================================
 -- Auth telemetry (research-safe login outcome audit)
 -- ============================================================================
 
@@ -332,11 +350,7 @@ CREATE TABLE IF NOT EXISTS interaction_textbook_unit_retrievals (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- RESEARCH-4: Unique constraint for upsert support (event_id, unit_id)
-ALTER TABLE interaction_textbook_unit_retrievals
-ADD CONSTRAINT IF NOT EXISTS unique_event_unit_retrieval 
-UNIQUE (event_id, unit_id);
-
+CREATE UNIQUE INDEX IF NOT EXISTS idx_retrievals_event_unit ON interaction_textbook_unit_retrievals(event_id, unit_id);
 CREATE INDEX IF NOT EXISTS idx_retrievals_event_id ON interaction_textbook_unit_retrievals(event_id);
 CREATE INDEX IF NOT EXISTS idx_retrievals_unit_id ON interaction_textbook_unit_retrievals(unit_id);
 
@@ -423,8 +437,33 @@ CREATE TABLE IF NOT EXISTS corpus_active_runs (
 CREATE INDEX IF NOT EXISTS idx_corpus_active_runs_run_id ON corpus_active_runs(run_id);
 
 INSERT INTO corpus_active_runs (doc_id, run_id, updated_by)
-VALUES ('dbms-ramakrishnan-3rd-edition', 'run-1774671570-b1353117', 'migrate-neon.sql:seed')
+SELECT 'dbms-ramakrishnan-3rd-edition', 'run-1774671570-b1353117', 'migrate-neon.sql:seed'
+FROM corpus_documents
+WHERE doc_id = 'dbms-ramakrishnan-3rd-edition'
 ON CONFLICT (doc_id) DO NOTHING;
+
+-- ============================================================================
+-- Learner profiles (durable adaptive-learning state)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS learner_profiles (
+  learner_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL DEFAULT 'Unknown',
+  concept_coverage TEXT NOT NULL DEFAULT '[]',
+  concept_evidence TEXT NOT NULL DEFAULT '{}',
+  error_history TEXT NOT NULL DEFAULT '{}',
+  interaction_count INTEGER NOT NULL DEFAULT 0,
+  strategy TEXT NOT NULL DEFAULT 'default',
+  preferences TEXT NOT NULL DEFAULT '{"escalationThreshold":3,"aggregationDelay":30000}',
+  last_activity_at TIMESTAMPTZ,
+  profile_data TEXT NOT NULL DEFAULT '{}',
+  version INTEGER NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE learner_profiles ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+CREATE INDEX IF NOT EXISTS idx_learner_profiles_last_activity ON learner_profiles(last_activity_at);
 
 -- ============================================================================
 -- Verification query

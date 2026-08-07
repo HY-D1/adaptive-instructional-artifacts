@@ -1,83 +1,101 @@
 ---
 id: foreign-key
-title: Foreign Key Constraint
-definition: Maintaining referential integrity between related tables
+title: Foreign Keys
+definition: A column that references another table's primary key, keeping related rows consistent
 difficulty: intermediate
-estimatedReadTime: 5
-pageReferences: [240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254]
-chunkIds:
-  - dbms-ramakrishnan-3rd-edition:p240:c1
-  - dbms-ramakrishnan-3rd-edition:p241:c1
-  - dbms-ramakrishnan-3rd-edition:p241:c2
-  - dbms-ramakrishnan-3rd-edition:p242:c1
-  - dbms-ramakrishnan-3rd-edition:p242:c2
-  - dbms-ramakrishnan-3rd-edition:p243:c1
-  - dbms-ramakrishnan-3rd-edition:p243:c2
-  - dbms-ramakrishnan-3rd-edition:p243:c3
-  - dbms-ramakrishnan-3rd-edition:p244:c1
-  - dbms-ramakrishnan-3rd-edition:p244:c2
-  - dbms-ramakrishnan-3rd-edition:p244:c3
-  - dbms-ramakrishnan-3rd-edition:p245:c1
-  - dbms-ramakrishnan-3rd-edition:p245:c2
-  - dbms-ramakrishnan-3rd-edition:p246:c1
-  - dbms-ramakrishnan-3rd-edition:p246:c2
-  - dbms-ramakrishnan-3rd-edition:p247:c1
-  - dbms-ramakrishnan-3rd-edition:p247:c2
-  - dbms-ramakrishnan-3rd-edition:p248:c1
-  - dbms-ramakrishnan-3rd-edition:p248:c2
-  - dbms-ramakrishnan-3rd-edition:p249:c1
-  - dbms-ramakrishnan-3rd-edition:p249:c2
-  - dbms-ramakrishnan-3rd-edition:p250:c1
-  - dbms-ramakrishnan-3rd-edition:p250:c2
-  - dbms-ramakrishnan-3rd-edition:p251:c1
-  - dbms-ramakrishnan-3rd-edition:p251:c2
-  - dbms-ramakrishnan-3rd-edition:p252:c1
-  - dbms-ramakrishnan-3rd-edition:p252:c2
-  - dbms-ramakrishnan-3rd-edition:p253:c1
-  - dbms-ramakrishnan-3rd-edition:p253:c2
-  - dbms-ramakrishnan-3rd-edition:p253:c3
-  - dbms-ramakrishnan-3rd-edition:p254:c1
-  - dbms-ramakrishnan-3rd-edition:p254:c2
-relatedConcepts:
+estimatedReadTime: 4
+pageReferences: [75, 76, 77, 78, 79]
 tags:
   - sql
-  - foreign-key
-  - referential-integrity
+  - keys
+  - constraints
+  - relationships
 sourceDocId: dbms-ramakrishnan-3rd-edition
 ---
 
-# Foreign Key Constraint
+# Foreign Keys
 
 ## Definition
-Maintaining referential integrity between related tables
+A foreign key is a column whose values must match a primary key in another table. It records a relationship between rows and stops that relationship from pointing at something that does not exist.
 
 ## Explanation
-Database Appl'imtion Developrnent System.out.println("Name:" + md.getDriverNameO + "; version:" + mcl.getDriverVersion()); ~ The DatabaseMetaData object has many more methods (in JDBC 2.0, exactly 134); we list some methods here: • public ResultSet getCatalogs 0 throws SqLException. This function returns a ResultSet that can be used to iterate over all the catalog relations. The functions getIndexInfo 0 and getTables 0 work analogously. • pUblic int getMaxConnections 0 throws SqLException. This function returns the ma.ximum number of connections possible. We will conclude our discussion of JDBC with an example code fragment that examines all database metadata shown in DatabaseMetaData dmd = con.getMetaDataO; ResultSet tablesRS = dmd.getTables(null,null,null,null); string tableName; while(tablesRS.next()) { tableNarne = tablesRS.getString("TABLE_NAME"); / / print out the attributes of this table System.out.println("The attributes of table" + tableName + " are:"); ResultSet columnsRS = dmd.getColums(null,null,tableName, null); while (columnsRS.next()) { System.out.print(colummsRS.getString(" COLUMN_NAME") +" "); } / / print out the primary keys of this table System.out.println("The keys of table" + tableName + " are:"); ResultSet keysRS = dmd.getPrimaryKeys(null,null,tableName); while (keysRS. next()) { 'System.out.print(keysRS.getStringC'COLUMN_NAME") +" "); } } Obtaining Infon-nation about it Data Source
+Splitting data across tables only works if the links between them stay trustworthy. In the practice database, orders.user_id is meant to identify the person who placed each order. Declaring it a foreign key turns that intention into a rule the database enforces: an insert naming a user who does not exist is rejected instead of quietly creating an order belonging to nobody. This property is called referential integrity, and its value is that broken links become impossible rather than merely unlikely.
 
-CHAPTER.:6 6.4 SQLJ SQLJ (short for 'SQL-Java') was developed by the SQLJ Group, a group of database vendors and Sun. SQLJ was developed to complement the dynamic way of creating queries in JDBC with a static model. It is therefore very close to Embedded SQL. Unlike JDBC, having semi-static SQL queries allows the compiler to perform SQL syntax checks, strong type checks of the compatibility of the host variables with the respective SQL attributes, and consistency of the query with the database schema-tables, attributes, views, and stored procedures--all at compilat
+The constraint also governs deletion, which is where the interesting choices live. By default the database refuses to delete a row that other rows still reference, protecting you from orphaning them. ON DELETE CASCADE instead removes the dependent rows automatically, which suits data that has no meaning without its parent, such as the line items of a deleted order. ON DELETE SET NULL keeps the dependent rows but clears the link, which suits optional relationships, such as an employee whose department is dissolved. Cascade is powerful and worth using deliberately, because one statement can remove far more than it appears to.
+
+One practical note for the practice editor: SQLite only enforces foreign keys when the connection has switched them on, so a constraint that would be rejected on a server database may be accepted here. Treat the declaration as documentation of intent that most production databases will enforce strictly.
 
 ## Examples
-### Example 1: SELECT Example
+### Declare the relationship
 ```sql
-SELECT title, price INTO:title,:price FROM Books WHERE author =:author };
+CREATE TABLE orders (
+  order_id INTEGER PRIMARY KEY,
+  user_id INTEGER NOT NULL,
+  product TEXT,
+  amount REAL,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
 ```
-Example SELECT statement from textbook.
+Every order must name a user that exists in the users table.
 
-### Example 2: SELECT Example
+### Remove dependent rows automatically
 ```sql
-SELECT title, price INTO:title,:price FROM Books WHERE author =:author };
+CREATE TABLE order_items (
+  item_id INTEGER PRIMARY KEY,
+  order_id INTEGER NOT NULL,
+  product TEXT,
+  FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE CASCADE
+);
 ```
-Example SELECT statement from textbook.
+Deleting an order deletes its items too, because an item has no meaning on its own.
 
-### Example 3: INSERT Example
+### Follow the link in a query
 ```sql
-INSERT INTO Orders VALUES(7, 7, 7, 7, 7, 7)";
+SELECT users.name, orders.product
+FROM orders
+INNER JOIN users ON orders.user_id = users.id;
 ```
-Example INSERT statement from textbook.
+The foreign key is what makes this join meaningful: each user_id is guaranteed to match a real user.
 
 ## Common Mistakes
-### No common mistakes listed
-No specific mistakes documented in textbook.
+### Inserting a reference to a row that does not exist
+❌ Incorrect
+```sql
+INSERT INTO orders (order_id, user_id, product, amount)
+VALUES (107, 99, 'Desk', 299.99);
+```
+✅ Correct
+```sql
+INSERT INTO orders (order_id, user_id, product, amount)
+VALUES (107, 3, 'Desk', 299.99);
+```
+💡 Why it happens: There is no user with id 99, so the order would reference nothing. Insert the parent row first, or reference one that already exists.
 
----
-*Source: dbms-ramakrishnan-3rd-edition, Pages 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250, 251, 252, 253, 254*
+### Deleting a parent while children still reference it
+❌ Incorrect
+```sql
+DELETE FROM users WHERE id = 1;
+```
+✅ Correct
+```sql
+DELETE FROM orders WHERE user_id = 1;
+DELETE FROM users WHERE id = 1;
+```
+💡 Why it happens: Alice still has orders pointing at her, so the delete is refused unless the constraint declares CASCADE. Remove the dependent rows first, or design the cascade deliberately.
+
+### Pointing a foreign key at a non-unique column
+❌ Incorrect
+```sql
+CREATE TABLE orders (
+  order_id INTEGER PRIMARY KEY,
+  user_name TEXT REFERENCES users(name)
+);
+```
+✅ Correct
+```sql
+CREATE TABLE orders (
+  order_id INTEGER PRIMARY KEY,
+  user_id INTEGER REFERENCES users(id)
+);
+```
+💡 Why it happens: A foreign key must reference a column guaranteed unique. Two users can share a name, so the reference would be ambiguous.
