@@ -49,4 +49,32 @@ test.describe('@no-external Login + Practice Minimal Terminal polish', () => {
       expect(bg).toBe('rgb(20, 34, 56)'); // #142238, the atlas-console theme background
     }
   });
+
+  test('new badge/label elements keep a single main landmark and do not overflow at 320px', async ({ page }) => {
+    await setupStudentProfile(page, 'A11yViewportTester');
+
+    for (const path of ['/login', '/practice'] as const) {
+      await page.setViewportSize({ width: 320, height: 800 });
+      if (path === '/practice') {
+        await goToPractice(page);
+      } else {
+        await page.goto(path);
+        // Note: not asserting the 'Welcome back' heading here. In this build
+        // (test:e2e:no-external, no VITE_API_BASE_URL) AUTH_ENABLED is false,
+        // so AuthPage's early-return branch renders "Account system not
+        // available" instead of the login form/heading (see AuthPage.tsx,
+        // gate predates this plan — introduced in a7d187d). Waiting on the
+        // main landmark keeps this test valid across both branches while
+        // still exercising the real assertions below.
+        await expect(page.getByRole('main')).toBeVisible({ timeout: 10000 });
+      }
+
+      await expect(page.getByRole('main')).toHaveCount(1);
+      await expect(page.locator('a', { hasText: 'Skip to main content' })).toHaveCount(1);
+
+      const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+      expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1); // +1 rounding tolerance
+    }
+  });
 });
