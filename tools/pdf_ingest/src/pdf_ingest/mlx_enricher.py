@@ -72,7 +72,75 @@ def _extract_sql_candidate(text: str) -> str:
     return clipped if clipped.endswith(";") else f"{clipped};"
 
 
-def _deterministic_hints(summary: str, excerpt: str) -> tuple[str, str, str]:
+# Failure families a passage can teach, matched to the SQL-Engage subtypes the
+# runtime classifier emits. The offline rungs are what a learner reads when the
+# LLM is unavailable, so a passage about grouping should not open with the same
+# generic "identify what data the question asks for" as every other concept.
+ERROR_CLASS_SIGNALS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("grouping", re.compile(r"\bgroup\s+by\b|\baggregat|\bhaving\b|\bcount\s*\(|\bsum\s*\(", re.I)),
+    ("joining", re.compile(r"\bjoin\b|\bforeign\s+key\b|\brelationship\b|\bmatching\s+rows\b", re.I)),
+    ("ordering", re.compile(r"\border\s+by\b|\bsort\b|\bascending\b|\bdescending\b", re.I)),
+    ("duplicates", re.compile(r"\bdistinct\b|\bduplicate\b|\bunique\s+rows\b", re.I)),
+    ("filtering", re.compile(r"\bwhere\b|\bpredicate\b|\bfilter\b|\bcondition\b", re.I)),
+)
+
+# Rung 1 is a micro-hint, rung 2 a guiding question, rung 3 an explicit scaffold.
+# Keeping them distinct matters: identical text across rungs flattens the
+# escalation depth the papers measure.
+ERROR_CLASS_HINTS: dict[str, tuple[str, str, str]] = {
+    "grouping": (
+        "Decide which column defines each group before you aggregate.",
+        "Which column should every row be grouped by, and which value is being counted or summed?",
+        "Fill the scaffold: SELECT ___, COUNT(___) FROM ___ GROUP BY ___.",
+    ),
+    "joining": (
+        "Find the column the two tables have in common before combining them.",
+        "Which column in each table refers to the same thing, and what should connect them?",
+        "Fill the scaffold: SELECT ___ FROM ___ JOIN ___ ON ___ = ___.",
+    ),
+    "ordering": (
+        "The rows are right but their order is not yet specified.",
+        "Which column decides the order, and should it run ascending or descending?",
+        "Fill the scaffold: SELECT ___ FROM ___ ORDER BY ___ DESC.",
+    ),
+    "duplicates": (
+        "Check whether the same value can appear on more than one row.",
+        "Should repeated values appear once each, or once per matching row?",
+        "Fill the scaffold: SELECT DISTINCT ___ FROM ___.",
+    ),
+    "filtering": (
+        "Work out which rows to keep before shaping the columns.",
+        "Which column carries the condition, and what value does it compare against?",
+        "Fill the scaffold: SELECT ___ FROM ___ WHERE ___ = ___.",
+    ),
+}
+
+
+def _detect_error_class(text: str) -> str | None:
+    """The failure family a passage teaches, or None when it is not SQL-shaped."""
+    normalized = _normalize_text(text)
+    for name, pattern in ERROR_CLASS_SIGNALS:
+        if pattern.search(normalized):
+            return name
+    return None
+
+
+def _deterministic_hints(
+    summary: str,
+    excerpt: str,
+    error_class: str | None = None,
+) -> tuple[str, str, str]:
+    ladder = ERROR_CLASS_HINTS.get(error_class or "")
+    if ladder:
+        # Rung 2 stays a bare question. Appending the excerpt buries the question
+        # mid-string and risks the clip truncating it, which turns a guiding
+        # question into a statement.
+        return (
+            _clip_for_display(ladder[0], 110),
+            _clip_for_display(ladder[1], 210),
+            _clip_for_display(ladder[2], 280),
+        )
+
     v1 = _clip_for_display(
         f"Start by identifying what data the question asks for before writing SQL. {summary}",
         110,
@@ -108,7 +176,11 @@ def _fallback_enrichment(text: str, *, fallback_reason: str | None, model: str) 
         "- Mixing multiple clauses before validating a minimal query.\n"
         "- Forgetting to verify column names against the schema."
     )
-    hint_v1, hint_v2, hint_escalation = _deterministic_hints(display_summary_refined, hintable_excerpt_refined)
+    hint_v1, hint_v2, hint_escalation = _deterministic_hints(
+        display_summary_refined,
+        hintable_excerpt_refined,
+        error_class=_detect_error_class(clean or summary),
+    )
     hint = hint_v1
     return MlxEnrichmentResult(
         summary=summary,
@@ -154,18 +226,34 @@ def _extract_json_block(value: str) -> dict | None:
 
 
 def _build_prompt(text: str) -> str:
+    # The three hint keys are rungs 1-3 of the guidance ladder and must escalate.
+    # Without the rung semantics spelled out, the model returns three paraphrases
+    # of the same hint, which flattens the escalation depth the study measures.
+    # Rung 4 is generated at runtime from retrieval, so ingest never produces one.
+    error_class = _detect_error_class(text)
+    focus = (
+        f"- The passage teaches the '{error_class}' failure family; aim every hint at that mistake.\n"
+        if error_class
+        else ""
+    )
     return (
         "You refine SQL teaching content. Stay grounded only in the provided passage.\n"
         "Do not invent tables, columns, or facts not present in the passage.\n"
         "Return JSON only with keys:\n"
         "definition_refined, example_refined, common_mistakes_refined, "
         "display_summary_refined, hintable_excerpt_refined, hint_v1, hint_v2, hint_escalation, refinement_confidence.\n"
+        "The three hint keys are an escalating ladder, not three versions of one hint:\n"
+        "- hint_v1 is a micro-hint: one nudge toward what to think about first.\n"
+        "- hint_v2 is a guiding question that makes the learner name the missing piece.\n"
+        "- hint_escalation gives explicit direction, and may use a blanked scaffold.\n"
+        "Each rung must add information the previous one withheld.\n"
+        f"{focus}"
         "Constraints:\n"
         "- definition_refined <= 260 chars.\n"
         "- display_summary_refined <= 200 chars.\n"
         "- hintable_excerpt_refined <= 180 chars.\n"
         "- hint_v1 <= 110 chars, no direct SQL solution.\n"
-        "- hint_v2 <= 220 chars, ask a guiding question.\n"
+        "- hint_v2 <= 220 chars, phrased as a question ending in '?'.\n"
         "- hint_escalation <= 320 chars, may use blanks like SELECT ___ FROM ___.\n"
         "- common_mistakes_refined must be 2-4 short bullet lines with '- ' prefixes.\n"
         "- example_refined should be concrete and concise.\n"
