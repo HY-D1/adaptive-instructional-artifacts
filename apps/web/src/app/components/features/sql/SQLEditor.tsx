@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
+import type { Monaco } from '@monaco-editor/react';
 import type { editor } from 'monaco-editor';
 import { Button } from '../../ui/button';
 import { Card } from '../../ui/card';
@@ -161,6 +162,24 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
       return;
     }
     editorRef.current = editor;
+  };
+
+  const handleEditorBeforeMount = (monacoInstance: Monaco) => {
+    monacoInstance.editor.defineTheme('atlas-console', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'keyword', foreground: '6e95ff' },
+        { token: 'string', foreground: 'efb84d' },
+        { token: 'comment', foreground: 'aebbd0' },
+        { token: 'number', foreground: '58c69d' },
+      ],
+      colors: {
+        'editor.background': '#142238',
+        'editor.foreground': '#f4f7fb',
+        'editorLineNumber.foreground': '#33445e',
+      },
+    });
   };
 
   useEffect(() => {
@@ -539,7 +558,8 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
                 value={code}
                 onChange={handleCodeChange}
                 onMount={handleEditorDidMount}
-                theme="vs-dark"
+                beforeMount={handleEditorBeforeMount}
+                theme="atlas-console"
                 options={{
                   minimap: { enabled: false },
                   fontSize: 14,
