@@ -553,6 +553,74 @@ export function getMappedSqlEngageSubtypes(): string[] {
   return Object.keys(subtypeToConceptMap).sort((a, b) => a.localeCompare(b));
 }
 
+/** SQL keywords a learner is most likely to mistype. */
+const COMMON_SQL_KEYWORDS = [
+  'select', 'from', 'where', 'group', 'order', 'having', 'join', 'inner',
+  'left', 'right', 'outer', 'on', 'insert', 'into', 'values', 'update',
+  'set', 'delete', 'create', 'table', 'distinct', 'limit', 'offset',
+  'union', 'and', 'or', 'not', 'null', 'like', 'between', 'exists', 'as',
+];
+
+/** Levenshtein distance, bounded early since we only care about small edits. */
+function editDistance(a: string, b: string): number {
+  if (Math.abs(a.length - b.length) > 2) return 3;
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  const curr = new Array<number>(b.length + 1).fill(0);
+  for (let i = 1; i <= a.length; i += 1) {
+    curr[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      curr[j] = Math.min(
+        prev[j] + 1,
+        curr[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+    }
+    for (let j = 0; j <= b.length; j += 1) prev[j] = curr[j];
+  }
+  return prev[b.length];
+}
+
+/**
+ * SQLite reports the offending token as: near "TOKEN": syntax error.
+ * A token one or two edits away from a SQL keyword is a misspelling rather
+ * than a punctuation problem, which is what the learner needs told.
+ */
+function isLikelyMisspelledKeyword(errorMessage: string): boolean {
+  const near = /near\s+"([^"]+)"/i.exec(errorMessage);
+  if (!near) return false;
+  const token = near[1].toLowerCase();
+  if (token.length < 2 || !/^[a-z_]+$/.test(token)) return false;
+  if (COMMON_SQL_KEYWORDS.includes(token)) return false;
+  return COMMON_SQL_KEYWORDS.some((kw) => editDistance(token, kw) <= 2);
+}
+
+/** Unbalanced parentheses outside of string literals. */
+function hasUnbalancedParens(query: string): boolean {
+  let depth = 0;
+  let inString = false;
+  for (let i = 0; i < query.length; i += 1) {
+    const ch = query[i];
+    if (ch === "'") inString = !inString;
+    if (inString) continue;
+    if (ch === '(') depth += 1;
+    if (ch === ')') depth -= 1;
+    if (depth < 0) return true;
+  }
+  return depth !== 0;
+}
+
+/**
+ * Two bare identifiers adjacent inside a SELECT list, e.g. `SELECT name age city`.
+ * Deliberately narrow: only fires when no comma appears in the select list at all.
+ */
+function isLikelyMissingComma(query: string): boolean {
+  const select = /select\s+(.+?)\s+from\b/is.exec(query);
+  if (!select) return false;
+  const list = select[1].trim();
+  if (list.includes(',') || list.includes('*') || list.includes('(')) return false;
+  return /^[a-z_][a-z0-9_]*(\s+[a-z_][a-z0-9_]*){2,}$/i.test(list);
+}
+
 function isLikelyWrongPositioning(query: string): boolean {
   const compact = query.trim().toLowerCase();
   if (!compact) return false;
@@ -618,9 +686,15 @@ export function normalizeSqlErrorSubtype(errorMessage: string, query: string = '
   if (/datatype mismatch|type mismatch|cannot convert|incompatible types|invalid.*type/i.test(error)) {
     return canonicalizeSqlEngageSubtype('data type mismatch');
   }
-  // Constraint violation patterns
+  // Constraint violations (UNIQUE / NOT NULL / FOREIGN KEY / CHECK).
+  // NOTE: the SQL-Engage dataset has no constraint category, so the former
+  // 'constraint violation' label was not canonical and every constraint error
+  // silently fell through to the 'incomplete query' fallback. 'data type
+  // mismatch' is the closest dataset-backed label: both describe a value that
+  // the schema refuses to accept. Revisit if the taxonomy gains a constraint
+  // subtype — see the handoff note on error-taxonomy coverage.
   if (/constraint failed|unique constraint|foreign key constraint|check constraint|not null constraint/i.test(error)) {
-    return canonicalizeSqlEngageSubtype('constraint violation');
+    return canonicalizeSqlEngageSubtype('data type mismatch');
   }
   // Division by zero and arithmetic errors
   if (/division by zero|divide by zero|arithmetic error|numeric overflow/i.test(error)) {
@@ -638,13 +712,26 @@ export function normalizeSqlErrorSubtype(errorMessage: string, query: string = '
   if (/no such view|view.*not found|invalid view/i.test(error)) {
     return canonicalizeSqlEngageSubtype('undefined table');
   }
-  // Missing comma patterns
-  if (/near\s*"[^"]*"\s*: syntax error|missing comma|expected comma/i.test(error)) {
-    return canonicalizeSqlEngageSubtype('missing commas');
-  }
-  // Unmatched brackets/parentheses
-  if (/unmatched.*bracket|unmatched.*parenthes|unclosed.*paren|mismatched.*bracket/i.test(error)) {
+  // Unmatched brackets/parentheses. Checked before the generic syntax-error
+  // branches because SQLite reports an unclosed paren as an ordinary
+  // `near "...": syntax error`, with no mention of brackets.
+  if (
+    /unmatched.*bracket|unmatched.*parenthes|unclosed.*paren|mismatched.*bracket/i.test(error) ||
+    (/syntax error|unrecognized token/i.test(error) && hasUnbalancedParens(query))
+  ) {
     return canonicalizeSqlEngageSubtype('unmatched brackets');
+  }
+  // A mistyped keyword is a spelling problem, not a punctuation one. SQLite
+  // surfaces both as the same `near "TOKEN": syntax error`, so the token is
+  // compared against the SQL keyword list before falling through.
+  if (/syntax error/i.test(error) && isLikelyMisspelledKeyword(error)) {
+    return canonicalizeSqlEngageSubtype('misspelling');
+  }
+  // Missing commas. Narrowed to queries whose select list really does hold
+  // adjacent bare identifiers: the previous pattern matched every SQLite
+  // syntax error, so keyword typos were reported to learners as comma errors.
+  if (/missing comma|expected comma/i.test(error) || (/syntax error/i.test(error) && isLikelyMissingComma(query))) {
+    return canonicalizeSqlEngageSubtype('missing commas');
   }
 
   // Safe fallback to a canonical subtype guaranteed in the SQL-Engage dataset.
