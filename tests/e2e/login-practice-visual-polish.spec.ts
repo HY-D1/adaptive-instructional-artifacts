@@ -32,8 +32,25 @@ test.describe('@no-external Login + Practice Minimal Terminal polish', () => {
       await setTheme(page, theme);
       const label = page.locator('.atlas-label', { hasText: /Problem \d+ of \d+/ });
       await expect(label).toBeVisible();
+
       const panel = page.locator('.atlas-panel-border').first();
       await expect(panel).toBeVisible();
+
+      // Prove .atlas-panel-border actually changes rendering rather than being a
+      // no-op: compare its computed border-color against a plain default Card
+      // ("Session Stats") on the same page, which only carries the shared
+      // `border` utility (--atlas-line). The panel additionally applies
+      // .atlas-panel-border, which uses --atlas-line-strong, so the two must
+      // differ in both light and dark mode.
+      const defaultCard = page.locator('[data-slot="card"]', { hasText: 'Session Stats' }).first();
+      await expect(defaultCard).toBeVisible();
+
+      const [panelBorderColor, defaultBorderColor] = await Promise.all([
+        panel.evaluate((el) => getComputedStyle(el).borderColor),
+        defaultCard.evaluate((el) => getComputedStyle(el).borderColor),
+      ]);
+
+      expect(panelBorderColor).not.toBe(defaultBorderColor);
     }
   });
 
@@ -50,7 +67,7 @@ test.describe('@no-external Login + Practice Minimal Terminal polish', () => {
     }
   });
 
-  test('new badge/label elements keep a single main landmark and do not overflow at 320px', async ({ page }) => {
+  test('practice atlas-label and the login fallback state keep a single main landmark and do not overflow at 320px', async ({ page }) => {
     await setupStudentProfile(page, 'A11yViewportTester');
 
     for (const path of ['/login', '/practice'] as const) {

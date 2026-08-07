@@ -27,7 +27,7 @@ vi.mock('../lib/runtime-config', () => ({
 import { AuthPage } from './AuthPage';
 
 describe('AuthPage', () => {
-  it('shows a connected status badge when AUTH_ENABLED is true', () => {
+  it('shows an account-login-enabled status badge when AUTH_ENABLED is true', () => {
     // Setup mocks to render the normal login form branch
     mocks.useAuth.mockReturnValue({
       login: vi.fn(),
@@ -46,9 +46,10 @@ describe('AuthPage', () => {
       </MemoryRouter>,
     );
 
-    // Verify the badge component is rendered
-    const badge = screen.getByText('Backend connected');
-    expect(badge).toBeTruthy();
+    // Verify the badge component is rendered with a claim that is actually true at
+    // render time (AUTH_ENABLED only means account login is configured/available,
+    // not that a backend is live and reachable).
+    const badge = screen.getByText('Account login enabled');
     expect(badge.className).toContain('atlas-badge');
 
     // Verify the badge dot with emerald color is present
