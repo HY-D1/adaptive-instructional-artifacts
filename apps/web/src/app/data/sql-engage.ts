@@ -594,6 +594,50 @@ function isLikelyMisspelledKeyword(errorMessage: string): boolean {
   return COMMON_SQL_KEYWORDS.some((kw) => editDistance(token, kw) <= 2);
 }
 
+/** Removes string literals so identifier scans never match inside a value. */
+function scrubStringLiterals(query: string): string {
+  return query.replace(/'[^']*'/g, "''").replace(/"[^"]*"/g, '""');
+}
+
+/**
+ * A forgotten quote around a string literal. SQLite reads `WHERE name = Alice`
+ * as a column reference and reports `no such column: Alice`, which previously
+ * sent the learner advice about undefined columns.
+ *
+ * Narrow on purpose: the token must appear on the right of a comparison and
+ * nowhere else in the query, so a genuine undefined column — which is normally
+ * also named in the select list — still classifies as one.
+ */
+function isLikelyUnquotedLiteral(errorMessage: string, query: string): boolean {
+  const missing = /no such column:\s*([a-z_][a-z0-9_]*)/i.exec(errorMessage);
+  if (!missing) return false;
+  const token = missing[1];
+  const scrubbed = scrubStringLiterals(query);
+  const asComparisonValue = new RegExp(
+    `(?:=|!=|<>|<=|>=|<|>|\\blike\\b|\\bis\\b)\\s*${token}\\b`,
+    'i'
+  );
+  if (!asComparisonValue.test(scrubbed)) return false;
+  const occurrences = scrubbed.match(new RegExp(`\\b${token}\\b`, 'gi')) || [];
+  return occurrences.length === 1;
+}
+
+/**
+ * SQLite reports both an aggregate used as a row filter and an aggregate nested
+ * inside another aggregate as `misuse of aggregate function COUNT()`, so the
+ * query decides which subtype applies.
+ */
+function aggregateMisuseSubtype(query: string): string {
+  const scrubbed = scrubStringLiterals(query);
+  const where = /\bwhere\b([\s\S]*?)(?:\bgroup\s+by\b|\bhaving\b|\border\s+by\b|\blimit\b|$)/i.exec(
+    scrubbed
+  );
+  if (where && /\b(count|sum|avg|min|max|total|group_concat)\s*\(/i.test(where[1])) {
+    return 'incorrect having clause';
+  }
+  return 'aggregation misuse';
+}
+
 /** Unbalanced parentheses outside of string literals. */
 function hasUnbalancedParens(query: string): boolean {
   let depth = 0;
@@ -658,6 +702,22 @@ function isLikelyIncompleteQuery(query: string): boolean {
 export function normalizeSqlErrorSubtype(errorMessage: string, query: string = ''): string {
   const error = errorMessage.toLowerCase();
 
+  // An unquoted string literal masquerades as an undefined column, so this is
+  // checked before the column branch below.
+  if (isLikelyUnquotedLiteral(error, query)) {
+    return canonicalizeSqlEngageSubtype('missing quotes');
+  }
+  // HAVING without GROUP BY. SQLite rejects it with a message that matches none
+  // of the generic syntax patterns, so it previously fell through to the
+  // 'incomplete query' fallback.
+  if (/having clause on a non-aggregate query/i.test(error)) {
+    return canonicalizeSqlEngageSubtype('incorrect having clause');
+  }
+  // An aggregate used as a row filter, or nested inside another aggregate.
+  // Same fallthrough problem as above.
+  if (/misuse of aggregate function|misuse of aggregate/i.test(error)) {
+    return canonicalizeSqlEngageSubtype(aggregateMisuseSubtype(query));
+  }
   // Column-related errors - expanded pattern coverage
   if (/no such column|unknown column|has no column named|column not found|does not exist.*column|invalid column|referenced column/i.test(error)) {
     return canonicalizeSqlEngageSubtype('undefined column');
@@ -696,12 +756,20 @@ export function normalizeSqlErrorSubtype(errorMessage: string, query: string = '
   if (/constraint failed|unique constraint|foreign key constraint|check constraint|not null constraint/i.test(error)) {
     return canonicalizeSqlEngageSubtype('data type mismatch');
   }
-  // Division by zero and arithmetic errors
+  // Division by zero and arithmetic errors. Kept for engines that raise them:
+  // SQLite returns NULL for `age / 0` rather than erroring, so this branch is
+  // inert against sql.js. Verified by execution.
   if (/division by zero|divide by zero|arithmetic error|numeric overflow/i.test(error)) {
     return canonicalizeSqlEngageSubtype('operator misuse');
   }
-  // LIKE pattern errors
-  if (/like pattern|escape sequence|invalid escape/i.test(error)) {
+  // Operator misuse: a malformed LIKE ... ESCAPE is the one shape sql.js
+  // actually reports. The generic 'like pattern'/'invalid escape' wordings below
+  // match no SQLite message, so the real one is matched first.
+  if (
+    /escape expression must be a single character/i.test(error) ||
+    /like or glob pattern too complex/i.test(error) ||
+    /like pattern|escape sequence|invalid escape/i.test(error)
+  ) {
     return canonicalizeSqlEngageSubtype('operator misuse');
   }
   // Index-related errors
