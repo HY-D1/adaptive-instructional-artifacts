@@ -10,6 +10,7 @@
       "title": "Introduction to MySQL",
       "definition": "Overview of MySQL database management system and relational databases",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         1,
         2,
@@ -186,6 +187,7 @@
       "title": "Relational Databases",
       "definition": "Tables, rows, columns, keys, and relationships in relational databases",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         21,
         22,
@@ -340,6 +342,7 @@
       "title": "SELECT Statement",
       "definition": "Retrieving data from a single table with column selection and aliases",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         73,
         74,
@@ -530,6 +533,7 @@
       "title": "WHERE Clause",
       "definition": "Filtering rows with comparison operators, AND, OR, NOT, IN, BETWEEN, LIKE",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         85,
         86,
@@ -714,6 +718,7 @@
       "title": "ORDER BY Clause",
       "definition": "Sorting query results by one or more columns, ascending and descending",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         101,
         102,
@@ -840,6 +845,7 @@
       "title": "Joining Tables",
       "definition": "Inner joins, outer joins, and cross joins in MySQL",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         117,
         118,
@@ -1024,6 +1030,7 @@
       "title": "Inner Join",
       "definition": "Matching rows from two or more tables",
       "difficulty": "beginner",
+      "estimatedReadTime": 3,
       "pageNumbers": [
         117,
         118,
@@ -1138,6 +1145,7 @@
       "title": "Outer Join",
       "definition": "Left, right, and full outer joins in MySQL",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         129,
         130,
@@ -1262,6 +1270,7 @@
       "title": "INSERT Statement",
       "definition": "Adding rows to tables with INSERT INTO and INSERT SELECT",
       "difficulty": "beginner",
+      "estimatedReadTime": 3,
       "pageNumbers": [
         149,
         150,
@@ -1402,6 +1411,7 @@
       "title": "UPDATE Statement",
       "definition": "Modifying existing data with UPDATE and UPDATE JOIN",
       "difficulty": "beginner",
+      "estimatedReadTime": 7,
       "pageNumbers": [
         165,
         166,
@@ -1534,6 +1544,7 @@
       "title": "DELETE Statement",
       "definition": "Removing rows with DELETE and DELETE JOIN",
       "difficulty": "beginner",
+      "estimatedReadTime": 3,
       "pageNumbers": [
         177,
         178,
@@ -1628,6 +1639,7 @@
       "title": "MySQL Data Types",
       "definition": "Numeric, string, date/time, and large object data types",
       "difficulty": "beginner",
+      "estimatedReadTime": 27,
       "pageNumbers": [
         193,
         194,
@@ -1776,6 +1788,7 @@
       "title": "MySQL Functions",
       "definition": "String, numeric, date/time, and conversion functions",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         217,
         218,
@@ -1930,6 +1943,7 @@
       "title": "String Functions",
       "definition": "CONCAT, SUBSTRING, LENGTH, TRIM, UPPER, LOWER, and more",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         218,
         219,
@@ -2030,6 +2044,7 @@
       "title": "Date and Time Functions",
       "definition": "NOW, CURDATE, DATE_FORMAT, DATE_ADD, DATEDIFF, and more",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         228,
         229,
@@ -2128,6 +2143,7 @@
       "title": "Aggregate Functions",
       "definition": "COUNT, SUM, AVG, MAX, MIN, and DISTINCT aggregates",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         241,
         242,
@@ -2274,6 +2290,7 @@
       "title": "GROUP BY Clause",
       "definition": "Grouping data for aggregate calculations",
       "difficulty": "intermediate",
+      "estimatedReadTime": 9,
       "pageNumbers": [
         253,
         254,
@@ -2416,6 +2433,7 @@
       "title": "HAVING Clause",
       "definition": "Filtering groups based on aggregate values",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         265,
         266,
@@ -2512,6 +2530,7 @@
       "title": "Subqueries",
       "definition": "Single-row, multi-row, and correlated subqueries in MySQL",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         277,
         278,
@@ -2658,6 +2677,7 @@
       "title": "Correlated Subqueries",
       "definition": "Subqueries that reference outer query columns",
       "difficulty": "advanced",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         289,
         290,
@@ -2761,6 +2781,7 @@
       "title": "UNION and UNION ALL",
       "definition": "Combining results from multiple SELECT statements",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         301,
         302,
@@ -2867,6 +2888,7 @@
       "title": "Creating Tables",
       "definition": "CREATE TABLE with columns, data types, and constraints",
       "difficulty": "beginner",
+      "estimatedReadTime": 18,
       "pageNumbers": [
         317,
         318,
@@ -2991,6 +3013,7 @@
       "title": "Altering Tables",
       "definition": "ALTER TABLE to add, modify, and drop columns",
       "difficulty": "intermediate",
+      "estimatedReadTime": 3,
       "pageNumbers": [
         333,
         334,
@@ -3103,6 +3126,7 @@
       "title": "Constraints",
       "definition": "PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK, and NOT NULL",
       "difficulty": "intermediate",
+      "estimatedReadTime": 16,
       "pageNumbers": [
         345,
         346,
@@ -3239,6 +3263,7 @@
       "title": "Views",
       "definition": "Creating and using views in MySQL",
       "difficulty": "intermediate",
+      "estimatedReadTime": 10,
       "pageNumbers": [
         381,
         382,
@@ -3367,6 +3392,7 @@
       "title": "Stored Procedures",
       "definition": "Creating and using stored procedures in MySQL",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         401,
         402,
@@ -3489,6 +3515,7 @@
       "title": "Stored Functions",
       "definition": "Creating user-defined functions in MySQL",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         417,
         418,
@@ -3589,6 +3616,7 @@
       "title": "Triggers",
       "definition": "Automatic actions on INSERT, UPDATE, DELETE",
       "difficulty": "advanced",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         429,
         430,
@@ -3712,6 +3740,7 @@
       "title": "Events",
       "definition": "Scheduled tasks in MySQL",
       "difficulty": "advanced",
+      "estimatedReadTime": 3,
       "pageNumbers": [
         441,
         442,
@@ -3819,6 +3848,7 @@
       "title": "Transactions",
       "definition": "ACID properties, COMMIT, ROLLBACK, and savepoints",
       "difficulty": "intermediate",
+      "estimatedReadTime": 25,
       "pageNumbers": [
         457,
         458,
@@ -3959,6 +3989,7 @@
       "title": "Transaction Isolation Levels",
       "definition": "READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE",
       "difficulty": "advanced",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         471,
         472,
@@ -4068,6 +4099,7 @@
       "title": "User Management",
       "definition": "Creating users, granting privileges, and roles",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         487,
         488,
@@ -4184,6 +4216,7 @@
       "title": "Backup and Restore",
       "definition": "Database backup strategies and restoration procedures",
       "difficulty": "intermediate",
+      "estimatedReadTime": 14,
       "pageNumbers": [
         505,
         506,
@@ -4298,6 +4331,7 @@
       "title": "Introduction to Relational Databases",
       "definition": "Overview of database systems, relational model basics, and data independence",
       "difficulty": "beginner",
+      "estimatedReadTime": 4,
       "pageNumbers": [
         1,
         2,
@@ -4382,6 +4416,7 @@
       "title": "Data Independence",
       "definition": "Logical and physical data independence - how DBMS separates data from applications",
       "difficulty": "beginner",
+      "estimatedReadTime": 2,
       "pageNumbers": [
         15,
         16,
@@ -4454,6 +4489,7 @@
       "title": "Entity-Relationship Model",
       "definition": "Modeling database structure using entities, relationships, and attributes",
       "difficulty": "intermediate",
+      "estimatedReadTime": 15,
       "pageNumbers": [
         25,
         26,
@@ -4586,6 +4622,7 @@
       "title": "ER Diagrams",
       "definition": "Visual representation of entity-relationship models",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         35,
         36,
@@ -4708,6 +4745,7 @@
       "title": "Cardinality Constraints",
       "definition": "Specifying how many instances of one entity relate to instances of another",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         45,
         46,
@@ -4848,6 +4886,7 @@
       "title": "Relational Algebra",
       "definition": "Formal language for manipulating relations using operations like selection, projection, and join",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         75,
         76,
@@ -5040,6 +5079,7 @@
       "title": "Selection and Projection",
       "definition": "Basic relational algebra operations for filtering rows and selecting columns",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         78,
         79,
@@ -5164,6 +5204,7 @@
       "title": "Set Operations in SQL",
       "definition": "UNION, INTERSECT, and EXCEPT operations in relational algebra and SQL",
       "difficulty": "intermediate",
+      "estimatedReadTime": 7,
       "pageNumbers": [
         93,
         94,
@@ -5284,6 +5325,7 @@
       "title": "Introduction to SQL",
       "definition": "Structured Query Language for managing relational databases",
       "difficulty": "beginner",
+      "estimatedReadTime": 7,
       "pageNumbers": [
         115,
         116,
@@ -5416,6 +5458,7 @@
       "title": "SELECT Statement Basics",
       "definition": "Retrieving data from one or more tables using the SELECT statement",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         115,
         116,
@@ -5534,6 +5577,7 @@
       "title": "WHERE Clause and Filtering",
       "definition": "Filtering rows using conditions with WHERE, comparison operators, and logical operators",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         120,
         121,
@@ -5674,6 +5718,7 @@
       "title": "SQL Joins",
       "definition": "Combining data from multiple tables using INNER JOIN, LEFT JOIN, RIGHT JOIN, and FULL JOIN",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         140,
         141,
@@ -5864,6 +5909,7 @@
       "title": "INNER JOIN",
       "definition": "Retrieving matching rows from two or more tables",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         140,
         141,
@@ -5976,6 +6022,7 @@
       "title": "OUTER JOIN",
       "definition": "Retrieving all rows from one table and matching rows from another (LEFT, RIGHT, FULL)",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         148,
         149,
@@ -6110,6 +6157,7 @@
       "title": "Aggregate Functions",
       "definition": "Computing summary values with COUNT, SUM, AVG, MAX, MIN",
       "difficulty": "beginner",
+      "estimatedReadTime": 5,
       "pageNumbers": [
         165,
         166,
@@ -6264,6 +6312,7 @@
       "title": "GROUP BY Clause",
       "definition": "Grouping rows with common values for aggregate calculations",
       "difficulty": "intermediate",
+      "estimatedReadTime": 9,
       "pageNumbers": [
         175,
         176,
@@ -6402,6 +6451,7 @@
       "title": "HAVING Clause",
       "definition": "Filtering groups based on aggregate conditions",
       "difficulty": "intermediate",
+      "estimatedReadTime": 17,
       "pageNumbers": [
         183,
         184,
@@ -6517,7 +6567,8 @@
     "dbms-ramakrishnan-3rd-edition/subqueries": {
       "title": "Subqueries",
       "definition": "Nested queries - using SELECT statements within other SQL statements",
-      "difficulty": "intermediate",
+      "difficulty": "advanced",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         195,
         196,
@@ -6676,6 +6727,7 @@
       "title": "Correlated Subqueries",
       "definition": "Subqueries that reference columns from the outer query",
       "difficulty": "advanced",
+      "estimatedReadTime": 6,
       "pageNumbers": [
         205,
         206,
@@ -6809,6 +6861,7 @@
       "title": "CREATE TABLE",
       "definition": "Creating database tables with column definitions and constraints",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         225,
         226,
@@ -6945,6 +6998,7 @@
       "title": "SQL Data Types",
       "definition": "Integer, decimal, character, date/time, and blob data types in SQL",
       "difficulty": "beginner",
+      "estimatedReadTime": 3,
       "pageNumbers": [
         228,
         229,
@@ -7075,6 +7129,7 @@
       "title": "Integrity Constraints",
       "definition": "PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK, and NOT NULL constraints",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         235,
         236,
@@ -7221,6 +7276,7 @@
       "title": "Primary Key Constraint",
       "definition": "Uniquely identifying each row in a table",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         235,
         236,
@@ -7311,6 +7367,7 @@
       "title": "Foreign Key Constraint",
       "definition": "Maintaining referential integrity between related tables",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         240,
         241,
@@ -7437,6 +7494,7 @@
       "title": "INSERT Statement",
       "definition": "Adding new rows to database tables",
       "difficulty": "beginner",
+      "estimatedReadTime": 5,
       "pageNumbers": [
         260,
         261,
@@ -7557,6 +7615,7 @@
       "title": "UPDATE Statement",
       "definition": "Modifying existing data in tables",
       "difficulty": "beginner",
+      "estimatedReadTime": 3,
       "pageNumbers": [
         268,
         269,
@@ -7679,6 +7738,7 @@
       "title": "DELETE Statement",
       "definition": "Removing rows from database tables",
       "difficulty": "beginner",
+      "estimatedReadTime": 2,
       "pageNumbers": [
         275,
         276,
@@ -7791,6 +7851,7 @@
       "title": "SQL Views",
       "definition": "Virtual tables based on the result of a query - stored SELECT statements",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         295,
         296,
@@ -7955,6 +8016,7 @@
       "title": "Database Normalization",
       "definition": "Organizing data to reduce redundancy and improve integrity (1NF, 2NF, 3NF, BCNF)",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         325,
         326,
@@ -8145,6 +8207,7 @@
       "title": "First Normal Form (1NF)",
       "definition": "Eliminating repeating groups and ensuring atomic values",
       "difficulty": "beginner",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         328,
         329,
@@ -8253,6 +8316,7 @@
       "title": "Second Normal Form (2NF)",
       "definition": "Eliminating partial dependencies on composite keys",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         335,
         336,
@@ -8375,6 +8439,7 @@
       "title": "Third Normal Form (3NF)",
       "definition": "Eliminating transitive dependencies",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         342,
         343,
@@ -8503,6 +8568,7 @@
       "title": "Database Transactions",
       "definition": "Atomic units of work that maintain database consistency (ACID properties)",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         355,
         356,
@@ -8697,6 +8763,7 @@
       "title": "ACID Properties",
       "definition": "Atomicity, Consistency, Isolation, Durability - guarantees for transaction processing",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         355,
         356,
@@ -8827,6 +8894,7 @@
       "title": "Transaction Isolation Levels",
       "definition": "READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE",
       "difficulty": "advanced",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         365,
         366,
@@ -8976,6 +9044,7 @@
       "title": "Database Indexes",
       "definition": "Data structures that improve the speed of data retrieval operations",
       "difficulty": "intermediate",
+      "estimatedReadTime": 5,
       "pageNumbers": [
         385,
         386,
@@ -9120,6 +9189,7 @@
       "title": "SQL Authorization",
       "definition": "GRANT and REVOKE statements for controlling access to database objects",
       "difficulty": "intermediate",
+      "estimatedReadTime": 1,
       "pageNumbers": [
         405,
         406,
