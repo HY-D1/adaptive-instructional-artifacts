@@ -169,15 +169,19 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
       base: 'vs-dark',
       inherit: true,
       rules: [
-        { token: 'keyword', foreground: '6e95ff' },
-        { token: 'string', foreground: 'efb84d' },
-        { token: 'comment', foreground: 'aebbd0' },
-        { token: 'number', foreground: '58c69d' },
+        { token: 'keyword', foreground: '6e95ff' }, // --atlas-cobalt (dark)
+        { token: 'string', foreground: 'efb84d' }, // --atlas-amber (dark)
+        { token: 'comment', foreground: 'aebbd0' }, // --atlas-ink-soft (dark)
+        { token: 'number', foreground: '58c69d' }, // --atlas-emerald (dark)
       ],
       colors: {
-        'editor.background': '#142238',
-        'editor.foreground': '#f4f7fb',
-        'editorLineNumber.foreground': '#33445e',
+        'editor.background': '#142238', // --atlas-surface (dark)
+        'editor.foreground': '#f4f7fb', // --atlas-ink (dark)
+        // --atlas-ink-soft (dark): 8.22:1 on the surface above, meets AA (4.5:1) for
+        // line numbers referenced by SQL error messages. --atlas-line (#33445e) is a
+        // hairline/border token and only reaches 1.62:1 here, so it must not be used
+        // for text.
+        'editorLineNumber.foreground': '#aebbd0',
       },
     });
   };
