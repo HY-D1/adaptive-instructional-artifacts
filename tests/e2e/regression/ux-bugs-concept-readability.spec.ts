@@ -106,14 +106,21 @@ test.describe('@regression @ux-bugs @no-external Concept readability — helper 
   });
 
   /**
-   * Second known-bad concept: dbms-ramakrishnan-3rd-edition/select-basic
+   * Second known-bad concept: dbms-ramakrishnan-3rd-edition/selection-projection
    * Must also show the banner and fallback summary.
+   *
+   * This was `select-basic` until that concept was hand-rewritten and its
+   * concept-quality.json entry flipped from "fallback_only" to "ok". A concept
+   * that is genuinely readable shows no quality banner, so the assertion below
+   * was failing on a stale premise rather than on a real regression. Pointing at
+   * a concept that is still degraded — and still from the non-Murach source doc,
+   * which is the point of this case — preserves what the test is for.
    */
   test('Second known-bad concept (different source doc) also shows quality fallback', async ({ page }) => {
-    await page.goto('/concepts/dbms-ramakrishnan-3rd-edition/select-basic');
+    await page.goto('/concepts/dbms-ramakrishnan-3rd-edition/selection-projection');
 
     await expect(
-      page.locator('h1').filter({ hasText: /SELECT Statement Basics/i })
+      page.locator('h1').filter({ hasText: /Selection and Projection/i })
     ).toBeVisible({ timeout: 30_000 });
 
     // Quality banner present
