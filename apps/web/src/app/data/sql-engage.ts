@@ -1,4 +1,4 @@
-import { ConceptNode, ErrorSubtype, HintTemplate } from '../types';
+import { ConceptNode } from '../types';
 import sqlEngageCsvRaw from './sql_engage_dataset.csv?raw';
 
 // SQL-Engage Knowledge Graph: Concept nodes
@@ -436,18 +436,6 @@ function ensureSqlEngageRow(row: SqlEngageRecord | undefined, canonicalSubtype: 
   };
 }
 
-export function getDeterministicSqlEngageHint(
-  subtype: string,
-  hintLevel: number,
-  seed: string
-): SqlEngageRecord {
-  const canonicalSubtype = canonicalizeSqlEngageSubtype(subtype);
-  const rows = getSqlEngageRowsBySubtype(canonicalSubtype);
-  const sourceRows = rows.length > 0 ? rows : [getFallbackSqlEngageRow()];
-  const index = stableHash(`${canonicalSubtype}|${hintLevel}|${seed}`) % sourceRows.length;
-  return ensureSqlEngageRow(sourceRows[index], canonicalSubtype);
-}
-
 export function getDeterministicSqlEngageAnchor(
   subtype: string,
   seed: string
@@ -547,10 +535,6 @@ export function getConceptIdsForSqlEngageSubtype(subtype?: string): string[] {
   if (!subtype) return [];
   const normalized = canonicalizeSqlEngageSubtype(subtype);
   return subtypeToConceptMap[normalized] || [];
-}
-
-export function getMappedSqlEngageSubtypes(): string[] {
-  return Object.keys(subtypeToConceptMap).sort((a, b) => a.localeCompare(b));
 }
 
 /** SQL keywords a learner is most likely to mistype. */
@@ -806,158 +790,8 @@ export function normalizeSqlErrorSubtype(errorMessage: string, query: string = '
   return canonicalizeSqlEngageSubtype(DEFAULT_SUBTYPE_FALLBACK);
 }
 
-// Error subtypes mapped to concepts
-export const errorSubtypes: ErrorSubtype[] = [
-  {
-    id: 'missing-from',
-    pattern: /no such table|FROM/i,
-    conceptIds: ['select-basic'],
-    severity: 'high',
-    description: 'Missing or incorrect FROM clause'
-  },
-  {
-    id: 'syntax-select',
-    pattern: /syntax error.*SELECT/i,
-    conceptIds: ['select-basic'],
-    severity: 'medium',
-    description: 'Syntax error in SELECT statement'
-  },
-  {
-    id: 'ambiguous-column',
-    pattern: /ambiguous column/i,
-    conceptIds: ['joins'],
-    severity: 'medium',
-    description: 'Column name exists in multiple tables without table prefix'
-  },
-  {
-    id: 'join-condition-missing',
-    pattern: /ON.*expected|cartesian/i,
-    conceptIds: ['joins'],
-    severity: 'high',
-    description: 'Missing or incorrect JOIN condition'
-  },
-  {
-    id: 'group-by-error',
-    pattern: /not in GROUP BY|aggregate/i,
-    conceptIds: ['aggregation'],
-    severity: 'high',
-    description: 'Column not in GROUP BY or aggregate function'
-  },
-  {
-    id: 'where-syntax',
-    pattern: /syntax error.*WHERE/i,
-    conceptIds: ['where-clause'],
-    severity: 'medium',
-    description: 'Syntax error in WHERE clause'
-  }
-];
-
-// Guidance Ladder: Progressive hint templates
-export const hintTemplates: HintTemplate[] = [
-  // Basic SELECT hints
-  {
-    id: 'hint-select-1',
-    conceptId: 'select-basic',
-    errorSubtypeId: 'missing-from',
-    hintLevel: 1,
-    content: 'Remember: Every SELECT statement needs a FROM clause to specify which table to query.',
-    nextAction: 'stay'
-  },
-  {
-    id: 'hint-select-2',
-    conceptId: 'select-basic',
-    errorSubtypeId: 'missing-from',
-    hintLevel: 2,
-    content: 'The structure is: SELECT columns FROM table_name. Check if your table name is spelled correctly.',
-    nextAction: 'escalate'
-  },
-  {
-    id: 'hint-select-3',
-    conceptId: 'select-basic',
-    errorSubtypeId: 'syntax-select',
-    hintLevel: 1,
-    content: 'Check your SELECT syntax. Are you using commas correctly between column names?',
-    nextAction: 'stay'
-  },
-  
-  // JOIN hints
-  {
-    id: 'hint-join-1',
-    conceptId: 'joins',
-    errorSubtypeId: 'ambiguous-column',
-    hintLevel: 1,
-    content: 'When joining tables, prefix column names with table names (e.g., users.id) to avoid ambiguity.',
-    nextAction: 'stay'
-  },
-  {
-    id: 'hint-join-2',
-    conceptId: 'joins',
-    errorSubtypeId: 'ambiguous-column',
-    hintLevel: 2,
-    content: 'Use table aliases for cleaner code: SELECT u.name, o.id FROM users u JOIN orders o ...',
-    nextAction: 'escalate'
-  },
-  {
-    id: 'hint-join-3',
-    conceptId: 'joins',
-    errorSubtypeId: 'join-condition-missing',
-    hintLevel: 1,
-    content: 'Your JOIN is missing an ON condition. Specify how the tables should be connected.',
-    nextAction: 'stay'
-  },
-  {
-    id: 'hint-join-4',
-    conceptId: 'joins',
-    errorSubtypeId: 'join-condition-missing',
-    hintLevel: 2,
-    content: 'JOIN syntax: FROM table1 JOIN table2 ON table1.column = table2.column',
-    nextAction: 'escalate'
-  },
-  
-  // Aggregation hints
-  {
-    id: 'hint-agg-1',
-    conceptId: 'aggregation',
-    errorSubtypeId: 'group-by-error',
-    hintLevel: 1,
-    content: 'When using GROUP BY, every column in SELECT must either be in GROUP BY or inside an aggregate function.',
-    nextAction: 'stay'
-  },
-  {
-    id: 'hint-agg-2',
-    conceptId: 'aggregation',
-    errorSubtypeId: 'group-by-error',
-    hintLevel: 2,
-    content: 'Aggregate functions: COUNT(), SUM(), AVG(), MAX(), MIN(). Group by the non-aggregated columns.',
-    nextAction: 'escalate'
-  },
-  
-  // WHERE clause hints
-  {
-    id: 'hint-where-1',
-    conceptId: 'where-clause',
-    errorSubtypeId: 'where-syntax',
-    hintLevel: 1,
-    content: 'Check your WHERE clause syntax. Are you using comparison operators correctly (=, >, <, !=)?',
-    nextAction: 'stay'
-  }
-];
-
 // Helper functions to retrieve from SQL-Engage
 export function getConceptById(id: string): ConceptNode | undefined {
   return conceptNodes.find(c => c.id === id);
 }
 
-export function getErrorSubtype(errorMessage: string): ErrorSubtype | undefined {
-  return errorSubtypes.find(e => e.pattern.test(errorMessage));
-}
-
-export function getHintsForError(errorSubtypeId: string, level: number = 1): HintTemplate[] {
-  return hintTemplates.filter(h => 
-    h.errorSubtypeId === errorSubtypeId && h.hintLevel <= level
-  );
-}
-
-export function getConceptsByIds(ids: string[]): ConceptNode[] {
-  return conceptNodes.filter(c => ids.includes(c.id));
-}

@@ -38,23 +38,6 @@ export type ConceptNode = {
   examples: string[];
 };
 
-export type ErrorSubtype = {
-  id: string;
-  pattern: RegExp;
-  conceptIds: string[];
-  severity: 'low' | 'medium' | 'high';
-  description: string;
-};
-
-export type HintTemplate = {
-  id: string;
-  conceptId: string;
-  errorSubtypeId: string;
-  hintLevel: 1 | 2 | 3; // Progressive hint levels
-  content: string;
-  nextAction: 'stay' | 'escalate' | 'aggregate';
-};
-
 export type RetrievedChunkInfo = {
   docId: string;
   page?: number;

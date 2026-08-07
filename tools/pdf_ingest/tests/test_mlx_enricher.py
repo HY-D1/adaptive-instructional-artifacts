@@ -85,7 +85,8 @@ def test_prompt_states_the_ladder_and_the_detected_error_class() -> None:
     assert "micro-hint" in prompt
     assert "guiding question" in prompt
     assert "grouping" in prompt
-    # L4 is the runtime RAG/LLM rung, so ingest must not invent a fourth hint.
+    # The implemented ladder is GuidanceRung = 1 | 2 | 3, so a fourth hint field
+    # would have no consumer.
     assert "hint_v4" not in prompt
 
 

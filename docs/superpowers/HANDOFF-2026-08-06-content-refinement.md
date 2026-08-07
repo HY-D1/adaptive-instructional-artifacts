@@ -21,6 +21,7 @@ carries a superseded-status header; this table is the authoritative version.
 | 13 | Final verification | Done — gate run, one stale e2e spec fixed in `89b1e29`. Browser spot-check still outstanding |
 | 14 | Semantic classification for wrong-but-runnable queries | Done — `5ab0fd3` |
 | 15 | Offline hint rungs escalate and match the failure family | Done — `def1d57` |
+| 17 | Remove the 7 dead exports and 2 unused types from `sql-engage.ts` | Done — see below |
 
 Units 10-12 were cancelled after the user clarified that hints are driven by error
 type, not per-problem text. The replacement work (auditing and fixing the
@@ -157,12 +158,19 @@ none. Error-*event* counts are unchanged; error-*subtype* coverage is not.
   `incorrect order by usage` fire only in combination with another mistake. Tightening
   grading would move the 78.9% solve rate, so it is a research decision, not a fix to make
   quietly.
-- **Rungs 3 and 4 serve identical text** on both offline paths:
-  `getProgressiveSqlEngageHintText` clamps with `Math.min(3, hintLevel)`, and
-  `refined-hints.ts:38` maps rung 3 and rung 4 to `hintEscalation`. Only the runtime LLM
-  differentiates rung 4, and it is first-choice for all rungs, so this bites in degraded
-  mode. Adding a fourth ingest field would require re-ingestion to populate, so it was not
-  added — see the unit 15 commit message.
+- **There is no rung 4.** An earlier draft of this handoff, and the `def1d57` commit
+  message, claimed rungs 3 and 4 served identical text and treated that as a defect. That
+  was wrong: `GuidanceRung = 1 | 2 | 3` in
+  `apps/web/src/app/lib/ml/guidance-ladder.ts`, `RUNG_DEFINITIONS` has exactly three
+  entries (Micro-hint, Explanation, Reflective Note), and no production code passes 4.
+  `Math.min(3, hintLevel)` in `getProgressiveSqlEngageHintText` is correct defensive
+  clamping, and the else-branch in `refined-hints.ts:38` *is* rung 3, the final rung.
+
+  The L1–L4 framing came from a research note describing the ladder as four levels
+  (micro-hint → guiding question → explicit direction → RAG/LLM explanation), which does
+  not match the implemented three-rung `RUNG_DEFINITIONS`. **Do not "fix" this by adding a
+  fourth rung** — that would change the ladder contract and the escalation depth the papers
+  measure. Whether the docs or the implementation should move is a research decision.
 
 ## Suggested next work, highest value first
 
@@ -180,11 +188,12 @@ none. Error-*event* counts are unchanged; error-*subtype* coverage is not.
    ingest pipeline via `refined-hints.ts`, and the runtime LLM. To improve what learners
    read, change those — not `hintTemplates`.
 2. **`hint_level`/`rung` telemetry gap.** The CIKM paper reports AED was computable on only 371/699 hint rows (53.1%), which is why HDI runs as a 3-component proxy and AED/REAE are listed as limitations. Making every hint event reliably carry its rung would let the full 5-component HDI be computed — a limitation removed rather than a feature added. Check `buildHintViewEvent` in `apps/web/src/app/lib/telemetry/`.
-3. **Delete the 7 dead exports in `sql-engage.ts`** (listed in item 1). `errorSubtypes`'
-   patterns are broken anyway — `/no such table|FROM/i` matches any error containing
-   "from". Left in place during the classification work to keep that commit reviewable;
-   removing them is a clean standalone change. Confirm with a fresh grep first, since the
-   semantic classifier work did not touch them.
+3. ~~**Delete the 7 dead exports in `sql-engage.ts`.**~~ **Done.** `sql-engage.ts` went from
+   17 exports to 11, all live. The unused `ErrorSubtype` and `HintTemplate` types went with
+   them, since they existed only to type the dead tables. Evidence that behaviour is
+   unchanged: the production bundle is byte-identical before and after
+   (`index-DyceQRD3.js`, 1,664.93 kB), because the dead code was already being
+   tree-shaken.
 4. **Remaining broken concepts.** 31 of 66 are still `fallback_only`. 10 more duplicate pairs exist (`aggregate-functions`, `having`, `inner-join`, `outer-join`, `insert`, `delete`, `update`, `correlated-subquery`, `isolation-levels`, `views`) — same situation as the 4 already merged. Also 3 orphaned markdown files no concept-map entry references, and `tests/e2e/ws-4-audit.spec.ts:9-10` references two concept ids that do not exist.
 5. **`postSolveExplanation`** is declared on `SQLProblem` but not populated or rendered. If you implement it, it must not emit `explanation_view` — that would inflate ER in HDI for every learner who solves.
 
