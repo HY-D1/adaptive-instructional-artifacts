@@ -67,6 +67,7 @@ import { sqlProblems } from '../data/problems';
 import { getProblemsByDifficultyRank } from '../lib/adaptive-problem-selector';
 import { getFirstProblem } from '../lib/problem-ranking';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
+import { classifySemanticSqlIssue } from '../lib/sql-semantic-classifier';
 import { useUserRole } from '../hooks/useUserRole';
 import { useLocation, Link } from 'react-router';
 import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync } from '../lib/storage';
@@ -1535,7 +1536,12 @@ export function LearningInterface() {
         (interaction) =>
           interaction.sessionId === sessionId &&
           interaction.problemId === currentProblem.id &&
-          interaction.eventType === 'error'
+          // An engine error, or a query that ran but answered wrongly. Both now
+          // carry a subtype, and the most recent mistake is what a hint should
+          // target.
+          (interaction.eventType === 'error' ||
+            (interaction.eventType === 'execution' && interaction.successful === false)) &&
+          Boolean(interaction.sqlEngageSubtype || interaction.errorSubtypeId)
       )
       .sort((a, b) => b.timestamp - a.timestamp)[0];
 
@@ -1700,9 +1706,23 @@ export function LearningInterface() {
     // If not provided, fall back to result.success (no SQL errors)
     const actuallyCorrect = isCorrect ?? result.success;
     
+    // An engine error arrives with its own subtype from normalizeSqlErrorSubtype.
+    // A query that ran but answered wrongly arrived with none, which is why 12 of
+    // the 23 canonical subtypes could never be emitted and the hint pipeline —
+    // which selects on subtype — had nothing to target for those attempts.
+    const semanticSubtype =
+      result.success && !actuallyCorrect
+        ? classifySemanticSqlIssue({
+            query,
+            expectedQuery: currentProblem.expectedQuery
+          })
+        : null;
+
     const resolvedSubtype = !result.success
       ? canonicalizeSqlEngageSubtype(instructorSubtypeOverride || result.errorSubtypeId)
-      : undefined;
+      : semanticSubtype
+        ? canonicalizeSqlEngageSubtype(instructorSubtypeOverride || semanticSubtype)
+        : undefined;
     const event: InteractionEvent = {
       id: createEventId('event', 'execution'),
       sessionId,
@@ -1747,8 +1767,16 @@ export function LearningInterface() {
     }
 
     if (result.success) {
-      setLastError(undefined);
-      setLastErrorEventId(undefined);
+      // A query that ran but answered wrongly keeps its subtype instead of
+      // clearing it, so a hint can target the actual mistake. eventType stays
+      // 'execution', so error-event counts and the bandit reward are unchanged.
+      if (actuallyCorrect) {
+        setLastError(undefined);
+        setLastErrorEventId(undefined);
+      } else if (resolvedSubtype) {
+        setLastError(resolvedSubtype);
+        setLastErrorEventId(event.id);
+      }
       // Keep escalationTriggered=true so Save to Notes stays visible after solving
       setNotesActionMessage(undefined);
       setGenerationError(undefined);
