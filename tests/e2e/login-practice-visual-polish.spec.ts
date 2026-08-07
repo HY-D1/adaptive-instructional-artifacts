@@ -36,4 +36,17 @@ test.describe('@no-external Login + Practice Minimal Terminal polish', () => {
       await expect(panel).toBeVisible();
     }
   });
+
+  test('practice editor uses the custom atlas-console theme in both app light and dark mode', async ({ page }) => {
+    await setupStudentProfile(page, 'EditorThemeTester');
+    await goToPractice(page);
+    await page.waitForSelector('.monaco-editor', { timeout: 10000 });
+
+    for (const theme of ['light', 'dark'] as const) {
+      await setTheme(page, theme);
+      const bg = await page.locator('.monaco-editor-background').first()
+        .evaluate((el) => getComputedStyle(el).backgroundColor);
+      expect(bg).toBe('rgb(20, 34, 56)'); // #142238, the atlas-console theme background
+    }
+  });
 });
