@@ -551,7 +551,18 @@ export type SQLProblem = {
   expectedQuery: string;
   expectedResult?: any[];
   gradingMode?: 'result' | 'exec-only';
+  /**
+   * Authored hints for this specific problem, ordered from gentlest nudge to
+   * most explicit. Index 0 backs hint rung 1, and so on.
+   */
   hints?: string[];
+  /**
+   * Shown after the learner submits a correct query, explaining why the
+   * solution works. Deliberately not named `explanation`: that term already
+   * refers to the rung-2 escalation shown when a learner is stuck, and is
+   * recorded as `explanation_view` in telemetry.
+   */
+  postSolveExplanation?: string;
   /** Topic category for grouping and scaffolded progression */
   topic: SQLProblemTopic;
   /** Difficulty level within the topic (1 = easiest, 5 = hardest) */
