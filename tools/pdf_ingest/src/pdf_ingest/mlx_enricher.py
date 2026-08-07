@@ -226,10 +226,11 @@ def _extract_json_block(value: str) -> dict | None:
 
 
 def _build_prompt(text: str) -> str:
-    # The three hint keys are rungs 1-3 of the guidance ladder and must escalate.
-    # Without the rung semantics spelled out, the model returns three paraphrases
-    # of the same hint, which flattens the escalation depth the study measures.
-    # Rung 4 is generated at runtime from retrieval, so ingest never produces one.
+    # The three hint keys are the full guidance ladder: GuidanceRung is 1 | 2 | 3
+    # in apps/web/src/app/lib/ml/guidance-ladder.ts, so three fields is exactly
+    # right and a fourth would have no consumer. Without the rung semantics
+    # spelled out, the model returns three paraphrases of the same hint, which
+    # flattens the escalation depth the study measures.
     error_class = _detect_error_class(text)
     focus = (
         f"- The passage teaches the '{error_class}' failure family; aim every hint at that mistake.\n"
