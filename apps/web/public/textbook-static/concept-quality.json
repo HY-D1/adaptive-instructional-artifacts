@@ -5,60 +5,52 @@
     "dbms-ramakrishnan-3rd-edition",
     "murachs-mysql-3rd-edition"
   ],
-  "totalConcepts": 70,
+  "totalConcepts": 66,
   "qualityByConcept": {
     "dbms-ramakrishnan-3rd-edition/1nf": {
-      "readabilityStatus": "fallback_only",
-      "readabilityWarnings": [
-        "semantic_drift: only 11% of title keywords (['atomic', 'eliminating', 'ensuring', 'first', 'form', 'groups', 'normal', 'repeating', 'values']) appear in explanation \u2014 content may be about a different topic",
-        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
-      ],
-      "exampleQuality": "filtered",
-      "learnerSafeSummary": "First Normal Form (1NF): Eliminating repeating groups and ensuring atomic values",
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "ok",
+      "learnerSafeSummary": "First normal form requires one value per cell, with no lists and no numbered repeating columns.",
       "learnerSafeKeyPoints": [
-        "First Normal Form (1NF) refers to: Eliminating repeating groups and ensuring atomic values",
-        "Key topics: design, normalization, 1nf",
-        "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 328\u2013337"
+        "A comma-separated list in a cell cannot be counted, filtered, or joined.",
+        "Numbered columns such as course_1 and course_2 hard-code an arbitrary limit.",
+        "Move repeating data into its own table with one row per value.",
+        "Each column should hold one kind of fact."
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/2nf": {
-      "readabilityStatus": "fallback_only",
-      "readabilityWarnings": [
-        "toc_pollution: 10 TOC-like patterns in explanation (threshold 3) \u2014 content is an index page",
-        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
-      ],
-      "exampleQuality": "filtered",
-      "learnerSafeSummary": "Second Normal Form (2NF): Eliminating partial dependencies on composite keys",
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "ok",
+      "learnerSafeSummary": "Second normal form removes partial dependencies on part of a composite key.",
       "learnerSafeKeyPoints": [
-        "Second Normal Form (2NF) refers to: Eliminating partial dependencies on composite keys",
-        "Key topics: design, normalization, 2nf",
-        "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 335\u2013346"
+        "It only applies to tables whose primary key spans several columns.",
+        "A column depending on half the key gets stored repeatedly.",
+        "Move that column into a table keyed by what it truly depends on.",
+        "A join reproduces the original combined view on demand."
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/3nf": {
-      "readabilityStatus": "fallback_only",
-      "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['dependencies', 'eliminating', 'form', 'normal', 'third', 'transitive']) appear in explanation \u2014 content may be about a different topic"
-      ],
-      "exampleQuality": "filtered",
-      "learnerSafeSummary": "Third Normal Form (3NF): Eliminating transitive dependencies",
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "ok",
+      "learnerSafeSummary": "Third normal form removes transitive dependencies, where one non-key column determines another.",
       "learnerSafeKeyPoints": [
-        "Third Normal Form (3NF) refers to: Eliminating transitive dependencies",
-        "Key topics: design, normalization, 3nf",
-        "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 342\u2013353"
+        "Storing a department name on every employee repeats it once per person.",
+        "It causes update, deletion, and insertion anomalies.",
+        "Move the dependent column into a table keyed by what determines it.",
+        "Most working schemas aim for third normal form."
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/acid": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "toc_pollution: 3 TOC-like patterns in explanation (threshold 3) \u2014 content is an index page",
-        "semantic_drift: only 11% of title keywords (['acid', 'atomicity', 'consistency', 'durability', 'guarantees', 'isolation', 'processing', 'properties', 'transaction']) appear in explanation \u2014 content may be about a different topic",
+        "toc_pollution: 3 TOC-like patterns in explanation (threshold 3) — content is an index page",
+        "semantic_drift: only 11% of title keywords (['acid', 'atomicity', 'consistency', 'durability', 'guarantees', 'isolation', 'processing', 'properties', 'transaction']) appear in explanation — content may be about a different topic",
         "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
       ],
       "exampleQuality": "filtered",
@@ -67,7 +59,7 @@
         "ACID Properties refers to: Atomicity, Consistency, Isolation, Durability - guarantees for transaction processing",
         "Key topics: transactions, acid, properties",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 355\u2013366"
+        "Source: pages 355–366"
       ],
       "learnerSafeExamples": []
     },
@@ -82,14 +74,14 @@
         "Aggregate Functions refers to: Computing summary values with COUNT, SUM, AVG, MAX, MIN",
         "Key topics: sql, aggregates, functions",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 165\u2013181"
+        "Source: pages 165–181"
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/authorization": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['access', 'authorization', 'controlling', 'database', 'grant', 'objects', 'revoke', 'statements']) appear in explanation \u2014 content may be about a different topic",
+        "semantic_drift: only 0% of title keywords (['access', 'authorization', 'controlling', 'database', 'grant', 'objects', 'revoke', 'statements']) appear in explanation — content may be about a different topic",
         "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
       ],
       "exampleQuality": "filtered",
@@ -98,14 +90,14 @@
         "SQL Authorization refers to: GRANT and REVOKE statements for controlling access to database objects",
         "Key topics: security, authorization, access control",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 405\u2013419"
+        "Source: pages 405–419"
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/cardinality": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 12% of title keywords (['another', 'cardinality', 'constraints', 'entity', 'instances', 'many', 'relate', 'specifying']) appear in explanation \u2014 content may be about a different topic"
+        "semantic_drift: only 12% of title keywords (['another', 'cardinality', 'constraints', 'entity', 'instances', 'many', 'relate', 'specifying']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "Cardinality Constraints: Specifying how many instances of one entity relate to instances of another",
@@ -113,15 +105,15 @@
         "Cardinality Constraints refers to: Specifying how many instances of one entity relate to instances of another",
         "Key topics: modeling, constraints, relationships",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 45\u201358"
+        "Source: pages 45–58"
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/constraints": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "toc_pollution: 3 TOC-like patterns in explanation (threshold 3) \u2014 content is an index page",
-        "semantic_drift: only 14% of title keywords (['check', 'constraints', 'foreign', 'integrity', 'null', 'primary', 'unique']) appear in explanation \u2014 content may be about a different topic"
+        "toc_pollution: 3 TOC-like patterns in explanation (threshold 3) — content is an index page",
+        "semantic_drift: only 14% of title keywords (['check', 'constraints', 'foreign', 'integrity', 'null', 'primary', 'unique']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "Integrity Constraints: PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK, and NOT NULL constraints",
@@ -129,7 +121,7 @@
         "Integrity Constraints refers to: PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK, and NOT NULL constraints",
         "Key topics: sql, constraints, integrity",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 235\u2013252"
+        "Source: pages 235–252"
       ],
       "learnerSafeExamples": []
     },
@@ -144,14 +136,14 @@
         "Correlated Subqueries refers to: Subqueries that reference columns from the outer query",
         "Key topics: sql, subqueries, correlated, advanced",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 205\u2013219"
+        "Source: pages 205–219"
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/create-table": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 12% of title keywords (['column', 'constraints', 'create', 'creating', 'database', 'definitions', 'table', 'tables']) appear in explanation \u2014 content may be about a different topic",
+        "semantic_drift: only 12% of title keywords (['column', 'constraints', 'create', 'creating', 'database', 'definitions', 'table', 'tables']) appear in explanation — content may be about a different topic",
         "sql_contamination: 67% of SQL code blocks contain embedded English prose (threshold 50%)"
       ],
       "exampleQuality": "filtered",
@@ -160,7 +152,7 @@
         "CREATE TABLE refers to: Creating database tables with column definitions and constraints",
         "Key topics: sql, ddl, create table",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 225\u2013238"
+        "Source: pages 225–238"
       ],
       "learnerSafeExamples": []
     },
@@ -173,7 +165,7 @@
         "Data Independence refers to: Logical and physical data independence - how DBMS separates data from applications",
         "Key topics: dbms, architecture, fundamentals",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 15\u201322"
+        "Source: pages 15–22"
       ],
       "learnerSafeExamples": []
     },
@@ -186,7 +178,7 @@
         "SQL Data Types refers to: Integer, decimal, character, date/time, and blob data types in SQL",
         "Key topics: sql, data types, ddl",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 228\u2013241"
+        "Source: pages 228–241"
       ],
       "learnerSafeExamples": []
     },
@@ -199,14 +191,14 @@
         "DELETE Statement refers to: Removing rows from database tables",
         "Key topics: sql, dml, delete",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 275\u2013285"
+        "Source: pages 275–285"
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/er-diagrams": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['diagrams', 'entity', 'models', 'relationship', 'representation', 'visual']) appear in explanation \u2014 content may be about a different topic"
+        "semantic_drift: only 0% of title keywords (['diagrams', 'entity', 'models', 'relationship', 'representation', 'visual']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "ER Diagrams: Visual representation of entity-relationship models",
@@ -214,7 +206,7 @@
         "ER Diagrams refers to: Visual representation of entity-relationship models",
         "Key topics: modeling, diagrams, design",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 35\u201347"
+        "Source: pages 35–47"
       ],
       "learnerSafeExamples": []
     },
@@ -229,38 +221,33 @@
         "Entity-Relationship Model refers to: Modeling database structure using entities, relationships, and attributes",
         "Key topics: modeling, er, design",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 25\u201339"
+        "Source: pages 25–39"
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/foreign-key": {
-      "readabilityStatus": "fallback_only",
-      "readabilityWarnings": [
-        "semantic_drift: only 12% of title keywords (['between', 'constraint', 'foreign', 'integrity', 'maintaining', 'referential', 'related', 'tables']) appear in explanation \u2014 content may be about a different topic",
-        "structural_corruption: 4 garbled structural markers (threshold 2) \u2014 explanation contains OCR artefacts of chapter/navigation text"
-      ],
-      "exampleQuality": "filtered",
-      "learnerSafeSummary": "Foreign Key Constraint: Maintaining referential integrity between related tables",
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "ok",
+      "learnerSafeSummary": "A foreign key must match a primary key elsewhere, so links cannot point at missing rows.",
       "learnerSafeKeyPoints": [
-        "Foreign Key Constraint refers to: Maintaining referential integrity between related tables",
-        "Key topics: sql, foreign key, referential integrity",
-        "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 240\u2013254"
+        "Referential integrity makes broken links impossible rather than unlikely.",
+        "ON DELETE CASCADE removes dependent rows; SET NULL clears the link.",
+        "A foreign key must reference a column guaranteed to be unique.",
+        "SQLite enforces foreign keys only when they are switched on."
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/group-by": {
       "readabilityStatus": "ok",
-      "readabilityWarnings": [
-        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
-      ],
-      "exampleQuality": "filtered",
-      "learnerSafeSummary": "GROUP BY Clause: Grouping rows with common values for aggregate calculations",
+      "readabilityWarnings": [],
+      "exampleQuality": "ok",
+      "learnerSafeSummary": "GROUP BY partitions rows into groups so aggregates report one result per group.",
       "learnerSafeKeyPoints": [
-        "GROUP BY Clause refers to: Grouping rows with common values for aggregate calculations",
-        "Key topics: sql, group by, aggregation",
-        "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 175\u2013189"
+        "Every selected column must be grouped or wrapped in an aggregate.",
+        "WHERE filters rows before grouping; HAVING filters groups afterwards.",
+        "COUNT of a column skips NULLs, while COUNT of everything counts rows.",
+        "SQLite tolerates ungrouped columns that most other databases reject."
       ],
       "learnerSafeExamples": []
     },
@@ -273,7 +260,7 @@
         "HAVING Clause refers to: Filtering groups based on aggregate conditions",
         "Key topics: sql, having, filtering",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 183\u2013195"
+        "Source: pages 183–195"
       ],
       "learnerSafeExamples": []
     },
@@ -288,14 +275,14 @@
         "Database Indexes refers to: Data structures that improve the speed of data retrieval operations",
         "Key topics: performance, indexes, optimization",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 385\u2013399"
+        "Source: pages 385–399"
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/inner-join": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['inner', 'join', 'matching', 'retrieving', 'rows', 'tables']) appear in explanation \u2014 content may be about a different topic"
+        "semantic_drift: only 0% of title keywords (['inner', 'join', 'matching', 'retrieving', 'rows', 'tables']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "INNER JOIN: Retrieving matching rows from two or more tables",
@@ -303,7 +290,7 @@
         "INNER JOIN refers to: Retrieving matching rows from two or more tables",
         "Key topics: sql, joins, inner",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 140\u2013150"
+        "Source: pages 140–150"
       ],
       "learnerSafeExamples": []
     },
@@ -318,14 +305,14 @@
         "INSERT Statement refers to: Adding new rows to database tables",
         "Key topics: sql, dml, insert",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 260\u2013272"
+        "Source: pages 260–272"
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/isolation-levels": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['committed', 'isolation', 'levels', 'read', 'repeatable', 'serializable', 'transaction', 'uncommitted']) appear in explanation \u2014 content may be about a different topic"
+        "semantic_drift: only 0% of title keywords (['committed', 'isolation', 'levels', 'read', 'repeatable', 'serializable', 'transaction', 'uncommitted']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "Transaction Isolation Levels: READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE",
@@ -333,29 +320,27 @@
         "Transaction Isolation Levels refers to: READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE",
         "Key topics: transactions, isolation, concurrency, advanced",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 365\u2013379"
+        "Source: pages 365–379"
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/joins": {
-      "readabilityStatus": "fallback_only",
-      "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['combining', 'data', 'full', 'inner', 'join', 'joins', 'left', 'multiple', 'right', 'tables']) appear in explanation \u2014 content may be about a different topic"
-      ],
-      "exampleQuality": "filtered",
-      "learnerSafeSummary": "SQL Joins: Combining data from multiple tables using INNER JOIN, LEFT JOIN, RIGHT JOIN, and FULL JOIN",
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "ok",
+      "learnerSafeSummary": "A join combines rows from two tables by matching values in a column they share.",
       "learnerSafeKeyPoints": [
-        "SQL Joins refers to: Combining data from multiple tables using INNER JOIN, LEFT JOIN, RIGHT JOIN, and FULL JOIN",
-        "Key topics: sql, joins, relationships",
-        "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 140\u2013160"
+        "INNER JOIN keeps only rows that match on both sides.",
+        "LEFT JOIN keeps every left-hand row and fills missing right-hand columns with NULL.",
+        "ON decides how rows pair up; WHERE filters what survives after pairing.",
+        "Qualify a column with its table name when both tables define that name."
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/normalization": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 11% of title keywords (['bcnf', 'data', 'database', 'improve', 'integrity', 'normalization', 'organizing', 'reduce', 'redundancy']) appear in explanation \u2014 content may be about a different topic",
+        "semantic_drift: only 11% of title keywords (['bcnf', 'data', 'database', 'improve', 'integrity', 'normalization', 'organizing', 'reduce', 'redundancy']) appear in explanation — content may be about a different topic",
         "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
       ],
       "exampleQuality": "filtered",
@@ -364,14 +349,14 @@
         "Database Normalization refers to: Organizing data to reduce redundancy and improve integrity (1NF, 2NF, 3NF, BCNF)",
         "Key topics: design, normalization, theory",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 325\u2013345"
+        "Source: pages 325–345"
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/outer-join": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 10% of title keywords (['another', 'full', 'join', 'left', 'matching', 'outer', 'retrieving', 'right', 'rows', 'table']) appear in explanation \u2014 content may be about a different topic"
+        "semantic_drift: only 10% of title keywords (['another', 'full', 'join', 'left', 'matching', 'outer', 'retrieving', 'right', 'rows', 'table']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "OUTER JOIN: Retrieving all rows from one table and matching rows from another (LEFT, RIGHT, FULL)",
@@ -379,30 +364,27 @@
         "OUTER JOIN refers to: Retrieving all rows from one table and matching rows from another (LEFT, RIGHT, FULL)",
         "Key topics: sql, joins, outer",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 148\u2013160"
+        "Source: pages 148–160"
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/primary-key": {
-      "readabilityStatus": "fallback_only",
-      "readabilityWarnings": [
-        "toc_pollution: 3 TOC-like patterns in explanation (threshold 3) \u2014 content is an index page",
-        "semantic_drift: only 0% of title keywords (['constraint', 'identifying', 'primary', 'table', 'uniquely']) appear in explanation \u2014 content may be about a different topic"
-      ],
-      "exampleQuality": "filtered",
-      "learnerSafeSummary": "Primary Key Constraint: Uniquely identifying each row in a table",
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "ok",
+      "learnerSafeSummary": "A primary key uniquely identifies each row and can never be duplicated or NULL.",
       "learnerSafeKeyPoints": [
-        "Primary Key Constraint refers to: Uniquely identifying each row in a table",
-        "Key topics: sql, primary key, constraints",
-        "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 235\u2013243"
+        "Declaring a primary key applies both UNIQUE and NOT NULL.",
+        "A table has one primary key, which may span several columns.",
+        "A composite key suits tables that record a relationship.",
+        "Surrogate keys are safer than real-world values, which change."
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/relational-algebra": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 9% of title keywords (['algebra', 'formal', 'join', 'language', 'like', 'manipulating', 'operations', 'projection', 'relational', 'relations', 'selection']) appear in explanation \u2014 content may be about a different topic"
+        "semantic_drift: only 9% of title keywords (['algebra', 'formal', 'join', 'language', 'like', 'manipulating', 'operations', 'projection', 'relational', 'relations', 'selection']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "Relational Algebra: Formal language for manipulating relations using operations like selection, projection, and join",
@@ -410,7 +392,7 @@
         "Relational Algebra refers to: Formal language for manipulating relations using operations like selection, projection, and join",
         "Key topics: relational, algebra, theory",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 75\u201396"
+        "Source: pages 75–96"
       ],
       "learnerSafeExamples": []
     },
@@ -423,7 +405,7 @@
         "Introduction to Relational Databases refers to: Overview of database systems, relational model basics, and data independence",
         "Key topics: dbms, relational, fundamentals",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 1\u201313"
+        "Source: pages 1–13"
       ],
       "learnerSafeExamples": [
         {
@@ -433,25 +415,22 @@
       ]
     },
     "dbms-ramakrishnan-3rd-edition/select-basic": {
-      "readabilityStatus": "fallback_only",
-      "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['basics', 'data', 'retrieving', 'statement', 'tables']) appear in explanation \u2014 content may be about a different topic",
-        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
-      ],
-      "exampleQuality": "filtered",
-      "learnerSafeSummary": "SELECT Statement Basics: Retrieving data from one or more tables using the SELECT statement",
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "ok",
+      "learnerSafeSummary": "SELECT reads data: you name the columns you want and the table they live in.",
       "learnerSafeKeyPoints": [
-        "SELECT Statement Basics refers to: Retrieving data from one or more tables using the SELECT statement",
-        "Key topics: sql, select, fundamentals",
-        "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 115\u2013127"
+        "List the columns you need instead of defaulting to the asterisk shorthand.",
+        "AS renames a column in the output, which matters for computed values.",
+        "DISTINCT removes duplicate rows, not duplicate values in one column.",
+        "Row order is not guaranteed without ORDER BY."
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/selection-projection": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['algebra', 'basic', 'columns', 'filtering', 'operations', 'projection', 'relational', 'rows', 'selecting', 'selection']) appear in explanation \u2014 content may be about a different topic"
+        "semantic_drift: only 0% of title keywords (['algebra', 'basic', 'columns', 'filtering', 'operations', 'projection', 'relational', 'rows', 'selecting', 'selection']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "Selection and Projection: Basic relational algebra operations for filtering rows and selecting columns",
@@ -459,7 +438,7 @@
         "Selection and Projection refers to: Basic relational algebra operations for filtering rows and selecting columns",
         "Key topics: relational, operations, basics",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 78\u201389"
+        "Source: pages 78–89"
       ],
       "learnerSafeExamples": []
     },
@@ -474,7 +453,7 @@
         "Set Operations in SQL refers to: UNION, INTERSECT, and EXCEPT operations in relational algebra and SQL",
         "Key topics: sql, set operations, relational",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 93\u2013104"
+        "Source: pages 93–104"
       ],
       "learnerSafeExamples": []
     },
@@ -489,31 +468,28 @@
         "Introduction to SQL refers to: Structured Query Language for managing relational databases",
         "Key topics: sql, fundamentals, introduction",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 115\u2013129"
+        "Source: pages 115–129"
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/subqueries": {
-      "readabilityStatus": "fallback_only",
-      "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['nested', 'other', 'queries', 'statements', 'subqueries', 'within']) appear in explanation \u2014 content may be about a different topic",
-        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
-      ],
-      "exampleQuality": "filtered",
-      "learnerSafeSummary": "Subqueries: Nested queries - using SELECT statements within other SQL statements",
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "ok",
+      "learnerSafeSummary": "A subquery is a SELECT nested inside another statement, supplying a value, a list, or a table.",
       "learnerSafeKeyPoints": [
-        "Subqueries refers to: Nested queries - using SELECT statements within other SQL statements",
-        "Key topics: sql, subqueries, nested",
-        "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 195\u2013211"
+        "A scalar subquery returns one row and one column and can be used as a value.",
+        "Use IN, not equals, when the inner query can return several rows.",
+        "A correlated subquery references the outer row and is evaluated per row.",
+        "NOT IN returns nothing when the inner query yields a NULL; prefer NOT EXISTS."
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/transactions": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "toc_pollution: 3 TOC-like patterns in explanation (threshold 3) \u2014 content is an index page",
-        "semantic_drift: only 0% of title keywords (['acid', 'atomic', 'consistency', 'database', 'maintain', 'properties', 'transactions', 'units', 'work']) appear in explanation \u2014 content may be about a different topic",
+        "toc_pollution: 3 TOC-like patterns in explanation (threshold 3) — content is an index page",
+        "semantic_drift: only 0% of title keywords (['acid', 'atomic', 'consistency', 'database', 'maintain', 'properties', 'transactions', 'units', 'work']) appear in explanation — content may be about a different topic",
         "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
       ],
       "exampleQuality": "filtered",
@@ -522,7 +498,7 @@
         "Database Transactions refers to: Atomic units of work that maintain database consistency (ACID properties)",
         "Key topics: transactions, acid, concurrency",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 355\u2013374"
+        "Source: pages 355–374"
       ],
       "learnerSafeExamples": []
     },
@@ -535,14 +511,14 @@
         "UPDATE Statement refers to: Modifying existing data in tables",
         "Key topics: sql, dml, update",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 268\u2013280"
+        "Source: pages 268–280"
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/views": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 12% of title keywords (['based', 'query', 'result', 'statements', 'stored', 'tables', 'views', 'virtual']) appear in explanation \u2014 content may be about a different topic",
+        "semantic_drift: only 12% of title keywords (['based', 'query', 'result', 'statements', 'stored', 'tables', 'views', 'virtual']) appear in explanation — content may be about a different topic",
         "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
       ],
       "exampleQuality": "filtered",
@@ -551,30 +527,27 @@
         "SQL Views refers to: Virtual tables based on the result of a query - stored SELECT statements",
         "Key topics: sql, views, virtualization",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 295\u2013311"
+        "Source: pages 295–311"
       ],
       "learnerSafeExamples": []
     },
     "dbms-ramakrishnan-3rd-edition/where-clause": {
-      "readabilityStatus": "fallback_only",
-      "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['clause', 'comparison', 'conditions', 'filtering', 'logical', 'operators', 'rows']) appear in explanation \u2014 content may be about a different topic",
-        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
-      ],
-      "exampleQuality": "filtered",
-      "learnerSafeSummary": "WHERE Clause and Filtering: Filtering rows using conditions with WHERE, comparison operators, and logical operators",
+      "readabilityStatus": "ok",
+      "readabilityWarnings": [],
+      "exampleQuality": "ok",
+      "learnerSafeSummary": "WHERE keeps only the rows whose condition tests true, discarding false and unknown ones.",
       "learnerSafeKeyPoints": [
-        "WHERE Clause and Filtering refers to: Filtering rows using conditions with WHERE, comparison operators, and logical operators",
-        "Key topics: sql, where, filtering",
-        "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 120\u2013134"
+        "WHERE runs before GROUP BY, so it cannot reference aggregates.",
+        "AND binds more tightly than OR; use parentheses to make intent explicit.",
+        "IN, BETWEEN, and LIKE are readable shorthands for common comparisons.",
+        "Use IS NULL rather than = NULL, because NULL means unknown."
       ],
       "learnerSafeExamples": []
     },
     "murachs-mysql-3rd-edition/aggregate-functions-murach": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['aggregate', 'aggregates', 'count', 'distinct', 'functions']) appear in explanation \u2014 content may be about a different topic",
+        "semantic_drift: only 0% of title keywords (['aggregate', 'aggregates', 'count', 'distinct', 'functions']) appear in explanation — content may be about a different topic",
         "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
       ],
       "exampleQuality": "filtered",
@@ -583,7 +556,7 @@
         "Aggregate Functions refers to: COUNT, SUM, AVG, MAX, MIN, and DISTINCT aggregates",
         "Key topics: mysql, aggregates, functions",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 241\u2013257"
+        "Source: pages 241–257"
       ],
       "learnerSafeExamples": []
     },
@@ -596,7 +569,7 @@
         "Altering Tables refers to: ALTER TABLE to add, modify, and drop columns",
         "Key topics: mysql, ddl, alter table",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 333\u2013343"
+        "Source: pages 333–343"
       ],
       "learnerSafeExamples": []
     },
@@ -611,7 +584,7 @@
         "Backup and Restore refers to: Database backup strategies and restoration procedures",
         "Key topics: mysql, backup, dba",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 505\u2013517"
+        "Source: pages 505–517"
       ],
       "learnerSafeExamples": []
     },
@@ -626,14 +599,14 @@
         "Constraints refers to: PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK, and NOT NULL",
         "Key topics: mysql, constraints, integrity",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 345\u2013357"
+        "Source: pages 345–357"
       ],
       "learnerSafeExamples": []
     },
     "murachs-mysql-3rd-edition/correlated-subquery-murach": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['columns', 'correlated', 'outer', 'query', 'reference', 'subqueries']) appear in explanation \u2014 content may be about a different topic"
+        "semantic_drift: only 0% of title keywords (['columns', 'correlated', 'outer', 'query', 'reference', 'subqueries']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "Correlated Subqueries: Subqueries that reference outer query columns",
@@ -641,22 +614,20 @@
         "Correlated Subqueries refers to: Subqueries that reference outer query columns",
         "Key topics: mysql, subqueries, correlated, advanced",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 289\u2013300"
+        "Source: pages 289–300"
       ],
       "learnerSafeExamples": []
     },
     "murachs-mysql-3rd-edition/create-table-murach": {
       "readabilityStatus": "ok",
-      "readabilityWarnings": [
-        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
-      ],
-      "exampleQuality": "filtered",
-      "learnerSafeSummary": "Creating Tables: CREATE TABLE with columns, data types, and constraints",
+      "readabilityWarnings": [],
+      "exampleQuality": "ok",
+      "learnerSafeSummary": "CREATE TABLE names each column, the type it stores, and the constraints the database enforces.",
       "learnerSafeKeyPoints": [
-        "Creating Tables refers to: CREATE TABLE with columns, data types, and constraints",
-        "Key topics: mysql, ddl, create table",
-        "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 317\u2013331"
+        "Choose types deliberately: DECIMAL for money, not a floating-point type.",
+        "Constraints such as NOT NULL and UNIQUE stop bad data on the way in.",
+        "MySQL writes AUTO_INCREMENT; SQLite auto-numbers an INTEGER PRIMARY KEY.",
+        "Schema-level rules apply to every writer, unlike application checks."
       ],
       "learnerSafeExamples": []
     },
@@ -671,14 +642,14 @@
         "MySQL Data Types refers to: Numeric, string, date/time, and large object data types",
         "Key topics: mysql, data types, ddl",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 193\u2013209"
+        "Source: pages 193–209"
       ],
       "learnerSafeExamples": []
     },
     "murachs-mysql-3rd-edition/date-functions": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['curdate', 'date', 'datediff', 'format', 'functions', 'time']) appear in explanation \u2014 content may be about a different topic"
+        "semantic_drift: only 0% of title keywords (['curdate', 'date', 'datediff', 'format', 'functions', 'time']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "Date and Time Functions: NOW, CURDATE, DATE_FORMAT, DATE_ADD, DATEDIFF, and more",
@@ -686,7 +657,7 @@
         "Date and Time Functions refers to: NOW, CURDATE, DATE_FORMAT, DATE_ADD, DATEDIFF, and more",
         "Key topics: mysql, functions, date time",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 228\u2013238"
+        "Source: pages 228–238"
       ],
       "learnerSafeExamples": []
     },
@@ -699,7 +670,7 @@
         "DELETE Statement refers to: Removing rows with DELETE and DELETE JOIN",
         "Key topics: mysql, dml, delete",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 177\u2013187"
+        "Source: pages 177–187"
       ],
       "learnerSafeExamples": []
     },
@@ -712,7 +683,7 @@
         "Events refers to: Scheduled tasks in MySQL",
         "Key topics: mysql, events, scheduling, advanced",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 441\u2013452"
+        "Source: pages 441–452"
       ],
       "learnerSafeExamples": [
         {
@@ -724,7 +695,7 @@
     "murachs-mysql-3rd-edition/functions-murach": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['creating', 'defined', 'functions', 'mysql', 'stored', 'user']) appear in explanation \u2014 content may be about a different topic",
+        "semantic_drift: only 0% of title keywords (['creating', 'defined', 'functions', 'mysql', 'stored', 'user']) appear in explanation — content may be about a different topic",
         "sql_contamination: 67% of SQL code blocks contain embedded English prose (threshold 50%)"
       ],
       "exampleQuality": "filtered",
@@ -733,7 +704,7 @@
         "Stored Functions refers to: Creating user-defined functions in MySQL",
         "Key topics: mysql, functions, programming",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 417\u2013428"
+        "Source: pages 417–428"
       ],
       "learnerSafeExamples": [
         {
@@ -742,25 +713,10 @@
         }
       ]
     },
-    "murachs-mysql-3rd-edition/group-by-murach": {
-      "readabilityStatus": "ok",
-      "readabilityWarnings": [
-        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
-      ],
-      "exampleQuality": "filtered",
-      "learnerSafeSummary": "GROUP BY Clause: Grouping data for aggregate calculations",
-      "learnerSafeKeyPoints": [
-        "GROUP BY Clause refers to: Grouping data for aggregate calculations",
-        "Key topics: mysql, group by, aggregation",
-        "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 253\u2013267"
-      ],
-      "learnerSafeExamples": []
-    },
     "murachs-mysql-3rd-edition/having-murach": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 14% of title keywords (['aggregate', 'based', 'clause', 'filtering', 'groups', 'having', 'values']) appear in explanation \u2014 content may be about a different topic"
+        "semantic_drift: only 14% of title keywords (['aggregate', 'based', 'clause', 'filtering', 'groups', 'having', 'values']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "HAVING Clause: Filtering groups based on aggregate values",
@@ -768,7 +724,7 @@
         "HAVING Clause refers to: Filtering groups based on aggregate values",
         "Key topics: mysql, having, filtering",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 265\u2013276"
+        "Source: pages 265–276"
       ],
       "learnerSafeExamples": []
     },
@@ -781,7 +737,7 @@
         "Inner Join refers to: Matching rows from two or more tables",
         "Key topics: mysql, joins, inner",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 117\u2013128"
+        "Source: pages 117–128"
       ],
       "learnerSafeExamples": []
     },
@@ -794,14 +750,14 @@
         "INSERT Statement refers to: Adding rows to tables with INSERT INTO and INSERT SELECT",
         "Key topics: mysql, dml, insert",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 149\u2013166"
+        "Source: pages 149–166"
       ],
       "learnerSafeExamples": []
     },
     "murachs-mysql-3rd-edition/isolation-levels-murach": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 12% of title keywords (['committed', 'isolation', 'levels', 'read', 'repeatable', 'serializable', 'transaction', 'uncommitted']) appear in explanation \u2014 content may be about a different topic"
+        "semantic_drift: only 12% of title keywords (['committed', 'isolation', 'levels', 'read', 'repeatable', 'serializable', 'transaction', 'uncommitted']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "Transaction Isolation Levels: READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE",
@@ -809,7 +765,7 @@
         "Transaction Isolation Levels refers to: READ UNCOMMITTED, READ COMMITTED, REPEATABLE READ, SERIALIZABLE",
         "Key topics: mysql, transactions, isolation, advanced",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 471\u2013482"
+        "Source: pages 471–482"
       ],
       "learnerSafeExamples": [
         {
@@ -822,25 +778,10 @@
         }
       ]
     },
-    "murachs-mysql-3rd-edition/joins-murach": {
-      "readabilityStatus": "fallback_only",
-      "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['cross', 'inner', 'joining', 'joins', 'mysql', 'outer', 'tables']) appear in explanation \u2014 content may be about a different topic"
-      ],
-      "exampleQuality": "filtered",
-      "learnerSafeSummary": "Joining Tables: Inner joins, outer joins, and cross joins in MySQL",
-      "learnerSafeKeyPoints": [
-        "Joining Tables refers to: Inner joins, outer joins, and cross joins in MySQL",
-        "Key topics: mysql, joins, relationships",
-        "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 117\u2013139"
-      ],
-      "learnerSafeExamples": []
-    },
     "murachs-mysql-3rd-edition/mysql-functions": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 14% of title keywords (['conversion', 'date', 'functions', 'mysql', 'numeric', 'string', 'time']) appear in explanation \u2014 content may be about a different topic"
+        "semantic_drift: only 14% of title keywords (['conversion', 'date', 'functions', 'mysql', 'numeric', 'string', 'time']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "MySQL Functions: String, numeric, date/time, and conversion functions",
@@ -848,7 +789,7 @@
         "MySQL Functions refers to: String, numeric, date/time, and conversion functions",
         "Key topics: mysql, functions, utilities",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 217\u2013236"
+        "Source: pages 217–236"
       ],
       "learnerSafeExamples": []
     },
@@ -864,14 +805,14 @@
         "Introduction to MySQL refers to: Overview of MySQL database management system and relational databases",
         "Key topics: mysql, fundamentals, introduction",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 1\u201325"
+        "Source: pages 1–25"
       ],
       "learnerSafeExamples": []
     },
     "murachs-mysql-3rd-edition/order-by-murach": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 12% of title keywords (['ascending', 'clause', 'columns', 'descending', 'order', 'query', 'results', 'sorting']) appear in explanation \u2014 content may be about a different topic",
+        "semantic_drift: only 12% of title keywords (['ascending', 'clause', 'columns', 'descending', 'order', 'query', 'results', 'sorting']) appear in explanation — content may be about a different topic",
         "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
       ],
       "exampleQuality": "filtered",
@@ -880,14 +821,14 @@
         "ORDER BY Clause refers to: Sorting query results by one or more columns, ascending and descending",
         "Key topics: mysql, order by, sorting",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 101\u2013115"
+        "Source: pages 101–115"
       ],
       "learnerSafeExamples": []
     },
     "murachs-mysql-3rd-edition/outer-join-murach": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['full', 'join', 'joins', 'left', 'mysql', 'outer', 'right']) appear in explanation \u2014 content may be about a different topic"
+        "semantic_drift: only 0% of title keywords (['full', 'join', 'joins', 'left', 'mysql', 'outer', 'right']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "Outer Join: Left, right, and full outer joins in MySQL",
@@ -895,14 +836,14 @@
         "Outer Join refers to: Left, right, and full outer joins in MySQL",
         "Key topics: mysql, joins, outer",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 129\u2013144"
+        "Source: pages 129–144"
       ],
       "learnerSafeExamples": []
     },
     "murachs-mysql-3rd-edition/relational-databases-murach": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "toc_pollution: 11 TOC-like patterns in explanation (threshold 3) \u2014 content is an index page",
+        "toc_pollution: 11 TOC-like patterns in explanation (threshold 3) — content is an index page",
         "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
       ],
       "exampleQuality": "filtered",
@@ -911,15 +852,15 @@
         "Relational Databases refers to: Tables, rows, columns, keys, and relationships in relational databases",
         "Key topics: mysql, relational, design",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 21\u201339"
+        "Source: pages 21–39"
       ],
       "learnerSafeExamples": []
     },
     "murachs-mysql-3rd-edition/select-statement-murach": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "ui_artifact_density=0.041 exceeds threshold (0.01) \u2014 explanation contains screenshot/form rendering artefacts (block chars, checkbox OCR)",
-        "structural_corruption: 3 garbled structural markers (threshold 2) \u2014 explanation contains OCR artefacts of chapter/navigation text",
+        "ui_artifact_density=0.041 exceeds threshold (0.01) — explanation contains screenshot/form rendering artefacts (block chars, checkbox OCR)",
+        "structural_corruption: 3 garbled structural markers (threshold 2) — explanation contains OCR artefacts of chapter/navigation text",
         "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
       ],
       "exampleQuality": "filtered",
@@ -928,14 +869,14 @@
         "SELECT Statement refers to: Retrieving data from a single table with column selection and aliases",
         "Key topics: mysql, select, fundamentals",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 73\u201395"
+        "Source: pages 73–95"
       ],
       "learnerSafeExamples": []
     },
     "murachs-mysql-3rd-edition/stored-procedures": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "toc_pollution: 10 TOC-like patterns in explanation (threshold 3) \u2014 content is an index page",
+        "toc_pollution: 10 TOC-like patterns in explanation (threshold 3) — content is an index page",
         "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
       ],
       "exampleQuality": "filtered",
@@ -944,14 +885,14 @@
         "Stored Procedures refers to: Creating and using stored procedures in MySQL",
         "Key topics: mysql, procedures, programming",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 401\u2013415"
+        "Source: pages 401–415"
       ],
       "learnerSafeExamples": []
     },
     "murachs-mysql-3rd-edition/string-functions": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 12% of title keywords (['concat', 'functions', 'length', 'lower', 'string', 'substring', 'trim', 'upper']) appear in explanation \u2014 content may be about a different topic"
+        "semantic_drift: only 12% of title keywords (['concat', 'functions', 'length', 'lower', 'string', 'substring', 'trim', 'upper']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "String Functions: CONCAT, SUBSTRING, LENGTH, TRIM, UPPER, LOWER, and more",
@@ -959,22 +900,7 @@
         "String Functions refers to: CONCAT, SUBSTRING, LENGTH, TRIM, UPPER, LOWER, and more",
         "Key topics: mysql, functions, string",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 218\u2013228"
-      ],
-      "learnerSafeExamples": []
-    },
-    "murachs-mysql-3rd-edition/subqueries-murach": {
-      "readabilityStatus": "fallback_only",
-      "readabilityWarnings": [
-        "toc_pollution: 18 TOC-like patterns in explanation (threshold 3) \u2014 content is an index page"
-      ],
-      "exampleQuality": "filtered",
-      "learnerSafeSummary": "Subqueries: Single-row, multi-row, and correlated subqueries in MySQL",
-      "learnerSafeKeyPoints": [
-        "Subqueries refers to: Single-row, multi-row, and correlated subqueries in MySQL",
-        "Key topics: mysql, subqueries, advanced",
-        "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 277\u2013294"
+        "Source: pages 218–228"
       ],
       "learnerSafeExamples": []
     },
@@ -989,7 +915,7 @@
         "Transactions refers to: ACID properties, COMMIT, ROLLBACK, and savepoints",
         "Key topics: mysql, transactions, acid",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 457\u2013470"
+        "Source: pages 457–470"
       ],
       "learnerSafeExamples": [
         {
@@ -1001,7 +927,7 @@
     "murachs-mysql-3rd-edition/triggers": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['actions', 'automatic', 'delete', 'insert', 'triggers', 'update']) appear in explanation \u2014 content may be about a different topic"
+        "semantic_drift: only 0% of title keywords (['actions', 'automatic', 'delete', 'insert', 'triggers', 'update']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "Triggers: Automatic actions on INSERT, UPDATE, DELETE",
@@ -1009,7 +935,7 @@
         "Triggers refers to: Automatic actions on INSERT, UPDATE, DELETE",
         "Key topics: mysql, triggers, automation, advanced",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 429\u2013440"
+        "Source: pages 429–440"
       ],
       "learnerSafeExamples": [
         {
@@ -1021,7 +947,7 @@
     "murachs-mysql-3rd-edition/unions": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['combining', 'multiple', 'results', 'statements', 'union']) appear in explanation \u2014 content may be about a different topic"
+        "semantic_drift: only 0% of title keywords (['combining', 'multiple', 'results', 'statements', 'union']) appear in explanation — content may be about a different topic"
       ],
       "exampleQuality": "filtered",
       "learnerSafeSummary": "UNION and UNION ALL: Combining results from multiple SELECT statements",
@@ -1029,7 +955,7 @@
         "UNION and UNION ALL refers to: Combining results from multiple SELECT statements",
         "Key topics: mysql, union, set operations",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 301\u2013311"
+        "Source: pages 301–311"
       ],
       "learnerSafeExamples": []
     },
@@ -1044,14 +970,14 @@
         "UPDATE Statement refers to: Modifying existing data with UPDATE and UPDATE JOIN",
         "Key topics: mysql, dml, update",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 165\u2013179"
+        "Source: pages 165–179"
       ],
       "learnerSafeExamples": []
     },
     "murachs-mysql-3rd-edition/user-management": {
       "readabilityStatus": "fallback_only",
       "readabilityWarnings": [
-        "semantic_drift: only 0% of title keywords (['creating', 'granting', 'management', 'privileges', 'roles', 'user', 'users']) appear in explanation \u2014 content may be about a different topic",
+        "semantic_drift: only 0% of title keywords (['creating', 'granting', 'management', 'privileges', 'roles', 'user', 'users']) appear in explanation — content may be about a different topic",
         "sql_contamination: 67% of SQL code blocks contain embedded English prose (threshold 50%)"
       ],
       "exampleQuality": "filtered",
@@ -1060,7 +986,7 @@
         "User Management refers to: Creating users, granting privileges, and roles",
         "Key topics: mysql, security, users",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 487\u2013500"
+        "Source: pages 487–500"
       ],
       "learnerSafeExamples": []
     },
@@ -1075,24 +1001,7 @@
         "Views refers to: Creating and using views in MySQL",
         "Key topics: mysql, views, virtualization",
         "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 381\u2013394"
-      ],
-      "learnerSafeExamples": []
-    },
-    "murachs-mysql-3rd-edition/where-clause-murach": {
-      "readabilityStatus": "fallback_only",
-      "readabilityWarnings": [
-        "semantic_drift: only 14% of title keywords (['between', 'clause', 'comparison', 'filtering', 'like', 'operators', 'rows']) appear in explanation \u2014 content may be about a different topic",
-        "structural_corruption: 3 garbled structural markers (threshold 2) \u2014 explanation contains OCR artefacts of chapter/navigation text",
-        "sql_contamination: 100% of SQL code blocks contain embedded English prose (threshold 50%)"
-      ],
-      "exampleQuality": "filtered",
-      "learnerSafeSummary": "WHERE Clause: Filtering rows with comparison operators, AND, OR, NOT, IN, BETWEEN, LIKE",
-      "learnerSafeKeyPoints": [
-        "WHERE Clause refers to: Filtering rows with comparison operators, AND, OR, NOT, IN, BETWEEN, LIKE",
-        "Key topics: mysql, where, filtering",
-        "Textbook covers: common mistakes, definition, worked examples",
-        "Source: pages 85\u2013107"
+        "Source: pages 381–394"
       ],
       "learnerSafeExamples": []
     }

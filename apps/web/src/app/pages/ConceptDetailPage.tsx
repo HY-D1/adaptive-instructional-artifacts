@@ -7,6 +7,10 @@ import { ChevronLeft, BookOpen, Clock, Dumbbell, AlertCircle, CheckCircle, XCirc
  * Display names for the corpus source documents. The two textbooks teach
  * different SQL dialects, so naming the actual source matters to a learner
  * comparing textbook syntax against the SQLite practice sandbox.
+ *
+ * The panel names the textbook this topic is drawn from and the pages that
+ * cover it. It deliberately avoids claiming the prose was extracted verbatim,
+ * because some concepts are hand-authored rather than pipeline-extracted.
  */
 const SOURCE_DOC_NAMES: Record<string, string> = {
   'dbms-ramakrishnan-3rd-edition': 'Database Management Systems (Ramakrishnan & Gehrke, 3rd ed.)',
@@ -225,7 +229,7 @@ export function ConceptDetailPage() {
                 Textbook Source
               </h3>
               <p className="text-sm text-blue-800 mb-2">
-                Content extracted from {formatSourceDoc(concept.sourceDocId)}
+                {formatSourceDoc(concept.sourceDocId)}
               </p>
               <p className="text-xs text-blue-600">
                 Pages: {concept.pageNumbers.join(', ')}
