@@ -85,3 +85,25 @@ def reconstruct_student_state(event: Any, session_events: list[dict[str, Any]]) 
         "error_type": error_type,
         "prior_interactions": prior_interactions,
     }
+
+
+def reconstruct_student_state_sample(
+    events: list[dict[str, Any]],
+    sample_size: int = 20,
+) -> list[dict[str, Any]]:
+    """Return reconstructed state previews for a small real-data sample."""
+
+    selection_events = [row for row in events if row.get("event_type") == "bandit_arm_selected"]
+    sample_events = selection_events[: max(0, sample_size)]
+    previews: list[dict[str, Any]] = []
+
+    for event in sample_events:
+        session_key = event.get("session_id") or event.get("user_id")
+        session_events = [
+            row
+            for row in events
+            if (row.get("session_id") or row.get("user_id")) == session_key
+        ]
+        previews.append(reconstruct_student_state(event, session_events))
+
+    return previews

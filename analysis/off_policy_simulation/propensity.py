@@ -62,3 +62,8 @@ def estimate_propensity_by_matching(counterfactual_choice: str, observed_choice:
     """Fallback propensity when the selection model cannot be reconstructed."""
 
     return 1.0 if counterfactual_choice == observed_choice else 0.0
+
+
+# TODO: Use Thompson-sampling Monte Carlo as the primary estimator unless the
+# real Neon rows show missing arm_stats_at_selection, in which case fall back to
+# matching for those records only.
