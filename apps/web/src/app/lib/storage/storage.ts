@@ -1457,6 +1457,7 @@ class StorageManager {
     selectionMethod: 'thompson_sampling' | 'epsilon_greedy' | 'forced';
     armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
     sessionId?: string;
+    conditionId?: string;
   }): void {
     const event: InteractionEvent = {
       id: createEventId('bandit', 'arm-selected'),
@@ -1467,6 +1468,7 @@ class StorageManager {
       problemId: params.problemId,
       selectedArm: params.armId,
       selectionMethod: params.selectionMethod === 'forced' ? 'thompson_sampling' : params.selectionMethod,
+      conditionId: params.conditionId,
       policyVersion: 'bandit-arm-v1',
       payload: {
         armId: params.armId,

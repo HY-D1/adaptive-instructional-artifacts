@@ -216,6 +216,8 @@ describe('dual-storage critical write semantics', () => {
     });
 
     const backendEvents = logInteractionMock.mock.calls.map(([event]) => event as Record<string, unknown>);
+    const banditSelectionEvent = backendEvents.find((event) => event.eventType === 'bandit_arm_selected');
+    expect(banditSelectionEvent?.conditionId).toBeUndefined();
     expect(backendEvents.map((event) => event.eventType)).toEqual(
       expect.arrayContaining([
         'coverage_change',
@@ -265,6 +267,24 @@ describe('dual-storage critical write semantics', () => {
 
     expect(getProfileMock).toHaveBeenCalledWith('learner-1');
     expect(dualStorageModule.dualStorage.getProfile('learner-1')?.solvedProblemIds.has('problem-9')).toBe(true);
+  });
+
+  it('adds conditionId to bandit selection events when provided', async () => {
+    dualStorageModule.dualStorage.logBanditArmSelected({
+      learnerId: 'learner-1',
+      problemId: 'problem-1',
+      armId: 'adaptive',
+      selectionMethod: 'thompson_sampling',
+      conditionId: 'adaptive',
+    });
+
+    await vi.waitFor(() => {
+      expect(logInteractionMock).toHaveBeenCalledTimes(1);
+    });
+
+    const [event] = logInteractionMock.mock.calls[0] as [Record<string, unknown>];
+    expect(event.eventType).toBe('bandit_arm_selected');
+    expect(event.conditionId).toBe('adaptive');
   });
 
   it('keeps solved state across repeated explicit hydrations and later backend catch-up', async () => {

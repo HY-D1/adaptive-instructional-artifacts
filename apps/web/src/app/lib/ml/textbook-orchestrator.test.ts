@@ -16,6 +16,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   orchestrate,
+  resolveConditionFlags,
+  resolveControlDecision,
   resolveCorpusConceptId,
   staticHintModeCondition,
   adaptiveTextbookCondition,
@@ -26,6 +28,53 @@ import {
   type OrchestrationContext,
   type SessionConditionFlags,
 } from './textbook-orchestrator';
+
+describe('condition intercept', () => {
+  const adaptiveFlags = adaptiveTextbookCondition();
+
+  it('keeps the control arm conservative for attempts one and two', () => {
+    const controlFlags = resolveConditionFlags('control', adaptiveFlags);
+    expect(controlFlags.staticHintMode).toBe(false);
+    expect(resolveControlDecision(1, { corpusConceptId: null, errorCountAtDecision: 1, timeToDecision: 0 }).action).toBe('stay_hint');
+    expect(resolveControlDecision(2, { corpusConceptId: null, errorCountAtDecision: 2, timeToDecision: 0 }).action).toBe('stay_hint');
+  });
+
+  it('switches control to explanation-first from attempt three onward', () => {
+    const decision = resolveControlDecision(3, { corpusConceptId: null, errorCountAtDecision: 3, timeToDecision: 0 });
+
+    expect(decision.action).toBe('show_explanation');
+    expect(decision.escalationTriggerReason).toBe('control_explanation_first_phase');
+  });
+
+  it('resets the control schedule for a new problem', () => {
+    const nextProblemAttempt = 1;
+
+    expect(resolveControlDecision(nextProblemAttempt, {
+      corpusConceptId: null,
+      errorCountAtDecision: 8,
+      timeToDecision: 0,
+    }).action).toBe('stay_hint');
+  });
+
+  it('leaves adaptive flags unchanged for the adaptive arm', () => {
+    expect(resolveConditionFlags('adaptive', adaptiveFlags)).toEqual(adaptiveFlags);
+  });
+
+  it('supports identical condition-bearing decision event structure', () => {
+    const fields = ['eventType', 'learnerId', 'sessionId', 'problemId', 'conditionId', 'escalationTriggerReason'];
+    const adaptiveEvent = {
+      eventType: 'explanation_view', learnerId: 'synthetic-adaptive', sessionId: 'session-a',
+      problemId: 'problem-1', conditionId: 'adaptive', escalationTriggerReason: 'early_phase',
+    };
+    const controlEvent = {
+      eventType: 'explanation_view', learnerId: 'synthetic-control', sessionId: 'session-c',
+      problemId: 'problem-1', conditionId: 'control', escalationTriggerReason: 'static_hint_mode',
+    };
+
+    expect(Object.keys(adaptiveEvent).sort()).toEqual(fields.sort());
+    expect(Object.keys(controlEvent).sort()).toEqual(fields.sort());
+  });
+});
 
 // ── Shared fixture ────────────────────────────────────────────────────────────
 

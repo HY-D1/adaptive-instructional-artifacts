@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+import random
 
 from .counterfactual_policies import FixedSchedulePolicy, RandomPolicy
 from .data_loader import load_events, load_mock_events
@@ -15,6 +16,38 @@ from .state_reconstruction import reconstruct_student_state
 
 MODULE_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG_PATH = MODULE_DIR / "config.yaml"
+
+
+def _ipw_uncertainty(
+    rows: list[dict[str, Any]],
+    *,
+    bootstrap_replicates: int,
+    random_seed: int,
+    use_ipw: bool = True,
+) -> tuple[float, float, float]:
+    """Return percentile-bootstrap CI and ESS for decision-level IPW terms."""
+
+    terms = (
+        [(float(row["weighted_reward"]), float(row["ipw_weight"])) for row in rows]
+        if use_ipw
+        else [(float(row["reward_total"]), 1.0) for row in rows]
+    )
+    if not terms:
+        return 0.0, 0.0, 0.0
+
+    weights = [weight for _, weight in terms if weight > 0]
+    weight_sum = sum(weights)
+    ess = (weight_sum * weight_sum / sum(weight * weight for weight in weights)) if weights else 0.0
+
+    rng = random.Random(random_seed)
+    estimates: list[float] = []
+    for _ in range(max(1, bootstrap_replicates)):
+        sample = [terms[rng.randrange(len(terms))][0] for _ in terms]
+        estimates.append(sum(sample) / len(sample))
+    estimates.sort()
+    low_index = int(0.025 * (len(estimates) - 1))
+    high_index = int(0.975 * (len(estimates) - 1))
+    return estimates[low_index], estimates[high_index], ess
 
 
 def _timestamp_sort_key(row: dict[str, Any]) -> Any:
@@ -37,11 +70,27 @@ def _resolve_observed_reward(event: dict[str, Any], session_events: list[dict[st
         for row in session_events
         if row.get("event_type") == "bandit_reward_observed"
         and row.get("selected_arm") == event.get("selected_arm")
-        and row.get("problem_id") == event.get("problem_id")
     ]
     if not reward_events:
         return 0.0
-    return float(reward_events[-1].get("reward_total") or 0.0)
+
+    event_timestamp = event.get("timestamp")
+    same_problem = [
+        row for row in reward_events
+        if row.get("problem_id") == event.get("problem_id")
+    ]
+    candidates = same_problem or reward_events
+    if event_timestamp is not None:
+        following = [row for row in candidates if row.get("timestamp") and row["timestamp"] >= event_timestamp]
+        if following:
+            candidates = following
+        candidates = sorted(
+            candidates,
+            key=lambda row: abs((row["timestamp"] - event_timestamp).total_seconds())
+            if row.get("timestamp") else float("inf"),
+        )
+
+    return float(candidates[0].get("reward_total") or 0.0)
 
 
 def _propensity_from_config(
@@ -98,6 +147,9 @@ def simulate_off_policy(
         second_arm=str(fixed_cfg.get("second_arm", "explanation-first")),
     )
     random_policy = RandomPolicy(seed=int(config.get("random_seed", 7)))
+    uncertainty_cfg = config.get("uncertainty", {})
+    bootstrap_replicates = int(uncertainty_cfg.get("bootstrap_replicates", 2000))
+    uncertainty_seed = int(uncertainty_cfg.get("random_seed", config.get("random_seed", 7)))
 
     rows: list[dict[str, Any]] = []
     for event in selection_events:
@@ -153,6 +205,7 @@ def simulate_off_policy(
                 "reward_total_sum": 0.0,
                 "weighted_reward_sum": 0.0,
                 "behavior_propensity_sum": 0.0,
+                "decision_rows": [],
             },
         )
         bucket["n_events"] += 1
@@ -160,6 +213,7 @@ def simulate_off_policy(
         bucket["reward_total_sum"] += float(row["reward_total"])
         bucket["weighted_reward_sum"] += float(row["weighted_reward"])
         bucket["behavior_propensity_sum"] += float(row["behavior_propensity"])
+        bucket["decision_rows"].append(row)
 
     summary: list[dict[str, Any]] = []
     for bucket in aggregates.values():
@@ -168,6 +222,12 @@ def simulate_off_policy(
         ipw_estimate = bucket["weighted_reward_sum"] / n_events
         if bucket["policy"] == "adaptive":
             ipw_estimate = mean_reward
+        ci_low, ci_high, ess = _ipw_uncertainty(
+            bucket["decision_rows"],
+            bootstrap_replicates=bootstrap_replicates,
+            random_seed=uncertainty_seed,
+            use_ipw=bucket["policy"] != "adaptive",
+        )
         summary.append(
             {
                 "policy": bucket["policy"],
@@ -176,6 +236,9 @@ def simulate_off_policy(
                 "matches_observed": bucket["matches_observed"],
                 "mean_reward": mean_reward,
                 "ipw_estimate": ipw_estimate,
+                "ipw_ci95_low": ci_low,
+                "ipw_ci95_high": ci_high,
+                "ipw_ess": ess,
                 "average_behavior_propensity": bucket["behavior_propensity_sum"] / n_events,
             }
         )

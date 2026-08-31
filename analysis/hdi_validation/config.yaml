@@ -1,0 +1,34 @@
+section_id_allowlist:
+  - 3bdacd09-e3d5-4a70-a09f-cbea3ffae28b
+  - ef726b7a-c593-4316-b5d9-fc54fed59992
+
+formula:
+  hpa: 0.3
+  aed: 0.133
+  er: 0.3
+  reae: 0.133
+  iwh: 0.134
+  hpa_cap: 3
+
+sensitivity:
+  - name: balanced
+    hpa: 0.25
+    aed: 0.20
+    er: 0.25
+    reae: 0.15
+    iwh: 0.15
+  - name: behavior_emphasis
+    hpa: 0.35
+    aed: 0.10
+    er: 0.30
+    reae: 0.10
+    iwh: 0.15
+  - name: learning_emphasis
+    hpa: 0.20
+    aed: 0.15
+    er: 0.20
+    reae: 0.20
+    iwh: 0.25
+
+high_hdi_threshold: 0.6
+random_seed: 7

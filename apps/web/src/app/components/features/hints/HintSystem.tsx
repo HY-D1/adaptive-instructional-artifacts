@@ -30,7 +30,7 @@ import { useUserRole } from '../../../hooks/useUserRole';
 import { useStorageFeedback } from '../../../hooks/useStorageFeedback';
 import type { EscalationProfile } from '../../../lib/ml/escalation-profiles';
 import type { SessionConfig } from '../../../types';
-import { orchestrate, type OrchestrationDecision } from '../../../lib/ml/textbook-orchestrator';
+import { orchestrate, resolveConditionFlags, resolveControlDecision, type OrchestrationDecision } from '../../../lib/ml/textbook-orchestrator';
 import { buildHintViewEvent, buildStableHintId } from '../../../lib/telemetry/build-hint-view-event';
 import { clearProblemHints, loadHintInfo, saveHintSnapshot } from '../../../lib/storage/hint-cache';
 
@@ -945,18 +945,25 @@ export function HintSystem({
         // Use first available concept ID for corpus resolution; fall back to error subtype
         const conceptId = conceptIds[0] || activeHintSubtype || errorSubtypeId || 'unknown';
 
-        const decision = orchestrate({
-          conceptId,
-          retryCount,
-          hintCount: hintCountForOrchestration,
-          elapsedMs,
-          sessionConfig: {
-            textbookDisabled: sessionConfig.textbookDisabled ?? false,
-            adaptiveLadderDisabled: sessionConfig.adaptiveLadderDisabled ?? false,
-            immediateExplanationMode: sessionConfig.immediateExplanationMode ?? false,
-            staticHintMode: sessionConfig.staticHintMode ?? false,
-          },
+        const conditionFlags = resolveConditionFlags(sessionConfig.conditionId, {
+          textbookDisabled: sessionConfig.textbookDisabled ?? false,
+          adaptiveLadderDisabled: sessionConfig.adaptiveLadderDisabled ?? false,
+          immediateExplanationMode: sessionConfig.immediateExplanationMode ?? false,
+          staticHintMode: sessionConfig.staticHintMode ?? false,
         });
+        const decision = sessionConfig.conditionId === 'control'
+          ? resolveControlDecision(nextHelpRequestIndex, {
+              corpusConceptId: null,
+              errorCountAtDecision: retryCount,
+              timeToDecision: elapsedMs,
+            })
+          : orchestrate({
+              conceptId,
+              retryCount,
+              hintCount: hintCountForOrchestration,
+              elapsedMs,
+              sessionConfig: conditionFlags,
+            });
 
         if (decision.action === 'show_explanation') {
           if (!isStaleRequest()) {
@@ -1195,18 +1202,24 @@ export function HintSystem({
           // Re-run canonical orchestrator with updated hint count for canonical RESEARCH-4 fields
           const traceForDecision = [...problemTrace, hintEvent];
           const rungExhaustedDecision = sessionConfig
-            ? orchestrate({
-                conceptId: conceptIds[0] || activeHintSubtype || errorSubtypeId || 'unknown',
-                retryCount: errorCount,
-                hintCount: hintCount + 1, // include the hint we just showed
-                elapsedMs: timeSpent,
-                sessionConfig: {
-                  textbookDisabled: sessionConfig.textbookDisabled ?? false,
-                  adaptiveLadderDisabled: sessionConfig.adaptiveLadderDisabled ?? false,
-                  immediateExplanationMode: sessionConfig.immediateExplanationMode ?? false,
-                  staticHintMode: sessionConfig.staticHintMode ?? false,
-                },
-              })
+            ? sessionConfig.conditionId === 'control'
+              ? resolveControlDecision(nextHelpRequestIndex + 1, {
+                  corpusConceptId: null,
+                  errorCountAtDecision: errorCount,
+                  timeToDecision: timeSpent,
+                })
+              : orchestrate({
+                  conceptId: conceptIds[0] || activeHintSubtype || errorSubtypeId || 'unknown',
+                  retryCount: errorCount,
+                  hintCount: hintCount + 1, // include the hint we just showed
+                  elapsedMs: timeSpent,
+                  sessionConfig: resolveConditionFlags(sessionConfig.conditionId, {
+                    textbookDisabled: sessionConfig.textbookDisabled ?? false,
+                    adaptiveLadderDisabled: sessionConfig.adaptiveLadderDisabled ?? false,
+                    immediateExplanationMode: sessionConfig.immediateExplanationMode ?? false,
+                    staticHintMode: sessionConfig.staticHintMode ?? false,
+                  }),
+                })
             : undefined;
           void handleShowExplanation('auto', nextHelpRequestIndex + 1, traceForDecision, rungExhaustedDecision);
         }, 500);

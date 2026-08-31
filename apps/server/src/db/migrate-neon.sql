@@ -67,6 +67,17 @@ CREATE INDEX IF NOT EXISTS idx_course_sections_signup_code ON course_sections(st
 CREATE INDEX IF NOT EXISTS idx_section_enrollments_section ON section_enrollments(section_id);
 CREATE INDEX IF NOT EXISTS idx_section_enrollments_student ON section_enrollments(student_user_id);
 
+CREATE TABLE IF NOT EXISTS student_condition_assignments (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  condition_id TEXT NOT NULL CHECK (condition_id IN ('adaptive', 'control')),
+  first_section_id TEXT NOT NULL REFERENCES course_sections(id) ON DELETE RESTRICT,
+  assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  assignment_version TEXT NOT NULL DEFAULT 'student-condition-v1'
+);
+
+CREATE INDEX IF NOT EXISTS idx_student_condition_assignments_condition
+  ON student_condition_assignments(condition_id);
+
 -- ============================================================================
 -- Learner sessions (experimental condition tracking)
 -- ============================================================================

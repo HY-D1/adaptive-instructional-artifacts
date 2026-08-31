@@ -1310,6 +1310,33 @@ export async function clearSession(learnerId: string): Promise<boolean> {
   return response.success;
 }
 
+export interface StudentConditionAssignment {
+  userId: string;
+  conditionId: 'adaptive' | 'control';
+  firstSectionId: string;
+  assignedAt: string;
+  assignmentVersion: string;
+}
+
+export async function getOrAssignStudentCondition(
+  learnerId: string,
+  firstSectionId: string,
+): Promise<StudentConditionAssignment | null> {
+  const existing = await fetchApi<StudentConditionAssignment>(
+    `/learners/${learnerId}/condition-assignment`,
+  );
+  if (existing.success && existing.data) return existing.data;
+
+  const assigned = await fetchApi<StudentConditionAssignment>(
+    `/learners/${learnerId}/condition-assignment`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ firstSectionId }),
+    },
+  );
+  return assigned.success && assigned.data ? assigned.data : null;
+}
+
 // ============================================================================
 // Research API
 // ============================================================================

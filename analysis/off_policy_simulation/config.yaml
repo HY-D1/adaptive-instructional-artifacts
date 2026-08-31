@@ -1,8 +1,10 @@
 random_seed: 7
-section_id_allowlist: []
+section_id_allowlist:
+  - 3bdacd09-e3d5-4a70-a09f-cbea3ffae28b
+  - ef726b7a-c593-4316-b5d9-fc54fed59992
 
 fixed_schedule:
-  first_n_attempts: 3
+  first_n_attempts: 2
   first_arm: conservative
   second_arm: explanation-first
 
@@ -10,6 +12,11 @@ propensity:
   method: thompson_sampling_monte_carlo
   n_simulations: 5000
   fallback_method: matching
+
+uncertainty:
+  method: percentile_bootstrap_decision_points
+  bootstrap_replicates: 2000
+  random_seed: 7
 
 mock_data:
   n_sessions: 3

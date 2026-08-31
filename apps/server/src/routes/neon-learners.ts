@@ -32,6 +32,35 @@ router.get('/profiles', requireInstructor, async (req: Request, res: Response) =
 // Verify ownership for all :id routes (students can only access their own data)
 router.param('id', requireOwnership);
 
+router.get('/:id/condition-assignment', async (req: Request, res: Response) => {
+  try {
+    const assignment = await db.getStudentConditionAssignment(req.params.id);
+    if (!assignment) {
+      res.status(404).json({ success: false, error: 'No condition assignment' });
+      return;
+    }
+    res.json({ success: true, data: assignment });
+  } catch (error) {
+    console.error('Error fetching student condition assignment:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch condition assignment' });
+  }
+});
+
+router.post('/:id/condition-assignment', async (req: Request, res: Response) => {
+  try {
+    const { firstSectionId } = req.body as { firstSectionId?: string };
+    if (!firstSectionId?.trim()) {
+      res.status(400).json({ success: false, error: 'Missing required field: firstSectionId' });
+      return;
+    }
+    const assignment = await db.assignStudentCondition(req.params.id, firstSectionId.trim());
+    res.json({ success: true, data: assignment });
+  } catch (error) {
+    console.error('Error assigning student condition:', error);
+    res.status(500).json({ success: false, error: 'Failed to assign condition' });
+  }
+});
+
 // ============================================================================
 // User Management
 // ============================================================================

@@ -2584,6 +2584,7 @@ class DualStorageManager {
     selectionMethod: 'thompson_sampling' | 'epsilon_greedy' | 'forced';
     armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
     sessionId?: string;
+    conditionId?: string;
   }): void {
     this.syncLatestLocalInteraction(
       params.learnerId,

@@ -539,6 +539,17 @@ export async function initializeSchema(): Promise<void> {
 
   await db`CREATE INDEX IF NOT EXISTS idx_learner_profiles_last_activity ON learner_profiles(last_activity_at)`;
 
+  await db`
+    CREATE TABLE IF NOT EXISTS student_condition_assignments (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      condition_id TEXT NOT NULL CHECK (condition_id IN ('adaptive', 'control')),
+      first_section_id TEXT NOT NULL REFERENCES course_sections(id) ON DELETE RESTRICT,
+      assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      assignment_version TEXT NOT NULL DEFAULT 'student-condition-v1'
+    )
+  `;
+  await db`CREATE INDEX IF NOT EXISTS idx_student_condition_assignments_condition ON student_condition_assignments(condition_id)`;
+
   console.log('✅ Neon PostgreSQL schema initialized');
 }
 
@@ -569,6 +580,60 @@ export async function getAllUsers(): Promise<Learner[]> {
   const db = getDb();
   const results = await db`SELECT * FROM users ORDER BY created_at DESC`;
   return results.map(rowToLearner);
+}
+
+export type StudentCondition = 'adaptive' | 'control';
+
+export interface StudentConditionAssignment {
+  userId: string;
+  conditionId: StudentCondition;
+  firstSectionId: string;
+  assignedAt: string;
+  assignmentVersion: string;
+}
+
+function studentConditionFor(userId: string): StudentCondition {
+  const digest = createHash('sha256').update(userId).digest();
+  return digest[0] % 2 === 0 ? 'adaptive' : 'control';
+}
+
+function rowToStudentConditionAssignment(row: any): StudentConditionAssignment {
+  return {
+    userId: row.user_id,
+    conditionId: row.condition_id,
+    firstSectionId: row.first_section_id,
+    assignedAt: new Date(row.assigned_at).toISOString(),
+    assignmentVersion: row.assignment_version,
+  };
+}
+
+export async function getStudentConditionAssignment(
+  userId: string,
+): Promise<StudentConditionAssignment | null> {
+  const db = getDb();
+  const [result] = await db`
+    SELECT user_id, condition_id, first_section_id, assigned_at, assignment_version
+    FROM student_condition_assignments
+    WHERE user_id = ${userId}
+  `;
+  return result ? rowToStudentConditionAssignment(result) : null;
+}
+
+export async function assignStudentCondition(
+  userId: string,
+  firstSectionId: string,
+): Promise<StudentConditionAssignment> {
+  const db = getDb();
+  await db`
+    INSERT INTO student_condition_assignments (user_id, condition_id, first_section_id)
+    VALUES (${userId}, ${studentConditionFor(userId)}, ${firstSectionId})
+    ON CONFLICT (user_id) DO NOTHING
+  `;
+  const assignment = await getStudentConditionAssignment(userId);
+  if (!assignment) {
+    throw new Error('Student condition assignment was not created or found');
+  }
+  return assignment;
 }
 
 export async function updateUser(id: string, data: UpdateLearnerRequest): Promise<Learner | null> {
