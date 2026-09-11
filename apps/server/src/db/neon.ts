@@ -188,6 +188,15 @@ export async function initializeSchema(): Promise<void> {
   `;
 
   await db`
+    ALTER TABLE course_sections ADD COLUMN IF NOT EXISTS section_type TEXT
+      NOT NULL DEFAULT 'test'
+      CHECK (section_type IN ('test', 'production', 'pilot'))
+  `;
+
+  await db`CREATE INDEX IF NOT EXISTS idx_course_sections_type ON course_sections(section_type)`;
+  await db`CREATE INDEX IF NOT EXISTS idx_course_sections_instructor_type ON course_sections(instructor_user_id, section_type)`;
+
+  await db`
     CREATE TABLE IF NOT EXISTS section_enrollments (
       id SERIAL PRIMARY KEY,
       section_id TEXT NOT NULL REFERENCES course_sections(id) ON DELETE CASCADE,

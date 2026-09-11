@@ -54,6 +54,14 @@ CREATE TABLE IF NOT EXISTS course_sections (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE course_sections ADD COLUMN IF NOT EXISTS section_type TEXT
+  NOT NULL DEFAULT 'test'
+  CHECK (section_type IN ('test', 'production', 'pilot'));
+
+CREATE INDEX IF NOT EXISTS idx_course_sections_type ON course_sections(section_type);
+CREATE INDEX IF NOT EXISTS idx_course_sections_instructor_type
+  ON course_sections(instructor_user_id, section_type);
+
 CREATE TABLE IF NOT EXISTS section_enrollments (
   id SERIAL PRIMARY KEY,
   section_id TEXT NOT NULL REFERENCES course_sections(id) ON DELETE CASCADE,
@@ -344,9 +352,18 @@ CREATE TABLE IF NOT EXISTS interaction_textbook_unit_retrievals (
 );
 
 -- RESEARCH-4: Unique constraint for upsert support (event_id, unit_id)
-ALTER TABLE interaction_textbook_unit_retrievals
-ADD CONSTRAINT IF NOT EXISTS unique_event_unit_retrieval 
-UNIQUE (event_id, unit_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'unique_event_unit_retrieval'
+      AND conrelid = 'interaction_textbook_unit_retrievals'::regclass
+  ) THEN
+    ALTER TABLE interaction_textbook_unit_retrievals
+      ADD CONSTRAINT unique_event_unit_retrieval UNIQUE (event_id, unit_id);
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_retrievals_event_id ON interaction_textbook_unit_retrievals(event_id);
 CREATE INDEX IF NOT EXISTS idx_retrievals_unit_id ON interaction_textbook_unit_retrievals(unit_id);

@@ -10,6 +10,7 @@
  */
 
 import type { InteractionEvent, HDIComponents } from '../../types';
+import HDI_WEIGHTS from './hdi-weights.json';
 
 /**
  * Comprehensive dependency metric result with explicit formulas
@@ -110,13 +111,7 @@ export interface PolicyComparisonSummary {
 
 // ── Component Weights (canonical for dependency-metrics-v1) ───────────────────
 
-const COMPONENT_WEIGHTS = {
-  hpa: 0.30,  // Hints Per Attempt: direct measure of hint seeking
-  aed: 0.15,  // Average Escalation Depth: how deep into help ladder
-  er: 0.25,   // Explanation Rate: tendency to escalate to explanations
-  reae: 0.15, // Repeated Error After Explanation: help effectiveness
-  iwh: 0.15,  // Improvement Without Hint: independence (inverted in HDI)
-} as const;
+const COMPONENT_WEIGHTS = HDI_WEIGHTS;
 
 /**
  * Get the canonical formula description for documentation.
@@ -153,10 +148,10 @@ All components normalized to [0, 1]. Higher HDI indicates greater dependency on 
  *
  * Weights (w):
  *   HPA  = 0.30
- *   AED  = 0.15
- *   ER   = 0.25
- *   REAE = 0.15
- *   IWH  = 0.15
+ *   AED  = 0.133
+ *   ER   = 0.30
+ *   REAE = 0.133
+ *   IWH  = 0.134
  *
  * All components normalized to [0, 1].
  *
