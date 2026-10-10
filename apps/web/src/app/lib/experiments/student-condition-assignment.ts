@@ -5,7 +5,7 @@
  * the server-backed student_condition_assignments record.
  */
 
-export const STUDENT_CONDITIONS = ['adaptive', 'control'] as const;
+export const STUDENT_CONDITIONS = ["adaptive", "control"] as const;
 export type StudentCondition = (typeof STUDENT_CONDITIONS)[number];
 
 export interface StudentConditionAssignment {
@@ -22,20 +22,14 @@ export interface StudentConditionStore {
   ): Promise<StudentConditionAssignment>;
 }
 
-function hashStudentId(userId: string): number {
-  let hash = 0;
-  for (let index = 0; index < userId.length; index += 1) {
-    hash = ((hash << 5) - hash) + userId.charCodeAt(index);
-    hash |= 0;
-  }
-  return Math.abs(hash);
-}
-
-export function deterministicStudentCondition(
-  userId: string,
-  seed = 0,
+export function randomStudentCondition(
+  adaptiveProbability = 0.5,
+  random = Math.random,
 ): StudentCondition {
-  return STUDENT_CONDITIONS[(hashStudentId(userId) + seed) % STUDENT_CONDITIONS.length];
+  const probability = Number.isFinite(adaptiveProbability)
+    ? Math.min(1, Math.max(0, adaptiveProbability))
+    : 0.5;
+  return random() < probability ? "adaptive" : "control";
 }
 
 export async function ensureStudentConditionAssignment(
@@ -43,17 +37,18 @@ export async function ensureStudentConditionAssignment(
   firstSectionId: string,
   store: StudentConditionStore,
   now = Date.now(),
-  seed = 0,
+  adaptiveProbability = 0.5,
+  random = Math.random,
 ): Promise<StudentConditionAssignment> {
-  if (!userId.trim()) throw new Error('userId is required');
-  if (!firstSectionId.trim()) throw new Error('firstSectionId is required');
+  if (!userId.trim()) throw new Error("userId is required");
+  if (!firstSectionId.trim()) throw new Error("firstSectionId is required");
 
   const existing = await store.get(userId);
   if (existing) return existing;
 
   return store.createIfAbsent({
     userId,
-    conditionId: deterministicStudentCondition(userId, seed),
+    conditionId: randomStudentCondition(adaptiveProbability, random),
     firstSectionId,
     assignedAt: now,
   });

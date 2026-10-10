@@ -11,6 +11,7 @@ const validateResearchEventMock = vi.fn();
 const validateResearchBatchForWriteMock = vi.fn();
 const getSectionForLearnerInInstructorScopeMock = vi.fn();
 const getSectionForStudentMock = vi.fn();
+const getStudentConditionAssignmentMock = vi.fn();
 
 vi.mock('../../../apps/server/src/db/neon.js', () => ({
   createInteraction: createInteractionMock,
@@ -18,6 +19,7 @@ vi.mock('../../../apps/server/src/db/neon.js', () => ({
   linkTextbookRetrievals: linkTextbookRetrievalsMock,
   getInteractionsByUser: getInteractionsByUserMock,
   getInteractionById: getInteractionByIdMock,
+  getStudentConditionAssignment: getStudentConditionAssignmentMock,
 }));
 
 vi.mock('../../../apps/server/src/db/index.js', () => ({
@@ -113,6 +115,7 @@ beforeEach(() => {
   validateResearchBatchForWriteMock.mockReset();
   getSectionForLearnerInInstructorScopeMock.mockReset();
   getSectionForStudentMock.mockReset();
+  getStudentConditionAssignmentMock.mockReset();
 });
 
 afterEach(() => {
@@ -120,6 +123,33 @@ afterEach(() => {
 });
 
 describe('neon-interactions single-event contract', () => {
+  it('fills a missing conditionId from the durable student assignment', async () => {
+    const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
+    const postInteraction = getRouteHandler(
+      neonInteractionsRouter as unknown as {
+        stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }>;
+      },
+      'post',
+      '/',
+    );
+    getStudentConditionAssignmentMock.mockResolvedValue({ conditionId: 'adaptive' });
+    createInteractionMock.mockResolvedValue({ id: 'event-1' });
+    updateProblemProgressMock.mockResolvedValue(undefined);
+
+    const result = await invokeJsonHandler(postInteraction, {
+      learnerId: 'learner-1',
+      eventType: 'execution',
+      problemId: 'problem-1',
+      successful: true,
+    });
+
+    expect(result.status).toBe(201);
+    expect(getStudentConditionAssignmentMock).toHaveBeenCalledWith('learner-1');
+    expect(createInteractionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: expect.objectContaining({ conditionId: 'adaptive' }) }),
+    );
+  });
+
   it('rejects unknown fields before creating an interaction', async () => {
     const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
     const postInteraction = getRouteHandler(

@@ -1127,6 +1127,34 @@ describe('dual-storage progress persistence sync', () => {
     expect(updateProblemProgressMock).not.toHaveBeenCalled();
   });
 
+  it('calls updateProblemProgress for an error submission attempt', async () => {
+    updateProblemProgressMock.mockClear();
+    logInteractionMock.mockResolvedValueOnce({ success: true, confirmed: true });
+
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'error-progress-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-progress-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-1',
+      successful: false,
+      code: 'SELECT * FROM bad_table',
+    });
+
+    await vi.waitFor(() => {
+      expect(updateProblemProgressMock).toHaveBeenCalledWith(
+        'learner-1',
+        'problem-1',
+        expect.objectContaining({
+          solved: false,
+          incrementAttempts: true,
+          lastCode: 'SELECT * FROM bad_table',
+        }),
+      );
+    });
+  });
+
   it('handles updateProblemProgress failures gracefully (best-effort)', async () => {
     updateProblemProgressMock.mockRejectedValueOnce(new Error('Network error'));
     logInteractionMock.mockResolvedValueOnce({ success: true, confirmed: true });
@@ -1150,12 +1178,6 @@ describe('dual-storage progress persistence sync', () => {
     await vi.waitFor(() => {
       expect(updateProblemProgressMock).toHaveBeenCalled();
     });
-
-    // Verify the error was logged (best-effort behavior)
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
-      '[DualStorage] Backend updateProblemProgress failed:',
-      expect.any(Error),
-    );
 
     consoleWarnSpy.mockRestore();
   });

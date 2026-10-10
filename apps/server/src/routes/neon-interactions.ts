@@ -16,6 +16,7 @@ import {
   type BatchValidationResult,
 } from '../db/index.js';
 import type { EventType } from '../types.js';
+import { requirePreSurveyCompleted } from '../middleware/pre-survey.js';
 
 const router = Router();
 
@@ -24,6 +25,7 @@ const interactionEventSchema = z.object({
   learnerId: z.string(),
   eventType: z.string(),
   problemId: z.string(),
+  conditionId: z.enum(['adaptive', 'control']).optional(),
   id: z.string().optional(),
   sessionId: z.string().optional(),
   timestamp: z.string().optional(),
@@ -215,6 +217,7 @@ export function buildNeonInteractionPayload(event: NeonInteractionEventInput): R
     ...basePayload,
     id: event.id ?? basePayload.id,
     sessionId: event.sessionId ?? basePayload.sessionId,
+    conditionId: event.conditionId ?? basePayload.conditionId,
     hintId: event.hintId ?? basePayload.hintId,
     conceptId: event.conceptId ?? basePayload.conceptId,
     source: event.source ?? basePayload.source,
@@ -283,7 +286,7 @@ async function resolveScopedTarget(
 // ============================================================================
 
 // POST /api/interactions - Log single interaction
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
     const event = req.body;
 
@@ -310,6 +313,9 @@ router.post('/', async (req: Request, res: Response) => {
     const scopedTarget = await resolveScopedTarget(req, validatedEvent.learnerId, 'write');
     validatedEvent.learnerId = scopedTarget.learnerId;
     validatedEvent.sectionId = scopedTarget.sectionId;
+    if (!validatedEvent.conditionId) {
+      validatedEvent.conditionId = (await db.getStudentConditionAssignment(validatedEvent.learnerId))?.conditionId;
+    }
 
     const id = validatedEvent.id || `${validatedEvent.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
 
@@ -372,7 +378,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/interactions/batch - Log multiple interactions
-router.post('/batch', async (req: Request, res: Response) => {
+router.post('/batch', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
     const { events } = req.body;
 
@@ -464,6 +470,9 @@ router.post('/batch', async (req: Request, res: Response) => {
         const scopedTarget = await resolveScopedTarget(req, event.learnerId, 'write');
         event.learnerId = scopedTarget.learnerId;
         event.sectionId = scopedTarget.sectionId;
+        if (!event.conditionId) {
+          event.conditionId = (await db.getStudentConditionAssignment(event.learnerId))?.conditionId;
+        }
         const id = event.id || `${event.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
         
         const payload = buildNeonInteractionPayload(event);

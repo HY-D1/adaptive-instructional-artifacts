@@ -1,39 +1,39 @@
 /**
  * Condition Assignment Module
- * 
+ *
  * Deterministic A/B test condition assignment for experimental control.
  * Ensures consistent condition assignment across sessions for the same learner.
- * 
+ *
  * Version: condition-assignment-v2
- * 
+ *
  * Session Config Redesign (Workstream 3/6):
  * - Uses sessionStorage instead of localStorage (tab-local, survives refresh, not permanent)
  * - Backend-first loading with sessionStorage fallback
  * - Safe storage writes that never crash on quota exceeded
  * - Telemetry logging for storage failures
- * 
+ *
  * @module experiments/condition-assignment
  */
 
-import type { SessionConfig } from '../../types';
-import { POLICY_IDS, getPolicyById } from '../policies/policy-definitions';
-import { storageClient, isBackendAvailable } from '../api/storage-client';
+import type { SessionConfig } from "../../types";
+import { POLICY_IDS, getPolicyById } from "../policies/policy-definitions";
+import { storageClient, isBackendAvailable } from "../api/storage-client";
 
 /**
  * Hash a string to a numeric value for deterministic assignment
  * Uses the same algorithm as escalation-profiles.ts for consistency
- * 
+ *
  * @param str - String to hash
  * @returns Numeric hash value (0 to 2^31-1)
  */
 export function hashString(str: string): number {
-  if (!str || typeof str !== 'string') {
+  if (!str || typeof str !== "string") {
     return 0;
   }
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash; // Convert to 32bit integer
   }
   return Math.abs(hash);
@@ -41,7 +41,7 @@ export function hashString(str: string): number {
 
 /**
  * Generate a unique ID for sessions
- * 
+ *
  * @returns Unique session ID
  */
 export function generateSessionId(): string {
@@ -53,7 +53,7 @@ export function generateSessionId(): string {
  * - cheap_mode: Low reasoning effort, shorter outputs, faster/cheaper
  * - quality_mode: Medium reasoning effort, richer outputs, higher quality
  */
-export type GenerationMode = 'cheap_mode' | 'quality_mode';
+export type GenerationMode = "cheap_mode" | "quality_mode";
 
 /**
  * Configuration options for condition assignment
@@ -77,39 +77,49 @@ export interface AssignmentOptions {
  * Assign a condition to a learner based on their learnerId.
  * This assignment is deterministic - the same learnerId will always
  * receive the same condition, ensuring consistency across sessions.
- * 
+ *
  * The function balances groups using a hash-based approach that distributes
  * learners evenly across conditions while maintaining consistency.
- * 
+ *
  * @param learnerId - Unique learner identifier
  * @param options - Assignment options
  * @returns Session configuration with assigned condition
- * 
+ *
  * @example
  * ```typescript
  * // Standard assignment
  * const config = assignCondition('learner-123');
- * 
+ *
  * // Force specific condition for testing
  * const config = assignCondition('test-user', { forceCondition: 'aggressive' });
- * 
+ *
  * // Custom condition pool
- * const config = assignCondition('learner-456', { 
- *   availableConditions: ['aggressive', 'conservative'] 
+ * const config = assignCondition('learner-456', {
+ *   availableConditions: ['aggressive', 'conservative']
  * });
  * ```
  */
 export function assignCondition(
   learnerId: string,
-  options: AssignmentOptions = {}
+  _options: AssignmentOptions = {},
+): SessionConfig {
+  console.error(
+    `[DEPRECATED] Legacy session condition assignment called for ${learnerId}; use the durable student condition assignment API.`,
+  );
+  return legacyAssignCondition(learnerId, _options);
+}
+
+function legacyAssignCondition(
+  learnerId: string,
+  options: AssignmentOptions = {},
 ): SessionConfig {
   const {
-    availableConditions = ['aggressive', 'conservative', 'adaptive'],
+    availableConditions = ["aggressive", "conservative", "adaptive"],
     forceCondition,
     timestamp = Date.now(),
     seed = 0,
     generationMode,
-    forceGenerationMode
+    forceGenerationMode,
   } = options;
 
   // Determine condition
@@ -133,8 +143,8 @@ export function assignCondition(
     assignedGenerationMode = generationMode;
   } else {
     // Deterministic assignment based on hash (separate from condition assignment)
-    const hash = hashString(learnerId + '-generation') + seed;
-    assignedGenerationMode = hash % 2 === 0 ? 'cheap_mode' : 'quality_mode';
+    const hash = hashString(learnerId + "-generation") + seed;
+    assignedGenerationMode = hash % 2 === 0 ? "cheap_mode" : "quality_mode";
   }
 
   // Get policy to determine toggle settings
@@ -146,11 +156,11 @@ export function assignCondition(
   return {
     sessionId: generateSessionId(),
     learnerId,
-    escalationPolicy: conditionId as SessionConfig['escalationPolicy'],
+    escalationPolicy: conditionId as SessionConfig["escalationPolicy"],
     ...toggles,
     conditionId,
     generationMode: assignedGenerationMode,
-    createdAt: timestamp
+    createdAt: timestamp,
   };
 }
 
@@ -159,55 +169,61 @@ export function assignCondition(
  */
 function calculateToggles(
   conditionId: string,
-  hintsEnabled: boolean
-): Pick<SessionConfig, 'textbookDisabled' | 'adaptiveLadderDisabled' | 'immediateExplanationMode' | 'staticHintMode'> {
+  hintsEnabled: boolean,
+): Pick<
+  SessionConfig,
+  | "textbookDisabled"
+  | "adaptiveLadderDisabled"
+  | "immediateExplanationMode"
+  | "staticHintMode"
+> {
   switch (conditionId) {
-    case 'explanation_first':
+    case "explanation_first":
       return {
-        textbookDisabled: true,  // No textbook in explanation-first (direct explanations)
+        textbookDisabled: true, // No textbook in explanation-first (direct explanations)
         adaptiveLadderDisabled: true,
         immediateExplanationMode: true,
-        staticHintMode: false
+        staticHintMode: false,
       };
-      
-    case 'conservative':
+
+    case "conservative":
       return {
         textbookDisabled: false,
-        adaptiveLadderDisabled: true,  // Conservative uses static ladder
+        adaptiveLadderDisabled: true, // Conservative uses static ladder
         immediateExplanationMode: false,
-        staticHintMode: true
+        staticHintMode: true,
       };
-      
-    case 'aggressive':
-      return {
-        textbookDisabled: false,
-        adaptiveLadderDisabled: false,
-        immediateExplanationMode: false,
-        staticHintMode: false
-      };
-      
-    case 'adaptive':
+
+    case "aggressive":
       return {
         textbookDisabled: false,
         adaptiveLadderDisabled: false,
         immediateExplanationMode: false,
-        staticHintMode: false
+        staticHintMode: false,
       };
-      
-    case 'no_hints':
+
+    case "adaptive":
+      return {
+        textbookDisabled: false,
+        adaptiveLadderDisabled: false,
+        immediateExplanationMode: false,
+        staticHintMode: false,
+      };
+
+    case "no_hints":
       return {
         textbookDisabled: false, // Textbook still available as reference
         adaptiveLadderDisabled: true,
         immediateExplanationMode: false,
-        staticHintMode: false
+        staticHintMode: false,
       };
-      
+
     default:
       return {
         textbookDisabled: false,
         adaptiveLadderDisabled: false,
         immediateExplanationMode: false,
-        staticHintMode: false
+        staticHintMode: false,
       };
   }
 }
@@ -215,51 +231,56 @@ function calculateToggles(
 /**
  * Reconstruct session config from existing session data.
  * Useful when resuming sessions or validating existing configurations.
- * 
+ *
  * @param existingConfig - Partial session config to reconstruct from
  * @returns Complete session config with defaults filled in
  */
 export function reconstructSessionConfig(
-  existingConfig: Partial<SessionConfig>
+  existingConfig: Partial<SessionConfig>,
 ): SessionConfig {
-  const learnerId = existingConfig.learnerId || 'unknown';
+  const learnerId = existingConfig.learnerId || "unknown";
   const timestamp = existingConfig.createdAt || Date.now();
-  
+
   // If we have a conditionId, trust it; otherwise re-assign
   const conditionId = existingConfig.conditionId;
-  
+
   if (conditionId) {
     const policy = getPolicyById(conditionId);
     const toggles = calculateToggles(conditionId, policy?.hintsEnabled ?? true);
-    
+
     return {
       sessionId: existingConfig.sessionId || generateSessionId(),
       learnerId,
-      escalationPolicy: existingConfig.escalationPolicy || (conditionId as SessionConfig['escalationPolicy']),
-      textbookDisabled: existingConfig.textbookDisabled ?? toggles.textbookDisabled,
-      adaptiveLadderDisabled: existingConfig.adaptiveLadderDisabled ?? toggles.adaptiveLadderDisabled,
-      immediateExplanationMode: existingConfig.immediateExplanationMode ?? toggles.immediateExplanationMode,
+      escalationPolicy:
+        existingConfig.escalationPolicy ||
+        (conditionId as SessionConfig["escalationPolicy"]),
+      textbookDisabled:
+        existingConfig.textbookDisabled ?? toggles.textbookDisabled,
+      adaptiveLadderDisabled:
+        existingConfig.adaptiveLadderDisabled ?? toggles.adaptiveLadderDisabled,
+      immediateExplanationMode:
+        existingConfig.immediateExplanationMode ??
+        toggles.immediateExplanationMode,
       staticHintMode: existingConfig.staticHintMode ?? toggles.staticHintMode,
       conditionId,
-      createdAt: timestamp
+      createdAt: timestamp,
     };
   }
-  
-  // Re-assign if no conditionId
+
   return assignCondition(learnerId, { timestamp });
 }
 
 /**
  * Get condition distribution statistics for a set of learners.
  * Useful for verifying balanced assignment before running experiments.
- * 
+ *
  * @param learnerIds - Array of learner IDs
  * @param conditions - Array of condition IDs to distribute across
  * @returns Distribution statistics
  */
 export function getConditionDistribution(
   learnerIds: string[],
-  conditions: string[] = ['aggressive', 'conservative', 'adaptive']
+  conditions: string[] = ["aggressive", "conservative", "adaptive"],
 ): {
   distribution: Record<string, number>;
   percentages: Record<string, number>;
@@ -267,38 +288,38 @@ export function getConditionDistribution(
   chiSquare: number;
 } {
   const distribution: Record<string, number> = {};
-  conditions.forEach(c => distribution[c] = 0);
-  
-  learnerIds.forEach(id => {
+  conditions.forEach((c) => (distribution[c] = 0));
+
+  learnerIds.forEach((id) => {
     const hash = hashString(id);
     const index = hash % conditions.length;
     const condition = conditions[index];
     distribution[condition] = (distribution[condition] || 0) + 1;
   });
-  
+
   // Calculate percentages
   const total = learnerIds.length;
   const percentages: Record<string, number> = {};
-  conditions.forEach(c => {
+  conditions.forEach((c) => {
     percentages[c] = total > 0 ? (distribution[c] / total) * 100 : 0;
   });
-  
+
   // Chi-square test for balance (expected = equal distribution)
   const expected = total / conditions.length;
   const chiSquare = conditions.reduce((sum, c) => {
     const observed = distribution[c];
     return sum + Math.pow(observed - expected, 2) / expected;
   }, 0);
-  
+
   // Consider balanced if chi-square < critical value (df=2, alpha=0.05 = 5.991)
   const isBalanced = chiSquare < 5.991;
-  
+
   return { distribution, percentages, isBalanced, chiSquare };
 }
 
 /**
  * Validate that a session configuration is complete and valid.
- * 
+ *
  * @param config - Session configuration to validate
  * @returns Validation result with any errors
  */
@@ -307,53 +328,53 @@ export function validateSessionConfig(config: SessionConfig): {
   errors: string[];
 } {
   const errors: string[] = [];
-  
+
   if (!config.sessionId) {
-    errors.push('Missing sessionId');
+    errors.push("Missing sessionId");
   }
-  
+
   if (!config.learnerId) {
-    errors.push('Missing learnerId');
+    errors.push("Missing learnerId");
   }
-  
+
   if (!config.conditionId) {
-    errors.push('Missing conditionId');
+    errors.push("Missing conditionId");
   }
-  
+
   if (!POLICY_IDS.includes(config.escalationPolicy)) {
     errors.push(`Invalid escalationPolicy: ${config.escalationPolicy}`);
   }
-  
+
   if (!config.createdAt || config.createdAt <= 0) {
-    errors.push('Invalid createdAt timestamp');
+    errors.push("Invalid createdAt timestamp");
   }
-  
+
   // Validate consistency between conditionId and escalationPolicy
   if (config.conditionId && config.conditionId !== config.escalationPolicy) {
-    errors.push('conditionId does not match escalationPolicy');
+    errors.push("conditionId does not match escalationPolicy");
   }
-  
+
   return {
     valid: errors.length === 0,
-    errors
+    errors,
   };
 }
 
 /**
  * Get all available experimental conditions.
  * Excludes the no_hints control condition from active experiments.
- * 
+ *
  * @returns Array of experimental condition IDs
  */
 export function getExperimentalConditions(): string[] {
-  return POLICY_IDS.filter(id => id !== 'no_hints');
+  return POLICY_IDS.filter((id) => id !== "no_hints");
 }
 
 /**
  * Get version of the condition assignment module.
  */
 export function getConditionAssignmentVersion(): string {
-  return 'condition-assignment-v2';
+  return "condition-assignment-v2";
 }
 
 // ============================================================================
@@ -364,23 +385,23 @@ export function getConditionAssignmentVersion(): string {
  * Storage key for session config in sessionStorage
  * Changed from localStorage to sessionStorage for tab-local persistence
  */
-export const SESSION_CONFIG_STORAGE_KEY = 'sql-adapt-session-config';
+export const SESSION_CONFIG_STORAGE_KEY = "sql-adapt-session-config";
 
 /**
  * Legacy storage key for migration (localStorage)
  * @deprecated Used only for one-time migration from localStorage
  */
-const LEGACY_SESSION_CONFIG_KEY = 'sql-adapt-session-config-local';
+const LEGACY_SESSION_CONFIG_KEY = "sql-adapt-session-config-local";
 
 /**
  * Telemetry event for storage failures
  */
 interface StorageFailureEvent {
-  type: 'session_config_storage_failure';
-  operation: 'save' | 'load' | 'clear';
+  type: "session_config_storage_failure";
+  operation: "save" | "load" | "clear";
   error: string;
   timestamp: number;
-  storageType: 'sessionStorage' | 'localStorage' | 'backend';
+  storageType: "sessionStorage" | "localStorage" | "backend";
 }
 
 /**
@@ -388,25 +409,30 @@ interface StorageFailureEvent {
  * Never throws - always fails silently
  */
 function logStorageFailure(
-  operation: 'save' | 'load' | 'clear',
+  operation: "save" | "load" | "clear",
   error: unknown,
-  storageType: 'sessionStorage' | 'localStorage' | 'backend'
+  storageType: "sessionStorage" | "localStorage" | "backend",
 ): void {
   try {
     const event: StorageFailureEvent = {
-      type: 'session_config_storage_failure',
+      type: "session_config_storage_failure",
       operation,
       error: error instanceof Error ? error.message : String(error),
       timestamp: Date.now(),
       storageType,
     };
-    
+
     // Log to console for development/debugging
-    console.warn(`[SessionConfig] Storage failure (${storageType}/${operation}):`, event.error);
-    
+    console.warn(
+      `[SessionConfig] Storage failure (${storageType}/${operation}):`,
+      event.error,
+    );
+
     // Emit custom event for telemetry subscribers
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('session_config_storage_failure', { detail: event }));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("session_config_storage_failure", { detail: event }),
+      );
     }
   } catch {
     // Absolute last resort - never crash
@@ -417,48 +443,61 @@ function logStorageFailure(
  * Check if a DOMException is a QuotaExceededError
  */
 function isQuotaExceededError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'QuotaExceededError';
+  return error instanceof DOMException && error.name === "QuotaExceededError";
 }
 
 /**
  * Safely write to sessionStorage with quota handling
  */
-function safeSessionStorageWrite(key: string, value: string): { success: boolean; quotaExceeded?: boolean } {
+function safeSessionStorageWrite(
+  key: string,
+  value: string,
+): { success: boolean; quotaExceeded?: boolean } {
   try {
     sessionStorage.setItem(key, value);
     return { success: true };
   } catch (error) {
     if (isQuotaExceededError(error)) {
-      logStorageFailure('save', error, 'sessionStorage');
+      logStorageFailure("save", error, "sessionStorage");
       return { success: false, quotaExceeded: true };
     }
-    logStorageFailure('save', error, 'sessionStorage');
+    logStorageFailure("save", error, "sessionStorage");
     return { success: false };
   }
 }
 
 /**
  * Save session config to storage
- * 
+ *
  * Redesigned (v2):
  * - Primary: sessionStorage (tab-local, survives refresh, not permanent)
  * - Never throws - always returns success status
  * - Logs failures for telemetry
- * 
+ *
  * @param config - Session configuration to save
  * @returns Success status and quota exceeded flag
  */
-export function saveSessionConfig(config: SessionConfig): { success: boolean; quotaExceeded?: boolean } {
+export function saveSessionConfig(config: SessionConfig): {
+  success: boolean;
+  quotaExceeded?: boolean;
+} {
   // Always validate first
   const validation = validateSessionConfig(config);
   if (!validation.valid) {
-    logStorageFailure('save', `Validation failed: ${validation.errors.join(', ')}`, 'sessionStorage');
+    logStorageFailure(
+      "save",
+      `Validation failed: ${validation.errors.join(", ")}`,
+      "sessionStorage",
+    );
     return { success: false };
   }
-  
+
   // Primary: sessionStorage
-  if (typeof sessionStorage !== 'undefined') {
-    const result = safeSessionStorageWrite(SESSION_CONFIG_STORAGE_KEY, JSON.stringify(config));
+  if (typeof sessionStorage !== "undefined") {
+    const result = safeSessionStorageWrite(
+      SESSION_CONFIG_STORAGE_KEY,
+      JSON.stringify(config),
+    );
     if (result.success) {
       return result;
     }
@@ -467,25 +506,25 @@ export function saveSessionConfig(config: SessionConfig): { success: boolean; qu
       return result;
     }
   }
-  
+
   return { success: false };
 }
 
 /**
  * Load session config from storage
- * 
+ *
  * Redesigned (v2):
  * - Primary: sessionStorage (tab-local)
  * - Validates loaded config
  * - Returns null if invalid or not found
  * - Clears corrupted/invalid data
  * - Never throws
- * 
+ *
  * @returns Session configuration or null if not found/invalid
  */
 export function loadSessionConfig(): SessionConfig | null {
   // Primary: sessionStorage
-  if (typeof sessionStorage !== 'undefined') {
+  if (typeof sessionStorage !== "undefined") {
     try {
       const stored = sessionStorage.getItem(SESSION_CONFIG_STORAGE_KEY);
       if (stored) {
@@ -494,11 +533,11 @@ export function loadSessionConfig(): SessionConfig | null {
           parsed = JSON.parse(stored);
         } catch (parseError) {
           // Corrupted JSON - clear it
-          logStorageFailure('load', parseError, 'sessionStorage');
+          logStorageFailure("load", parseError, "sessionStorage");
           safeClearSessionConfig();
           return null;
         }
-        
+
         const validated = validateSessionConfig(parsed as SessionConfig);
         if (validated.valid) {
           return parsed as SessionConfig;
@@ -507,46 +546,46 @@ export function loadSessionConfig(): SessionConfig | null {
         safeClearSessionConfig();
       }
     } catch (error) {
-      logStorageFailure('load', error, 'sessionStorage');
+      logStorageFailure("load", error, "sessionStorage");
     }
   }
-  
+
   return null;
 }
 
 /**
  * Clear session config from all storage
- * 
+ *
  * Redesigned (v2):
  * - Clears from sessionStorage (primary)
  * - Never throws
- * 
+ *
  * @returns Success status
  */
 export function safeClearSessionConfig(): boolean {
   let success = true;
-  
+
   // Clear sessionStorage (primary)
-  if (typeof sessionStorage !== 'undefined') {
+  if (typeof sessionStorage !== "undefined") {
     try {
       sessionStorage.removeItem(SESSION_CONFIG_STORAGE_KEY);
     } catch (error) {
-      logStorageFailure('clear', error, 'sessionStorage');
+      logStorageFailure("clear", error, "sessionStorage");
       success = false;
     }
   }
-  
+
   // Also clear legacy localStorage if present
-  if (typeof localStorage !== 'undefined') {
+  if (typeof localStorage !== "undefined") {
     try {
       localStorage.removeItem(SESSION_CONFIG_STORAGE_KEY);
       localStorage.removeItem(LEGACY_SESSION_CONFIG_KEY);
     } catch (error) {
-      logStorageFailure('clear', error, 'localStorage');
+      logStorageFailure("clear", error, "localStorage");
       success = false;
     }
   }
-  
+
   return success;
 }
 
@@ -561,7 +600,7 @@ export interface SessionLoadResult {
   /** The loaded or assigned session config */
   config: SessionConfig;
   /** Source of the session config */
-  source: 'backend' | 'sessionStorage' | 'assigned';
+  source: "backend" | "sessionStorage" | "assigned";
   /** Whether a new condition was assigned */
   isNewAssignment: boolean;
 }
@@ -572,7 +611,7 @@ export interface SessionLoadResult {
 interface BackendSessionData {
   sessionId?: string;
   conditionId?: string;
-  escalationPolicy?: SessionConfig['escalationPolicy'];
+  escalationPolicy?: SessionConfig["escalationPolicy"];
   textbookDisabled?: boolean;
   adaptiveLadderDisabled?: boolean;
   immediateExplanationMode?: boolean;
@@ -583,61 +622,79 @@ interface BackendSessionData {
 
 /**
  * Load session config with backend-first priority
- * 
+ *
  * Redesigned boot sequence (v2):
  * 1. Try load from backend learner_sessions first (most durable)
  * 2. Else recover from sessionStorage
  * 3. Else assign new condition via assignCondition()
- * 
+ *
  * Condition assignment remains deterministic (same learnerId → same condition)
- * 
+ *
  * @param learnerId - Current learner ID
  * @returns Promise resolving to session config and load metadata
  */
 export async function loadSessionConfigAsync(
-  learnerId: string
+  learnerId: string,
+  firstSectionId?: string | null,
 ): Promise<SessionLoadResult> {
+  const durableAssignment =
+    await storageClient.getOrAssignStudentCondition(learnerId, firstSectionId ?? undefined);
+  if (!durableAssignment) {
+    throw new Error(
+      `Durable student condition assignment failed for ${learnerId}`,
+    );
+  }
+
   // Try backend first (most durable)
   if (isBackendAvailable()) {
     try {
       const backendSession = await storageClient.getSession(learnerId);
       if (backendSession && isValidBackendSession(backendSession, learnerId)) {
-        const config = convertBackendSessionToConfig(backendSession, learnerId);
-        
+        const config = convertBackendSessionToConfig(
+          { ...backendSession, conditionId: durableAssignment.conditionId },
+          learnerId,
+        );
+
         // Also save to sessionStorage for tab-local recovery
         saveSessionConfig(config);
-        
+
         return {
           config,
-          source: 'backend',
+          source: "backend",
           isNewAssignment: false,
         };
       }
     } catch (error) {
-      logStorageFailure('load', error, 'backend');
+      logStorageFailure("load", error, "backend");
     }
   }
-  
+
   // Fallback: sessionStorage
   const storedConfig = loadSessionConfig();
   if (storedConfig && storedConfig.learnerId === learnerId) {
+    const config = convertBackendSessionToConfig(
+      { ...storedConfig, conditionId: durableAssignment.conditionId },
+      learnerId,
+    );
     return {
-      config: storedConfig,
-      source: 'sessionStorage',
+      config,
+      source: "sessionStorage",
       isNewAssignment: false,
     };
   }
-  
-  // Final fallback: assign new condition
-  // assignCondition is deterministic - same learnerId always gets same condition
-  const newConfig = assignCondition(learnerId);
-  
+
+  // The durable assignment is authoritative; sessionStorage is only a cache.
+  const newConfig = convertBackendSessionToConfig(
+    { conditionId: durableAssignment.conditionId },
+    learnerId,
+  );
+
   // Save to sessionStorage (best effort - don't block on failure)
   saveSessionConfig(newConfig);
-  
+
   return {
     config: newConfig,
-    source: 'assigned',
+    source: "assigned",
     isNewAssignment: true,
   };
 }
@@ -647,18 +704,21 @@ export async function loadSessionConfigAsync(
  */
 function isValidBackendSession(
   session: BackendSessionData,
-  expectedLearnerId: string
+  expectedLearnerId: string,
 ): boolean {
   // Must have a conditionId to be valid
   if (!session.conditionId) {
     return false;
   }
-  
+
   // Must have valid escalation policy
-  if (!session.escalationPolicy || !POLICY_IDS.includes(session.escalationPolicy)) {
+  if (
+    !session.escalationPolicy ||
+    !POLICY_IDS.includes(session.escalationPolicy)
+  ) {
     return false;
   }
-  
+
   return true;
 }
 
@@ -667,32 +727,47 @@ function isValidBackendSession(
  */
 function convertBackendSessionToConfig(
   session: BackendSessionData,
-  learnerId: string
+  learnerId: string,
 ): SessionConfig {
   // Generate new session ID if not provided
   const sessionId = session.sessionId || generateSessionId();
-  
+
   // Use backend values with sensible defaults
-  const conditionId = session.conditionId || 'adaptive';
+  const conditionId = session.conditionId || "adaptive";
   // Ensure escalationPolicy is a valid policy ID
-  const escalationPolicy = (session.escalationPolicy && POLICY_IDS.includes(session.escalationPolicy))
-    ? session.escalationPolicy
-    : (conditionId as SessionConfig['escalationPolicy']);
-  
+  const durableConditionPolicy =
+    conditionId === "adaptive" || conditionId === "control"
+      ? (conditionId as SessionConfig["escalationPolicy"])
+      : undefined;
+  const escalationPolicy =
+    durableConditionPolicy ||
+    (session.escalationPolicy && POLICY_IDS.includes(session.escalationPolicy)
+      ? session.escalationPolicy
+      : (conditionId as SessionConfig["escalationPolicy"]));
+
   const policy = getPolicyById(conditionId);
-  const defaultToggles = calculateToggles(conditionId, policy?.hintsEnabled ?? true);
-  
+  const defaultToggles = calculateToggles(
+    conditionId,
+    policy?.hintsEnabled ?? true,
+  );
+
   return {
     sessionId,
     learnerId,
     conditionId,
     escalationPolicy,
-    textbookDisabled: session.textbookDisabled ?? defaultToggles.textbookDisabled,
-    adaptiveLadderDisabled: session.adaptiveLadderDisabled ?? defaultToggles.adaptiveLadderDisabled,
-    immediateExplanationMode: session.immediateExplanationMode ?? defaultToggles.immediateExplanationMode,
+    textbookDisabled:
+      session.textbookDisabled ?? defaultToggles.textbookDisabled,
+    adaptiveLadderDisabled:
+      session.adaptiveLadderDisabled ?? defaultToggles.adaptiveLadderDisabled,
+    immediateExplanationMode:
+      session.immediateExplanationMode ??
+      defaultToggles.immediateExplanationMode,
     staticHintMode: session.staticHintMode ?? defaultToggles.staticHintMode,
-    generationMode: session.generationMode || 'quality_mode',
-    createdAt: session.startTime ? new Date(session.startTime).getTime() : Date.now(),
+    generationMode: session.generationMode || "quality_mode",
+    createdAt: session.startTime
+      ? new Date(session.startTime).getTime()
+      : Date.now(),
   };
 }
 

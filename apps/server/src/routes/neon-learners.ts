@@ -6,6 +6,7 @@ import { Router, Request, Response } from 'express';
 import * as db from '../db/neon.js';
 import { requireInstructor, requireOwnership } from '../middleware/auth.js';
 import { getInstructorScopedLearnerIds } from '../db/sections.js';
+import { requirePreSurveyCompleted } from '../middleware/pre-survey.js';
 
 const router = Router();
 
@@ -49,13 +50,13 @@ router.get('/:id/condition-assignment', async (req: Request, res: Response) => {
 router.post('/:id/condition-assignment', async (req: Request, res: Response) => {
   try {
     const { firstSectionId } = req.body as { firstSectionId?: string };
-    if (!firstSectionId?.trim()) {
-      res.status(400).json({ success: false, error: 'Missing required field: firstSectionId' });
-      return;
-    }
-    const assignment = await db.assignStudentCondition(req.params.id, firstSectionId.trim());
+    const assignment = await db.assignStudentCondition(req.params.id, firstSectionId?.trim() || undefined);
     res.json({ success: true, data: assignment });
   } catch (error) {
+    if (error instanceof db.StudentConditionAssignmentError) {
+      res.status(error.status).json({ success: false, error: error.message });
+      return;
+    }
     console.error('Error assigning student condition:', error);
     res.status(500).json({ success: false, error: 'Failed to assign condition' });
   }
@@ -214,7 +215,7 @@ router.get('/:id/session', async (req: Request, res: Response) => {
 });
 
 // POST /api/learners/:id/session - Save session
-router.post('/:id/session', async (req: Request, res: Response) => {
+router.post('/:id/session', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
     const { sessionId, conditionId, ...config } = req.body;
 
@@ -237,7 +238,7 @@ router.post('/:id/session', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/learners/:id/session/:sessionId - Clear session
-router.delete('/:id/session/:sessionId', async (req: Request, res: Response) => {
+router.delete('/:id/session/:sessionId', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
     const cleared = await db.clearSession(req.params.id, req.params.sessionId);
 
@@ -286,7 +287,7 @@ router.get('/:id/progress/:problemId', async (req: Request, res: Response) => {
 });
 
 // POST /api/learners/:id/progress/:problemId - Update problem progress
-router.post('/:id/progress/:problemId', async (req: Request, res: Response) => {
+router.post('/:id/progress/:problemId', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
     const { solved, incrementAttempts, incrementHints, lastCode } = req.body;
 
@@ -325,7 +326,7 @@ router.get('/:id/profile', async (req: Request, res: Response) => {
 });
 
 // PUT /api/learners/:id/profile - Save/update learner's full profile
-router.put('/:id/profile', async (req: Request, res: Response) => {
+router.put('/:id/profile', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
     const {
       name,
@@ -364,7 +365,7 @@ router.put('/:id/profile', async (req: Request, res: Response) => {
 });
 
 // POST /api/learners/:id/profile/events - Update profile from event
-router.post('/:id/profile/events', async (req: Request, res: Response) => {
+router.post('/:id/profile/events', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
     const { event } = req.body;
 
@@ -391,7 +392,7 @@ router.post('/:id/profile/events', async (req: Request, res: Response) => {
 });
 
 // POST /api/learners/:id/profile/events/batch - Update profile from events
-router.post('/:id/profile/events/batch', async (req: Request, res: Response) => {
+router.post('/:id/profile/events/batch', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
     const { events } = req.body;
 

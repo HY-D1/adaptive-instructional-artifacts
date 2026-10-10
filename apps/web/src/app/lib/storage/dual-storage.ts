@@ -1030,7 +1030,11 @@ class DualStorageManager {
     this.pendingStore.add(eventForWrite);
     
     // Step 3: Update problem progress for execution events
-    if (this.shouldUseBackend() && eventForWrite.eventType === 'execution' && eventForWrite.problemId) {
+    if (
+      this.shouldUseBackend() &&
+      (eventForWrite.eventType === 'execution' || eventForWrite.eventType === 'error') &&
+      eventForWrite.problemId
+    ) {
       const progressPayload = {
         solved: eventForWrite.successful === true,
         incrementAttempts: true,
@@ -1040,7 +1044,9 @@ class DualStorageManager {
         eventForWrite.learnerId,
         eventForWrite.problemId,
         progressPayload
-      ).catch(error => {
+      ).then(() => {
+        window.dispatchEvent(new Event('survey-invitations-refresh'));
+      }).catch(error => {
         console.warn('[DualStorage] Backend updateProblemProgress failed:', error);
         // Non-blocking - progress update is best-effort
       });
@@ -2578,6 +2584,7 @@ class DualStorageManager {
   }
 
   logBanditArmSelected(params: {
+    eventId?: string;
     learnerId: string;
     problemId: string;
     armId: string;
@@ -2585,6 +2592,7 @@ class DualStorageManager {
     armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
     sessionId?: string;
     conditionId?: string;
+    banditStateSource?: 'server' | 'fallback_cached' | 'fallback_prior';
   }): void {
     this.syncLatestLocalInteraction(
       params.learnerId,

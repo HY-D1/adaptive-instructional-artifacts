@@ -364,6 +364,7 @@ export interface CreateInteractionRequest {
   learnerId: string;
   sectionId?: string | null;
   sessionId?: string;
+  conditionId?: 'adaptive' | 'control';
   timestamp: string;
   eventType: EventType;
   problemId: string;

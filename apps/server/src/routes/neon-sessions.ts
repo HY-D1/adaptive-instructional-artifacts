@@ -6,6 +6,7 @@
 import { Router, Request, Response } from 'express';
 import * as db from '../db/neon.js';
 import { requireOwnership } from '../middleware/auth.js';
+import { requirePreSurveyCompleted } from '../middleware/pre-survey.js';
 import type { SessionData } from '../types.js';
 
 const router = Router();
@@ -136,7 +137,7 @@ router.get('/:learnerId/active', async (req: Request, res: Response) => {
 });
 
 // POST /api/sessions/:learnerId/active - Save active session
-router.post('/:learnerId/active', async (req: Request, res: Response) => {
+router.post('/:learnerId/active', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
     const body = req.body as SessionWriteBody;
 
@@ -179,7 +180,7 @@ router.post('/:learnerId/active', async (req: Request, res: Response) => {
 });
 
 // PUT /api/sessions/:learnerId/active - Update active session (alias for POST)
-router.put('/:learnerId/active', async (req: Request, res: Response) => {
+router.put('/:learnerId/active', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   // Delegate to POST handler logic
   try {
     const body = req.body as SessionWriteBody;
@@ -220,7 +221,7 @@ router.put('/:learnerId/active', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/sessions/:learnerId/active - Clear active session
-router.delete('/:learnerId/active', async (req: Request, res: Response) => {
+router.delete('/:learnerId/active', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
     // Get the active session first to find the sessionId
     const activeSession = await db.getActiveSession(req.params.learnerId);
