@@ -1451,6 +1451,7 @@ class StorageManager {
    * @param params - Bandit arm selection parameters (object payload)
    */
   logBanditArmSelected(params: {
+    eventId?: string;
     learnerId: string;
     problemId: string;
     armId: string;
@@ -1458,9 +1459,10 @@ class StorageManager {
     armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
     sessionId?: string;
     conditionId?: string;
+    banditStateSource?: 'server' | 'fallback_cached' | 'fallback_prior';
   }): void {
     const event: InteractionEvent = {
-      id: createEventId('bandit', 'arm-selected'),
+      id: params.eventId || createEventId('bandit', 'arm-selected'),
       sessionId: params.sessionId || this.getActiveSessionId(),
       learnerId: params.learnerId,
       timestamp: Date.now(),
@@ -1474,7 +1476,8 @@ class StorageManager {
         armId: params.armId,
         method: params.selectionMethod,
         armStatsAtSelection: params.armStatsAtSelection
-      }
+      },
+      banditStateSource: params.banditStateSource,
     };
     this.saveInteraction(event);
   }

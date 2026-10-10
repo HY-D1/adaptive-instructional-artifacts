@@ -10,20 +10,25 @@ import type {
   InstructionalUnit,
   LearnerProfile,
   ConceptCoverageEvidence,
-} from '@/app/types';
+} from "@/app/types";
 import {
   withCsrfHeader,
   isMutatingMethod,
   refreshCsrfTokenFromAuthMe,
   getCsrfHeaders,
-} from './csrf-client';
-import { isResearchSafe, getResearchRuntimeMode, getApiBaseUrl } from '../runtime-config';
+} from "./csrf-client";
+import {
+  isResearchSafe,
+  getResearchRuntimeMode,
+  getApiBaseUrl,
+} from "../runtime-config";
 
 // API Configuration
 // VITE_API_BASE_URL is the canonical env var (e.g. https://my-api.vercel.app — no trailing /api)
 // getApiBaseUrl() resolves the same-origin sentinel to '' (relative paths).
 const _API_BASE = getApiBaseUrl();
-const API_URL = _API_BASE !== undefined ? `${_API_BASE}/api` : 'http://localhost:3001/api';
+const API_URL =
+  _API_BASE !== undefined ? `${_API_BASE}/api` : "http://localhost:3001/api";
 const USE_BACKEND = _API_BASE !== undefined;
 
 /** Research-safe flag - true when backend is configured for data durability */
@@ -33,7 +38,9 @@ export const BACKEND_RESEARCH_SAFE = isResearchSafe();
  * Get research runtime mode for storage
  * @returns 'research-safe' | 'research-unsafe' | 'dev-demo'
  */
-export function getStorageResearchMode(): ReturnType<typeof getResearchRuntimeMode> {
+export function getStorageResearchMode(): ReturnType<
+  typeof getResearchRuntimeMode
+> {
   return getResearchRuntimeMode();
 }
 
@@ -51,7 +58,7 @@ export function isStorageResearchSafe(): boolean {
 
 export interface PersistenceStatus {
   backendReachable: boolean;
-  dbMode: 'neon' | 'sqlite';
+  dbMode: "neon" | "sqlite";
   resolvedEnvSource: string;
   persistenceRoutesEnabled: boolean;
 }
@@ -61,7 +68,7 @@ export interface BackendHealth {
   timestamp: string;
   version: string;
   db: {
-    mode: 'neon' | 'sqlite';
+    mode: "neon" | "sqlite";
     envSource: string;
   };
 }
@@ -72,17 +79,17 @@ export interface BackendHealth {
  */
 export async function checkPersistenceStatus(): Promise<PersistenceStatus | null> {
   if (_API_BASE === undefined) return null;
-  
+
   try {
     const response = await fetch(`${API_URL}/system/persistence-status`, {
-      method: 'GET',
-      credentials: 'include',
+      method: "GET",
+      credentials: "include",
     });
-    
+
     if (!response.ok) {
       return null;
     }
-    
+
     return await response.json();
   } catch {
     return null;
@@ -95,16 +102,16 @@ export async function checkPersistenceStatus(): Promise<PersistenceStatus | null
  */
 export async function fetchBackendHealth(): Promise<BackendHealth | null> {
   if (_API_BASE === undefined) return null;
-  
+
   try {
     const response = await fetch(`${_API_BASE}/health`, {
-      method: 'GET',
+      method: "GET",
     });
-    
+
     if (!response.ok) {
       return null;
     }
-    
+
     return await response.json();
   } catch {
     return null;
@@ -121,7 +128,11 @@ interface ApiResponse<T> {
   error?: string;
   message?: string;
   failedIds?: string[];
-  errors?: Array<{ eventId?: string; eventType?: string; missingFields?: string[] }>;
+  errors?: Array<{
+    eventId?: string;
+    eventType?: string;
+    missingFields?: string[];
+  }>;
 }
 
 interface BatchConfirmationResponse {
@@ -133,7 +144,7 @@ interface BatchConfirmationResponse {
 interface BackendLearner {
   id: string;
   name: string;
-  role: 'student' | 'instructor';
+  role: "student" | "instructor";
   createdAt: string;
   updatedAt: string;
 }
@@ -145,17 +156,17 @@ interface BackendInteraction {
   timestamp: string;
   eventType: string;
   problemId: string;
-  
+
   // Problem context
   problemSetId?: string;
   problemNumber?: number;
-  
+
   // Code/Error fields
   code?: string;
   error?: string;
   errorSubtypeId?: string;
   executionTimeMs?: number;
-  
+
   // Hint/Explanation fields
   hintId?: string;
   explanationId?: string;
@@ -164,7 +175,7 @@ interface BackendInteraction {
   helpRequestIndex?: number;
   sqlEngageSubtype?: string;
   sqlEngageRowId?: string;
-  
+
   // Policy fields
   policyVersion?: string;
   timeSpent?: number;
@@ -173,12 +184,12 @@ interface BackendInteraction {
   templateId?: string;
   inputHash?: string;
   model?: string;
-  
+
   // Textbook fields
   noteId?: string;
   noteTitle?: string;
   noteContent?: string;
-  
+
   // Source/Retrieval fields
   retrievedSourceIds?: string[];
   retrievedChunks?: Array<{
@@ -191,21 +202,21 @@ interface BackendInteraction {
   triggerInteractionIds?: string[];
   evidenceInteractionIds?: string[];
   sourceInteractionIds?: string[];
-  
+
   // I/O fields
   inputs?: Record<string, string | number | boolean | null>;
   outputs?: Record<string, string | number | boolean | null | string[]>;
-  
+
   // Concept fields
   conceptId?: string;
   conceptIds?: string[];
-  source?: 'problem' | 'hint' | 'textbook';
+  source?: "problem" | "hint" | "textbook";
   totalTime?: number;
   problemsAttempted?: number;
   problemsSolved?: number;
-  
+
   // Guidance Ladder fields
-  requestType?: 'hint' | 'explanation' | 'textbook';
+  requestType?: "hint" | "explanation" | "textbook";
   currentRung?: number;
   rung?: number;
   grounded?: boolean;
@@ -213,33 +224,33 @@ interface BackendInteraction {
   fromRung?: number;
   toRung?: number;
   trigger?: string;
-  
+
   // Textbook Unit fields
   unitId?: string;
-  action?: 'created' | 'updated';
+  action?: "created" | "updated";
   dedupeKey?: string;
   revisionCount?: number;
-  
+
   // Source view fields
   passageCount?: number;
   expanded?: boolean;
-  
+
   // Chat fields
   chatMessage?: string;
   chatResponse?: string;
   chatQuickChip?: string;
   savedToNotes?: boolean;
   textbookUnitsRetrieved?: string[];
-  
+
   // Escalation Profile fields (Week 5)
   profileId?: string;
-  assignmentStrategy?: 'static' | 'diagnostic' | 'bandit';
+  assignmentStrategy?: "static" | "diagnostic" | "bandit";
   previousThresholds?: { escalate: number; aggregate: number };
   newThresholds?: { escalate: number; aggregate: number };
-  
+
   // Bandit fields (Week 5)
   selectedArm?: string;
-  selectionMethod?: 'thompson_sampling' | 'epsilon_greedy';
+  selectionMethod?: "thompson_sampling" | "epsilon_greedy";
   armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
   reward?: {
     total: number;
@@ -253,10 +264,10 @@ interface BackendInteraction {
   };
   newAlpha?: number;
   newBeta?: number;
-  
+
   // HDI fields (Week 5)
   hdi?: number;
-  hdiLevel?: 'low' | 'medium' | 'high';
+  hdiLevel?: "low" | "medium" | "high";
   hdiComponents?: {
     hpa: number;
     aed: number;
@@ -264,21 +275,24 @@ interface BackendInteraction {
     reae: number;
     iwh: number;
   };
-  trend?: 'increasing' | 'stable' | 'decreasing';
+  trend?: "increasing" | "stable" | "decreasing";
   slope?: number;
-  interventionType?: 'forced_independent' | 'profile_switch' | 'reflective_prompt';
-  
+  interventionType?:
+    | "forced_independent"
+    | "profile_switch"
+    | "reflective_prompt";
+
   // Reinforcement fields (Week 5)
   scheduleId?: string;
   promptId?: string;
-  promptType?: 'mcq' | 'sql_completion' | 'concept_explanation';
+  promptType?: "mcq" | "sql_completion" | "concept_explanation";
   response?: string;
   isCorrect?: boolean;
   scheduledTime?: number;
   shownTime?: number;
-  
+
   // RESEARCH-4: Canonical study-facing fields
-  conditionId?: string;            // canonical session-init field (condition_assigned events)
+  conditionId?: string; // canonical session-init field (condition_assigned events)
   learnerProfileId?: string;
   escalationTriggerReason?: string;
   errorCountAtEscalation?: number;
@@ -298,13 +312,13 @@ interface BackendUnit {
   id: string;
   learnerId: string;
   unitId: string;
-  type: 'hint' | 'explanation' | 'example' | 'summary';
+  type: "hint" | "explanation" | "example" | "summary";
   conceptIds: string[];
   title: string;
   content: string;
-  contentFormat: 'markdown' | 'html';
+  contentFormat: "markdown" | "html";
   sourceInteractionIds: string[];
-  status: 'primary' | 'alternative' | 'archived';
+  status: "primary" | "alternative" | "archived";
   createdAt: string;
   updatedAt: string;
 }
@@ -335,7 +349,12 @@ interface SessionData {
   adaptiveLadderDisabled?: boolean;
   immediateExplanationMode?: boolean;
   staticHintMode?: boolean;
-  escalationPolicy?: 'aggressive' | 'conservative' | 'explanation_first' | 'adaptive' | 'no_hints';
+  escalationPolicy?:
+    | "aggressive"
+    | "conservative"
+    | "explanation_first"
+    | "adaptive"
+    | "no_hints";
   currentCode?: string;
   guidanceState?: Record<string, unknown>;
   hdiState?: Record<string, unknown>;
@@ -466,41 +485,47 @@ export interface RemoteCorpusActiveRun {
 
 async function fetchApi<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
 ): Promise<ApiResponse<T>> {
   const url = `${API_URL}${endpoint}`;
   const authMeUrl = `${API_URL}/auth/me`;
 
-  const executeRequest = async (requestOptions: RequestInit): Promise<Response> => {
+  const executeRequest = async (
+    requestOptions: RequestInit,
+  ): Promise<Response> => {
     const headers = new Headers(requestOptions.headers || {});
-    if (!headers.has('Content-Type')) {
-      headers.set('Content-Type', 'application/json');
+    if (!headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
     }
 
     return fetch(url, {
       ...requestOptions,
-      credentials: 'include',   // send JWT cookie for auth-protected API routes
+      credentials: "include", // send JWT cookie for auth-protected API routes
       headers,
     });
   };
-  
+
   try {
     const mutating = isMutatingMethod(options.method);
     let response = await executeRequest(withCsrfHeader(options));
-    let errorData = await response.json().catch(() => ({} as { error?: string; message?: string }));
+    let errorData = await response
+      .json()
+      .catch(() => ({}) as { error?: string; message?: string });
 
     // CSRF cookie/token can drift after auth state checks; refresh once and retry.
     if (
       !response.ok &&
       mutating &&
       response.status === 403 &&
-      typeof errorData.error === 'string' &&
-      errorData.error.toLowerCase().includes('csrf')
+      typeof errorData.error === "string" &&
+      errorData.error.toLowerCase().includes("csrf")
     ) {
       const refreshed = await refreshCsrfTokenFromAuthMe(authMeUrl);
       if (refreshed) {
         response = await executeRequest(withCsrfHeader(options));
-        errorData = await response.json().catch(() => ({} as { error?: string; message?: string }));
+        errorData = await response
+          .json()
+          .catch(() => ({}) as { error?: string; message?: string });
       }
     }
 
@@ -508,7 +533,8 @@ async function fetchApi<T>(
       return {
         ...errorData,
         success: false,
-        error: errorData.error || `HTTP ${response.status}: ${response.statusText}`,
+        error:
+          errorData.error || `HTTP ${response.status}: ${response.statusText}`,
         message: errorData.message,
       };
     }
@@ -518,8 +544,9 @@ async function fetchApi<T>(
   } catch (error) {
     return {
       success: false,
-      error: 'Network error',
-      message: error instanceof Error ? error.message : 'Failed to connect to backend',
+      error: "Network error",
+      message:
+        error instanceof Error ? error.message : "Failed to connect to backend",
     };
   }
 }
@@ -534,8 +561,8 @@ export function isBackendAvailable(): boolean {
 
 export async function checkBackendHealth(): Promise<boolean> {
   try {
-    const response = await fetch(`${API_URL.replace('/api', '')}/health`, {
-      method: 'GET',
+    const response = await fetch(`${API_URL.replace("/api", "")}/health`, {
+      method: "GET",
       signal: AbortSignal.timeout(5000),
     });
     return response.ok;
@@ -549,15 +576,15 @@ export async function checkBackendHealth(): Promise<boolean> {
 // ============================================================================
 
 export async function createLearner(profile: UserProfile): Promise<boolean> {
-  const response = await fetchApi<BackendLearner>('/learners', {
-    method: 'POST',
+  const response = await fetchApi<BackendLearner>("/learners", {
+    method: "POST",
     body: JSON.stringify({
       id: profile.id,
       name: profile.name,
       role: profile.role,
     }),
   });
-  if (!response.success && response.error === 'User already exists') {
+  if (!response.success && response.error === "User already exists") {
     return true;
   }
   return response.success;
@@ -566,7 +593,7 @@ export async function createLearner(profile: UserProfile): Promise<boolean> {
 export async function getLearner(id: string): Promise<UserProfile | null> {
   const response = await fetchApi<BackendLearner>(`/learners/${id}`);
   if (!response.success || !response.data) return null;
-  
+
   return {
     id: response.data.id,
     name: response.data.name,
@@ -576,10 +603,10 @@ export async function getLearner(id: string): Promise<UserProfile | null> {
 }
 
 export async function getAllLearners(): Promise<UserProfile[]> {
-  const response = await fetchApi<BackendLearner[]>('/learners');
+  const response = await fetchApi<BackendLearner[]>("/learners");
   if (!response.success || !response.data) return [];
-  
-  return response.data.map(l => ({
+
+  return response.data.map((l) => ({
     id: l.id,
     name: l.name,
     role: l.role,
@@ -589,10 +616,10 @@ export async function getAllLearners(): Promise<UserProfile[]> {
 
 export async function updateLearner(
   id: string,
-  updates: Partial<Pick<UserProfile, 'name' | 'role'>>
+  updates: Partial<Pick<UserProfile, "name" | "role">>,
 ): Promise<boolean> {
   const response = await fetchApi<BackendLearner>(`/learners/${id}`, {
-    method: 'PUT',
+    method: "PUT",
     body: JSON.stringify(updates),
   });
   return response.success;
@@ -605,20 +632,26 @@ export async function updateLearner(
 /**
  * Get a learner's full profile with concept coverage, evidence, etc.
  */
-export async function getProfile(learnerId: string): Promise<LearnerProfile | null> {
-  const response = await fetchApi<BackendLearnerProfile>(`/learners/${learnerId}/profile`);
+export async function getProfile(
+  learnerId: string,
+): Promise<LearnerProfile | null> {
+  const response = await fetchApi<BackendLearnerProfile>(
+    `/learners/${learnerId}/profile`,
+  );
   if (!response.success || !response.data) return null;
-  
+
   const data = response.data;
   return {
     id: data.id,
     name: data.name,
     conceptsCovered: new Set(data.conceptsCovered),
-    conceptCoverageEvidence: new Map(Object.entries(data.conceptCoverageEvidence)),
+    conceptCoverageEvidence: new Map(
+      Object.entries(data.conceptCoverageEvidence),
+    ),
     errorHistory: new Map(Object.entries(data.errorHistory)),
     solvedProblemIds: new Set(data.solvedProblemIds || []),
     interactionCount: data.interactionCount,
-    currentStrategy: data.currentStrategy as LearnerProfile['currentStrategy'],
+    currentStrategy: data.currentStrategy as LearnerProfile["currentStrategy"],
     preferences: data.preferences,
     createdAt: data.createdAt,
     lastActive: data.lastActive,
@@ -627,11 +660,13 @@ export async function getProfile(learnerId: string): Promise<LearnerProfile | nu
 
 function toStringArray(value: unknown): string[] {
   if (value instanceof Set) {
-    return Array.from(value).filter((item): item is string => typeof item === 'string');
+    return Array.from(value).filter(
+      (item): item is string => typeof item === "string",
+    );
   }
 
   if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === 'string');
+    return value.filter((item): item is string => typeof item === "string");
   }
 
   return [];
@@ -645,12 +680,14 @@ function toRecord<T>(value: unknown): Record<string, T> {
   if (Array.isArray(value)) {
     const entries = value.filter(
       (entry): entry is [string, T] =>
-        Array.isArray(entry) && typeof entry[0] === 'string' && entry.length >= 2,
+        Array.isArray(entry) &&
+        typeof entry[0] === "string" &&
+        entry.length >= 2,
     );
     return Object.fromEntries(entries) as Record<string, T>;
   }
 
-  if (value && typeof value === 'object') {
+  if (value && typeof value === "object") {
     return value as Record<string, T>;
   }
 
@@ -661,19 +698,24 @@ function toRecord<T>(value: unknown): Record<string, T> {
  * Save a learner's full profile
  */
 export async function saveProfile(profile: LearnerProfile): Promise<boolean> {
-  const response = await fetchApi<BackendLearnerProfile>(`/learners/${profile.id}/profile`, {
-    method: 'PUT',
-    body: JSON.stringify({
-      name: profile.name,
-      conceptsCovered: toStringArray(profile.conceptsCovered),
-      conceptCoverageEvidence: toRecord<ConceptCoverageEvidence>(profile.conceptCoverageEvidence),
-      errorHistory: toRecord<number>(profile.errorHistory),
-      interactionCount: profile.interactionCount,
-      currentStrategy: profile.currentStrategy ?? 'adaptive-medium',
-      preferences: profile.preferences,
-      lastActive: profile.lastActive,
-    }),
-  });
+  const response = await fetchApi<BackendLearnerProfile>(
+    `/learners/${profile.id}/profile`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        name: profile.name,
+        conceptsCovered: toStringArray(profile.conceptsCovered),
+        conceptCoverageEvidence: toRecord<ConceptCoverageEvidence>(
+          profile.conceptCoverageEvidence,
+        ),
+        errorHistory: toRecord<number>(profile.errorHistory),
+        interactionCount: profile.interactionCount,
+        currentStrategy: profile.currentStrategy ?? "adaptive-medium",
+        preferences: profile.preferences,
+        lastActive: profile.lastActive,
+      }),
+    },
+  );
   return response.success;
 }
 
@@ -681,18 +723,21 @@ export async function saveProfile(profile: LearnerProfile): Promise<boolean> {
  * Get all learner profiles (for instructor dashboard)
  */
 export async function getAllProfiles(): Promise<LearnerProfile[]> {
-  const response = await fetchApi<BackendLearnerProfile[]>('/learners/profiles');
+  const response =
+    await fetchApi<BackendLearnerProfile[]>("/learners/profiles");
   if (!response.success || !response.data) return [];
-  
-  return response.data.map(data => ({
+
+  return response.data.map((data) => ({
     id: data.id,
     name: data.name,
     conceptsCovered: new Set(data.conceptsCovered),
-    conceptCoverageEvidence: new Map(Object.entries(data.conceptCoverageEvidence)),
+    conceptCoverageEvidence: new Map(
+      Object.entries(data.conceptCoverageEvidence),
+    ),
     errorHistory: new Map(Object.entries(data.errorHistory)),
     solvedProblemIds: new Set(data.solvedProblemIds || []),
     interactionCount: data.interactionCount,
-    currentStrategy: data.currentStrategy as LearnerProfile['currentStrategy'],
+    currentStrategy: data.currentStrategy as LearnerProfile["currentStrategy"],
     preferences: data.preferences,
     createdAt: data.createdAt,
     lastActive: data.lastActive,
@@ -704,43 +749,48 @@ export async function getAllProfiles(): Promise<LearnerProfile[]> {
  */
 export async function updateProfileFromEvent(
   learnerId: string,
-  event: InteractionEvent
+  event: InteractionEvent,
 ): Promise<LearnerProfile | null> {
-  const response = await fetchApi<BackendLearnerProfile>(`/learners/${learnerId}/profile/events`, {
-    method: 'POST',
-    body: JSON.stringify({
-      event: {
-        learnerId: event.learnerId,
-        sessionId: event.sessionId,
-        timestamp: new Date(event.timestamp).toISOString(),
-        eventType: event.eventType,
-        problemId: event.problemId,
-        problemSetId: event.problemSetId,
-        problemNumber: event.problemNumber,
-        code: event.code,
-        error: event.error,
-        errorSubtypeId: event.errorSubtypeId,
-        successful: event.successful,
-        conceptIds: event.conceptIds,
-        metadata: {
-          ...event.metadata,
+  const response = await fetchApi<BackendLearnerProfile>(
+    `/learners/${learnerId}/profile/events`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        event: {
+          learnerId: event.learnerId,
+          sessionId: event.sessionId,
+          timestamp: new Date(event.timestamp).toISOString(),
+          eventType: event.eventType,
+          problemId: event.problemId,
+          problemSetId: event.problemSetId,
+          problemNumber: event.problemNumber,
+          code: event.code,
+          error: event.error,
+          errorSubtypeId: event.errorSubtypeId,
+          successful: event.successful,
+          conceptIds: event.conceptIds,
+          metadata: {
+            ...event.metadata,
+          },
         },
-      },
-    }),
-  });
-  
+      }),
+    },
+  );
+
   if (!response.success || !response.data) return null;
-  
+
   const data = response.data;
   return {
     id: data.id,
     name: data.name,
     conceptsCovered: new Set(data.conceptsCovered),
-    conceptCoverageEvidence: new Map(Object.entries(data.conceptCoverageEvidence)),
+    conceptCoverageEvidence: new Map(
+      Object.entries(data.conceptCoverageEvidence),
+    ),
     errorHistory: new Map(Object.entries(data.errorHistory)),
     solvedProblemIds: new Set(data.solvedProblemIds || []),
     interactionCount: data.interactionCount,
-    currentStrategy: data.currentStrategy as LearnerProfile['currentStrategy'],
+    currentStrategy: data.currentStrategy as LearnerProfile["currentStrategy"],
     preferences: data.preferences,
     createdAt: data.createdAt,
     lastActive: data.lastActive,
@@ -755,10 +805,12 @@ export async function updateProfileFromEvent(
  * Convert frontend InteractionEvent to backend format
  * Preserves ALL fields for research replay - LOSSLESS
  */
-function normalizeInteractionTimestampToIso(timestamp: string | number): string {
+function normalizeInteractionTimestampToIso(
+  timestamp: string | number,
+): string {
   const fallback = new Date().toISOString();
 
-  if (typeof timestamp === 'number' && Number.isFinite(timestamp)) {
+  if (typeof timestamp === "number" && Number.isFinite(timestamp)) {
     const millis = timestamp > 1e12 ? timestamp : timestamp * 1000;
     const iso = new Date(millis).toISOString();
     return Number.isNaN(Date.parse(iso)) ? fallback : iso;
@@ -780,7 +832,7 @@ function normalizeInteractionTimestampToIso(timestamp: string | number): string 
 }
 
 function getBackendHintId(event: InteractionEvent): string | undefined {
-  if (event.eventType !== 'hint_view') {
+  if (event.eventType !== "hint_view") {
     return event.hintId;
   }
 
@@ -792,12 +844,16 @@ function getBackendHintId(event: InteractionEvent): string | undefined {
   const hintLevel = Number.isFinite(event.hintLevel)
     ? Math.max(1, Math.min(3, Math.trunc(Number(event.hintLevel))))
     : 1;
-  const subtype = (event.sqlEngageSubtype || event.errorSubtypeId || 'unknown').trim() || 'unknown';
-  const rowId = event.sqlEngageRowId?.trim() || 'unknown';
+  const subtype =
+    (event.sqlEngageSubtype || event.errorSubtypeId || "unknown").trim() ||
+    "unknown";
+  const rowId = event.sqlEngageRowId?.trim() || "unknown";
   return `sql-engage:${subtype}:hint:${rowId}:L${hintLevel}`;
 }
 
-function convertToBackendInteraction(event: InteractionEvent): Partial<BackendInteraction> {
+function convertToBackendInteraction(
+  event: InteractionEvent,
+): Partial<BackendInteraction> {
   const timestampIso = normalizeInteractionTimestampToIso(event.timestamp);
   return {
     // Identity preservation for research analysis and flush verification
@@ -808,17 +864,17 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
     timestamp: timestampIso,
     eventType: event.eventType,
     problemId: event.problemId,
-    
+
     // Problem context
     problemSetId: event.problemSetId,
     problemNumber: event.problemNumber,
-    
+
     // Code/Error fields
     code: event.code,
     error: event.error,
     errorSubtypeId: event.errorSubtypeId,
     executionTimeMs: event.executionTimeMs,
-    
+
     // Hint/Explanation fields
     hintId: getBackendHintId(event),
     explanationId: event.explanationId,
@@ -827,7 +883,7 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
     helpRequestIndex: event.helpRequestIndex,
     sqlEngageSubtype: event.sqlEngageSubtype,
     sqlEngageRowId: event.sqlEngageRowId,
-    
+
     // Policy/Execution fields
     policyVersion: event.policyVersion,
     timeSpent: event.timeSpent,
@@ -836,23 +892,23 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
     templateId: event.templateId,
     inputHash: event.inputHash,
     model: event.model,
-    
+
     // Textbook fields
     noteId: event.noteId,
     noteTitle: event.noteTitle,
     noteContent: event.noteContent,
-    
+
     // Source/Retrieval fields
     retrievedSourceIds: event.retrievedSourceIds,
     retrievedChunks: event.retrievedChunks,
     triggerInteractionIds: event.triggerInteractionIds,
     evidenceInteractionIds: event.evidenceInteractionIds,
     sourceInteractionIds: event.sourceInteractionIds,
-    
+
     // I/O fields
     inputs: event.inputs,
     outputs: event.outputs,
-    
+
     // Concept fields (both single and array forms)
     conceptId: event.conceptId || event.conceptIds?.[0], // Primary concept
     conceptIds: event.conceptIds,
@@ -860,7 +916,7 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
     totalTime: event.totalTime,
     problemsAttempted: event.problemsAttempted,
     problemsSolved: event.problemsSolved,
-    
+
     // Guidance Ladder fields
     requestType: event.requestType,
     currentRung: event.currentRung,
@@ -870,30 +926,30 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
     fromRung: event.fromRung,
     toRung: event.toRung,
     trigger: event.trigger,
-    
+
     // Textbook Unit fields
     unitId: event.unitId,
     action: event.action,
     dedupeKey: event.dedupeKey,
     revisionCount: event.revisionCount,
-    
+
     // Source view fields
     passageCount: event.passageCount,
     expanded: event.expanded,
-    
+
     // Chat fields
     chatMessage: event.chatMessage,
     chatResponse: event.chatResponse,
     chatQuickChip: event.chatQuickChip,
     savedToNotes: event.savedToNotes,
     textbookUnitsRetrieved: event.textbookUnitsRetrieved,
-    
+
     // Escalation Profile fields (Week 5)
     profileId: event.profileId,
     assignmentStrategy: event.assignmentStrategy,
     previousThresholds: event.previousThresholds,
     newThresholds: event.newThresholds,
-    
+
     // Bandit fields (Week 5)
     selectedArm: event.selectedArm,
     selectionMethod: event.selectionMethod,
@@ -901,7 +957,7 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
     reward: event.reward,
     newAlpha: event.newAlpha,
     newBeta: event.newBeta,
-    
+
     // HDI fields (Week 5)
     hdi: event.hdi,
     hdiLevel: event.hdiLevel,
@@ -909,7 +965,7 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
     trend: event.trend,
     slope: event.slope,
     interventionType: event.interventionType,
-    
+
     // Reinforcement fields (Week 5)
     scheduleId: event.scheduleId,
     promptId: event.promptId,
@@ -918,7 +974,7 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
     isCorrect: event.isCorrect,
     scheduledTime: event.scheduledTime,
     shownTime: event.shownTime,
-    
+
     // RESEARCH-4: Canonical study-facing fields
     conditionId: event.conditionId,
     learnerProfileId: event.learnerProfileId,
@@ -940,14 +996,16 @@ function convertToBackendInteraction(event: InteractionEvent): Partial<BackendIn
  * Sends complete InteractionEvent to backend
  * RESEARCH-1: Returns confirmation status for durable pending store
  */
-export async function logInteraction(event: InteractionEvent): Promise<{ success: boolean; confirmed?: boolean }> {
+export async function logInteraction(
+  event: InteractionEvent,
+): Promise<{ success: boolean; confirmed?: boolean }> {
   const backendEvent = convertToBackendInteraction(event);
-  
-  const response = await fetchApi<BackendInteraction>('/interactions', {
-    method: 'POST',
+
+  const response = await fetchApi<BackendInteraction>("/interactions", {
+    method: "POST",
     body: JSON.stringify(backendEvent),
   });
-  
+
   const confirmed = response.success && response.data?.id === event.id;
   return {
     success: response.success,
@@ -959,13 +1017,15 @@ export async function logInteraction(event: InteractionEvent): Promise<{ success
  * Log multiple interaction events in batch (lossless)
  * Sends complete InteractionEvents to backend
  */
-export async function logInteractionsBatch(events: InteractionEvent[]): Promise<boolean> {
+export async function logInteractionsBatch(
+  events: InteractionEvent[],
+): Promise<boolean> {
   if (events.length === 0) return true;
-  
+
   const backendEvents = events.map(convertToBackendInteraction);
-  
-  const response = await fetchApi<{ count: number }>('/interactions/batch', {
-    method: 'POST',
+
+  const response = await fetchApi<{ count: number }>("/interactions/batch", {
+    method: "POST",
     body: JSON.stringify({ events: backendEvents }),
   });
   return response.success;
@@ -976,30 +1036,35 @@ export async function logInteractionsBatch(events: InteractionEvent[]): Promise<
  * RESEARCH-2: Durable write semantics with exact ID verification
  */
 export async function logInteractionsBatchVerified(
-  events: InteractionEvent[]
+  events: InteractionEvent[],
 ): Promise<{ confirmed: string[]; failed: string[]; invalid?: string[] }> {
   if (events.length === 0) return { confirmed: [], failed: [] };
-  
+
   const backendEvents = events.map(convertToBackendInteraction);
-  const eventIds = events.map(e => e.id);
-  
-  const response = await fetchApi<BatchConfirmationResponse>('/interactions/batch', {
-    method: 'POST',
-    body: JSON.stringify({ events: backendEvents }),
-  });
-  
+  const eventIds = events.map((e) => e.id);
+
+  const response = await fetchApi<BatchConfirmationResponse>(
+    "/interactions/batch",
+    {
+      method: "POST",
+      body: JSON.stringify({ events: backendEvents }),
+    },
+  );
+
   if (!response.success) {
-    const invalidIds = response.error?.toLowerCase().includes('invalid')
-      ? response.failedIds?.filter((id): id is string => eventIds.includes(id)) ?? []
+    const invalidIds = response.error?.toLowerCase().includes("invalid")
+      ? (response.failedIds?.filter((id): id is string =>
+          eventIds.includes(id),
+        ) ?? [])
       : [];
     return { confirmed: [], failed: eventIds, invalid: invalidIds };
   }
-  
+
   // Exact confirmation only. Missing confirmedIds means "unverified", not success.
   const confirmedIds = response.data?.confirmedIds ?? [];
   const confirmedSet = new Set(confirmedIds);
-  const failed = eventIds.filter(id => !confirmedSet.has(id));
-  
+  const failed = eventIds.filter((id) => !confirmedSet.has(id));
+
   return { confirmed: confirmedIds, failed };
 }
 
@@ -1009,40 +1074,40 @@ export async function logInteractionsBatchVerified(
  * RESEARCH-1: Includes CSRF token for Neon auth+CSRF routes
  */
 export async function logInteractionsBatchKeepalive(
-  events: InteractionEvent[]
+  events: InteractionEvent[],
 ): Promise<{ success: boolean; confirmedIds?: string[] }> {
   if (events.length === 0) return { success: true, confirmedIds: [] };
-  
+
   const backendEvents = events.map(convertToBackendInteraction);
   const url = `${API_URL}/interactions/batch`;
-  
+
   // Include CSRF token for Neon auth+CSRF routes
   const csrfHeaders = getCsrfHeaders();
-  
+
   try {
     const response = await fetch(url, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
         ...csrfHeaders,
       },
       body: JSON.stringify({ events: backendEvents }),
       keepalive: true,
-      credentials: 'include',
+      credentials: "include",
     });
-    
+
     if (!response.ok) {
-      console.warn('[StorageClient] Keepalive batch failed:', response.status);
+      console.warn("[StorageClient] Keepalive batch failed:", response.status);
       return { success: false };
     }
-    
+
     // Parse confirmed IDs if backend returns them. Missing IDs are not assumed.
     const data = await response.json().catch(() => null);
     const confirmedIds = data?.data?.confirmedIds ?? data?.confirmedIds ?? [];
-    
+
     return { success: true, confirmedIds };
   } catch (error) {
-    console.warn('[StorageClient] Keepalive batch failed:', error);
+    console.warn("[StorageClient] Keepalive batch failed:", error);
     return { success: false };
   }
 }
@@ -1057,19 +1122,19 @@ function convertToFrontendEvent(i: BackendInteraction): InteractionEvent {
     learnerId: i.learnerId,
     sessionId: i.sessionId || undefined,
     timestamp: new Date(i.timestamp).getTime(),
-    eventType: i.eventType as InteractionEvent['eventType'],
+    eventType: i.eventType as InteractionEvent["eventType"],
     problemId: i.problemId,
-    
+
     // Problem context
     problemSetId: i.problemSetId,
     problemNumber: i.problemNumber,
-    
+
     // Code/Error fields
     code: i.code,
     error: i.error,
     errorSubtypeId: i.errorSubtypeId,
     executionTimeMs: i.executionTimeMs,
-    
+
     // Hint/Explanation fields
     hintId: i.hintId,
     explanationId: i.explanationId,
@@ -1078,7 +1143,7 @@ function convertToFrontendEvent(i: BackendInteraction): InteractionEvent {
     helpRequestIndex: i.helpRequestIndex,
     sqlEngageSubtype: i.sqlEngageSubtype,
     sqlEngageRowId: i.sqlEngageRowId,
-    
+
     // Policy/Execution fields
     policyVersion: i.policyVersion,
     timeSpent: i.timeSpent,
@@ -1087,23 +1152,23 @@ function convertToFrontendEvent(i: BackendInteraction): InteractionEvent {
     templateId: i.templateId,
     inputHash: i.inputHash,
     model: i.model,
-    
+
     // Textbook fields
     noteId: i.noteId,
     noteTitle: i.noteTitle,
     noteContent: i.noteContent,
-    
+
     // Source/Retrieval fields
     retrievedSourceIds: i.retrievedSourceIds,
     retrievedChunks: i.retrievedChunks,
     triggerInteractionIds: i.triggerInteractionIds,
     evidenceInteractionIds: i.evidenceInteractionIds,
     sourceInteractionIds: i.sourceInteractionIds,
-    
+
     // I/O fields
     inputs: i.inputs,
     outputs: i.outputs,
-    
+
     // Concept fields
     conceptId: i.conceptId,
     conceptIds: i.conceptIds || (i.conceptId ? [i.conceptId] : undefined),
@@ -1111,7 +1176,7 @@ function convertToFrontendEvent(i: BackendInteraction): InteractionEvent {
     totalTime: i.totalTime,
     problemsAttempted: i.problemsAttempted,
     problemsSolved: i.problemsSolved,
-    
+
     // Guidance Ladder fields
     requestType: i.requestType,
     currentRung: i.currentRung as 1 | 2 | 3 | undefined,
@@ -1120,31 +1185,31 @@ function convertToFrontendEvent(i: BackendInteraction): InteractionEvent {
     contentLength: i.contentLength,
     fromRung: i.fromRung as 1 | 2 | 3 | undefined,
     toRung: i.toRung as 1 | 2 | 3 | undefined,
-    trigger: i.trigger as InteractionEvent['trigger'],
-    
+    trigger: i.trigger as InteractionEvent["trigger"],
+
     // Textbook Unit fields
     unitId: i.unitId,
     action: i.action,
     dedupeKey: i.dedupeKey,
     revisionCount: i.revisionCount,
-    
+
     // Source view fields
     passageCount: i.passageCount,
     expanded: i.expanded,
-    
+
     // Chat fields
     chatMessage: i.chatMessage,
     chatResponse: i.chatResponse,
     chatQuickChip: i.chatQuickChip,
     savedToNotes: i.savedToNotes,
     textbookUnitsRetrieved: i.textbookUnitsRetrieved,
-    
+
     // Escalation Profile fields (Week 5)
     profileId: i.profileId,
     assignmentStrategy: i.assignmentStrategy,
     previousThresholds: i.previousThresholds,
     newThresholds: i.newThresholds,
-    
+
     // Bandit fields (Week 5)
     selectedArm: i.selectedArm,
     selectionMethod: i.selectionMethod,
@@ -1152,7 +1217,7 @@ function convertToFrontendEvent(i: BackendInteraction): InteractionEvent {
     reward: i.reward,
     newAlpha: i.newAlpha,
     newBeta: i.newBeta,
-    
+
     // HDI fields (Week 5)
     hdi: i.hdi,
     hdiLevel: i.hdiLevel,
@@ -1160,7 +1225,7 @@ function convertToFrontendEvent(i: BackendInteraction): InteractionEvent {
     trend: i.trend,
     slope: i.slope,
     interventionType: i.interventionType,
-    
+
     // Reinforcement fields (Week 5)
     scheduleId: i.scheduleId,
     promptId: i.promptId,
@@ -1169,7 +1234,7 @@ function convertToFrontendEvent(i: BackendInteraction): InteractionEvent {
     isCorrect: i.isCorrect,
     scheduledTime: i.scheduledTime,
     shownTime: i.shownTime,
-    
+
     // Legacy payload/metadata
     payload: i.payload,
     metadata: i.metadata,
@@ -1189,36 +1254,40 @@ export async function getInteractions(
     problemId?: string;
     limit?: number;
     offset?: number;
-  }
+  },
 ): Promise<{ events: InteractionEvent[]; total: number }> {
   const params = new URLSearchParams();
-  if (learnerId) params.set('learnerId', learnerId);
-  if (options?.start) params.set('start', options.start.toISOString());
-  if (options?.end) params.set('end', options.end.toISOString());
-  if (options?.sessionId) params.set('sessionId', options.sessionId);
-  if (options?.eventType) params.set('eventType', options.eventType);
-  if (options?.problemId) params.set('problemId', options.problemId);
-  if (options?.limit) params.set('limit', options.limit.toString());
-  if (options?.offset) params.set('offset', options.offset.toString());
+  if (learnerId) params.set("learnerId", learnerId);
+  if (options?.start) params.set("start", options.start.toISOString());
+  if (options?.end) params.set("end", options.end.toISOString());
+  if (options?.sessionId) params.set("sessionId", options.sessionId);
+  if (options?.eventType) params.set("eventType", options.eventType);
+  if (options?.problemId) params.set("problemId", options.problemId);
+  if (options?.limit) params.set("limit", options.limit.toString());
+  if (options?.offset) params.set("offset", options.offset.toString());
 
   const response = await fetchApi<BackendInteraction[]>(
-    `/interactions?${params.toString()}`
+    `/interactions?${params.toString()}`,
   );
-  
+
   if (!response.success || !response.data) {
     return { events: [], total: 0 };
   }
   const eventsPayload = Array.isArray(response.data)
     ? response.data
-    : Array.isArray((response.data as unknown as { data?: BackendInteraction[] }).data)
+    : Array.isArray(
+          (response.data as unknown as { data?: BackendInteraction[] }).data,
+        )
       ? (response.data as unknown as { data: BackendInteraction[] }).data
       : [];
 
-  const pagination = (response as ApiResponse<BackendInteraction[]> & {
-    pagination?: { total?: number };
-  }).pagination;
+  const pagination = (
+    response as ApiResponse<BackendInteraction[]> & {
+      pagination?: { total?: number };
+    }
+  ).pagination;
   const total =
-    typeof pagination?.total === 'number'
+    typeof pagination?.total === "number"
       ? pagination.total
       : eventsPayload.length;
 
@@ -1230,14 +1299,16 @@ export async function getInteractions(
 // Textbook API
 // ============================================================================
 
-export async function getTextbook(learnerId: string): Promise<InstructionalUnit[]> {
+export async function getTextbook(
+  learnerId: string,
+): Promise<InstructionalUnit[]> {
   const response = await fetchApi<BackendUnit[]>(`/textbooks/${learnerId}`);
   if (!response.success || !response.data) return [];
 
-  return response.data.map(u => ({
+  return response.data.map((u) => ({
     id: u.unitId,
     type: u.type,
-    conceptId: u.conceptIds[0] || '',
+    conceptId: u.conceptIds[0] || "",
     conceptIds: u.conceptIds,
     title: u.title,
     content: u.content,
@@ -1252,31 +1323,34 @@ export async function getTextbook(learnerId: string): Promise<InstructionalUnit[
 
 export async function saveTextbookUnit(
   learnerId: string,
-  unit: InstructionalUnit
+  unit: InstructionalUnit,
 ): Promise<boolean> {
-  const response = await fetchApi<BackendUnit>(`/textbooks/${learnerId}/units`, {
-    method: 'POST',
-    body: JSON.stringify({
-      unitId: unit.id,
-      type: unit.type,
-      conceptIds: unit.conceptIds || [unit.conceptId],
-      title: unit.title,
-      content: unit.content,
-      contentFormat: unit.contentFormat || 'markdown',
-      sourceInteractionIds: unit.sourceInteractionIds,
-      status: unit.status || 'primary',
-    }),
-  });
+  const response = await fetchApi<BackendUnit>(
+    `/textbooks/${learnerId}/units`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        unitId: unit.id,
+        type: unit.type,
+        conceptIds: unit.conceptIds || [unit.conceptId],
+        title: unit.title,
+        content: unit.content,
+        contentFormat: unit.contentFormat || "markdown",
+        sourceInteractionIds: unit.sourceInteractionIds,
+        status: unit.status || "primary",
+      }),
+    },
+  );
   return response.success;
 }
 
 export async function deleteTextbookUnit(
   learnerId: string,
-  unitId: string
+  unitId: string,
 ): Promise<boolean> {
   const response = await fetchApi<{ learnerId: string; unitId: string }>(
     `/textbooks/${learnerId}/units/${unitId}`,
-    { method: 'DELETE' }
+    { method: "DELETE" },
   );
   return response.success;
 }
@@ -1285,7 +1359,9 @@ export async function deleteTextbookUnit(
 // Session API
 // ============================================================================
 
-export async function getSession(learnerId: string): Promise<SessionData | null> {
+export async function getSession(
+  learnerId: string,
+): Promise<SessionData | null> {
   const response = await fetchApi<SessionData>(`/sessions/${learnerId}/active`);
   if (!response.success || !response.data) return null;
   return response.data;
@@ -1293,34 +1369,91 @@ export async function getSession(learnerId: string): Promise<SessionData | null>
 
 export async function saveSession(
   learnerId: string,
-  data: SessionData
+  data: SessionData,
 ): Promise<boolean> {
-  const response = await fetchApi<SessionData>(`/sessions/${learnerId}/active`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
+  const response = await fetchApi<SessionData>(
+    `/sessions/${learnerId}/active`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+  );
   return response.success;
 }
 
 export async function clearSession(learnerId: string): Promise<boolean> {
   const response = await fetchApi<{ cleared: boolean }>(
     `/sessions/${learnerId}/active`,
-    { method: 'DELETE' }
+    { method: "DELETE" },
   );
   return response.success;
 }
 
+export interface SurveyInvitation {
+  userId: string;
+  instance: "pre" | "post";
+  username: string | null;
+  qualtricsResponseId: string | null;
+  status: "pending" | "completed";
+  createdAt: string;
+  completedAt: string | null;
+  surveyUrl: string | null;
+}
+
+export async function getSurveyInvitations(): Promise<SurveyInvitation[]> {
+  const response = await fetchApi<SurveyInvitation[]>("/surveys");
+  return response.success && response.data ? response.data : [];
+}
+
+export async function ensureSurveyInvitation(
+  instance: SurveyInvitation["instance"],
+): Promise<SurveyInvitation | null> {
+  const response = await fetchApi<SurveyInvitation>(`/surveys/${instance}`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  return response.success && response.data ? response.data : null;
+}
+
 export interface StudentConditionAssignment {
   userId: string;
-  conditionId: 'adaptive' | 'control';
+  conditionId: "adaptive" | "control";
   firstSectionId: string;
   assignedAt: string;
   assignmentVersion: string;
 }
 
+export interface SharedBanditArmState {
+  armId: 'aggressive' | 'conservative' | 'explanation-first' | 'adaptive';
+  experimentVersion: string;
+  alpha: number;
+  beta: number;
+  pullCount: number;
+  updatedAt: string;
+}
+
+export async function getSharedBanditState(): Promise<SharedBanditArmState[] | null> {
+  const response = await fetchApi<SharedBanditArmState[]>('/bandit/state');
+  return response.success && response.data ? response.data : null;
+}
+
+export async function recordSharedBanditReward(data: {
+  eventId: string;
+  selectionEventId: string;
+  armId: SharedBanditArmState['armId'];
+  reward: number;
+  assignmentStrategy: 'bandit';
+}): Promise<(SharedBanditArmState & { applied: boolean }) | null> {
+  const response = await fetchApi<SharedBanditArmState & { applied: boolean }>('/bandit/reward', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return response.success && response.data ? response.data : null;
+}
+
 export async function getOrAssignStudentCondition(
   learnerId: string,
-  firstSectionId: string,
+  firstSectionId?: string,
 ): Promise<StudentConditionAssignment | null> {
   const existing = await fetchApi<StudentConditionAssignment>(
     `/learners/${learnerId}/condition-assignment`,
@@ -1330,8 +1463,8 @@ export async function getOrAssignStudentCondition(
   const assigned = await fetchApi<StudentConditionAssignment>(
     `/learners/${learnerId}/condition-assignment`,
     {
-      method: 'POST',
-      body: JSON.stringify({ firstSectionId }),
+      method: "POST",
+      body: JSON.stringify(firstSectionId ? { firstSectionId } : {}),
     },
   );
   return assigned.success && assigned.data ? assigned.data : null;
@@ -1350,20 +1483,22 @@ export async function getClassStats(): Promise<{
     totalLearners: number;
     totalInteractions: number;
     totalTextbookUnits: number;
-  }>('/research/aggregates');
-  
+  }>("/research/aggregates");
+
   if (!response.success || !response.data) return null;
   return response.data;
 }
 
 export async function getInstructorOverview(): Promise<InstructorOverview | null> {
-  const response = await fetchApi<InstructorOverview>('/instructor/overview');
+  const response = await fetchApi<InstructorOverview>("/instructor/overview");
   if (!response.success || !response.data) return null;
   return response.data;
 }
 
 export async function getInstructorAnalyticsSummary(): Promise<InstructorAnalyticsSummary | null> {
-  const response = await fetchApi<InstructorAnalyticsSummary>('/instructor/analytics/summary');
+  const response = await fetchApi<InstructorAnalyticsSummary>(
+    "/instructor/analytics/summary",
+  );
   if (!response.success || !response.data) return null;
   return response.data;
 }
@@ -1379,14 +1514,14 @@ export async function getInstructorAnalyticsInteractions(options?: {
   offset?: number;
 }): Promise<InstructorAnalyticsInteractions> {
   const params = new URLSearchParams();
-  if (options?.learnerId) params.set('learnerId', options.learnerId);
-  if (options?.start) params.set('start', options.start.toISOString());
-  if (options?.end) params.set('end', options.end.toISOString());
-  if (options?.sessionId) params.set('sessionId', options.sessionId);
-  if (options?.eventType) params.set('eventType', options.eventType);
-  if (options?.problemId) params.set('problemId', options.problemId);
-  if (options?.limit) params.set('limit', options.limit.toString());
-  if (options?.offset) params.set('offset', options.offset.toString());
+  if (options?.learnerId) params.set("learnerId", options.learnerId);
+  if (options?.start) params.set("start", options.start.toISOString());
+  if (options?.end) params.set("end", options.end.toISOString());
+  if (options?.sessionId) params.set("sessionId", options.sessionId);
+  if (options?.eventType) params.set("eventType", options.eventType);
+  if (options?.problemId) params.set("problemId", options.problemId);
+  if (options?.limit) params.set("limit", options.limit.toString());
+  if (options?.offset) params.set("offset", options.offset.toString());
 
   const response = await fetchApi<BackendInteraction[]>(
     `/instructor/analytics/interactions?${params.toString()}`,
@@ -1404,24 +1539,46 @@ export async function getInstructorAnalyticsInteractions(options?: {
 
   const eventsPayload = Array.isArray(response.data)
     ? response.data
-    : Array.isArray((response.data as unknown as { data?: BackendInteraction[] }).data)
+    : Array.isArray(
+          (response.data as unknown as { data?: BackendInteraction[] }).data,
+        )
       ? (response.data as unknown as { data: BackendInteraction[] }).data
       : [];
-  const pagination = (response as ApiResponse<BackendInteraction[]> & {
-    pagination?: { total?: number; limit?: number; offset?: number; hasMore?: boolean };
-  }).pagination;
+  const pagination = (
+    response as ApiResponse<BackendInteraction[]> & {
+      pagination?: {
+        total?: number;
+        limit?: number;
+        offset?: number;
+        hasMore?: boolean;
+      };
+    }
+  ).pagination;
 
   return {
     events: eventsPayload.map(convertToFrontendEvent),
-    total: typeof pagination?.total === 'number' ? pagination.total : eventsPayload.length,
-    limit: typeof pagination?.limit === 'number' ? pagination.limit : (options?.limit ?? eventsPayload.length),
-    offset: typeof pagination?.offset === 'number' ? pagination.offset : (options?.offset ?? 0),
+    total:
+      typeof pagination?.total === "number"
+        ? pagination.total
+        : eventsPayload.length,
+    limit:
+      typeof pagination?.limit === "number"
+        ? pagination.limit
+        : (options?.limit ?? eventsPayload.length),
+    offset:
+      typeof pagination?.offset === "number"
+        ? pagination.offset
+        : (options?.offset ?? 0),
     hasMore: Boolean(pagination?.hasMore),
   };
 }
 
-export async function getInstructorLearners(): Promise<InstructorLearnerItem[]> {
-  const response = await fetchApi<InstructorLearnerItem[]>('/instructor/learners');
+export async function getInstructorLearners(): Promise<
+  InstructorLearnerItem[]
+> {
+  const response = await fetchApi<InstructorLearnerItem[]>(
+    "/instructor/learners",
+  );
   if (!response.success || !response.data) return [];
   return response.data;
 }
@@ -1444,10 +1601,10 @@ export async function getInstructorLearnerDetail(learnerId: string): Promise<{
     learner: response.data.learner,
     section: response.data.section,
     interactions: response.data.interactions.map(convertToFrontendEvent),
-    textbookUnits: response.data.textbookUnits.map(u => ({
+    textbookUnits: response.data.textbookUnits.map((u) => ({
       id: u.unitId,
       type: u.type,
-      conceptId: u.conceptIds[0] || '',
+      conceptId: u.conceptIds[0] || "",
       conceptIds: u.conceptIds,
       title: u.title,
       content: u.content,
@@ -1461,7 +1618,7 @@ export async function getInstructorLearnerDetail(learnerId: string): Promise<{
 }
 
 export async function getInstructorExport(): Promise<unknown | null> {
-  const response = await fetchApi<unknown>('/instructor/export');
+  const response = await fetchApi<unknown>("/instructor/export");
   if (!response.success || !response.data) return null;
   return response.data;
 }
@@ -1492,11 +1649,13 @@ interface InstructorExportPage {
   textbookUnits: Array<{ learnerId: string; units: BackendUnit[] }>;
 }
 
-export async function getCompleteInstructorExport(perPage: number = 50): Promise<{
+export async function getCompleteInstructorExport(
+  perPage: number = 50,
+): Promise<{
   exportedAt: string;
-  exportMetadata: InstructorExportPage['exportMetadata'];
-  pagination: InstructorExportPage['pagination'];
-  summary: InstructorExportPage['summary'];
+  exportMetadata: InstructorExportPage["exportMetadata"];
+  pagination: InstructorExportPage["pagination"];
+  summary: InstructorExportPage["summary"];
   learners: BackendLearner[];
   interactions: BackendInteraction[];
   textbookUnits: Array<{ learnerId: string; units: BackendUnit[] }>;
@@ -1508,7 +1667,8 @@ export async function getCompleteInstructorExport(perPage: number = 50): Promise
 
   const allLearners: BackendLearner[] = [];
   const allInteractions: BackendInteraction[] = [];
-  const allTextbookUnits: Array<{ learnerId: string; units: BackendUnit[] }> = [];
+  const allTextbookUnits: Array<{ learnerId: string; units: BackendUnit[] }> =
+    [];
   const warnings = new Set<string>();
 
   let page = 1;
@@ -1533,7 +1693,9 @@ export async function getCompleteInstructorExport(perPage: number = 50): Promise
     allInteractions.push(...pageData.interactions);
     allTextbookUnits.push(...pageData.textbookUnits);
 
-    const responseWarnings = (response as ApiResponse<InstructorExportPage> & { warnings?: string[] }).warnings;
+    const responseWarnings = (
+      response as ApiResponse<InstructorExportPage> & { warnings?: string[] }
+    ).warnings;
     for (const warning of responseWarnings ?? []) {
       warnings.add(warning);
     }
@@ -1560,7 +1722,10 @@ export async function getCompleteInstructorExport(perPage: number = 50): Promise
       ...firstPageData.summary,
       learnerCount: allLearners.length,
       interactionCount: allInteractions.length,
-      textbookUnitCount: allTextbookUnits.reduce((sum, entry) => sum + entry.units.length, 0),
+      textbookUnitCount: allTextbookUnits.reduce(
+        (sum, entry) => sum + entry.units.length,
+        0,
+      ),
     },
     learners: allLearners,
     interactions: allInteractions,
@@ -1577,15 +1742,15 @@ export async function getLearnerTrajectory(learnerId: string): Promise<{
     interactions: BackendInteraction[];
     textbookUnits: BackendUnit[];
   }>(`/research/learner/${learnerId}/trajectory`);
-  
+
   if (!response.success || !response.data) return null;
 
   return {
     interactions: response.data.interactions.map(convertToFrontendEvent),
-    textbookUnits: response.data.textbookUnits.map(u => ({
+    textbookUnits: response.data.textbookUnits.map((u) => ({
       id: u.unitId,
       type: u.type,
-      conceptId: u.conceptIds[0] || '',
+      conceptId: u.conceptIds[0] || "",
       conceptIds: u.conceptIds,
       title: u.title,
       content: u.content,
@@ -1602,8 +1767,11 @@ export async function getLearnerTrajectory(learnerId: string): Promise<{
 // ============================================================================
 
 export async function fetchCorpusManifest(): Promise<RemoteCorpusDocument[]> {
-  const response = await fetchApi<{ documents: RemoteCorpusDocument[]; units: RemoteCorpusUnit[] }>('/corpus/manifest', {
-    method: 'GET',
+  const response = await fetchApi<{
+    documents: RemoteCorpusDocument[];
+    units: RemoteCorpusUnit[];
+  }>("/corpus/manifest", {
+    method: "GET",
   });
   if (!response.success || !response.data) return [];
   return response.data.documents;
@@ -1613,8 +1781,11 @@ export async function fetchCorpusManifestWithUnits(): Promise<{
   documents: RemoteCorpusDocument[];
   units: RemoteCorpusUnit[];
 } | null> {
-  const response = await fetchApi<{ documents: RemoteCorpusDocument[]; units: RemoteCorpusUnit[] }>('/corpus/manifest', {
-    method: 'GET',
+  const response = await fetchApi<{
+    documents: RemoteCorpusDocument[];
+    units: RemoteCorpusUnit[];
+  }>("/corpus/manifest", {
+    method: "GET",
   });
   if (!response.success || !response.data) return null;
   return response.data;
@@ -1628,7 +1799,7 @@ export async function fetchCorpusUnit(unitId: string): Promise<{
     unit: RemoteCorpusUnit;
     chunks: RemoteCorpusChunk[];
   }>(`/corpus/unit/${encodeURIComponent(unitId)}`, {
-    method: 'GET',
+    method: "GET",
   });
   if (!response.success || !response.data) return null;
   return response.data;
@@ -1637,23 +1808,44 @@ export async function fetchCorpusUnit(unitId: string): Promise<{
 export async function searchCorpusChunks(
   query: string,
   limit = 10,
-): Promise<Array<RemoteCorpusChunk & { unitTitle: string; conceptId: string | null; summary: string; termHits?: number }>> {
+): Promise<
+  Array<
+    RemoteCorpusChunk & {
+      unitTitle: string;
+      conceptId: string | null;
+      summary: string;
+      termHits?: number;
+    }
+  >
+> {
   const response = await fetchApi<{
     query: string;
     limit: number;
-    results: Array<RemoteCorpusChunk & { unitTitle: string; conceptId: string | null; summary: string; termHits?: number }>;
-  }>('/corpus/search', {
-    method: 'POST',
+    results: Array<
+      RemoteCorpusChunk & {
+        unitTitle: string;
+        conceptId: string | null;
+        summary: string;
+        termHits?: number;
+      }
+    >;
+  }>("/corpus/search", {
+    method: "POST",
     body: JSON.stringify({ query, limit }),
   });
   if (!response.success || !response.data) return [];
   return response.data.results;
 }
 
-export async function fetchCorpusActiveRuns(): Promise<RemoteCorpusActiveRun[]> {
-  const response = await fetchApi<{ activeRuns: RemoteCorpusActiveRun[] }>('/corpus/active-runs', {
-    method: 'GET',
-  });
+export async function fetchCorpusActiveRuns(): Promise<
+  RemoteCorpusActiveRun[]
+> {
+  const response = await fetchApi<{ activeRuns: RemoteCorpusActiveRun[] }>(
+    "/corpus/active-runs",
+    {
+      method: "GET",
+    },
+  );
   if (!response.success || !response.data) return [];
   return response.data.activeRuns;
 }
@@ -1662,10 +1854,13 @@ export async function setCorpusActiveRun(
   docId: string,
   runId: string,
 ): Promise<RemoteCorpusActiveRun | null> {
-  const response = await fetchApi<{ activeRun: RemoteCorpusActiveRun }>('/corpus/active-run', {
-    method: 'POST',
-    body: JSON.stringify({ docId, runId }),
-  });
+  const response = await fetchApi<{ activeRun: RemoteCorpusActiveRun }>(
+    "/corpus/active-run",
+    {
+      method: "POST",
+      body: JSON.stringify({ docId, runId }),
+    },
+  );
   if (!response.success || !response.data) return null;
   return response.data.activeRun;
 }
@@ -1687,15 +1882,21 @@ export interface ProblemProgress {
 
 export async function getProblemProgress(
   learnerId: string,
-  problemId: string
+  problemId: string,
 ): Promise<ProblemProgress | null> {
-  const response = await fetchApi<ProblemProgress>(`/learners/${learnerId}/progress/${problemId}`);
+  const response = await fetchApi<ProblemProgress>(
+    `/learners/${learnerId}/progress/${problemId}`,
+  );
   if (!response.success || !response.data) return null;
   return response.data;
 }
 
-export async function getAllProblemProgress(learnerId: string): Promise<ProblemProgress[]> {
-  const response = await fetchApi<ProblemProgress[]>(`/learners/${learnerId}/progress`);
+export async function getAllProblemProgress(
+  learnerId: string,
+): Promise<ProblemProgress[]> {
+  const response = await fetchApi<ProblemProgress[]>(
+    `/learners/${learnerId}/progress`,
+  );
   if (!response.success || !response.data) return [];
   return response.data;
 }
@@ -1708,12 +1909,15 @@ export async function updateProblemProgress(
     incrementAttempts?: boolean;
     incrementHints?: boolean;
     lastCode?: string;
-  }
+  },
 ): Promise<ProblemProgress | null> {
-  const response = await fetchApi<ProblemProgress>(`/learners/${learnerId}/progress/${problemId}`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
+  const response = await fetchApi<ProblemProgress>(
+    `/learners/${learnerId}/progress/${problemId}`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
   if (!response.success || !response.data) return null;
   return response.data;
 }
@@ -1753,6 +1957,9 @@ export const storageClient = {
   getSession,
   saveSession,
   clearSession,
+  getOrAssignStudentCondition,
+  getSurveyInvitations,
+  ensureSurveyInvitation,
   // Research
   getClassStats,
   getLearnerTrajectory,

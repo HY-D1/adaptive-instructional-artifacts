@@ -24,6 +24,8 @@ import { neonLearnersRouter } from './routes/neon-learners.js';
 import { neonInteractionsRouter } from './routes/neon-interactions.js';
 import { neonTextbooksRouter } from './routes/neon-textbooks.js';
 import { neonSessionsRouter } from './routes/neon-sessions.js';
+import { neonBanditRouter } from './routes/neon-bandit.js';
+import { surveysRouter } from './routes/surveys.js';
 import { authRouter } from './routes/auth.js';
 import { instructorRouter } from './routes/instructor.js';
 import { corpusRouter } from './routes/corpus.js';
@@ -43,6 +45,7 @@ import { generalApiLimiter, researchRateLimiter } from './middleware/rate-limit.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../.env');
 dotenv.config({ path: envPath });
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
 const DATA_DIR = path.resolve(__dirname, '../data');
 if (!fs.existsSync(DATA_DIR)) {
@@ -272,6 +275,8 @@ if (usingNeon) {
   app.use('/api/interactions', generalApiLimiter, requireAuth, requireCsrf, neonInteractionsRouter);
   app.use('/api/textbooks', generalApiLimiter, requireAuth, requireCsrf, neonTextbooksRouter);
   app.use('/api/sessions', generalApiLimiter, requireAuth, requireCsrf, neonSessionsRouter);
+  app.use('/api/surveys', generalApiLimiter, requireCsrf, surveysRouter);
+  app.use('/api/bandit', generalApiLimiter, requireAuth, requireCsrf, neonBanditRouter);
 } else {
   console.log('💾 Using SQLite routes (local/dev fallback only)');
   console.log('⚠️  Research exports and multi-learner features require DATABASE_URL');

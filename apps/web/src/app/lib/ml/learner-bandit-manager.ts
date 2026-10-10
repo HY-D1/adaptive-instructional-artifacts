@@ -37,6 +37,16 @@ export const BANDIT_ARM_PROFILES = {
 
 export type BanditArmId = keyof typeof BANDIT_ARM_PROFILES;
 
+export function shouldUpdateBandit(
+  conditionId: string | undefined,
+  assignmentStrategy: string | undefined,
+  hasDebugProfileOverride: boolean,
+): boolean {
+  return !hasDebugProfileOverride &&
+    conditionId === 'adaptive' &&
+    assignmentStrategy === 'bandit';
+}
+
 /**
  * Reverse mapping from profile ID to bandit arm ID
  * Used for UI display when profile override is active
@@ -110,6 +120,22 @@ export class LearnerBanditManager {
       this.bandits.set(this.sharedPoolKey, new MultiArmedBandit(this.armIds));
     }
     return this.bandits.get(this.sharedPoolKey)!;
+  }
+
+  hydrateSharedState(state: Array<{ armId: BanditArmId; alpha: number; beta: number; pullCount: number; cumulativeReward?: number }>): void {
+    const bandit = new MultiArmedBandit(this.armIds);
+    bandit.deserialize({
+      arms: state.map((arm) => ({
+        id: arm.armId,
+        alpha: arm.alpha,
+        beta: arm.beta,
+        pullCount: arm.pullCount,
+        cumulativeReward: arm.cumulativeReward ?? 0,
+      })),
+      priorAlpha: 1,
+      priorBeta: 1,
+    });
+    this.bandits.set(this.sharedPoolKey, bandit);
   }
 
   /**

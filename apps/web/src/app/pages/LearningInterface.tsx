@@ -58,6 +58,7 @@ import { Skeleton } from '../components/ui/skeleton';
 import { cn } from '../components/ui/utils';
 import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/features/sql/SQLEditor';
 import { HintSystem } from '../components/features/hints/HintSystem';
+import { SurveyInvitationLinks } from '../components/features/surveys/SurveyInvitationLinks';
 import { ConceptCoverage } from '../components/features/research/ConceptCoverage';
 import { AskMyTextbookChat } from '../components/features/chat/AskMyTextbookChat';
 import { ReinforcementPrompt } from '../components/features/reinforcement/ReinforcementPrompt';
@@ -72,6 +73,8 @@ import { useLocation, Link } from 'react-router';
 import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync } from '../lib/storage';
 import { useAuth } from '../lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
+import { isSharedBanditEnabled } from '../lib/runtime-config';
+import { getSharedBanditState, recordSharedBanditReward } from '../lib/api/storage-client';
 import { clearUiStateForActor, getUiState, setUiState } from '../lib/ui-state';
 import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
@@ -81,7 +84,7 @@ import { createEventId } from '../lib/utils/event-id';
 import { startBackgroundAnalysis, stopBackgroundAnalysis, runAnalysisOnce, ANALYSIS_INTERVAL_MS } from '../lib/trace-analyzer';
 import type { AnalysisResult } from '../lib/trace-analyzer';
 import { getConcept, getTextbookCorpusMode } from '../lib/content/concept-loader';
-import { banditManager, PROFILE_TO_ARM_ID, BANDIT_ARM_PROFILES } from '../lib/ml/learner-bandit-manager';
+import { banditManager, PROFILE_TO_ARM_ID, BANDIT_ARM_PROFILES, shouldUpdateBandit } from '../lib/ml/learner-bandit-manager';
 import { calculateHDI, calculateHDIComponents } from '../lib/ml/hdi-calculator';
 import type { HDIComponents, HDILevel } from '../types';
 import { safeGetStrategy, safeGetProfileOverride } from '../lib/storage/storage-validation';
@@ -391,7 +394,7 @@ function analyzeLearnerHistory(interactions: InteractionEvent[]) {
 export function LearningInterface() {
   const location = useLocation();
   const { role, isStudent, isInstructor, profile, isLoading: isRoleLoading } = useUserRole();
-  const { isHydrating } = useAuth();
+  const { isHydrating, user: authUser } = useAuth();
   const cachedProfileId = storage.getUserProfile()?.id;
   // Use actual user profile ID for data isolation (aligned with TextbookPage)
   const learnerId = profile?.id || cachedProfileId || (AUTH_BACKEND_CONFIGURED ? '' : 'learner-1');
@@ -512,6 +515,9 @@ export function LearningInterface() {
   
   // Week 6: Session configuration for experimental conditions
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
+  const [sharedBanditReady, setSharedBanditReady] = useState(false);
+  const sharedBanditSourceRef = useRef<'server' | 'fallback_cached' | 'fallback_prior'>('fallback_prior');
+  const selectionEventIdRef = useRef<string | null>(null);
   
   // Paper Data Contract: Debounced code change telemetry
   // Stabilize callback to prevent hook recreation on every render
@@ -566,6 +572,32 @@ export function LearningInterface() {
   // Week 6: Modified to respect sessionConfig experimental settings
   useEffect(() => {
     if (!learnerId) return;
+
+    if (!isSharedBanditEnabled() || sessionConfig?.conditionId !== 'adaptive' || safeGetStrategy() !== 'bandit') {
+      setSharedBanditReady(true);
+      return;
+    }
+    let cancelled = false;
+    setSharedBanditReady(false);
+    getSharedBanditState().then((state) => {
+      if (cancelled) return;
+      if (state) {
+        banditManager.hydrateSharedState(state);
+        sharedBanditSourceRef.current = 'server';
+      } else {
+        sharedBanditSourceRef.current = banditManager.hasBandit(learnerId) ? 'fallback_cached' : 'fallback_prior';
+      }
+      setSharedBanditReady(true);
+    }).catch(() => {
+      if (cancelled) return;
+      sharedBanditSourceRef.current = banditManager.hasBandit(learnerId) ? 'fallback_cached' : 'fallback_prior';
+      setSharedBanditReady(true);
+    });
+    return () => { cancelled = true; };
+  }, [learnerId, sessionConfig?.conditionId, sessionConfig?.sessionId]);
+
+  useEffect(() => {
+    if (!learnerId || !sharedBanditReady) return;
     
     // Week 6: Respect sessionConfig experimental settings
     const debugProfileOverride = safeGetProfileOverride();
@@ -647,9 +679,12 @@ export function LearningInterface() {
           effectiveProfile = banditResult.profile;
           effectiveArmId = banditResult.armId;
           selectionReason = 'bandit_selection';
+          const selectionEventId = createEventId('bandit', 'arm-selected');
+          selectionEventIdRef.current = selectionEventId;
           
           // Log bandit arm selection event
           storage.logBanditArmSelected({
+            eventId: selectionEventId,
             learnerId,
             problemId: currentProblem.id,
             armId: effectiveArmId,
@@ -660,7 +695,9 @@ export function LearningInterface() {
                   return acc;
                 }, {} as Record<string, { mean: number; pulls: number }>)
               : undefined,
-            sessionId
+            sessionId,
+            conditionId: sessionConditionIdRef.current,
+            banditStateSource: sharedBanditSourceRef.current
           });
           break;
         }
@@ -684,7 +721,7 @@ export function LearningInterface() {
         selectionReason
       );
     }
-  }, [learnerId, currentProblem.id, sessionId, debugRefreshKey, sessionConfig]);
+  }, [learnerId, currentProblem.id, sessionId, debugRefreshKey, sessionConfig, sharedBanditReady]);
 
   // Week 5: Listen for HDI calculated events
   useEffect(() => {
@@ -1029,7 +1066,7 @@ export function LearningInterface() {
     
     const loadConfig = async () => {
       // Use async loader: backend -> sessionStorage -> assign
-      const result = await loadSessionConfigAsync(learnerId);
+      const result = await loadSessionConfigAsync(learnerId, authUser?.sectionId);
       
       if (cancelled) return;
       
@@ -1095,7 +1132,7 @@ export function LearningInterface() {
     return () => {
       cancelled = true;
     };
-  }, [learnerId, currentProblem.id]);
+  }, [learnerId, authUser?.sectionId, currentProblem.id]);
 
   // Effect 1: Session initialization - handles profile, session ID, and state reset.
   // Runs when learner/auth readiness changes (not on problem/session-config churn)
@@ -1769,7 +1806,7 @@ export function LearningInterface() {
       // Only record when using bandit strategy (not static or diagnostic)
       const debugProfileOverride = safeGetProfileOverride();
       const assignmentStrategy = safeGetStrategy();
-      if (!debugProfileOverride && assignmentStrategy === 'bandit' && learnerId) {
+      if (shouldUpdateBandit(sessionConfig?.conditionId, assignmentStrategy, Boolean(debugProfileOverride)) && learnerId) {
         try {
           // Calculate reward components
           const timeSpent = Date.now() - startTime;
@@ -1799,6 +1836,14 @@ export function LearningInterface() {
           };
           const totalReward = Object.values(rewardComponents).reduce((a, b) => a + b, 0) / 5;
 
+          const serverBanditState = isSharedBanditEnabled() ? await recordSharedBanditReward({
+            eventId: createEventId('bandit', 'reward'),
+            selectionEventId: selectionEventIdRef.current || createEventId('bandit', 'arm-selected-fallback'),
+            armId: currentProfileId as BanditArmId,
+            reward: Math.max(0, Math.min(1, totalReward)),
+            assignmentStrategy: 'bandit',
+          }) : null;
+
           storage.logBanditRewardObserved(
             learnerId,
             currentProfileId,
@@ -1807,13 +1852,13 @@ export function LearningInterface() {
           );
 
           // Log bandit updated event with new alpha/beta values
-          const armStats = banditManager.getLearnerStats(learnerId).find(s => s.armId === currentProfileId);
+          const armStats = serverBanditState ?? banditManager.getLearnerStats(learnerId).find(s => s.armId === currentProfileId);
           if (armStats) {
             storage.logBanditUpdated(
               learnerId,
               currentProfileId,
-              armStats.pullCount + 1, // Approximate alpha
-              Math.max(1, armStats.pullCount * 0.5), // Approximate beta
+              'alpha' in armStats ? armStats.alpha : armStats.pullCount + 1,
+              'beta' in armStats ? armStats.beta : Math.max(1, armStats.pullCount * 0.5),
               armStats.pullCount
             );
           }
@@ -2446,6 +2491,8 @@ export function LearningInterface() {
                 </div>
               )}
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                {/* Provisional self-initiated survey links; this is intentionally non-blocking pending demo confirmation. */}
+                {isStudent && <SurveyInvitationLinks />}
                 {/* Enhanced Session Timer */}
                 <Tooltip>
                   <TooltipTrigger asChild>

@@ -10,10 +10,25 @@ import {
   banditManager,
   BANDIT_ARM_PROFILES,
   LEARNER_BANDIT_MANAGER_VERSION,
+  shouldUpdateBandit,
   type BanditArmId,
 } from './learner-bandit-manager';
 
 describe('LearnerBanditManager', () => {
+  describe('shouldUpdateBandit', () => {
+    it('allows adaptive bandit outcomes without a debug override', () => {
+      expect(shouldUpdateBandit('adaptive', 'bandit', false)).toBe(true);
+    });
+
+    it('blocks control outcomes even when strategy is bandit', () => {
+      expect(shouldUpdateBandit('control', 'bandit', false)).toBe(false);
+    });
+
+    it('blocks debug profile overrides', () => {
+      expect(shouldUpdateBandit('adaptive', 'bandit', true)).toBe(false);
+    });
+  });
+
   let manager: LearnerBanditManager;
 
   beforeEach(() => {
