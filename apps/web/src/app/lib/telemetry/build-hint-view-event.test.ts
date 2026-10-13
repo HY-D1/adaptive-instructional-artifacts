@@ -79,14 +79,24 @@ describe('buildHintViewEvent', () => {
         { docId: 'doc-1', page: 5, chunkId: 'chunk-1', score: 0.95, snippet: 'text...' },
       ],
       inputs: { retry_count: 1, hint_count: 0 },
-      outputs: { will_escalate: false },
+      outputs: {
+        will_escalate: false,
+        llm_model: 'openai/gpt-oss-20b',
+        hint_source: 'llm',
+        prompt_version: 'adaptive-hint-v1',
+      },
     });
 
     expect(event.ruleFired).toBe('enhanced-hint');
     expect(event.retrievedSourceIds).toEqual(['chunk-1', 'chunk-2']);
     expect(event.retrievedChunks).toHaveLength(1);
     expect(event.inputs).toEqual({ retry_count: 1, hint_count: 0 });
-    expect(event.outputs).toEqual({ will_escalate: false });
+    expect(event.outputs).toEqual({
+      will_escalate: false,
+      llm_model: 'openai/gpt-oss-20b',
+      hint_source: 'llm',
+      prompt_version: 'adaptive-hint-v1',
+    });
   });
 
   it('should trim whitespace from string fields', () => {

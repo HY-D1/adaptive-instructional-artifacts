@@ -13,7 +13,7 @@ import { applyHintSafetyLayer } from './safety';
 import { generateSqlEngageFallbackHint, mergeFallbackReasons } from './fallback';
 import { generateTextbookEnhancedHint } from './textbook-generation';
 import { getCachedHint, saveCachedHint } from './hint-cache';
-import { MIN_RETRIEVAL_CONFIDENCE } from './types';
+import { HINT_PROMPT_VERSION, MIN_RETRIEVAL_CONFIDENCE } from './types';
 
 /**
  * Generate hint using LLM.
@@ -33,7 +33,7 @@ export async function generateLLMEnhancedHint(
   const { rung, errorSubtypeId } = options;
 
   // Check local cache first so previously-generated LLM hints survive LLM outages
-  const cached = getCachedHint(retrievalBundle.problem.id, errorSubtypeId || 'unknown', rung);
+  const cached = getCachedHint(retrievalBundle.problem.id, errorSubtypeId || 'unknown', rung, HINT_PROMPT_VERSION);
   if (cached) {
     return {
       content: cached.content,
@@ -54,6 +54,9 @@ export async function generateLLMEnhancedHint(
       safetyFilterApplied: false,
       retrievedSourceIds: cached.retrievedSourceIds,
       retrievedChunkIds: retrievalSignals.retrievedChunkIds,
+      hintSource: 'llm_cache',
+      llmModel: null,
+      promptVersion: HINT_PROMPT_VERSION,
     };
   }
 
@@ -87,6 +90,7 @@ export async function generateLLMEnhancedHint(
 
   try {
     // Generate adaptive hint using LLM
+    let answeredByModel: string | null = null;
     const llmCall = async (prompt: string) => {
       const response = await generateWithLLM(prompt, {
         params: {
@@ -94,6 +98,7 @@ export async function generateLLMEnhancedHint(
           max_tokens: 500,
         },
       });
+      answeredByModel = response.model;
       return response.text;
     };
 
@@ -138,6 +143,9 @@ export async function generateLLMEnhancedHint(
       safetyFilterApplied: safety.safetyFilterApplied,
       retrievedSourceIds: retrievalSignals.retrievedSourceIds,
       retrievedChunkIds: retrievalSignals.retrievedChunkIds,
+      hintSource: 'llm',
+      llmModel: answeredByModel,
+      promptVersion: HINT_PROMPT_VERSION,
     };
   } catch (error) {
     console.error('[LLMGeneration] Failed to generate hint:', error);
@@ -147,6 +155,12 @@ export async function generateLLMEnhancedHint(
       return generateTextbookEnhancedHint(options, retrievalBundle, resources, {
         ...retrievalSignals,
         fallbackReason: mergeFallbackReasons('llm_error', retrievalSignals.fallbackReason),
+      }, {
+        hintSource: 'textbook',
+        llmModel: null,
+        promptVersion: HINT_PROMPT_VERSION,
+        llmFailed: true,
+        llmErrorMessage: error instanceof Error ? error.message : 'Unknown error',
       });
     }
 
@@ -154,6 +168,11 @@ export async function generateLLMEnhancedHint(
       return generateSqlEngageFallbackHint(errorSubtypeId, rung, {
         ...retrievalSignals,
         fallbackReason: mergeFallbackReasons('llm_error', retrievalSignals.fallbackReason),
+        hintSource: 'static',
+        llmModel: null,
+        promptVersion: HINT_PROMPT_VERSION,
+        llmFailed: true,
+        llmErrorMessage: error instanceof Error ? error.message : 'Unknown error',
       });
     }
 

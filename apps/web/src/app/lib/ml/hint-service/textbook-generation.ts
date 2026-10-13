@@ -5,7 +5,7 @@
  */
 
 import type { GuidanceRung } from '../guidance-ladder';
-import type { EnhancedHint, HintGenerationOptions, RetrievalSignalMeta } from './types';
+import type { EnhancedHint, HintGenerationOptions, HintSourceMetadata, RetrievalSignalMeta } from './types';
 import type { AvailableResources } from './types';
 import type { EnhancedRetrievalBundle } from './types';
 import { applyHintSafetyLayer } from './safety';
@@ -23,7 +23,8 @@ export function generateTextbookEnhancedHint(
   options: HintGenerationOptions,
   retrievalBundle: EnhancedRetrievalBundle,
   _resources: AvailableResources,
-  retrievalSignals: RetrievalSignalMeta
+  retrievalSignals: RetrievalSignalMeta,
+  sourceMetadata: HintSourceMetadata = {}
 ): EnhancedHint {
   const { rung, errorSubtypeId } = options;
   const { textbookUnits } = retrievalBundle;
@@ -72,5 +73,10 @@ export function generateTextbookEnhancedHint(
     safetyFilterApplied: safety.safetyFilterApplied,
     retrievedSourceIds: retrievalSignals.retrievedSourceIds,
     retrievedChunkIds: retrievalSignals.retrievedChunkIds,
+    hintSource: sourceMetadata.hintSource ?? 'textbook',
+    llmModel: sourceMetadata.llmModel ?? null,
+    promptVersion: sourceMetadata.promptVersion ?? 'adaptive-hint-v1',
+    llmFailed: sourceMetadata.llmFailed ?? false,
+    llmErrorMessage: sourceMetadata.llmErrorMessage,
   };
 }

@@ -23,6 +23,18 @@ export type AvailableResources = {
   pdfIndex: boolean;
 };
 
+export type HintSource = 'llm' | 'llm_cache' | 'textbook' | 'static';
+
+export const HINT_PROMPT_VERSION = 'adaptive-hint-v1';
+
+export type HintSourceMetadata = {
+  hintSource?: HintSource;
+  llmModel?: string | null;
+  promptVersion?: string;
+  llmFailed?: boolean;
+  llmErrorMessage?: string;
+};
+
 /**
  * Enhanced hint with metadata about sources used
  */
@@ -62,6 +74,12 @@ export type EnhancedHint = {
   llmFailed?: boolean;
   /** Error message if LLM failed */
   llmErrorMessage?: string;
+  /** Source classification for research telemetry */
+  hintSource: HintSource;
+  /** Model returned by the live LLM response, or null for non-live sources */
+  llmModel: string | null;
+  /** Prompt contract version used by the generator */
+  promptVersion: string;
 };
 
 /**

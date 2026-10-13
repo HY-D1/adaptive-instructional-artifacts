@@ -62,6 +62,7 @@ const retrievalSignals: RetrievalSignalMeta = {
 describe('LLM hint generation safety retry', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     mocks.isLLMAvailable.mockResolvedValue(true);
   });
 
@@ -107,5 +108,33 @@ describe('LLM hint generation safety retry', () => {
     expect(result.content).toContain('every row');
     expect(result.content).not.toContain('SELECT * FROM users');
     expect(result.safetyFilterApplied).toBe(false);
+    expect(result.hintSource).toBe('llm');
+    expect(result.llmModel).toBe('openai/gpt-oss-20b');
+    expect(result.promptVersion).toBe('adaptive-hint-v1');
+  });
+
+  it('marks a live LLM failure when it falls back to static guidance', async () => {
+    mocks.generateWithLLM.mockRejectedValue(new Error('request timed out'));
+
+    const { generateLLMEnhancedHint } = await import('./llm-generation');
+    const result = await generateLLMEnhancedHint(
+      {
+        learnerId: 'learner-1',
+        problemId: 'problem-1',
+        sessionId: 'session-1',
+        errorSubtypeId: 'incorrect results',
+        rung: 3,
+        recentInteractions: [],
+      },
+      retrievalBundle,
+      { sqlEngage: true, textbook: false, llm: true, pdfIndex: false },
+      retrievalSignals,
+    );
+
+    expect(result.hintSource).toBe('static');
+    expect(result.llmModel).toBeNull();
+    expect(result.llmFailed).toBe(true);
+    expect(result.llmErrorMessage).toBe('request timed out');
+    expect(result.fallbackReason).toContain('llm_error');
   });
 });

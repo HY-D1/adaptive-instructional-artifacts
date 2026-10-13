@@ -1004,6 +1004,9 @@ export function HintSystem({
         retrievedChunkIds: string[];
         llmFailed?: boolean;
         llmErrorMessage?: string;
+        llmModel: string | null;
+        hintSource: 'llm' | 'llm_cache' | 'textbook' | 'static';
+        promptVersion: string;
       } | null = null;
 
       try {
@@ -1038,6 +1041,10 @@ export function HintSystem({
           safetyFilterApplied: false,
           retrievedSourceIds: [],
           retrievedChunkIds: [],
+          hintSource: 'static',
+          llmModel: null,
+          promptVersion: 'adaptive-hint-v1',
+          llmFailed: false,
         };
       }
 
@@ -1136,6 +1143,9 @@ export function HintSystem({
           is_enhanced: hintSelection.isEnhanced,
           llm_failed: hintSelection.llmFailed || false,
           llm_error_message: hintSelection.llmErrorMessage || null,
+          llm_model: hintSelection.llmModel,
+          hint_source: hintSelection.hintSource,
+          prompt_version: hintSelection.promptVersion,
           retrieval_confidence: Number(hintSelection.retrievalConfidence.toFixed(4)),
           fallback_reason: hintSelection.fallbackReason || null,
           safety_filter_applied: hintSelection.safetyFilterApplied,
