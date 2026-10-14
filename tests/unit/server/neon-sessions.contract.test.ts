@@ -1,38 +1,40 @@
 /* @vitest-environment node */
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getActiveSessionMock = vi.fn();
 const saveSessionMock = vi.fn();
 const getSessionMock = vi.fn();
+const getSurveyInvitationsMock = vi.fn();
 
 vi.mock('../../../apps/server/src/db/neon.js', () => ({
   getActiveSession: getActiveSessionMock,
   saveSession: saveSessionMock,
   getSession: getSessionMock,
+  getSurveyInvitations: getSurveyInvitationsMock,
 }));
 
 vi.mock('../../../apps/server/src/middleware/auth.js', () => ({
   requireOwnership: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
-function getRouteHandler(
+function getRouteStack(
   router: { stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }> },
   method: 'post' | 'put' | 'get',
   path: string,
-): Function {
+): Function[] {
   const layer = router.stack?.find(
     (entry) => entry.route?.path === path && entry.route?.methods?.[method],
   );
-  const handle = layer?.route?.stack?.[0]?.handle;
-  if (!handle) {
+  const handlers = layer?.route?.stack?.map((entry) => entry.handle).filter((handle): handle is Function => Boolean(handle));
+  if (!handlers?.length) {
     throw new Error(`Route handler not found for ${method.toUpperCase()} ${path}`);
   }
-  return handle;
+  return handlers;
 }
 
 async function invokeJsonHandler(
-  handler: Function,
+  handlers: Function[],
   {
     params,
     body,
@@ -62,20 +64,39 @@ async function invokeJsonHandler(
     },
   } as Record<string, unknown>;
 
-  await handler(req, res);
+  let handlerIndex = 0;
+  let downstream: Promise<void> | undefined;
+  const runNext = async (): Promise<void> => {
+    const handler = handlers[handlerIndex++];
+    if (!handler) return;
+    await handler(req, res, () => {
+      downstream = runNext();
+      return downstream;
+    });
+  };
+
+  await runNext();
+  if (downstream) {
+    await downstream;
+  }
   return { status: statusCode, json: payload };
 }
+
+beforeEach(() => {
+  getSurveyInvitationsMock.mockResolvedValue([{ instance: 'pre', status: 'completed' }]);
+});
 
 afterEach(() => {
   getActiveSessionMock.mockReset();
   saveSessionMock.mockReset();
   getSessionMock.mockReset();
+  getSurveyInvitationsMock.mockReset();
 });
 
 describe('neon-sessions contract', () => {
   it('keeps sessionId and currentProblemId distinct in POST mapping', async () => {
     const { neonSessionsRouter } = await import('../../../apps/server/src/routes/neon-sessions');
-    const postActive = getRouteHandler(
+    const postActive = getRouteStack(
       neonSessionsRouter as unknown as { stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }> },
       'post',
       '/:learnerId/active',
@@ -124,7 +145,7 @@ describe('neon-sessions contract', () => {
 
   it('treats heartbeat payloads as read-through and does not clobber state', async () => {
     const { neonSessionsRouter } = await import('../../../apps/server/src/routes/neon-sessions');
-    const postActive = getRouteHandler(
+    const postActive = getRouteStack(
       neonSessionsRouter as unknown as { stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }> },
       'post',
       '/:learnerId/active',
@@ -160,7 +181,7 @@ describe('neon-sessions contract', () => {
 
   it('preserves existing condition flags when partial updates omit them', async () => {
     const { neonSessionsRouter } = await import('../../../apps/server/src/routes/neon-sessions');
-    const postActive = getRouteHandler(
+    const postActive = getRouteStack(
       neonSessionsRouter as unknown as { stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }> },
       'post',
       '/:learnerId/active',
