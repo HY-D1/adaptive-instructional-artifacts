@@ -42,10 +42,10 @@ export function PreSurveyRequiredPage() {
 
   return (
     <main className="min-h-[60vh] flex items-center justify-center p-6">
-      <section className="w-full max-w-xl rounded-lg border bg-white p-8 text-center shadow-sm">
+      <section className="w-full max-w-xl rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <ClipboardCheck className="mx-auto mb-4 h-10 w-10 text-blue-600" aria-hidden="true" />
-        <h1 className="text-2xl font-semibold">Complete the pre-activity survey</h1>
-        <p className="mt-3 text-gray-600">
+        <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">Complete the pre-activity survey</h1>
+        <p className="mt-3 text-gray-600 dark:text-gray-300">
           {linkExpired
             ? 'That survey link has expired. Return to the app and open the current survey link again. '
             : 'Complete the survey before starting the activity. This page will update when completion is recorded. '}
@@ -54,7 +54,7 @@ export function PreSurveyRequiredPage() {
               href={preSurvey.surveyUrl}
               target="_blank"
               rel="noreferrer"
-              className="font-medium text-blue-700 underline hover:text-blue-900"
+              className="font-medium text-blue-700 underline hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-200"
             >
               Click here to continue to the pre-activity survey.
             </a>
