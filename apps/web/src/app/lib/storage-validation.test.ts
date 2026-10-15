@@ -576,6 +576,15 @@ describe('storage-validation comprehensive tests', () => {
       
       expect(result).toBeNull();
     });
+
+    it('ignores stored debug profiles in production builds', () => {
+      mockStorage.setItem(STORAGE_KEYS.PROFILE_OVERRIDE, 'explanation-first');
+      vi.stubEnv('DEV', false);
+
+      expect(safeGetProfileOverride()).toBeNull();
+
+      vi.unstubAllEnvs();
+    });
   });
 
   describe('safeGetStrategy', () => {
@@ -607,6 +616,15 @@ describe('storage-validation comprehensive tests', () => {
       const result = safeGetStrategy();
       
       expect(result).toBe('bandit');
+    });
+
+    it('ignores stored debug strategies in production builds', () => {
+      localStorage.setItem(STORAGE_KEYS.STRATEGY, 'static');
+      vi.stubEnv('DEV', false);
+
+      expect(safeGetStrategy()).toBe('bandit');
+
+      vi.unstubAllEnvs();
     });
   });
 

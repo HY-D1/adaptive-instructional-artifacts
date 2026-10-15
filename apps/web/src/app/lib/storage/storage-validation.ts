@@ -56,6 +56,8 @@ export function parseBooleanString(value: string | null): boolean | null {
  * Returns null if invalid or not found
  */
 export function safeGetProfileOverride(): string | null {
+  if (!import.meta.env.DEV) return null;
+
   try {
     const value = localStorage.getItem(DEBUG_PROFILE_KEY);
     if (value && isValidProfileId(value)) {
@@ -77,6 +79,8 @@ export function safeGetProfileOverride(): string | null {
  * Returns 'bandit' as default if invalid or not found
  */
 export function safeGetStrategy(): 'static' | 'diagnostic' | 'bandit' {
+  if (!import.meta.env.DEV) return 'bandit';
+
   try {
     const value = localStorage.getItem(DEBUG_STRATEGY_KEY);
     if (value && isValidStrategy(value)) {
