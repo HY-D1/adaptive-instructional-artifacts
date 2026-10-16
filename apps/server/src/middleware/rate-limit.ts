@@ -47,6 +47,50 @@ export const generalApiLimiter = rateLimit({
   },
 });
 
+const DEFAULT_STUDENT_DATA_RATE_LIMIT = 600;
+const configuredStudentDataRateLimit = Number.parseInt(
+  process.env.STUDENT_DATA_RATE_LIMIT ?? '',
+  10,
+);
+
+export const STUDENT_DATA_RATE_LIMIT = Number.isFinite(configuredStudentDataRateLimit) && configuredStudentDataRateLimit > 0
+  ? configuredStudentDataRateLimit
+  : DEFAULT_STUDENT_DATA_RATE_LIMIT;
+
+/**
+ * Student data limiter
+ * Configurable requests per 15 minutes per authenticated learner.
+ */
+export const studentDataLimiterOptions = {
+  windowMs: 15 * 60 * 1000,
+  limit: STUDENT_DATA_RATE_LIMIT,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Too many student data requests',
+    message: 'Student data rate limit exceeded. Please try again later.',
+    retryAfter: '15 minutes',
+  },
+  handler: (_req: Request, res: Response) => {
+    res.setHeader('Retry-After', String(15 * 60));
+    res.status(429).json({
+      success: false,
+      error: 'Too many student data requests',
+      message: 'Student data rate limit exceeded. Please try again later.',
+      retryAfter: '15 minutes',
+    });
+  },
+  keyGenerator: (req: Request) => {
+    if (req.auth?.learnerId) {
+      return `student-data:${req.auth.learnerId}`;
+    }
+    return `student-data:ip:${req.ip ?? 'unknown'}`;
+  },
+};
+
+export const studentDataLimiter = rateLimit(studentDataLimiterOptions);
+
 /**
  * Research endpoint rate limiter
  * Stricter limits for expensive aggregation/export endpoints

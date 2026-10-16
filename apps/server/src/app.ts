@@ -40,7 +40,7 @@ import { isUsingNeon } from './db/index.js';
 import { resolveDbEnv, resolveEnvironment, resolveDbTarget } from './db/env-resolver.js';
 import { optionalAuth, requireAuth, requireInstructor } from './middleware/auth.js';
 import { requireCsrf } from './middleware/csrf.js';
-import { generalApiLimiter, researchRateLimiter } from './middleware/rate-limit.js';
+import { generalApiLimiter, researchRateLimiter, studentDataLimiter } from './middleware/rate-limit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../.env');
@@ -271,19 +271,19 @@ const usingNeon = isUsingNeon();
 
 if (usingNeon) {
   console.log('🔌 Using Neon PostgreSQL routes (auth + csrf required) [PRODUCTION PATH]');
-  app.use('/api/learners', generalApiLimiter, requireAuth, requireCsrf, neonLearnersRouter);
-  app.use('/api/interactions', generalApiLimiter, requireAuth, requireCsrf, neonInteractionsRouter);
-  app.use('/api/textbooks', generalApiLimiter, requireAuth, requireCsrf, neonTextbooksRouter);
-  app.use('/api/sessions', generalApiLimiter, requireAuth, requireCsrf, neonSessionsRouter);
+  app.use('/api/learners', studentDataLimiter, requireAuth, requireCsrf, neonLearnersRouter);
+  app.use('/api/interactions', studentDataLimiter, requireAuth, requireCsrf, neonInteractionsRouter);
+  app.use('/api/textbooks', studentDataLimiter, requireAuth, requireCsrf, neonTextbooksRouter);
+  app.use('/api/sessions', studentDataLimiter, requireAuth, requireCsrf, neonSessionsRouter);
   app.use('/api/surveys', generalApiLimiter, requireCsrf, surveysRouter);
   app.use('/api/bandit', generalApiLimiter, requireAuth, requireCsrf, neonBanditRouter);
 } else {
   console.log('💾 Using SQLite routes (local/dev fallback only)');
   console.log('⚠️  Research exports and multi-learner features require DATABASE_URL');
-  app.use('/api/learners', generalApiLimiter, learnersRouter);
-  app.use('/api/interactions', generalApiLimiter, interactionsRouter);
-  app.use('/api/textbooks', generalApiLimiter, textbooksRouter);
-  app.use('/api/sessions', generalApiLimiter, sessionsRouter);
+  app.use('/api/learners', studentDataLimiter, learnersRouter);
+  app.use('/api/interactions', studentDataLimiter, interactionsRouter);
+  app.use('/api/textbooks', studentDataLimiter, textbooksRouter);
+  app.use('/api/sessions', studentDataLimiter, sessionsRouter);
 }
 
 // Auth routes - rate limiting applied per-endpoint in auth router
@@ -293,7 +293,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/research', researchRateLimiter, requireAuth, requireInstructor, researchRouter);
 // Instructor export endpoints also use research rate limits
 app.use('/api/instructor', researchRateLimiter, requireAuth, instructorRouter);
-app.use('/api/corpus', generalApiLimiter, corpusRouter);
+app.use('/api/corpus', studentDataLimiter, corpusRouter);
 app.use('/api/pdf-index', generalApiLimiter, pdfIndexRouter);
 app.use('/api/llm', generalApiLimiter, llmRouter);
 
