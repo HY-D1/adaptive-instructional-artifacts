@@ -152,6 +152,28 @@ describe('neon-interactions single-event contract', () => {
     );
   });
 
+  it('rejects control-group bandit events before persistence', async () => {
+    const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
+    const postInteraction = getRouteHandler(
+      neonInteractionsRouter as unknown as {
+        stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }>;
+      },
+      'post',
+      '/',
+    );
+    getStudentConditionAssignmentMock.mockResolvedValue({ conditionId: 'control' });
+
+    const result = await invokeJsonHandler(postInteraction, {
+      learnerId: 'learner-1',
+      eventType: 'bandit_arm_selected',
+      problemId: 'problem-1',
+      selectedArm: 'adaptive',
+    });
+
+    expect(result.status).toBe(400);
+    expect(createInteractionMock).not.toHaveBeenCalled();
+  });
+
   it('rejects unknown fields before creating an interaction', async () => {
     const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
     const postInteraction = getRouteHandler(

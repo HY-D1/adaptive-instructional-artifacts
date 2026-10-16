@@ -188,6 +188,10 @@ function logInteractionValidationRejection(
   });
 }
 
+function isAdaptiveBanditEvent(eventType: string): boolean {
+  return eventType === 'bandit_arm_selected' || eventType === 'bandit_reward_observed';
+}
+
 // Re-export for backward compatibility
 export { validateResearchEvent, validateResearchBatchForWrite };
 export type { BatchValidationError, BatchValidationResult };
@@ -440,6 +444,13 @@ router.post('/', requirePreSurveyCompleted, async (req: Request, res: Response) 
       validatedEvent.conditionId = (await db.getStudentConditionAssignment(validatedEvent.learnerId))?.conditionId;
     }
 
+    if (isAdaptiveBanditEvent(validatedEvent.eventType) && validatedEvent.conditionId !== 'adaptive') {
+      const issues = ['Adaptive bandit events require adaptive condition'];
+      logInteractionValidationRejection('single', validatedEvent.eventType, issues);
+      res.status(400).json({ success: false, error: issues[0] });
+      return;
+    }
+
     const id = validatedEvent.id || `${validatedEvent.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
 
     // RESEARCH-3: Validate research-critical events in production
@@ -613,6 +624,16 @@ router.post('/batch', requirePreSurveyCompleted, async (req: Request, res: Respo
         event.sectionId = scopedTarget.sectionId;
         if (!event.conditionId) {
           event.conditionId = (await db.getStudentConditionAssignment(event.learnerId))?.conditionId;
+        }
+        if (isAdaptiveBanditEvent(event.eventType) && event.conditionId !== 'adaptive') {
+          const reason = 'Adaptive bandit events require adaptive condition';
+          logInteractionValidationRejection('batch', event.eventType, [reason]);
+          failedEvents.push({
+            index: i,
+            eventId: event.id || `index-${i}`,
+            error: reason,
+          });
+          continue;
         }
         const id = event.id || `${event.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
         

@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process';
-import { createWriteStream, readFileSync } from 'node:fs';
+import { createWriteStream, mkdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 
 const require = createRequire(import.meta.url);
@@ -45,9 +47,12 @@ if (realSurveys) {
 
 const children = [];
 let shuttingDown = false;
-const API_LOG_PATH = '/tmp/sqladapt-api.log';
-const WEB_LOG_PATH = '/tmp/sqladapt-web.log';
-const SURVEY_STUB_LOG_PATH = '/tmp/sqladapt-survey-stub.log';
+const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
+const LOG_DIR = resolve(PROJECT_ROOT, '.local', 'manual-test');
+mkdirSync(LOG_DIR, { recursive: true });
+const API_LOG_PATH = resolve(LOG_DIR, 'api.log');
+const WEB_LOG_PATH = resolve(LOG_DIR, 'web.log');
+const SURVEY_STUB_LOG_PATH = resolve(LOG_DIR, 'survey-stub.log');
 
 function spawnDetached(command, args, options = {}) {
   const { env: extraEnv = {}, logPath } = options;
