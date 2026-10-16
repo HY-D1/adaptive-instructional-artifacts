@@ -11,7 +11,13 @@ const getProfileMock = vi.fn<(learnerId: string) => Promise<LearnerProfile | nul
 const getSessionMock = vi.fn<(learnerId: string) => Promise<Record<string, unknown> | null>>();
 const getInteractionsMock = vi.fn<(learnerId: string, options?: Record<string, unknown>) => Promise<{ events: unknown[]; total: number }>>();
 const getTextbookMock = vi.fn<(learnerId: string) => Promise<unknown[]>>();
-const logInteractionMock = vi.fn<(event: unknown) => Promise<{ success: boolean; confirmed?: boolean }>>();
+const logInteractionMock = vi.fn<(event: unknown) => Promise<{
+  success: boolean;
+  confirmed?: boolean;
+  status?: number;
+  retryAfterMs?: number;
+  permanentFailure?: boolean;
+}>>();
 const logInteractionsBatchMock = vi.fn<(events: unknown[]) => Promise<boolean>>();
 const logInteractionsBatchVerifiedMock = vi.fn<(events: unknown[]) => Promise<{ confirmed: string[]; failed: string[] }>>();
 const logInteractionsBatchKeepaliveMock = vi.fn<(events: unknown[]) => Promise<{ success: boolean; confirmedIds?: string[] }>>();
@@ -105,6 +111,29 @@ beforeEach(() => {
 });
 
 describe('dual-storage critical write semantics', () => {
+  it('dead-letters permanent interaction failures instead of retrying them', async () => {
+    logInteractionMock.mockResolvedValueOnce({
+      success: false,
+      status: 400,
+      permanentFailure: true,
+    });
+    await dualStorageModule.dualStorage.checkHealth();
+
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'permanent-interaction-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-permanent-1',
+      timestamp: Date.now(),
+      eventType: 'execution',
+      problemId: 'problem-1',
+    });
+
+    await vi.waitFor(() => {
+      expect(dualStorageModule.dualStorage.getPendingInteractionsForSession('session-permanent-1')).toEqual([]);
+    });
+    expect(logInteractionMock).toHaveBeenCalledTimes(1);
+  });
+
   it('forwards helper-created research interactions to the backend with core identifiers', async () => {
     localStorage.setItem('sql-learning-active-session', 'session-research-helper');
     await dualStorageModule.dualStorage.checkHealth();

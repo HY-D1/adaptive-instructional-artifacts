@@ -127,12 +127,37 @@ interface ApiResponse<T> {
   data?: T;
   error?: string;
   message?: string;
+  status?: number;
+  retryAfterMs?: number;
   failedIds?: string[];
   errors?: Array<{
     eventId?: string;
     eventType?: string;
     missingFields?: string[];
   }>;
+}
+
+export interface InteractionWriteResult {
+  success: boolean;
+  confirmed?: boolean;
+  status?: number;
+  retryAfterMs?: number;
+  permanentFailure?: boolean;
+}
+
+function retryAfterMilliseconds(response: Response): number | undefined {
+  const value = response.headers.get('Retry-After');
+  if (!value) return undefined;
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+
+  const retryAt = Date.parse(value);
+  return Number.isFinite(retryAt) ? Math.max(0, retryAt - Date.now()) : undefined;
+}
+
+function isPermanentClientFailure(status: number | undefined): boolean {
+  return status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429;
 }
 
 interface BatchConfirmationResponse {
@@ -533,6 +558,8 @@ async function fetchApi<T>(
       return {
         ...errorData,
         success: false,
+        status: response.status,
+        retryAfterMs: retryAfterMilliseconds(response),
         error:
           errorData.error || `HTTP ${response.status}: ${response.statusText}`,
         message: errorData.message,
@@ -998,7 +1025,7 @@ function convertToBackendInteraction(
  */
 export async function logInteraction(
   event: InteractionEvent,
-): Promise<{ success: boolean; confirmed?: boolean }> {
+): Promise<InteractionWriteResult> {
   const backendEvent = convertToBackendInteraction(event);
 
   const response = await fetchApi<BackendInteraction>("/interactions", {
@@ -1007,10 +1034,16 @@ export async function logInteraction(
   });
 
   const confirmed = response.success && response.data?.id === event.id;
-  return {
+  const result: InteractionWriteResult = {
     success: response.success,
     confirmed,
   };
+  if (response.status !== undefined) {
+    result.status = response.status;
+    result.retryAfterMs = response.retryAfterMs;
+    result.permanentFailure = isPermanentClientFailure(response.status);
+  }
+  return result;
 }
 
 /**
@@ -1037,7 +1070,14 @@ export async function logInteractionsBatch(
  */
 export async function logInteractionsBatchVerified(
   events: InteractionEvent[],
-): Promise<{ confirmed: string[]; failed: string[]; invalid?: string[] }> {
+): Promise<{
+  confirmed: string[];
+  failed: string[];
+  invalid?: string[];
+  status?: number;
+  retryAfterMs?: number;
+  permanentFailure?: boolean;
+}> {
   if (events.length === 0) return { confirmed: [], failed: [] };
 
   const backendEvents = events.map(convertToBackendInteraction);
@@ -1057,7 +1097,18 @@ export async function logInteractionsBatchVerified(
           eventIds.includes(id),
         ) ?? [])
       : [];
-    return { confirmed: [], failed: eventIds, invalid: invalidIds };
+    const permanentFailure = isPermanentClientFailure(response.status);
+    const result = {
+      confirmed: [],
+      failed: eventIds,
+      status: response.status,
+      retryAfterMs: response.retryAfterMs,
+      permanentFailure,
+    };
+    if (permanentFailure || invalidIds.length > 0) {
+      return { ...result, invalid: permanentFailure ? eventIds : invalidIds };
+    }
+    return result;
   }
 
   // Exact confirmation only. Missing confirmedIds means "unverified", not success.
@@ -1075,7 +1126,7 @@ export async function logInteractionsBatchVerified(
  */
 export async function logInteractionsBatchKeepalive(
   events: InteractionEvent[],
-): Promise<{ success: boolean; confirmedIds?: string[] }> {
+): Promise<{ success: boolean; confirmedIds?: string[]; status?: number; retryAfterMs?: number }> {
   if (events.length === 0) return { success: true, confirmedIds: [] };
 
   const backendEvents = events.map(convertToBackendInteraction);
@@ -1098,7 +1149,11 @@ export async function logInteractionsBatchKeepalive(
 
     if (!response.ok) {
       console.warn("[StorageClient] Keepalive batch failed:", response.status);
-      return { success: false };
+      return {
+        success: false,
+        status: response.status,
+        retryAfterMs: retryAfterMilliseconds(response),
+      };
     }
 
     // Parse confirmed IDs if backend returns them. Missing IDs are not assumed.

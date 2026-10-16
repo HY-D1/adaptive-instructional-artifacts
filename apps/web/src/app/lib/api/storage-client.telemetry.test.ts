@@ -439,6 +439,59 @@ describe('storage-client telemetry contract', () => {
     });
   });
 
+  it('classifies permanent interaction 4xx responses without retry metadata', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: false, error: 'Schema validation failed' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const { logInteraction } = await import('./storage-client');
+    const result = await logInteraction({
+      id: 'permanent-failure-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-1',
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      status: 400,
+      permanentFailure: true,
+    });
+  });
+
+  it('returns Retry-After for retryable 429 batch responses', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ success: false, error: 'Too many requests' }), {
+        status: 429,
+        headers: { 'Content-Type': 'application/json', 'Retry-After': '7' },
+      }),
+    );
+
+    const { logInteractionsBatchVerified } = await import('./storage-client');
+    const result = await logInteractionsBatchVerified([{
+      id: 'rate-limited-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-1',
+    }]);
+
+    expect(result).toMatchObject({
+      confirmed: [],
+      failed: ['rate-limited-1'],
+      status: 429,
+      retryAfterMs: 7000,
+      permanentFailure: false,
+    });
+    expect(result.invalid).toBeUndefined();
+  });
+
   it('surfaces server-reported invalid batch ids separately from transient failures', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(
@@ -485,6 +538,9 @@ describe('storage-client telemetry contract', () => {
       confirmed: [],
       failed: ['invalid-hint-1'],
       invalid: ['invalid-hint-1'],
+      status: 400,
+      retryAfterMs: undefined,
+      permanentFailure: true,
     });
   });
 
