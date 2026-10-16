@@ -40,7 +40,13 @@ import { isUsingNeon } from './db/index.js';
 import { resolveDbEnv, resolveEnvironment, resolveDbTarget } from './db/env-resolver.js';
 import { optionalAuth, requireAuth, requireInstructor } from './middleware/auth.js';
 import { requireCsrf } from './middleware/csrf.js';
-import { generalApiLimiter, researchRateLimiter, studentDataLimiter } from './middleware/rate-limit.js';
+import {
+  generalApiLimiter,
+  llmRateLimiter,
+  researchRateLimiter,
+  studentDataLimiter,
+  surveyRateLimiter,
+} from './middleware/rate-limit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../.env');
@@ -133,8 +139,8 @@ function originGuard(req: Request, res: Response, next: NextFunction): void {
 
 const app = express();
 
-// Trust proxy for Vercel deployment to get correct client IP
-if (process.env.VERCEL === '1' || process.env.NODE_ENV === 'production') {
+// Opt in only when the deployment is known to be behind a trusted proxy.
+if (process.env.TRUST_PROXY === 'true') {
   app.set('trust proxy', 1);
 }
 
@@ -275,8 +281,8 @@ if (usingNeon) {
   app.use('/api/interactions', studentDataLimiter, requireAuth, requireCsrf, neonInteractionsRouter);
   app.use('/api/textbooks', studentDataLimiter, requireAuth, requireCsrf, neonTextbooksRouter);
   app.use('/api/sessions', studentDataLimiter, requireAuth, requireCsrf, neonSessionsRouter);
-  app.use('/api/surveys', generalApiLimiter, requireCsrf, surveysRouter);
-  app.use('/api/bandit', generalApiLimiter, requireAuth, requireCsrf, neonBanditRouter);
+  app.use('/api/surveys', surveyRateLimiter, requireCsrf, surveysRouter);
+  app.use('/api/bandit', requireAuth, requireCsrf, neonBanditRouter);
 } else {
   console.log('💾 Using SQLite routes (local/dev fallback only)');
   console.log('⚠️  Research exports and multi-learner features require DATABASE_URL');
@@ -295,7 +301,7 @@ app.use('/api/research', researchRateLimiter, requireAuth, requireInstructor, re
 app.use('/api/instructor', researchRateLimiter, requireAuth, instructorRouter);
 app.use('/api/corpus', studentDataLimiter, corpusRouter);
 app.use('/api/pdf-index', generalApiLimiter, pdfIndexRouter);
-app.use('/api/llm', generalApiLimiter, llmRouter);
+app.use('/api/llm', llmRateLimiter, llmRouter);
 
 app.post('/ollama/api/generate', async (req: Request, res: Response) => {
   if (!ENABLE_LLM) {

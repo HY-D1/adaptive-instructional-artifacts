@@ -13,6 +13,8 @@ vi.mock('../../../apps/server/src/db/neon.js', () => ({
 }));
 vi.mock('../../../apps/server/src/middleware/rate-limit.js', () => ({
   strictRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
+  banditReadRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
+  banditRewardRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
 
 function getHandler(router: any, method: string, path: string) {

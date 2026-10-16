@@ -1,7 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import * as db from '../db/neon.js';
-import { strictRateLimiter } from '../middleware/rate-limit.js';
+import {
+  banditReadRateLimiter,
+  banditRewardRateLimiter,
+} from '../middleware/rate-limit.js';
 
 const router = Router();
 const rewardSchema = z.object({
@@ -12,7 +15,7 @@ const rewardSchema = z.object({
   assignmentStrategy: z.literal('bandit'),
 });
 
-router.get('/state', async (req: Request, res: Response) => {
+router.get('/state', banditReadRateLimiter, async (req: Request, res: Response) => {
   if (req.auth?.role !== 'student') {
     res.status(403).json({ success: false, error: 'Adaptive bandit is student-only' });
     return;
@@ -25,7 +28,7 @@ router.get('/state', async (req: Request, res: Response) => {
   res.json({ success: true, data: await db.getSharedBanditState() });
 });
 
-router.post('/reward', strictRateLimiter, async (req: Request, res: Response) => {
+router.post('/reward', banditRewardRateLimiter, async (req: Request, res: Response) => {
   if (req.auth?.role !== 'student') {
     res.status(403).json({ success: false, error: 'Adaptive bandit is student-only' });
     return;

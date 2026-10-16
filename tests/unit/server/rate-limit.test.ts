@@ -36,4 +36,20 @@ describe('student data rate limiter', () => {
 
     expect(STUDENT_DATA_RATE_LIMIT).toBe(750);
   });
+
+  it('uses classroom-safe defaults for signup and dedicated service limits', async () => {
+    const {
+      SIGNUP_RATE_LIMIT,
+      LLM_RATE_LIMIT,
+      BANDIT_READ_RATE_LIMIT,
+      BANDIT_REWARD_RATE_LIMIT,
+      SURVEY_RATE_LIMIT,
+    } = await import('../../../apps/server/src/middleware/rate-limit.js');
+
+    expect(SIGNUP_RATE_LIMIT).toBeGreaterThanOrEqual(100);
+    expect(LLM_RATE_LIMIT).toBe(60);
+    expect(BANDIT_READ_RATE_LIMIT).toBe(300);
+    expect(BANDIT_REWARD_RATE_LIMIT).toBe(60);
+    expect(SURVEY_RATE_LIMIT).toBeGreaterThanOrEqual(10);
+  });
 });

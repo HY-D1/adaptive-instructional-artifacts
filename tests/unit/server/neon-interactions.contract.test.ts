@@ -319,6 +319,32 @@ describe('neon-interactions single-event contract', () => {
 });
 
 describe('neon-interactions batch rejection logging', () => {
+  it('rejects batches over 3 MB with HTTP 413', async () => {
+    const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
+    const postBatch = getRouteHandler(
+      neonInteractionsRouter as unknown as {
+        stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }>;
+      },
+      'post',
+      '/batch',
+    );
+
+    const result = await invokeJsonHandler(postBatch, {
+      events: [{
+        learnerId: 'learner-1',
+        eventType: 'execution',
+        problemId: 'problem-1',
+        payload: { oversized: 'x'.repeat(3 * 1024 * 1024) },
+      }],
+    }, '/batch');
+
+    expect(result.status).toBe(413);
+    expect(result.json).toEqual({
+      success: false,
+      error: 'Interaction batch request exceeds maximum size of 3 MB',
+    });
+  });
+
   it('logs sanitized schema issues for rejected batch events', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');

@@ -19,6 +19,7 @@ import type { EventType } from '../types.js';
 import { requirePreSurveyCompleted } from '../middleware/pre-survey.js';
 
 const router = Router();
+const MAX_BATCH_BODY_BYTES = 3 * 1024 * 1024;
 
 const scalarMetadataValue = z.union([
   z.string(),
@@ -507,6 +508,15 @@ router.post('/batch', requirePreSurveyCompleted, async (req: Request, res: Respo
       res.status(400).json({
         success: false,
         error: 'Request body must contain an events array',
+      });
+      return;
+    }
+
+    const requestBodyBytes = Buffer.byteLength(JSON.stringify(req.body), 'utf8');
+    if (requestBodyBytes > MAX_BATCH_BODY_BYTES) {
+      res.status(413).json({
+        success: false,
+        error: 'Interaction batch request exceeds maximum size of 3 MB',
       });
       return;
     }
