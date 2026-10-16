@@ -51,13 +51,14 @@ function getRouteHandler(
 async function invokeJsonHandler(
   handler: Function,
   body: Record<string, unknown>,
+  path = '/',
 ): Promise<{ status: number; json: unknown }> {
   let statusCode = 200;
   let payload: unknown = null;
   const req = {
     method: 'POST',
     baseUrl: '/api/interactions',
-    path: '/',
+    path,
     body,
     auth: undefined,
   } as Record<string, unknown>;
@@ -120,6 +121,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe('neon-interactions single-event contract', () => {
@@ -176,6 +178,58 @@ describe('neon-interactions single-event contract', () => {
       }),
     );
     expect(createInteractionMock).not.toHaveBeenCalled();
+  });
+
+  it('logs only sanitized details for single-event schema rejection', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
+    const postInteraction = getRouteHandler(
+      neonInteractionsRouter as unknown as {
+        stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }>;
+      },
+      'post',
+      '/',
+    );
+
+    await invokeJsonHandler(postInteraction, {
+      learnerId: 'learner-1',
+      eventType: 'execution',
+      problemId: 'problem-1',
+      unexpectedField: 'not-logged',
+    });
+
+    expect(warn).toHaveBeenCalledWith('[interaction/rejected]', {
+      route: 'single',
+      eventType: 'execution',
+      issues: ["Unrecognized key(s) in object: 'unexpectedField'"],
+    });
+  });
+
+  it('logs research validation rejection details without event identifiers', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    validateResearchEventMock.mockReturnValue({ valid: false, missing: ['templateId'] });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
+    const postInteraction = getRouteHandler(
+      neonInteractionsRouter as unknown as {
+        stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }>;
+      },
+      'post',
+      '/',
+    );
+
+    await invokeJsonHandler(postInteraction, {
+      id: 'event-not-logged',
+      learnerId: 'learner-1',
+      eventType: 'hint_view',
+      problemId: 'problem-1',
+    });
+
+    expect(warn).toHaveBeenCalledWith('[interaction/rejected]', {
+      route: 'single',
+      eventType: 'hint_view',
+      issues: ['Missing required field: templateId'],
+    });
   });
 
   it('rejects oversized string input before creating an interaction', async () => {
@@ -261,5 +315,67 @@ describe('neon-interactions single-event contract', () => {
         ]),
       }),
     );
+  });
+});
+
+describe('neon-interactions batch rejection logging', () => {
+  it('logs sanitized schema issues for rejected batch events', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
+    const postBatch = getRouteHandler(
+      neonInteractionsRouter as unknown as {
+        stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }>;
+      },
+      'post',
+      '/batch',
+    );
+
+    await invokeJsonHandler(postBatch, {
+      events: [{
+        learnerId: 'learner-1',
+        eventType: 'error',
+        problemId: 'problem-1',
+        unexpectedField: 'not-logged',
+      }],
+    }, '/batch');
+
+    expect(warn).toHaveBeenCalledWith('[interaction/rejected]', {
+      route: 'batch',
+      eventType: 'error',
+      issues: ["Unrecognized key(s) in object: 'unexpectedField'"],
+    });
+  });
+
+  it('logs research validation issues for rejected batch events', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    validateResearchBatchForWriteMock.mockReturnValue({
+      valid: false,
+      failedIds: ['event-not-logged'],
+      errors: [{ eventId: 'event-not-logged', eventType: 'hint_view', missingFields: ['templateId'] }],
+    });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
+    const postBatch = getRouteHandler(
+      neonInteractionsRouter as unknown as {
+        stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }>;
+      },
+      'post',
+      '/batch',
+    );
+
+    await invokeJsonHandler(postBatch, {
+      events: [{
+        id: 'event-not-logged',
+        learnerId: 'learner-1',
+        eventType: 'hint_view',
+        problemId: 'problem-1',
+      }],
+    }, '/batch');
+
+    expect(warn).toHaveBeenCalledWith('[interaction/rejected]', {
+      route: 'batch',
+      eventType: 'hint_view',
+      issues: ['Missing required field: templateId'],
+    });
   });
 });

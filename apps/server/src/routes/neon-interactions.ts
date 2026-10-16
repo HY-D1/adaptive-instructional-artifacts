@@ -175,6 +175,18 @@ export const interactionEventSchema = z.object({
 
 type NeonInteractionEventInput = z.infer<typeof interactionEventSchema>;
 
+function logInteractionValidationRejection(
+  route: 'single' | 'batch',
+  eventType: unknown,
+  issues: string[],
+): void {
+  console.warn('[interaction/rejected]', {
+    route,
+    eventType: typeof eventType === 'string' && eventType ? eventType : 'unknown',
+    issues,
+  });
+}
+
 // Re-export for backward compatibility
 export { validateResearchEvent, validateResearchBatchForWrite };
 export type { BatchValidationError, BatchValidationResult };
@@ -393,6 +405,9 @@ router.post('/', requirePreSurveyCompleted, async (req: Request, res: Response) 
     const event = req.body;
 
     if (!event.learnerId || !event.eventType || !event.problemId) {
+      logInteractionValidationRejection('single', event.eventType, [
+        'Missing required fields: learnerId, eventType, problemId',
+      ]);
       res.status(400).json({
         success: false,
         error: 'Missing required fields: learnerId, eventType, problemId',
@@ -402,6 +417,11 @@ router.post('/', requirePreSurveyCompleted, async (req: Request, res: Response) 
 
     const schemaValidation = interactionEventSchema.safeParse(event);
     if (!schemaValidation.success) {
+      logInteractionValidationRejection(
+        'single',
+        event.eventType,
+        schemaValidation.error.issues.map((issue) => issue.message),
+      );
       res.status(400).json({
         success: false,
         error: 'Schema validation failed',
@@ -425,12 +445,11 @@ router.post('/', requirePreSurveyCompleted, async (req: Request, res: Response) 
     if (process.env.NODE_ENV === 'production') {
       const validation = validateResearchEvent(validatedEvent);
       if (!validation.valid) {
-        console.warn('[telemetry_validation_error]', {
-          eventType: validatedEvent.eventType,
-          missingFields: validation.missing,
-          eventId: id,
-          route: 'single',
-        });
+        logInteractionValidationRejection(
+          'single',
+          validatedEvent.eventType,
+          validation.missing.map((field) => `Missing required field: ${field}`),
+        );
         // Return 400 to reject invalid research events
         res.status(400).json({
           success: false,
@@ -506,6 +525,11 @@ router.post('/batch', requirePreSurveyCompleted, async (req: Request, res: Respo
     for (let i = 0; i < events.length; i++) {
       const result = interactionEventSchema.safeParse(events[i]);
       if (!result.success) {
+        logInteractionValidationRejection(
+          'batch',
+          events[i]?.eventType,
+          result.error.issues.map((issue) => issue.message),
+        );
         schemaValidationErrors.push({
           index: i,
           eventId: events[i]?.id || `index-${i}`,
@@ -527,6 +551,9 @@ router.post('/batch', requirePreSurveyCompleted, async (req: Request, res: Respo
     for (let i = 0; i < events.length; i++) {
       const event = events[i];
       if (!event.learnerId || !event.eventType || !event.problemId) {
+        logInteractionValidationRejection('batch', event.eventType, [
+          'Missing required fields: learnerId, eventType, problemId',
+        ]);
         invalidEvents.push({
           index: i,
           eventId: event.id || `index-${i}`,
@@ -546,11 +573,13 @@ router.post('/batch', requirePreSurveyCompleted, async (req: Request, res: Respo
     if (process.env.NODE_ENV === 'production') {
       const batchValidation = validateResearchBatchForWrite(events);
       if (!batchValidation.valid) {
-        console.warn('[telemetry_validation_error]', {
-          route: 'batch',
-          failedIds: batchValidation.failedIds,
-          errors: batchValidation.errors,
-        });
+        for (const error of batchValidation.errors) {
+          logInteractionValidationRejection(
+            'batch',
+            error.eventType,
+            error.missingFields.map((field) => `Missing required field: ${field}`),
+          );
+        }
         res.status(400).json({
           success: false,
           error: 'Invalid research-critical event batch',
