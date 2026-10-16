@@ -177,7 +177,7 @@ try {
   if (!realSurveys) {
     await waitForHttp('http://localhost:4320/survey?instance=pre', 'Survey stub');
   }
-  await waitFor(web, (output) => output.includes('Local:'), 'Web app');
+  await waitForHttp('http://localhost:4316/', 'Web app');
   console.log(`API log: ${API_LOG_PATH}`);
   console.log(`Web log: ${WEB_LOG_PATH}`);
   if (!realSurveys) console.log(`Survey stub log: ${SURVEY_STUB_LOG_PATH}`);
