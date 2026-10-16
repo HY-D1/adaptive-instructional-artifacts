@@ -50,6 +50,6 @@ describe('student data rate limiter', () => {
     expect(LLM_RATE_LIMIT).toBe(60);
     expect(BANDIT_READ_RATE_LIMIT).toBe(300);
     expect(BANDIT_REWARD_RATE_LIMIT).toBe(60);
-    expect(SURVEY_RATE_LIMIT).toBeGreaterThanOrEqual(10);
+    expect(SURVEY_RATE_LIMIT).toBeGreaterThanOrEqual(100);
   });
 });

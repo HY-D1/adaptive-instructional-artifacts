@@ -56,7 +56,7 @@ export const SIGNUP_RATE_LIMIT = configuredLimit('SIGNUP_RATE_LIMIT', 100);
 export const LLM_RATE_LIMIT = configuredLimit('LLM_RATE_LIMIT', 60);
 export const BANDIT_READ_RATE_LIMIT = configuredLimit('BANDIT_READ_RATE_LIMIT', 300);
 export const BANDIT_REWARD_RATE_LIMIT = configuredLimit('BANDIT_REWARD_RATE_LIMIT', 60);
-export const SURVEY_RATE_LIMIT = configuredLimit('SURVEY_RATE_LIMIT', 30);
+export const SURVEY_RATE_LIMIT = configuredLimit('SURVEY_RATE_LIMIT', 100);
 
 function userOrIpKey(prefix: string, req: Request): string {
   return req.auth?.learnerId
