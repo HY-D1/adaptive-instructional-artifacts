@@ -6,6 +6,7 @@ vi.mock('../../../apps/server/src/db/neon.js', () => ({}));
 vi.mock('../../../apps/server/src/db/sections.js', () => ({}));
 
 import {
+  buildNeonInteractionPayload,
   interactionEventSchema,
 } from '../../../apps/server/src/routes/neon-interactions.js';
 import { validateResearchEvent } from '../../../apps/server/src/db/index.js';
@@ -73,5 +74,14 @@ describe('neon interaction schema probe', () => {
 
     expect(result.success).toBe(true);
     expect(research.valid).toBe(true);
+  });
+
+  it('preserves metadata for the database payload builder', () => {
+    const event = {
+      ...events.concept_view,
+      metadata: { client: 'probe', retryable: false },
+    };
+
+    expect(buildNeonInteractionPayload(event).metadata).toEqual(event.metadata);
   });
 });

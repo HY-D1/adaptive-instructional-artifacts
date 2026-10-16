@@ -315,6 +315,7 @@ export async function initializeSchema(): Promise<void> {
       source_interaction_ids TEXT,
       inputs TEXT,
       outputs TEXT,
+      metadata TEXT,
       concept_id TEXT,
       concept_ids TEXT,
       source TEXT,
@@ -378,6 +379,7 @@ export async function initializeSchema(): Promise<void> {
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_user_id ON interaction_events(user_id)`;
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_session_id ON interaction_events(session_id)`;
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_event_type ON interaction_events(event_type)`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS metadata TEXT`;
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_timestamp ON interaction_events(timestamp)`;
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_problem_id ON interaction_events(problem_id)`;
 
@@ -1403,7 +1405,7 @@ export async function createInteraction(
       note_id, note_title, note_content,
       retrieved_source_ids, retrieved_chunks, trigger_interaction_ids,
       evidence_interaction_ids, source_interaction_ids, inputs, outputs, concept_id, concept_ids,
-      source, total_time, problems_attempted, problems_solved,
+      metadata, source, total_time, problems_attempted, problems_solved,
       request_type, current_rung, rung, grounded, content_length,
       from_rung, to_rung, trigger_reason, unit_id, action, dedupe_key,
       revision_count, passage_count, expanded, chat_message, chat_response,
@@ -1454,6 +1456,7 @@ export async function createInteraction(
       ${JSON.stringify(payload.sourceInteractionIds || null)},
       ${JSON.stringify(payload.inputs || null)},
       ${JSON.stringify(payload.outputs || null)},
+      ${JSON.stringify(payload.metadata || null)},
       ${storedConceptId},
       ${JSON.stringify(payload.conceptIds || null)},
       ${payload.source || null},

@@ -163,6 +163,8 @@ UPDATE survey_invitations
 SET completion_nonce = md5(random()::text || clock_timestamp()::text || user_id || instance)
 WHERE completion_nonce IS NULL;
 
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS metadata TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_survey_invitations_status
   ON survey_invitations(status);
 
