@@ -34,6 +34,18 @@ import { orchestrate, resolveConditionFlags, resolveControlDecision, type Orches
 import { buildHintViewEvent, buildStableHintId } from '../../../lib/telemetry/build-hint-view-event';
 import { clearProblemHints, loadHintInfo, saveHintSnapshot } from '../../../lib/storage/hint-cache';
 
+export function buildHintSourceMetadata(selection: {
+  llmModel: string | null;
+  hintSource: 'llm' | 'llm_cache' | 'textbook' | 'static';
+  promptVersion: string;
+}): { llm_model: string | null; hint_source: string; prompt_version: string } {
+  return {
+    llm_model: selection.llmModel,
+    hint_source: selection.hintSource,
+    prompt_version: selection.promptVersion,
+  };
+}
+
 /**
  * Props for the HintSystem component
  */
@@ -613,6 +625,9 @@ export function HintSystem({
     safetyFilterApplied: boolean;
     retrievedSourceIds: string[];
     retrievedChunkIds: string[];
+    llmModel: string | null;
+    hintSource: 'llm' | 'llm_cache' | 'textbook' | 'static';
+    promptVersion: string;
     llmFailed?: boolean;
     llmErrorMessage?: string;
   } | null> => {
@@ -658,6 +673,9 @@ export function HintSystem({
           safetyFilterApplied: enhancedHint.safetyFilterApplied,
           retrievedSourceIds: enhancedHint.retrievedSourceIds,
           retrievedChunkIds: enhancedHint.retrievedChunkIds,
+          llmModel: enhancedHint.llmModel,
+          hintSource: enhancedHint.hintSource,
+          promptVersion: enhancedHint.promptVersion,
           llmFailed: enhancedHint.llmFailed,
           llmErrorMessage: enhancedHint.llmErrorMessage
         };
@@ -696,6 +714,9 @@ export function HintSystem({
       safetyFilterApplied: false,
       retrievedSourceIds: [],
       retrievedChunkIds: [],
+      llmModel: null,
+      hintSource: 'static',
+      promptVersion: 'adaptive-hint-v1',
       llmFailed: false
     };
   };
@@ -1143,9 +1164,7 @@ export function HintSystem({
           is_enhanced: hintSelection.isEnhanced,
           llm_failed: hintSelection.llmFailed || false,
           llm_error_message: hintSelection.llmErrorMessage || null,
-          llm_model: hintSelection.llmModel,
-          hint_source: hintSelection.hintSource,
-          prompt_version: hintSelection.promptVersion,
+          ...buildHintSourceMetadata(hintSelection),
           retrieval_confidence: Number(hintSelection.retrievalConfidence.toFixed(4)),
           fallback_reason: hintSelection.fallbackReason || null,
           safety_filter_applied: hintSelection.safetyFilterApplied,

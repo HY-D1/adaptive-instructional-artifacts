@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { createWriteStream, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { randomBytes } from 'node:crypto';
 
@@ -45,8 +45,12 @@ if (realSurveys) {
 
 const children = [];
 let shuttingDown = false;
+const API_LOG_PATH = '/tmp/sqladapt-api.log';
+const WEB_LOG_PATH = '/tmp/sqladapt-web.log';
+const SURVEY_STUB_LOG_PATH = '/tmp/sqladapt-survey-stub.log';
 
 function spawnDetached(command, args, options = {}) {
+  const { env: extraEnv = {}, logPath } = options;
   const child = spawn(command, args, {
     cwd: new URL('../..', import.meta.url),
     env: {
@@ -66,16 +70,22 @@ function spawnDetached(command, args, options = {}) {
       CORS_ORIGIN: 'http://localhost:4316',
       WEB_APP_BASE_URL: 'http://localhost:4316',
       VITE_API_BASE_URL: 'http://localhost:3316',
-      ...options.env,
+      ...extraEnv,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: true,
   });
+  if (logPath) {
+    const logStream = createWriteStream(logPath, { flags: 'w' });
+    child.stdout.pipe(logStream);
+    child.stderr.pipe(logStream);
+    child.on('close', () => logStream.end());
+  }
   children.push(child);
   return child;
 }
 
-const api = spawnDetached('node', ['apps/server/dist/index.js']);
+const api = spawnDetached('node', ['apps/server/dist/index.js'], { logPath: API_LOG_PATH });
 const stubCode = `import http from 'node:http';
 http.createServer((req, res) => {
   const incoming = new URL(req.url, 'http://localhost:4320');
@@ -91,9 +101,10 @@ http.createServer((req, res) => {
 }).listen(4320, 'localhost');`;
 const stub = realSurveys
   ? null
-  : spawnDetached('node', ['--input-type=module', '-e', stubCode]);
+  : spawnDetached('node', ['--input-type=module', '-e', stubCode], { logPath: SURVEY_STUB_LOG_PATH });
 const web = spawnDetached('npm', ['run', 'dev', '--', '--host', 'localhost', '--port', '4316'], {
   env: { VITE_API_BASE_URL: 'http://localhost:3316' },
+  logPath: WEB_LOG_PATH,
 });
 
 function stopAll() {
@@ -167,9 +178,9 @@ try {
     await waitForHttp('http://localhost:4320/survey?instance=pre', 'Survey stub');
   }
   await waitFor(web, (output) => output.includes('Local:'), 'Web app');
-  console.log('API Neon health: ok');
-  console.log(`Survey mode: ${realSurveys ? 'real Qualtrics' : 'local fake survey'}`);
-  console.log('Web app: http://localhost:4316');
+  console.log(`API log: ${API_LOG_PATH}`);
+  console.log(`Web log: ${WEB_LOG_PATH}`);
+  if (!realSurveys) console.log(`Survey stub log: ${SURVEY_STUB_LOG_PATH}`);
 } catch (error) {
   stopAll();
   console.error(error instanceof Error ? error.message : String(error));

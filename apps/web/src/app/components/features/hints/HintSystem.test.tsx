@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ToastProvider } from '../../ui/toast';
-import { HintSystem } from './HintSystem';
+import { buildHintSourceMetadata, HintSystem } from './HintSystem';
 
 const mockStorage = vi.hoisted(() => ({
   getProfile: vi.fn(),
@@ -120,6 +120,9 @@ describe('HintSystem quota handling', () => {
         safetyFilterApplied: false,
         retrievedSourceIds: [],
         retrievedChunkIds: [],
+        llmModel: 'test-model',
+        hintSource: 'llm',
+        promptVersion: 'test-prompt-v1',
       })),
       isGenerating: false,
       lastHint: null,
@@ -156,6 +159,19 @@ describe('HintSystem quota handling', () => {
       expect(mockHintCache.saveHintSnapshot).toHaveBeenCalled();
     });
     expect(mockStorage.logGuidanceRequest).toHaveBeenCalled();
+
+  });
+
+  it('maps hint source metadata to the stored output field names', () => {
+    expect(buildHintSourceMetadata({
+      llmModel: 'test-model',
+      hintSource: 'llm',
+      promptVersion: 'test-prompt-v1',
+    })).toEqual({
+      llm_model: 'test-model',
+      hint_source: 'llm',
+      prompt_version: 'test-prompt-v1',
+    });
   });
 
   it('deduplicates the quota warning across repeated hint requests', async () => {
