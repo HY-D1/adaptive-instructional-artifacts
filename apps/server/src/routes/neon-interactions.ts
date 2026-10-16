@@ -20,8 +20,35 @@ import { requirePreSurveyCompleted } from '../middleware/pre-survey.js';
 
 const router = Router();
 
+const scalarMetadataValue = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+]);
+
+const boundedInputMetadata = z.record(scalarMetadataValue).superRefine((value, ctx) => {
+  if (JSON.stringify(value).length > 100_000) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Metadata exceeds maximum size of 100KB' });
+  }
+});
+
+const boundedOutputMetadata = z.record(
+  z.union([scalarMetadataValue, z.array(z.string()).max(500)]),
+).superRefine((value, ctx) => {
+  if (JSON.stringify(value).length > 100_000) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Metadata exceeds maximum size of 100KB' });
+  }
+});
+
+const boundedMetadata = z.record(z.unknown()).superRefine((value, ctx) => {
+  if (JSON.stringify(value).length > 100_000) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Metadata exceeds maximum size of 100KB' });
+  }
+});
+
 // Zod schema for interaction event validation (BUG-007)
-const interactionEventSchema = z.object({
+export const interactionEventSchema = z.object({
   learnerId: z.string(),
   eventType: z.string(),
   problemId: z.string(),
@@ -29,17 +56,43 @@ const interactionEventSchema = z.object({
   id: z.string().optional(),
   sessionId: z.string().optional(),
   timestamp: z.string().optional(),
+  problemSetId: z.string().optional(),
+  problemNumber: z.number().optional(),
   code: z.string().max(50000).optional(),
   error: z.string().max(5000).optional(),
+  errorSubtypeId: z.string().optional(),
+  executionTimeMs: z.number().optional(),
   hintText: z.string().max(10000).optional(),
   hintLevel: z.number().optional(),
   hintId: z.string().optional(),
+  explanationId: z.string().optional(),
+  helpRequestIndex: z.number().optional(),
+  sqlEngageSubtype: z.string().optional(),
+  sqlEngageRowId: z.string().optional(),
   conceptId: z.string().optional(),
+  conceptIds: z.array(z.string()).max(500).optional(),
   source: z.string().optional(),
   totalTime: z.number().optional(),
   problemsAttempted: z.number().optional(),
   problemsSolved: z.number().optional(),
   successful: z.boolean().optional(),
+  policyVersion: z.string().optional(),
+  timeSpent: z.number().optional(),
+  ruleFired: z.string().optional(),
+  templateId: z.string().optional(),
+  inputHash: z.string().optional(),
+  model: z.string().optional(),
+  noteId: z.string().optional(),
+  noteTitle: z.string().optional(),
+  noteContent: z.string().max(100000).optional(),
+  retrievedSourceIds: z.array(z.string()).max(500).optional(),
+  retrievedChunks: z.array(z.record(z.unknown())).max(500).optional(),
+  triggerInteractionIds: z.array(z.string()).max(500).optional(),
+  evidenceInteractionIds: z.array(z.string()).max(500).optional(),
+  sourceInteractionIds: z.array(z.string()).max(500).optional(),
+  inputs: boundedInputMetadata.optional(),
+  outputs: boundedOutputMetadata.optional(),
+  metadata: boundedMetadata.optional(),
   // Escalation Profile fields
   profileId: z.string().optional(),
   assignmentStrategy: z.string().optional(),
@@ -49,7 +102,13 @@ const interactionEventSchema = z.object({
   selectedArm: z.string().optional(),
   selectionMethod: z.string().optional(),
   armStatsAtSelection: z.record(z.any()).optional(),
-  reward: z.number().optional(),
+  reward: z.union([
+    z.number(),
+    z.object({
+      total: z.number(),
+      components: z.record(z.number()),
+    }),
+  ]).optional(),
   newAlpha: z.number().optional(),
   newBeta: z.number().optional(),
   // HDI fields
@@ -69,6 +128,49 @@ const interactionEventSchema = z.object({
   learnerProfileId: z.string().optional(),
   payload: z.record(z.any()).optional(),
   textbookUnitsRetrieved: z.array(z.string()).optional(),
+  requestType: z.string().optional(),
+  currentRung: z.number().optional(),
+  rung: z.number().optional(),
+  grounded: z.boolean().optional(),
+  contentLength: z.number().optional(),
+  fromRung: z.number().optional(),
+  toRung: z.number().optional(),
+  unitId: z.string().optional(),
+  action: z.string().optional(),
+  dedupeKey: z.string().optional(),
+  revisionCount: z.number().optional(),
+  passageCount: z.number().optional(),
+  expanded: z.boolean().optional(),
+  chatMessage: z.string().max(10000).optional(),
+  chatResponse: z.string().max(100000).optional(),
+  chatQuickChip: z.string().optional(),
+  savedToNotes: z.boolean().optional(),
+  scheduleId: z.string().optional(),
+  promptId: z.string().optional(),
+  promptType: z.string().optional(),
+  response: z.string().optional(),
+  isCorrect: z.boolean().optional(),
+  scheduledTime: z.number().optional(),
+  shownTime: z.number().optional(),
+  reinforcementCorrect: z.boolean().optional(),
+  reinforcementLatencyMs: z.number().optional(),
+  sourceUnitId: z.string().optional(),
+  sourceConceptId: z.string().optional(),
+  delayBucket: z.string().optional(),
+  completedTime: z.number().optional(),
+  retryCount: z.number().optional(),
+  hintCount: z.number().optional(),
+  llmProvider: z.string().optional(),
+  llmModel: z.string().optional(),
+  llmPurpose: z.string().optional(),
+  llmLatencyMs: z.number().optional(),
+  llmInputTokens: z.number().optional(),
+  llmOutputTokens: z.number().optional(),
+  llmReasoningEffort: z.string().optional(),
+  llmFallbackReason: z.string().optional(),
+  llmCacheHit: z.boolean().optional(),
+  hintIndex: z.number().optional(),
+  helpfulnessRating: z.string().optional(),
 }).strict(); // Rejects unknown fields
 
 type NeonInteractionEventInput = z.infer<typeof interactionEventSchema>;
