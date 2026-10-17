@@ -492,6 +492,46 @@ describe('storage-client telemetry contract', () => {
     expect(result.invalid).toBeUndefined();
   });
 
+  it('dead-letters explicitly rejected events from a partial batch response', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        success: true,
+        partial: true,
+        data: { count: 1, confirmedIds: ['valid-event-1'] },
+        failedEvents: [{ index: 1, eventId: 'rejected-event-1', error: 'Schema validation failed', rejected: true }],
+      }), {
+        status: 207,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+
+    const { logInteractionsBatchVerified } = await import('./storage-client');
+    const result = await logInteractionsBatchVerified([
+      {
+        id: 'valid-event-1',
+        learnerId: 'learner-1',
+        sessionId: 'session-1',
+        timestamp: 1_700_000_000_000,
+        eventType: 'execution',
+        problemId: 'problem-1',
+      },
+      {
+        id: 'rejected-event-1',
+        learnerId: 'learner-1',
+        sessionId: 'session-1',
+        timestamp: 1_700_000_000_001,
+        eventType: 'execution',
+        problemId: 'problem-1',
+      },
+    ]);
+
+    expect(result).toEqual({
+      confirmed: ['valid-event-1'],
+      failed: ['rejected-event-1'],
+      invalid: ['rejected-event-1'],
+    });
+  });
+
   it('surfaces server-reported invalid batch ids separately from transient failures', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(

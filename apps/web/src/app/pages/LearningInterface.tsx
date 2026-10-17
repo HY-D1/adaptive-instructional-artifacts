@@ -84,7 +84,13 @@ import { createEventId } from '../lib/utils/event-id';
 import { startBackgroundAnalysis, stopBackgroundAnalysis, runAnalysisOnce, ANALYSIS_INTERVAL_MS } from '../lib/trace-analyzer';
 import type { AnalysisResult } from '../lib/trace-analyzer';
 import { getConcept, getTextbookCorpusMode } from '../lib/content/concept-loader';
-import { banditManager, PROFILE_TO_ARM_ID, BANDIT_ARM_PROFILES, shouldUpdateBandit } from '../lib/ml/learner-bandit-manager';
+import {
+  banditManager,
+  PROFILE_TO_ARM_ID,
+  BANDIT_ARM_PROFILES,
+  shouldSelectBanditForLearner,
+  shouldUpdateBandit,
+} from '../lib/ml/learner-bandit-manager';
 import { calculateHDI, calculateHDIComponents } from '../lib/ml/hdi-calculator';
 import type { HDIComponents, HDILevel } from '../types';
 import { safeGetStrategy, safeGetProfileOverride } from '../lib/storage/storage-validation';
@@ -573,7 +579,12 @@ export function LearningInterface() {
   useEffect(() => {
     if (!learnerId) return;
 
-    if (!isSharedBanditEnabled() || sessionConfig?.conditionId !== 'adaptive' || safeGetStrategy() !== 'bandit') {
+    if (!isSharedBanditEnabled() || !shouldSelectBanditForLearner(
+      learnerId,
+      sessionConfig?.learnerId,
+      sessionConfig?.conditionId,
+      safeGetStrategy(),
+    )) {
       setSharedBanditReady(true);
       return;
     }
@@ -641,6 +652,12 @@ export function LearningInterface() {
     }
     
     const assignmentStrategy = safeGetStrategy();
+    const banditSelectionAllowed = isSharedBanditEnabled() && shouldSelectBanditForLearner(
+      learnerId,
+      sessionConfig?.learnerId,
+      sessionConfig?.conditionId,
+      assignmentStrategy,
+    );
     
     let effectiveProfile: EscalationProfile;
     let effectiveArmId: BanditArmId;
@@ -674,6 +691,12 @@ export function LearningInterface() {
         
         case 'bandit':
         default: {
+          if (!banditSelectionAllowed) {
+            effectiveProfile = assignProfile({ learnerId }, 'static');
+            effectiveArmId = getArmIdFromProfileId(effectiveProfile.id);
+            selectionReason = 'bandit_blocked_for_condition';
+            break;
+          }
           // Use Thompson sampling bandit selection
           const banditResult = banditManager.selectProfileForLearner(learnerId);
           effectiveProfile = banditResult.profile;

@@ -341,6 +341,33 @@ describe('neon-interactions single-event contract', () => {
 });
 
 describe('neon-interactions batch rejection logging', () => {
+  it('persists valid events while returning rejected events in a partial response', async () => {
+    createInteractionMock.mockImplementation(async (data: { id: string }) => ({ id: data.id }));
+    const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
+    const postBatch = getRouteHandler(
+      neonInteractionsRouter as unknown as {
+        stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }>;
+      },
+      'post',
+      '/batch',
+    );
+
+    const result = await invokeJsonHandler(postBatch, {
+      events: [
+        { id: 'valid-event', learnerId: 'learner-1', eventType: 'execution', problemId: 'problem-1' },
+        { id: 'rejected-event', learnerId: 'learner-1', eventType: 'execution', problemId: 'problem-1', badField: true },
+      ],
+    }, '/batch');
+
+    expect(result.status).toBe(207);
+    expect(result.json).toEqual(expect.objectContaining({
+      success: true,
+      data: expect.objectContaining({ confirmedIds: ['valid-event'] }),
+      failedEvents: [expect.objectContaining({ eventId: 'rejected-event', rejected: true })],
+    }));
+    expect(createInteractionMock).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects batches over 3 MB with HTTP 413', async () => {
     const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
     const postBatch = getRouteHandler(
@@ -396,11 +423,7 @@ describe('neon-interactions batch rejection logging', () => {
 
   it('logs research validation issues for rejected batch events', async () => {
     vi.stubEnv('NODE_ENV', 'production');
-    validateResearchBatchForWriteMock.mockReturnValue({
-      valid: false,
-      failedIds: ['event-not-logged'],
-      errors: [{ eventId: 'event-not-logged', eventType: 'hint_view', missingFields: ['templateId'] }],
-    });
+    validateResearchEventMock.mockReturnValue({ valid: false, missing: ['templateId'] });
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
     const postBatch = getRouteHandler(

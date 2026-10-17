@@ -47,6 +47,17 @@ export function shouldUpdateBandit(
     assignmentStrategy === 'bandit';
 }
 
+export function shouldSelectBanditForLearner(
+  learnerId: string,
+  sessionLearnerId: string | undefined,
+  conditionId: string | undefined,
+  assignmentStrategy: string | undefined,
+): boolean {
+  return learnerId === sessionLearnerId &&
+    conditionId === 'adaptive' &&
+    assignmentStrategy === 'bandit';
+}
+
 /**
  * Reverse mapping from profile ID to bandit arm ID
  * Used for UI display when profile override is active

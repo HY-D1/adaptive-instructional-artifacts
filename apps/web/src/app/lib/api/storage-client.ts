@@ -130,6 +130,10 @@ interface ApiResponse<T> {
   status?: number;
   retryAfterMs?: number;
   failedIds?: string[];
+  failedEvents?: Array<{
+    eventId?: string;
+    rejected?: boolean;
+  }>;
   errors?: Array<{
     eventId?: string;
     eventType?: string;
@@ -1115,8 +1119,16 @@ export async function logInteractionsBatchVerified(
   const confirmedIds = response.data?.confirmedIds ?? [];
   const confirmedSet = new Set(confirmedIds);
   const failed = eventIds.filter((id) => !confirmedSet.has(id));
+  const rejectedIds = (response.failedEvents ?? [])
+    .filter((event) => event.rejected === true && typeof event.eventId === 'string')
+    .map((event) => event.eventId as string)
+    .filter((id) => eventIds.includes(id));
 
-  return { confirmed: confirmedIds, failed };
+  const result = {
+    confirmed: confirmedIds,
+    failed,
+  };
+  return rejectedIds.length > 0 ? { ...result, invalid: rejectedIds } : result;
 }
 
 /**

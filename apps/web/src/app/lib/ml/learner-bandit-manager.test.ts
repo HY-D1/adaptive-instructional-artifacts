@@ -10,6 +10,7 @@ import {
   banditManager,
   BANDIT_ARM_PROFILES,
   LEARNER_BANDIT_MANAGER_VERSION,
+  shouldSelectBanditForLearner,
   shouldUpdateBandit,
   type BanditArmId,
 } from './learner-bandit-manager';
@@ -26,6 +27,17 @@ describe('LearnerBanditManager', () => {
 
     it('blocks debug profile overrides', () => {
       expect(shouldUpdateBandit('adaptive', 'bandit', true)).toBe(false);
+    });
+  });
+
+  describe('shouldSelectBanditForLearner', () => {
+    it('blocks a stale adaptive session config from selecting for another learner', () => {
+      expect(shouldSelectBanditForLearner('control-learner', 'adaptive-learner', 'adaptive', 'bandit')).toBe(false);
+    });
+
+    it('allows bandit selection only for the matching adaptive learner', () => {
+      expect(shouldSelectBanditForLearner('adaptive-learner', 'adaptive-learner', 'adaptive', 'bandit')).toBe(true);
+      expect(shouldSelectBanditForLearner('control-learner', 'control-learner', 'control', 'bandit')).toBe(false);
     });
   });
 

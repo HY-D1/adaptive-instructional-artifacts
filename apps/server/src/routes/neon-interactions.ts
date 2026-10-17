@@ -541,82 +541,73 @@ router.post('/batch', requirePreSurveyCompleted, async (req: Request, res: Respo
       return;
     }
 
-    // BUG-007: Validate each event against schema
-    const schemaValidationErrors: Array<{ index: number; eventId: string; issues: string[] }> = [];
+    // Validate each event independently so valid events can still be persisted.
+    const rejectedIndices = new Set<number>();
+    const failedEvents: Array<{ index: number; eventId: string; error: string; rejected?: boolean }> = [];
     for (let i = 0; i < events.length; i++) {
       const result = interactionEventSchema.safeParse(events[i]);
       if (!result.success) {
+        const issues = result.error.issues.map((issue) => issue.message);
         logInteractionValidationRejection(
           'batch',
           events[i]?.eventType,
-          result.error.issues.map((issue) => issue.message),
+          issues,
         );
-        schemaValidationErrors.push({
+        rejectedIndices.add(i);
+        failedEvents.push({
           index: i,
           eventId: events[i]?.id || `index-${i}`,
-          issues: result.error.issues.map(issue => issue.message),
+          error: `Schema validation failed: ${issues.join('; ')}`,
+          rejected: true,
         });
       }
     }
-    if (schemaValidationErrors.length > 0) {
-      res.status(400).json({
-        success: false,
-        error: 'Schema validation failed for one or more events',
-        schemaErrors: schemaValidationErrors,
-      });
-      return;
-    }
 
     // RESEARCH-4: Validate basic required fields for each event (parity with single route)
-    const invalidEvents: Array<{ index: number; eventId: string; reason: string }> = [];
     for (let i = 0; i < events.length; i++) {
+      if (rejectedIndices.has(i)) continue;
       const event = events[i];
       if (!event.learnerId || !event.eventType || !event.problemId) {
         logInteractionValidationRejection('batch', event.eventType, [
           'Missing required fields: learnerId, eventType, problemId',
         ]);
-        invalidEvents.push({
+        rejectedIndices.add(i);
+        failedEvents.push({
           index: i,
           eventId: event.id || `index-${i}`,
-          reason: 'Missing required fields: learnerId, eventType, or problemId',
+          error: 'Missing required fields: learnerId, eventType, or problemId',
+          rejected: true,
         });
       }
     }
-    if (invalidEvents.length > 0) {
-      res.status(400).json({
-        success: false,
-        error: 'Invalid events in batch',
-        invalidEvents,
-      });
-      return;
-    }
 
     if (process.env.NODE_ENV === 'production') {
-      const batchValidation = validateResearchBatchForWrite(events);
-      if (!batchValidation.valid) {
-        for (const error of batchValidation.errors) {
+      for (let i = 0; i < events.length; i++) {
+        if (rejectedIndices.has(i)) continue;
+        const validation = validateResearchEvent(events[i]);
+        if (!validation.valid) {
           logInteractionValidationRejection(
             'batch',
-            error.eventType,
-            error.missingFields.map((field) => `Missing required field: ${field}`),
+            events[i].eventType,
+            validation.missing.map((field) => `Missing required field: ${field}`),
           );
+          rejectedIndices.add(i);
+          failedEvents.push({
+            index: i,
+            eventId: events[i].id || `index-${i}`,
+            error: `Research validation failed: ${validation.missing.join(', ')}`,
+            rejected: true,
+          });
         }
-        res.status(400).json({
-          success: false,
-          error: 'Invalid research-critical event batch',
-          failedIds: batchValidation.failedIds,
-          errors: batchValidation.errors,
-        });
-        return;
       }
     }
 
     const results = [];
     const confirmedIds: string[] = [];
-    const failedEvents: Array<{ index: number; eventId: string; error: string }> = [];
     
     // Process each event, tracking partial failures
     for (let i = 0; i < events.length; i++) {
+      if (rejectedIndices.has(i)) continue;
       const event = events[i];
       try {
         const scopedTarget = await resolveScopedTarget(req, event.learnerId, 'write');
@@ -632,6 +623,7 @@ router.post('/batch', requirePreSurveyCompleted, async (req: Request, res: Respo
             index: i,
             eventId: event.id || `index-${i}`,
             error: reason,
+            rejected: true,
           });
           continue;
         }
@@ -682,9 +674,9 @@ router.post('/batch', requirePreSurveyCompleted, async (req: Request, res: Respo
     // RESEARCH-2: Return confirmed IDs for client-side verification
     // If all events failed, return 500. If partial success, return 207 Multi-Status
     if (results.length === 0 && failedEvents.length > 0) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
-        error: 'All events failed to process',
+        error: 'All events were rejected',
         failedEvents,
       });
       return;
