@@ -122,7 +122,7 @@ export async function fetchBackendHealth(): Promise<BackendHealth | null> {
 // Types
 // ============================================================================
 
-interface ApiResponse<T> {
+export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
@@ -1468,8 +1468,12 @@ export interface SurveyInvitation {
 }
 
 export async function getSurveyInvitations(): Promise<SurveyInvitation[]> {
-  const response = await fetchApi<SurveyInvitation[]>("/surveys");
+  const response = await getSurveyInvitationsResult();
   return response.success && response.data ? response.data : [];
+}
+
+export async function getSurveyInvitationsResult(): Promise<ApiResponse<SurveyInvitation[]>> {
+  return fetchApi<SurveyInvitation[]>("/surveys");
 }
 
 export async function ensureSurveyInvitation(

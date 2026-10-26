@@ -1,7 +1,8 @@
 import { Outlet, Link, useLocation, Navigate, useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Compass, BookOpen, BarChart3, FlaskConical, Code, HelpCircle, Menu, X, Keyboard, GraduationCap, LogOut, RefreshCw, AlertCircle, Users, Settings, Eye } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { MouseEvent } from 'react';
 import { WelcomeModal } from '../components/shared/WelcomeModal';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
@@ -13,7 +14,12 @@ import { clearAllUiState, clearUiStateForActor } from '../lib/ui-state';
 import { useAuth } from '../lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
 import { resolveLogoutLearnerId } from '../lib/auth/logout-learner';
+import { getSurveyInvitationsResult } from '../lib/api/storage-client';
 import { useToast } from '../components/ui/toast';
+import {
+  getPendingPostSurveyUrl,
+  LogoutSurveyReminderDialog,
+} from '../components/features/surveys/LogoutSurveyReminderDialog';
 import { CommandMenu } from '../components/shared/CommandMenu';
 import {
   canOpenWelcomeModal,
@@ -317,6 +323,10 @@ export function RootLayout() {
   const { logout, user: authUser } = useAuth();
   const { addToast } = useToast();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isCheckingLogoutSurvey, setIsCheckingLogoutSurvey] = useState(false);
+  const [postSurveyReminderOpen, setPostSurveyReminderOpen] = useState(false);
+  const [postSurveyUrl, setPostSurveyUrl] = useState<string | null>(null);
+  const logoutButtonRef = useRef<HTMLButtonElement>(null);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const postLogoutPath = AUTH_BACKEND_CONFIGURED ? '/login' : '/';
   const [showPreviewBanner, setShowPreviewBanner] = useState(false);
@@ -516,6 +526,26 @@ export function RootLayout() {
     navigate(postLogoutPath, { replace: true });
     setIsLoggingOut(false);
   }, [isLoggingOut, logout, finalizeLocalSignOut, navigate, postLogoutPath, syncedProfile?.id, authUser?.learnerId]);
+
+  const handleLogoutClick = useCallback(async (event: MouseEvent<HTMLButtonElement>) => {
+    if (isLoggingOut || isCheckingLogoutSurvey) return;
+    logoutButtonRef.current = event.currentTarget;
+    setIsCheckingLogoutSurvey(true);
+    try {
+      const response = await getSurveyInvitationsResult();
+      const surveyUrl = response.success
+        ? getPendingPostSurveyUrl(response.data)
+        : null;
+      if (surveyUrl) {
+        setPostSurveyUrl(surveyUrl);
+        setPostSurveyReminderOpen(true);
+        return;
+      }
+    } finally {
+      setIsCheckingLogoutSurvey(false);
+    }
+    await handleLogout();
+  }, [handleLogout, isCheckingLogoutSurvey, isLoggingOut]);
 
   // Handle session expired redirect
   const handleSessionExpiredRedirect = () => {
@@ -769,8 +799,8 @@ export function RootLayout() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => { void handleLogout(); }}
-                      disabled={isLoggingOut}
+                      onClick={(event) => { void handleLogoutClick(event); }}
+                      disabled={isLoggingOut || isCheckingLogoutSurvey}
                       className="touch-manipulation hidden md:flex"
                       aria-label="Logout"
                     >
@@ -834,10 +864,10 @@ export function RootLayout() {
                           variant="ghost"
                           size="lg"
                           className="w-full justify-start touch-manipulation text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={() => {
-                            void handleLogout();
+                          onClick={(event) => {
+                            void handleLogoutClick(event);
                           }}
-                          disabled={isLoggingOut}
+                          disabled={isLoggingOut || isCheckingLogoutSurvey}
                         >
                           <LogOut className="size-5 mr-3" />
                           <span>{isLoggingOut ? 'Signing Out...' : 'Logout'}</span>
@@ -872,6 +902,23 @@ export function RootLayout() {
             </div>
           )}
         </nav>
+
+        {postSurveyUrl && (
+          <LogoutSurveyReminderDialog
+            open={postSurveyReminderOpen}
+            surveyUrl={postSurveyUrl}
+            onOpenChange={setPostSurveyReminderOpen}
+            onCompleteSurvey={() => setPostSurveyReminderOpen(false)}
+            onLogoutAnyway={() => {
+              setPostSurveyReminderOpen(false);
+              void handleLogout();
+            }}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              logoutButtonRef.current?.focus();
+            }}
+          />
+        )}
 
         {/* Global Command Menu (⌘+K) */}
         <CommandMenu />

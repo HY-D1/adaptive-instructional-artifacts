@@ -58,7 +58,7 @@ export function SurveyInvitationLinks(): ReactNode {
           href={invitation.surveyUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50">
+          className="inline-flex items-center gap-1 rounded-md bg-red-700 px-2.5 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:focus-visible:ring-red-300 dark:focus-visible:ring-offset-gray-900">
           {LABELS[invitation.instance]}
           <ExternalLink className="size-3" aria-hidden="true" />
         </a>
