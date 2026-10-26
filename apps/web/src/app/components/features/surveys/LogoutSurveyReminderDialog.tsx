@@ -20,6 +20,23 @@ export function getPendingPostSurveyUrl(
   )?.surveyUrl ?? null;
 }
 
+export async function getPendingPostSurveyUrlWithTimeout(
+  fetchInvitations: () => Promise<SurveyInvitation[] | undefined>,
+  timeoutMs = 2000,
+): Promise<string | null> {
+  try {
+    const invitations = await Promise.race([
+      fetchInvitations(),
+      new Promise<SurveyInvitation[]>((_, reject) => {
+        setTimeout(() => reject(new Error("Survey lookup timed out")), timeoutMs);
+      }),
+    ]);
+    return getPendingPostSurveyUrl(invitations);
+  } catch {
+    return null;
+  }
+}
+
 interface LogoutSurveyReminderDialogProps {
   open: boolean;
   surveyUrl: string;

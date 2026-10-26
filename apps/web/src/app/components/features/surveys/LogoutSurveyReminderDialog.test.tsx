@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
   getPendingPostSurveyUrl,
+  getPendingPostSurveyUrlWithTimeout,
   LogoutSurveyReminderDialog,
 } from "./LogoutSurveyReminderDialog";
 import type { SurveyInvitation } from "../../../lib/api/storage-client";
@@ -29,15 +30,14 @@ describe("post-survey logout reminder", () => {
     expect(getPendingPostSurveyUrl(undefined)).toBeNull();
   });
 
-  it("logs out when the student chooses Log out anyway", async () => {
+  it("logs out when the student chooses Log out anyway", () => {
     const onLogoutAnyway = vi.fn();
-    const onOpenChange = vi.fn();
 
     render(
       <LogoutSurveyReminderDialog
         open
         surveyUrl={pendingPostSurvey.surveyUrl!}
-        onOpenChange={onOpenChange}
+        onOpenChange={vi.fn()}
         onCompleteSurvey={vi.fn()}
         onLogoutAnyway={onLogoutAnyway}
         onCloseAutoFocus={vi.fn()}
@@ -48,15 +48,14 @@ describe("post-survey logout reminder", () => {
     expect(onLogoutAnyway).toHaveBeenCalledOnce();
   });
 
-  it("opens the post survey when the student chooses Complete the survey", async () => {
+  it("opens the post survey when the student chooses Complete the survey", () => {
     const onCompleteSurvey = vi.fn();
-    const onOpenChange = vi.fn();
 
     render(
       <LogoutSurveyReminderDialog
         open
         surveyUrl={pendingPostSurvey.surveyUrl!}
-        onOpenChange={onOpenChange}
+        onOpenChange={vi.fn()}
         onCompleteSurvey={onCompleteSurvey}
         onLogoutAnyway={vi.fn()}
         onCloseAutoFocus={vi.fn()}
@@ -68,5 +67,28 @@ describe("post-survey logout reminder", () => {
     expect(link.getAttribute("target")).toBe("_blank");
     fireEvent.click(link);
     expect(onCompleteSurvey).toHaveBeenCalledOnce();
+  });
+
+  it("falls back to normal logout when the survey lookup is slow", async () => {
+    const onOpenChange = vi.fn();
+    const onLogoutAnyway = vi.fn();
+    const apiCall = vi.fn(
+      () => new Promise<SurveyInvitation[]>((resolve) => setTimeout(() => resolve([pendingPostSurvey]), 3000)),
+    );
+
+    const result = await getPendingPostSurveyUrlWithTimeout(apiCall, 2000);
+
+    expect(result).toBeNull();
+    render(
+      <LogoutSurveyReminderDialog
+        open={false}
+        surveyUrl={pendingPostSurvey.surveyUrl!}
+        onOpenChange={onOpenChange}
+        onCompleteSurvey={vi.fn()}
+        onLogoutAnyway={onLogoutAnyway}
+        onCloseAutoFocus={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

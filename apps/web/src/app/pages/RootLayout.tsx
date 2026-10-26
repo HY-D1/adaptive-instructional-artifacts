@@ -532,15 +532,20 @@ export function RootLayout() {
     logoutButtonRef.current = event.currentTarget;
     setIsCheckingLogoutSurvey(true);
     try {
-      const response = await getSurveyInvitationsResult();
-      const surveyUrl = response.success
-        ? getPendingPostSurveyUrl(response.data)
-        : null;
+      const response = await Promise.race([
+        getSurveyInvitationsResult(),
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error('Survey check timed out')), 2000);
+        }),
+      ]);
+      const surveyUrl = response.success ? getPendingPostSurveyUrl(response.data) : null;
       if (surveyUrl) {
         setPostSurveyUrl(surveyUrl);
         setPostSurveyReminderOpen(true);
         return;
       }
+    } catch {
+      // If the survey check stalls or fails, proceed with the standard logout flow.
     } finally {
       setIsCheckingLogoutSurvey(false);
     }
