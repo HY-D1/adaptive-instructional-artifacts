@@ -321,7 +321,8 @@ function ResearchReadinessBlocker({ reason, diagnostics }: ResearchReadinessBloc
 export function RootLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { logout, user: authUser } = useAuth();
+  const { logout, user: authUser, isLoading: isAuthLoading } = useAuth();
+  const isSignedIn = !isAuthLoading && Boolean(authUser);
   const { addToast } = useToast();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isCheckingLogoutSurvey, setIsCheckingLogoutSurvey] = useState(false);
@@ -622,18 +623,20 @@ export function RootLayout() {
   // Build navigation items based on role
   // When in preview mode, show student navigation even for instructors
   const showStudentNav = !isInstructor || isInPreviewMode;
-  const navItems = showStudentNav
-    ? [
-        { to: '/concepts', label: 'Learn', icon: Compass, isActive: isConceptsPage },
-        { to: '/practice', label: 'Practice', icon: Code, isActive: isPracticePage },
-        { to: '/textbook', label: 'My Textbook', icon: BookOpen, isActive: isTextbookPage },
-        { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },
-      ]
-    : [
-        { to: '/instructor-dashboard', label: 'Dashboard', icon: BarChart3, isActive: isInstructorPage },
-        { to: '/research', label: 'Research', icon: FlaskConical, isActive: isResearchPage },
-        { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },
-      ];
+  const navItems = isSignedIn
+    ? (showStudentNav
+      ? [
+          { to: '/concepts', label: 'Learn', icon: Compass, isActive: isConceptsPage },
+          { to: '/practice', label: 'Practice', icon: Code, isActive: isPracticePage },
+          { to: '/textbook', label: 'My Textbook', icon: BookOpen, isActive: isTextbookPage },
+          { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },
+        ]
+      : [
+          { to: '/instructor-dashboard', label: 'Dashboard', icon: BarChart3, isActive: isInstructorPage },
+          { to: '/research', label: 'Research', icon: FlaskConical, isActive: isResearchPage },
+          { to: '/settings', label: 'Settings', icon: Settings, isActive: isSettingsPage },
+        ])
+    : [];
 
   // Research safety check
   const isResearchUnsafeMode = isResearchUnsafe();
@@ -694,16 +697,16 @@ export function RootLayout() {
           <div className="container mx-auto px-4">
             <div className="flex items-center justify-between h-16">
               {/* Logo */}
-              <Link to={isInstructor ? '/instructor-dashboard' : '/practice'} className="flex items-center gap-2 shrink-0">
+              <Link to={isSignedIn ? (isInstructor ? '/instructor-dashboard' : '/practice') : '/'} className="flex items-center gap-2 shrink-0">
                 <Code className="size-6 text-blue-600" />
                 <span className="font-bold text-lg hidden sm:block">SQL-Adapt</span>
-                {isStudent && (
+                {isSignedIn && isStudent && (
                   <span className="hidden sm:flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
                     <GraduationCap className="size-3" />
                     Student
                   </span>
                 )}
-                {isInstructor && (
+                {isSignedIn && isInstructor && (
                   <span className="hidden sm:flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
                     <BarChart3 className="size-3" />
                     Instructor
@@ -775,7 +778,7 @@ export function RootLayout() {
                 )}
 
                 {/* Switch User button - only for instructors */}
-                {isInstructor && (
+                {isSignedIn && isInstructor && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -796,27 +799,31 @@ export function RootLayout() {
                   </Tooltip>
                 )}
 
-                {/* Logout button */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(event) => { void handleLogoutClick(event); }}
-                      disabled={isLoggingOut || isCheckingLogoutSurvey}
-                      className="touch-manipulation hidden md:flex"
-                      aria-label="Logout"
-                    >
-                      <LogOut className="size-4 mr-2 hidden sm:block" />
-                      <span className="hidden sm:inline">
-                        {isLoggingOut ? 'Signing Out...' : 'Logout'}
-                      </span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Sign out of your account</p>
-                  </TooltipContent>
-                </Tooltip>
+                {isSignedIn && (
+                  <>
+                    {/* Logout button */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(event) => { void handleLogoutClick(event); }}
+                          disabled={isLoggingOut || isCheckingLogoutSurvey}
+                          className="touch-manipulation hidden md:flex"
+                          aria-label="Logout"
+                        >
+                          <LogOut className="size-4 mr-2 hidden sm:block" />
+                          <span className="hidden sm:inline">
+                            {isLoggingOut ? 'Signing Out...' : 'Logout'}
+                          </span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Sign out of your account</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </>
+                )}
 
                 {/* Mobile menu */}
                 <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
@@ -863,18 +870,20 @@ export function RootLayout() {
                             <span>Switch User</span>
                           </Button>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="lg"
-                          className="w-full justify-start touch-manipulation text-red-600 hover:text-red-700 hover:bg-red-50"
-                          onClick={(event) => {
-                            void handleLogoutClick(event);
-                          }}
-                          disabled={isLoggingOut || isCheckingLogoutSurvey}
-                        >
-                          <LogOut className="size-5 mr-3" />
-                          <span>{isLoggingOut ? 'Signing Out...' : 'Logout'}</span>
-                        </Button>
+                        {isSignedIn && (
+                          <Button
+                            variant="ghost"
+                            size="lg"
+                            className="w-full justify-start touch-manipulation text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={(event) => {
+                              void handleLogoutClick(event);
+                            }}
+                            disabled={isLoggingOut || isCheckingLogoutSurvey}
+                          >
+                            <LogOut className="size-5 mr-3" />
+                            <span>{isLoggingOut ? 'Signing Out...' : 'Logout'}</span>
+                          </Button>
+                        )}
                         <div className="px-2 text-sm text-gray-600 dark:text-gray-300">
                           <p className="font-medium mb-2">Keyboard Shortcuts</p>
                           <div className="space-y-1 text-xs">
