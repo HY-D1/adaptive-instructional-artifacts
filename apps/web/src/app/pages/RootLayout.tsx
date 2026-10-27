@@ -18,6 +18,7 @@ import { getSurveyInvitationsResult } from '../lib/api/storage-client';
 import { useToast } from '../components/ui/toast';
 import {
   getPendingPostSurveyUrl,
+  getPendingPostSurveyUrlWithTimeout,
   LogoutSurveyReminderDialog,
 } from '../components/features/surveys/LogoutSurveyReminderDialog';
 import { CommandMenu } from '../components/shared/CommandMenu';
@@ -532,13 +533,10 @@ export function RootLayout() {
     logoutButtonRef.current = event.currentTarget;
     setIsCheckingLogoutSurvey(true);
     try {
-      const response = await Promise.race([
-        getSurveyInvitationsResult(),
-        new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Survey check timed out')), 2000);
-        }),
-      ]);
-      const surveyUrl = response.success ? getPendingPostSurveyUrl(response.data) : null;
+      const surveyUrl = await getPendingPostSurveyUrlWithTimeout(async () => {
+        const response = await getSurveyInvitationsResult();
+        return response.success ? response.data : undefined;
+      });
       if (surveyUrl) {
         setPostSurveyUrl(surveyUrl);
         setPostSurveyReminderOpen(true);

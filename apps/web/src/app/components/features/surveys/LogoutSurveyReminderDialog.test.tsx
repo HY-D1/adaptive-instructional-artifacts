@@ -1,4 +1,6 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import * as React from "react";
 import { describe, expect, it, vi } from "vitest";
 import {
   getPendingPostSurveyUrl,
@@ -30,8 +32,9 @@ describe("post-survey logout reminder", () => {
     expect(getPendingPostSurveyUrl(undefined)).toBeNull();
   });
 
-  it("logs out when the student chooses Log out anyway", () => {
+  it("logs out when the student chooses Log out anyway", async () => {
     const onLogoutAnyway = vi.fn();
+    const user = userEvent.setup();
 
     render(
       <LogoutSurveyReminderDialog
@@ -44,12 +47,13 @@ describe("post-survey logout reminder", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Log out anyway" }));
+    await user.click(screen.getByRole("button", { name: "Log out anyway" }));
     expect(onLogoutAnyway).toHaveBeenCalledOnce();
   });
 
-  it("opens the post survey when the student chooses Complete the survey", () => {
+  it("opens the post survey when the student chooses Complete the survey", async () => {
     const onCompleteSurvey = vi.fn();
+    const user = userEvent.setup();
 
     render(
       <LogoutSurveyReminderDialog
@@ -65,13 +69,11 @@ describe("post-survey logout reminder", () => {
     const link = screen.getByRole("link", { name: "Complete the survey" });
     expect(link.getAttribute("href")).toBe(pendingPostSurvey.surveyUrl);
     expect(link.getAttribute("target")).toBe("_blank");
-    fireEvent.click(link);
+    await user.click(link);
     expect(onCompleteSurvey).toHaveBeenCalledOnce();
   });
 
   it("falls back to normal logout when the survey lookup is slow", async () => {
-    const onOpenChange = vi.fn();
-    const onLogoutAnyway = vi.fn();
     const apiCall = vi.fn(
       () => new Promise<SurveyInvitation[]>((resolve) => setTimeout(() => resolve([pendingPostSurvey]), 3000)),
     );
@@ -79,16 +81,38 @@ describe("post-survey logout reminder", () => {
     const result = await getPendingPostSurveyUrlWithTimeout(apiCall, 2000);
 
     expect(result).toBeNull();
-    render(
-      <LogoutSurveyReminderDialog
-        open={false}
-        surveyUrl={pendingPostSurvey.surveyUrl!}
-        onOpenChange={onOpenChange}
-        onCompleteSurvey={vi.fn()}
-        onLogoutAnyway={onLogoutAnyway}
-        onCloseAutoFocus={vi.fn()}
-      />,
+  });
+
+  it("moves focus into the dialog, closes on Escape, and returns focus to Logout", async () => {
+    const user = userEvent.setup();
+    function Harness() {
+      const [open, setOpen] = React.useState(true);
+      const logoutButtonRef = React.useRef<HTMLButtonElement>(null);
+
+      return (
+        <>
+          <button ref={logoutButtonRef}>Logout</button>
+          <LogoutSurveyReminderDialog
+            open={open}
+            surveyUrl={pendingPostSurvey.surveyUrl!}
+            onOpenChange={setOpen}
+            onCompleteSurvey={() => setOpen(false)}
+            onLogoutAnyway={() => setOpen(false)}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              logoutButtonRef.current?.focus();
+            }}
+          />
+        </>
+      );
+    }
+
+    render(<Harness />);
+    await waitFor(() =>
+      expect(screen.getByRole("dialog").contains(document.activeElement)).toBe(true),
     );
-    expect(screen.queryByRole("dialog")).toBeNull();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Logout" }));
   });
 });
