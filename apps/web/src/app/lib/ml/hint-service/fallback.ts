@@ -66,7 +66,7 @@ export function generateSqlEngageFallbackHint(
     retrievedChunkIds: retrievalMeta?.retrievedChunkIds ?? [],
     hintSource: retrievalMeta?.hintSource ?? 'static',
     llmModel: retrievalMeta?.llmModel ?? null,
-    promptVersion: retrievalMeta?.promptVersion ?? 'adaptive-hint-v1',
+    promptVersion: retrievalMeta?.promptVersion ?? 'adaptive-hint-v2',
     llmFailed: retrievalMeta?.llmFailed ?? false,
     llmErrorMessage: retrievalMeta?.llmErrorMessage,
   };
@@ -99,7 +99,7 @@ export function createUltimateFallbackHint(
     retrievedChunkIds: [],
     hintSource: sourceMetadata.hintSource ?? 'static',
     llmModel: sourceMetadata.llmModel ?? null,
-    promptVersion: sourceMetadata.promptVersion ?? 'adaptive-hint-v1',
+    promptVersion: sourceMetadata.promptVersion ?? 'adaptive-hint-v2',
     llmFailed: sourceMetadata.llmFailed ?? false,
     llmErrorMessage: sourceMetadata.llmErrorMessage,
   };

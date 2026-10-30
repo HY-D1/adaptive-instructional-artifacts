@@ -25,7 +25,7 @@ export type AvailableResources = {
 
 export type HintSource = 'llm' | 'llm_cache' | 'textbook' | 'static';
 
-export const HINT_PROMPT_VERSION = 'adaptive-hint-v1';
+export const HINT_PROMPT_VERSION = 'adaptive-hint-v2';
 
 export type HintSourceMetadata = {
   hintSource?: HintSource;
@@ -142,6 +142,11 @@ export type AdaptiveHintContext = {
   sqlEngageRecords: SqlEngageRecord[];
   /** Derived learner state from recent interactions and retrieval trace */
   learningSignals: LearningSignalSummary;
+  /** Sanitized execution context; never includes learner identity. */
+  studentSql?: string;
+  errorMessage?: string;
+  resultSummary?: string;
+  tableSchema?: string;
 };
 
 /**

@@ -716,7 +716,7 @@ export function HintSystem({
       retrievedChunkIds: [],
       llmModel: null,
       hintSource: 'static',
-      promptVersion: 'adaptive-hint-v1',
+      promptVersion: 'adaptive-hint-v2',
       llmFailed: false
     };
   };
@@ -1064,7 +1064,7 @@ export function HintSystem({
           retrievedChunkIds: [],
           hintSource: 'static',
           llmModel: null,
-          promptVersion: 'adaptive-hint-v1',
+          promptVersion: 'adaptive-hint-v2',
           llmFailed: false,
         };
       }

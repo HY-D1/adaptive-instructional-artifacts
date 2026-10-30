@@ -179,7 +179,7 @@ function buildRefinedHint(
     retrievedChunkIds: refinedChunkIds,
     hintSource: sourceMetadata.hintSource ?? 'textbook',
     llmModel: sourceMetadata.llmModel ?? null,
-    promptVersion: sourceMetadata.promptVersion ?? 'adaptive-hint-v1',
+    promptVersion: sourceMetadata.promptVersion ?? 'adaptive-hint-v2',
     llmFailed: sourceMetadata.llmFailed ?? false,
     llmErrorMessage: sourceMetadata.llmErrorMessage,
   };
