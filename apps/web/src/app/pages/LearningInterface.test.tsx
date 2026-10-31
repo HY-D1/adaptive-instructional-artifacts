@@ -141,7 +141,7 @@ describe('GeneratedExplanationCard', () => {
     );
 
     expect(
-      Array.from(container.querySelectorAll('[data-testid]')).map((element) => element.dataset.testid),
+      Array.from(container.querySelectorAll('[data-testid]')).map((element) => (element as HTMLElement).dataset.testid),
     ).toEqual([
       'full-explanation-banner',
       'generated-explanation-card',
