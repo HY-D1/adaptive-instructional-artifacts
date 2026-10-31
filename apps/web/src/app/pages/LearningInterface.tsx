@@ -405,12 +405,88 @@ export function GeneratedExplanationPreview({ unit }: { unit: InstructionalUnit 
   });
 
   return (
-    <div className="max-h-64 overflow-y-auto rounded border bg-slate-50 p-3">
+    <div className="max-h-96 overflow-y-auto rounded border bg-slate-50 p-3">
       <p className="text-xs font-medium text-slate-700">{unit.title}</p>
       <div
-        className="prose prose-sm mt-2 max-w-none text-slate-700"
+        className="prose prose-sm mt-2 max-w-none break-words text-slate-700 [&_code]:break-all [&_pre]:whitespace-pre-wrap"
         dangerouslySetInnerHTML={{ __html: renderedContent }}
       />
+    </div>
+  );
+}
+
+export function GeneratedExplanationCard({
+  unit,
+  isGeneratingUnit,
+  generationError,
+  notesActionMessage,
+  onSave,
+}: {
+  unit: InstructionalUnit | null;
+  isGeneratingUnit: boolean;
+  generationError?: string;
+  notesActionMessage?: string;
+  onSave: () => void;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const scrolledUnitIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!unit || scrolledUnitIdsRef.current.has(unit.id)) {
+      return;
+    }
+
+    scrolledUnitIdsRef.current.add(unit.id);
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (typeof cardRef.current?.scrollIntoView !== 'function') {
+      return;
+    }
+    cardRef.current.scrollIntoView({
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      block: 'nearest',
+    });
+  }, [unit]);
+
+  return (
+    <div ref={cardRef} data-testid="generated-explanation-card">
+      <Card className="p-4 space-y-3">
+        <div>
+          <h3 className="font-semibold">Save This Explanation</h3>
+          <p className="text-sm text-gray-600">
+            You have viewed all available hints. Save this explanation to your notes for later review.
+          </p>
+        </div>
+        <Button onClick={onSave} size="sm" className="w-full" disabled={isGeneratingUnit}>
+          {isGeneratingUnit ? (
+            <>
+              <Sparkles className="size-4 mr-2 animate-pulse" />
+              Saving...
+            </>
+          ) : (
+            'Save to My Notes'
+          )}
+        </Button>
+        {isGeneratingUnit && (
+          <p className="text-xs text-gray-500">Preparing your explanation…</p>
+        )}
+        {generationError && (
+          <p className="text-xs text-amber-700 dark:text-amber-300">{generationError}</p>
+        )}
+        {notesActionMessage && (
+          <div className="text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 p-3 rounded-lg border border-green-300 dark:border-green-800 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="size-5 text-green-600 flex-shrink-0" />
+              <p className="font-medium">{notesActionMessage}</p>
+            </div>
+            <Link to="/textbook" className="text-blue-600 hover:underline mt-2 inline-flex items-center gap-1 text-xs">
+              View in My Textbook →
+            </Link>
+          </div>
+        )}
+        {unit && <GeneratedExplanationPreview unit={unit} />}
+      </Card>
     </div>
   );
 }
@@ -3003,6 +3079,16 @@ export function LearningInterface() {
                 sessionConfig={sessionConfig}
               />
 
+              {showAddToNotes && (
+                <GeneratedExplanationCard
+                  unit={latestGeneratedUnit}
+                  isGeneratingUnit={isGeneratingUnit}
+                  generationError={generationError}
+                  notesActionMessage={notesActionMessage}
+                  onSave={handleAddToNotes}
+                />
+              )}
+
               {/* Week 5: Progress Hint - subtle, below hint panel */}
               {isStudent && progressHint && (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -3028,47 +3114,6 @@ export function LearningInterface() {
                   recentInteractions={problemInteractions}
                   onInteractionLogged={handleHintSystemInteraction}
                 />
-              )}
-
-              {showAddToNotes && (
-                <Card className="p-4 space-y-3">
-                  <div>
-                    <h3 className="font-semibold">Save This Explanation</h3>
-                    <p className="text-sm text-gray-600">
-                      You have viewed all available hints. Save this explanation to your notes for later review.
-                    </p>
-                  </div>
-                  <Button onClick={handleAddToNotes} size="sm" className="w-full" disabled={isGeneratingUnit}>
-                    {isGeneratingUnit ? (
-                      <>
-                        <Sparkles className="size-4 mr-2 animate-pulse" />
-                        Saving...
-                      </>
-                    ) : (
-                      'Save to My Notes'
-                    )}
-                  </Button>
-                  {isGeneratingUnit && (
-                    <p className="text-xs text-gray-500">Preparing your explanation…</p>
-                  )}
-                  {generationError && (
-                    <p className="text-xs text-amber-700 dark:text-amber-300">{generationError}</p>
-                  )}
-                  {notesActionMessage && (
-                    <div className="text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 p-3 rounded-lg border border-green-300 dark:border-green-800 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle className="size-5 text-green-600 flex-shrink-0" />
-                        <p className="font-medium">{notesActionMessage}</p>
-                      </div>
-                      <Link to="/textbook" className="text-blue-600 hover:underline mt-2 inline-flex items-center gap-1 text-xs">
-                        View in My Textbook →
-                      </Link>
-                    </div>
-                  )}
-                  {latestGeneratedUnit && (
-                    <GeneratedExplanationPreview unit={latestGeneratedUnit} />
-                  )}
-                </Card>
               )}
 
               <ConceptCoverage learnerId={learnerId} />

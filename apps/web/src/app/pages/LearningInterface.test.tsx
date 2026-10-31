@@ -1,7 +1,8 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  GeneratedExplanationCard,
   GeneratedExplanationPreview,
   resolvePracticeDraftState,
   resolvePracticeProblemFromSources,
@@ -36,6 +37,15 @@ const problems: SQLProblem[] = [
 ];
 
 const fallbackProblem = problems[0];
+let scrollIntoView: ReturnType<typeof vi.fn>;
+
+beforeEach(() => {
+  scrollIntoView = vi.fn();
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: scrollIntoView,
+  });
+});
 
 describe('LearningInterface restore precedence', () => {
   it('prefers backend session problem over stale persisted UI state in account mode', () => {
@@ -99,5 +109,75 @@ describe('GeneratedExplanationPreview', () => {
     );
 
     expect(screen.getByText('Use', { exact: false })).toBeTruthy();
+  });
+});
+
+describe('GeneratedExplanationCard', () => {
+  const unit = {
+    id: 'unit-explanation',
+    type: 'explanation' as const,
+    conceptId: 'select-basics',
+    title: 'Understanding SELECT',
+    content: 'Use **SELECT** to choose columns.',
+    contentFormat: 'markdown' as const,
+    prerequisites: [],
+    addedTimestamp: 1,
+    sourceInteractionIds: [],
+  };
+
+  it('renders between the explanation banner and Ask My Textbook slot', () => {
+    const { container } = render(
+      <div>
+        <div data-testid="full-explanation-banner" />
+        <GeneratedExplanationCard
+          unit={unit}
+          isGeneratingUnit={false}
+          onSave={vi.fn()}
+        />
+        <div data-testid="ask-my-textbook" />
+      </div>,
+    );
+
+    expect(
+      Array.from(container.querySelectorAll('[data-testid]')).map((element) => element.dataset.testid),
+    ).toEqual([
+      'full-explanation-banner',
+      'generated-explanation-card',
+      'ask-my-textbook',
+    ]);
+  });
+
+  it('scrolls into view once for each generated unit', () => {
+    const { rerender } = render(
+      <GeneratedExplanationCard
+        unit={unit}
+        isGeneratingUnit={false}
+        onSave={vi.fn()}
+      />,
+    );
+
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      behavior: 'smooth',
+      block: 'nearest',
+    });
+
+    rerender(
+      <GeneratedExplanationCard
+        unit={{ ...unit, title: 'Updated title' }}
+        isGeneratingUnit={false}
+        onSave={vi.fn()}
+      />,
+    );
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <GeneratedExplanationCard
+        unit={{ ...unit, id: 'unit-explanation-2' }}
+        isGeneratingUnit={false}
+        onSave={vi.fn()}
+      />,
+    );
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
   });
 });
