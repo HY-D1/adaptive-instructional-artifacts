@@ -3077,6 +3077,7 @@ export function LearningInterface() {
                 onInteractionLogged={handleHintSystemInteraction}
                 escalationProfile={currentEscalationProfile}
                 sessionConfig={sessionConfig}
+                isExplanationGenerating={isGeneratingUnit}
               />
 
               {showAddToNotes && (

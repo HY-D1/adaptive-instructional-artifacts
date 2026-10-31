@@ -175,6 +175,30 @@ describe('HintSystem quota handling', () => {
     });
   });
 
+  it('does not log another request when explanation generation is in flight', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ToastProvider>
+        <HintSystem
+          learnerId="learner-1"
+          problemId="problem-1"
+          sessionId="session-1"
+          recentInteractions={[]}
+          isExplanationGenerating
+        />
+      </ToastProvider>,
+    );
+
+    const button = screen.getByRole('button', { name: /preparing your explanation/i });
+    await user.click(button);
+    await user.click(button);
+
+    expect(mockStorage.logGuidanceRequest).not.toHaveBeenCalled();
+    expect(mockStorage.logGuidanceView).not.toHaveBeenCalled();
+    expect(mockStorage.logGuidanceEscalate).not.toHaveBeenCalled();
+  });
+
   describe('HintSystem escalation guard', () => {
     it('suppresses a rapid duplicate but allows a later escalation', () => {
       const first = { key: 'session-1|learner-1|problem-1', timestamp: 1000 };

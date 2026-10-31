@@ -72,6 +72,8 @@ interface HintSystemProps {
   escalationProfile?: EscalationProfile | null;
   /** Session configuration for experimental conditions (Week 6) */
   sessionConfig?: SessionConfig | null;
+  /** Whether an explanation generation request is currently in flight */
+  isExplanationGenerating?: boolean;
 }
 
 export type EscalationGuardState = {
@@ -99,7 +101,8 @@ export function HintSystem({
   onEscalate,
   onInteractionLogged,
   escalationProfile,
-  sessionConfig
+  sessionConfig,
+  isExplanationGenerating = false
 }: HintSystemProps) {
   const [hints, setHints] = useState<string[]>([]);
   const [hintPdfPassages, setHintPdfPassages] = useState<RetrievalPdfPassage[][]>([]);
@@ -917,6 +920,9 @@ export function HintSystem({
     if (!sessionId) {
       return;
     }
+    if (isExplanationGenerating) {
+      return;
+    }
     // Prevent race conditions from double-clicks
     if (isProcessingHint) {
       return;
@@ -1648,10 +1654,12 @@ export function HintSystem({
               onClick={handleRequestHint}
               variant="outline"
               className="w-full h-9 text-sm"
-              disabled={!profile || !sessionId || isProcessingHint}
+              disabled={!profile || !sessionId || isProcessingHint || isExplanationGenerating}
               data-testid="hint-action-button"
             >
-              {isProcessingHint ? (
+              {isExplanationGenerating ? (
+                <span className="truncate">Preparing your explanation…</span>
+              ) : isProcessingHint ? (
                 <Loader2 className="size-4 mr-2 shrink-0 animate-spin" />
               ) : (
                 <Lightbulb className="size-4 mr-2 shrink-0" />
