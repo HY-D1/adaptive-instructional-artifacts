@@ -74,6 +74,20 @@ interface HintSystemProps {
   sessionConfig?: SessionConfig | null;
 }
 
+export type EscalationGuardState = {
+  key: string;
+  timestamp: number;
+};
+
+export function shouldSuppressEscalation(
+  state: EscalationGuardState | null,
+  key: string,
+  now: number,
+  windowMs = 1000,
+): boolean {
+  return state?.key === key && now - state.timestamp < windowMs;
+}
+
 export function HintSystem({ 
   sessionId,
   learnerId, 
@@ -177,6 +191,7 @@ export function HintSystem({
   const hintRequestVersionRef = useRef(0);
   const pendingAutoEscalationTimeoutRef = useRef<number | null>(null);
   const visibleHintCountRef = useRef(0);
+  const escalationGuardRef = useRef<EscalationGuardState | null>(null);
   
   // Enhanced hint system hook
   const {
@@ -775,6 +790,12 @@ export function HintSystem({
     if (!profile || !sessionId) {
       return;
     }
+    const escalationKey = getHelpFlowKey();
+    const now = Date.now();
+    if (shouldSuppressEscalation(escalationGuardRef.current, escalationKey, now)) {
+      return;
+    }
+    escalationGuardRef.current = { key: escalationKey, timestamp: now };
     clearPendingAutoEscalation();
     setHintRuntimeError(null);
 

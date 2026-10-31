@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ToastProvider } from '../../ui/toast';
-import { buildHintSourceMetadata, HintSystem } from './HintSystem';
+import { buildHintSourceMetadata, HintSystem, shouldSuppressEscalation } from './HintSystem';
 
 const mockStorage = vi.hoisted(() => ({
   getProfile: vi.fn(),
@@ -109,6 +109,7 @@ describe('HintSystem quota handling', () => {
       quotaExceeded: true,
       diagnostic: 'hint_cache_write_skipped_quota',
     });
+
     mockUseEnhancedHints.mockReturnValue({
       generateHint: vi.fn(async () => ({
         content: 'Try selecting only the columns you need.',
@@ -171,6 +172,16 @@ describe('HintSystem quota handling', () => {
       llm_model: 'test-model',
       hint_source: 'llm',
       prompt_version: 'test-prompt-v1',
+    });
+  });
+
+  describe('HintSystem escalation guard', () => {
+    it('suppresses a rapid duplicate but allows a later escalation', () => {
+      const first = { key: 'session-1|learner-1|problem-1', timestamp: 1000 };
+
+      expect(shouldSuppressEscalation(null, first.key, 1000)).toBe(false);
+      expect(shouldSuppressEscalation(first, first.key, 1068)).toBe(true);
+      expect(shouldSuppressEscalation(first, first.key, 6000)).toBe(false);
     });
   });
 
