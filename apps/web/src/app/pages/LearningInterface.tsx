@@ -79,6 +79,7 @@ import { clearUiStateForActor, getUiState, setUiState } from '../lib/ui-state';
 import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content/content-generator';
+import { renderTextbookContent } from '../lib/content/textbook-renderer';
 import { buildPdfIndexOutputFields } from '../lib/api/pdf-retrieval';
 import { createEventId } from '../lib/utils/event-id';
 import { startBackgroundAnalysis, stopBackgroundAnalysis, runAnalysisOnce, ANALYSIS_INTERVAL_MS } from '../lib/trace-analyzer';
@@ -397,6 +398,23 @@ function analyzeLearnerHistory(interactions: InteractionEvent[]) {
  * 
  * Used by both student and instructor roles (instructor has additional controls)
  */
+export function GeneratedExplanationPreview({ unit }: { unit: InstructionalUnit }) {
+  const renderedContent = renderTextbookContent({
+    content: unit.content,
+    contentFormat: unit.contentFormat,
+  });
+
+  return (
+    <div className="max-h-64 overflow-y-auto rounded border bg-slate-50 p-3">
+      <p className="text-xs font-medium text-slate-700">{unit.title}</p>
+      <div
+        className="prose prose-sm mt-2 max-w-none text-slate-700"
+        dangerouslySetInnerHTML={{ __html: renderedContent }}
+      />
+    </div>
+  );
+}
+
 export function LearningInterface() {
   const location = useLocation();
   const { role, isStudent, isInstructor, profile, isLoading: isRoleLoading } = useUserRole();
@@ -3031,7 +3049,7 @@ export function LearningInterface() {
                     )}
                   </Button>
                   {isGeneratingUnit && (
-                    <p className="text-xs text-gray-500">Creating your note...</p>
+                    <p className="text-xs text-gray-500">Preparing your explanation…</p>
                   )}
                   {generationError && (
                     <p className="text-xs text-amber-700 dark:text-amber-300">{generationError}</p>
@@ -3048,9 +3066,7 @@ export function LearningInterface() {
                     </div>
                   )}
                   {latestGeneratedUnit && (
-                    <div className="rounded border bg-slate-50 p-2">
-                      <p className="text-xs font-medium text-slate-700">{latestGeneratedUnit.title}</p>
-                    </div>
+                    <GeneratedExplanationPreview unit={latestGeneratedUnit} />
                   )}
                 </Card>
               )}

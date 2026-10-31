@@ -1,6 +1,8 @@
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import {
+  GeneratedExplanationPreview,
   resolvePracticeDraftState,
   resolvePracticeProblemFromSources,
 } from './LearningInterface';
@@ -75,5 +77,27 @@ describe('LearningInterface restore precedence', () => {
 
     expect(resolved.problem.id).toBe('problem-2');
     expect(resolved.draft).toBeNull();
+  });
+});
+
+describe('GeneratedExplanationPreview', () => {
+  it('shows the generated explanation text when a unit exists', () => {
+    render(
+      <GeneratedExplanationPreview
+        unit={{
+          id: 'unit-explanation',
+          type: 'explanation',
+          conceptId: 'select-basics',
+          title: 'Understanding SELECT',
+          content: 'Use **SELECT** to choose columns.',
+          contentFormat: 'markdown',
+          prerequisites: [],
+          addedTimestamp: 1,
+          sourceInteractionIds: [],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Use', { exact: false })).toBeTruthy();
   });
 });
