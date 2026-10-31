@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   GeneratedExplanationCard,
   GeneratedExplanationPreview,
+  SessionConfigErrorCard,
+  SESSION_CONFIG_ERROR_MESSAGE,
   resolvePracticeDraftState,
   resolvePracticeProblemFromSources,
 } from './LearningInterface';
@@ -179,5 +181,20 @@ describe('GeneratedExplanationCard', () => {
       />,
     );
     expect(scrollIntoView).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('SessionConfigErrorCard', () => {
+  it('shows the session setup error alert instead of a loading skeleton', () => {
+    render(<SessionConfigErrorCard />);
+
+    expect(screen.getByRole('alert').textContent).toContain(SESSION_CONFIG_ERROR_MESSAGE);
+    expect(screen.queryByTestId('session-loading-skeleton')).toBeNull();
+  });
+
+  it('does not show the session setup alert when the session setup succeeds', () => {
+    render(<div data-testid="session-ready" />);
+
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

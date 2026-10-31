@@ -491,6 +491,23 @@ export function GeneratedExplanationCard({
   );
 }
 
+export const SESSION_CONFIG_ERROR_MESSAGE =
+  "We couldn't set up your session. Please refresh or contact your instructor.";
+
+export function SessionConfigErrorCard() {
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="container mx-auto px-4 py-6">
+        <Card className="mx-auto max-w-xl p-6">
+          <p className="text-red-700 dark:text-red-300" role="alert">
+            {SESSION_CONFIG_ERROR_MESSAGE}
+          </p>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 export function LearningInterface() {
   const location = useLocation();
   const { role, isStudent, isInstructor, profile, isLoading: isRoleLoading } = useUserRole();
@@ -515,6 +532,7 @@ export function LearningInterface() {
   const [notesActionMessage, setNotesActionMessage] = useState<string | undefined>();
   const [sessionSyncStatus, setSessionSyncStatus] = useState<'checking' | 'confirmed' | 'pending' | 'failed'>('checking');
   const [sessionSyncError, setSessionSyncError] = useState<string | undefined>();
+  const [sessionConfigError, setSessionConfigError] = useState<string | undefined>();
   const [isGeneratingUnit, setIsGeneratingUnit] = useState(false);
   const [generationError, setGenerationError] = useState<string | undefined>();
   const [latestGeneratedUnit, setLatestGeneratedUnit] = useState<InstructionalUnit | null>(null);
@@ -1182,65 +1200,74 @@ export function LearningInterface() {
     let cancelled = false;
     
     const loadConfig = async () => {
-      // Use async loader: backend -> sessionStorage -> assign
-      const result = await loadSessionConfigAsync(learnerId, authUser?.sectionId);
-      
-      if (cancelled) return;
-      
-      const config = result.config;
-      
-      // Log condition assignment event for new assignments (canonical RESEARCH-4 event type)
-      if (result.isNewAssignment) {
-        const configEvent: InteractionEvent = {
-          id: createEventId('event', 'session-config'),
-          sessionId: config.sessionId,
-          learnerId,
-          timestamp: Date.now(),
-          eventType: 'condition_assigned',
-          problemId: currentProblem.id,
-          conditionId: config.conditionId,
-          profileId: config.escalationPolicy,
-          strategyAssigned: config.conditionId,
-          assignmentStrategy: config.staticHintMode ? 'static' : (config.adaptiveLadderDisabled ? 'diagnostic' : 'bandit'),
-          metadata: {
-            sessionConfigVersion: getConditionAssignmentVersion(),
-            sessionConfigSource: result.source,
-            textbookDisabled: config.textbookDisabled,
-            adaptiveLadderDisabled: config.adaptiveLadderDisabled,
-            immediateExplanationMode: config.immediateExplanationMode,
-            staticHintMode: config.staticHintMode,
-          }
-        };
-        storage.saveInteraction(configEvent);
-      }
-      
-      // Log recovery from sessionStorage (for debugging)
-      if (result.source === 'sessionStorage') {
-        console.info('[SessionConfig] Recovered from sessionStorage:', {
-          learnerId,
-          conditionId: config.conditionId,
-        });
-      }
+      try {
+        setSessionConfigError(undefined);
 
-      if (config.sessionId?.trim()) {
-        storage.setActiveSessionId(config.sessionId.trim());
-      }
+        // Use async loader: backend -> sessionStorage -> assign
+        const result = await loadSessionConfigAsync(learnerId, authUser?.sectionId);
 
-      setSessionConfig(config);
+        if (cancelled) return;
+
+        const config = result.config;
       
-      // Override escalation profile if config specifies a policy
-      if (config.escalationPolicy && config.escalationPolicy !== 'adaptive') {
-        const policyProfile = getProfileById(config.escalationPolicy === 'explanation_first' 
-          ? 'explanation-first' 
-          : config.escalationPolicy === 'aggressive' 
-            ? 'fast-escalator'
-            : config.escalationPolicy === 'conservative'
-              ? 'slow-escalator'
-              : 'adaptive-escalator'
-        );
-        if (policyProfile) {
-          setCurrentEscalationProfile(policyProfile);
+        // Log condition assignment event for new assignments (canonical RESEARCH-4 event type)
+        if (result.isNewAssignment) {
+          const configEvent: InteractionEvent = {
+            id: createEventId('event', 'session-config'),
+            sessionId: config.sessionId,
+            learnerId,
+            timestamp: Date.now(),
+            eventType: 'condition_assigned',
+            problemId: currentProblem.id,
+            conditionId: config.conditionId,
+            profileId: config.escalationPolicy,
+            strategyAssigned: config.conditionId,
+            assignmentStrategy: config.staticHintMode ? 'static' : (config.adaptiveLadderDisabled ? 'diagnostic' : 'bandit'),
+            metadata: {
+              sessionConfigVersion: getConditionAssignmentVersion(),
+              sessionConfigSource: result.source,
+              textbookDisabled: config.textbookDisabled,
+              adaptiveLadderDisabled: config.adaptiveLadderDisabled,
+              immediateExplanationMode: config.immediateExplanationMode,
+              staticHintMode: config.staticHintMode,
+            }
+          };
+          storage.saveInteraction(configEvent);
         }
+      
+        // Log recovery from sessionStorage (for debugging)
+        if (result.source === 'sessionStorage') {
+          console.info('[SessionConfig] Recovered from sessionStorage:', {
+            learnerId,
+            conditionId: config.conditionId,
+          });
+        }
+
+        if (config.sessionId?.trim()) {
+          storage.setActiveSessionId(config.sessionId.trim());
+        }
+
+        setSessionConfig(config);
+      
+        // Override escalation profile if config specifies a policy
+        if (config.escalationPolicy && config.escalationPolicy !== 'adaptive') {
+          const policyProfile = getProfileById(config.escalationPolicy === 'explanation_first'
+            ? 'explanation-first'
+            : config.escalationPolicy === 'aggressive'
+              ? 'fast-escalator'
+              : config.escalationPolicy === 'conservative'
+                ? 'slow-escalator'
+                : 'adaptive-escalator'
+          );
+          if (policyProfile) {
+            setCurrentEscalationProfile(policyProfile);
+          }
+        }
+      } catch (error) {
+        if (cancelled) return;
+
+        console.error('[SessionConfig] Failed to load session configuration:', error);
+        setSessionConfigError("We couldn't set up your session. Please refresh or contact your instructor.");
       }
     };
     
@@ -2501,6 +2528,10 @@ export function LearningInterface() {
     ).length,
     [problemInteractions]
   );
+
+  if (sessionConfigError) {
+    return <SessionConfigErrorCard />;
+  }
 
   if (isLoading) {
     return (
