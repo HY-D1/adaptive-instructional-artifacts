@@ -1074,7 +1074,8 @@ describe('Assignment Strategy: Performance', () => {
     const endTime = Date.now();
 
     expect(endTime - startTime).toBeLessThan(500);
-    expect(manager.getLearnerCount()).toBe(100);
+    // The shared-pool design stores one bandit for all learners.
+    expect(manager.getLearnerCount()).toBe(1);
   });
 });
 

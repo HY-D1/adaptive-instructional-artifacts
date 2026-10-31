@@ -30,9 +30,21 @@ import { useUserRole } from '../../../hooks/useUserRole';
 import { useStorageFeedback } from '../../../hooks/useStorageFeedback';
 import type { EscalationProfile } from '../../../lib/ml/escalation-profiles';
 import type { SessionConfig } from '../../../types';
-import { orchestrate, type OrchestrationDecision } from '../../../lib/ml/textbook-orchestrator';
+import { orchestrate, resolveConditionFlags, resolveControlDecision, type OrchestrationDecision } from '../../../lib/ml/textbook-orchestrator';
 import { buildHintViewEvent, buildStableHintId } from '../../../lib/telemetry/build-hint-view-event';
 import { clearProblemHints, loadHintInfo, saveHintSnapshot } from '../../../lib/storage/hint-cache';
+
+export function buildHintSourceMetadata(selection: {
+  llmModel: string | null;
+  hintSource: 'llm' | 'llm_cache' | 'textbook' | 'static';
+  promptVersion: string;
+}): { llm_model: string | null; hint_source: string; prompt_version: string } {
+  return {
+    llm_model: selection.llmModel,
+    hint_source: selection.hintSource,
+    prompt_version: selection.promptVersion,
+  };
+}
 
 /**
  * Props for the HintSystem component
@@ -60,6 +72,22 @@ interface HintSystemProps {
   escalationProfile?: EscalationProfile | null;
   /** Session configuration for experimental conditions (Week 6) */
   sessionConfig?: SessionConfig | null;
+  /** Whether an explanation generation request is currently in flight */
+  isExplanationGenerating?: boolean;
+}
+
+export type EscalationGuardState = {
+  key: string;
+  timestamp: number;
+};
+
+export function shouldSuppressEscalation(
+  state: EscalationGuardState | null,
+  key: string,
+  now: number,
+  windowMs = 1000,
+): boolean {
+  return state?.key === key && now - state.timestamp < windowMs;
 }
 
 export function HintSystem({ 
@@ -73,7 +101,8 @@ export function HintSystem({
   onEscalate,
   onInteractionLogged,
   escalationProfile,
-  sessionConfig
+  sessionConfig,
+  isExplanationGenerating = false
 }: HintSystemProps) {
   const [hints, setHints] = useState<string[]>([]);
   const [hintPdfPassages, setHintPdfPassages] = useState<RetrievalPdfPassage[][]>([]);
@@ -165,6 +194,7 @@ export function HintSystem({
   const hintRequestVersionRef = useRef(0);
   const pendingAutoEscalationTimeoutRef = useRef<number | null>(null);
   const visibleHintCountRef = useRef(0);
+  const escalationGuardRef = useRef<EscalationGuardState | null>(null);
   
   // Enhanced hint system hook
   const {
@@ -613,6 +643,9 @@ export function HintSystem({
     safetyFilterApplied: boolean;
     retrievedSourceIds: string[];
     retrievedChunkIds: string[];
+    llmModel: string | null;
+    hintSource: 'llm' | 'llm_cache' | 'textbook' | 'static';
+    promptVersion: string;
     llmFailed?: boolean;
     llmErrorMessage?: string;
   } | null> => {
@@ -658,6 +691,9 @@ export function HintSystem({
           safetyFilterApplied: enhancedHint.safetyFilterApplied,
           retrievedSourceIds: enhancedHint.retrievedSourceIds,
           retrievedChunkIds: enhancedHint.retrievedChunkIds,
+          llmModel: enhancedHint.llmModel,
+          hintSource: enhancedHint.hintSource,
+          promptVersion: enhancedHint.promptVersion,
           llmFailed: enhancedHint.llmFailed,
           llmErrorMessage: enhancedHint.llmErrorMessage
         };
@@ -696,6 +732,9 @@ export function HintSystem({
       safetyFilterApplied: false,
       retrievedSourceIds: [],
       retrievedChunkIds: [],
+      llmModel: null,
+      hintSource: 'static',
+      promptVersion: 'adaptive-hint-v2',
       llmFailed: false
     };
   };
@@ -754,6 +793,12 @@ export function HintSystem({
     if (!profile || !sessionId) {
       return;
     }
+    const escalationKey = getHelpFlowKey();
+    const now = Date.now();
+    if (shouldSuppressEscalation(escalationGuardRef.current, escalationKey, now)) {
+      return;
+    }
+    escalationGuardRef.current = { key: escalationKey, timestamp: now };
     clearPendingAutoEscalation();
     setHintRuntimeError(null);
 
@@ -875,6 +920,9 @@ export function HintSystem({
     if (!sessionId) {
       return;
     }
+    if (isExplanationGenerating) {
+      return;
+    }
     // Prevent race conditions from double-clicks
     if (isProcessingHint) {
       return;
@@ -945,18 +993,25 @@ export function HintSystem({
         // Use first available concept ID for corpus resolution; fall back to error subtype
         const conceptId = conceptIds[0] || activeHintSubtype || errorSubtypeId || 'unknown';
 
-        const decision = orchestrate({
-          conceptId,
-          retryCount,
-          hintCount: hintCountForOrchestration,
-          elapsedMs,
-          sessionConfig: {
-            textbookDisabled: sessionConfig.textbookDisabled ?? false,
-            adaptiveLadderDisabled: sessionConfig.adaptiveLadderDisabled ?? false,
-            immediateExplanationMode: sessionConfig.immediateExplanationMode ?? false,
-            staticHintMode: sessionConfig.staticHintMode ?? false,
-          },
+        const conditionFlags = resolveConditionFlags(sessionConfig.conditionId, {
+          textbookDisabled: sessionConfig.textbookDisabled ?? false,
+          adaptiveLadderDisabled: sessionConfig.adaptiveLadderDisabled ?? false,
+          immediateExplanationMode: sessionConfig.immediateExplanationMode ?? false,
+          staticHintMode: sessionConfig.staticHintMode ?? false,
         });
+        const decision = sessionConfig.conditionId === 'control'
+          ? resolveControlDecision(nextHelpRequestIndex, {
+              corpusConceptId: null,
+              errorCountAtDecision: retryCount,
+              timeToDecision: elapsedMs,
+            })
+          : orchestrate({
+              conceptId,
+              retryCount,
+              hintCount: hintCountForOrchestration,
+              elapsedMs,
+              sessionConfig: conditionFlags,
+            });
 
         if (decision.action === 'show_explanation') {
           if (!isStaleRequest()) {
@@ -997,6 +1052,9 @@ export function HintSystem({
         retrievedChunkIds: string[];
         llmFailed?: boolean;
         llmErrorMessage?: string;
+        llmModel: string | null;
+        hintSource: 'llm' | 'llm_cache' | 'textbook' | 'static';
+        promptVersion: string;
       } | null = null;
 
       try {
@@ -1031,6 +1089,10 @@ export function HintSystem({
           safetyFilterApplied: false,
           retrievedSourceIds: [],
           retrievedChunkIds: [],
+          hintSource: 'static',
+          llmModel: null,
+          promptVersion: 'adaptive-hint-v2',
+          llmFailed: false,
         };
       }
 
@@ -1129,6 +1191,7 @@ export function HintSystem({
           is_enhanced: hintSelection.isEnhanced,
           llm_failed: hintSelection.llmFailed || false,
           llm_error_message: hintSelection.llmErrorMessage || null,
+          ...buildHintSourceMetadata(hintSelection),
           retrieval_confidence: Number(hintSelection.retrievalConfidence.toFixed(4)),
           fallback_reason: hintSelection.fallbackReason || null,
           safety_filter_applied: hintSelection.safetyFilterApplied,
@@ -1195,18 +1258,24 @@ export function HintSystem({
           // Re-run canonical orchestrator with updated hint count for canonical RESEARCH-4 fields
           const traceForDecision = [...problemTrace, hintEvent];
           const rungExhaustedDecision = sessionConfig
-            ? orchestrate({
-                conceptId: conceptIds[0] || activeHintSubtype || errorSubtypeId || 'unknown',
-                retryCount: errorCount,
-                hintCount: hintCount + 1, // include the hint we just showed
-                elapsedMs: timeSpent,
-                sessionConfig: {
-                  textbookDisabled: sessionConfig.textbookDisabled ?? false,
-                  adaptiveLadderDisabled: sessionConfig.adaptiveLadderDisabled ?? false,
-                  immediateExplanationMode: sessionConfig.immediateExplanationMode ?? false,
-                  staticHintMode: sessionConfig.staticHintMode ?? false,
-                },
-              })
+            ? sessionConfig.conditionId === 'control'
+              ? resolveControlDecision(nextHelpRequestIndex + 1, {
+                  corpusConceptId: null,
+                  errorCountAtDecision: errorCount,
+                  timeToDecision: timeSpent,
+                })
+              : orchestrate({
+                  conceptId: conceptIds[0] || activeHintSubtype || errorSubtypeId || 'unknown',
+                  retryCount: errorCount,
+                  hintCount: hintCount + 1, // include the hint we just showed
+                  elapsedMs: timeSpent,
+                  sessionConfig: resolveConditionFlags(sessionConfig.conditionId, {
+                    textbookDisabled: sessionConfig.textbookDisabled ?? false,
+                    adaptiveLadderDisabled: sessionConfig.adaptiveLadderDisabled ?? false,
+                    immediateExplanationMode: sessionConfig.immediateExplanationMode ?? false,
+                    staticHintMode: sessionConfig.staticHintMode ?? false,
+                  }),
+                })
             : undefined;
           void handleShowExplanation('auto', nextHelpRequestIndex + 1, traceForDecision, rungExhaustedDecision);
         }, 500);
@@ -1585,10 +1654,12 @@ export function HintSystem({
               onClick={handleRequestHint}
               variant="outline"
               className="w-full h-9 text-sm"
-              disabled={!profile || !sessionId || isProcessingHint}
+              disabled={!profile || !sessionId || isProcessingHint || isExplanationGenerating}
               data-testid="hint-action-button"
             >
-              {isProcessingHint ? (
+              {isExplanationGenerating ? (
+                <span className="truncate">Preparing your explanation…</span>
+              ) : isProcessingHint ? (
                 <Loader2 className="size-4 mr-2 shrink-0 animate-spin" />
               ) : (
                 <Lightbulb className="size-4 mr-2 shrink-0" />

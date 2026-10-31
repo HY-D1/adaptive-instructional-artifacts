@@ -16,28 +16,84 @@ import {
   type BatchValidationResult,
 } from '../db/index.js';
 import type { EventType } from '../types.js';
+import { requirePreSurveyCompleted } from '../middleware/pre-survey.js';
 
 const router = Router();
+const MAX_BATCH_BODY_BYTES = 3 * 1024 * 1024;
+
+const scalarMetadataValue = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+]);
+
+const boundedInputMetadata = z.record(scalarMetadataValue).superRefine((value, ctx) => {
+  if (JSON.stringify(value).length > 100_000) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Metadata exceeds maximum size of 100KB' });
+  }
+});
+
+const boundedOutputMetadata = z.record(
+  z.union([scalarMetadataValue, z.array(z.string()).max(500)]),
+).superRefine((value, ctx) => {
+  if (JSON.stringify(value).length > 100_000) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Metadata exceeds maximum size of 100KB' });
+  }
+});
+
+const boundedMetadata = z.record(z.unknown()).superRefine((value, ctx) => {
+  if (JSON.stringify(value).length > 100_000) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Metadata exceeds maximum size of 100KB' });
+  }
+});
 
 // Zod schema for interaction event validation (BUG-007)
-const interactionEventSchema = z.object({
+export const interactionEventSchema = z.object({
   learnerId: z.string(),
   eventType: z.string(),
   problemId: z.string(),
+  conditionId: z.enum(['adaptive', 'control']).optional(),
   id: z.string().optional(),
   sessionId: z.string().optional(),
   timestamp: z.string().optional(),
+  problemSetId: z.string().optional(),
+  problemNumber: z.number().optional(),
   code: z.string().max(50000).optional(),
   error: z.string().max(5000).optional(),
+  errorSubtypeId: z.string().optional(),
+  executionTimeMs: z.number().optional(),
   hintText: z.string().max(10000).optional(),
   hintLevel: z.number().optional(),
   hintId: z.string().optional(),
+  explanationId: z.string().optional(),
+  helpRequestIndex: z.number().optional(),
+  sqlEngageSubtype: z.string().optional(),
+  sqlEngageRowId: z.string().optional(),
   conceptId: z.string().optional(),
+  conceptIds: z.array(z.string()).max(500).optional(),
   source: z.string().optional(),
   totalTime: z.number().optional(),
   problemsAttempted: z.number().optional(),
   problemsSolved: z.number().optional(),
   successful: z.boolean().optional(),
+  policyVersion: z.string().optional(),
+  timeSpent: z.number().optional(),
+  ruleFired: z.string().optional(),
+  templateId: z.string().optional(),
+  inputHash: z.string().optional(),
+  model: z.string().optional(),
+  noteId: z.string().optional(),
+  noteTitle: z.string().optional(),
+  noteContent: z.string().max(100000).optional(),
+  retrievedSourceIds: z.array(z.string()).max(500).optional(),
+  retrievedChunks: z.array(z.record(z.unknown())).max(500).optional(),
+  triggerInteractionIds: z.array(z.string()).max(500).optional(),
+  evidenceInteractionIds: z.array(z.string()).max(500).optional(),
+  sourceInteractionIds: z.array(z.string()).max(500).optional(),
+  inputs: boundedInputMetadata.optional(),
+  outputs: boundedOutputMetadata.optional(),
+  metadata: boundedMetadata.optional(),
   // Escalation Profile fields
   profileId: z.string().optional(),
   assignmentStrategy: z.string().optional(),
@@ -47,7 +103,13 @@ const interactionEventSchema = z.object({
   selectedArm: z.string().optional(),
   selectionMethod: z.string().optional(),
   armStatsAtSelection: z.record(z.any()).optional(),
-  reward: z.number().optional(),
+  reward: z.union([
+    z.number(),
+    z.object({
+      total: z.number(),
+      components: z.record(z.number()),
+    }),
+  ]).optional(),
   newAlpha: z.number().optional(),
   newBeta: z.number().optional(),
   // HDI fields
@@ -67,9 +129,68 @@ const interactionEventSchema = z.object({
   learnerProfileId: z.string().optional(),
   payload: z.record(z.any()).optional(),
   textbookUnitsRetrieved: z.array(z.string()).optional(),
+  requestType: z.string().optional(),
+  currentRung: z.number().optional(),
+  rung: z.number().optional(),
+  grounded: z.boolean().optional(),
+  contentLength: z.number().optional(),
+  fromRung: z.number().optional(),
+  toRung: z.number().optional(),
+  unitId: z.string().optional(),
+  action: z.string().optional(),
+  dedupeKey: z.string().optional(),
+  revisionCount: z.number().optional(),
+  passageCount: z.number().optional(),
+  expanded: z.boolean().optional(),
+  chatMessage: z.string().max(10000).optional(),
+  chatResponse: z.string().max(100000).optional(),
+  chatQuickChip: z.string().optional(),
+  savedToNotes: z.boolean().optional(),
+  scheduleId: z.string().optional(),
+  promptId: z.string().optional(),
+  promptType: z.string().optional(),
+  response: z.string().optional(),
+  isCorrect: z.boolean().optional(),
+  scheduledTime: z.number().optional(),
+  shownTime: z.number().optional(),
+  reinforcementCorrect: z.boolean().optional(),
+  reinforcementLatencyMs: z.number().optional(),
+  sourceUnitId: z.string().optional(),
+  sourceConceptId: z.string().optional(),
+  delayBucket: z.string().optional(),
+  completedTime: z.number().optional(),
+  retryCount: z.number().optional(),
+  hintCount: z.number().optional(),
+  llmProvider: z.string().optional(),
+  llmModel: z.string().optional(),
+  llmPurpose: z.string().optional(),
+  llmLatencyMs: z.number().optional(),
+  llmInputTokens: z.number().optional(),
+  llmOutputTokens: z.number().optional(),
+  llmReasoningEffort: z.string().optional(),
+  llmFallbackReason: z.string().optional(),
+  llmCacheHit: z.boolean().optional(),
+  hintIndex: z.number().optional(),
+  helpfulnessRating: z.string().optional(),
 }).strict(); // Rejects unknown fields
 
 type NeonInteractionEventInput = z.infer<typeof interactionEventSchema>;
+
+function logInteractionValidationRejection(
+  route: 'single' | 'batch',
+  eventType: unknown,
+  issues: string[],
+): void {
+  console.warn('[interaction/rejected]', {
+    route,
+    eventType: typeof eventType === 'string' && eventType ? eventType : 'unknown',
+    issues,
+  });
+}
+
+function isAdaptiveBanditEvent(eventType: string): boolean {
+  return eventType === 'bandit_arm_selected' || eventType === 'bandit_reward_observed';
+}
 
 // Re-export for backward compatibility
 export { validateResearchEvent, validateResearchBatchForWrite };
@@ -215,6 +336,7 @@ export function buildNeonInteractionPayload(event: NeonInteractionEventInput): R
     ...basePayload,
     id: event.id ?? basePayload.id,
     sessionId: event.sessionId ?? basePayload.sessionId,
+    conditionId: event.conditionId ?? basePayload.conditionId,
     hintId: event.hintId ?? basePayload.hintId,
     conceptId: event.conceptId ?? basePayload.conceptId,
     source: event.source ?? basePayload.source,
@@ -283,11 +405,14 @@ async function resolveScopedTarget(
 // ============================================================================
 
 // POST /api/interactions - Log single interaction
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
     const event = req.body;
 
     if (!event.learnerId || !event.eventType || !event.problemId) {
+      logInteractionValidationRejection('single', event.eventType, [
+        'Missing required fields: learnerId, eventType, problemId',
+      ]);
       res.status(400).json({
         success: false,
         error: 'Missing required fields: learnerId, eventType, problemId',
@@ -297,6 +422,11 @@ router.post('/', async (req: Request, res: Response) => {
 
     const schemaValidation = interactionEventSchema.safeParse(event);
     if (!schemaValidation.success) {
+      logInteractionValidationRejection(
+        'single',
+        event.eventType,
+        schemaValidation.error.issues.map((issue) => issue.message),
+      );
       res.status(400).json({
         success: false,
         error: 'Schema validation failed',
@@ -310,6 +440,16 @@ router.post('/', async (req: Request, res: Response) => {
     const scopedTarget = await resolveScopedTarget(req, validatedEvent.learnerId, 'write');
     validatedEvent.learnerId = scopedTarget.learnerId;
     validatedEvent.sectionId = scopedTarget.sectionId;
+    if (!validatedEvent.conditionId) {
+      validatedEvent.conditionId = (await db.getStudentConditionAssignment(validatedEvent.learnerId))?.conditionId;
+    }
+
+    if (isAdaptiveBanditEvent(validatedEvent.eventType) && validatedEvent.conditionId !== 'adaptive') {
+      const issues = ['Adaptive bandit events require adaptive condition'];
+      logInteractionValidationRejection('single', validatedEvent.eventType, issues);
+      res.status(400).json({ success: false, error: issues[0] });
+      return;
+    }
 
     const id = validatedEvent.id || `${validatedEvent.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
 
@@ -317,12 +457,11 @@ router.post('/', async (req: Request, res: Response) => {
     if (process.env.NODE_ENV === 'production') {
       const validation = validateResearchEvent(validatedEvent);
       if (!validation.valid) {
-        console.warn('[telemetry_validation_error]', {
-          eventType: validatedEvent.eventType,
-          missingFields: validation.missing,
-          eventId: id,
-          route: 'single',
-        });
+        logInteractionValidationRejection(
+          'single',
+          validatedEvent.eventType,
+          validation.missing.map((field) => `Missing required field: ${field}`),
+        );
         // Return 400 to reject invalid research events
         res.status(400).json({
           success: false,
@@ -372,7 +511,7 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // POST /api/interactions/batch - Log multiple interactions
-router.post('/batch', async (req: Request, res: Response) => {
+router.post('/batch', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
     const { events } = req.body;
 
@@ -380,6 +519,15 @@ router.post('/batch', async (req: Request, res: Response) => {
       res.status(400).json({
         success: false,
         error: 'Request body must contain an events array',
+      });
+      return;
+    }
+
+    const requestBodyBytes = Buffer.byteLength(JSON.stringify(req.body), 'utf8');
+    if (requestBodyBytes > MAX_BATCH_BODY_BYTES) {
+      res.status(413).json({
+        success: false,
+        error: 'Interaction batch request exceeds maximum size of 3 MB',
       });
       return;
     }
@@ -393,77 +541,92 @@ router.post('/batch', async (req: Request, res: Response) => {
       return;
     }
 
-    // BUG-007: Validate each event against schema
-    const schemaValidationErrors: Array<{ index: number; eventId: string; issues: string[] }> = [];
+    // Validate each event independently so valid events can still be persisted.
+    const rejectedIndices = new Set<number>();
+    const failedEvents: Array<{ index: number; eventId: string; error: string; rejected?: boolean }> = [];
     for (let i = 0; i < events.length; i++) {
       const result = interactionEventSchema.safeParse(events[i]);
       if (!result.success) {
-        schemaValidationErrors.push({
+        const issues = result.error.issues.map((issue) => issue.message);
+        logInteractionValidationRejection(
+          'batch',
+          events[i]?.eventType,
+          issues,
+        );
+        rejectedIndices.add(i);
+        failedEvents.push({
           index: i,
           eventId: events[i]?.id || `index-${i}`,
-          issues: result.error.issues.map(issue => issue.message),
+          error: `Schema validation failed: ${issues.join('; ')}`,
+          rejected: true,
         });
       }
-    }
-    if (schemaValidationErrors.length > 0) {
-      res.status(400).json({
-        success: false,
-        error: 'Schema validation failed for one or more events',
-        schemaErrors: schemaValidationErrors,
-      });
-      return;
     }
 
     // RESEARCH-4: Validate basic required fields for each event (parity with single route)
-    const invalidEvents: Array<{ index: number; eventId: string; reason: string }> = [];
     for (let i = 0; i < events.length; i++) {
+      if (rejectedIndices.has(i)) continue;
       const event = events[i];
       if (!event.learnerId || !event.eventType || !event.problemId) {
-        invalidEvents.push({
+        logInteractionValidationRejection('batch', event.eventType, [
+          'Missing required fields: learnerId, eventType, problemId',
+        ]);
+        rejectedIndices.add(i);
+        failedEvents.push({
           index: i,
           eventId: event.id || `index-${i}`,
-          reason: 'Missing required fields: learnerId, eventType, or problemId',
+          error: 'Missing required fields: learnerId, eventType, or problemId',
+          rejected: true,
         });
       }
     }
-    if (invalidEvents.length > 0) {
-      res.status(400).json({
-        success: false,
-        error: 'Invalid events in batch',
-        invalidEvents,
-      });
-      return;
-    }
 
     if (process.env.NODE_ENV === 'production') {
-      const batchValidation = validateResearchBatchForWrite(events);
-      if (!batchValidation.valid) {
-        console.warn('[telemetry_validation_error]', {
-          route: 'batch',
-          failedIds: batchValidation.failedIds,
-          errors: batchValidation.errors,
-        });
-        res.status(400).json({
-          success: false,
-          error: 'Invalid research-critical event batch',
-          failedIds: batchValidation.failedIds,
-          errors: batchValidation.errors,
-        });
-        return;
+      for (let i = 0; i < events.length; i++) {
+        if (rejectedIndices.has(i)) continue;
+        const validation = validateResearchEvent(events[i]);
+        if (!validation.valid) {
+          logInteractionValidationRejection(
+            'batch',
+            events[i].eventType,
+            validation.missing.map((field) => `Missing required field: ${field}`),
+          );
+          rejectedIndices.add(i);
+          failedEvents.push({
+            index: i,
+            eventId: events[i].id || `index-${i}`,
+            error: `Research validation failed: ${validation.missing.join(', ')}`,
+            rejected: true,
+          });
+        }
       }
     }
 
     const results = [];
     const confirmedIds: string[] = [];
-    const failedEvents: Array<{ index: number; eventId: string; error: string }> = [];
     
     // Process each event, tracking partial failures
     for (let i = 0; i < events.length; i++) {
+      if (rejectedIndices.has(i)) continue;
       const event = events[i];
       try {
         const scopedTarget = await resolveScopedTarget(req, event.learnerId, 'write');
         event.learnerId = scopedTarget.learnerId;
         event.sectionId = scopedTarget.sectionId;
+        if (!event.conditionId) {
+          event.conditionId = (await db.getStudentConditionAssignment(event.learnerId))?.conditionId;
+        }
+        if (isAdaptiveBanditEvent(event.eventType) && event.conditionId !== 'adaptive') {
+          const reason = 'Adaptive bandit events require adaptive condition';
+          logInteractionValidationRejection('batch', event.eventType, [reason]);
+          failedEvents.push({
+            index: i,
+            eventId: event.id || `index-${i}`,
+            error: reason,
+            rejected: true,
+          });
+          continue;
+        }
         const id = event.id || `${event.eventType}-${scopedTarget.learnerId}-${Date.now()}`;
         
         const payload = buildNeonInteractionPayload(event);
@@ -511,9 +674,9 @@ router.post('/batch', async (req: Request, res: Response) => {
     // RESEARCH-2: Return confirmed IDs for client-side verification
     // If all events failed, return 500. If partial success, return 207 Multi-Status
     if (results.length === 0 && failedEvents.length > 0) {
-      res.status(500).json({
+      res.status(400).json({
         success: false,
-        error: 'All events failed to process',
+        error: 'All events were rejected',
         failedEvents,
       });
       return;

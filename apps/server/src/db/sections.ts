@@ -7,6 +7,7 @@ export interface CourseSection {
   instructorUserId: string;
   name: string;
   studentSignupCode: string;
+  sectionType: 'test' | 'production' | 'pilot';
   createdAt: string;
   updatedAt: string;
 }
@@ -24,6 +25,7 @@ function mapCourseSection(row: Record<string, unknown>): CourseSection {
     instructorUserId: String(row.instructor_user_id),
     name: String(row.name),
     studentSignupCode: String(row.student_signup_code),
+    sectionType: (row.section_type as 'test' | 'production' | 'pilot') || 'test',
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -113,6 +115,23 @@ export async function getOwnedSectionsByInstructor(
     ORDER BY created_at ASC
   `;
   return rows.map((row) => mapCourseSection(row as Record<string, unknown>));
+}
+
+export async function getSectionsByType(
+  sectionType: 'test' | 'production' | 'pilot'
+): Promise<CourseSection[]> {
+  const db = getDb();
+  const rows = await db`
+    SELECT *
+    FROM course_sections
+    WHERE section_type = ${sectionType}
+    ORDER BY created_at ASC
+  `;
+  return rows.map((row) => mapCourseSection(row as Record<string, unknown>));
+}
+
+export async function getProductionSections(): Promise<CourseSection[]> {
+  return getSectionsByType('production');
 }
 
 export async function getSectionForStudent(studentUserId: string): Promise<CourseSection | null> {

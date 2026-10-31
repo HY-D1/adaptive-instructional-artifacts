@@ -5,7 +5,7 @@
  */
 
 import type { GuidanceRung } from '../guidance-ladder';
-import type { EnhancedHint, HintGenerationOptions, RetrievalSignalMeta } from './types';
+import type { EnhancedHint, HintGenerationOptions, HintSourceMetadata, RetrievalSignalMeta } from './types';
 import { checkAvailableResources } from './resources';
 import { buildEnhancedRetrievalBundle, extractRetrievalSignals, MIN_RETRIEVAL_CONFIDENCE } from './retrieval';
 import { generateSqlEngageFallbackHint, createUltimateFallbackHint, mergeFallbackReasons } from './fallback';
@@ -54,6 +54,7 @@ export async function generateEnhancedHint(options: HintGenerationOptions): Prom
   // Retrieval still builds context first, but low confidence/refined hints are fallback paths.
   const canUseLLM = resources.llm || Boolean(forceLLM);
   let llmFallbackReason: string | null = null;
+  let llmFailureMetadata: HintSourceMetadata = {};
   if (canUseLLM) {
     try {
       const llmHint = await generateLLMEnhancedHint(options, retrievalBundle, resources, retrievalSignals);
@@ -61,8 +62,21 @@ export async function generateEnhancedHint(options: HintGenerationOptions): Prom
         return llmHint;
       }
       llmFallbackReason = llmHint.fallbackReason;
+      llmFailureMetadata = {
+        hintSource: llmHint.hintSource,
+        llmModel: llmHint.llmModel,
+        promptVersion: llmHint.promptVersion,
+        llmFailed: llmHint.llmFailed,
+        llmErrorMessage: llmHint.llmErrorMessage,
+      };
     } catch (error) {
       llmFallbackReason = 'llm_error';
+      llmFailureMetadata = {
+        hintSource: 'static',
+        llmModel: null,
+        llmFailed: true,
+        llmErrorMessage: error instanceof Error ? error.message : 'Unknown error',
+      };
       console.warn('[HintService] LLM hint failed; falling back to grounded static paths:', error);
     }
   }
@@ -73,7 +87,7 @@ export async function generateEnhancedHint(options: HintGenerationOptions): Prom
     : { content: null, rejectReason: 'missing_error_subtype' as const };
 
   if (refinedHintResult.content) {
-    return buildRefinedHint(rung, refinedHintResult, retrievalSignals, retrievalBundle);
+    return buildRefinedHint(rung, refinedHintResult, retrievalSignals, retrievalBundle, llmFailureMetadata);
   }
 
   const refinedFallbackReason = mergeFallbackReasons(
@@ -88,9 +102,10 @@ export async function generateEnhancedHint(options: HintGenerationOptions): Prom
         ...retrievalSignals,
         fallbackReason: mergeFallbackReasons('low_retrieval_confidence', refinedFallbackReason),
         safetyFilterApplied: true,
+        ...llmFailureMetadata,
       });
     }
-    return createUltimateFallbackHint(rung, retrievalSignals.retrievalConfidence);
+    return createUltimateFallbackHint(rung, retrievalSignals.retrievalConfidence, llmFailureMetadata);
   }
 
   // Decision: Do we have textbook content?
@@ -101,7 +116,7 @@ export async function generateEnhancedHint(options: HintGenerationOptions): Prom
     return generateTextbookEnhancedHint(options, retrievalBundle, resources, {
       ...retrievalSignals,
       fallbackReason: refinedFallbackReason,
-    });
+    }, llmFailureMetadata);
   }
 
   // CASE 2: Neither LLM nor Textbook → SQL-Engage CSV fallback
@@ -109,11 +124,12 @@ export async function generateEnhancedHint(options: HintGenerationOptions): Prom
     return generateSqlEngageFallbackHint(errorSubtypeId, rung, {
       ...retrievalSignals,
       fallbackReason: mergeFallbackReasons('no_llm_or_textbook', refinedFallbackReason),
+      ...llmFailureMetadata,
     });
   }
 
   // Ultimate fallback
-  return createUltimateFallbackHint(rung, retrievalSignals.retrievalConfidence);
+  return createUltimateFallbackHint(rung, retrievalSignals.retrievalConfidence, llmFailureMetadata);
 }
 
 /**
@@ -128,7 +144,8 @@ function buildRefinedHint(
     refinementConfidence?: number;
   },
   retrievalSignals: RetrievalSignalMeta,
-  retrievalBundle: { conceptCandidates: Array<{ id: string }> }
+  retrievalBundle: { conceptCandidates: Array<{ id: string }> },
+  sourceMetadata: HintSourceMetadata = {}
 ): EnhancedHint {
   const refinedSourceIds = Array.from(
     new Set([...retrievalSignals.retrievedSourceIds, ...refinedHintResult.sourceChunkIds])
@@ -160,6 +177,11 @@ function buildRefinedHint(
     safetyFilterApplied: false,
     retrievedSourceIds: refinedSourceIds,
     retrievedChunkIds: refinedChunkIds,
+    hintSource: sourceMetadata.hintSource ?? 'textbook',
+    llmModel: sourceMetadata.llmModel ?? null,
+    promptVersion: sourceMetadata.promptVersion ?? 'adaptive-hint-v2',
+    llmFailed: sourceMetadata.llmFailed ?? false,
+    llmErrorMessage: sourceMetadata.llmErrorMessage,
   };
 }
 

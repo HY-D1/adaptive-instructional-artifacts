@@ -14,9 +14,42 @@ CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('student', 'instructor')),
+  username TEXT NOT NULL UNIQUE
+    CHECK (username ~ '^(student|instructor)-[a-z0-9]{6}$'),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
+
+DO $$
+DECLARE
+  user_row RECORD;
+  candidate TEXT;
+BEGIN
+  FOR user_row IN SELECT id, role FROM users WHERE username IS NULL LOOP
+    LOOP
+      candidate := lower(user_row.role) || '-' || substr(md5(random()::text || clock_timestamp()::text || user_row.id), 1, 6);
+      EXIT WHEN NOT EXISTS (SELECT 1 FROM users WHERE username = candidate);
+    END LOOP;
+    UPDATE users SET username = candidate WHERE id = user_row.id AND username IS NULL;
+  END LOOP;
+END $$;
+
+ALTER TABLE users ALTER COLUMN username SET NOT NULL;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'users_username_format'
+      AND conrelid = 'users'::regclass
+  ) THEN
+    ALTER TABLE users ADD CONSTRAINT users_username_format
+      CHECK (username ~ '^(student|instructor)-[a-z0-9]{6}$');
+  END IF;
+END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);
 
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
 
@@ -54,6 +87,14 @@ CREATE TABLE IF NOT EXISTS course_sections (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE course_sections ADD COLUMN IF NOT EXISTS section_type TEXT
+  NOT NULL DEFAULT 'test'
+  CHECK (section_type IN ('test', 'production', 'pilot'));
+
+CREATE INDEX IF NOT EXISTS idx_course_sections_type ON course_sections(section_type);
+CREATE INDEX IF NOT EXISTS idx_course_sections_instructor_type
+  ON course_sections(instructor_user_id, section_type);
+
 CREATE TABLE IF NOT EXISTS section_enrollments (
   id SERIAL PRIMARY KEY,
   section_id TEXT NOT NULL REFERENCES course_sections(id) ON DELETE CASCADE,
@@ -66,6 +107,66 @@ CREATE INDEX IF NOT EXISTS idx_course_sections_instructor ON course_sections(ins
 CREATE INDEX IF NOT EXISTS idx_course_sections_signup_code ON course_sections(student_signup_code);
 CREATE INDEX IF NOT EXISTS idx_section_enrollments_section ON section_enrollments(section_id);
 CREATE INDEX IF NOT EXISTS idx_section_enrollments_student ON section_enrollments(student_user_id);
+
+CREATE TABLE IF NOT EXISTS student_condition_assignments (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  condition_id TEXT NOT NULL CHECK (condition_id IN ('adaptive', 'control')),
+  first_section_id TEXT NOT NULL REFERENCES course_sections(id) ON DELETE RESTRICT,
+  assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  assignment_version TEXT NOT NULL DEFAULT 'student-condition-v1'
+);
+
+CREATE INDEX IF NOT EXISTS idx_student_condition_assignments_condition
+  ON student_condition_assignments(condition_id);
+
+CREATE TABLE IF NOT EXISTS bandit_arm_state (
+  arm_id TEXT PRIMARY KEY CHECK (arm_id IN ('aggressive', 'conservative', 'explanation-first', 'adaptive')),
+  experiment_version TEXT NOT NULL DEFAULT 'bandit-shared-v1',
+  alpha NUMERIC NOT NULL DEFAULT 1 CHECK (alpha > 0),
+  beta NUMERIC NOT NULL DEFAULT 1 CHECK (beta > 0),
+  pull_count INTEGER NOT NULL DEFAULT 0 CHECK (pull_count >= 0),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO bandit_arm_state (arm_id)
+VALUES ('aggressive'), ('conservative'), ('explanation-first'), ('adaptive')
+ON CONFLICT (arm_id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS bandit_reward_events (
+  event_id TEXT PRIMARY KEY,
+  selection_event_id TEXT NOT NULL UNIQUE,
+  student_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  condition_id TEXT NOT NULL CHECK (condition_id = 'adaptive'),
+  arm_id TEXT NOT NULL REFERENCES bandit_arm_state(arm_id),
+  reward NUMERIC NOT NULL CHECK (reward >= 0 AND reward <= 1),
+  experiment_version TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_bandit_reward_events_student ON bandit_reward_events(student_id);
+
+CREATE TABLE IF NOT EXISTS survey_invitations (
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  instance TEXT NOT NULL CHECK (instance IN ('pre', 'post')),
+  username TEXT,
+  completion_nonce TEXT,
+  qualtrics_response_id TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  PRIMARY KEY (user_id, instance)
+);
+
+ALTER TABLE survey_invitations ADD COLUMN IF NOT EXISTS username TEXT;
+ALTER TABLE survey_invitations ADD COLUMN IF NOT EXISTS completion_nonce TEXT;
+UPDATE survey_invitations
+SET completion_nonce = md5(random()::text || clock_timestamp()::text || user_id || instance)
+WHERE completion_nonce IS NULL;
+
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS metadata TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_survey_invitations_status
+  ON survey_invitations(status);
 
 -- ============================================================================
 -- Learner sessions (experimental condition tracking)
@@ -131,6 +232,7 @@ CREATE TABLE IF NOT EXISTS interaction_events (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL,
+  condition_id TEXT CHECK (condition_id IN ('adaptive', 'control')),
   session_id TEXT,
   timestamp TIMESTAMPTZ NOT NULL,
   event_type TEXT NOT NULL,
@@ -255,6 +357,7 @@ CREATE INDEX IF NOT EXISTS idx_interaction_events_section_timestamp
   ON interaction_events(section_id, timestamp DESC);
 
 ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL;
+ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS condition_id TEXT;
 ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS learner_profile_id TEXT;
 ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS escalation_trigger_reason TEXT;
 ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS error_count_at_escalation INTEGER;
@@ -333,9 +436,18 @@ CREATE TABLE IF NOT EXISTS interaction_textbook_unit_retrievals (
 );
 
 -- RESEARCH-4: Unique constraint for upsert support (event_id, unit_id)
-ALTER TABLE interaction_textbook_unit_retrievals
-ADD CONSTRAINT IF NOT EXISTS unique_event_unit_retrieval 
-UNIQUE (event_id, unit_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'unique_event_unit_retrieval'
+      AND conrelid = 'interaction_textbook_unit_retrievals'::regclass
+  ) THEN
+    ALTER TABLE interaction_textbook_unit_retrievals
+      ADD CONSTRAINT unique_event_unit_retrieval UNIQUE (event_id, unit_id);
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_retrievals_event_id ON interaction_textbook_unit_retrievals(event_id);
 CREATE INDEX IF NOT EXISTS idx_retrievals_unit_id ON interaction_textbook_unit_retrievals(unit_id);

@@ -184,6 +184,26 @@ npm run test:e2e:weekly              # CI regression suite
 npm run replay:gate                  # Replay determinism check
 ```
 
+## Experiment Structure (Additive)
+
+The repository now includes an additive experiment workspace for the pooled/control/logging/analysis/deployment workstream:
+
+- [bandit/README.md](bandit/README.md) — pooled/contextual bandit workstream
+- [control/README.md](control/README.md) — fixed schedule control logic
+- [logging/README.md](logging/README.md) — event pipeline audit and extensions
+- [analysis/README.md](analysis/README.md) — off-policy simulation, convergence estimate, HDI validation, survey linkage
+- [deployment/README.md](deployment/README.md) — isolated deployment and classroom rollout config
+- [data/README.md](data/README.md) — historical validation data and future experiment data
+- [config/README.md](config/README.md) — experiment config files and defaults
+
+The default experiment config lives in [config/experiment-defaults.json](config/experiment-defaults.json) and can be exercised with:
+
+```bash
+npm run experiment:config
+```
+
+This is designed to be additive and reversible. If the experiment path causes issues, the previous app structure remains available because the existing app entry points and runtime behavior were not replaced.
+
 ## Contributing
 
 1. Read [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for working rules

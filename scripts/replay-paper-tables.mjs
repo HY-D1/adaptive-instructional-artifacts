@@ -37,6 +37,7 @@ import {
   adaptiveTextbookCondition,
   explanationFirstCondition,
 } from './textbook-orchestrator-esm.mjs';
+import HDI_WEIGHTS from '../apps/web/src/app/lib/ml/hdi-weights.json' with { type: 'json' };
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -313,7 +314,7 @@ function calculateHDI(trace) {
   const iwh = successfulProblems > 0 ? successfulWithoutHints / successfulProblems : 0;
 
   // Weighted HDI (canonical weights)
-  const weights = { hpa: 0.3, aed: 0.15, er: 0.25, reae: 0.15, iwh: 0.15 };
+  const weights = HDI_WEIGHTS;
   const hdi = Math.min(
     Math.max(
       hpa * weights.hpa + aed * weights.aed + er * weights.er + reae * weights.reae + (1 - iwh) * weights.iwh,
@@ -532,7 +533,7 @@ function generateManifest(comparisons, checksums) {
       description: p.description,
     })),
     formula: {
-      hdi: 'HDI = 0.30*HPA + 0.15*AED + 0.25*ER + 0.15*REAE + 0.15*(1-IWH)',
+      hdi: `HDI = ${HDI_WEIGHTS.hpa}*HPA + ${HDI_WEIGHTS.aed}*AED + ${HDI_WEIGHTS.er}*ER + ${HDI_WEIGHTS.reae}*REAE + ${HDI_WEIGHTS.iwh}*(1-IWH)`,
       components: {
         HPA: 'Hints Per Attempt = min(hints / attempts, 1.0)',
         AED: 'Average Escalation Depth = clamp((avg_hint_level - 1) / 2, 0, 1)',
@@ -683,7 +684,7 @@ async function main() {
             policyId: c.policyId,
             hdi: c.dependency.hdi,
             components: c.dependency.hdiComponents,
-            weights: { hpa: 0.3, aed: 0.15, er: 0.25, reae: 0.15, iwh: 0.15 },
+            weights: HDI_WEIGHTS,
           })),
         },
         null,

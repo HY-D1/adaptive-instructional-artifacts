@@ -10,7 +10,7 @@ import {
   getProgressiveSqlEngageHintText,
   getSqlEngageRowsBySubtype,
 } from '../../../data/sql-engage';
-import type { EnhancedHint, RetrievalSignalMeta } from './types';
+import type { EnhancedHint, HintSourceMetadata, RetrievalSignalMeta } from './types';
 import { applyHintSafetyLayer, getGenericFallbackHint, mergeFallbackReasons } from './safety';
 
 /**
@@ -27,7 +27,7 @@ export function generateSqlEngageFallbackHint(
   retrievalMeta?: Partial<RetrievalSignalMeta> & {
     fallbackReason?: string | null;
     safetyFilterApplied?: boolean;
-  }
+  } & HintSourceMetadata
 ): EnhancedHint {
   const canonicalSubtype = canonicalizeSqlEngageSubtype(errorSubtypeId);
   const records = getSqlEngageRowsBySubtype(canonicalSubtype);
@@ -64,6 +64,11 @@ export function generateSqlEngageFallbackHint(
       (retrievalMeta?.safetyFilterApplied ?? false) || safety.safetyFilterApplied,
     retrievedSourceIds: retrievalMeta?.retrievedSourceIds ?? [],
     retrievedChunkIds: retrievalMeta?.retrievedChunkIds ?? [],
+    hintSource: retrievalMeta?.hintSource ?? 'static',
+    llmModel: retrievalMeta?.llmModel ?? null,
+    promptVersion: retrievalMeta?.promptVersion ?? 'adaptive-hint-v2',
+    llmFailed: retrievalMeta?.llmFailed ?? false,
+    llmErrorMessage: retrievalMeta?.llmErrorMessage,
   };
 }
 
@@ -72,7 +77,8 @@ export function generateSqlEngageFallbackHint(
  */
 export function createUltimateFallbackHint(
   rung: GuidanceRung,
-  retrievalConfidence: number
+  retrievalConfidence: number,
+  sourceMetadata: HintSourceMetadata = {}
 ): EnhancedHint {
   return {
     content: 'Review your SQL syntax and try again.',
@@ -91,6 +97,11 @@ export function createUltimateFallbackHint(
     safetyFilterApplied: false,
     retrievedSourceIds: [],
     retrievedChunkIds: [],
+    hintSource: sourceMetadata.hintSource ?? 'static',
+    llmModel: sourceMetadata.llmModel ?? null,
+    promptVersion: sourceMetadata.promptVersion ?? 'adaptive-hint-v2',
+    llmFailed: sourceMetadata.llmFailed ?? false,
+    llmErrorMessage: sourceMetadata.llmErrorMessage,
   };
 }
 

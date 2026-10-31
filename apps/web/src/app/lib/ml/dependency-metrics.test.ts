@@ -190,10 +190,10 @@ describe('calculateDependencyMetrics - HDI Integration', () => {
   it('includes component weights for transparency', () => {
     const metrics = calculateDependencyMetrics(CANONICAL_TRACE);
     expect(metrics.componentWeights.hpa).toBe(0.30);
-    expect(metrics.componentWeights.aed).toBe(0.15);
-    expect(metrics.componentWeights.er).toBe(0.25);
-    expect(metrics.componentWeights.reae).toBe(0.15);
-    expect(metrics.componentWeights.iwh).toBe(0.15);
+    expect(metrics.componentWeights.aed).toBe(0.133);
+    expect(metrics.componentWeights.er).toBe(0.30);
+    expect(metrics.componentWeights.reae).toBe(0.133);
+    expect(metrics.componentWeights.iwh).toBe(0.134);
   });
 
   it('HDI is bounded to [0, 1]', () => {

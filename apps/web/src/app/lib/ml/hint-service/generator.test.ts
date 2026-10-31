@@ -113,6 +113,9 @@ const llmHint: EnhancedHint = {
   safetyFilterApplied: false,
   retrievedSourceIds: ['sql-engage:select-basic'],
   retrievedChunkIds: [],
+  hintSource: 'llm',
+  llmModel: 'test-model',
+  promptVersion: 'test-prompt-v1',
 };
 
 const fallbackHint: EnhancedHint = {
@@ -127,6 +130,9 @@ const fallbackHint: EnhancedHint = {
   safetyFilterApplied: false,
   retrievedSourceIds: [],
   retrievedChunkIds: [],
+  hintSource: 'static',
+  llmModel: null,
+  promptVersion: 'adaptive-hint-v2',
 };
 
 describe('hint-service Groq-first generator policy', () => {

@@ -208,6 +208,18 @@ describe('logging contract routing', () => {
     expect(payload.source).toBe('hint');
   });
 
+  it('preserves the assigned condition in bandit event payloads', () => {
+    const payload = buildNeonInteractionPayload({
+      learnerId: 'synthetic-adaptive',
+      eventType: 'bandit_arm_selected',
+      problemId: 'problem-1',
+      conditionId: 'adaptive',
+      selectedArm: 'adaptive',
+    });
+
+    expect(payload.conditionId).toBe('adaptive');
+  });
+
   it('preserves client-provided id for session_end events with summary fields', () => {
     const payload = buildNeonInteractionPayload({
       id: 'session-end-event-999',

@@ -5,6 +5,7 @@
 import { Router, Request, Response } from 'express';
 import * as db from '../db/neon.js';
 import { requireOwnership } from '../middleware/auth.js';
+import { requirePreSurveyCompleted } from '../middleware/pre-survey.js';
 
 const router = Router();
 
@@ -27,7 +28,7 @@ router.get('/:userId', async (req: Request, res: Response) => {
 });
 
 // POST /api/textbooks/:userId/units - Create/update textbook unit
-router.post('/:userId/units', async (req: Request, res: Response) => {
+router.post('/:userId/units', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
     const {
       unitId,
@@ -85,7 +86,7 @@ router.get('/:userId/units/:unitId', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/textbooks/:userId/units/:unitId - Delete unit
-router.delete('/:userId/units/:unitId', async (req: Request, res: Response) => {
+router.delete('/:userId/units/:unitId', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
     const deleted = await db.deleteTextbookUnit(req.params.userId, req.params.unitId);
 

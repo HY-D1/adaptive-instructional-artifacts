@@ -70,6 +70,47 @@ Aligns with OpenTelemetry data modeling for cross-service correlation.
 
 ---
 
+## Rung / Hint Level Terminology
+
+The guidance ladder is a 3-level system. Multiple field names refer to the same concept in different contexts. This section clarifies their relationships and preferred usage.
+
+### Quick Reference
+
+| Term | Context | Type | Notes |
+|------|---------|------|-------|
+| **`rung`** | guidance_view, guidance_escalate events | `RungLevel (1\|2\|3)` | ✅ Canonical - use in new code |
+| **`hintLevel`** | HintTemplate type; hint generation | `1 \| 2 \| 3` | ⚠️ Context-specific: describes hint artifact |
+| **`currentRung`** | guidance_request events | `RungLevel (1\|2\|3)` | ⚠️ Context-specific: learner's state before request |
+| **`fromRung` / `toRung`** | guidance_escalate events | `RungLevel (1\|2\|3)` | ⚠️ Context-specific: escalation transitions |
+
+### RungLevel Definition (1 | 2 | 3)
+
+- **Rung 1 (Micro-Hint)**: Narrow, targeted hint focused on the specific error
+  - Example: "Check your GROUP BY clause for this aggregate"
+
+- **Rung 2 (Explanation)**: Broader conceptual explanation
+  - Example: "Aggregates require GROUP BY when using COUNT(). Here's why..."
+
+- **Rung 3 (Reflective Note)**: Full solution with reflection prompt
+  - Example: "Here's the solution... Now reflect: What did you miss?"
+
+### Field-by-Field Explanation
+
+- **`rung`** (canonical): The escalation level of guidance that was shown. Use in guidance_view and guidance_escalate events.
+- **`hintLevel`** (in template context): Describes the escalation depth of a specific hint template artifact.
+- **`currentRung`** (in request context): The learner's rung position at the time of guidance request.
+- **`fromRung` / `toRung`** (in escalation context): Before and after positions during escalation transitions.
+
+### For Analysis and Replay
+
+When processing logged events:
+- Prefer `rung` as the canonical field name in new code
+- Treat `hintLevel`, `currentRung`, `fromRung`, `toRung` as context-specific synonyms
+- Use fallback chain: `event.rung ?? event.hintLevel ?? event.currentRung ?? 1`
+- Document field presence in data exports: "rung (alias: hintLevel in context of hint generation)"
+
+---
+
 ## Canonical Event Record Schema
 
 Every event stored as JSON object in JSONL format (append-only).

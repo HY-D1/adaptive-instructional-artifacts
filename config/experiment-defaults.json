@@ -1,0 +1,30 @@
+{
+  "name": "adaptive-instructional-artifacts-experiment",
+  "version": "0.1.0",
+  "reproducible": true,
+  "bandit": {
+    "mode": "pooled",
+    "enabled": false,
+    "seed": 42,
+    "armIds": ["aggressive", "conservative", "explanation-first", "adaptive"]
+  },
+  "control": {
+    "mode": "fixed-schedule",
+    "enabled": true
+  },
+  "logging": {
+    "auditEvents": true,
+    "extendEventSchema": true
+  },
+  "analysis": {
+    "offPolicySimulation": true,
+    "convergenceEstimate": true,
+    "hdiValidation": true,
+    "surveyLogLinkage": true
+  },
+  "deployment": {
+    "isolatedDeployment": true,
+    "preserveReferenceDeployment": true,
+    "classroomConfig": "default"
+  }
+}

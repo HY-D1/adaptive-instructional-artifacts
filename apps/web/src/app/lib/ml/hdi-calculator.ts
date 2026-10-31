@@ -8,6 +8,7 @@
  */
 
 import type { InteractionEvent, HDIComponents } from '../../types';
+import HDI_WEIGHTS from './hdi-weights.json';
 
 export const HDI_CALCULATOR_VERSION = 'hdi-calculator-v1';
 
@@ -41,13 +42,7 @@ export function classifyHDILevel(hdi: number): HDILevel {
 }
 
 // Weight constants for HDI calculation
-const WEIGHTS = {
-  hpa: 0.3,  // Hints Per Attempt
-  aed: 0.133, // Average Escalation Depth
-  er: 0.3,   // Explanation Rate
-  reae: 0.133, // Repeated Error After Explanation
-  iwh: 0.134, // Improvement Without Hint
-};
+const WEIGHTS = HDI_WEIGHTS;
 
 /**
  * Calculate Hints Per Attempt (HPA)

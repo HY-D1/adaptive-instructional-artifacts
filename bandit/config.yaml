@@ -1,0 +1,30 @@
+random_seed: 7
+arms:
+  - aggressive
+  - conservative
+  - explanation-first
+  - adaptive
+model:
+  prior_precision: 1.0
+  observation_noise: 0.25
+  posterior_scale: 1.0
+  sample_scale: 1.0
+features:
+  rolling_accuracy:
+    enabled: true
+    window_problems: 5
+    history_scope: student_across_sessions
+    default: 0.5
+  problem_difficulty:
+    enabled: true
+    source: apps/web/src/app/data/problems.ts
+    key: problem_id
+    encoding:
+      beginner: 0.0
+      intermediate: 0.5
+      advanced: 1.0
+  intercept: true
+validation:
+  section_id_allowlist:
+    - 3bdacd09-e3d5-4a70-a09f-cbea3ffae28b
+    - ef726b7a-c593-4316-b5d9-fc54fed59992

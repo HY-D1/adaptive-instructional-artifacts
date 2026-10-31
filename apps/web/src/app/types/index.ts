@@ -191,6 +191,7 @@ export type InteractionEvent = {
   selectedArm?: string;
   selectionMethod?: 'thompson_sampling' | 'epsilon_greedy';
   armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
+  banditStateSource?: 'server' | 'fallback_cached' | 'fallback_prior';
   reward?: {
     total: number;
     components: {

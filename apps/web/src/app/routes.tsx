@@ -11,6 +11,7 @@ import { InstructorDashboard } from './pages/InstructorDashboard';
 import { StartPage } from './pages/StartPage';
 import { LearningInterface } from './pages/LearningInterface';
 import { SettingsPage } from './pages/SettingsPage';
+import { PreSurveyRequiredPage } from './pages/PreSurveyRequiredPage';
 import { ConceptLibraryPage } from './pages/ConceptLibraryPage';
 import { ConceptDetailPage } from './pages/ConceptDetailPage';
 import { storage } from './lib/storage';
@@ -183,7 +184,7 @@ export const router = createBrowserRouter([
             <ConceptLibraryPage />
           </StudentRoute>
         ),
-        loader: createProtectedLoader({ requiredRole: 'student' }),
+        loader: createProtectedLoader({ requiredRole: 'student', requirePreSurvey: true }),
       },
       {
         path: 'concepts/*',
@@ -192,13 +193,22 @@ export const router = createBrowserRouter([
             <ConceptDetailPage />
           </StudentRoute>
         ),
-        loader: createProtectedLoader({ requiredRole: 'student' }),
+        loader: createProtectedLoader({ requiredRole: 'student', requirePreSurvey: true }),
       },
       {
         path: 'practice',
         element: (
           <StudentRoute>
             <LearningInterface />
+          </StudentRoute>
+        ),
+        loader: createProtectedLoader({ requiredRole: 'student', requirePreSurvey: true }),
+      },
+      {
+        path: 'pre-survey-required',
+        element: (
+          <StudentRoute>
+            <PreSurveyRequiredPage />
           </StudentRoute>
         ),
         loader: createProtectedLoader({ requiredRole: 'student' }),
@@ -210,7 +220,7 @@ export const router = createBrowserRouter([
             <TextbookPage />
           </AuthenticatedRoute>
         ),
-        loader: createProtectedLoader(),
+        loader: createProtectedLoader({ requirePreSurvey: true }),
       },
       {
         path: 'research',
@@ -239,7 +249,7 @@ export const router = createBrowserRouter([
             <SettingsPage />
           </AuthenticatedRoute>
         ),
-        loader: createProtectedLoader({ allowAuthenticated: true }),
+        loader: createProtectedLoader({ allowAuthenticated: true, requirePreSurvey: true }),
       },
       // Auth routes (login / signup) — outside the protected area
       {
