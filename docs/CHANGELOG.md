@@ -9,6 +9,22 @@
 
 ## [Unreleased] - Harderning/Research-Grade-Tightening
 
+### 2026-11-01 — Minimum PR gate verified
+
+PASS: GitHub run41357318093 on cb0117e. Both E2E shards green (5PASS24.6s;
+4PASS15.2s), Unit Tests green (119files/2040passed/2skipped), Quick Smoke green,
+Consolidate Test Results green. Production frontend/backend build/type checks
+remain included. No new runtime changes after3da23b4. This follow-up is docs-only.
+
+Coverage boundary: full weekly run41356479083 is NOT green: shard1 reached600s
+with202passed/60unrun; shard2 reached600s with86passed/7failed/64unrun. Failures
+include remaining role/navigation/logout assertions and offline queue/session
+scenarios. These remain unresolved full-suite findings; reducing the PR gate at
+the user's explicit request does not fix them or establish broad merge safety.
+Do not describe all browser tests as passing or the whole release as verified.
+Minimal core PR checks PASS; comprehensive regression/production readiness PARTIAL.
+Re-enable full weekly via manual dispatch suite=weekly for that separate work.
+
 ### 2026-11-01 — User-requested minimum PR browser gate
 
 User explicitly requested minimum tests and test-only corrections for remaining
