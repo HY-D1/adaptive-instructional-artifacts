@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ToastProvider } from '../../ui/toast';
-import { HintSystem } from './HintSystem';
+import { buildHintSourceMetadata, HintSystem, shouldSuppressEscalation } from './HintSystem';
 
 const mockStorage = vi.hoisted(() => ({
   getProfile: vi.fn(),
@@ -109,6 +109,7 @@ describe('HintSystem quota handling', () => {
       quotaExceeded: true,
       diagnostic: 'hint_cache_write_skipped_quota',
     });
+
     mockUseEnhancedHints.mockReturnValue({
       generateHint: vi.fn(async () => ({
         content: 'Try selecting only the columns you need.',
@@ -120,6 +121,9 @@ describe('HintSystem quota handling', () => {
         safetyFilterApplied: false,
         retrievedSourceIds: [],
         retrievedChunkIds: [],
+        llmModel: 'test-model',
+        hintSource: 'llm',
+        promptVersion: 'test-prompt-v1',
       })),
       isGenerating: false,
       lastHint: null,
@@ -156,6 +160,53 @@ describe('HintSystem quota handling', () => {
       expect(mockHintCache.saveHintSnapshot).toHaveBeenCalled();
     });
     expect(mockStorage.logGuidanceRequest).toHaveBeenCalled();
+
+  });
+
+  it('maps hint source metadata to the stored output field names', () => {
+    expect(buildHintSourceMetadata({
+      llmModel: 'test-model',
+      hintSource: 'llm',
+      promptVersion: 'test-prompt-v1',
+    })).toEqual({
+      llm_model: 'test-model',
+      hint_source: 'llm',
+      prompt_version: 'test-prompt-v1',
+    });
+  });
+
+  it('does not log another request when explanation generation is in flight', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ToastProvider>
+        <HintSystem
+          learnerId="learner-1"
+          problemId="problem-1"
+          sessionId="session-1"
+          recentInteractions={[]}
+          isExplanationGenerating
+        />
+      </ToastProvider>,
+    );
+
+    const button = screen.getByRole('button', { name: /preparing your explanation/i });
+    await user.click(button);
+    await user.click(button);
+
+    expect(mockStorage.logGuidanceRequest).not.toHaveBeenCalled();
+    expect(mockStorage.logGuidanceView).not.toHaveBeenCalled();
+    expect(mockStorage.logGuidanceEscalate).not.toHaveBeenCalled();
+  });
+
+  describe('HintSystem escalation guard', () => {
+    it('suppresses a rapid duplicate but allows a later escalation', () => {
+      const first = { key: 'session-1|learner-1|problem-1', timestamp: 1000 };
+
+      expect(shouldSuppressEscalation(null, first.key, 1000)).toBe(false);
+      expect(shouldSuppressEscalation(first, first.key, 1068)).toBe(true);
+      expect(shouldSuppressEscalation(first, first.key, 6000)).toBe(false);
+    });
   });
 
   it('deduplicates the quota warning across repeated hint requests', async () => {

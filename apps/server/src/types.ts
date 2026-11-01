@@ -366,12 +366,12 @@ export interface CreateInteractionRequest {
   learnerId: string;
   sectionId?: string | null;
   sessionId?: string;
+  conditionId?: 'adaptive' | 'control';
   timestamp: string;
   eventType: EventType;
   problemId: string;
   problemSetId?: string;
   problemNumber?: number;
-  conditionId?: string;
   
   // Code/Error fields
   code?: string;

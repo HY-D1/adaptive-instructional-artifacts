@@ -9,6 +9,85 @@
 
 ## [Unreleased] - Harderning/Research-Grade-Tightening
 
+### In progress - 2026-11-01 (current-main compatibility and migration safety)
+
+**Status: PARTIAL. Production migration is not verified or performed.**
+The earlier pilot commit `913f651` was pushed with the user's requested message.
+It is based on `9112c5a`; fetched current `origin/main` is `f32b4b2`, 41 commits
+ahead of that base. The current production backend is also built from f32b4b2.
+`git merge --no-commit --no-ff origin/main` is in progress on the test branch,
+preserving both histories and all eight unrelated untracked files. No PR was
+created or merged. Current-main features include readable usernames, surveys,
+control/adaptive conditions, and shared bandit behavior; the old pilot evidence
+must not be presented as validation of this integrated version.
+
+Frontend resolutions preserve both sides' behavior and move the three unique
+restore tests into main's existing LearningInterface.test.tsx; focused checks
+passed (3 files, 68 tests and frontend TypeScript). Atomic signup now shares the
+readable username generator and retries username collisions without swallowing
+email conflicts. Signup/manifest focused checks passed (3 files, 13 tests).
+The production migration manifest includes event columns, signup counters and
+progress deduplication only; the historical UUID fallback remains on disk but is
+excluded. A guarded follow-up migration removes only that pilot default on
+rehearsal databases where it was previously installed. Original usernames are
+not rewritten. Full integrated validation remains outstanding.
+
+Created authorized fresh Neon rehearsal copy `migration-rehearsal-20261101`,
+branch `br-cool-glitter-anetgfgy`, parent `br-delicate-glitter-an2fuzzq`, project
+`ancient-star-01392879`. No rehearsal migration or account writes yet. Production
+remains untouched. Before/after row-count and SHA-256 comparisons are required
+on the rehearsal before functional traffic. A read-only parent preflight found
+zero orphan event users and zero null problem IDs for the historical progress
+claim seed; the parent still lacks the new signup/progress tables and event
+execution-time column.
+
+Known check boundary: cached merge `git diff --check` reports an extra EOF blank
+in incoming main's analysis/off_policy_simulation/__init__.py. Preserve unrelated
+upstream formatting and distinguish it from this task's delta against origin/main.
+Next: complete server conflict resolution, run integrated unit/build gates,
+then migration fingerprints and returning/new-user rehearsal on combined code.
+No production action until rehearsal passes and the user's manual PR merge.
+
+All merge conflicts are resolved. Both integrated builds pass. The first full
+unit run passed 2012 tests, skipped 2 and failed 2 legacy signup-limit assertions:
+current main intentionally makes that unused legacy export configurable. Its
+HTTP tests now assert the actual configured limit; the production signup route
+retains the separate shared database limits. Related limiter/auth tests pass
+11/11. The next full run passed all 118 files (2019 tests, 2 skipped) but exited
+1 with the previously observed Vitest EnvironmentTeardownError: pending
+onUserConsoleLog in progress-persistence.integration.test.ts. It is not a clean
+PASS. A full rerun with console capture suppressed (--silent) is in progress;
+assertions and unhandled-error checking remain enabled.
+
+Final rerun `npx --no-install vitest run --silent` PASS: 118 files, 2019 tests,
+2 skipped, exit 0. The normal-run console teardown race remains documented above.
+Both builds pass, frontend TypeScript and focused maintenance/fingerprint tests
+pass. Replay is SKIPPED. Delta whitespace check against origin/main passes;
+the incoming main EOF blank is preserved. Integration is being committed/pushed
+on test_branch/system-stable-test without creating a PR. This is not permission
+to merge before the outstanding rehearsal gates pass.
+
+Added default-off maintenance middleware before auth/body/schema initialization,
+with 503 + Retry-After 60 and a nonempty constant-time operator key check.
+Application-stack tests verify blocked survey callbacks do not initialize the
+database and the bypass still requires authentication. Maintenance/related tests
+pass 11/11; backend build passes. No production settings enabled this guard.
+
+Added scripts/deploy/verify-migration-data.mjs and focused helper tests (6/6).
+The server-side fingerprint SQL was executed in a RepeatableRead READ ONLY
+transaction on fresh rehearsal branch br-cool-glitter-anetgfgy: all 20 public
+tables returned complete counts/hashes. Only aggregate fingerprints and schema
+metadata were returned, no raw rows. Initial probe snapshot is private local
+/tmp/sql-rehearsal-initial-fingerprint.json (0600). This is an initial SQL probe,
+not the final before/after migration proof; controlled old-version fixtures
+must still be prepared before the definitive migration baseline.
+
+Remaining: prepare old-version controlled fixtures, capture the definitive
+baseline, migrate the rehearsal copy and compare, verify old/new users and
+conditions on the combined preview, rerun the 50-user workload, and then request
+the user's manual PR/merge for the gated production cutover. Production tables,
+configuration, identities, and existing records have not been changed.
+
 ### In progress - 2026-10-31 (minimal 50-student implementation)
 
 **Status: PASS for the selected isolated 50-student core workflow.** Scope is the approved

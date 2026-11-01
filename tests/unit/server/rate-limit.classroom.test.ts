@@ -2,9 +2,9 @@
 import express from 'express';
 import type { Server } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { signupRateLimiter } from '../../../apps/server/src/middleware/rate-limit';
+import { SIGNUP_RATE_LIMIT, signupRateLimiter } from '../../../apps/server/src/middleware/rate-limit';
 
-describe('signup rate limit behind a proxy', () => {
+describe('legacy signup rate limit behind a proxy', () => {
   let server: Server;
   let baseUrl: string;
 
@@ -24,22 +24,22 @@ describe('signup rate limit behind a proxy', () => {
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   });
 
-  it('keeps the five-attempt limit for a shared IPv4 address', async () => {
+  it('enforces the configured limit for a shared IPv4 address', async () => {
     const statuses: number[] = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i <= SIGNUP_RATE_LIMIT; i++) {
       const response = await fetch(`${baseUrl}/signup`, { method: 'POST', headers: { 'X-Forwarded-For': '192.0.2.48' } });
       statuses.push(response.status);
     }
-    expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
+    expect(statuses).toEqual([...Array(SIGNUP_RATE_LIMIT).fill(200), 429]);
   });
 
   it('does not allow IPv6 address rotation within the same subnet to bypass the limit', async () => {
     const statuses: number[] = [];
-    for (let i = 1; i <= 6; i++) {
-      const response = await fetch(`${baseUrl}/signup`, { method: 'POST', headers: { 'X-Forwarded-For': `2001:db8:abcd:1200::${i}` } });
+    for (let i = 1; i <= SIGNUP_RATE_LIMIT + 1; i++) {
+      const response = await fetch(`${baseUrl}/signup`, { method: 'POST', headers: { 'X-Forwarded-For': `2001:db8:abcd:1200::${i.toString(16)}` } });
       statuses.push(response.status);
     }
-    expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
+    expect(statuses).toEqual([...Array(SIGNUP_RATE_LIMIT).fill(200), 429]);
     const otherSubnet = await fetch(`${baseUrl}/signup`, {
       method: 'POST', headers: { 'X-Forwarded-For': '2001:db8:abcd:1300::1' },
     });

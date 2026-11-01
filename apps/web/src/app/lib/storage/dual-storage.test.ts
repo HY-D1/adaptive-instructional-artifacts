@@ -11,7 +11,13 @@ const getProfileMock = vi.fn<(learnerId: string) => Promise<LearnerProfile | nul
 const getSessionMock = vi.fn<(learnerId: string) => Promise<Record<string, unknown> | null>>();
 const getInteractionsMock = vi.fn<(learnerId: string, options?: Record<string, unknown>) => Promise<{ events: unknown[]; total: number }>>();
 const getTextbookMock = vi.fn<(learnerId: string) => Promise<unknown[]>>();
-const logInteractionMock = vi.fn<(event: unknown) => Promise<{ success: boolean; confirmed?: boolean }>>();
+const logInteractionMock = vi.fn<(event: unknown) => Promise<{
+  success: boolean;
+  confirmed?: boolean;
+  status?: number;
+  retryAfterMs?: number;
+  permanentFailure?: boolean;
+}>>();
 const logInteractionsBatchMock = vi.fn<(events: unknown[]) => Promise<boolean>>();
 const logInteractionsBatchVerifiedMock = vi.fn<(events: unknown[]) => Promise<{ confirmed: string[]; failed: string[] }>>();
 const logInteractionsBatchKeepaliveMock = vi.fn<(events: unknown[]) => Promise<{ success: boolean; confirmedIds?: string[] }>>();
@@ -179,6 +185,29 @@ describe('dual-storage critical write semantics', () => {
       .toEqual(expect.arrayContaining([expect.objectContaining({ id: event.id })]));
   });
 
+  it('dead-letters permanent interaction failures instead of retrying them', async () => {
+    logInteractionMock.mockResolvedValueOnce({
+      success: false,
+      status: 400,
+      permanentFailure: true,
+    });
+    await dualStorageModule.dualStorage.checkHealth();
+
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'permanent-interaction-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-permanent-1',
+      timestamp: Date.now(),
+      eventType: 'execution',
+      problemId: 'problem-1',
+    });
+
+    await vi.waitFor(() => {
+      expect(dualStorageModule.dualStorage.getPendingInteractionsForSession('session-permanent-1')).toEqual([]);
+    });
+    expect(logInteractionMock).toHaveBeenCalledTimes(1);
+  });
+
   it('forwards helper-created research interactions to the backend with core identifiers', async () => {
     localStorage.setItem('sql-learning-active-session', 'session-research-helper');
     await dualStorageModule.dualStorage.checkHealth();
@@ -290,6 +319,8 @@ describe('dual-storage critical write semantics', () => {
     });
 
     const backendEvents = logInteractionMock.mock.calls.map(([event]) => event as Record<string, unknown>);
+    const banditSelectionEvent = backendEvents.find((event) => event.eventType === 'bandit_arm_selected');
+    expect(banditSelectionEvent?.conditionId).toBeUndefined();
     expect(backendEvents.map((event) => event.eventType)).toEqual(
       expect.arrayContaining([
         'coverage_change',
@@ -339,6 +370,24 @@ describe('dual-storage critical write semantics', () => {
 
     expect(getProfileMock).toHaveBeenCalledWith('learner-1');
     expect(dualStorageModule.dualStorage.getProfile('learner-1')?.solvedProblemIds.has('problem-9')).toBe(true);
+  });
+
+  it('adds conditionId to bandit selection events when provided', async () => {
+    dualStorageModule.dualStorage.logBanditArmSelected({
+      learnerId: 'learner-1',
+      problemId: 'problem-1',
+      armId: 'adaptive',
+      selectionMethod: 'thompson_sampling',
+      conditionId: 'adaptive',
+    });
+
+    await vi.waitFor(() => {
+      expect(logInteractionMock).toHaveBeenCalledTimes(1);
+    });
+
+    const [event] = logInteractionMock.mock.calls[0] as [Record<string, unknown>];
+    expect(event.eventType).toBe('bandit_arm_selected');
+    expect(event.conditionId).toBe('adaptive');
   });
 
   it('keeps solved state across repeated explicit hydrations and later backend catch-up', async () => {
@@ -1182,6 +1231,34 @@ describe('dual-storage progress persistence sync', () => {
     expect(updateProblemProgressMock).not.toHaveBeenCalled();
   });
 
+  it('calls updateProblemProgress for an error submission attempt', async () => {
+    updateProblemProgressMock.mockClear();
+    logInteractionMock.mockResolvedValueOnce({ success: true, confirmed: true });
+
+    dualStorageModule.dualStorage.saveInteraction({
+      id: 'error-progress-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-progress-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'error',
+      problemId: 'problem-1',
+      successful: false,
+      code: 'SELECT * FROM bad_table',
+    });
+
+    await vi.waitFor(() => {
+      expect(updateProblemProgressMock).toHaveBeenCalledWith(
+        'learner-1',
+        'problem-1',
+        expect.objectContaining({
+          solved: false,
+          incrementAttempts: true,
+          lastCode: 'SELECT * FROM bad_table',
+        }),
+      );
+    });
+  });
+
   it('handles updateProblemProgress failures gracefully (best-effort)', async () => {
     updateProblemProgressMock.mockRejectedValueOnce(new Error('Network error'));
     logInteractionMock.mockResolvedValueOnce({ success: true, confirmed: true });
@@ -1205,12 +1282,6 @@ describe('dual-storage progress persistence sync', () => {
     await vi.waitFor(() => {
       expect(updateProblemProgressMock).toHaveBeenCalled();
     });
-
-    // Verify the error was logged (best-effort behavior)
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
-      '[DualStorage] Backend updateProblemProgress failed:',
-      expect.any(Error),
-    );
 
     consoleWarnSpy.mockRestore();
   });

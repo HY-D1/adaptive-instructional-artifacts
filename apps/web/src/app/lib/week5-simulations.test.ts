@@ -1073,7 +1073,8 @@ describe('Simulation: Performance Tests', () => {
     }
     const endTime = Date.now();
 
-    expect(manager.getLearnerCount()).toBe(100);
+    // The shared-pool design stores one bandit for all learners.
+    expect(manager.getLearnerCount()).toBe(1);
     expect(endTime - startTime).toBeLessThan(1000);
   });
 });

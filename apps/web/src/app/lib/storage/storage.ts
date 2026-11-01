@@ -1451,15 +1451,18 @@ class StorageManager {
    * @param params - Bandit arm selection parameters (object payload)
    */
   logBanditArmSelected(params: {
+    eventId?: string;
     learnerId: string;
     problemId: string;
     armId: string;
     selectionMethod: 'thompson_sampling' | 'epsilon_greedy' | 'forced';
     armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
     sessionId?: string;
+    conditionId?: string;
+    banditStateSource?: 'server' | 'fallback_cached' | 'fallback_prior';
   }): void {
     const event: InteractionEvent = {
-      id: createEventId('bandit', 'arm-selected'),
+      id: params.eventId || createEventId('bandit', 'arm-selected'),
       sessionId: params.sessionId || this.getActiveSessionId(),
       learnerId: params.learnerId,
       timestamp: Date.now(),
@@ -1467,12 +1470,14 @@ class StorageManager {
       problemId: params.problemId,
       selectedArm: params.armId,
       selectionMethod: params.selectionMethod === 'forced' ? 'thompson_sampling' : params.selectionMethod,
+      conditionId: params.conditionId,
       policyVersion: 'bandit-arm-v1',
       payload: {
         armId: params.armId,
         method: params.selectionMethod,
         armStatsAtSelection: params.armStatsAtSelection
-      }
+      },
+      banditStateSource: params.banditStateSource,
     };
     this.saveInteraction(event);
   }

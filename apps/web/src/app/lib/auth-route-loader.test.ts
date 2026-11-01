@@ -63,4 +63,47 @@ describe('createProtectedLoader account-mode auth', () => {
     expect(protectRoute).not.toHaveBeenCalled();
     expect(result).toBeNull();
   });
+
+  it('redirects a pending student before practice loads', async () => {
+    const getMe = vi.fn().mockResolvedValue({ learnerId: 'student-1', role: 'student' });
+    const getPreSurveyStatus = vi.fn().mockResolvedValue({ completed: false, username: 'student-abc123' });
+    vi.doMock('./api/auth-client', () => ({
+      AUTH_BACKEND_CONFIGURED: true,
+      getMe,
+      getPreSurveyStatus,
+    }));
+    vi.doMock('./auth-guard', () => ({
+      ROUTES: { HOME: '/', LOGIN: '/login' },
+      protectRoute: vi.fn(),
+      getDefaultRouteForRole: () => '/',
+      isPreviewModeActive: () => false,
+    }));
+
+    const { createProtectedLoader } = await import('./auth-route-loader');
+    const result = await createProtectedLoader({ requiredRole: 'student', requirePreSurvey: true })({} as never);
+
+    expect(getPreSurveyStatus).toHaveBeenCalledTimes(1);
+    expect((result as Response).headers.get('Location')).toBe('/pre-survey-required');
+  });
+
+  it('allows a completed student to load practice', async () => {
+    const getMe = vi.fn().mockResolvedValue({ learnerId: 'student-1', role: 'student' });
+    const getPreSurveyStatus = vi.fn().mockResolvedValue({ completed: true, username: 'student-abc123' });
+    vi.doMock('./api/auth-client', () => ({
+      AUTH_BACKEND_CONFIGURED: true,
+      getMe,
+      getPreSurveyStatus,
+    }));
+    vi.doMock('./auth-guard', () => ({
+      ROUTES: { HOME: '/', LOGIN: '/login' },
+      protectRoute: vi.fn(),
+      getDefaultRouteForRole: () => '/',
+      isPreviewModeActive: () => false,
+    }));
+
+    const { createProtectedLoader } = await import('./auth-route-loader');
+    const result = await createProtectedLoader({ requiredRole: 'student', requirePreSurvey: true })({} as never);
+
+    expect(result).toBeNull();
+  });
 });

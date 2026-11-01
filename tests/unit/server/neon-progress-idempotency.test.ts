@@ -11,7 +11,7 @@ vi.mock('../../../apps/server/src/db/env-resolver.js', () => ({
 }));
 
 describe('Neon progress event claims', () => {
-  beforeEach(() => queryMock.mockReset());
+  beforeEach(() => queryMock.mockReset().mockResolvedValue([{ attempted_problem_count: 0 }]));
 
   it('claims an event and updates progress in the same SQL statement', async () => {
     queryMock.mockResolvedValueOnce([{ user_id: 'learner-1' }]);
@@ -19,7 +19,7 @@ describe('Neon progress event claims', () => {
     await updateProblemProgress('learner-1', 'problem-1', {
       eventId: 'event-1', incrementAttempts: true, solved: true, lastCode: 'SELECT 1',
     });
-    expect(queryMock).toHaveBeenCalledTimes(1);
+    expect(queryMock).toHaveBeenCalledTimes(2);
     const [parts, ...values] = queryMock.mock.calls[0];
     const sql = parts.join('?');
     expect(sql).toContain('WITH claimed AS');
@@ -40,7 +40,7 @@ describe('Neon progress event claims', () => {
     queryMock.mockResolvedValueOnce([]);
     const { updateProblemProgress } = await import('../../../apps/server/src/db/neon');
     await updateProblemProgress('learner-1', 'problem-1', { incrementAttempts: true });
-    expect(queryMock).toHaveBeenCalledTimes(1);
+    expect(queryMock).toHaveBeenCalledTimes(2);
     const sql = queryMock.mock.calls[0][0].join('?');
     expect(sql).toContain('INSERT INTO problem_progress');
     expect(sql).not.toContain('problem_progress_events');
@@ -52,5 +52,18 @@ describe('Neon progress event claims', () => {
     await expect(updateProblemProgress('learner-1', 'problem-1', { eventId: 'event-1' }))
       .rejects.toThrow('database unavailable');
     expect(queryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('checks and creates the post-survey invitation after an idempotent attempt', async () => {
+    queryMock.mockResolvedValueOnce([{ user_id: 'learner-1' }])
+      .mockResolvedValueOnce([{ attempted_problem_count: 1 }])
+      .mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ user_id: 'learner-1', instance: 'post', status: 'pending',
+        created_at: '2026-01-01T00:00:00.000Z', completed_at: null }]);
+    const { updateProblemProgress } = await import('../../../apps/server/src/db/neon');
+    await updateProblemProgress('learner-1', 'problem-1', { eventId: 'event-1', incrementAttempts: true });
+    expect(queryMock).toHaveBeenCalledTimes(6);
+    expect(queryMock.mock.calls[1][0].join('?')).toContain('attempted_problem_count');
+    expect(queryMock.mock.calls[2][0].join('?')).toContain('INSERT INTO survey_invitations');
   });
 });

@@ -83,6 +83,7 @@ interface QueuedItem {
   timestamp: number;
   status: EventStatus;
   lastAttempt?: number;
+  nextRetryAt?: number;
   errorCount: number;
 }
 
@@ -300,7 +301,7 @@ class DurablePendingStore {
     if (item) {
       item.status = 'dead_letter';
       this.savePending();
-      console.error('[telemetry_dead_letter]', { eventId: id, reason });
+      console.error('[telemetry_dead_letter]', { count: 1, reason });
     }
   }
 
@@ -498,12 +499,17 @@ class OfflineQueueManager {
     return this.getPending();
   }
 
-  incrementRetry(id: string, error?: Error): void {
+  incrementRetry(id: string, error?: Error, retryAfterMs?: number): void {
     const item = this.queue.find(i => i.id === id);
     if (item) {
       item.retries++;
       item.lastAttempt = Date.now();
       item.status = 'sent_unverified';
+      const exponentialDelay = Math.min(
+        60_000,
+        RETRY_INTERVAL_MS * (2 ** Math.min(item.retries - 1, 4)),
+      );
+      item.nextRetryAt = Date.now() + (retryAfterMs ?? exponentialDelay);
       
       if (error) {
         item.errorCount++;
@@ -586,7 +592,9 @@ class OfflineQueueManager {
       return;
     }
     
-    const pending = this.getPending();
+    const pending = this.getPending().filter(
+      (item) => !item.nextRetryAt || item.nextRetryAt <= Date.now(),
+    );
     
     // Process interactions in batches for efficiency
     const interactions = pending.filter(item => item.type === 'interaction');
@@ -616,7 +624,7 @@ class OfflineQueueManager {
           if (result.invalid?.includes(id)) {
             continue;
           }
-          this.incrementRetry(id);
+          this.incrementRetry(id, undefined, result.retryAfterMs);
         }
       } catch (error) {
         console.warn('[OfflineQueue] Batch processing failed:', error);
@@ -932,8 +940,15 @@ class DualStorageManager {
 
     const eventForWrite = this.withActiveSessionFallback(event);
     storageClient.logInteraction(eventForWrite).then(result => {
+      if (result.permanentFailure) {
+        this.pendingStore.markDeadLetter(eventForWrite.id, `http_${result.status}`);
+        return;
+      }
       if (!result.success || !result.confirmed) {
         this.queueInteractionForRetry(eventForWrite);
+        if (result.status === 429) {
+          this.offlineQueue.incrementRetry(eventForWrite.id, undefined, result.retryAfterMs);
+        }
       }
     }).catch(error => {
       console.warn(`[DualStorage] Backend ${source} failed, queuing for retry:`, error);
@@ -990,7 +1005,11 @@ class DualStorageManager {
     const pendingResult = this.pendingStore.add(eventForWrite);
     
     // Step 3: Update problem progress for execution events
-    if (this.shouldUseBackend() && eventForWrite.eventType === 'execution' && eventForWrite.problemId) {
+    if (
+      this.shouldUseBackend() &&
+      (eventForWrite.eventType === 'execution' || eventForWrite.eventType === 'error') &&
+      eventForWrite.problemId
+    ) {
       const progressPayload = {
         eventId: eventForWrite.id,
         solved: eventForWrite.successful === true,
@@ -1001,7 +1020,9 @@ class DualStorageManager {
         eventForWrite.learnerId,
         eventForWrite.problemId,
         progressPayload
-      ).catch(error => {
+      ).then(() => {
+        window.dispatchEvent(new Event('survey-invitations-refresh'));
+      }).catch(error => {
         console.warn('[DualStorage] Backend updateProblemProgress failed:', error);
         // Non-blocking - progress update is best-effort
       });
@@ -1016,10 +1037,15 @@ class DualStorageManager {
           // Backend confirmed receipt - mark as confirmed
           this.pendingStore.markConfirmedInteraction(eventForWrite.id);
           this.trackBackendAck();
+        } else if (result.permanentFailure) {
+          this.pendingStore.markDeadLetter(eventForWrite.id, `http_${result.status}`);
         } else {
           // Backend did not confirm - will be retried via pending store
           console.warn('[DualStorage] Backend did not confirm interaction, will retry:', eventForWrite.id);
           this.queueInteractionForRetry(eventForWrite);
+          if (result.status === 429) {
+            this.offlineQueue.incrementRetry(eventForWrite.id, undefined, result.retryAfterMs);
+          }
         }
       }).catch(error => {
         console.warn('[DualStorage] Backend saveInteraction failed, will retry:', error);
@@ -2544,12 +2570,15 @@ class DualStorageManager {
   }
 
   logBanditArmSelected(params: {
+    eventId?: string;
     learnerId: string;
     problemId: string;
     armId: string;
     selectionMethod: 'thompson_sampling' | 'epsilon_greedy' | 'forced';
     armStatsAtSelection?: Record<string, { mean: number; pulls: number }>;
     sessionId?: string;
+    conditionId?: string;
+    banditStateSource?: 'server' | 'fallback_cached' | 'fallback_prior';
   }): void {
     this.syncLatestLocalInteraction(
       params.learnerId,

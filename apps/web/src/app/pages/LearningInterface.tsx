@@ -58,6 +58,7 @@ import { Skeleton } from '../components/ui/skeleton';
 import { cn } from '../components/ui/utils';
 import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/features/sql/SQLEditor';
 import { HintSystem } from '../components/features/hints/HintSystem';
+import { SurveyInvitationLinks } from '../components/features/surveys/SurveyInvitationLinks';
 import { ConceptCoverage } from '../components/features/research/ConceptCoverage';
 import { AskMyTextbookChat } from '../components/features/chat/AskMyTextbookChat';
 import { ReinforcementPrompt } from '../components/features/reinforcement/ReinforcementPrompt';
@@ -73,16 +74,25 @@ import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync 
 import { useAuth } from '../lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
 import { getProblemProgress } from '../lib/api/storage-client';
+import { isSharedBanditEnabled } from '../lib/runtime-config';
+import { getSharedBanditState, recordSharedBanditReward } from '../lib/api/storage-client';
 import { clearUiStateForActor, getUiState, setUiState } from '../lib/ui-state';
 import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content/content-generator';
+import { renderTextbookContent } from '../lib/content/textbook-renderer';
 import { buildPdfIndexOutputFields } from '../lib/api/pdf-retrieval';
 import { createEventId } from '../lib/utils/event-id';
 import { startBackgroundAnalysis, stopBackgroundAnalysis, runAnalysisOnce, ANALYSIS_INTERVAL_MS } from '../lib/trace-analyzer';
 import type { AnalysisResult } from '../lib/trace-analyzer';
 import { getConcept, getTextbookCorpusMode } from '../lib/content/concept-loader';
-import { banditManager, PROFILE_TO_ARM_ID, BANDIT_ARM_PROFILES } from '../lib/ml/learner-bandit-manager';
+import {
+  banditManager,
+  PROFILE_TO_ARM_ID,
+  BANDIT_ARM_PROFILES,
+  shouldSelectBanditForLearner,
+  shouldUpdateBandit,
+} from '../lib/ml/learner-bandit-manager';
 import { calculateHDI, calculateHDIComponents } from '../lib/ml/hdi-calculator';
 import type { HDIComponents, HDILevel } from '../types';
 import { safeGetStrategy, safeGetProfileOverride } from '../lib/storage/storage-validation';
@@ -410,10 +420,120 @@ function analyzeLearnerHistory(interactions: InteractionEvent[]) {
  * 
  * Used by both student and instructor roles (instructor has additional controls)
  */
+export function GeneratedExplanationPreview({ unit }: { unit: InstructionalUnit }) {
+  const renderedContent = renderTextbookContent({
+    content: unit.content,
+    contentFormat: unit.contentFormat,
+  });
+
+  return (
+    <div className="max-h-96 overflow-y-auto rounded border bg-slate-50 p-3">
+      <p className="text-xs font-medium text-slate-700">{unit.title}</p>
+      <div
+        className="prose prose-sm mt-2 max-w-none break-words text-slate-700 [&_code]:break-all [&_pre]:whitespace-pre-wrap"
+        dangerouslySetInnerHTML={{ __html: renderedContent }}
+      />
+    </div>
+  );
+}
+
+export function GeneratedExplanationCard({
+  unit,
+  isGeneratingUnit,
+  generationError,
+  notesActionMessage,
+  onSave,
+}: {
+  unit: InstructionalUnit | null;
+  isGeneratingUnit: boolean;
+  generationError?: string;
+  notesActionMessage?: string;
+  onSave: () => void;
+}) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  const scrolledUnitIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!unit || scrolledUnitIdsRef.current.has(unit.id)) {
+      return;
+    }
+
+    scrolledUnitIdsRef.current.add(unit.id);
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (typeof cardRef.current?.scrollIntoView !== 'function') {
+      return;
+    }
+    cardRef.current.scrollIntoView({
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      block: 'nearest',
+    });
+  }, [unit]);
+
+  return (
+    <div ref={cardRef} data-testid="generated-explanation-card">
+      <Card className="p-4 space-y-3">
+        <div>
+          <h3 className="font-semibold">Save This Explanation</h3>
+          <p className="text-sm text-gray-600">
+            You have viewed all available hints. Save this explanation to your notes for later review.
+          </p>
+        </div>
+        <Button onClick={onSave} size="sm" className="w-full" disabled={isGeneratingUnit}>
+          {isGeneratingUnit ? (
+            <>
+              <Sparkles className="size-4 mr-2 animate-pulse" />
+              Saving...
+            </>
+          ) : (
+            'Save to My Notes'
+          )}
+        </Button>
+        {isGeneratingUnit && (
+          <p className="text-xs text-gray-500">Preparing your explanation…</p>
+        )}
+        {generationError && (
+          <p className="text-xs text-amber-700 dark:text-amber-300">{generationError}</p>
+        )}
+        {notesActionMessage && (
+          <div className="text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 p-3 rounded-lg border border-green-300 dark:border-green-800 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="size-5 text-green-600 flex-shrink-0" />
+              <p className="font-medium">{notesActionMessage}</p>
+            </div>
+            <Link to="/textbook" className="text-blue-600 hover:underline mt-2 inline-flex items-center gap-1 text-xs">
+              View in My Textbook →
+            </Link>
+          </div>
+        )}
+        {unit && <GeneratedExplanationPreview unit={unit} />}
+      </Card>
+    </div>
+  );
+}
+
+export const SESSION_CONFIG_ERROR_MESSAGE =
+  "We couldn't set up your session. Please refresh or contact your instructor.";
+
+export function SessionConfigErrorCard() {
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="container mx-auto px-4 py-6">
+        <Card className="mx-auto max-w-xl p-6">
+          <p className="text-red-700 dark:text-red-300" role="alert">
+            {SESSION_CONFIG_ERROR_MESSAGE}
+          </p>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 export function LearningInterface() {
   const location = useLocation();
   const { role, isStudent, isInstructor, profile, isLoading: isRoleLoading } = useUserRole();
-  const { isHydrating } = useAuth();
+  const { isHydrating, user: authUser } = useAuth();
   const cachedProfileId = storage.getUserProfile()?.id;
   // Use actual user profile ID for data isolation (aligned with TextbookPage)
   const learnerId = profile?.id || cachedProfileId || (AUTH_BACKEND_CONFIGURED ? '' : 'learner-1');
@@ -436,6 +556,7 @@ export function LearningInterface() {
   const [notesActionMessage, setNotesActionMessage] = useState<string | undefined>();
   const [sessionSyncStatus, setSessionSyncStatus] = useState<'checking' | 'confirmed' | 'pending' | 'failed'>('checking');
   const [sessionSyncError, setSessionSyncError] = useState<string | undefined>();
+  const [sessionConfigError, setSessionConfigError] = useState<string | undefined>();
   const [isGeneratingUnit, setIsGeneratingUnit] = useState(false);
   const [generationError, setGenerationError] = useState<string | undefined>();
   const [latestGeneratedUnit, setLatestGeneratedUnit] = useState<InstructionalUnit | null>(null);
@@ -536,6 +657,9 @@ export function LearningInterface() {
   
   // Week 6: Session configuration for experimental conditions
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
+  const [sharedBanditReady, setSharedBanditReady] = useState(false);
+  const sharedBanditSourceRef = useRef<'server' | 'fallback_cached' | 'fallback_prior'>('fallback_prior');
+  const selectionEventIdRef = useRef<string | null>(null);
   
   // Paper Data Contract: Debounced code change telemetry
   // Stabilize callback to prevent hook recreation on every render
@@ -590,6 +714,37 @@ export function LearningInterface() {
   // Week 6: Modified to respect sessionConfig experimental settings
   useEffect(() => {
     if (!learnerId) return;
+
+    if (!isSharedBanditEnabled() || !shouldSelectBanditForLearner(
+      learnerId,
+      sessionConfig?.learnerId,
+      sessionConfig?.conditionId,
+      safeGetStrategy(),
+    )) {
+      setSharedBanditReady(true);
+      return;
+    }
+    let cancelled = false;
+    setSharedBanditReady(false);
+    getSharedBanditState().then((state) => {
+      if (cancelled) return;
+      if (state) {
+        banditManager.hydrateSharedState(state);
+        sharedBanditSourceRef.current = 'server';
+      } else {
+        sharedBanditSourceRef.current = banditManager.hasBandit(learnerId) ? 'fallback_cached' : 'fallback_prior';
+      }
+      setSharedBanditReady(true);
+    }).catch(() => {
+      if (cancelled) return;
+      sharedBanditSourceRef.current = banditManager.hasBandit(learnerId) ? 'fallback_cached' : 'fallback_prior';
+      setSharedBanditReady(true);
+    });
+    return () => { cancelled = true; };
+  }, [learnerId, sessionConfig?.conditionId, sessionConfig?.sessionId]);
+
+  useEffect(() => {
+    if (!learnerId || !sharedBanditReady) return;
     
     // Week 6: Respect sessionConfig experimental settings
     const debugProfileOverride = safeGetProfileOverride();
@@ -633,6 +788,12 @@ export function LearningInterface() {
     }
     
     const assignmentStrategy = safeGetStrategy();
+    const banditSelectionAllowed = isSharedBanditEnabled() && shouldSelectBanditForLearner(
+      learnerId,
+      sessionConfig?.learnerId,
+      sessionConfig?.conditionId,
+      assignmentStrategy,
+    );
     
     let effectiveProfile: EscalationProfile;
     let effectiveArmId: BanditArmId;
@@ -666,14 +827,23 @@ export function LearningInterface() {
         
         case 'bandit':
         default: {
+          if (!banditSelectionAllowed) {
+            effectiveProfile = assignProfile({ learnerId }, 'static');
+            effectiveArmId = getArmIdFromProfileId(effectiveProfile.id);
+            selectionReason = 'bandit_blocked_for_condition';
+            break;
+          }
           // Use Thompson sampling bandit selection
           const banditResult = banditManager.selectProfileForLearner(learnerId);
           effectiveProfile = banditResult.profile;
           effectiveArmId = banditResult.armId;
           selectionReason = 'bandit_selection';
+          const selectionEventId = createEventId('bandit', 'arm-selected');
+          selectionEventIdRef.current = selectionEventId;
           
           // Log bandit arm selection event
           storage.logBanditArmSelected({
+            eventId: selectionEventId,
             learnerId,
             problemId: currentProblem.id,
             armId: effectiveArmId,
@@ -684,7 +854,9 @@ export function LearningInterface() {
                   return acc;
                 }, {} as Record<string, { mean: number; pulls: number }>)
               : undefined,
-            sessionId
+            sessionId,
+            conditionId: sessionConditionIdRef.current,
+            banditStateSource: sharedBanditSourceRef.current
           });
           break;
         }
@@ -708,7 +880,7 @@ export function LearningInterface() {
         selectionReason
       );
     }
-  }, [learnerId, currentProblem.id, sessionId, debugRefreshKey, sessionConfig]);
+  }, [learnerId, currentProblem.id, sessionId, debugRefreshKey, sessionConfig, sharedBanditReady]);
 
   // Week 5: Listen for HDI calculated events
   useEffect(() => {
@@ -1052,65 +1224,74 @@ export function LearningInterface() {
     let cancelled = false;
     
     const loadConfig = async () => {
-      // Use async loader: backend -> sessionStorage -> assign
-      const result = await loadSessionConfigAsync(learnerId);
-      
-      if (cancelled) return;
-      
-      const config = result.config;
-      
-      // Log condition assignment event for new assignments (canonical RESEARCH-4 event type)
-      if (result.isNewAssignment) {
-        const configEvent: InteractionEvent = {
-          id: createEventId('event', 'session-config'),
-          sessionId: config.sessionId,
-          learnerId,
-          timestamp: Date.now(),
-          eventType: 'condition_assigned',
-          problemId: currentProblem.id,
-          conditionId: config.conditionId,
-          profileId: config.escalationPolicy,
-          strategyAssigned: config.conditionId,
-          assignmentStrategy: config.staticHintMode ? 'static' : (config.adaptiveLadderDisabled ? 'diagnostic' : 'bandit'),
-          metadata: {
-            sessionConfigVersion: getConditionAssignmentVersion(),
-            sessionConfigSource: result.source,
-            textbookDisabled: config.textbookDisabled,
-            adaptiveLadderDisabled: config.adaptiveLadderDisabled,
-            immediateExplanationMode: config.immediateExplanationMode,
-            staticHintMode: config.staticHintMode,
-          }
-        };
-        storage.saveInteraction(configEvent);
-      }
-      
-      // Log recovery from sessionStorage (for debugging)
-      if (result.source === 'sessionStorage') {
-        console.info('[SessionConfig] Recovered from sessionStorage:', {
-          learnerId,
-          conditionId: config.conditionId,
-        });
-      }
+      try {
+        setSessionConfigError(undefined);
 
-      if (config.sessionId?.trim()) {
-        storage.setActiveSessionId(config.sessionId.trim());
-      }
+        // Use async loader: backend -> sessionStorage -> assign
+        const result = await loadSessionConfigAsync(learnerId, authUser?.sectionId);
 
-      setSessionConfig(config);
+        if (cancelled) return;
+
+        const config = result.config;
       
-      // Override escalation profile if config specifies a policy
-      if (config.escalationPolicy && config.escalationPolicy !== 'adaptive') {
-        const policyProfile = getProfileById(config.escalationPolicy === 'explanation_first' 
-          ? 'explanation-first' 
-          : config.escalationPolicy === 'aggressive' 
-            ? 'fast-escalator'
-            : config.escalationPolicy === 'conservative'
-              ? 'slow-escalator'
-              : 'adaptive-escalator'
-        );
-        if (policyProfile) {
-          setCurrentEscalationProfile(policyProfile);
+        // Log condition assignment event for new assignments (canonical RESEARCH-4 event type)
+        if (result.isNewAssignment) {
+          const configEvent: InteractionEvent = {
+            id: createEventId('event', 'session-config'),
+            sessionId: config.sessionId,
+            learnerId,
+            timestamp: Date.now(),
+            eventType: 'condition_assigned',
+            problemId: currentProblem.id,
+            conditionId: config.conditionId,
+            profileId: config.escalationPolicy,
+            strategyAssigned: config.conditionId,
+            assignmentStrategy: config.staticHintMode ? 'static' : (config.adaptiveLadderDisabled ? 'diagnostic' : 'bandit'),
+            metadata: {
+              sessionConfigVersion: getConditionAssignmentVersion(),
+              sessionConfigSource: result.source,
+              textbookDisabled: config.textbookDisabled,
+              adaptiveLadderDisabled: config.adaptiveLadderDisabled,
+              immediateExplanationMode: config.immediateExplanationMode,
+              staticHintMode: config.staticHintMode,
+            }
+          };
+          storage.saveInteraction(configEvent);
         }
+      
+        // Log recovery from sessionStorage (for debugging)
+        if (result.source === 'sessionStorage') {
+          console.info('[SessionConfig] Recovered from sessionStorage:', {
+            learnerId,
+            conditionId: config.conditionId,
+          });
+        }
+
+        if (config.sessionId?.trim()) {
+          storage.setActiveSessionId(config.sessionId.trim());
+        }
+
+        setSessionConfig(config);
+      
+        // Override escalation profile if config specifies a policy
+        if (config.escalationPolicy && config.escalationPolicy !== 'adaptive') {
+          const policyProfile = getProfileById(config.escalationPolicy === 'explanation_first'
+            ? 'explanation-first'
+            : config.escalationPolicy === 'aggressive'
+              ? 'fast-escalator'
+              : config.escalationPolicy === 'conservative'
+                ? 'slow-escalator'
+                : 'adaptive-escalator'
+          );
+          if (policyProfile) {
+            setCurrentEscalationProfile(policyProfile);
+          }
+        }
+      } catch (error) {
+        if (cancelled) return;
+
+        console.error('[SessionConfig] Failed to load session configuration:', error);
+        setSessionConfigError("We couldn't set up your session. Please refresh or contact your instructor.");
       }
     };
     
@@ -1119,7 +1300,7 @@ export function LearningInterface() {
     return () => {
       cancelled = true;
     };
-  }, [learnerId, currentProblem.id]);
+  }, [learnerId, authUser?.sectionId, currentProblem.id]);
 
   // Effect 1: Session initialization - handles profile, session ID, and state reset.
   // Runs when learner/auth readiness changes (not on problem/session-config churn)
@@ -1813,7 +1994,7 @@ export function LearningInterface() {
       // Only record when using bandit strategy (not static or diagnostic)
       const debugProfileOverride = safeGetProfileOverride();
       const assignmentStrategy = safeGetStrategy();
-      if (!debugProfileOverride && assignmentStrategy === 'bandit' && learnerId) {
+      if (shouldUpdateBandit(sessionConfig?.conditionId, assignmentStrategy, Boolean(debugProfileOverride)) && learnerId) {
         try {
           // Calculate reward components
           const timeSpent = Date.now() - startTime;
@@ -1843,6 +2024,14 @@ export function LearningInterface() {
           };
           const totalReward = Object.values(rewardComponents).reduce((a, b) => a + b, 0) / 5;
 
+          const serverBanditState = isSharedBanditEnabled() ? await recordSharedBanditReward({
+            eventId: createEventId('bandit', 'reward'),
+            selectionEventId: selectionEventIdRef.current || createEventId('bandit', 'arm-selected-fallback'),
+            armId: currentProfileId as BanditArmId,
+            reward: Math.max(0, Math.min(1, totalReward)),
+            assignmentStrategy: 'bandit',
+          }) : null;
+
           storage.logBanditRewardObserved(
             learnerId,
             currentProfileId,
@@ -1851,13 +2040,13 @@ export function LearningInterface() {
           );
 
           // Log bandit updated event with new alpha/beta values
-          const armStats = banditManager.getLearnerStats(learnerId).find(s => s.armId === currentProfileId);
+          const armStats = serverBanditState ?? banditManager.getLearnerStats(learnerId).find(s => s.armId === currentProfileId);
           if (armStats) {
             storage.logBanditUpdated(
               learnerId,
               currentProfileId,
-              armStats.pullCount + 1, // Approximate alpha
-              Math.max(1, armStats.pullCount * 0.5), // Approximate beta
+              'alpha' in armStats ? armStats.alpha : armStats.pullCount + 1,
+              'beta' in armStats ? armStats.beta : Math.max(1, armStats.pullCount * 0.5),
               armStats.pullCount
             );
           }
@@ -2384,6 +2573,10 @@ export function LearningInterface() {
     [problemInteractions]
   );
 
+  if (sessionConfigError) {
+    return <SessionConfigErrorCard />;
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -2490,6 +2683,8 @@ export function LearningInterface() {
                 </div>
               )}
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                {/* Provisional self-initiated survey links; this is intentionally non-blocking pending demo confirmation. */}
+                {isStudent && <SurveyInvitationLinks />}
                 {/* Enhanced Session Timer */}
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -2716,29 +2911,6 @@ export function LearningInterface() {
                       })}
                     </div>
                     
-                    {/* Week 6: Condition indicator - subtle experimental condition badge */}
-                    {sessionConfig && (
-                      <div className="flex items-center gap-2 text-xs">
-                        <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded">
-                          Condition: {sessionConfig.conditionId}
-                        </span>
-                        {sessionConfig.textbookDisabled && (
-                          <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded dark:bg-amber-900/30 dark:text-amber-300">
-                            Textbook Disabled
-                          </span>
-                        )}
-                        {sessionConfig.immediateExplanationMode && (
-                          <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded dark:bg-blue-900/30 dark:text-blue-300">
-                            Explanation-First Mode
-                          </span>
-                        )}
-                        {sessionConfig.adaptiveLadderDisabled && (
-                          <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded dark:bg-purple-900/30 dark:text-purple-300">
-                            Static Ladder
-                          </span>
-                        )}
-                      </div>
-                    )}
                   </div>
                   
                   {/* Enhanced Problem Selector with difficulty, concepts, and solved status */}
@@ -2980,7 +3152,18 @@ export function LearningInterface() {
                 onInteractionLogged={handleHintSystemInteraction}
                 escalationProfile={currentEscalationProfile}
                 sessionConfig={sessionConfig}
+                isExplanationGenerating={isGeneratingUnit}
               />
+
+              {showAddToNotes && (
+                <GeneratedExplanationCard
+                  unit={latestGeneratedUnit}
+                  isGeneratingUnit={isGeneratingUnit}
+                  generationError={generationError}
+                  notesActionMessage={notesActionMessage}
+                  onSave={handleAddToNotes}
+                />
+              )}
 
               {/* Week 5: Progress Hint - subtle, below hint panel */}
               {isStudent && progressHint && (
@@ -3007,49 +3190,6 @@ export function LearningInterface() {
                   recentInteractions={problemInteractions}
                   onInteractionLogged={handleHintSystemInteraction}
                 />
-              )}
-
-              {showAddToNotes && (
-                <Card className="p-4 space-y-3">
-                  <div>
-                    <h3 className="font-semibold">Save This Explanation</h3>
-                    <p className="text-sm text-gray-600">
-                      You have viewed all available hints. Save this explanation to your notes for later review.
-                    </p>
-                  </div>
-                  <Button onClick={handleAddToNotes} size="sm" className="w-full" disabled={isGeneratingUnit}>
-                    {isGeneratingUnit ? (
-                      <>
-                        <Sparkles className="size-4 mr-2 animate-pulse" />
-                        Saving...
-                      </>
-                    ) : (
-                      'Save to My Notes'
-                    )}
-                  </Button>
-                  {isGeneratingUnit && (
-                    <p className="text-xs text-gray-500">Creating your note...</p>
-                  )}
-                  {generationError && (
-                    <p className="text-xs text-amber-700 dark:text-amber-300">{generationError}</p>
-                  )}
-                  {notesActionMessage && (
-                    <div className="text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 p-3 rounded-lg border border-green-300 dark:border-green-800 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle className="size-5 text-green-600 flex-shrink-0" />
-                        <p className="font-medium">{notesActionMessage}</p>
-                      </div>
-                      <Link to="/textbook" className="text-blue-600 hover:underline mt-2 inline-flex items-center gap-1 text-xs">
-                        View in My Textbook →
-                      </Link>
-                    </div>
-                  )}
-                  {latestGeneratedUnit && (
-                    <div className="rounded border bg-slate-50 p-2">
-                      <p className="text-xs font-medium text-slate-700">{latestGeneratedUnit.title}</p>
-                    </div>
-                  )}
-                </Card>
               )}
 
               <ConceptCoverage learnerId={learnerId} />

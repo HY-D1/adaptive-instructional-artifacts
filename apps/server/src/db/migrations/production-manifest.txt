@@ -1,0 +1,5 @@
+# Apply in order with event and progress writes paused; verify each target first.
+# The pilot username default and its rehearsal-only removal are intentionally excluded.
+20261031-interaction-event-fields.sql
+20261031-signup-rate-limits.sql
+20261031-problem-progress-events.sql

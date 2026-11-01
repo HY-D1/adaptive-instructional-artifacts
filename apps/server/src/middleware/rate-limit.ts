@@ -47,6 +47,115 @@ export const generalApiLimiter = rateLimit({
   },
 });
 
+function configuredLimit(name: string, fallback: number): number {
+  const value = Number.parseInt(process.env[name] ?? '', 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+export const SIGNUP_RATE_LIMIT = configuredLimit('SIGNUP_RATE_LIMIT', 100);
+export const LLM_RATE_LIMIT = configuredLimit('LLM_RATE_LIMIT', 60);
+export const BANDIT_READ_RATE_LIMIT = configuredLimit('BANDIT_READ_RATE_LIMIT', 300);
+export const BANDIT_REWARD_RATE_LIMIT = configuredLimit('BANDIT_REWARD_RATE_LIMIT', 60);
+export const SURVEY_RATE_LIMIT = configuredLimit('SURVEY_RATE_LIMIT', 100);
+
+function userOrIpKey(prefix: string, req: Request): string {
+  return req.auth?.learnerId
+    ? `${prefix}:user:${req.auth.learnerId}`
+    : `${prefix}:ip:${req.ip ?? 'unknown'}`;
+}
+
+function retryAfterHandler(label: string) {
+  return (_req: Request, res: Response) => {
+    res.setHeader('Retry-After', String(15 * 60));
+    res.status(429).json({
+      success: false,
+      error: `Too many ${label} requests`,
+      message: `${label} rate limit exceeded. Please try again later.`,
+      retryAfter: '15 minutes',
+    });
+  };
+}
+
+export const llmRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: LLM_RATE_LIMIT,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: retryAfterHandler('LLM'),
+  keyGenerator: (req: Request) => userOrIpKey('llm', req),
+});
+
+export const banditReadRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: BANDIT_READ_RATE_LIMIT,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: retryAfterHandler('bandit read'),
+  keyGenerator: (req: Request) => userOrIpKey('bandit-read', req),
+});
+
+export const banditRewardRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: BANDIT_REWARD_RATE_LIMIT,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: retryAfterHandler('bandit reward'),
+  keyGenerator: (req: Request) => userOrIpKey('bandit-reward', req),
+});
+
+export const surveyRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: SURVEY_RATE_LIMIT,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: retryAfterHandler('survey'),
+  keyGenerator: (req: Request) => userOrIpKey('survey', req),
+});
+
+const DEFAULT_STUDENT_DATA_RATE_LIMIT = 600;
+const configuredStudentDataRateLimit = Number.parseInt(
+  process.env.STUDENT_DATA_RATE_LIMIT ?? '',
+  10,
+);
+
+export const STUDENT_DATA_RATE_LIMIT = Number.isFinite(configuredStudentDataRateLimit) && configuredStudentDataRateLimit > 0
+  ? configuredStudentDataRateLimit
+  : DEFAULT_STUDENT_DATA_RATE_LIMIT;
+
+/**
+ * Student data limiter
+ * Configurable requests per 15 minutes per authenticated learner.
+ */
+export const studentDataLimiterOptions = {
+  windowMs: 15 * 60 * 1000,
+  limit: STUDENT_DATA_RATE_LIMIT,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Too many student data requests',
+    message: 'Student data rate limit exceeded. Please try again later.',
+    retryAfter: '15 minutes',
+  },
+  handler: (_req: Request, res: Response) => {
+    res.setHeader('Retry-After', String(15 * 60));
+    res.status(429).json({
+      success: false,
+      error: 'Too many student data requests',
+      message: 'Student data rate limit exceeded. Please try again later.',
+      retryAfter: '15 minutes',
+    });
+  },
+  keyGenerator: (req: Request) => {
+    if (req.auth?.learnerId) {
+      return `student-data:${req.auth.learnerId}`;
+    }
+    return `student-data:ip:${req.ip ?? 'unknown'}`;
+  },
+};
+
+export const studentDataLimiter = rateLimit(studentDataLimiterOptions);
+
 /**
  * Research endpoint rate limiter
  * Stricter limits for expensive aggregation/export endpoints
@@ -106,13 +215,12 @@ export const loginRateLimiter = rateLimit({
 });
 
 /**
- * Signup endpoint rate limiter
- * 5 requests per 15 minutes per IP
- * Keyed by IP only (new users don't have email yet)
+ * Legacy configurable per-IP signup limiter. The auth signup route uses
+ * shared database counters instead; this export remains for compatibility.
  */
 export const signupRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: 5, // 5 signup attempts per window per IP
+  limit: SIGNUP_RATE_LIMIT,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -125,6 +233,7 @@ export const signupRateLimiter = rateLimit({
     return `signup:${ipKeyGenerator(req.ip ?? 'unknown')}`;
   },
   handler: (_req: Request, res: Response) => {
+    res.setHeader('Retry-After', String(15 * 60));
     res.status(429).json({
       success: false,
       error: 'Too many signup attempts',

@@ -1,0 +1,26 @@
+{
+  "event_count": 1534,
+  "diagnostics": {
+    "difficulty_count": 30,
+    "missing_difficulty": [],
+    "students": 45,
+    "selections": 983,
+    "initial_best_arm": "aggressive",
+    "final_best_arm": "conservative",
+    "best_arm_changes": 68
+  },
+  "final_stats": {
+    "aggressive": {
+      "pulls": 238
+    },
+    "conservative": {
+      "pulls": 271
+    },
+    "explanation-first": {
+      "pulls": 242
+    },
+    "adaptive": {
+      "pulls": 232
+    }
+  }
+}

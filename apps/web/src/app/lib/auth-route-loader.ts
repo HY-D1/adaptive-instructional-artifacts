@@ -1,7 +1,7 @@
 import { redirect } from 'react-router';
 import type { LoaderFunction } from 'react-router';
 
-import { AUTH_BACKEND_CONFIGURED, getMe } from './api/auth-client';
+import { AUTH_BACKEND_CONFIGURED, getMe, getPreSurveyStatus } from './api/auth-client';
 import {
   ROUTES,
   protectRoute,
@@ -12,6 +12,7 @@ import {
 export interface ProtectedLoaderOptions {
   requiredRole?: 'student' | 'instructor';
   allowAuthenticated?: boolean;
+  requirePreSurvey?: boolean;
 }
 
 /**
@@ -35,6 +36,16 @@ export function createProtectedLoader(options?: ProtectedLoaderOptions): LoaderF
         !(options.requiredRole === 'student' && authUser.role === 'instructor' && isPreviewModeActive())
       ) {
         return redirect(`${getDefaultRouteForRole(authUser.role)}?reason=access-denied`);
+      }
+      if (options?.requirePreSurvey && authUser.role === 'student') {
+        try {
+          const status = await getPreSurveyStatus();
+          if (!status.completed) {
+            return redirect('/pre-survey-required');
+          }
+        } catch {
+          return redirect('/pre-survey-required');
+        }
       }
       return null;
     }

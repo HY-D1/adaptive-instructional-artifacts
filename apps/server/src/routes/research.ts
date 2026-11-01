@@ -21,7 +21,11 @@ import type {
   EventType,
   Interaction,
 } from '../types.js';
-import { getInstructorScopedLearnerIds, getOwnedSectionsByInstructor } from '../db/sections.js';
+import {
+  getInstructorScopedLearnerIds,
+  getOwnedSectionsByInstructor,
+  getProductionSections,
+} from '../db/sections.js';
 
 const router = Router();
 
@@ -38,6 +42,11 @@ export const RESEARCH_EXPORT_FIELDS_PRESERVED = [
 async function getScopedLearnerIdsForInstructor(instructorUserId: string): Promise<Set<string>> {
   const ids = await getInstructorScopedLearnerIds(instructorUserId);
   return new Set(ids);
+}
+
+export async function getProductionSectionIds(): Promise<Set<string>> {
+  const sections = await getProductionSections();
+  return new Set(sections.map((section) => section.id));
 }
 
 // ============================================================================

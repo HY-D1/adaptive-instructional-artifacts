@@ -24,6 +24,8 @@ import { neonLearnersRouter } from './routes/neon-learners.js';
 import { neonInteractionsRouter } from './routes/neon-interactions.js';
 import { neonTextbooksRouter } from './routes/neon-textbooks.js';
 import { neonSessionsRouter } from './routes/neon-sessions.js';
+import { neonBanditRouter } from './routes/neon-bandit.js';
+import { surveysRouter } from './routes/surveys.js';
 import { authRouter } from './routes/auth.js';
 import { instructorRouter } from './routes/instructor.js';
 import { corpusRouter } from './routes/corpus.js';
@@ -38,11 +40,19 @@ import { isUsingNeon } from './db/index.js';
 import { resolveDbEnv, resolveEnvironment, resolveDbTarget } from './db/env-resolver.js';
 import { optionalAuth, requireAuth, requireInstructor } from './middleware/auth.js';
 import { requireCsrf } from './middleware/csrf.js';
-import { generalApiLimiter, researchRateLimiter } from './middleware/rate-limit.js';
+import { maintenanceGuard } from './middleware/maintenance.js';
+import {
+  generalApiLimiter,
+  llmRateLimiter,
+  researchRateLimiter,
+  studentDataLimiter,
+  surveyRateLimiter,
+} from './middleware/rate-limit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const envPath = path.resolve(__dirname, '../.env');
 dotenv.config({ path: envPath });
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
 const DATA_DIR = path.resolve(__dirname, '../data');
 if (!fs.existsSync(DATA_DIR)) {
@@ -130,8 +140,8 @@ function originGuard(req: Request, res: Response, next: NextFunction): void {
 
 const app = express();
 
-// Trust proxy for Vercel deployment to get correct client IP
-if (process.env.VERCEL === '1' || process.env.NODE_ENV === 'production') {
+// Opt in only when the deployment is known to be behind a trusted proxy.
+if (process.env.TRUST_PROXY === 'true') {
   app.set('trust proxy', 1);
 }
 
@@ -155,10 +165,13 @@ app.use(cors({
     'Content-Type',
     'Authorization',
     'x-csrf-token',
+    'x-maintenance-key',
     'x-vercel-protection-bypass',
     'x-vercel-set-bypass-cookie',
   ],
 }));
+
+app.use(maintenanceGuard);
 
 app.use(cookieParser());
 app.use(optionalAuth);
@@ -268,17 +281,19 @@ const usingNeon = isUsingNeon();
 
 if (usingNeon) {
   console.log('🔌 Using Neon PostgreSQL routes (auth + csrf required) [PRODUCTION PATH]');
-  app.use('/api/learners', generalApiLimiter, requireAuth, requireCsrf, neonLearnersRouter);
-  app.use('/api/interactions', generalApiLimiter, requireAuth, requireCsrf, neonInteractionsRouter);
-  app.use('/api/textbooks', generalApiLimiter, requireAuth, requireCsrf, neonTextbooksRouter);
-  app.use('/api/sessions', generalApiLimiter, requireAuth, requireCsrf, neonSessionsRouter);
+  app.use('/api/learners', studentDataLimiter, requireAuth, requireCsrf, neonLearnersRouter);
+  app.use('/api/interactions', studentDataLimiter, requireAuth, requireCsrf, neonInteractionsRouter);
+  app.use('/api/textbooks', studentDataLimiter, requireAuth, requireCsrf, neonTextbooksRouter);
+  app.use('/api/sessions', studentDataLimiter, requireAuth, requireCsrf, neonSessionsRouter);
+  app.use('/api/surveys', surveyRateLimiter, requireCsrf, surveysRouter);
+  app.use('/api/bandit', requireAuth, requireCsrf, neonBanditRouter);
 } else {
   console.log('💾 Using SQLite routes (local/dev fallback only)');
   console.log('⚠️  Research exports and multi-learner features require DATABASE_URL');
-  app.use('/api/learners', generalApiLimiter, learnersRouter);
-  app.use('/api/interactions', generalApiLimiter, interactionsRouter);
-  app.use('/api/textbooks', generalApiLimiter, textbooksRouter);
-  app.use('/api/sessions', generalApiLimiter, sessionsRouter);
+  app.use('/api/learners', studentDataLimiter, learnersRouter);
+  app.use('/api/interactions', studentDataLimiter, interactionsRouter);
+  app.use('/api/textbooks', studentDataLimiter, textbooksRouter);
+  app.use('/api/sessions', studentDataLimiter, sessionsRouter);
 }
 
 // Auth routes - rate limiting applied per-endpoint in auth router
@@ -288,9 +303,9 @@ app.use('/api/auth', authRouter);
 app.use('/api/research', researchRateLimiter, requireAuth, requireInstructor, researchRouter);
 // Instructor export endpoints also use research rate limits
 app.use('/api/instructor', researchRateLimiter, requireAuth, instructorRouter);
-app.use('/api/corpus', generalApiLimiter, corpusRouter);
+app.use('/api/corpus', studentDataLimiter, corpusRouter);
 app.use('/api/pdf-index', generalApiLimiter, pdfIndexRouter);
-app.use('/api/llm', generalApiLimiter, llmRouter);
+app.use('/api/llm', llmRateLimiter, llmRouter);
 
 app.post('/ollama/api/generate', async (req: Request, res: Response) => {
   if (!ENABLE_LLM) {

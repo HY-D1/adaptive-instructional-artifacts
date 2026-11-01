@@ -8,6 +8,10 @@ const updateProblemProgressMock = vi.fn();
 const getProblemProgressMock = vi.fn();
 const updateLearnerProfileFromEventMock = vi.fn();
 const getLearnerProfileMock = vi.fn();
+const assignStudentConditionMock = vi.fn();
+class StudentConditionAssignmentErrorMock extends Error {
+  readonly status = 400;
+}
 const requireInstructorMock = vi.fn((_req, _res, next) => next?.());
 const requireOwnershipMock = vi.fn((_req, _res, next) => next?.());
 
@@ -21,6 +25,8 @@ vi.mock('../../../apps/server/src/db/neon.js', () => ({
   getProblemProgress: getProblemProgressMock,
   updateLearnerProfileFromEvent: updateLearnerProfileFromEventMock,
   getLearnerProfile: getLearnerProfileMock,
+  assignStudentCondition: assignStudentConditionMock,
+  StudentConditionAssignmentError: StudentConditionAssignmentErrorMock,
   getUserById: vi.fn(),
   getAllUsers: vi.fn(),
   createUser: vi.fn(),
@@ -53,7 +59,7 @@ function getRouteHandler(
   return handle;
 }
 
-async function invokePostHandler(handler: Function, body: unknown): Promise<number> {
+async function invokeStatusPostHandler(handler: Function, body: unknown): Promise<number> {
   let status = 200;
   const res = {
     status(code: number) { status = code; return this; },
@@ -87,6 +93,34 @@ async function invokeGetHandler(handler: Function): Promise<{ status: number; js
   return { status: statusCode, json: payload };
 }
 
+async function invokePostHandler(
+  handler: Function,
+  body: Record<string, unknown>,
+): Promise<{ status: number; json: unknown }> {
+  let statusCode = 200;
+  let payload: unknown = null;
+  const req = {
+    method: 'POST',
+    baseUrl: '/api/learners',
+    path: '/student-1/condition-assignment',
+    params: { id: 'student-1' },
+    body,
+  } as Record<string, unknown>;
+  const res = {
+    status(code: number) {
+      statusCode = code;
+      return this;
+    },
+    json(data: unknown) {
+      payload = data;
+      return this;
+    },
+  } as Record<string, unknown>;
+
+  await handler(req, res);
+  return { status: statusCode, json: payload };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -99,9 +133,9 @@ describe('neon learners profile contract', () => {
     const profile = getRouteHandler(router, 'post', '/:id/profile/events');
     const batch = getRouteHandler(router, 'post', '/:id/profile/events/batch');
     for (const eventId of ['', '  ', null, 123, {}, 'x'.repeat(257)]) {
-      expect(await invokePostHandler(progress, { eventId })).toBe(400);
-      expect(await invokePostHandler(profile, { event: { eventId } })).toBe(400);
-      expect(await invokePostHandler(batch, { events: [{ eventId: 'valid' }, { eventId }] })).toBe(400);
+      expect(await invokeStatusPostHandler(progress, { eventId })).toBe(400);
+      expect(await invokeStatusPostHandler(profile, { event: { eventId } })).toBe(400);
+      expect(await invokeStatusPostHandler(batch, { events: [{ eventId: 'valid' }, { eventId }] })).toBe(400);
     }
     expect(updateProblemProgressMock).not.toHaveBeenCalled();
     expect(updateLearnerProfileFromEventMock).not.toHaveBeenCalled();
@@ -110,11 +144,11 @@ describe('neon learners profile contract', () => {
     getProblemProgressMock.mockResolvedValue({});
     updateLearnerProfileFromEventMock.mockResolvedValue({});
     getLearnerProfileMock.mockResolvedValue({});
-    expect(await invokePostHandler(progress, {})).toBe(200);
-    expect(await invokePostHandler(profile, { event: {} })).toBe(200);
-    expect(await invokePostHandler(batch, { events: [{}] })).toBe(200);
-    expect(await invokePostHandler(progress, { eventId: 'x'.repeat(256) })).toBe(200);
-    expect(await invokePostHandler(profile, { event: { eventId: 'valid' } })).toBe(200);
+    expect(await invokeStatusPostHandler(progress, {})).toBe(200);
+    expect(await invokeStatusPostHandler(profile, { event: {} })).toBe(200);
+    expect(await invokeStatusPostHandler(batch, { events: [{}] })).toBe(200);
+    expect(await invokeStatusPostHandler(progress, { eventId: 'x'.repeat(256) })).toBe(200);
+    expect(await invokeStatusPostHandler(profile, { event: { eventId: 'valid' } })).toBe(200);
   });
   it('fetches scoped learner profiles in one batch call', async () => {
     const { neonLearnersRouter } = await import('../../../apps/server/src/routes/neon-learners');
@@ -144,6 +178,33 @@ describe('neon learners profile contract', () => {
         { id: 'learner-1', conceptsCovered: ['joins'] },
         { id: 'learner-2', conceptsCovered: ['aggregates'] },
       ],
+    });
+  });
+
+  it('rejects an assignment section that is not eligible for the student', async () => {
+    const { neonLearnersRouter } = await import('../../../apps/server/src/routes/neon-learners');
+    const assignCondition = getRouteHandler(
+      neonLearnersRouter as unknown as {
+        stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }>;
+      },
+      'post',
+      '/:id/condition-assignment',
+    );
+
+    assignStudentConditionMock.mockRejectedValue(
+      new StudentConditionAssignmentErrorMock(
+        'Student is not enrolled in an eligible production section',
+      ),
+    );
+
+    const result = await invokePostHandler(assignCondition, {
+      firstSectionId: 'qa-section',
+    });
+
+    expect(result.status).toBe(400);
+    expect(result.json).toEqual({
+      success: false,
+      error: 'Student is not enrolled in an eligible production section',
     });
   });
 });

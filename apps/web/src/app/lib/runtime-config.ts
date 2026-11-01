@@ -128,6 +128,10 @@ export function isBackendConfigured(): boolean {
   return getRawApiBaseUrl() !== undefined;
 }
 
+export function isSharedBanditEnabled(): boolean {
+  return import.meta.env.VITE_SHARED_BANDIT_ENABLED !== 'false';
+}
+
 /**
  * Check if explicit dev/demo mode is enabled
  * This allows local-only mode for development/testing

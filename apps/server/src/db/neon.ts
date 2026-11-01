@@ -10,11 +10,14 @@
  * - Race-condition safe progress updates using atomic operations and row locking
  */
 
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from "node:crypto";
+import { generateUsername } from './username.js';
+export { generateUsername } from './username.js';
 
-import { neon, neonConfig, NeonQueryFunction } from '@neondatabase/serverless';
-import { resolveDbEnv } from './env-resolver.js';
-import { initAuthSchema } from './auth.js';
+import { neon, neonConfig, NeonQueryFunction } from "@neondatabase/serverless";
+import { resolveDbEnv } from "./env-resolver.js";
+import { initAuthSchema } from "./auth.js";
+import { issueSurveyCompletionToken } from "../lib/survey-links.js";
 import type {
   Learner,
   CreateLearnerRequest,
@@ -25,7 +28,8 @@ import type {
   CreateUnitRequest,
   LearnerProfile,
   SessionData,
-} from '../types.js';
+  UserRole,
+} from "../types.js";
 
 export interface CorpusManifestDocumentRow {
   docId: string;
@@ -83,8 +87,8 @@ export interface AuthEventRow {
   emailHash: string;
   accountId: string | null;
   learnerId: string | null;
-  role: 'student' | 'instructor' | null;
-  outcome: 'success' | 'failure';
+  role: "student" | "instructor" | null;
+  outcome: "success" | "failure";
   failureReason: string | null;
   createdAt: string;
 }
@@ -93,13 +97,13 @@ export interface CreateAuthEventRequest {
   email: string;
   accountId?: string | null;
   learnerId?: string | null;
-  role?: 'student' | 'instructor' | null;
-  outcome: 'success' | 'failure';
+  role?: "student" | "instructor" | null;
+  outcome: "success" | "failure";
   failureReason?: string | null;
 }
 
-export const DEFAULT_ACTIVE_CORPUS_DOC_ID = 'dbms-ramakrishnan-3rd-edition';
-export const DEFAULT_ACTIVE_CORPUS_RUN_ID = 'run-1774671570-b1353117';
+export const DEFAULT_ACTIVE_CORPUS_DOC_ID = "dbms-ramakrishnan-3rd-edition";
+export const DEFAULT_ACTIVE_CORPUS_RUN_ID = "run-1774671570-b1353117";
 
 // Configure Neon for serverless environment
 neonConfig.fetchConnectionCache = true;
@@ -115,7 +119,7 @@ function getDatabaseUrl(): string {
   if (!url) {
     throw new Error(
       `No database URL found. Set one of: DATABASE_URL, NEON_DATABASE_URL, ` +
-      `adaptive_data_DATABASE_URL, or adaptive_data_POSTGRES_URL`
+        `adaptive_data_DATABASE_URL, or adaptive_data_POSTGRES_URL`,
     );
   }
   console.log(`🔌 Database URL resolved from env var: ${source}`);
@@ -146,10 +150,17 @@ export async function initializeSchema(): Promise<void> {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       role TEXT NOT NULL CHECK (role IN ('student', 'instructor')),
+      username TEXT NOT NULL UNIQUE
+        CHECK (username ~ '^(student|instructor)-[a-z0-9]{6}$'),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+
+  await db`ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT`;
+  await backfillUsernames(db);
+  await db`ALTER TABLE users ALTER COLUMN username SET NOT NULL`;
+  await db`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username)`;
 
   await db`CREATE INDEX IF NOT EXISTS idx_users_role ON users(role)`;
 
@@ -186,6 +197,15 @@ export async function initializeSchema(): Promise<void> {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
+
+  await db`
+    ALTER TABLE course_sections ADD COLUMN IF NOT EXISTS section_type TEXT
+      NOT NULL DEFAULT 'test'
+      CHECK (section_type IN ('test', 'production', 'pilot'))
+  `;
+
+  await db`CREATE INDEX IF NOT EXISTS idx_course_sections_type ON course_sections(section_type)`;
+  await db`CREATE INDEX IF NOT EXISTS idx_course_sections_instructor_type ON course_sections(instructor_user_id, section_type)`;
 
   await db`
     CREATE TABLE IF NOT EXISTS section_enrollments (
@@ -272,15 +292,14 @@ export async function initializeSchema(): Promise<void> {
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       section_id TEXT REFERENCES course_sections(id) ON DELETE SET NULL,
+      condition_id TEXT CHECK (condition_id IN ('adaptive', 'control')),
       session_id TEXT,
       timestamp TIMESTAMPTZ NOT NULL,
       event_type TEXT NOT NULL,
       problem_id TEXT NOT NULL,
       problem_set_id TEXT,
       problem_number INTEGER,
-      condition_id TEXT,
       execution_time_ms DOUBLE PRECISION,
-      metadata TEXT,
       code TEXT,
       error TEXT,
       error_subtype_id TEXT,
@@ -308,6 +327,7 @@ export async function initializeSchema(): Promise<void> {
       source_interaction_ids TEXT,
       inputs TEXT,
       outputs TEXT,
+      metadata TEXT,
       concept_id TEXT,
       concept_ids TEXT,
       source TEXT,
@@ -371,12 +391,14 @@ export async function initializeSchema(): Promise<void> {
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_user_id ON interaction_events(user_id)`;
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_session_id ON interaction_events(session_id)`;
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_event_type ON interaction_events(event_type)`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS metadata TEXT`;
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_timestamp ON interaction_events(timestamp)`;
   await db`CREATE INDEX IF NOT EXISTS idx_interaction_events_problem_id ON interaction_events(problem_id)`;
 
   // Keep RESEARCH-4 columns in lockstep with migrate-neon.sql.
   // Fresh Neon init uses this runtime initializer, while SQL migration paths use the .sql file.
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS learner_profile_id TEXT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS condition_id TEXT`;
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS escalation_trigger_reason TEXT`;
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS error_count_at_escalation INTEGER`;
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS time_to_escalation INTEGER`;
@@ -388,9 +410,7 @@ export async function initializeSchema(): Promise<void> {
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS total_time INTEGER`;
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS problems_attempted INTEGER`;
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS problems_solved INTEGER`;
-  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS condition_id TEXT`;
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS execution_time_ms DOUBLE PRECISION`;
-  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS metadata TEXT`;
 
   // Textbook units (My Textbook)
   await db`
@@ -554,24 +574,118 @@ export async function initializeSchema(): Promise<void> {
 
   await db`CREATE INDEX IF NOT EXISTS idx_learner_profiles_last_activity ON learner_profiles(last_activity_at)`;
 
-  console.log('✅ Neon PostgreSQL schema initialized');
+  await db`
+    CREATE TABLE IF NOT EXISTS student_condition_assignments (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      condition_id TEXT NOT NULL CHECK (condition_id IN ('adaptive', 'control')),
+      first_section_id TEXT NOT NULL REFERENCES course_sections(id) ON DELETE RESTRICT,
+      assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      assignment_version TEXT NOT NULL DEFAULT 'student-condition-v1'
+    )
+  `;
+  await db`CREATE INDEX IF NOT EXISTS idx_student_condition_assignments_condition ON student_condition_assignments(condition_id)`;
+
+  await db`
+    CREATE TABLE IF NOT EXISTS bandit_arm_state (
+      arm_id TEXT PRIMARY KEY CHECK (arm_id IN ('aggressive', 'conservative', 'explanation-first', 'adaptive')),
+      experiment_version TEXT NOT NULL DEFAULT 'bandit-shared-v1',
+      alpha NUMERIC NOT NULL DEFAULT 1 CHECK (alpha > 0),
+      beta NUMERIC NOT NULL DEFAULT 1 CHECK (beta > 0),
+      pull_count INTEGER NOT NULL DEFAULT 0 CHECK (pull_count >= 0),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await db`
+    INSERT INTO bandit_arm_state (arm_id)
+    VALUES ('aggressive'), ('conservative'), ('explanation-first'), ('adaptive')
+    ON CONFLICT (arm_id) DO NOTHING
+  `;
+  await db`
+    CREATE TABLE IF NOT EXISTS bandit_reward_events (
+      event_id TEXT PRIMARY KEY,
+      selection_event_id TEXT NOT NULL UNIQUE,
+      student_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      condition_id TEXT NOT NULL CHECK (condition_id = 'adaptive'),
+      arm_id TEXT NOT NULL REFERENCES bandit_arm_state(arm_id),
+      reward NUMERIC NOT NULL CHECK (reward >= 0 AND reward <= 1),
+      experiment_version TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+  await db`CREATE INDEX IF NOT EXISTS idx_bandit_reward_events_student ON bandit_reward_events(student_id)`;
+
+  await db`
+    CREATE TABLE IF NOT EXISTS survey_invitations (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      instance TEXT NOT NULL CHECK (instance IN ('pre', 'post')),
+      username TEXT,
+      completion_nonce TEXT,
+      qualtrics_response_id TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed')),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      completed_at TIMESTAMPTZ,
+      PRIMARY KEY (user_id, instance)
+    )
+  `;
+  await db`ALTER TABLE survey_invitations ADD COLUMN IF NOT EXISTS username TEXT`;
+  await db`ALTER TABLE survey_invitations ADD COLUMN IF NOT EXISTS completion_nonce TEXT`;
+  await db`CREATE INDEX IF NOT EXISTS idx_survey_invitations_status ON survey_invitations(status)`;
+
+  console.log("✅ Neon PostgreSQL schema initialized");
 }
 
 // ============================================================================
 // User Operations
 // ============================================================================
 
-export async function createUser(id: string, data: CreateLearnerRequest): Promise<Learner> {
+export async function createUser(
+  id: string,
+  data: CreateLearnerRequest,
+): Promise<Learner> {
   const db = getDb();
   const now = new Date().toISOString();
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      const username = generateUsername(data.role);
+      const [result] = await db`
+        INSERT INTO users (id, name, role, username, created_at, updated_at)
+        VALUES (${id}, ${data.name}, ${data.role}, ${username}, ${now}, ${now})
+        RETURNING id, name, role, created_at, updated_at
+      `;
+      return rowToLearner(result);
+    } catch (error) {
+      if (!isUniqueViolation(error) || attempt === 9) {
+        throw error;
+      }
+    }
+  }
+  throw new Error('Failed to generate a unique username');
+}
 
-  const [result] = await db`
-    INSERT INTO users (id, name, role, created_at, updated_at)
-    VALUES (${id}, ${data.name}, ${data.role}, ${now}, ${now})
-    RETURNING id, name, role, created_at, updated_at
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
+}
+
+async function backfillUsernames(db: NeonQueryFunction<false, false>): Promise<void> {
+  const rows = await db`
+    SELECT id, role
+    FROM users
+    WHERE username IS NULL
   `;
-
-  return rowToLearner(result);
+  for (const row of rows) {
+    let username = generateUsername(row.role as UserRole);
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      try {
+        await db`UPDATE users SET username = ${username} WHERE id = ${row.id} AND username IS NULL`;
+        break;
+      } catch (error) {
+        if (!isUniqueViolation(error) || attempt === 9) {
+          throw error;
+        }
+        username = generateUsername(row.role as UserRole);
+      }
+    }
+  }
 }
 
 export async function getUserById(id: string): Promise<Learner | null> {
@@ -586,7 +700,333 @@ export async function getAllUsers(): Promise<Learner[]> {
   return results.map(rowToLearner);
 }
 
-export async function updateUser(id: string, data: UpdateLearnerRequest): Promise<Learner | null> {
+export type StudentCondition = "adaptive" | "control";
+
+export interface StudentConditionAssignment {
+  userId: string;
+  conditionId: StudentCondition;
+  firstSectionId: string;
+  assignedAt: string;
+  assignmentVersion: string;
+}
+
+export class StudentConditionAssignmentError extends Error {
+  readonly status = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'StudentConditionAssignmentError';
+  }
+}
+
+export const SHARED_BANDIT_EXPERIMENT_VERSION = 'bandit-shared-v1';
+export const SHARED_BANDIT_ARMS = ['aggressive', 'conservative', 'explanation-first', 'adaptive'] as const;
+export type SharedBanditArm = (typeof SHARED_BANDIT_ARMS)[number];
+
+export interface SharedBanditArmState {
+  armId: SharedBanditArm;
+  experimentVersion: string;
+  alpha: number;
+  beta: number;
+  pullCount: number;
+  updatedAt: string;
+}
+
+export async function getSharedBanditState(): Promise<SharedBanditArmState[]> {
+  const db = getDb();
+  const rows = await db`
+    SELECT arm_id, experiment_version, alpha, beta, pull_count, updated_at
+    FROM bandit_arm_state
+    ORDER BY arm_id
+  `;
+  return rows.map((row) => ({
+    armId: row.arm_id as SharedBanditArm,
+    experimentVersion: row.experiment_version,
+    alpha: Number(row.alpha),
+    beta: Number(row.beta),
+    pullCount: Number(row.pull_count),
+    updatedAt: new Date(row.updated_at).toISOString(),
+  }));
+}
+
+export async function recordSharedBanditReward(params: {
+  eventId: string;
+  selectionEventId: string;
+  studentId: string;
+  conditionId: 'adaptive';
+  assignmentStrategy: 'bandit';
+  armId: SharedBanditArm;
+  reward: number;
+}): Promise<SharedBanditArmState & { applied: boolean }> {
+  const db = getDb();
+  const [row] = await db`
+    WITH inserted AS (
+      INSERT INTO bandit_reward_events (
+        event_id, selection_event_id, student_id, condition_id, arm_id, reward, experiment_version
+      ) VALUES (
+        ${params.eventId}, ${params.selectionEventId}, ${params.studentId}, ${params.conditionId},
+        ${params.armId}, CAST(${params.reward} AS NUMERIC), ${SHARED_BANDIT_EXPERIMENT_VERSION}
+      )
+      ON CONFLICT DO NOTHING
+      RETURNING event_id
+    ), updated AS (
+      UPDATE bandit_arm_state
+        SET alpha = alpha + CAST(${params.reward} AS NUMERIC),
+          beta = beta + (1 - CAST(${params.reward} AS NUMERIC)),
+          pull_count = pull_count + 1,
+          updated_at = NOW()
+      WHERE arm_id = ${params.armId}
+        AND EXISTS (SELECT 1 FROM inserted)
+      RETURNING arm_id
+    )
+    SELECT state.arm_id, state.experiment_version, state.alpha, state.beta,
+           state.pull_count, state.updated_at,
+           EXISTS (SELECT 1 FROM updated) AS applied
+    FROM bandit_arm_state state
+    WHERE state.arm_id = ${params.armId}
+  `;
+  if (!row) throw new Error('Shared bandit arm was not found');
+  return {
+    armId: row.arm_id as SharedBanditArm,
+    experimentVersion: row.experiment_version,
+    alpha: Number(row.alpha),
+    beta: Number(row.beta),
+    pullCount: Number(row.pull_count),
+    updatedAt: new Date(row.updated_at).toISOString(),
+    applied: Boolean(row.applied),
+  };
+}
+
+function studentConditionFor(): StudentCondition {
+  const configuredProbability = Number(
+    process.env.STUDENT_CONDITION_ADAPTIVE_PROBABILITY ?? "0.5",
+  );
+  const adaptiveProbability = Number.isFinite(configuredProbability)
+    ? Math.min(1, Math.max(0, configuredProbability))
+    : 0.5;
+  return Math.random() < adaptiveProbability ? "adaptive" : "control";
+}
+
+function rowToStudentConditionAssignment(row: any): StudentConditionAssignment {
+  return {
+    userId: row.user_id,
+    conditionId: row.condition_id,
+    firstSectionId: row.first_section_id,
+    assignedAt: new Date(row.assigned_at).toISOString(),
+    assignmentVersion: row.assignment_version,
+  };
+}
+
+export async function getStudentConditionAssignment(
+  userId: string,
+): Promise<StudentConditionAssignment | null> {
+  const db = getDb();
+  const [result] = await db`
+    SELECT user_id, condition_id, first_section_id, assigned_at, assignment_version
+    FROM student_condition_assignments
+    WHERE user_id = ${userId}
+  `;
+  return result ? rowToStudentConditionAssignment(result) : null;
+}
+
+export async function assignStudentCondition(
+  userId: string,
+  firstSectionId?: string,
+): Promise<StudentConditionAssignment> {
+  const db = getDb();
+  const resolvedFirstSectionId = await resolveEligibleSectionIdForAssignment(
+    userId,
+    firstSectionId,
+  );
+  if (!resolvedFirstSectionId) {
+    throw new StudentConditionAssignmentError(
+      firstSectionId
+        ? 'Student is not enrolled in an eligible production section'
+        : 'Cannot assign student condition without an eligible production section',
+    );
+  }
+  await db`
+    INSERT INTO student_condition_assignments (user_id, condition_id, first_section_id)
+    VALUES (${userId}, ${studentConditionFor()}, ${resolvedFirstSectionId})
+    ON CONFLICT (user_id) DO NOTHING
+  `;
+  const assignment = await getStudentConditionAssignment(userId);
+  if (!assignment) {
+    throw new Error("Student condition assignment was not created or found");
+  }
+  await ensureSurveyInvitation(userId, "pre");
+  return assignment;
+}
+
+export type SurveyInstance = "pre" | "post";
+export type SurveyInvitationStatus = "pending" | "completed";
+
+export interface SurveyInvitation {
+  userId: string;
+  instance: SurveyInstance;
+  username: string | null;
+  qualtricsResponseId: string | null;
+  status: SurveyInvitationStatus;
+  createdAt: string;
+  completedAt: string | null;
+  surveyUrl: string | null;
+}
+
+function surveyBaseUrl(instance: SurveyInstance): string | null {
+  const value =
+    instance === "pre"
+      ? process.env.QUALTRICS_PRE_SURVEY_URL
+      : process.env.QUALTRICS_POST_SURVEY_URL;
+  return value?.trim() || null;
+}
+
+export function buildSurveyUrl(
+  username: string | null,
+  instance: SurveyInstance,
+  invitationNonce: string | null,
+): string | null {
+  const baseUrl = surveyBaseUrl(instance);
+  const token = username && invitationNonce
+    ? issueSurveyCompletionToken(username, instance, invitationNonce)
+    : null;
+  if (!baseUrl || !username || !token) {
+    if (!token && username) {
+      console.warn('[surveys/link] completion signing secret is not configured');
+    }
+    return null;
+  }
+
+  const url = new URL(baseUrl);
+  url.searchParams.set("username", username);
+  url.searchParams.set("instance", instance);
+  url.searchParams.set("completion_token", token);
+  return url.toString();
+}
+
+function rowToSurveyInvitation(row: any): SurveyInvitation {
+  const instance = row.instance as SurveyInstance;
+  return {
+    userId: row.user_id,
+    instance,
+    username: row.username ?? null,
+    qualtricsResponseId: row.qualtrics_response_id ?? null,
+    status: row.status,
+    createdAt: new Date(row.created_at).toISOString(),
+    completedAt: row.completed_at
+      ? new Date(row.completed_at).toISOString()
+      : null,
+    surveyUrl: buildSurveyUrl(row.username ?? null, instance, row.completion_nonce ?? null),
+  };
+}
+
+export async function ensureSurveyInvitation(
+  userId: string,
+  instance: SurveyInstance,
+): Promise<SurveyInvitation> {
+  const db = getDb();
+  await db`
+    INSERT INTO survey_invitations (user_id, instance, username, completion_nonce)
+    SELECT ${userId}, ${instance}, username, ${randomBytes(24).toString('hex')} FROM users WHERE id = ${userId}
+    ON CONFLICT (user_id, instance) DO NOTHING
+  `;
+  await db`
+    UPDATE survey_invitations
+    SET username = users.username
+    FROM users
+    WHERE survey_invitations.user_id = users.id
+      AND survey_invitations.user_id = ${userId}
+      AND survey_invitations.instance = ${instance}
+      AND survey_invitations.username IS NULL
+  `;
+  await db`
+    UPDATE survey_invitations
+    SET completion_nonce = ${randomBytes(24).toString('hex')}
+    WHERE user_id = ${userId} AND instance = ${instance} AND completion_nonce IS NULL
+  `;
+  const [row] = await db`
+    SELECT user_id, instance, username, completion_nonce, qualtrics_response_id, status, created_at, completed_at
+    FROM survey_invitations
+    WHERE user_id = ${userId} AND instance = ${instance}
+  `;
+  if (!row) throw new Error("Survey invitation was not created or found");
+  return rowToSurveyInvitation(row);
+}
+
+// Provisional Part B rule: one attempted problem is the temporary definition of "finished".
+// Replace this predicate when the professor's final activity-completion definition is settled.
+export function isFinishedForPostSurvey(params: { attemptedProblemCount: number }): boolean {
+  return params.attemptedProblemCount >= 1;
+}
+
+export async function maybeEnsurePostSurveyInvitation(userId: string): Promise<boolean> {
+  try {
+    const db = getDb();
+    const [result] = await db`
+      SELECT COUNT(*)::integer AS attempted_problem_count
+      FROM problem_progress
+      WHERE user_id = ${userId} AND attempts_count > 0
+    `;
+    if (!isFinishedForPostSurvey({ attemptedProblemCount: Number(result?.attempted_problem_count ?? 0) })) {
+      return false;
+    }
+    await ensureSurveyInvitation(userId, "post");
+    return true;
+  } catch (error) {
+    console.error('[surveys/post-trigger]', {
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+export async function getSurveyInvitations(
+  userId: string,
+): Promise<SurveyInvitation[]> {
+  const db = getDb();
+  const missingNonces = await db`
+    SELECT instance
+    FROM survey_invitations
+    WHERE user_id = ${userId} AND completion_nonce IS NULL
+  `;
+  for (const row of missingNonces) {
+    await db`
+      UPDATE survey_invitations
+      SET completion_nonce = ${randomBytes(24).toString('hex')}
+      WHERE user_id = ${userId} AND instance = ${row.instance} AND completion_nonce IS NULL
+    `;
+  }
+  const rows = await db`
+    SELECT user_id, instance, username, completion_nonce, qualtrics_response_id, status, created_at, completed_at
+    FROM survey_invitations
+    WHERE user_id = ${userId}
+    ORDER BY created_at, instance
+  `;
+  return rows.map(rowToSurveyInvitation);
+}
+
+export async function completeSurveyInvitation(
+  username: string,
+  instance: SurveyInstance,
+  invitationNonce: string,
+  qualtricsResponseId?: string,
+): Promise<SurveyInvitation | null> {
+  const db = getDb();
+  const [row] = await db`
+    UPDATE survey_invitations
+    SET status = 'completed',
+        qualtrics_response_id = COALESCE(qualtrics_response_id, ${qualtricsResponseId ?? null}),
+        completed_at = COALESCE(completed_at, NOW())
+    WHERE username = ${username} AND instance = ${instance} AND completion_nonce = ${invitationNonce}
+    RETURNING user_id, instance, username, completion_nonce, qualtrics_response_id, status, created_at, completed_at
+  `;
+  return row ? rowToSurveyInvitation(row) : null;
+}
+
+export async function updateUser(
+  id: string,
+  data: UpdateLearnerRequest,
+): Promise<Learner | null> {
   const db = getDb();
   const existing = await getUserById(id);
   if (!existing) return null;
@@ -608,7 +1048,7 @@ export async function updateUser(id: string, data: UpdateLearnerRequest): Promis
   values.push(new Date().toISOString());
   values.push(id);
 
-  const query = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
+  const query = `UPDATE users SET ${updates.join(", ")} WHERE id = $${paramIndex} RETURNING *`;
   const [result] = await db.query(query, values);
 
   return result ? rowToLearner(result) : null;
@@ -621,16 +1061,40 @@ export async function deleteUser(id: string): Promise<boolean> {
   return Array.isArray(result) && result.length === 0;
 }
 
-async function resolveSectionIdForLearner(userId: string): Promise<string | null> {
+async function resolveSectionIdForLearner(
+  userId: string,
+): Promise<string | null> {
   const db = getDb();
   const [row] = await db`
     SELECT e.section_id
     FROM section_enrollments e
+    INNER JOIN course_sections s ON s.id = e.section_id
     WHERE e.student_user_id = ${userId}
+      AND s.section_type = 'production'
     ORDER BY e.joined_at DESC
     LIMIT 1
   `;
   return row ? String(row.section_id) : null;
+}
+
+async function resolveEligibleSectionIdForAssignment(
+  userId: string,
+  requestedSectionId?: string,
+): Promise<string | null> {
+  const db = getDb();
+  if (requestedSectionId) {
+    const [row] = await db`
+      SELECT s.id
+      FROM course_sections s
+      INNER JOIN section_enrollments e ON e.section_id = s.id
+      WHERE s.id = ${requestedSectionId}
+        AND e.student_user_id = ${userId}
+        AND s.section_type = 'production'
+      LIMIT 1
+    `;
+    return row ? String(row.id) : null;
+  }
+  return resolveSectionIdForLearner(userId);
 }
 
 // ============================================================================
@@ -641,36 +1105,47 @@ export async function saveSession(
   userId: string,
   sessionId: string,
   conditionId: string | undefined,
-  config: SessionData
+  config: SessionData,
 ): Promise<void> {
   const db = getDb();
   const id = `${userId}-${sessionId}`;
   const now = new Date().toISOString();
   const existingSession = await getSession(userId, sessionId);
   const resolvedSectionId =
-    config.sectionId ?? existingSession?.sectionId ?? await resolveSectionIdForLearner(userId);
-  const resolvedConditionId = conditionId ?? existingSession?.conditionId ?? 'default';
+    config.sectionId ??
+    existingSession?.sectionId ??
+    (await resolveSectionIdForLearner(userId));
+  const resolvedConditionId =
+    conditionId ?? existingSession?.conditionId ?? "default";
   const resolvedTextbookDisabled =
     config.textbookDisabled ?? existingSession?.textbookDisabled ?? false;
   const resolvedAdaptiveLadderDisabled =
-    config.adaptiveLadderDisabled ?? existingSession?.adaptiveLadderDisabled ?? false;
+    config.adaptiveLadderDisabled ??
+    existingSession?.adaptiveLadderDisabled ??
+    false;
   const resolvedImmediateExplanationMode =
-    config.immediateExplanationMode ?? existingSession?.immediateExplanationMode ?? false;
+    config.immediateExplanationMode ??
+    existingSession?.immediateExplanationMode ??
+    false;
   const resolvedStaticHintMode =
     config.staticHintMode ?? existingSession?.staticHintMode ?? false;
   const resolvedEscalationPolicy =
-    config.escalationPolicy ?? existingSession?.escalationPolicy ?? 'adaptive';
+    config.escalationPolicy ?? existingSession?.escalationPolicy ?? "adaptive";
   const resolvedCurrentProblemId =
     config.currentProblemId ?? existingSession?.currentProblemId ?? null;
-  const resolvedCurrentCode = config.currentCode ?? existingSession?.lastCode ?? null;
-  const resolvedGuidanceState = config.guidanceState ?? existingSession?.guidanceState ?? null;
+  const resolvedCurrentCode =
+    config.currentCode ?? existingSession?.lastCode ?? null;
+  const resolvedGuidanceState =
+    config.guidanceState ?? existingSession?.guidanceState ?? null;
   const resolvedHdiState = config.hdiState ?? existingSession?.hdiState ?? null;
-  const resolvedBanditState = config.banditState ?? existingSession?.banditState ?? null;
+  const resolvedBanditState =
+    config.banditState ?? existingSession?.banditState ?? null;
   const existingLastActivity =
-    typeof existingSession?.lastActivity === 'number'
+    typeof existingSession?.lastActivity === "number"
       ? new Date(existingSession.lastActivity).toISOString()
       : null;
-  const resolvedLastActivity = config.lastActivity ?? existingLastActivity ?? now;
+  const resolvedLastActivity =
+    config.lastActivity ?? existingLastActivity ?? now;
 
   await db`
     INSERT INTO learner_sessions (
@@ -706,7 +1181,10 @@ export async function saveSession(
   `;
 }
 
-export async function getSession(userId: string, sessionId: string): Promise<any | null> {
+export async function getSession(
+  userId: string,
+  sessionId: string,
+): Promise<any | null> {
   const db = getDb();
   const [result] = await db`
     SELECT * FROM learner_sessions
@@ -729,7 +1207,9 @@ export async function getSession(userId: string, sessionId: string): Promise<any
     guidanceState: parseJson(result.guidance_state),
     hdiState: parseJson(result.hdi_state),
     banditState: parseJson(result.bandit_state),
-    lastActivity: result.last_activity ? new Date(result.last_activity).getTime() : null,
+    lastActivity: result.last_activity
+      ? new Date(result.last_activity).getTime()
+      : null,
     createdAt: new Date(result.created_at).getTime(),
     updatedAt: new Date(result.updated_at).getTime(),
   };
@@ -760,13 +1240,18 @@ export async function getActiveSession(userId: string): Promise<any | null> {
     guidanceState: parseJson(result.guidance_state),
     hdiState: parseJson(result.hdi_state),
     banditState: parseJson(result.bandit_state),
-    lastActivity: result.last_activity ? new Date(result.last_activity).getTime() : null,
+    lastActivity: result.last_activity
+      ? new Date(result.last_activity).getTime()
+      : null,
     createdAt: new Date(result.created_at).getTime(),
     updatedAt: new Date(result.updated_at).getTime(),
   };
 }
 
-export async function clearSession(userId: string, sessionId: string): Promise<boolean> {
+export async function clearSession(
+  userId: string,
+  sessionId: string,
+): Promise<boolean> {
   const db = getDb();
   const result = await db`
     DELETE FROM learner_sessions
@@ -793,7 +1278,7 @@ export async function updateProblemProgress(
     incrementHints?: boolean;
     lastCode?: string;
     eventId?: string;
-  }
+  },
 ): Promise<void> {
   const db = getDb();
   const now = new Date().toISOString();
@@ -835,6 +1320,7 @@ export async function updateProblemProgress(
         throw new Error('Progress event ID belongs to a different problem');
       }
     }
+    await maybeEnsurePostSurveyInvitation(userId);
     return;
   }
 
@@ -865,9 +1351,13 @@ export async function updateProblemProgress(
       END,
       updated_at = EXCLUDED.updated_at
   `;
+  await maybeEnsurePostSurveyInvitation(userId);
 }
 
-export async function getProblemProgress(userId: string, problemId: string): Promise<any | null> {
+export async function getProblemProgress(
+  userId: string,
+  problemId: string,
+): Promise<any | null> {
   const db = getDb();
   const [result] = await db`
     SELECT * FROM problem_progress
@@ -883,7 +1373,9 @@ export async function getProblemProgress(userId: string, problemId: string): Pro
     attemptsCount: result.attempts_count,
     hintsUsed: result.hints_used,
     lastCode: result.last_code,
-    firstAttemptedAt: result.first_attempted_at ? new Date(result.first_attempted_at).getTime() : null,
+    firstAttemptedAt: result.first_attempted_at
+      ? new Date(result.first_attempted_at).getTime()
+      : null,
     solvedAt: result.solved_at ? new Date(result.solved_at).getTime() : null,
   };
 }
@@ -896,14 +1388,16 @@ export async function getAllProblemProgress(userId: string): Promise<any[]> {
     ORDER BY updated_at DESC
   `;
 
-  return results.map(r => ({
+  return results.map((r) => ({
     userId: r.user_id,
     problemId: r.problem_id,
     solved: r.solved,
     attemptsCount: r.attempts_count,
     hintsUsed: r.hints_used,
     lastCode: r.last_code,
-    firstAttemptedAt: r.first_attempted_at ? new Date(r.first_attempted_at).getTime() : null,
+    firstAttemptedAt: r.first_attempted_at
+      ? new Date(r.first_attempted_at).getTime()
+      : null,
     solvedAt: r.solved_at ? new Date(r.solved_at).getTime() : null,
   }));
 }
@@ -912,7 +1406,10 @@ export async function getAllProblemProgress(userId: string): Promise<any[]> {
 // Interaction Event Operations
 // ============================================================================
 
-function normalizeInteractionTimestamp(timestamp: string, fallbackIso: string): string {
+function normalizeInteractionTimestamp(
+  timestamp: string,
+  fallbackIso: string,
+): string {
   const numeric = Number(timestamp);
   if (Number.isFinite(numeric)) {
     const millis = numeric > 1e12 ? numeric : numeric * 1000;
@@ -925,7 +1422,9 @@ function normalizeInteractionTimestamp(timestamp: string, fallbackIso: string): 
   return fallbackIso;
 }
 
-export async function createInteraction(data: CreateInteractionRequest & { id: string }): Promise<Interaction> {
+export async function createInteraction(
+  data: CreateInteractionRequest & { id: string },
+): Promise<Interaction> {
   const db = getDb();
   const now = new Date().toISOString();
 
@@ -933,10 +1432,14 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
   // RESEARCH-4: hintId can be at top level (from convertToBackendInteraction) or in payload
   const storedHintId = data.hintId ?? payload.hintId ?? null;
   const storedSessionId =
-    data.sessionId ?? (typeof payload.sessionId === 'string' ? payload.sessionId : null);
+    data.sessionId ??
+    (typeof payload.sessionId === "string" ? payload.sessionId : null);
   const timestampIso = normalizeInteractionTimestamp(data.timestamp, now);
-  const storedConceptId = payload.conceptId || (Array.isArray(payload.conceptIds) ? payload.conceptIds[0] : null);
-  const resolvedSectionId = data.sectionId ?? await resolveSectionIdForLearner(data.learnerId);
+  const storedConceptId =
+    payload.conceptId ||
+    (Array.isArray(payload.conceptIds) ? payload.conceptIds[0] : null);
+  const resolvedSectionId =
+    data.sectionId ?? (await resolveSectionIdForLearner(data.learnerId));
 
   await db`
     INSERT INTO interaction_events (
@@ -971,7 +1474,7 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
       ${data.problemId},
       ${payload.problemSetId || null},
       ${payload.problemNumber || null},
-      ${payload.conditionId ?? null},
+      ${data.conditionId ?? payload.conditionId ?? null},
       ${payload.executionTimeMs ?? null},
       ${payload.metadata == null ? null : JSON.stringify(payload.metadata)},
       ${payload.code || null},
@@ -1062,7 +1565,8 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
     ON CONFLICT (id) DO NOTHING
   `;
 
-  const { sectionId: _ignoredSectionId, ...topLevelPayload } = payload as Record<string, unknown>;
+  const { sectionId: _ignoredSectionId, ...topLevelPayload } =
+    payload as Record<string, unknown>;
   return {
     id: data.id,
     learnerId: data.learnerId,
@@ -1093,15 +1597,19 @@ export interface GetInteractionsOptions {
  */
 export async function countInteractionsByUser(
   userId: string,
-  options?: Omit<GetInteractionsOptions, 'limit' | 'offset'>
+  options?: Omit<GetInteractionsOptions, "limit" | "offset">,
 ): Promise<number> {
   const db = getDb();
 
   const conditions = [db`user_id = ${userId}`];
-  if (options?.sessionId) conditions.push(db`session_id = ${options.sessionId}`);
-  if (options?.eventType) conditions.push(db`event_type = ${options.eventType}`);
-  if (options?.problemId) conditions.push(db`problem_id = ${options.problemId}`);
-  if (options?.startDate) conditions.push(db`timestamp >= ${options.startDate}`);
+  if (options?.sessionId)
+    conditions.push(db`session_id = ${options.sessionId}`);
+  if (options?.eventType)
+    conditions.push(db`event_type = ${options.eventType}`);
+  if (options?.problemId)
+    conditions.push(db`problem_id = ${options.problemId}`);
+  if (options?.startDate)
+    conditions.push(db`timestamp >= ${options.startDate}`);
   if (options?.endDate) conditions.push(db`timestamp <= ${options.endDate}`);
 
   const [result] = await db`
@@ -1116,7 +1624,7 @@ export async function countInteractionsByUser(
 /**
  * Get interactions for a user with SQL-level filtering and pagination.
  * All filtering happens in the database for scalability.
- * 
+ *
  * Performance note: This function relies on composite indexes:
  * - idx_interaction_events_user_timestamp (user_id, timestamp DESC)
  * - idx_interaction_events_user_session_timestamp (user_id, session_id, timestamp DESC)
@@ -1125,21 +1633,26 @@ export async function countInteractionsByUser(
  */
 export async function getInteractionsByUser(
   userId: string,
-  options?: GetInteractionsOptions
+  options?: GetInteractionsOptions,
 ): Promise<{ interactions: Interaction[]; total: number }> {
   const db = getDb();
 
   // Build filter conditions
   const conditions = [db`user_id = ${userId}`];
-  if (options?.sessionId) conditions.push(db`session_id = ${options.sessionId}`);
-  if (options?.eventType) conditions.push(db`event_type = ${options.eventType}`);
-  if (options?.problemId) conditions.push(db`problem_id = ${options.problemId}`);
-  if (options?.startDate) conditions.push(db`timestamp >= ${options.startDate}`);
+  if (options?.sessionId)
+    conditions.push(db`session_id = ${options.sessionId}`);
+  if (options?.eventType)
+    conditions.push(db`event_type = ${options.eventType}`);
+  if (options?.problemId)
+    conditions.push(db`problem_id = ${options.problemId}`);
+  if (options?.startDate)
+    conditions.push(db`timestamp >= ${options.startDate}`);
   if (options?.endDate) conditions.push(db`timestamp <= ${options.endDate}`);
 
   // Build WHERE clause by combining conditions
-  const whereClause = conditions.reduce((acc, cond, i) => 
-    i === 0 ? cond : db`${acc} AND ${cond}`, db``
+  const whereClause = conditions.reduce(
+    (acc, cond, i) => (i === 0 ? cond : db`${acc} AND ${cond}`),
+    db``,
   );
 
   // Get total count efficiently
@@ -1183,24 +1696,28 @@ export async function getInteractionsByUser(
 
 export async function getInteractionsByUsers(
   userIds: string[],
-  options?: GetInteractionsOptions
+  options?: GetInteractionsOptions,
 ): Promise<{ interactions: Interaction[]; total: number }> {
   const db = getDb();
-  const ids = Array.from(new Set(userIds.filter(Boolean)));
-
+  const ids = userIds;
   if (ids.length === 0) {
     return { interactions: [], total: 0 };
   }
 
   const conditions = [db`user_id = ANY(${ids})`];
-  if (options?.sessionId) conditions.push(db`session_id = ${options.sessionId}`);
-  if (options?.eventType) conditions.push(db`event_type = ${options.eventType}`);
-  if (options?.problemId) conditions.push(db`problem_id = ${options.problemId}`);
-  if (options?.startDate) conditions.push(db`timestamp >= ${options.startDate}`);
+  if (options?.sessionId)
+    conditions.push(db`session_id = ${options.sessionId}`);
+  if (options?.eventType)
+    conditions.push(db`event_type = ${options.eventType}`);
+  if (options?.problemId)
+    conditions.push(db`problem_id = ${options.problemId}`);
+  if (options?.startDate)
+    conditions.push(db`timestamp >= ${options.startDate}`);
   if (options?.endDate) conditions.push(db`timestamp <= ${options.endDate}`);
 
-  const whereClause = conditions.reduce((acc, cond, index) =>
-    index === 0 ? cond : db`${acc} AND ${cond}`, db``
+  const whereClause = conditions.reduce(
+    (acc, cond, index) => (index === 0 ? cond : db`${acc} AND ${cond}`),
+    db``,
   );
 
   const [countResult] = await db`
@@ -1238,7 +1755,9 @@ export async function getInteractionsByUsers(
   };
 }
 
-export async function getInteractionById(id: string): Promise<Interaction | null> {
+export async function getInteractionById(
+  id: string,
+): Promise<Interaction | null> {
   const db = getDb();
   const [result] = await db`SELECT * FROM interaction_events WHERE id = ${id}`;
   return result ? rowToInteraction(result) : null;
@@ -1260,11 +1779,11 @@ export interface ActiveLearnerCounts {
 
 export async function getInteractionAggregatesByUsers(
   userIds: string[],
-  referenceTime: number = Date.now()
+  referenceTime: number = Date.now(),
 ): Promise<InteractionAggregates> {
   const db = getDb();
   const ids = Array.from(new Set(userIds.filter(Boolean)));
-  
+
   if (ids.length === 0) {
     return {
       totalCount: 0,
@@ -1319,7 +1838,7 @@ export async function getInteractionAggregatesByUsers(
 
 export async function getActiveLearnerCountsByUsers(
   userIds: string[],
-  referenceTime: number = Date.now()
+  referenceTime: number = Date.now(),
 ): Promise<ActiveLearnerCounts> {
   const db = getDb();
   const ids = Array.from(new Set(userIds.filter(Boolean)));
@@ -1359,7 +1878,7 @@ export async function getActiveLearnerCountsByUsers(
 
 export async function createTextbookUnit(
   userId: string,
-  data: CreateUnitRequest & { unitId: string }
+  data: CreateUnitRequest & { unitId: string },
 ): Promise<InstructionalUnit> {
   const db = getDb();
   const now = new Date().toISOString();
@@ -1376,9 +1895,9 @@ export async function createTextbookUnit(
       ${id}, ${userId}, ${data.unitId}, ${data.type},
       ${JSON.stringify(data.conceptIds || [])},
       ${data.title}, ${data.content},
-      ${data.contentFormat || 'markdown'},
+      ${data.contentFormat || "markdown"},
       ${JSON.stringify(data.sourceInteractionIds || [])},
-      ${data.status || 'primary'},
+      ${data.status || "primary"},
       ${(data as { summary?: string }).summary || null},
       ${JSON.stringify((data as { commonMistakes?: unknown }).commonMistakes || null)},
       ${(data as { minimalExample?: string }).minimalExample || null},
@@ -1408,7 +1927,15 @@ export async function createTextbookUnit(
   `;
 
   const sourceInteractionIds = Array.isArray(data.sourceInteractionIds)
-    ? Array.from(new Set(data.sourceInteractionIds.filter((sourceId) => typeof sourceId === 'string' && sourceId.trim()).map((sourceId) => sourceId.trim())))
+    ? Array.from(
+        new Set(
+          data.sourceInteractionIds
+            .filter(
+              (sourceId) => typeof sourceId === "string" && sourceId.trim(),
+            )
+            .map((sourceId) => sourceId.trim()),
+        ),
+      )
     : [];
   if (sourceInteractionIds.length > 0) {
     await db`
@@ -1431,7 +1958,9 @@ export async function createTextbookUnit(
   return rowToInstructionalUnit(result);
 }
 
-export async function getTextbookUnitsByUser(userId: string): Promise<InstructionalUnit[]> {
+export async function getTextbookUnitsByUser(
+  userId: string,
+): Promise<InstructionalUnit[]> {
   const db = getDb();
   const results = await db`
     SELECT * FROM textbook_units
@@ -1441,7 +1970,9 @@ export async function getTextbookUnitsByUser(userId: string): Promise<Instructio
   return results.map(rowToInstructionalUnit);
 }
 
-export async function getTextbookUnitCountsByUsers(userIds: string[]): Promise<Map<string, number>> {
+export async function getTextbookUnitCountsByUsers(
+  userIds: string[],
+): Promise<Map<string, number>> {
   const db = getDb();
   const ids = Array.from(new Set(userIds.filter(Boolean)));
   if (ids.length === 0) {
@@ -1462,14 +1993,20 @@ export async function getTextbookUnitCountsByUsers(userIds: string[]): Promise<M
   return counts;
 }
 
-export async function getTextbookUnitById(userId: string, unitId: string): Promise<InstructionalUnit | null> {
+export async function getTextbookUnitById(
+  userId: string,
+  unitId: string,
+): Promise<InstructionalUnit | null> {
   const db = getDb();
   const id = `${userId}-${unitId}`;
   const [result] = await db`SELECT * FROM textbook_units WHERE id = ${id}`;
   return result ? rowToInstructionalUnit(result) : null;
 }
 
-export async function deleteTextbookUnit(userId: string, unitId: string): Promise<boolean> {
+export async function deleteTextbookUnit(
+  userId: string,
+  unitId: string,
+): Promise<boolean> {
   const db = getDb();
   const id = `${userId}-${unitId}`;
   const result = await db`DELETE FROM textbook_units WHERE id = ${id}`;
@@ -1557,10 +2094,13 @@ function rowToInteraction(row: any): Interaction {
     selectedArm: row.selected_arm,
     selectionMethod: row.selection_method,
     armStatsAtSelection: parseJson(row.arm_stats_at_selection),
-    reward: row.reward_total !== null ? {
-      total: row.reward_total,
-      components: parseJson(row.reward_components),
-    } : undefined,
+    reward:
+      row.reward_total !== null
+        ? {
+            total: row.reward_total,
+            components: parseJson(row.reward_components),
+          }
+        : undefined,
     newAlpha: row.new_alpha,
     newBeta: row.new_beta,
     hdi: row.hdi,
@@ -1613,7 +2153,7 @@ function normalizeAuthEmail(email: string): string {
 }
 
 function hashAuthEmail(email: string): string {
-  return createHash('sha256').update(normalizeAuthEmail(email)).digest('hex');
+  return createHash("sha256").update(normalizeAuthEmail(email)).digest("hex");
 }
 
 function rowToAuthEvent(row: Record<string, unknown>): AuthEventRow {
@@ -1623,14 +2163,16 @@ function rowToAuthEvent(row: Record<string, unknown>): AuthEventRow {
     emailHash: String(row.email_hash),
     accountId: row.account_id ? String(row.account_id) : null,
     learnerId: row.learner_id ? String(row.learner_id) : null,
-    role: row.role ? (String(row.role) as 'student' | 'instructor') : null,
-    outcome: String(row.outcome) as 'success' | 'failure',
+    role: row.role ? (String(row.role) as "student" | "instructor") : null,
+    outcome: String(row.outcome) as "success" | "failure",
     failureReason: row.failure_reason ? String(row.failure_reason) : null,
     createdAt: new Date(String(row.created_at)).toISOString(),
   };
 }
 
-export async function createAuthEvent(data: CreateAuthEventRequest): Promise<AuthEventRow> {
+export async function createAuthEvent(
+  data: CreateAuthEventRequest,
+): Promise<AuthEventRow> {
   const db = getDb();
   const now = new Date().toISOString();
   const id = `auth-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -1689,7 +2231,9 @@ function parseJson(value: string | null): any {
 // Learner Profile Operations
 // ============================================================================
 
-export async function getLearnerProfile(learnerId: string): Promise<LearnerProfile | null> {
+export async function getLearnerProfile(
+  learnerId: string,
+): Promise<LearnerProfile | null> {
   const db = getDb();
   const [result] = await db`
     SELECT * FROM learner_profiles WHERE learner_id = ${learnerId}
@@ -1707,23 +2251,27 @@ export async function getLearnerProfile(learnerId: string): Promise<LearnerProfi
     errorHistory: parseJson(result.error_history) || {},
     solvedProblemIds,
     interactionCount: result.interaction_count || 0,
-    currentStrategy: result.strategy || 'default',
+    currentStrategy: result.strategy || "default",
     preferences: parseJson(result.preferences) || {
       escalationThreshold: 3,
       aggregationDelay: 30000,
       autoTextbookEnabled: true,
       notificationsEnabled: true,
-      theme: 'system',
+      theme: "system",
     },
-    createdAt: result.created_at ? new Date(result.created_at).getTime() : Date.now(),
-    lastActive: result.last_activity_at ? new Date(result.last_activity_at).getTime() : Date.now(),
+    createdAt: result.created_at
+      ? new Date(result.created_at).getTime()
+      : Date.now(),
+    lastActive: result.last_activity_at
+      ? new Date(result.last_activity_at).getTime()
+      : Date.now(),
     extendedData: parseJson(result.profile_data) || {},
   };
 }
 
 export async function saveLearnerProfile(
   learnerId: string,
-  profile: Partial<LearnerProfile>
+  profile: Partial<LearnerProfile>,
 ): Promise<LearnerProfile | null> {
   const db = getDb();
   const now = new Date().toISOString();
@@ -1734,17 +2282,23 @@ export async function saveLearnerProfile(
 
   const mergedProfile: LearnerProfile = {
     id: learnerId,
-    name: profile.name || existing?.name || 'Unknown',
+    name: profile.name || existing?.name || "Unknown",
     conceptsCovered: profile.conceptsCovered || existing?.conceptsCovered || [],
-    conceptCoverageEvidence: profile.conceptCoverageEvidence || existing?.conceptCoverageEvidence || {},
+    conceptCoverageEvidence:
+      profile.conceptCoverageEvidence ||
+      existing?.conceptCoverageEvidence ||
+      {},
     errorHistory: profile.errorHistory || existing?.errorHistory || {},
     solvedProblemIds,
-    interactionCount: profile.interactionCount ?? existing?.interactionCount ?? 0,
-    currentStrategy: profile.currentStrategy || existing?.currentStrategy || 'default',
-    preferences: profile.preferences || existing?.preferences || {
-      escalationThreshold: 3,
-      aggregationDelay: 30000,
-    },
+    interactionCount:
+      profile.interactionCount ?? existing?.interactionCount ?? 0,
+    currentStrategy:
+      profile.currentStrategy || existing?.currentStrategy || "default",
+    preferences: profile.preferences ||
+      existing?.preferences || {
+        escalationThreshold: 3,
+        aggregationDelay: 30000,
+      },
     createdAt: existing?.createdAt || Date.now(),
     lastActive: Date.now(),
     extendedData: profile.extendedData || existing?.extendedData || {},
@@ -1788,12 +2342,13 @@ export async function saveLearnerProfile(
 
 export async function getAllLearnerProfiles(): Promise<LearnerProfile[]> {
   const db = getDb();
-  const results = await db`SELECT * FROM learner_profiles ORDER BY updated_at DESC`;
+  const results =
+    await db`SELECT * FROM learner_profiles ORDER BY updated_at DESC`;
   const solvedProblemIdsByLearner = await getSolvedProblemIdsByLearner(
     results.map((row) => row.learner_id),
   );
 
-  return results.map(row => ({
+  return results.map((row) => ({
     id: row.learner_id,
     name: row.name,
     conceptsCovered: parseJson(row.concept_coverage) || [],
@@ -1801,18 +2356,22 @@ export async function getAllLearnerProfiles(): Promise<LearnerProfile[]> {
     errorHistory: parseJson(row.error_history) || {},
     solvedProblemIds: solvedProblemIdsByLearner.get(row.learner_id) || [],
     interactionCount: row.interaction_count || 0,
-    currentStrategy: row.strategy || 'default',
+    currentStrategy: row.strategy || "default",
     preferences: parseJson(row.preferences) || {
       escalationThreshold: 3,
       aggregationDelay: 30000,
     },
     createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
-    lastActive: row.last_activity_at ? new Date(row.last_activity_at).getTime() : Date.now(),
+    lastActive: row.last_activity_at
+      ? new Date(row.last_activity_at).getTime()
+      : Date.now(),
     extendedData: parseJson(row.profile_data) || {},
   }));
 }
 
-export async function getLearnerProfilesByIds(learnerIds: string[]): Promise<LearnerProfile[]> {
+export async function getLearnerProfilesByIds(
+  learnerIds: string[],
+): Promise<LearnerProfile[]> {
   const db = getDb();
   const ids = Array.from(new Set(learnerIds.filter(Boolean)));
 
@@ -1837,13 +2396,17 @@ export async function getLearnerProfilesByIds(learnerIds: string[]): Promise<Lea
         errorHistory: parseJson(row.error_history) || {},
         solvedProblemIds: solvedProblemIdsByLearner.get(row.learner_id) || [],
         interactionCount: row.interaction_count || 0,
-        currentStrategy: row.strategy || 'default',
+        currentStrategy: row.strategy || "default",
         preferences: parseJson(row.preferences) || {
           escalationThreshold: 3,
           aggregationDelay: 30000,
         },
-        createdAt: row.created_at ? new Date(row.created_at).getTime() : Date.now(),
-        lastActive: row.last_activity_at ? new Date(row.last_activity_at).getTime() : Date.now(),
+        createdAt: row.created_at
+          ? new Date(row.created_at).getTime()
+          : Date.now(),
+        lastActive: row.last_activity_at
+          ? new Date(row.last_activity_at).getTime()
+          : Date.now(),
         extendedData: parseJson(row.profile_data) || {},
       },
     ]),
@@ -1861,7 +2424,7 @@ export async function getLearnerProfilesByIds(learnerIds: string[]): Promise<Lea
  */
 export async function updateLearnerProfileFromEvent(
   learnerId: string,
-  event: CreateInteractionRequest
+  event: CreateInteractionRequest,
 ): Promise<LearnerProfile | null> {
   const db = getDb();
   const now = new Date().toISOString();
@@ -1911,7 +2474,8 @@ export async function updateLearnerProfileFromEvent(
   if (event.errorSubtypeId) {
     updatedErrorHistory = {
       ...currentErrorHistory,
-      [event.errorSubtypeId]: (currentErrorHistory[event.errorSubtypeId] || 0) + 1,
+      [event.errorSubtypeId]:
+        (currentErrorHistory[event.errorSubtypeId] || 0) + 1,
     };
     hasUpdates = true;
   }
@@ -1932,7 +2496,7 @@ export async function updateLearnerProfileFromEvent(
           [conceptId]: {
             conceptId,
             score: 0,
-            confidence: 'low',
+            confidence: "low",
             lastUpdated: nowMs,
             evidenceCounts: {
               successfulExecution: 0,
@@ -1953,19 +2517,19 @@ export async function updateLearnerProfileFromEvent(
       const updatedEvidence = { ...evidence };
       let evidenceChanged = false;
 
-      if (event.eventType === 'hint_view') {
+      if (event.eventType === "hint_view") {
         updatedEvidence.evidenceCounts = {
           ...evidence.evidenceCounts,
           hintViewed: evidence.evidenceCounts.hintViewed + 1,
         };
         evidenceChanged = true;
-      } else if (event.eventType === 'explanation_view') {
+      } else if (event.eventType === "explanation_view") {
         updatedEvidence.evidenceCounts = {
           ...evidence.evidenceCounts,
           explanationViewed: evidence.evidenceCounts.explanationViewed + 1,
         };
         evidenceChanged = true;
-      } else if (event.eventType === 'error') {
+      } else if (event.eventType === "error") {
         updatedEvidence.evidenceCounts = {
           ...evidence.evidenceCounts,
           errorEncountered: evidence.evidenceCounts.errorEncountered + 1,
@@ -2005,14 +2569,14 @@ export async function updateLearnerProfileFromEvent(
 
   // Update problem_progress on successful execution
   // This makes problem_progress the durable source of truth for solved state
-  if (event.eventType === 'execution' && event.successful && event.problemId) {
+  if (event.eventType === "execution" && event.successful && event.problemId) {
     await updateProblemProgress(learnerId, event.problemId, {
       solved: true,
       incrementAttempts: true,
       lastCode: event.code,
       eventId: event.eventId,
     });
-  } else if (event.eventType === 'execution' && event.problemId) {
+  } else if (event.eventType === "execution" && event.problemId) {
     // Failed execution - just increment attempts
     await updateProblemProgress(learnerId, event.problemId, {
       incrementAttempts: true,
@@ -2025,12 +2589,18 @@ export async function updateLearnerProfileFromEvent(
   return getLearnerProfile(learnerId);
 }
 
-async function getSolvedProblemIdsForLearner(learnerId: string): Promise<string[]> {
-  const solvedProblemIdsByLearner = await getSolvedProblemIdsByLearner([learnerId]);
+async function getSolvedProblemIdsForLearner(
+  learnerId: string,
+): Promise<string[]> {
+  const solvedProblemIdsByLearner = await getSolvedProblemIdsByLearner([
+    learnerId,
+  ]);
   return solvedProblemIdsByLearner.get(learnerId) || [];
 }
 
-async function getSolvedProblemIdsByLearner(learnerIds: string[]): Promise<Map<string, string[]>> {
+async function getSolvedProblemIdsByLearner(
+  learnerIds: string[],
+): Promise<Map<string, string[]>> {
   const ids = Array.from(new Set(learnerIds.filter(Boolean)));
   if (ids.length === 0) {
     return new Map();
@@ -2065,8 +2635,8 @@ async function getSolvedProblemIdsByLearner(learnerIds: string[]): Promise<Map<s
 
 function parseJsonField<T>(value: unknown, fallback: T): T {
   if (value == null) return fallback;
-  if (typeof value === 'object') return value as T;
-  if (typeof value === 'string') {
+  if (typeof value === "object") return value as T;
+  if (typeof value === "string") {
     try {
       return JSON.parse(value) as T;
     } catch {
@@ -2076,12 +2646,14 @@ function parseJsonField<T>(value: unknown, fallback: T): T {
   return fallback;
 }
 
-function toCorpusActiveRunRow(row: Record<string, unknown>): CorpusActiveRunRow {
+function toCorpusActiveRunRow(
+  row: Record<string, unknown>,
+): CorpusActiveRunRow {
   return {
-    docId: String(row.doc_id ?? ''),
-    runId: String(row.run_id ?? ''),
+    docId: String(row.doc_id ?? ""),
+    runId: String(row.run_id ?? ""),
     updatedAt: new Date(String(row.updated_at)).toISOString(),
-    updatedBy: typeof row.updated_by === 'string' ? row.updated_by : null,
+    updatedBy: typeof row.updated_by === "string" ? row.updated_by : null,
   };
 }
 
@@ -2095,7 +2667,9 @@ export async function listCorpusActiveRuns(): Promise<CorpusActiveRunRow[]> {
   return rows.map((row) => toCorpusActiveRunRow(row));
 }
 
-export async function getCorpusActiveRun(docId: string): Promise<CorpusActiveRunRow | null> {
+export async function getCorpusActiveRun(
+  docId: string,
+): Promise<CorpusActiveRunRow | null> {
   const db = getDb();
   const [row] = await db`
     SELECT doc_id, run_id, updated_at, updated_by
@@ -2150,7 +2724,9 @@ export async function setCorpusActiveRun(params: {
   return toCorpusActiveRunRow(row);
 }
 
-export async function getCorpusManifest(): Promise<CorpusManifestDocumentRow[]> {
+export async function getCorpusManifest(): Promise<
+  CorpusManifestDocumentRow[]
+> {
   const db = getDb();
   const rows = await db`
     WITH run_resolution AS (
@@ -2244,12 +2820,17 @@ export async function getCorpusUnitsIndex(): Promise<CorpusUnitRow[]> {
     pageStart: Number(row.page_start ?? 0),
     pageEnd: Number(row.page_end ?? 0),
     runId: row.run_id ?? null,
-    metadata: parseJsonField<Record<string, unknown> | null>(row.metadata, null),
+    metadata: parseJsonField<Record<string, unknown> | null>(
+      row.metadata,
+      null,
+    ),
     createdAt: new Date(row.created_at).toISOString(),
   }));
 }
 
-export async function getCorpusUnitById(unitId: string): Promise<CorpusUnitRow | null> {
+export async function getCorpusUnitById(
+  unitId: string,
+): Promise<CorpusUnitRow | null> {
   const db = getDb();
   const [row] = await db`
     WITH run_resolution AS (
@@ -2282,12 +2863,18 @@ export async function getCorpusUnitById(unitId: string): Promise<CorpusUnitRow |
     pageStart: Number(row.page_start ?? 0),
     pageEnd: Number(row.page_end ?? 0),
     runId: row.run_id ?? null,
-    metadata: parseJsonField<Record<string, unknown> | null>(row.metadata, null),
+    metadata: parseJsonField<Record<string, unknown> | null>(
+      row.metadata,
+      null,
+    ),
     createdAt: new Date(row.created_at).toISOString(),
   };
 }
 
-export async function getCorpusChunksByUnitId(unitId: string, limit = 50): Promise<CorpusChunkRow[]> {
+export async function getCorpusChunksByUnitId(
+  unitId: string,
+  limit = 50,
+): Promise<CorpusChunkRow[]> {
   const db = getDb();
   const rows = await db`
     WITH run_resolution AS (
@@ -2316,7 +2903,10 @@ export async function getCorpusChunksByUnitId(unitId: string, limit = 50): Promi
     page: Number(row.page ?? 0),
     chunkText: row.chunk_text,
     runId: row.run_id ?? null,
-    metadata: parseJsonField<Record<string, unknown> | null>(row.metadata, null),
+    metadata: parseJsonField<Record<string, unknown> | null>(
+      row.metadata,
+      null,
+    ),
     createdAt: new Date(row.created_at).toISOString(),
   }));
 }
@@ -2324,7 +2914,16 @@ export async function getCorpusChunksByUnitId(unitId: string, limit = 50): Promi
 export async function searchCorpus(
   query: string,
   limit = 10,
-): Promise<Array<CorpusChunkRow & { unitTitle: string; conceptId: string | null; summary: string; termHits: number }>> {
+): Promise<
+  Array<
+    CorpusChunkRow & {
+      unitTitle: string;
+      conceptId: string | null;
+      summary: string;
+      termHits: number;
+    }
+  >
+> {
   const db = getDb();
   const normalized = query.toLowerCase().trim();
   if (!normalized) {
@@ -2389,15 +2988,17 @@ export async function searchCorpus(
     page: Number(row.page ?? 0),
     chunkText: row.chunk_text,
     runId: row.run_id ?? null,
-    metadata: parseJsonField<Record<string, unknown> | null>(row.metadata, null),
+    metadata: parseJsonField<Record<string, unknown> | null>(
+      row.metadata,
+      null,
+    ),
     createdAt: new Date(row.created_at).toISOString(),
     unitTitle: row.unit_title,
     conceptId: row.concept_id ?? null,
-    summary: row.summary ?? '',
+    summary: row.summary ?? "",
     termHits: Number(row.term_hits ?? 0),
   }));
 }
-
 
 // ============================================================================
 // Textbook Retrieval Linking (RESEARCH-5)
@@ -2416,19 +3017,19 @@ interface RetrievalLinkInput {
  */
 export async function linkTextbookRetrievals(
   eventId: string,
-  retrievals: string[] | RetrievalLinkInput[]
+  retrievals: string[] | RetrievalLinkInput[],
 ): Promise<void> {
   const db = getDb();
-  
+
   for (let i = 0; i < retrievals.length; i++) {
     const retrieval = retrievals[i];
-    
+
     let unitId: string;
     let rank: number | null = null;
     let sourceKind: string | null = null;
     let score: number | null = null;
-    
-    if (typeof retrieval === 'string') {
+
+    if (typeof retrieval === "string") {
       unitId = retrieval;
       rank = i + 1;
     } else {
@@ -2437,7 +3038,7 @@ export async function linkTextbookRetrievals(
       sourceKind = retrieval.sourceKind ?? null;
       score = retrieval.score ?? null;
     }
-    
+
     await db`
       INSERT INTO interaction_textbook_unit_retrievals
         (event_id, unit_id, rank, source_kind, score)
@@ -2454,25 +3055,25 @@ export async function linkTextbookRetrievals(
 /**
  * Get textbook retrievals for an event
  */
-export async function getTextbookRetrievalsForEvent(
-  eventId: string
-): Promise<Array<{
-  unitId: string;
-  rank: number | null;
-  sourceKind: string | null;
-  score: number | null;
-  createdAt: string;
-}>> {
+export async function getTextbookRetrievalsForEvent(eventId: string): Promise<
+  Array<{
+    unitId: string;
+    rank: number | null;
+    sourceKind: string | null;
+    score: number | null;
+    createdAt: string;
+  }>
+> {
   const db = getDb();
-  
+
   const rows = await db`
     SELECT unit_id, rank, source_kind, score, created_at
     FROM interaction_textbook_unit_retrievals
     WHERE event_id = ${eventId}
     ORDER BY rank ASC NULLS LAST
   `;
-  
-  return rows.map(row => ({
+
+  return rows.map((row) => ({
     unitId: row.unit_id,
     rank: row.rank,
     sourceKind: row.source_kind,
@@ -2485,4 +3086,4 @@ export async function getTextbookRetrievalsForEvent(
 // Schema Version
 // ============================================================================
 
-export const DB_SCHEMA_VERSION = 'v1.1.0';
+export const DB_SCHEMA_VERSION = "v1.1.0";

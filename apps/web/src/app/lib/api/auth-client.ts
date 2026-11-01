@@ -81,6 +81,11 @@ export interface LogoutResult {
   error?: string;
 }
 
+export interface PreSurveyStatus {
+  completed: boolean;
+  username: string | null;
+}
+
 // ============================================================================
 // HTTP helper
 // ============================================================================
@@ -117,6 +122,18 @@ async function authFetch(path: string, init: RequestInit = {}): Promise<Response
     clearTimeout(timeoutId);
     throw error;
   }
+}
+
+export async function getPreSurveyStatus(): Promise<PreSurveyStatus> {
+  const base = _API_BASE !== undefined ? _API_BASE : 'http://localhost:3001';
+  const response = await fetch(`${base}/api/surveys/status`, {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw new Error(`Pre-survey status request failed (${response.status})`);
+  }
+  const body = await response.json() as { data?: PreSurveyStatus };
+  return body.data ?? { completed: false, username: null };
 }
 
 // ============================================================================

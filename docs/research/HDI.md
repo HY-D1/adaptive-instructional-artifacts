@@ -236,7 +236,7 @@ function calculateHDI(
     weights.aed * aed +
     weights.er * er +
     weights.reae * reae +
-    (1 - components.iwh) * WEIGHTS.iwh;  // Inverted: higher IWH reduces HDI
+    (1 - iwh) * weights.iwh;  // Inverted: higher IWH reduces HDI
   
   // Normalize to [0, 1]
   return Math.max(0, Math.min(1, rawHDI));

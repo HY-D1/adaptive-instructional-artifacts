@@ -48,6 +48,36 @@ export interface SessionConditionFlags {
   staticHintMode: boolean;
 }
 
+/** Resolve the flags used by the shared decision point for an assigned arm. */
+export function resolveConditionFlags(
+  conditionId: string | undefined,
+  flags: SessionConditionFlags,
+): SessionConditionFlags {
+  return conditionId === 'control' ? { ...flags, staticHintMode: false } : flags;
+}
+
+/** Apply the confirmed schedule for the current problem's decision points. */
+export function resolveControlDecision(
+  attemptNumber: number,
+  base: Pick<OrchestrationDecision, 'corpusConceptId' | 'errorCountAtDecision' | 'timeToDecision'>,
+): OrchestrationDecision {
+  if (attemptNumber <= 2) {
+    return {
+      ...base,
+      action: 'stay_hint',
+      reason: 'control fixed schedule: conservative on attempts 1-2',
+      escalationTriggerReason: 'control_conservative_phase',
+    };
+  }
+
+  return {
+    ...base,
+    action: 'show_explanation',
+    reason: 'control fixed schedule: explanation-first from attempt 3 onward',
+    escalationTriggerReason: 'control_explanation_first_phase',
+  };
+}
+
 /** All inputs for a single orchestration decision */
 export interface OrchestrationContext {
   /** Internal adaptive concept ID (e.g. 'joins', 'where-clause') */
