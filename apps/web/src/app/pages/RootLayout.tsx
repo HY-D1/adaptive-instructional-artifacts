@@ -322,7 +322,6 @@ export function RootLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout, user: authUser, isLoading: isAuthLoading } = useAuth();
-  const isSignedIn = !isAuthLoading && Boolean(authUser);
   const { addToast } = useToast();
   useEffect(() => {
     const handleProfileConflict = () => addToast({
@@ -358,6 +357,10 @@ export function RootLayout() {
     syncedLoading: isSessionLoading
   });
   
+  const isSignedIn = AUTH_BACKEND_CONFIGURED
+    ? !isAuthLoading && Boolean(authUser)
+    : !isRoleLoading && Boolean(syncedProfile);
+
   const [showWelcome, setShowWelcome] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   

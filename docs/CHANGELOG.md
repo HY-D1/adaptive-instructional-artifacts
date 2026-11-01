@@ -9,6 +9,22 @@
 
 ## [Unreleased] - Harderning/Research-Grade-Tightening
 
+### 2026-11-01 — PR32 offline header compatibility
+
+Previous run41355375830 shard2 finished with8 failures/45passed and the600s
+suite cutoff. The completed failures show storage-only sessions missing header
+links/badges: RootLayout checked backend authUser even with no backend configured.
+Restore signed-in header visibility from the existing synced storage profile only
+in offline mode; account mode remains exclusively backend-authenticated.
+Existing exact failed browser checks PASS3/3 (cross-tab profile sync and both
+student/instructor textbook access),13.3s. RootLayout focused unit PASS5/5,
+including a new no-backend/no-authUser local session regression. Final frontend
+build and tsc results tracked with follow-up CI. No test assertions weakened.
+Changed RootLayout.tsx/test only plus checkpoint. Current final-runtime GitHub run
+must complete before merge readiness is claimed; earlier successful load rehearsal
+is not evidence for these additional runtime fixes. Reuse it for unaffected API
+load behavior, but refresh the affected browser checks before production cutover.
+
 ### 2026-11-01 — PR32 follow-up from complete shard evidence
 
 Run41355375830 on a95db1a: unit PASS2039/2skipped, quick smoke PASS.
