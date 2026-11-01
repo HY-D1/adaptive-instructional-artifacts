@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const getInstructorScopedLearnerIdsMock = vi.fn();
 const getLearnerProfilesByIdsMock = vi.fn();
+const updateProblemProgressMock = vi.fn();
+const getProblemProgressMock = vi.fn();
+const updateLearnerProfileFromEventMock = vi.fn();
+const getLearnerProfileMock = vi.fn();
 const assignStudentConditionMock = vi.fn();
 class StudentConditionAssignmentErrorMock extends Error {
   readonly status = 400;
@@ -17,6 +21,10 @@ vi.mock('../../../apps/server/src/db/sections.js', () => ({
 
 vi.mock('../../../apps/server/src/db/neon.js', () => ({
   getLearnerProfilesByIds: getLearnerProfilesByIdsMock,
+  updateProblemProgress: updateProblemProgressMock,
+  getProblemProgress: getProblemProgressMock,
+  updateLearnerProfileFromEvent: updateLearnerProfileFromEventMock,
+  getLearnerProfile: getLearnerProfileMock,
   assignStudentCondition: assignStudentConditionMock,
   StudentConditionAssignmentError: StudentConditionAssignmentErrorMock,
   getUserById: vi.fn(),
@@ -49,6 +57,16 @@ function getRouteHandler(
     throw new Error(`Route handler not found for ${method.toUpperCase()} ${path}`);
   }
   return handle;
+}
+
+async function invokeStatusPostHandler(handler: Function, body: unknown): Promise<number> {
+  let status = 200;
+  const res = {
+    status(code: number) { status = code; return this; },
+    json() { return this; },
+  };
+  await handler({ body, params: { id: 'learner-1', problemId: 'problem-1' } }, res);
+  return status;
 }
 
 async function invokeGetHandler(handler: Function): Promise<{ status: number; json: unknown }> {
@@ -108,6 +126,30 @@ beforeEach(() => {
 });
 
 describe('neon learners profile contract', () => {
+  it('validates optional event IDs before direct and profile writes, including the whole batch', async () => {
+    const { neonLearnersRouter } = await import('../../../apps/server/src/routes/neon-learners');
+    const router = neonLearnersRouter as unknown as Parameters<typeof getRouteHandler>[0];
+    const progress = getRouteHandler(router, 'post', '/:id/progress/:problemId');
+    const profile = getRouteHandler(router, 'post', '/:id/profile/events');
+    const batch = getRouteHandler(router, 'post', '/:id/profile/events/batch');
+    for (const eventId of ['', '  ', null, 123, {}, 'x'.repeat(257)]) {
+      expect(await invokeStatusPostHandler(progress, { eventId })).toBe(400);
+      expect(await invokeStatusPostHandler(profile, { event: { eventId } })).toBe(400);
+      expect(await invokeStatusPostHandler(batch, { events: [{ eventId: 'valid' }, { eventId }] })).toBe(400);
+    }
+    expect(updateProblemProgressMock).not.toHaveBeenCalled();
+    expect(updateLearnerProfileFromEventMock).not.toHaveBeenCalled();
+    expect(getLearnerProfileMock).not.toHaveBeenCalled();
+
+    getProblemProgressMock.mockResolvedValue({});
+    updateLearnerProfileFromEventMock.mockResolvedValue({});
+    getLearnerProfileMock.mockResolvedValue({});
+    expect(await invokeStatusPostHandler(progress, {})).toBe(200);
+    expect(await invokeStatusPostHandler(profile, { event: {} })).toBe(200);
+    expect(await invokeStatusPostHandler(batch, { events: [{}] })).toBe(200);
+    expect(await invokeStatusPostHandler(progress, { eventId: 'x'.repeat(256) })).toBe(200);
+    expect(await invokeStatusPostHandler(profile, { event: { eventId: 'valid' } })).toBe(200);
+  });
   it('fetches scoped learner profiles in one batch call', async () => {
     const { neonLearnersRouter } = await import('../../../apps/server/src/routes/neon-learners');
     const getProfiles = getRouteHandler(

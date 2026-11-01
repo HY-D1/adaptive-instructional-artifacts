@@ -8,7 +8,7 @@
  * use user+session keys to prevent students from throttling each other.
  */
 
-import { rateLimit } from 'express-rate-limit';
+import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import { Request, Response } from 'express';
 
 /**
@@ -215,9 +215,8 @@ export const loginRateLimiter = rateLimit({
 });
 
 /**
- * Signup endpoint rate limiter
- * 5 requests per 15 minutes per IP
- * Keyed by IP only (new users don't have email yet)
+ * Legacy configurable per-IP signup limiter. The auth signup route uses
+ * shared database counters instead; this export remains for compatibility.
  */
 export const signupRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -231,7 +230,7 @@ export const signupRateLimiter = rateLimit({
     retryAfter: '15 minutes',
   },
   keyGenerator: (req: Request) => {
-    return `signup:${req.ip ?? 'unknown'}`;
+    return `signup:${ipKeyGenerator(req.ip ?? 'unknown')}`;
   },
   handler: (_req: Request, res: Response) => {
     res.setHeader('Retry-After', String(15 * 60));

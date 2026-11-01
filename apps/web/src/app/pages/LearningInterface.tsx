@@ -73,7 +73,8 @@ import { useLocation, Link } from 'react-router';
 import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync } from '../lib/storage';
 import { useAuth } from '../lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
-import { isSharedBanditEnabled } from '../lib/runtime-config';
+import { getProblemProgress } from '../lib/api/storage-client';
+import { isSharedBanditEnabled, isDevDemoModeEnabled, isTestEnvironment } from '../lib/runtime-config';
 import { getSharedBanditState, recordSharedBanditReward } from '../lib/api/storage-client';
 import { clearUiStateForActor, getUiState, setUiState } from '../lib/ui-state';
 import type { QueryResult } from '../lib/sql-executor';
@@ -97,7 +98,8 @@ import type { HDIComponents, HDILevel } from '../types';
 import { safeGetStrategy, safeGetProfileOverride } from '../lib/storage/storage-validation';
 import { assignProfile, getProfileById, type EscalationProfile } from '../lib/ml/escalation-profiles';
 import { 
-  assignCondition, 
+  assignCondition,
+  assignLocalDemoCondition,
   loadSessionConfig,
   loadSessionConfigAsync,
   saveSessionConfig,
@@ -300,6 +302,27 @@ export function resolvePracticeDraftState(args: {
   }
 
   return { problem: fallbackProblem, draft: null };
+}
+
+function isMeaningfulPracticeDraft(draft: string | null | undefined): draft is string {
+  return typeof draft === 'string' && draft.trim().length > 0 &&
+    draft.trim() !== DEFAULT_SQL_EDITOR_CODE.trim();
+}
+
+export async function restoreDraftFromProgress(args: {
+  learnerId: string;
+  problemId: string;
+  draft: string | null;
+  fetchProgress: (learnerId: string, problemId: string) => Promise<{ lastCode: string | null } | null>;
+}): Promise<string | null> {
+  if (isMeaningfulPracticeDraft(args.draft)) return args.draft;
+  try {
+    const progress = await args.fetchProgress(args.learnerId, args.problemId);
+    return isMeaningfulPracticeDraft(progress?.lastCode) ? progress.lastCode : args.draft;
+  } catch {
+    // Offline or unavailable progress must not prevent the editor opening.
+    return args.draft;
+  }
 }
 
 function DependencyWarningToast({ onClose }: DependencyWarningToastProps) {
@@ -508,6 +531,12 @@ export function SessionConfigErrorCard() {
   );
 }
 
+export function resolvePracticeLearnerProfile(learnerId: string, backendConfigured: boolean): LearnerProfile | null {
+  const existing = storage.getProfile(learnerId);
+  // Local practice owns its initial profile; account mode must await backend hydration.
+  return existing || (backendConfigured ? null : storage.createDefaultProfile(learnerId));
+}
+
 export function LearningInterface() {
   const location = useLocation();
   const { role, isStudent, isInstructor, profile, isLoading: isRoleLoading } = useUserRole();
@@ -520,6 +549,8 @@ export function LearningInterface() {
   const [activeConceptId, setActiveConceptId] = useState<string | null>(null);
   const [activeConceptTitle, setActiveConceptTitle] = useState<string | null>(null);
   const [sqlDraft, setSqlDraft] = useState(DEFAULT_SQL_EDITOR_CODE);
+  const draftEditRevisionRef = useRef(0);
+  const restoringDraftRef = useRef(false);
   const [startTime, setStartTime] = useState(Date.now());
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
@@ -720,7 +751,7 @@ export function LearningInterface() {
   }, [learnerId, sessionConfig?.conditionId, sessionConfig?.sessionId]);
 
   useEffect(() => {
-    if (!learnerId || !sharedBanditReady) return;
+    if (!learnerId || !sharedBanditReady || sessionConfig?.learnerId !== learnerId) return;
     
     // Week 6: Respect sessionConfig experimental settings
     const debugProfileOverride = safeGetProfileOverride();
@@ -1204,7 +1235,13 @@ export function LearningInterface() {
         setSessionConfigError(undefined);
 
         // Use async loader: backend -> sessionStorage -> assign
-        const result = await loadSessionConfigAsync(learnerId, authUser?.sectionId);
+        const offlineDemo = !AUTH_BACKEND_CONFIGURED && (isDevDemoModeEnabled() || isTestEnvironment());
+        const cachedConfig = offlineDemo ? loadSessionConfig() : null;
+        const result = offlineDemo
+          ? { config: cachedConfig?.learnerId === learnerId ? cachedConfig : assignLocalDemoCondition(learnerId),
+              isNewAssignment: cachedConfig?.learnerId !== learnerId, source: 'sessionStorage' }
+          : await loadSessionConfigAsync(learnerId, authUser?.sectionId);
+        if (offlineDemo) saveSessionConfig(result.config);
 
         if (cancelled) return;
 
@@ -1288,10 +1325,9 @@ export function LearningInterface() {
         cancelled = true;
       };
     }
-    const isMeaningfulDraft = (draft: string | null | undefined): draft is string =>
-      typeof draft === 'string' &&
-      draft.trim().length > 0 &&
-      draft.trim() !== DEFAULT_SQL_EDITOR_CODE.trim();
+    const isMeaningfulDraft = isMeaningfulPracticeDraft;
+    const initialDraftRevision = draftEditRevisionRef.current;
+    restoringDraftRef.current = true;
     const draftLookup: PracticeDraftLookup = {
       getPracticeDraft: (candidateSessionId, problemId) =>
         storage.getPracticeDraft(learnerId, candidateSessionId, problemId),
@@ -1299,15 +1335,7 @@ export function LearningInterface() {
     };
 
     const initializeSessionState = async () => {
-      // Initialize learner profile if doesn't exist
-      let profile = storage.getProfile(learnerId);
-      if (!profile) {
-        // Do NOT eagerly create a default profile here.
-        // hydrateLearner (in account mode) or updateProfileStatsFromEvent
-        // will create it with proper solved state when needed.
-        // Creating an empty profile here races with backend hydration and
-        // can overwrite progress that hasn't been loaded yet.
-      }
+      resolvePracticeLearnerProfile(learnerId, AUTH_BACKEND_CONFIGURED);
 
       // Prefer active session from storage (hydrated from backend in account mode).
       // Fall back to sessionConfig only when storage still has its sentinel value.
@@ -1409,6 +1437,13 @@ export function LearningInterface() {
             resolvedProblem = localFallbackState.problem;
             resolvedDraft = localFallbackState.draft;
           }
+
+          resolvedDraft = await restoreDraftFromProgress({
+            learnerId,
+            problemId: resolvedProblem.id,
+            draft: resolvedDraft,
+            fetchProgress: getProblemProgress,
+          });
         }
       } else {
         const localState = resolvePracticeDraftState({
@@ -1424,14 +1459,22 @@ export function LearningInterface() {
 
       if (cancelled) return;
 
+      const draftUnchanged = draftEditRevisionRef.current === initialDraftRevision;
+      restoringDraftRef.current = false;
+
       if (resolvedSessionId && resolvedSessionId !== 'session-unknown') {
         storage.setActiveSessionId(resolvedSessionId);
       }
       setSessionId(resolvedSessionId);
-      if (currentProblem.id !== resolvedProblem.id) {
+      if (draftUnchanged && currentProblem.id !== resolvedProblem.id) {
         setCurrentProblem(resolvedProblem);
       }
-      setSqlDraft(resolvedDraft ?? DEFAULT_SQL_EDITOR_CODE);
+      if (draftUnchanged) {
+        setSqlDraft(resolvedDraft ?? DEFAULT_SQL_EDITOR_CODE);
+        if (isMeaningfulDraft(resolvedDraft)) {
+          storage.savePracticeDraft(learnerId, resolvedSessionId, resolvedProblem.id, resolvedDraft);
+        }
+      }
       setInteractions(
         storage
           .getInteractionsByLearner(learnerId)
@@ -1451,6 +1494,7 @@ export function LearningInterface() {
 
     return () => {
       cancelled = true;
+      restoringDraftRef.current = false;
     };
   }, [learnerId, isHydrating, isRoleLoading]);
 
@@ -1546,19 +1590,22 @@ export function LearningInterface() {
   useEffect(() => {
     if (!learnerId) return;
     
+    const learnerProfile = storage.getProfile(learnerId);
+    if (!learnerProfile) return;
+
     // Build initial learning path
     const path = buildLearningPath(learnerId, 'prerequisite_first');
     setLearningPath(path);
     
     // Check prerequisites for current problem
-    const readiness = checkProblemReadiness(currentProblem.concepts, storage.getProfile(learnerId)!);
+    const readiness = checkProblemReadiness(currentProblem.concepts, learnerProfile);
     setPrerequisiteWarnings(readiness.warnings);
     
     // Log if there are violations
     if (readiness.violations.length > 0) {
       console.log('[Knowledge] Prerequisite violations detected:', readiness.violations);
     }
-  }, [learnerId, currentProblem.id]);
+  }, [learnerId, currentProblem.id, sessionId, isHydrating]);
   
   // Effect 5: Mastery tracking - update mastery on successful submissions
   useEffect(() => {
@@ -1607,8 +1654,11 @@ export function LearningInterface() {
   // Immediate draft persistence for UX, debounced telemetry for research
   // Stabilized with useCallback to prevent unnecessary re-renders and debounce resets
   const handleEditorCodeChange = useCallback((code: string) => {
+    if (!restoringDraftRef.current || code !== DEFAULT_SQL_EDITOR_CODE) {
+      draftEditRevisionRef.current += 1;
+    }
     setSqlDraft(code);
-    if (sessionId) {
+    if (sessionId && !(restoringDraftRef.current && code === DEFAULT_SQL_EDITOR_CODE)) {
       storage.savePracticeDraft(learnerId, sessionId, currentProblem.id, code);
     }
     // Debounced telemetry - not immediate
@@ -1621,6 +1671,7 @@ export function LearningInterface() {
   };
 
   const handleEditorReset = () => {
+    draftEditRevisionRef.current += 1;
     setSqlDraft(DEFAULT_SQL_EDITOR_CODE);
     if (sessionId) {
       storage.clearPracticeDraft(learnerId, sessionId, currentProblem.id);
@@ -1641,6 +1692,7 @@ export function LearningInterface() {
       // Problem not found - silently return
       return;
     }
+    draftEditRevisionRef.current += 1;
     setCurrentProblem(problem);
 
     // Persist last active problem so returning students resume here

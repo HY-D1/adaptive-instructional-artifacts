@@ -11,6 +11,44 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { SQLExecutor } from '../lib/sql-executor';
 import { sqlProblems, getProblemById } from './problems';
 
+describe('SQL Problems - discriminating advanced exercise seeds', () => {
+  const cases = [
+    {
+      id: 'problem-11',
+      incorrect: 'SELECT name FROM users WHERE id IN (SELECT user_id FROM orders);',
+      alternative: 'SELECT name FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id AND o.amount > 200);',
+    },
+    {
+      id: 'problem-22',
+      incorrect: 'SELECT dept_name FROM departments;',
+      alternative: 'SELECT DISTINCT d.dept_name FROM departments d JOIN employees e ON e.dept_id = d.dept_id;',
+    },
+    {
+      id: 'problem-24',
+      incorrect: 'SELECT emp_name, dept_id, salary FROM employees;',
+      alternative: 'SELECT e.emp_name, e.dept_id, e.salary FROM employees e WHERE (SELECT COUNT(*) FROM employees b WHERE b.dept_id = e.dept_id AND b.salary > e.salary) < 2;',
+    },
+  ];
+
+  for (const { id, incorrect, alternative } of cases) {
+    it(`${id} rejects the missing-filter solution and accepts an equivalent query`, async () => {
+      const problem = getProblemById(id)!;
+      const executor = new SQLExecutor();
+      try {
+        await executor.initialize(problem.schema);
+        const wrong = await executor.executeQuery(incorrect);
+        const valid = await executor.executeQuery(alternative);
+        expect(wrong.success).toBe(true);
+        expect(valid.success).toBe(true);
+        expect(executor.compareResults(executor.formatResults(wrong), problem.expectedResult!).match).toBe(false);
+        expect(executor.compareResults(executor.formatResults(valid), problem.expectedResult!).match).toBe(true);
+      } finally {
+        executor.close();
+      }
+    });
+  }
+});
+
 describe('SQL Problems Regression Suite - All 32 Problems', () => {
   // Test all 32 problems
   for (const problem of sqlProblems) {

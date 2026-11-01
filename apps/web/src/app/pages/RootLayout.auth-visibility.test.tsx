@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const authState = vi.hoisted(() => ({
   user: null as { learnerId: string; name: string; role: 'student' | 'instructor' } | null,
   isLoading: false,
+  localProfile: null as { id: string; name: string } | null,
 }));
 const mockNavigate = vi.hoisted(() => vi.fn());
 const mockLogout = vi.hoisted(() => vi.fn(async () => ({ success: true })));
@@ -34,7 +35,7 @@ vi.mock('../hooks/useSessionPersistence', () => ({
   useSessionPersistence: () => ({
     showSyncToast: false,
     dismissToast: vi.fn(),
-    profile: authState.user ? { id: authState.user.learnerId, name: authState.user.name } : null,
+    profile: authState.user ? { id: authState.user.learnerId, name: authState.user.name } : authState.localProfile,
     isLoading: false,
     isSessionExpired: false,
   }),
@@ -99,6 +100,7 @@ import { RootLayout } from './RootLayout';
 describe('RootLayout signed-in visibility', () => {
   beforeEach(() => {
     authState.user = null;
+    authState.localProfile = null;
     authState.isLoading = false;
     window.matchMedia = vi.fn(() => ({
       matches: false,
@@ -108,6 +110,13 @@ describe('RootLayout signed-in visibility', () => {
     mockNavigate.mockReset();
     mockLogout.mockReset();
     mockLogout.mockResolvedValue({ success: true });
+  });
+
+  it('shows offline navigation for a storage session without backend auth', () => {
+    authState.localProfile = { id: 'offline-student', name: 'Offline Student' };
+    render(<RootLayout />);
+    expect(screen.getByText('Student')).not.toBeNull();
+    expect(screen.getAllByText('Practice')).toHaveLength(2);
   });
 
   it('hides authenticated controls for signed-out visitors on desktop and mobile', () => {

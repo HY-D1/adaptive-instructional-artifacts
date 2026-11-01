@@ -11,6 +11,8 @@
  */
 
 import { createHash, randomBytes } from "node:crypto";
+import { generateUsername } from './username.js';
+export { generateUsername } from './username.js';
 
 import { neon, neonConfig, NeonQueryFunction } from "@neondatabase/serverless";
 import { resolveDbEnv } from "./env-resolver.js";
@@ -275,6 +277,15 @@ export async function initializeSchema(): Promise<void> {
   await db`CREATE INDEX IF NOT EXISTS idx_problem_progress_user_id ON problem_progress(user_id)`;
   await db`CREATE INDEX IF NOT EXISTS idx_problem_progress_problem_id ON problem_progress(problem_id)`;
 
+  await db`
+    CREATE TABLE IF NOT EXISTS problem_progress_events (
+      event_id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      problem_id TEXT NOT NULL,
+      PRIMARY KEY (user_id, event_id)
+    )
+  `;
+
   // Interaction events (append-only research log)
   await db`
     CREATE TABLE IF NOT EXISTS interaction_events (
@@ -288,6 +299,7 @@ export async function initializeSchema(): Promise<void> {
       problem_id TEXT NOT NULL,
       problem_set_id TEXT,
       problem_number INTEGER,
+      execution_time_ms DOUBLE PRECISION,
       code TEXT,
       error TEXT,
       error_subtype_id TEXT,
@@ -398,6 +410,7 @@ export async function initializeSchema(): Promise<void> {
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS total_time INTEGER`;
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS problems_attempted INTEGER`;
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS problems_solved INTEGER`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS execution_time_ms DOUBLE PRECISION`;
 
   // Textbook units (My Textbook)
   await db`
@@ -562,6 +575,16 @@ export async function initializeSchema(): Promise<void> {
   await db`CREATE INDEX IF NOT EXISTS idx_learner_profiles_last_activity ON learner_profiles(last_activity_at)`;
 
   await db`
+    CREATE TABLE IF NOT EXISTS learner_profile_events (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      event_id TEXT NOT NULL,
+      problem_id TEXT,
+      event_type TEXT,
+      PRIMARY KEY (user_id, event_id)
+    )
+  `;
+
+  await db`
     CREATE TABLE IF NOT EXISTS student_condition_assignments (
       user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       condition_id TEXT NOT NULL CHECK (condition_id IN ('adaptive', 'control')),
@@ -647,15 +670,6 @@ export async function createUser(
     }
   }
   throw new Error('Failed to generate a unique username');
-}
-
-const USERNAME_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
-
-export function generateUsername(role: UserRole): string {
-  const suffix = Array.from(randomBytes(6), (byte) =>
-    USERNAME_ALPHABET[byte % USERNAME_ALPHABET.length],
-  ).join('');
-  return `${role}-${suffix}`;
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -1273,10 +1287,52 @@ export async function updateProblemProgress(
     incrementAttempts?: boolean;
     incrementHints?: boolean;
     lastCode?: string;
+    eventId?: string;
   },
 ): Promise<void> {
   const db = getDb();
   const now = new Date().toISOString();
+
+  if (update.eventId) {
+    // The claim and progress upsert are one statement: either both commit or
+    // neither does, even when independent requests deliver the same event.
+    const applied = await db`
+      WITH claimed AS (
+        INSERT INTO problem_progress_events (event_id, user_id, problem_id)
+        VALUES (${update.eventId}, ${userId}, ${problemId})
+        ON CONFLICT (user_id, event_id) DO NOTHING
+        RETURNING event_id
+      )
+      INSERT INTO problem_progress (
+        user_id, problem_id, solved, attempts_count, hints_used, last_code,
+        first_attempted_at, solved_at, updated_at
+      ) SELECT ${userId}, ${problemId}, ${update.solved ?? false},
+        ${update.incrementAttempts ? 1 : 0}, ${update.incrementHints ? 1 : 0},
+        ${update.lastCode ?? null}, ${now}, ${update.solved ? now : null}, ${now}
+      FROM claimed
+      ON CONFLICT (user_id, problem_id) DO UPDATE SET
+        solved = problem_progress.solved OR EXCLUDED.solved,
+        attempts_count = problem_progress.attempts_count + EXCLUDED.attempts_count,
+        hints_used = problem_progress.hints_used + EXCLUDED.hints_used,
+        last_code = COALESCE(EXCLUDED.last_code, problem_progress.last_code),
+        solved_at = CASE WHEN EXCLUDED.solved AND NOT problem_progress.solved
+          THEN EXCLUDED.solved_at ELSE problem_progress.solved_at END,
+        updated_at = EXCLUDED.updated_at
+      RETURNING user_id
+    `;
+    if (applied.length === 0) {
+      // A duplicate ID may only acknowledge the original learner/problem.
+      const existing = await db`
+        SELECT user_id, problem_id FROM problem_progress_events
+        WHERE user_id = ${userId} AND event_id = ${update.eventId}
+      `;
+      if (!existing[0] || existing[0].user_id !== userId || existing[0].problem_id !== problemId) {
+        throw new Error('Progress event ID belongs to a different problem');
+      }
+    }
+    await maybeEnsurePostSurveyInvitation(userId);
+    return;
+  }
 
   // Race-condition safe atomic upsert:
   // - attempts_count and hints_used reference the CURRENT database value
@@ -1397,15 +1453,15 @@ export async function createInteraction(
 
   await db`
     INSERT INTO interaction_events (
-      id, user_id, section_id, condition_id, session_id, timestamp, event_type, problem_id,
-      problem_set_id, problem_number, code, error, error_subtype_id,
+      id, user_id, section_id, session_id, timestamp, event_type, problem_id,
+      problem_set_id, problem_number, condition_id, execution_time_ms, metadata, code, error, error_subtype_id,
       hint_id, explanation_id, hint_text, hint_level, help_request_index,
       sql_engage_subtype, sql_engage_row_id, policy_version, time_spent,
       successful, rule_fired, template_id, input_hash, model,
       note_id, note_title, note_content,
       retrieved_source_ids, retrieved_chunks, trigger_interaction_ids,
       evidence_interaction_ids, source_interaction_ids, inputs, outputs, concept_id, concept_ids,
-      metadata, source, total_time, problems_attempted, problems_solved,
+      source, total_time, problems_attempted, problems_solved,
       request_type, current_rung, rung, grounded, content_length,
       from_rung, to_rung, trigger_reason, unit_id, action, dedupe_key,
       revision_count, passage_count, expanded, chat_message, chat_response,
@@ -1422,13 +1478,15 @@ export async function createInteraction(
       ${data.id},
       ${data.learnerId},
       ${resolvedSectionId},
-      ${data.conditionId ?? payload.conditionId ?? null},
       ${storedSessionId},
       ${timestampIso},
       ${data.eventType},
       ${data.problemId},
       ${payload.problemSetId || null},
       ${payload.problemNumber || null},
+      ${data.conditionId ?? payload.conditionId ?? null},
+      ${payload.executionTimeMs ?? null},
+      ${payload.metadata == null ? null : JSON.stringify(payload.metadata)},
       ${payload.code || null},
       ${payload.error || null},
       ${payload.errorSubtypeId || null},
@@ -1456,7 +1514,6 @@ export async function createInteraction(
       ${JSON.stringify(payload.sourceInteractionIds || null)},
       ${JSON.stringify(payload.inputs || null)},
       ${JSON.stringify(payload.outputs || null)},
-      ${JSON.stringify(payload.metadata || null)},
       ${storedConceptId},
       ${JSON.stringify(payload.conceptIds || null)},
       ${payload.source || null},
@@ -1985,6 +2042,9 @@ function rowToInteraction(row: any): Interaction {
     sectionId: row.section_id ?? null,
     problemSetId: row.problem_set_id,
     problemNumber: row.problem_number,
+    conditionId: row.condition_id ?? undefined,
+    executionTimeMs: row.execution_time_ms ?? undefined,
+    metadata: parseJson(row.metadata) ?? undefined,
     code: row.code,
     error: row.error,
     errorSubtypeId: row.error_subtype_id,
@@ -2195,6 +2255,7 @@ export async function getLearnerProfile(
 
   return {
     id: result.learner_id,
+    serverRevision: Number(result.version),
     name: result.name,
     conceptsCovered: parseJson(result.concept_coverage) || [],
     conceptCoverageEvidence: parseJson(result.concept_evidence) || {},
@@ -2219,9 +2280,14 @@ export async function getLearnerProfile(
   };
 }
 
+export class ProfileRevisionConflict extends Error {
+  constructor() { super('Profile changed; reload the latest profile and retry'); }
+}
+
 export async function saveLearnerProfile(
   learnerId: string,
   profile: Partial<LearnerProfile>,
+  expectedRevision?: number,
 ): Promise<LearnerProfile | null> {
   const db = getDb();
   const now = new Date().toISOString();
@@ -2229,6 +2295,9 @@ export async function saveLearnerProfile(
 
   // Get existing profile or create new
   const existing = await getLearnerProfile(learnerId);
+  if (expectedRevision !== undefined && expectedRevision !== (existing?.serverRevision ?? 0)) {
+    throw new ProfileRevisionConflict();
+  }
 
   const mergedProfile: LearnerProfile = {
     id: learnerId,
@@ -2255,7 +2324,7 @@ export async function saveLearnerProfile(
   };
 
   // Atomic upsert with version increment for optimistic locking
-  await db`
+  const saved = await db`
     INSERT INTO learner_profiles (
       learner_id, name, concept_coverage, concept_evidence, error_history,
       interaction_count, strategy, preferences, last_activity_at, profile_data, version, updated_at
@@ -2285,7 +2354,11 @@ export async function saveLearnerProfile(
       profile_data = EXCLUDED.profile_data,
       version = learner_profiles.version + 1,
       updated_at = EXCLUDED.updated_at
+    WHERE ${expectedRevision ?? null}::integer IS NULL OR learner_profiles.version = ${expectedRevision ?? null}
+    RETURNING version
   `;
+  if (expectedRevision !== undefined && saved.length === 0) throw new ProfileRevisionConflict();
+  mergedProfile.serverRevision = saved[0]?.version;
 
   return mergedProfile;
 }
@@ -2367,49 +2440,7 @@ export async function getLearnerProfilesByIds(
     .filter((profile): profile is LearnerProfile => Boolean(profile));
 }
 
-/**
- * Update learner profile from an interaction event.
- * Uses SELECT FOR UPDATE row locking to prevent race conditions during
- * concurrent event processing.
- */
-export async function updateLearnerProfileFromEvent(
-  learnerId: string,
-  event: CreateInteractionRequest,
-): Promise<LearnerProfile | null> {
-  const db = getDb();
-  const now = new Date().toISOString();
-  const nowMs = Date.now();
-
-  // Step 1: Ensure profile exists (atomic initialization - safe for concurrent calls)
-  await db`
-    INSERT INTO learner_profiles (learner_id, name, created_at, updated_at, version)
-    VALUES (${learnerId}, ${learnerId}, ${now}, ${now}, 1)
-    ON CONFLICT (learner_id) DO NOTHING
-  `;
-
-  // Step 2: Atomic increment of interaction_count - race condition safe
-  // Each concurrent call increments the counter separately
-  await db`
-    UPDATE learner_profiles
-    SET interaction_count = interaction_count + 1,
-        last_activity_at = ${now},
-        version = version + 1,
-        updated_at = ${now}
-    WHERE learner_id = ${learnerId}
-  `;
-
-  // Step 3: For complex JSON updates, use SELECT FOR UPDATE to lock the row
-  // This ensures exclusive access during the read-modify-write cycle
-  const [lockedRow] = await db`
-    SELECT * FROM learner_profiles
-    WHERE learner_id = ${learnerId}
-    FOR UPDATE
-  `;
-
-  if (!lockedRow) {
-    return getLearnerProfile(learnerId);
-  }
-
+function deriveProfileEventUpdate(lockedRow: any, event: CreateInteractionRequest, nowMs: number) {
   // Parse current values from locked row
   const currentErrorHistory = parseJson(lockedRow.error_history) || {};
   const currentConceptEvidence = parseJson(lockedRow.concept_evidence) || {};
@@ -2504,17 +2535,111 @@ export async function updateLearnerProfileFromEvent(
     }
   }
 
-  // Apply updates if any JSON fields changed
-  if (hasUpdates) {
+  return { hasUpdates, updatedErrorHistory, updatedConceptEvidence, updatedConceptCoverage };
+}
+
+/** Apply an identified event once, retrying if another writer changed the profile. */
+async function applyIdentifiedProfileEvent(
+  learnerId: string, event: CreateInteractionRequest, now: string, nowMs: number,
+): Promise<void> {
+  const db = getDb();
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const [row] = await db`SELECT * FROM learner_profiles WHERE learner_id = ${learnerId}`;
+    if (!row) throw new Error('Learner profile not found');
+    const update = deriveProfileEventUpdate(row, event, nowMs);
+    // Lock and version-check before claiming: a failed update cannot consume the ID.
+    const applied = await db`
+      WITH eligible AS (
+        SELECT learner_id FROM learner_profiles
+        WHERE learner_id = ${learnerId} AND version = ${row.version}
+        FOR UPDATE
+      ), claimed AS (
+        INSERT INTO learner_profile_events (user_id, event_id, problem_id, event_type)
+        SELECT ${learnerId}, ${event.eventId}, ${event.problemId ?? null}, ${event.eventType ?? null}
+        FROM eligible ON CONFLICT (user_id, event_id) DO NOTHING
+        RETURNING user_id
+      )
+      UPDATE learner_profiles
+      SET interaction_count = interaction_count + 1,
+          last_activity_at = ${now},
+          error_history = CASE WHEN ${update.hasUpdates} THEN ${JSON.stringify(update.updatedErrorHistory)} ELSE error_history END,
+          concept_evidence = CASE WHEN ${update.hasUpdates} THEN ${JSON.stringify(update.updatedConceptEvidence)} ELSE concept_evidence END,
+          concept_coverage = CASE WHEN ${update.hasUpdates} THEN ${JSON.stringify(update.updatedConceptCoverage)} ELSE concept_coverage END,
+          version = version + ${update.hasUpdates ? 2 : 1}, updated_at = ${now}
+      FROM claimed WHERE learner_profiles.learner_id = claimed.user_id
+      RETURNING learner_profiles.learner_id
+    `;
+    if (applied.length) return;
+    const [existing] = await db`
+      SELECT problem_id, event_type FROM learner_profile_events
+      WHERE user_id = ${learnerId} AND event_id = ${event.eventId}
+    `;
+    if (existing) {
+      if (existing.problem_id !== (event.problemId ?? null) || existing.event_type !== (event.eventType ?? null)) {
+        throw new Error('Profile event ID belongs to a different event');
+      }
+      return;
+    }
+  }
+  throw new Error('Profile event update conflicted repeatedly');
+}
+
+/** Update a learner profile; event IDs provide idempotent, concurrent-safe updates. */
+export async function updateLearnerProfileFromEvent(
+  learnerId: string,
+  event: CreateInteractionRequest,
+): Promise<LearnerProfile | null> {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const nowMs = Date.now();
+
+  // Step 1: Ensure profile exists (atomic initialization - safe for concurrent calls)
+  await db`
+    INSERT INTO learner_profiles (learner_id, name, created_at, updated_at, version)
+    VALUES (${learnerId}, ${learnerId}, ${now}, ${now}, 1)
+    ON CONFLICT (learner_id) DO NOTHING
+  `;
+
+  if (event.eventId) {
+    await applyIdentifiedProfileEvent(learnerId, event, now, nowMs);
+  } else {
+    // Legacy callers without event IDs retain their existing update behavior.
+    // Each concurrent call increments the counter separately
     await db`
       UPDATE learner_profiles
-      SET error_history = ${JSON.stringify(updatedErrorHistory)},
-          concept_evidence = ${JSON.stringify(updatedConceptEvidence)},
-          concept_coverage = ${JSON.stringify(updatedConceptCoverage)},
+      SET interaction_count = interaction_count + 1,
+          last_activity_at = ${now},
           version = version + 1,
           updated_at = ${now}
       WHERE learner_id = ${learnerId}
     `;
+
+    // Legacy HTTP queries are separate transactions; this lock is not held across them.
+    const [lockedRow] = await db`
+      SELECT * FROM learner_profiles
+      WHERE learner_id = ${learnerId}
+      FOR UPDATE
+    `;
+
+    if (!lockedRow) {
+      return getLearnerProfile(learnerId);
+    }
+
+    const { hasUpdates, updatedErrorHistory, updatedConceptEvidence, updatedConceptCoverage } =
+      deriveProfileEventUpdate(lockedRow, event, nowMs);
+
+    // Apply updates if any JSON fields changed
+    if (hasUpdates) {
+      await db`
+        UPDATE learner_profiles
+        SET error_history = ${JSON.stringify(updatedErrorHistory)},
+            concept_evidence = ${JSON.stringify(updatedConceptEvidence)},
+            concept_coverage = ${JSON.stringify(updatedConceptCoverage)},
+            version = version + 1,
+            updated_at = ${now}
+        WHERE learner_id = ${learnerId}
+      `;
+    }
   }
 
   // Update problem_progress on successful execution
@@ -2524,12 +2649,14 @@ export async function updateLearnerProfileFromEvent(
       solved: true,
       incrementAttempts: true,
       lastCode: event.code,
+      eventId: event.eventId,
     });
   } else if (event.eventType === "execution" && event.problemId) {
     // Failed execution - just increment attempts
     await updateProblemProgress(learnerId, event.problemId, {
       incrementAttempts: true,
       lastCode: event.code,
+      eventId: event.eventId,
     });
   }
 

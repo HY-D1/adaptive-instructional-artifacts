@@ -21,7 +21,7 @@ const logInteractionMock = vi.fn<(event: unknown) => Promise<{
 const logInteractionsBatchMock = vi.fn<(events: unknown[]) => Promise<boolean>>();
 const logInteractionsBatchVerifiedMock = vi.fn<(events: unknown[]) => Promise<{ confirmed: string[]; failed: string[] }>>();
 const logInteractionsBatchKeepaliveMock = vi.fn<(events: unknown[]) => Promise<{ success: boolean; confirmedIds?: string[] }>>();
-const saveProfileMock = vi.fn<(profile: unknown) => Promise<boolean>>();
+const saveProfileMock = vi.fn<(profile: unknown, onServerProfile?: (profile: LearnerProfile | null, conflict: boolean) => void) => Promise<boolean>>();
 const updateProblemProgressMock = vi.fn<(learnerId: string, problemId: string, update: unknown) => Promise<unknown>>();
 const getAllProblemProgressMock = vi.fn<(learnerId: string) => Promise<Array<{ problemId: string; solved: boolean }>>>();
 const createLearnerMock = vi.fn<(profile: unknown) => Promise<boolean>>();
@@ -74,6 +74,65 @@ beforeAll(async () => {
   dualStorageModule = await import('./dual-storage');
 });
 
+describe('durable offline backlog', () => {
+  const internals = () => dualStorageModule.dualStorage as unknown as {
+    pendingStore: { clear: () => void; add: (event: InteractionEvent) => unknown };
+    offlineQueue: {
+      queue: unknown[];
+      add: (item: { id: string; type: 'interaction'; data: InteractionEvent }) => void;
+      processQueue: () => Promise<void>;
+    };
+  };
+  const event = (id: string): InteractionEvent => ({
+    id, learnerId: 'backlog-learner', sessionId: 'backlog-session',
+    timestamp: Date.now(), eventType: 'execution', problemId: 'problem-1',
+  });
+
+  it('persists every pending event when the backlog exceeds 100', () => {
+    const store = internals().pendingStore;
+    store.clear();
+    for (let i = 0; i < 101; i++) store.add(event(`backlog-${i}`));
+    const persisted = JSON.parse(localStorage.getItem('sql-adapt-pending-interactions')!);
+    expect(persisted).toHaveLength(101);
+    expect(persisted.map((item: { id: string }) => item.id)).toContain('backlog-0');
+    store.clear();
+  });
+
+  it('does not replace older pending events with a truncated fallback on quota errors', () => {
+    const store = internals().pendingStore;
+    store.clear();
+    for (let i = 0; i < 60; i++) store.add(event(`quota-${i}`));
+    const previous = localStorage.getItem('sql-adapt-pending-interactions');
+    const original = localStorage.setItem.bind(localStorage);
+    const spy = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'sql-adapt-pending-interactions' && JSON.parse(value).length > 50) {
+        throw new DOMException('Full', 'QuotaExceededError');
+      }
+      return original(key, value);
+    });
+    const result = store.add(event('quota-extra'));
+    expect(result).toMatchObject({ success: false, quotaExceeded: true });
+    expect(localStorage.getItem('sql-adapt-pending-interactions')).toBe(previous);
+    spy.mockRestore();
+    store.clear();
+  });
+
+  it('serializes simultaneous processQueue calls while health check is pending', async () => {
+    const queue = internals().offlineQueue;
+    queue.queue = [];
+    const item = event('race-queue-unique');
+    queue.add({ id: item.id, type: 'interaction', data: item });
+    let resolveHealth!: (value: boolean) => void;
+    checkBackendHealthMock.mockImplementation(() => new Promise(resolve => { resolveHealth = resolve; }));
+    const first = queue.processQueue();
+    const second = queue.processQueue();
+    expect(checkBackendHealthMock).toHaveBeenCalledTimes(1);
+    resolveHealth(true);
+    await Promise.all([first, second]);
+    expect(logInteractionsBatchVerifiedMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 afterAll(() => {
   vi.unstubAllEnvs();
   vi.resetModules();
@@ -111,6 +170,21 @@ beforeEach(() => {
 });
 
 describe('dual-storage critical write semantics', () => {
+  it('keeps an interaction pending when the configured backend is offline', async () => {
+    checkBackendHealthMock.mockResolvedValue(false);
+    await dualStorageModule.dualStorage.checkHealth();
+    const event: InteractionEvent = {
+      id: 'offline-interaction-unique', learnerId: 'learner-1',
+      sessionId: 'offline-session-unique', timestamp: Date.now(),
+      eventType: 'execution', problemId: 'problem-1', successful: false,
+    };
+    expect(dualStorageModule.dualStorage.saveInteraction(event).success).toBe(true);
+    expect(dualStorageModule.dualStorage.getPendingInteractionsForSession(event.sessionId!))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: event.id })]));
+    expect(JSON.parse(localStorage.getItem('sql-adapt-offline-queue') || '[]'))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: event.id })]));
+  });
+
   it('dead-letters permanent interaction failures instead of retrying them', async () => {
     logInteractionMock.mockResolvedValueOnce({
       success: false,
@@ -354,7 +428,7 @@ describe('dual-storage critical write semantics', () => {
     );
 
     await vi.waitFor(() => {
-      expect(saveProfileMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'learner-new' }));
+      expect(saveProfileMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'learner-new' }), expect.any(Function));
     });
   });
 
@@ -372,8 +446,37 @@ describe('dual-storage critical write semantics', () => {
 
     await vi.waitFor(() => {
       expect(saveProfileMock).toHaveBeenCalledTimes(2);
-      expect(saveProfileMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ id: 'learner-queued' }));
+      expect(saveProfileMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ id: 'learner-queued' }), expect.any(Function));
     });
+  });
+
+  it('replaces stale cache and does not queue a conflicted profile snapshot', async () => {
+    await dualStorageModule.dualStorage.checkHealth();
+    const notify = vi.fn();
+    window.addEventListener('sql-adapt-profile-conflict', notify);
+    const latest = createBackendProfile({ name: 'Latest', serverRevision: 8, solvedProblemIds: new Set() });
+    saveProfileMock.mockImplementationOnce(async (_profile, callback) => { callback?.(latest, true); return false; });
+    dualStorageModule.dualStorage.saveProfile(createBackendProfile({ name: 'Stale', serverRevision: 7, solvedProblemIds: new Set(['problem-stale']) }));
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledOnce());
+    const cached = dualStorageModule.dualStorage.getProfile('learner-1');
+    expect(cached).toMatchObject({ name: 'Latest', serverRevision: 8 });
+    expect(cached?.solvedProblemIds.has('problem-stale')).toBe(false);
+    await dualStorageModule.dualStorage.processOfflineQueue();
+    expect(saveProfileMock).toHaveBeenCalledTimes(1);
+    window.removeEventListener('sql-adapt-profile-conflict', notify);
+  });
+
+  it('preserves newer local edits when an earlier profile save succeeds', async () => {
+    await dualStorageModule.dualStorage.checkHealth();
+    let complete!: (profile: LearnerProfile | null, conflict: boolean) => void;
+    saveProfileMock.mockImplementationOnce(async (_profile, callback) => {
+      complete = callback!;
+      return new Promise<boolean>(() => {});
+    });
+    dualStorageModule.dualStorage.saveProfile(createBackendProfile({ name: 'First', serverRevision: 7 }));
+    dualStorageModule.dualStorage.cacheProfile(createBackendProfile({ name: 'Newer edit', serverRevision: 7 }));
+    complete(createBackendProfile({ name: 'First', serverRevision: 8 }), false);
+    expect(dualStorageModule.dualStorage.getProfile('learner-1')?.name).toBe('Newer edit');
   });
 
   it('sends the active session fallback to backend for background interaction writes', async () => {
@@ -1100,6 +1203,7 @@ describe('dual-storage progress persistence sync', () => {
         'problem-1',
         expect.objectContaining({
           solved: true,
+          eventId: 'exec-progress-1',
           incrementAttempts: true,
           lastCode: 'SELECT * FROM users',
         }),

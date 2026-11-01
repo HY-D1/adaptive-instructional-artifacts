@@ -128,6 +128,7 @@ export interface ApiResponse<T> {
   error?: string;
   message?: string;
   status?: number;
+  code?: string;
   retryAfterMs?: number;
   failedIds?: string[];
   failedEvents?: Array<{
@@ -354,6 +355,7 @@ interface BackendUnit {
 
 interface BackendLearnerProfile {
   id: string;
+  serverRevision?: number;
   name: string;
   conceptsCovered: string[];
   conceptCoverageEvidence: Record<string, ConceptCoverageEvidence>;
@@ -674,6 +676,7 @@ export async function getProfile(
   const data = response.data;
   return {
     id: data.id,
+    serverRevision: data.serverRevision,
     name: data.name,
     conceptsCovered: new Set(data.conceptsCovered),
     conceptCoverageEvidence: new Map(
@@ -728,12 +731,13 @@ function toRecord<T>(value: unknown): Record<string, T> {
 /**
  * Save a learner's full profile
  */
-export async function saveProfile(profile: LearnerProfile): Promise<boolean> {
+export async function saveProfile(profile: LearnerProfile, onServerProfile?: (profile: LearnerProfile | null, conflict: boolean) => void): Promise<boolean> {
   const response = await fetchApi<BackendLearnerProfile>(
     `/learners/${profile.id}/profile`,
     {
       method: "PUT",
       body: JSON.stringify({
+        expectedRevision: profile.serverRevision ?? 0,
         name: profile.name,
         conceptsCovered: toStringArray(profile.conceptsCovered),
         conceptCoverageEvidence: toRecord<ConceptCoverageEvidence>(
@@ -747,6 +751,20 @@ export async function saveProfile(profile: LearnerProfile): Promise<boolean> {
       }),
     },
   );
+  if (response.data && (response.success || response.code === 'PROFILE_REVISION_CONFLICT' || response.code === 'PROFILE_REVISION_REQUIRED')) {
+    const data = response.data;
+    onServerProfile?.({
+      id: data.id, serverRevision: data.serverRevision, name: data.name,
+      conceptsCovered: new Set(data.conceptsCovered),
+      conceptCoverageEvidence: new Map(Object.entries(data.conceptCoverageEvidence)),
+      errorHistory: new Map(Object.entries(data.errorHistory)),
+      solvedProblemIds: new Set(data.solvedProblemIds || []), interactionCount: data.interactionCount,
+      currentStrategy: data.currentStrategy as LearnerProfile['currentStrategy'],
+      preferences: data.preferences, createdAt: data.createdAt, lastActive: data.lastActive,
+    }, !response.success);
+  } else if (response.code === 'PROFILE_REVISION_CONFLICT' || response.code === 'PROFILE_REVISION_REQUIRED') {
+    onServerProfile?.(null, true);
+  }
   return response.success;
 }
 
@@ -760,6 +778,7 @@ export async function getAllProfiles(): Promise<LearnerProfile[]> {
 
   return response.data.map((data) => ({
     id: data.id,
+    serverRevision: data.serverRevision,
     name: data.name,
     conceptsCovered: new Set(data.conceptsCovered),
     conceptCoverageEvidence: new Map(
@@ -788,6 +807,7 @@ export async function updateProfileFromEvent(
       method: "POST",
       body: JSON.stringify({
         event: {
+          eventId: event.id,
           learnerId: event.learnerId,
           sessionId: event.sessionId,
           timestamp: new Date(event.timestamp).toISOString(),
@@ -813,6 +833,7 @@ export async function updateProfileFromEvent(
   const data = response.data;
   return {
     id: data.id,
+    serverRevision: data.serverRevision,
     name: data.name,
     conceptsCovered: new Set(data.conceptsCovered),
     conceptCoverageEvidence: new Map(
@@ -1195,6 +1216,7 @@ function convertToFrontendEvent(i: BackendInteraction): InteractionEvent {
     // Problem context
     problemSetId: i.problemSetId,
     problemNumber: i.problemNumber,
+    conditionId: i.conditionId ?? undefined,
 
     // Code/Error fields
     code: i.code,
@@ -1980,6 +2002,7 @@ export async function updateProblemProgress(
     incrementAttempts?: boolean;
     incrementHints?: boolean;
     lastCode?: string;
+    eventId?: string;
   },
 ): Promise<ProblemProgress | null> {
   const response = await fetchApi<ProblemProgress>(

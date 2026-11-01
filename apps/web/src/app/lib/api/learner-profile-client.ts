@@ -38,10 +38,12 @@ interface ApiResponse<T> {
   data?: T;
   error?: string;
   message?: string;
+  code?: string;
 }
 
 interface BackendLearnerProfile {
   id: string;
+  serverRevision?: number;
   name: string;
   conceptsCovered: string[];
   conceptCoverageEvidence: Record<string, ConceptCoverageEvidence>;
@@ -97,6 +99,7 @@ async function fetchApi<T>(
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       return {
+        ...errorData,
         success: false,
         error: errorData.error || `HTTP ${response.status}: ${response.statusText}`,
         message: errorData.message,
@@ -158,8 +161,9 @@ function getCachedProfile(learnerId: string): CachedProfile | null {
   };
 }
 
-function setCachedProfile(learnerId: string, profile: LearnerProfile, synced: boolean = true, pendingUpdates: InteractionEvent[] = []): void {
+function setCachedProfile(learnerId: string, profile: LearnerProfile, synced: boolean = true, pendingUpdates?: InteractionEvent[]): void {
   const cache = getCache();
+  const pending = pendingUpdates ?? cache[learnerId]?.pendingUpdates ?? [];
   
   cache[learnerId] = {
     profile: {
@@ -170,8 +174,8 @@ function setCachedProfile(learnerId: string, profile: LearnerProfile, synced: bo
       solvedProblemIds: Array.from(profile.solvedProblemIds) as unknown as Set<string>,
     },
     timestamp: Date.now(),
-    synced,
-    pendingUpdates,
+    synced: synced && pending.length === 0,
+    pendingUpdates: pending,
   };
   
   setCache(cache);
@@ -182,17 +186,21 @@ function addPendingUpdate(learnerId: string, event: InteractionEvent): void {
   const cached = cache[learnerId];
   
   if (cached) {
-    cached.pendingUpdates.push(event);
+    if (!cached.pendingUpdates.some(pending => pending.id === event.id)) {
+      cached.pendingUpdates.push(event);
+    }
     cached.synced = false;
     setCache(cache);
   }
 }
 
-function clearPendingUpdates(learnerId: string): void {
+function clearPendingUpdates(learnerId: string, confirmedIds?: Set<string>): void {
   const cache = getCache();
   if (cache[learnerId]) {
-    cache[learnerId].pendingUpdates = [];
-    cache[learnerId].synced = true;
+    cache[learnerId].pendingUpdates = confirmedIds
+      ? cache[learnerId].pendingUpdates.filter(event => !confirmedIds.has(event.id))
+      : [];
+    cache[learnerId].synced = cache[learnerId].pendingUpdates.length === 0;
     setCache(cache);
   }
 }
@@ -204,6 +212,7 @@ function clearPendingUpdates(learnerId: string): void {
 function convertToFrontendProfile(data: BackendLearnerProfile): LearnerProfile {
   return {
     id: data.id,
+    serverRevision: data.serverRevision,
     name: data.name,
     conceptsCovered: new Set(data.conceptsCovered),
     conceptCoverageEvidence: new Map(Object.entries(data.conceptCoverageEvidence)),
@@ -285,11 +294,14 @@ export async function saveProfile(profile: LearnerProfile): Promise<boolean> {
 
   const response = await fetchApi<BackendLearnerProfile>(`/learners/${profile.id}/profile`, {
     method: 'PUT',
-    body: JSON.stringify(convertToBackendProfile(profile)),
+    body: JSON.stringify({ ...convertToBackendProfile(profile), expectedRevision: profile.serverRevision ?? 0 }),
   });
   
-  if (response.success) {
-    setCachedProfile(profile.id, profile, true);
+  if (response.success && response.data) {
+    setCachedProfile(profile.id, convertToFrontendProfile(response.data), true);
+  } else if (response.code === 'PROFILE_REVISION_CONFLICT' || response.code === 'PROFILE_REVISION_REQUIRED') {
+    if (response.data) setCachedProfile(profile.id, convertToFrontendProfile(response.data), true);
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('sql-adapt-profile-conflict'));
   }
   
   return response.success;
@@ -342,11 +354,13 @@ export async function updateProfileFromEvent(
     method: 'POST',
     body: JSON.stringify({
       event: {
+        eventId: event.id,
         learnerId: event.learnerId,
         sessionId: event.sessionId,
         timestamp: new Date(event.timestamp).toISOString(),
         eventType: event.eventType,
         problemId: event.problemId,
+        code: event.code,
         successful: event.successful,
         errorSubtypeId: event.errorSubtypeId,
         conceptIds: event.conceptIds,
@@ -357,10 +371,13 @@ export async function updateProfileFromEvent(
   
   if (!response.success || !response.data) {
     // Fallback to local update
-    return applyEventToLocalProfile(learnerId, event);
+    const local = await applyEventToLocalProfile(learnerId, event);
+    addPendingUpdate(learnerId, event);
+    return local;
   }
 
   const profile = convertToFrontendProfile(response.data);
+  clearPendingUpdates(learnerId, new Set([event.id]));
   setCachedProfile(learnerId, profile, true);
   
   return profile;
@@ -393,11 +410,13 @@ export async function batchUpdateProfile(
     method: 'POST',
     body: JSON.stringify({
       events: events.map(event => ({
+        eventId: event.id,
         learnerId: event.learnerId,
         sessionId: event.sessionId,
         timestamp: new Date(event.timestamp).toISOString(),
         eventType: event.eventType,
         problemId: event.problemId,
+        code: event.code,
         successful: event.successful,
         errorSubtypeId: event.errorSubtypeId,
         conceptIds: event.conceptIds,
@@ -412,12 +431,13 @@ export async function batchUpdateProfile(
     for (const event of events) {
       profile = await applyEventToLocalProfile(learnerId, event, profile);
     }
+    events.forEach(event => addPendingUpdate(learnerId, event));
     return profile;
   }
 
   const profile = convertToFrontendProfile(response.data);
+  clearPendingUpdates(learnerId, new Set(events.map(event => event.id)));
   setCachedProfile(learnerId, profile, true);
-  clearPendingUpdates(learnerId);
   
   return profile;
 }
@@ -568,16 +588,20 @@ export async function syncPendingUpdates(learnerId: string): Promise<boolean> {
   }
   
   console.log(`[ProfileClient] Syncing ${cached.pendingUpdates.length} pending updates for ${learnerId}`);
+  const pending = [...cached.pendingUpdates];
   
   const response = await fetchApi<BackendLearnerProfile>(`/learners/${learnerId}/profile/events/batch`, {
     method: 'POST',
     body: JSON.stringify({
-      events: cached.pendingUpdates.map(event => ({
+      events: pending.map(event => ({
+        eventId: event.id,
         learnerId: event.learnerId,
         sessionId: event.sessionId,
         timestamp: new Date(event.timestamp).toISOString(),
         eventType: event.eventType,
         problemId: event.problemId,
+        code: event.code,
+        successful: event.successful,
         errorSubtypeId: event.errorSubtypeId,
         conceptIds: event.conceptIds,
         metadata: event.metadata,
@@ -586,7 +610,7 @@ export async function syncPendingUpdates(learnerId: string): Promise<boolean> {
   });
   
   if (response.success) {
-    clearPendingUpdates(learnerId);
+    clearPendingUpdates(learnerId, new Set(pending.map(event => event.id)));
     if (response.data) {
       const profile = convertToFrontendProfile(response.data);
       setCachedProfile(learnerId, profile, true);

@@ -10,6 +10,11 @@ import { requirePreSurveyCompleted } from '../middleware/pre-survey.js';
 
 const router = Router();
 
+function validOptionalEventId(value: unknown): boolean {
+  return value === undefined ||
+    (typeof value === 'string' && value.trim().length > 0 && value.length <= 256);
+}
+
 // GET /api/learners/profiles - Get all learner profiles scoped to instructor sections
 router.get('/profiles', requireInstructor, async (req: Request, res: Response) => {
   try {
@@ -289,13 +294,19 @@ router.get('/:id/progress/:problemId', async (req: Request, res: Response) => {
 // POST /api/learners/:id/progress/:problemId - Update problem progress
 router.post('/:id/progress/:problemId', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
-    const { solved, incrementAttempts, incrementHints, lastCode } = req.body;
+    const { solved, incrementAttempts, incrementHints, lastCode, eventId } = req.body;
+
+    if (!validOptionalEventId(eventId)) {
+      res.status(400).json({ success: false, error: 'eventId must be a nonempty string of at most 256 characters' });
+      return;
+    }
 
     await db.updateProblemProgress(req.params.id, req.params.problemId, {
       solved,
       incrementAttempts,
       incrementHints,
       lastCode,
+      eventId,
     });
 
     const progress = await db.getProblemProgress(req.params.id, req.params.problemId);
@@ -328,6 +339,15 @@ router.get('/:id/profile', async (req: Request, res: Response) => {
 // PUT /api/learners/:id/profile - Save/update learner's full profile
 router.put('/:id/profile', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
+    const revision = req.body.expectedRevision;
+    if (revision === undefined) {
+      res.status(428).json({ success: false, code: 'PROFILE_REVISION_REQUIRED', error: 'Reload the latest profile before saving', data: await db.getLearnerProfile(req.params.id) });
+      return;
+    }
+    if (!Number.isInteger(revision) || revision < 0 || revision > 2147483647) {
+      res.status(400).json({ success: false, error: 'Invalid expectedRevision' });
+      return;
+    }
     const {
       name,
       conceptsCovered,
@@ -350,7 +370,7 @@ router.put('/:id/profile', requirePreSurveyCompleted, async (req: Request, res: 
       preferences,
       lastActive,
       extendedData,
-    });
+    }, revision);
 
     if (!profile) {
       res.status(500).json({ success: false, error: 'Failed to save profile' });
@@ -359,6 +379,10 @@ router.put('/:id/profile', requirePreSurveyCompleted, async (req: Request, res: 
 
     res.json({ success: true, data: profile });
   } catch (error) {
+    if (error instanceof db.ProfileRevisionConflict) {
+      res.status(409).json({ success: false, code: 'PROFILE_REVISION_CONFLICT', error: error.message, data: await db.getLearnerProfile(req.params.id) });
+      return;
+    }
     console.error('Error saving learner profile:', error);
     res.status(500).json({ success: false, error: 'Failed to save learner profile' });
   }
@@ -374,6 +398,11 @@ router.post('/:id/profile/events', requirePreSurveyCompleted, async (req: Reques
         success: false,
         error: 'Missing required field: event',
       });
+      return;
+    }
+
+    if (!validOptionalEventId(event.eventId)) {
+      res.status(400).json({ success: false, error: 'eventId must be a nonempty string of at most 256 characters' });
       return;
     }
 
@@ -401,6 +430,11 @@ router.post('/:id/profile/events/batch', requirePreSurveyCompleted, async (req: 
         success: false,
         error: 'Missing required field: events',
       });
+      return;
+    }
+
+    if (events.some(event => event && !validOptionalEventId(event.eventId))) {
+      res.status(400).json({ success: false, error: 'eventId must be a nonempty string of at most 256 characters' });
       return;
     }
 

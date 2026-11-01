@@ -87,6 +87,7 @@ export interface ErrorHistoryEntry {
  * Stored in learner_profiles table with both structured columns and JSON extensibility
  */
 export interface LearnerProfile {
+  serverRevision?: number;
   id: string;
   name: string;
   conceptsCovered: string[]; // Set serialized as array
@@ -233,6 +234,7 @@ export interface Interaction {
   problemId: string;
   problemSetId?: string;
   problemNumber?: number;
+  conditionId?: string;
   
   // Code/Error fields
   code?: string;
@@ -361,6 +363,7 @@ export interface Interaction {
  * Required fields: learnerId, timestamp, eventType, problemId
  */
 export interface CreateInteractionRequest {
+  eventId?: string;
   learnerId: string;
   sectionId?: string | null;
   sessionId?: string;

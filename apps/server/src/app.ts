@@ -40,6 +40,7 @@ import { isUsingNeon } from './db/index.js';
 import { resolveDbEnv, resolveEnvironment, resolveDbTarget } from './db/env-resolver.js';
 import { optionalAuth, requireAuth, requireInstructor } from './middleware/auth.js';
 import { requireCsrf } from './middleware/csrf.js';
+import { maintenanceGuard } from './middleware/maintenance.js';
 import {
   generalApiLimiter,
   llmRateLimiter,
@@ -58,7 +59,7 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-export const RESEARCH_CONTRACT_VERSION = 'v2.2.0';
+export const RESEARCH_CONTRACT_VERSION = 'v2.6.0';
 
 let schemaInitPromise: Promise<void> | null = null;
 
@@ -164,10 +165,13 @@ app.use(cors({
     'Content-Type',
     'Authorization',
     'x-csrf-token',
+    'x-maintenance-key',
     'x-vercel-protection-bypass',
     'x-vercel-set-bypass-cookie',
   ],
 }));
+
+app.use(maintenanceGuard);
 
 app.use(cookieParser());
 app.use(optionalAuth);

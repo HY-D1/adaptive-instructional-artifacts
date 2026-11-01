@@ -2,13 +2,16 @@ import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  resolvePracticeLearnerProfile,
   GeneratedExplanationCard,
   GeneratedExplanationPreview,
   SessionConfigErrorCard,
   SESSION_CONFIG_ERROR_MESSAGE,
   resolvePracticeDraftState,
+  restoreDraftFromProgress,
   resolvePracticeProblemFromSources,
 } from './LearningInterface';
+import { storage } from '../lib/storage';
 import type { SQLProblem } from '../types';
 
 const problems: SQLProblem[] = [
@@ -50,6 +53,31 @@ beforeEach(() => {
 });
 
 describe('LearningInterface restore precedence', () => {
+  it('restores the selected problem lastCode when no meaningful draft exists', async () => {
+    const fetchProgress = vi.fn().mockResolvedValue({ lastCode: 'SELECT * FROM users;' });
+    expect(await restoreDraftFromProgress({
+      learnerId: 'learner-1', problemId: 'problem-1', draft: null, fetchProgress,
+    })).toBe('SELECT * FROM users;');
+    expect(fetchProgress).toHaveBeenCalledWith('learner-1', 'problem-1');
+  });
+
+  it('keeps a local draft and skips progress lookup, while ignoring empty saved code', async () => {
+    const fetchProgress = vi.fn().mockResolvedValue({ lastCode: '' });
+    expect(await restoreDraftFromProgress({
+      learnerId: 'learner-1', problemId: 'problem-1', draft: 'SELECT unsent;', fetchProgress,
+    })).toBe('SELECT unsent;');
+    expect(fetchProgress).not.toHaveBeenCalled();
+    expect(await restoreDraftFromProgress({
+      learnerId: 'learner-1', problemId: 'problem-1', draft: null, fetchProgress,
+    })).toBeNull();
+  });
+
+  it('leaves the editor usable if the progress request fails', async () => {
+    const fetchProgress = vi.fn().mockRejectedValue(new Error('offline'));
+    expect(await restoreDraftFromProgress({
+      learnerId: 'learner-1', problemId: 'problem-1', draft: null, fetchProgress,
+    })).toBeNull();
+  });
   it('prefers backend session problem over stale persisted UI state in account mode', () => {
     const resolved = resolvePracticeProblemFromSources({
       problems,
@@ -196,5 +224,30 @@ describe('SessionConfigErrorCard', () => {
     render(<div data-testid="session-ready" />);
 
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('practice profile readiness', () => {
+  it('initializes a missing local profile and preserves it on subsequent loads', () => {
+    const id = 'local-profile-readiness';
+    const profile = resolvePracticeLearnerProfile(id, false);
+    expect(profile?.id).toBe(id);
+    expect(profile?.currentStrategy).toBe('adaptive-medium');
+    const stored = storage.getProfile(id);
+    expect(stored).not.toBeNull();
+    expect(resolvePracticeLearnerProfile(id, false)).toEqual(stored);
+  });
+
+  it('waits for account hydration without creating a replacement and uses the hydrated profile', () => {
+    const id = 'account-profile-readiness';
+    expect(resolvePracticeLearnerProfile(id, true)).toBeNull();
+    expect(storage.getProfile(id)).toBeNull();
+    const hydrated = storage.createDefaultProfile(id);
+    hydrated.interactionCount = 7;
+    hydrated.solvedProblemIds.add('problem-1');
+    storage.cacheProfile(hydrated);
+    const loaded = resolvePracticeLearnerProfile(id, true);
+    expect(loaded?.interactionCount).toBe(7);
+    expect(loaded?.solvedProblemIds.has('problem-1')).toBe(true);
   });
 });

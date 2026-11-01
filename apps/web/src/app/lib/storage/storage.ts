@@ -889,7 +889,7 @@ class StorageManager {
    * Save learner profile with optimistic locking
    * @param profile - Profile to save
    */
-  saveProfile(profile: LearnerProfile) {
+  saveProfile(profile: LearnerProfile, replace = false) {
     // Re-read profiles from storage each time to minimize race condition window
     let profiles = this.getAllProfiles();
     let index = profiles.findIndex(p => p.id === profile.id);
@@ -905,7 +905,7 @@ class StorageManager {
     let mergedErrorHistory = profile.errorHistory;
     let mergedSolvedProblemIds = new Set(profile.solvedProblemIds || new Set());
     
-    if (index >= 0 && incomingVersion < existingVersion) {
+    if (!replace && index >= 0 && incomingVersion < existingVersion) {
       // Race condition detected: merge with existing data instead of overwriting
       if (existingProfile) {
         // Merge conceptsCovered: union of both sets
@@ -931,7 +931,7 @@ class StorageManager {
       }
     }
 
-    if (existingProfile) {
+    if (!replace && existingProfile) {
       mergedSolvedProblemIds = new Set([
         ...Array.from(existingProfile.solvedProblemIds),
         ...Array.from(profile.solvedProblemIds || new Set()),

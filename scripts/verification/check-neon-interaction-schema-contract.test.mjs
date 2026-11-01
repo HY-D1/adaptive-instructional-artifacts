@@ -18,6 +18,20 @@ test('verifyInteractionSchemaContract passes for the checked-in Neon schema defi
   assert.equal(result.errors.length, 0);
 });
 
+test('rejects an event-fields migration missing a required column', () => {
+  const fixtureDir = mkdtempSync(join(tmpdir(), 'neon-event-fields-'));
+  try {
+    const eventFieldsMigrationPath = join(fixtureDir, 'event-fields.sql');
+    writeFileSync(eventFieldsMigrationPath, 'ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS condition_id TEXT;\n');
+    const result = verifyInteractionSchemaContract({ eventFieldsMigrationPath });
+    assert.equal(result.ok, false);
+    assert.ok(result.errors.some(error => error.includes('execution_time_ms')));
+    assert.ok(result.errors.some(error => error.includes('metadata')));
+  } finally {
+    rmSync(fixtureDir, { recursive: true, force: true });
+  }
+});
+
 test('verifyInteractionSchemaContract fails when a required RESEARCH-4 column is missing', () => {
   const fixtureDir = mkdtempSync(join(tmpdir(), 'neon-schema-contract-'));
 

@@ -125,6 +125,87 @@ afterEach(() => {
 });
 
 describe('neon-interactions single-event contract', () => {
+  it('retains condition, execution timing and metadata on an existing event', async () => {
+    const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
+    const handler = getRouteHandler(neonInteractionsRouter as unknown as Parameters<typeof getRouteHandler>[0], 'post', '/');
+    createInteractionMock.mockImplementation(async (data) => data);
+    const result = await invokeJsonHandler(handler, {
+      id: 'execution-fields', learnerId: 'learner-1', sessionId: 'session-1',
+      eventType: 'execution', problemId: 'problem-1', conditionId: 'adaptive',
+      executionTimeMs: 0, metadata: { source: 'test', attempt: 1 },
+    });
+    expect(result.status).toBe(201);
+    expect(createInteractionMock).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({ conditionId: 'adaptive', executionTimeMs: 0, metadata: { source: 'test', attempt: 1 } }),
+    }));
+  });
+  it('accepts and persists execution fields emitted by the frontend alongside legacy payload', async () => {
+    const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
+    const postInteraction = getRouteHandler(neonInteractionsRouter as unknown as Parameters<typeof getRouteHandler>[0], 'post', '/');
+    createInteractionMock.mockImplementation(async (data) => data);
+    const result = await invokeJsonHandler(postInteraction, {
+      id: 'execution-1', learnerId: 'learner-1', sessionId: 'session-1',
+      eventType: 'execution', problemId: 'problem-1', code: 'SELECT 1',
+      successful: true, policyVersion: 'policy-v1', conceptIds: ['select-basic'],
+      timeSpent: 120, payload: { legacy: 'preserved' },
+    });
+    expect(result.status).toBe(201);
+    expect(updateProblemProgressMock).toHaveBeenCalledWith('learner-1', 'problem-1', {
+      eventId: 'execution-1', solved: true, incrementAttempts: true, lastCode: 'SELECT 1',
+    });
+    expect(createInteractionMock).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'execution-1', payload: expect.objectContaining({
+        legacy: 'preserved', policyVersion: 'policy-v1', conceptIds: ['select-basic'], timeSpent: 120,
+      }),
+    }));
+  });
+
+  it('accepts and persists a frontend hint event in a verified batch', async () => {
+    const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
+    const postBatch = getRouteHandler(neonInteractionsRouter as unknown as Parameters<typeof getRouteHandler>[0], 'post', '/batch');
+    createInteractionMock.mockImplementation(async (data) => data);
+    const result = await invokeJsonHandler(postBatch, { events: [{
+      id: 'hint-1', learnerId: 'learner-1', sessionId: 'session-1',
+      eventType: 'hint_view', problemId: 'problem-1', hintId: 'hint-1',
+      hintText: 'Check the filter', hintLevel: 1, helpRequestIndex: 1,
+      sqlEngageSubtype: 'incomplete query', sqlEngageRowId: 'row-1',
+      policyVersion: 'policy-v1', templateId: 'hint-template', conceptIds: ['where-clause'],
+    }] });
+    expect(result.status).toBe(201);
+    expect(result.json).toEqual(expect.objectContaining({ data: expect.objectContaining({ confirmedIds: ['hint-1'] }) }));
+    expect(createInteractionMock).toHaveBeenCalledWith(expect.objectContaining({
+      payload: expect.objectContaining({ policyVersion: 'policy-v1', helpRequestIndex: 1, conceptIds: ['where-clause'] }),
+    }));
+  });
+
+  it('does not confirm a batch event when its progress write fails, and can retry it', async () => {
+    const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
+    const handler = getRouteHandler(neonInteractionsRouter as unknown as Parameters<typeof getRouteHandler>[0], 'post', '/batch');
+    createInteractionMock.mockImplementation(async (data) => data);
+    updateProblemProgressMock.mockRejectedValueOnce(new Error('progress unavailable'));
+    const body = { events: [{ id: 'exec-retry', learnerId: 'learner-1', eventType: 'execution',
+      problemId: 'problem-1', code: 'SELECT 1', successful: true }] };
+    const failed = await invokeJsonHandler(handler, structuredClone(body));
+    expect(failed.status).toBe(500);
+    expect(failed.json).toMatchObject({ success: false, failedEvents: [{ eventId: 'exec-retry' }] });
+    const retry = await invokeJsonHandler(handler, structuredClone(body));
+    expect(retry.status).toBe(201);
+    expect(retry.json).toMatchObject({ data: { confirmedIds: ['exec-retry'] } });
+    expect(updateProblemProgressMock).toHaveBeenLastCalledWith('learner-1', 'problem-1',
+      expect.objectContaining({ eventId: 'exec-retry', lastCode: 'SELECT 1', solved: true }));
+  });
+
+  it('rejects invalid types for frontend fields', async () => {
+    const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
+    const postInteraction = getRouteHandler(neonInteractionsRouter as unknown as Parameters<typeof getRouteHandler>[0], 'post', '/');
+    const result = await invokeJsonHandler(postInteraction, {
+      learnerId: 'learner-1', eventType: 'execution', problemId: 'problem-1',
+      policyVersion: 4, conceptIds: 'select-basic', timeSpent: '120',
+    });
+    expect(result.status).toBe(400);
+    expect(createInteractionMock).not.toHaveBeenCalled();
+  });
+
   it('fills a missing conditionId from the durable student assignment', async () => {
     const { neonInteractionsRouter } = await import('../../../apps/server/src/routes/neon-interactions');
     const postInteraction = getRouteHandler(

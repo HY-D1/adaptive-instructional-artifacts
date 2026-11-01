@@ -322,8 +322,16 @@ export function RootLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { logout, user: authUser, isLoading: isAuthLoading } = useAuth();
-  const isSignedIn = !isAuthLoading && Boolean(authUser);
   const { addToast } = useToast();
+  useEffect(() => {
+    const handleProfileConflict = () => addToast({
+      type: 'warning',
+      title: 'Profile changed elsewhere',
+      message: 'Your save was not applied. Reload the latest profile, review your changes, and retry.',
+    });
+    window.addEventListener('sql-adapt-profile-conflict', handleProfileConflict);
+    return () => window.removeEventListener('sql-adapt-profile-conflict', handleProfileConflict);
+  }, [addToast]);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isCheckingLogoutSurvey, setIsCheckingLogoutSurvey] = useState(false);
   const [postSurveyReminderOpen, setPostSurveyReminderOpen] = useState(false);
@@ -349,6 +357,10 @@ export function RootLayout() {
     syncedLoading: isSessionLoading
   });
   
+  const isSignedIn = AUTH_BACKEND_CONFIGURED
+    ? !isAuthLoading && Boolean(authUser)
+    : !isRoleLoading && Boolean(syncedProfile);
+
   const [showWelcome, setShowWelcome] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   

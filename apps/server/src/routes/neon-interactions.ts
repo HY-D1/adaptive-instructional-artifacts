@@ -62,7 +62,7 @@ export const interactionEventSchema = z.object({
   code: z.string().max(50000).optional(),
   error: z.string().max(5000).optional(),
   errorSubtypeId: z.string().optional(),
-  executionTimeMs: z.number().optional(),
+  executionTimeMs: z.number().finite().nonnegative().optional(),
   hintText: z.string().max(10000).optional(),
   hintLevel: z.number().optional(),
   hintId: z.string().optional(),
@@ -124,7 +124,7 @@ export const interactionEventSchema = z.object({
   errorCountAtEscalation: z.number().optional(),
   timeToEscalation: z.number().optional(),
   strategyAssigned: z.string().optional(),
-  strategyUpdated: z.boolean().optional(),
+  strategyUpdated: z.union([z.boolean(), z.string()]).optional(),
   rewardValue: z.number().optional(),
   learnerProfileId: z.string().optional(),
   payload: z.record(z.any()).optional(),
@@ -287,13 +287,14 @@ async function persistProblemProgressIfNeeded(
   learnerId: string,
   problemId: string,
   event: NeonInteractionEventInput,
+  eventId?: string,
 ): Promise<void> {
   const progressUpdate = buildProblemProgressUpdate(event);
   if (!progressUpdate) {
     return;
   }
 
-  await db.updateProblemProgress(learnerId, problemId, progressUpdate);
+  await db.updateProblemProgress(learnerId, problemId, { ...progressUpdate, eventId });
 }
 
 export function buildNeonInteractionPayload(event: NeonInteractionEventInput): Record<string, unknown> {
@@ -333,10 +334,13 @@ export function buildNeonInteractionPayload(event: NeonInteractionEventInput): R
   // RESEARCH-4: Always merge canonical study fields from event top-level into payload.
   // This ensures they reach the DB columns regardless of whether event.payload was set.
   return {
+    ...event,
     ...basePayload,
+    conditionId: event.conditionId ?? basePayload.conditionId,
+    executionTimeMs: event.executionTimeMs ?? basePayload.executionTimeMs,
+    metadata: event.metadata ?? basePayload.metadata,
     id: event.id ?? basePayload.id,
     sessionId: event.sessionId ?? basePayload.sessionId,
-    conditionId: event.conditionId ?? basePayload.conditionId,
     hintId: event.hintId ?? basePayload.hintId,
     conceptId: event.conceptId ?? basePayload.conceptId,
     source: event.source ?? basePayload.source,
@@ -484,7 +488,7 @@ router.post('/', requirePreSurveyCompleted, async (req: Request, res: Response) 
       payload,
     });
 
-    await persistProblemProgressIfNeeded(validatedEvent.learnerId, validatedEvent.problemId, validatedEvent);
+    await persistProblemProgressIfNeeded(validatedEvent.learnerId, validatedEvent.problemId, validatedEvent, validatedEvent.id);
     
     // RESEARCH-4: Link textbook retrievals if present (single route parity with batch)
     if (validatedEvent.textbookUnitsRetrieved && Array.isArray(validatedEvent.textbookUnitsRetrieved)) {
@@ -640,12 +644,8 @@ router.post('/batch', requirePreSurveyCompleted, async (req: Request, res: Respo
           payload,
         });
 
-        // Persist problem progress - log but don't fail if this fails
-        try {
-          await persistProblemProgressIfNeeded(scopedTarget.learnerId, event.problemId, event);
-        } catch (progressErr) {
-          console.warn('[neon-interactions] Failed to persist problem progress:', progressErr);
-        }
+        // Do not acknowledge the event until its required progress write succeeds.
+        await persistProblemProgressIfNeeded(scopedTarget.learnerId, event.problemId, event, event.id);
         
         // RESEARCH-5: Link textbook retrievals if present
         if (event.textbookUnitsRetrieved && Array.isArray(event.textbookUnitsRetrieved)) {
@@ -674,9 +674,10 @@ router.post('/batch', requirePreSurveyCompleted, async (req: Request, res: Respo
     // RESEARCH-2: Return confirmed IDs for client-side verification
     // If all events failed, return 500. If partial success, return 207 Multi-Status
     if (results.length === 0 && failedEvents.length > 0) {
-      res.status(400).json({
+      const allRejected = failedEvents.every(event => event.rejected);
+      res.status(allRejected ? 400 : 500).json({
         success: false,
-        error: 'All events were rejected',
+        error: allRejected ? 'All events were rejected' : 'All events failed to process',
         failedEvents,
       });
       return;

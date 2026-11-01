@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
 import { Badge } from '../../ui/badge';
 import { Play, RotateCcw, CheckCircle, XCircle, AlertCircle, Terminal, Loader2, Copy, Check, Trash2, Keyboard, Lightbulb, RefreshCw } from 'lucide-react';
 import { SQLExecutor, QueryResult, resetSQLInitialization } from '../../../lib/sql-executor';
+import { gradeDatabaseState } from '../../../lib/sql-state-grading';
 import { SQLProblem } from '../../../types';
 
 export const DEFAULT_SQL_EDITOR_CODE = '-- Write your SQL query here';
@@ -22,7 +23,7 @@ interface SQLEditorProps {
 type CorrectnessState = {
   match: boolean;
   differences: string[];
-  mode: 'result' | 'exec-only';
+  mode: 'result' | 'exec-only' | 'database-state-v1';
 };
 
 // Parse SQL error to extract line numbers and format message
@@ -139,6 +140,7 @@ function generatePositiveFeedback(query: string): string {
  */
 export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: SQLEditorProps) {
   const [result, setResult] = useState<QueryResult | null>(null);
+  const [stateCorrectness, setStateCorrectness] = useState<CorrectnessState | null>(null);
   const [executor, setExecutor] = useState<SQLExecutor | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -254,6 +256,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
   useEffect(() => {
     const abortController = new AbortController();
     initAttemptRef.current = 0;
+    setStateCorrectness(null);
 
     initExecutor(abortController.signal).catch(() => {
       // Error is handled in initExecutor
@@ -299,11 +302,24 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
 
     setIsExecuting(true);
     try {
+      // Each mutation attempt starts from the exercise seed, so a wrong INSERT
+      // cannot make a subsequent corrected submission fail a uniqueness check.
+      if (problem.gradingMode === 'database-state-v1') {
+        executor.close();
+        await executor.initialize(problem.schema);
+      }
       const queryResult = await executor.executeQuery(code);
+      const stateGrade = queryResult.success && problem.gradingMode === 'database-state-v1'
+        ? await gradeDatabaseState(problem, code)
+        : null;
+      const stateResult: CorrectnessState | null = stateGrade
+        ? { ...stateGrade, mode: 'database-state-v1' }
+        : null;
+      setStateCorrectness(stateResult);
       setResult(queryResult);
       
       // Calculate correctness to pass to parent
-      const correctness = checkCorrectnessForResult(queryResult);
+      const correctness = stateResult ?? checkCorrectnessForResult(queryResult);
       onExecute(code, queryResult, correctness?.match ?? queryResult.success);
     } catch (error) {
       // Query execution error handled
@@ -320,11 +336,13 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
 
   const handleReset = () => {
     setResult(null);
+    setStateCorrectness(null);
     onReset?.();
   };
 
   const handleClearResults = () => {
     setResult(null);
+    setStateCorrectness(null);
   };
 
   const handleCopyCode = async () => {
@@ -354,6 +372,8 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
     // result-check if expectedResult exists with data, otherwise exec-only
     const hasExpectedResult = problem.expectedResult && problem.expectedResult.length > 0;
     const gradingMode = problem.gradingMode ?? (hasExpectedResult ? 'result' : 'exec-only');
+
+    if (gradingMode === 'database-state-v1') return stateCorrectness;
     
     if (gradingMode === 'exec-only') {
       return {
@@ -449,7 +469,8 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
                     <>
                       <CheckCircle className="size-5 text-green-600" />
                       <span className="text-sm font-medium text-green-600">
-                        {correctness.mode === 'exec-only' ? 'Ran successfully' : 'Output matches'}
+                        {correctness.mode === 'exec-only' ? 'Ran successfully' :
+                          correctness.mode === 'database-state-v1' ? 'Database state matches' : 'Output matches'}
                       </span>
                     </>
                   ) : (
@@ -597,7 +618,9 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
                         <CheckCircle className="size-4 text-green-600 shrink-0 mt-0.5" />
                         <div>
                           <p className="text-sm font-medium text-green-800 dark:text-green-300">
-                            {generatePositiveFeedback(code)}
+                            {correctness.mode === 'database-state-v1'
+                              ? 'The database reflects the requested change.'
+                              : generatePositiveFeedback(code)}
                           </p>
                         </div>
                       </div>
@@ -640,11 +663,13 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
                     </div>
                   )}
 
-                  {correctness && correctness.mode === 'result' && !correctness.match && (
+                  {correctness && correctness.mode !== 'exec-only' && !correctness.match && (
                     <div className="mt-3 p-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
                       <p className="text-sm font-medium text-amber-800 dark:text-amber-300 mb-2 flex items-center gap-2">
                         <AlertCircle className="size-4" />
-                        Your query returned different results:
+                        {correctness.mode === 'database-state-v1'
+                          ? 'The database does not reflect the requested change:'
+                          : 'Your query returned different results:'}
                       </p>
                       <ul className="text-sm text-amber-700 dark:text-amber-300 space-y-1">
                         {correctness.differences.slice(0, 3).map((diff, idx) => (
