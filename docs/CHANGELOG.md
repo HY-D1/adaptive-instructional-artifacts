@@ -122,7 +122,11 @@ included (HEAD two ahead, zero behind before this commit); author HY-D1.
 Selected classroom persistence workflow and migration rehearsal PASS on the
 same runtime revision. Overall release remains PARTIAL because replay checksum,
 provider/live-survey/security boundaries above are not fully verified. Reviewed
-changes are prepared for the authorized test-branch push only, without a PR.
+runtime/test changes committed and pushed as `8991e4d` (author HY-D1) to
+`test_branch/system-stable-test`, without a PR. Both isolated deployments above
+contain the runtime represented by that commit; later test-only timing and
+returning-account checks do not change deployed runtime. Final tracked working
+tree is clean; all eight original unrelated untracked files remain.
 Production needs the separate maintenance,
 identity/recovery-point checks, migration comparison and explicit cutover gate.
 
