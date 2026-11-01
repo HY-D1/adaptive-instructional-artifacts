@@ -84,7 +84,7 @@ export default defineConfig({
         webServer: {
           // In CI: use preview server with existing build (build done in workflow)
           // Local: use dev server
-          command: IS_CI
+          command: IS_CI && process.env.PLAYWRIGHT_LOCAL_DEV !== 'true'
             ? `npx vite preview --config apps/web/vite.config.ts --host ${HOST} --port ${PORT} --outDir ../../dist/app`
             : `npm run dev -- --host ${HOST} --port ${PORT}`,
           url: LOCAL_BASE_URL,

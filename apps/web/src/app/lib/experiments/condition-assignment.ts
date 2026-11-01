@@ -115,7 +115,7 @@ export function assignLocalDemoCondition(learnerId: string): SessionConfig {
   if (isBackendConfigured() || (!isDevDemoModeEnabled() && !isTestEnvironment())) {
     throw new Error('Local assignment requires explicit offline demo/test mode');
   }
-  return legacyAssignCondition(learnerId);
+  return legacyAssignCondition(learnerId, { forceCondition: "adaptive" });
 }
 
 function legacyAssignCondition(

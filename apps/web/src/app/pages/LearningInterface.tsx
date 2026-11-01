@@ -751,7 +751,7 @@ export function LearningInterface() {
   }, [learnerId, sessionConfig?.conditionId, sessionConfig?.sessionId]);
 
   useEffect(() => {
-    if (!learnerId || !sharedBanditReady) return;
+    if (!learnerId || !sharedBanditReady || sessionConfig?.learnerId !== learnerId) return;
     
     // Week 6: Respect sessionConfig experimental settings
     const debugProfileOverride = safeGetProfileOverride();

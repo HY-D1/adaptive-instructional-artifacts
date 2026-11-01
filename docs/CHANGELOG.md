@@ -9,6 +9,26 @@
 
 ## [Unreleased] - Harderning/Research-Grade-Tightening
 
+### 2026-11-01 — PR32 follow-up from complete shard evidence
+
+Run41355375830 on a95db1a: unit PASS2039/2skipped, quick smoke PASS.
+Shard1 completed all262 tests (245PASS/17FAIL) in6.6m, no suite timeout. Remaining
+failures exposed developer-test/build-mode mismatch: static/diagnostic/debug
+settings are intentionally DEV-only but CI served a production build. Preserve
+production debug restrictions; opt weekly offline developer checks into the local
+dev server with PLAYWRIGHT_LOCAL_DEV=true. Production build still runs separately;
+deployed tests/default preview selection are unchanged. No specs/assertions removed.
+
+Also defer profile assignment until matching session config exists (avoid logging
+bandit_blocked_for_condition before config is ready), and default explicit offline
+demo/test sessions to adaptive so local strategy settings remain selectable.
+Configured account assignments and control/adaptive rules remain unchanged.
+Focused exact failures PASS6/6 browser checks14.2s using dev server; focused unit
+checks PASS70/70; CI-style build and frontend tsc PASS. Follow-up full CI pending.
+The previous shard2 was still running when follow-up was prepared; do not claim
+its result passed. Changes: four bounded implementation/workflow/config lines
+plus this checkpoint. Automatic production promotion remains disabled.
+
 ### 2026-11-01 — PR32 regression-gate correction
 
 Status: PARTIAL pending the complete GitHub two-shard run. PR32 run41353021329

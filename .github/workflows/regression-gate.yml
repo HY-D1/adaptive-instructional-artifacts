@@ -77,6 +77,7 @@ jobs:
           npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@(integration|flaky)' --shard=${{ matrix.shard }}/${{ matrix.totalShards }} --reporter=list,json
         env:
           CI: true
+          PLAYWRIGHT_LOCAL_DEV: 'true'
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results-shard-${{ matrix.shard }}.json
       
       - name: Create demo directory
