@@ -9,6 +9,78 @@
 
 ## [Unreleased] - Harderning/Research-Grade-Tightening
 
+### 2026-11-01 — Safe-to-merge staging gate
+
+**SAFE TO MERGE INTO STAGED MAIN: PASS. Production cutover: PENDING.**
+Runtime under review remains 8991e4d; branch checkpoint before this entry is
+73d7988. `git fetch origin main test_branch/system-stable-test` confirms main
+f32b4b2 is fully included (four ahead/zero behind). Existing runtime tests and
+50-user results above are reused because runtime inputs are unchanged.
+
+Authorized Vercel changes, read back successfully:
+- Frontend prj_39bY93BbbDoT6A0avxsLNxXtxKra: autoAssignCustomDomains=false.
+- Backend prj_vR3HTHqulLCVqv5EnSMfnStWP4cZ: autoAssignCustomDomains=false.
+- Backend future production builds: MAINTENANCE_MODE=true, production-only.
+  Current serving deployment was not redeployed; no database/auth/provider values
+  changed. The connector returned403 for the env write; authenticated CLI fallback
+  succeeded and decrypted readback verified only this non-secret flag.
+
+Before/after project metadata comparison PASS: Git connections/production branch,
+all current production aliases and deployment IDs unchanged. Production still
+runs f32b4b27057f2ada81da18b80cc64806f886bfbb:
+frontend dpl_BXQeScTqbXqe7n2YXejW8GkSbCwm;
+backend dpl_2mw88NrbRUYXW87sXAucqMfuPtyi.
+Read-only probes confirm frontend200 and unauthenticated backend /api/auth/me401.
+No production accounts, migrations or data writes were performed.
+
+Created isolated maintenance preview dpl_2ux5UfcCCoJoeD1nEpKqVCCevkMm:
+https://adaptive-instructional-artifacts-api-backend-g9qs94953.vercel.app
+It uses the existing rehearsal copy and fresh private operator key, not production
+credentials. Direct-URL probes PASS: /api/auth/me, POST /api/interactions,
+/api/surveys/complete, /ollama/api/tags and POST /ollama/api/generate all503,
+Retry-After60. Valid operator bypass on /api/research without authentication401.
+Existing focused tests cover authorization/CSRF enforcement. Preview build PASS.
+Installed CLI help confirms --skip-domain disables automatic production promotion;
+project settings use Vercel's documented staged deployment workflow. Actual merged
+production artifacts are intentionally deferred until the user's manual merge.
+
+Commands/checks: git fetch and rev-list; scoped vercel project GET/PATCH;
+production-only MAINTENANCE_MODE upsert/readback; isolated vercel deploy
+--target preview; private read-only maintenance/routing probes; git diff --check.
+Private scripts and non-secret metadata are under /tmp/sql-cutover-prepare;
+credentials stay0600 and are not committed. No runtime code changed this step.
+All eight original unrelated untracked files remain untouched.
+
+Next gate after USER manual PR/merge (no PR created here):
+1. Verify merged SHA and staged production artifacts; production frontend must
+   bind to the production backend. Preserve current DB URL and signing secrets.
+2. Prepare maintenance-on/off merged backend builds and an old-source rollback
+   artifact with only the tested maintenance guard added. Verify each before use.
+3. Prepare controlled old-code instructor/control/adaptive verification identities;
+   never reset real passwords. Production account creation is deferred until the
+   explicitly started cutover preparation, and must precede migration.
+4. On explicit maintenance-start instruction only: promote maintenance backend,
+   identify/pause all other writers/direct endpoints, drain writes and prove quiet.
+   If any writer cannot be paused, stop before migration.
+5. Create fresh recovery branch from verified production DB, capture consistent
+   original-row/column fingerprints, apply exactly the four manifest migrations
+   in one transaction (strip nested wrappers), lock5s/statement60s, compare before
+   functional writes. Require zero missing/changed original records.
+6. Operator smoke tests cover old/new students, surveys, conditions, hints, notes,
+   retry/deduplication, refresh, instructor scope and cross-user denial. Preserve
+   survey requirements; do not fabricate external survey responses. Then release
+   matching artifacts and verify aliases. Old browser tabs must refresh for the
+   explicit full-profile revision contract. Reuse rehearsal load; no prod load.
+
+Failure/rollback: keep maintenance active, roll back failed migration transaction,
+restore prepared maintenance-capable old application when required. Retain
+additive structures and committed activity; never overwrite prod with rehearsal.
+Do not blindly re-enable automatic promotion or promote the current old deployment
+as a way to bypass maintenance. Release hold remains until deliberately restored.
+Fresh recovery point and production data comparison are NOT yet done. Existing
+LLM/role concerns and replay SKIPPED remain documented; no blanket security or
+production-cutover PASS claim is made. No new topics. User handles PR/merge.
+
 ### In progress - 2026-11-01 (final exposure and compatibility audit)
 
 **Status: PARTIAL; production cutover is not authorized by this checkpoint.**
