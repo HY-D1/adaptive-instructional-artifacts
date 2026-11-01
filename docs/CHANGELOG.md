@@ -9,6 +9,25 @@
 
 ## [Unreleased] - Harderning/Research-Grade-Tightening
 
+### 2026-11-01 — User-requested minimum PR browser gate
+
+User explicitly requested minimum tests and test-only corrections for remaining
+checks. No further frontend/backend/database runtime changes in this step.
+PR/push browser gate now selects9 existing assertions: practice startup, hint-event
+persistence, editor draft recovery across textbook navigation, mobile welcome,
+cross-tab profile identity, student/instructor textbook access, anonymous practice
+rejection, and student research rejection. Exact local CI/dev command PASS9/9 in
+21.9s, with retries disabled. Both shard job names and required consolidation stay.
+Full unit suite/backend build/production frontend build/type smoke remain required.
+Full weekly selection remains available via regression-gate workflow_dispatch with
+suite=weekly. This is an explicit reduction in PR browser coverage, not a claim
+that all previously unrun/failing weekly cases are fixed. No test was deleted or
+assertion weakened. Existing unverified/full-suite results remain historical.
+Run41356479083 on3da23b4 still had both browser jobs in progress at this checkpoint;
+unit and quick smoke passed. Latest workflow-only commit will receive its own CI
+result. No PR merge, production writes, deployment or release-control changes.
+Only regression-gate.yml and this checkpoint changed; git diff --check PASS.
+
 ### 2026-11-01 — PR32 offline header compatibility
 
 Previous run41355375830 shard2 finished with8 failures/45passed and the600s

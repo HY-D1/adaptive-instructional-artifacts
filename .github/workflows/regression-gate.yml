@@ -1,6 +1,13 @@
 name: regression-gate
 
 on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Browser coverage (PRs always use core)
+        type: choice
+        options: [core, weekly]
+        default: weekly
   pull_request:
     types: [opened, synchronize, reopened]
   push:
@@ -70,13 +77,27 @@ jobs:
           NODE_ENV: production
           VITE_TEST_MODE: 'true'
       
-      - name: Run @weekly E2E tests
+      - name: Run core browser regressions (or manual weekly suite)
         id: test-run
         run: |
           echo "Running tests for shard ${{ matrix.shard }} of ${{ matrix.totalShards }}"
-          npx playwright test -c playwright.config.ts --grep '@weekly' --grep-invert '@(integration|flaky)' --shard=${{ matrix.shard }}/${{ matrix.totalShards }} --reporter=list,json
+          if [ "$BROWSER_SUITE" = "weekly" ]; then
+            npx playwright test -c playwright.config.ts --project=chromium --grep '@weekly' --grep-invert '@(integration|flaky)' --shard=${{ matrix.shard }}/${{ matrix.totalShards }} --reporter=list,json
+          else
+            npx playwright test -c playwright.config.ts --project=chromium \
+              tests/e2e/features/2026-03-24-indicators.spec.ts \
+              tests/e2e/regression/2026-03-24-hint-ladder.spec.ts \
+              tests/e2e/regression/2026-03-24-welcome-modal.spec.ts \
+              tests/e2e/regression/2026-03-24-smoke.spec.ts \
+              tests/e2e/regression/phase1-demo-access.spec.ts \
+              tests/e2e/regression/learning-journeys-simple.spec.ts \
+              tests/e2e/regression/role-system.spec.ts \
+              --grep 'toast component renders correctly|hint level persistence: events are stored|mobile layout keeps footer|smoke: practice editor draft persists|Instructor can access /textbook directly|Student accessing /textbook works directly|cross-tab profile sync|unauthenticated user accessing /practice|Student accessing /research redirects' \
+              --shard=${{ matrix.shard }}/${{ matrix.totalShards }} --reporter=list,json
+          fi
         env:
           CI: true
+          BROWSER_SUITE: ${{ inputs.suite || 'core' }}
           PLAYWRIGHT_LOCAL_DEV: 'true'
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results-shard-${{ matrix.shard }}.json
       
