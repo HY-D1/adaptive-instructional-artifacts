@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const getDbMock = vi.fn();
 const getAuthAccountByEmailMock = vi.fn();
 const createAuthAccountMock = vi.fn();
+const createStudentAccountMock = vi.fn();
+const consumeSignupLimitMock = vi.fn().mockResolvedValue(true);
 const createAuthEventMock = vi.fn();
 const saveLearnerProfileMock = vi.fn();
 const signTokenMock = vi.fn(() => 'signed-token');
@@ -27,7 +29,10 @@ vi.mock('../../../apps/server/src/db/neon.js', () => ({
   saveLearnerProfile: saveLearnerProfileMock,
 }));
 
+vi.mock('../../../apps/server/src/db/signup-rate-limit.js', () => ({ consumeSignupLimit: consumeSignupLimitMock }));
+
 vi.mock('../../../apps/server/src/db/auth.js', () => ({
+  createStudentAccount: createStudentAccountMock,
   createAuthAccount: createAuthAccountMock,
   getAuthAccountByEmail: getAuthAccountByEmailMock,
   getAuthAccountById: vi.fn(),
@@ -116,6 +121,8 @@ afterEach(() => {
   getDbMock.mockReset().mockReturnValue({});
   getAuthAccountByEmailMock.mockReset();
   createAuthAccountMock.mockReset();
+  createStudentAccountMock.mockReset();
+  consumeSignupLimitMock.mockReset().mockResolvedValue(true);
   createAuthEventMock.mockReset();
   saveLearnerProfileMock.mockReset();
   signTokenMock.mockClear();
@@ -130,6 +137,60 @@ afterEach(() => {
 });
 
 describe('auth login telemetry contract', () => {
+  it('allows a validated shared classroom while retaining class, email, invalid and global caps', async () => {
+    const { authRouter } = await import('../../../apps/server/src/routes/auth');
+    const signup = getRouteHandler(authRouter, 'post', '/signup');
+    const counts = new Map<string, number>();
+    consumeSignupLimitMock.mockImplementation(async (_db, scope, parts, limit) => {
+      const key = JSON.stringify([scope, ...parts]);
+      const count = (counts.get(key) ?? 0) + 1;
+      counts.set(key, count);
+      return count <= limit;
+    });
+    getSectionBySignupCodeMock.mockImplementation(async (code) => code === 'VALID' ? { id: 'class-1' } : null);
+    getAuthAccountByEmailMock.mockResolvedValue({ id: 'already-exists' });
+    const body = { name: 'Student', password: 'long-password', role: 'student', classCode: 'VALID' };
+    for (let i = 0; i < 60; i++) {
+      expect((await invokeJsonHandler(signup, { ...body, email: `student${i}@example.com` })).status).toBe(409);
+    }
+    expect((await invokeJsonHandler(signup, { ...body, email: 'student60@example.com' })).status).toBe(429);
+    counts.clear();
+    for (let i = 0; i < 5; i++) {
+      expect((await invokeJsonHandler(signup, { ...body, email: 'same@example.com' })).status).toBe(409);
+    }
+    expect((await invokeJsonHandler(signup, { ...body, email: 'same@example.com' })).status).toBe(429);
+    counts.clear();
+    for (let i = 0; i < 5; i++) {
+      expect((await invokeJsonHandler(signup, { ...body, classCode: 'INVALID', email: `invalid${i}@example.com` })).status).toBe(403);
+    }
+    expect((await invokeJsonHandler(signup, { ...body, classCode: 'INVALID', email: 'invalid6@example.com' })).status).toBe(429);
+    counts.clear();
+    for (let i = 0; i < 120; i++) {
+      await invokeJsonHandler(signup, { ...body, classCode: 'INVALID', email: `invalid${i}@example.com` });
+    }
+    expect((await invokeJsonHandler(signup, { ...body, email: 'fresh@example.com' })).status).toBe(429);
+  });
+
+  it('fails closed when the shared limiter is unavailable', async () => {
+    const { authRouter } = await import('../../../apps/server/src/routes/auth');
+    const signup = getRouteHandler(authRouter, 'post', '/signup');
+    consumeSignupLimitMock.mockRejectedValue(new Error('database unavailable'));
+    const result = await invokeJsonHandler(signup, { name: 'Student', email: 's@example.com', password: 'long-password', role: 'student', classCode: 'VALID' });
+    expect(result.status).toBe(503);
+    expect(createStudentAccountMock).not.toHaveBeenCalled();
+  });
+
+  it('returns conflict for a concurrent duplicate email', async () => {
+    const { authRouter } = await import('../../../apps/server/src/routes/auth');
+    const signup = getRouteHandler(authRouter, 'post', '/signup');
+    getSectionBySignupCodeMock.mockResolvedValue({ id: 'class-1' });
+    getAuthAccountByEmailMock.mockResolvedValue(null);
+    createStudentAccountMock.mockRejectedValue({ code: '23505', constraint: 'auth_accounts_email_key' });
+    const result = await invokeJsonHandler(signup, { name: 'Student', email: 's@example.com', password: 'long-password', role: 'student', classCode: 'VALID' });
+    expect(result.status).toBe(409);
+    expect(createAuthEventMock).toHaveBeenCalledWith(expect.objectContaining({ failureReason: 'duplicate_email' }));
+  });
+
   it('creates a learner profile and records a success auth event for student signup', async () => {
     const { authRouter } = await import('../../../apps/server/src/routes/auth');
     const signupHandler = getRouteHandler(
@@ -141,7 +202,7 @@ describe('auth login telemetry contract', () => {
     getDbMock.mockReturnValue({});
     getSectionBySignupCodeMock.mockResolvedValue({ id: 'section-1', name: 'Section 1' });
     getAuthAccountByEmailMock.mockResolvedValue(null);
-    createAuthAccountMock.mockResolvedValue({
+    createStudentAccountMock.mockResolvedValue({
       id: 'account-1',
       email: 'student@example.com',
       role: 'student',
@@ -180,24 +241,10 @@ describe('auth login telemetry contract', () => {
 
     expect(result.status).toBe(201);
     expect((result.json as { success?: boolean; user?: { learnerId?: string } }).success).toBe(true);
-    expect(saveLearnerProfileMock).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        name: 'Student One',
-        conceptsCovered: [],
-        conceptCoverageEvidence: {},
-        errorHistory: {},
-        interactionCount: 0,
-        currentStrategy: 'adaptive-medium',
-        preferences: expect.objectContaining({
-          escalationThreshold: 3,
-          aggregationDelay: 300000,
-          autoTextbookEnabled: true,
-          notificationsEnabled: true,
-          theme: 'system',
-        }),
-      }),
-    );
+    expect(createStudentAccountMock).toHaveBeenCalledWith({}, expect.objectContaining({
+      name: 'Student One', email: 'student@example.com', sectionId: 'section-1',
+      passwordHash: expect.stringMatching(/^\$2[aby]\$12\$/),
+    }));
     expect(createAuthEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
         outcome: 'success',

@@ -111,6 +111,7 @@ describe('learner-profile-client', () => {
       eventType: 'execution',
       problemId: 'problem-9',
       successful: true,
+      code: 'SELECT 1',
       metadata: {
         foo: 'bar',
       },
@@ -120,8 +121,10 @@ describe('learner-profile-client', () => {
     const body = JSON.parse(String(request?.body));
     expect(body.event).toMatchObject({
       eventType: 'execution',
+      eventId: 'execution-1',
       problemId: 'problem-9',
       successful: true,
+      code: 'SELECT 1',
       metadata: { foo: 'bar' },
     });
   });

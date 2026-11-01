@@ -304,6 +304,13 @@ describe('safe-storage', () => {
   // evictRecoverableCaches
   // ============================================================================
   describe('evictRecoverableCaches', () => {
+    it('preserves unconfirmed and dead-letter data during cache eviction', () => {
+      const keys = ['sql-adapt-offline-queue', 'sql-adapt-pending-interactions', 'sql-adapt-dead-letter'];
+      for (const key of keys) localStorage.setItem(key, 'pending');
+      evictRecoverableCaches(1_000_000);
+      for (const key of keys) expect(localStorage.getItem(key)).toBe('pending');
+    });
+
     it('evicts recoverable cache keys', () => {
       // Set up cache entries
       localStorage.setItem('sql-learning-llm-cache', JSON.stringify({ cache: 'data1' }));

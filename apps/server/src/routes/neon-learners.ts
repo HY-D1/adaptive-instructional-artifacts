@@ -9,6 +9,11 @@ import { getInstructorScopedLearnerIds } from '../db/sections.js';
 
 const router = Router();
 
+function validOptionalEventId(value: unknown): boolean {
+  return value === undefined ||
+    (typeof value === 'string' && value.trim().length > 0 && value.length <= 256);
+}
+
 // GET /api/learners/profiles - Get all learner profiles scoped to instructor sections
 router.get('/profiles', requireInstructor, async (req: Request, res: Response) => {
   try {
@@ -259,13 +264,19 @@ router.get('/:id/progress/:problemId', async (req: Request, res: Response) => {
 // POST /api/learners/:id/progress/:problemId - Update problem progress
 router.post('/:id/progress/:problemId', async (req: Request, res: Response) => {
   try {
-    const { solved, incrementAttempts, incrementHints, lastCode } = req.body;
+    const { solved, incrementAttempts, incrementHints, lastCode, eventId } = req.body;
+
+    if (!validOptionalEventId(eventId)) {
+      res.status(400).json({ success: false, error: 'eventId must be a nonempty string of at most 256 characters' });
+      return;
+    }
 
     await db.updateProblemProgress(req.params.id, req.params.problemId, {
       solved,
       incrementAttempts,
       incrementHints,
       lastCode,
+      eventId,
     });
 
     const progress = await db.getProblemProgress(req.params.id, req.params.problemId);
@@ -347,6 +358,11 @@ router.post('/:id/profile/events', async (req: Request, res: Response) => {
       return;
     }
 
+    if (!validOptionalEventId(event.eventId)) {
+      res.status(400).json({ success: false, error: 'eventId must be a nonempty string of at most 256 characters' });
+      return;
+    }
+
     const profile = await db.updateLearnerProfileFromEvent(req.params.id, event);
 
     if (!profile) {
@@ -371,6 +387,11 @@ router.post('/:id/profile/events/batch', async (req: Request, res: Response) => 
         success: false,
         error: 'Missing required field: events',
       });
+      return;
+    }
+
+    if (events.some(event => event && !validOptionalEventId(event.eventId))) {
+      res.status(400).json({ success: false, error: 'eventId must be a nonempty string of at most 256 characters' });
       return;
     }
 

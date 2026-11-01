@@ -11,7 +11,8 @@
 
 // RESEARCH CONTRACT VERSION - Bump when deployment semantics change
 // v2.2.0: Exact backend confirmation, durable pagehide/session_end barriers, bounded hint cache, production batch validation
-export const RESEARCH_CONTRACT_VERSION = 'v2.2.0';
+// v2.4.0: Event-ID-aware progress persistence; legacy requests remain supported.
+export const RESEARCH_CONTRACT_VERSION = 'v2.4.0';
 
 /**
  * Research Runtime Mode

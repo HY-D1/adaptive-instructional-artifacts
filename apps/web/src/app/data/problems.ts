@@ -349,7 +349,8 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['subqueries', 'where-clause'],
     topic: 'advanced',
     topicDifficultyLevel: 1,
-    schema: usersOrdersPracticeSchema,
+    schema: `${usersOrdersPracticeSchema}
+INSERT INTO orders VALUES (107, 3, 'Pen', 9.99);`,
     expectedQuery: 'SELECT name FROM users WHERE id IN (SELECT user_id FROM orders WHERE amount > 200);',
     expectedResult: [
       { name: 'Alice' },
@@ -465,6 +466,8 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     topicDifficultyLevel: 3,
     schema: usersPracticeSchema,
     expectedQuery: "INSERT INTO users VALUES (6, 'Frank', 'frank@email.com', 40, 'Austin');",
+    gradingMode: 'database-state-v1',
+    gradingStateQuery: 'SELECT * FROM users;',
     expectedResult: []
   },
   {
@@ -477,6 +480,8 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     topicDifficultyLevel: 3,
     schema: usersPracticeSchema,
     expectedQuery: "UPDATE users SET age = 26 WHERE name = 'Alice';",
+    gradingMode: 'database-state-v1',
+    gradingStateQuery: 'SELECT * FROM users;',
     expectedResult: []
   },
   {
@@ -489,6 +494,8 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     topicDifficultyLevel: 3,
     schema: usersPracticeSchema,
     expectedQuery: "DELETE FROM users WHERE city = 'Portland';",
+    gradingMode: 'database-state-v1',
+    gradingStateQuery: 'SELECT * FROM users;',
     expectedResult: []
   },
   {
@@ -518,7 +525,8 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['subqueries', 'exists'],
     topic: 'advanced',
     topicDifficultyLevel: 2,
-    schema: employeesDepartmentsSchema,
+    schema: `${employeesDepartmentsSchema}
+INSERT INTO departments VALUES (5, 'Finance');`,
     expectedQuery: 'SELECT dept_name FROM departments d WHERE EXISTS (SELECT 1 FROM employees e WHERE e.dept_id = d.dept_id);',
     expectedResult: [
       { dept_name: 'Engineering' },
@@ -550,7 +558,8 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     concepts: ['window-functions', 'subqueries'],
     topic: 'advanced',
     topicDifficultyLevel: 3,
-    schema: employeesDepartmentsSchema,
+    schema: `${employeesDepartmentsSchema}
+INSERT INTO employees VALUES (7, 'Grace', 60000, 1, 1, '2024-01-01');`,
     expectedQuery: 'SELECT emp_name, dept_id, salary FROM (SELECT emp_name, dept_id, salary, ROW_NUMBER() OVER (PARTITION BY dept_id ORDER BY salary DESC) as rn FROM employees) WHERE rn <= 2;',
     expectedResult: [
       { emp_name: 'Alice', dept_id: 1, salary: 90000 },

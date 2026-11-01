@@ -72,6 +72,7 @@ import { useLocation, Link } from 'react-router';
 import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync } from '../lib/storage';
 import { useAuth } from '../lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
+import { getProblemProgress } from '../lib/api/storage-client';
 import { clearUiStateForActor, getUiState, setUiState } from '../lib/ui-state';
 import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
@@ -292,6 +293,27 @@ export function resolvePracticeDraftState(args: {
   return { problem: fallbackProblem, draft: null };
 }
 
+function isMeaningfulPracticeDraft(draft: string | null | undefined): draft is string {
+  return typeof draft === 'string' && draft.trim().length > 0 &&
+    draft.trim() !== DEFAULT_SQL_EDITOR_CODE.trim();
+}
+
+export async function restoreDraftFromProgress(args: {
+  learnerId: string;
+  problemId: string;
+  draft: string | null;
+  fetchProgress: (learnerId: string, problemId: string) => Promise<{ lastCode: string | null } | null>;
+}): Promise<string | null> {
+  if (isMeaningfulPracticeDraft(args.draft)) return args.draft;
+  try {
+    const progress = await args.fetchProgress(args.learnerId, args.problemId);
+    return isMeaningfulPracticeDraft(progress?.lastCode) ? progress.lastCode : args.draft;
+  } catch {
+    // Offline or unavailable progress must not prevent the editor opening.
+    return args.draft;
+  }
+}
+
 function DependencyWarningToast({ onClose }: DependencyWarningToastProps) {
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -400,6 +422,8 @@ export function LearningInterface() {
   const [activeConceptId, setActiveConceptId] = useState<string | null>(null);
   const [activeConceptTitle, setActiveConceptTitle] = useState<string | null>(null);
   const [sqlDraft, setSqlDraft] = useState(DEFAULT_SQL_EDITOR_CODE);
+  const draftEditRevisionRef = useRef(0);
+  const restoringDraftRef = useRef(false);
   const [startTime, setStartTime] = useState(Date.now());
   const [elapsedTime, setElapsedTime] = useState(0);
   const [isTimerPaused, setIsTimerPaused] = useState(false);
@@ -1107,10 +1131,9 @@ export function LearningInterface() {
         cancelled = true;
       };
     }
-    const isMeaningfulDraft = (draft: string | null | undefined): draft is string =>
-      typeof draft === 'string' &&
-      draft.trim().length > 0 &&
-      draft.trim() !== DEFAULT_SQL_EDITOR_CODE.trim();
+    const isMeaningfulDraft = isMeaningfulPracticeDraft;
+    const initialDraftRevision = draftEditRevisionRef.current;
+    restoringDraftRef.current = true;
     const draftLookup: PracticeDraftLookup = {
       getPracticeDraft: (candidateSessionId, problemId) =>
         storage.getPracticeDraft(learnerId, candidateSessionId, problemId),
@@ -1228,6 +1251,13 @@ export function LearningInterface() {
             resolvedProblem = localFallbackState.problem;
             resolvedDraft = localFallbackState.draft;
           }
+
+          resolvedDraft = await restoreDraftFromProgress({
+            learnerId,
+            problemId: resolvedProblem.id,
+            draft: resolvedDraft,
+            fetchProgress: getProblemProgress,
+          });
         }
       } else {
         const localState = resolvePracticeDraftState({
@@ -1243,14 +1273,22 @@ export function LearningInterface() {
 
       if (cancelled) return;
 
+      const draftUnchanged = draftEditRevisionRef.current === initialDraftRevision;
+      restoringDraftRef.current = false;
+
       if (resolvedSessionId && resolvedSessionId !== 'session-unknown') {
         storage.setActiveSessionId(resolvedSessionId);
       }
       setSessionId(resolvedSessionId);
-      if (currentProblem.id !== resolvedProblem.id) {
+      if (draftUnchanged && currentProblem.id !== resolvedProblem.id) {
         setCurrentProblem(resolvedProblem);
       }
-      setSqlDraft(resolvedDraft ?? DEFAULT_SQL_EDITOR_CODE);
+      if (draftUnchanged) {
+        setSqlDraft(resolvedDraft ?? DEFAULT_SQL_EDITOR_CODE);
+        if (isMeaningfulDraft(resolvedDraft)) {
+          storage.savePracticeDraft(learnerId, resolvedSessionId, resolvedProblem.id, resolvedDraft);
+        }
+      }
       setInteractions(
         storage
           .getInteractionsByLearner(learnerId)
@@ -1270,6 +1308,7 @@ export function LearningInterface() {
 
     return () => {
       cancelled = true;
+      restoringDraftRef.current = false;
     };
   }, [learnerId, isHydrating, isRoleLoading]);
 
@@ -1426,8 +1465,11 @@ export function LearningInterface() {
   // Immediate draft persistence for UX, debounced telemetry for research
   // Stabilized with useCallback to prevent unnecessary re-renders and debounce resets
   const handleEditorCodeChange = useCallback((code: string) => {
+    if (!restoringDraftRef.current || code !== DEFAULT_SQL_EDITOR_CODE) {
+      draftEditRevisionRef.current += 1;
+    }
     setSqlDraft(code);
-    if (sessionId) {
+    if (sessionId && !(restoringDraftRef.current && code === DEFAULT_SQL_EDITOR_CODE)) {
       storage.savePracticeDraft(learnerId, sessionId, currentProblem.id, code);
     }
     // Debounced telemetry - not immediate
@@ -1440,6 +1482,7 @@ export function LearningInterface() {
   };
 
   const handleEditorReset = () => {
+    draftEditRevisionRef.current += 1;
     setSqlDraft(DEFAULT_SQL_EDITOR_CODE);
     if (sessionId) {
       storage.clearPracticeDraft(learnerId, sessionId, currentProblem.id);
@@ -1460,6 +1503,7 @@ export function LearningInterface() {
       // Problem not found - silently return
       return;
     }
+    draftEditRevisionRef.current += 1;
     setCurrentProblem(problem);
 
     // Persist last active problem so returning students resume here

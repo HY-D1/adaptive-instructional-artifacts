@@ -342,11 +342,13 @@ export async function updateProfileFromEvent(
     method: 'POST',
     body: JSON.stringify({
       event: {
+        eventId: event.id,
         learnerId: event.learnerId,
         sessionId: event.sessionId,
         timestamp: new Date(event.timestamp).toISOString(),
         eventType: event.eventType,
         problemId: event.problemId,
+        code: event.code,
         successful: event.successful,
         errorSubtypeId: event.errorSubtypeId,
         conceptIds: event.conceptIds,
@@ -393,11 +395,13 @@ export async function batchUpdateProfile(
     method: 'POST',
     body: JSON.stringify({
       events: events.map(event => ({
+        eventId: event.id,
         learnerId: event.learnerId,
         sessionId: event.sessionId,
         timestamp: new Date(event.timestamp).toISOString(),
         eventType: event.eventType,
         problemId: event.problemId,
+        code: event.code,
         successful: event.successful,
         errorSubtypeId: event.errorSubtypeId,
         conceptIds: event.conceptIds,

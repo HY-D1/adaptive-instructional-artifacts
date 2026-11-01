@@ -32,12 +32,69 @@ const interactionEventSchema = z.object({
   hintText: z.string().max(10000).optional(),
   hintLevel: z.number().optional(),
   hintId: z.string().optional(),
+  problemSetId: z.string().optional(),
+  problemNumber: z.number().optional(),
+  conditionId: z.string().max(1000).optional(),
+  executionTimeMs: z.number().finite().nonnegative().optional(),
+  metadata: z.record(z.unknown()).optional(),
+  errorSubtypeId: z.string().optional(),
+  explanationId: z.string().optional(),
+  helpRequestIndex: z.number().optional(),
+  sqlEngageSubtype: z.string().optional(),
+  sqlEngageRowId: z.string().optional(),
+  policyVersion: z.string().optional(),
+  timeSpent: z.number().optional(),
+  ruleFired: z.string().optional(),
+  templateId: z.string().optional(),
+  inputHash: z.string().optional(),
+  model: z.string().optional(),
+  noteId: z.string().optional(),
+  noteTitle: z.string().optional(),
+  noteContent: z.string().optional(),
+  retrievedSourceIds: z.array(z.string()).optional(),
+  retrievedChunks: z.array(z.object({
+    docId: z.string(),
+    page: z.number().optional(),
+    chunkId: z.string().optional(),
+    score: z.number().optional(),
+    snippet: z.string().optional(),
+  }).strict()).optional(),
+  triggerInteractionIds: z.array(z.string()).optional(),
+  evidenceInteractionIds: z.array(z.string()).optional(),
+  sourceInteractionIds: z.array(z.string()).optional(),
+  inputs: z.record(z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+  outputs: z.record(z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.string())])).optional(),
   conceptId: z.string().optional(),
+  conceptIds: z.array(z.string()).optional(),
   source: z.string().optional(),
   totalTime: z.number().optional(),
   problemsAttempted: z.number().optional(),
   problemsSolved: z.number().optional(),
   successful: z.boolean().optional(),
+  requestType: z.string().optional(),
+  currentRung: z.number().optional(),
+  rung: z.number().optional(),
+  grounded: z.boolean().optional(),
+  contentLength: z.number().optional(),
+  fromRung: z.number().optional(),
+  toRung: z.number().optional(),
+  unitId: z.string().optional(),
+  action: z.string().optional(),
+  dedupeKey: z.string().optional(),
+  revisionCount: z.number().optional(),
+  passageCount: z.number().optional(),
+  expanded: z.boolean().optional(),
+  chatMessage: z.string().optional(),
+  chatResponse: z.string().optional(),
+  chatQuickChip: z.string().optional(),
+  savedToNotes: z.boolean().optional(),
+  scheduleId: z.string().optional(),
+  promptId: z.string().optional(),
+  promptType: z.string().optional(),
+  response: z.string().optional(),
+  isCorrect: z.boolean().optional(),
+  scheduledTime: z.number().optional(),
+  shownTime: z.number().optional(),
   // Escalation Profile fields
   profileId: z.string().optional(),
   assignmentStrategy: z.string().optional(),
@@ -47,7 +104,16 @@ const interactionEventSchema = z.object({
   selectedArm: z.string().optional(),
   selectionMethod: z.string().optional(),
   armStatsAtSelection: z.record(z.any()).optional(),
-  reward: z.number().optional(),
+  reward: z.union([z.number(), z.object({
+    total: z.number(),
+    components: z.object({
+      independentSuccess: z.number(),
+      errorReduction: z.number(),
+      delayedRetention: z.number(),
+      dependencyPenalty: z.number(),
+      timeEfficiency: z.number(),
+    }).strict(),
+  }).strict()]).optional(),
   newAlpha: z.number().optional(),
   newBeta: z.number().optional(),
   // HDI fields
@@ -62,7 +128,7 @@ const interactionEventSchema = z.object({
   errorCountAtEscalation: z.number().optional(),
   timeToEscalation: z.number().optional(),
   strategyAssigned: z.string().optional(),
-  strategyUpdated: z.boolean().optional(),
+  strategyUpdated: z.union([z.boolean(), z.string()]).optional(),
   rewardValue: z.number().optional(),
   learnerProfileId: z.string().optional(),
   payload: z.record(z.any()).optional(),
@@ -166,13 +232,14 @@ async function persistProblemProgressIfNeeded(
   learnerId: string,
   problemId: string,
   event: NeonInteractionEventInput,
+  eventId?: string,
 ): Promise<void> {
   const progressUpdate = buildProblemProgressUpdate(event);
   if (!progressUpdate) {
     return;
   }
 
-  await db.updateProblemProgress(learnerId, problemId, progressUpdate);
+  await db.updateProblemProgress(learnerId, problemId, { ...progressUpdate, eventId });
 }
 
 export function buildNeonInteractionPayload(event: NeonInteractionEventInput): Record<string, unknown> {
@@ -212,7 +279,11 @@ export function buildNeonInteractionPayload(event: NeonInteractionEventInput): R
   // RESEARCH-4: Always merge canonical study fields from event top-level into payload.
   // This ensures they reach the DB columns regardless of whether event.payload was set.
   return {
+    ...event,
     ...basePayload,
+    conditionId: event.conditionId ?? basePayload.conditionId,
+    executionTimeMs: event.executionTimeMs ?? basePayload.executionTimeMs,
+    metadata: event.metadata ?? basePayload.metadata,
     id: event.id ?? basePayload.id,
     sessionId: event.sessionId ?? basePayload.sessionId,
     hintId: event.hintId ?? basePayload.hintId,
@@ -345,7 +416,7 @@ router.post('/', async (req: Request, res: Response) => {
       payload,
     });
 
-    await persistProblemProgressIfNeeded(validatedEvent.learnerId, validatedEvent.problemId, validatedEvent);
+    await persistProblemProgressIfNeeded(validatedEvent.learnerId, validatedEvent.problemId, validatedEvent, validatedEvent.id);
     
     // RESEARCH-4: Link textbook retrievals if present (single route parity with batch)
     if (validatedEvent.textbookUnitsRetrieved && Array.isArray(validatedEvent.textbookUnitsRetrieved)) {
@@ -477,12 +548,8 @@ router.post('/batch', async (req: Request, res: Response) => {
           payload,
         });
 
-        // Persist problem progress - log but don't fail if this fails
-        try {
-          await persistProblemProgressIfNeeded(scopedTarget.learnerId, event.problemId, event);
-        } catch (progressErr) {
-          console.warn('[neon-interactions] Failed to persist problem progress:', progressErr);
-        }
+        // Do not acknowledge the event until its required progress write succeeds.
+        await persistProblemProgressIfNeeded(scopedTarget.learnerId, event.problemId, event, event.id);
         
         // RESEARCH-5: Link textbook retrievals if present
         if (event.textbookUnitsRetrieved && Array.isArray(event.textbookUnitsRetrieved)) {

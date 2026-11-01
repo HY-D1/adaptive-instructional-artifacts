@@ -14,6 +14,7 @@ import {
   safeSet,
   safeGet,
   safeRemove,
+  isQuotaError,
   subscribeToStorageTelemetry,
   type SafeSetResult,
 } from './safe-storage';
@@ -50,7 +51,7 @@ const PENDING_CONFIRMED_KEY = 'sql-adapt-pending-confirmed';
 const DEAD_LETTER_KEY = 'sql-adapt-dead-letter';
 
 // RESEARCH-2: Durable write semantics
-// No max queue size - use chunked storage instead of dropping
+// No max queue size - retain pending items and report persistence failures.
 const CHUNK_SIZE = 100;
 // No max retries - retry until backend confirms
 const RETRY_INTERVAL_MS = 5000;
@@ -221,33 +222,17 @@ class DurablePendingStore {
       .filter(item => !this.confirmedIds.has(item.id) && item.status !== 'backend_confirmed')
       .sort((a, b) => a.timestamp - b.timestamp);
     
-    // Store in chunks if needed
-    const dataToStore = pending.length > CHUNK_SIZE ? pending.slice(-CHUNK_SIZE) : pending;
-    
-    // Critical session data - use memory fallback if quota exceeded
-    const result = safeSet(PENDING_INTERACTIONS_KEY, dataToStore, {
-      priority: 'critical',
-      allowEviction: true,
-    });
-    
-    if (!result.success && result.quotaExceeded) {
-      // Try with just the most recent
-      const recent = Array.from(this.interactions.values())
-        .filter(item => !this.confirmedIds.has(item.id))
-        .sort((a, b) => b.timestamp - a.timestamp)
-        .slice(0, 50);
-      
-      const retryResult = safeSet(PENDING_INTERACTIONS_KEY, recent, {
+    // A failed atomic write leaves the previous durable backlog intact.
+    let result: SafeSetResult;
+    try {
+      result = safeSet(PENDING_INTERACTIONS_KEY, pending, {
         priority: 'critical',
-        allowEviction: true,
+        allowEviction: false,
       });
-      
-      if (!retryResult.success) {
-        console.error('[DurablePendingStore] Failed to save pending interactions', retryResult.error);
-      }
-      return retryResult;
+    } catch (error) {
+      result = { success: false, quotaExceeded: isQuotaError(error), error: String(error) };
     }
-    
+    if (!result.success) console.error('[DurablePendingStore] Failed to save pending interactions', result.error);
     return result;
   }
 
@@ -255,10 +240,10 @@ class DurablePendingStore {
    * Add a new interaction to the pending store
    * RESEARCH-1: Every interaction starts as 'backend_pending'
    */
-  add(event: InteractionEvent): void {
+  add(event: InteractionEvent): SafeSetResult {
     // Skip if already confirmed
     if (this.confirmedIds.has(event.id)) {
-      return;
+      return { success: true };
     }
 
     const pending: PendingInteraction = {
@@ -272,7 +257,7 @@ class DurablePendingStore {
     };
 
     this.interactions.set(event.id, pending);
-    this.savePending();
+    const result = this.savePending();
 
     if (import.meta.env.DEV) {
       console.info('[telemetry_interaction_pending]', {
@@ -281,6 +266,7 @@ class DurablePendingStore {
         sessionId: event.sessionId,
       });
     }
+    return result;
   }
 
   /**
@@ -433,45 +419,17 @@ class OfflineQueueManager {
     );
     
     // Critical session data - use memory fallback if quota exceeded
-    const result = safeSet(OFFLINE_QUEUE_KEY, unconfirmed, {
-      priority: 'critical',
-      allowEviction: true,
-    });
-    
-    if (!result.success && result.quotaExceeded) {
-      // Try to save in chunks
-      return this.saveQueueChunked();
-    }
-    
-    return result;
-  }
-
-  private saveQueueChunked(): SafeSetResult {
-    // Keep only most recent items if storage is limited
-    const recent = this.queue
-      .filter(item => item.status !== 'backend_confirmed')
-      .slice(-CHUNK_SIZE);
-    
-    const result = safeSet(OFFLINE_QUEUE_KEY, recent, {
-      priority: 'critical',
-      allowEviction: true,
-    });
-    
-    if (!result.success) {
-      // Last resort: keep minimal queue
-      const minimal = this.queue.slice(-20);
-      const minimalResult = safeSet(OFFLINE_QUEUE_KEY, minimal, {
+    let result: SafeSetResult;
+    try {
+      result = safeSet(OFFLINE_QUEUE_KEY, unconfirmed, {
         priority: 'critical',
-        allowEviction: true,
+        allowEviction: false,
       });
-      
-      if (!minimalResult.success) {
-        // Memory fallback: queue remains in memory, will be retried on next session
-        console.error('[OfflineQueueManager] Failed to save queue to storage, using memory fallback');
-      }
-      return minimalResult;
+    } catch (error) {
+      result = { success: false, quotaExceeded: isQuotaError(error), error: String(error) };
     }
     
+    if (!result.success) console.error('[OfflineQueueManager] Failed to save queue to storage, using memory fallback');
     return result;
   }
 
@@ -507,7 +465,7 @@ class OfflineQueueManager {
     // Log queue growth for large backlogs
     if (this.queue.length > CHUNK_SIZE) {
       if (import.meta.env.DEV) {
-        console.info('[OfflineQueue] Queue size:', this.queue.length, '- using chunked storage');
+        console.info('[OfflineQueue] Queue size:', this.queue.length);
       }
     }
   }
@@ -621,12 +579,12 @@ class OfflineQueueManager {
       return;
     }
 
+    this.isProcessing = true;
+    try {
     const backendHealthy = await checkBackendHealth();
     if (!backendHealthy) {
       return;
     }
-
-    this.isProcessing = true;
     
     const pending = this.getPending();
     
@@ -704,7 +662,9 @@ class OfflineQueueManager {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
     
-    this.isProcessing = false;
+    } finally {
+      this.isProcessing = false;
+    }
   }
 }
 
@@ -1027,11 +987,12 @@ class DualStorageManager {
     
     // Step 2: Add to durable pending store BEFORE network send
     // This ensures the event is tracked even if the tab closes during send
-    this.pendingStore.add(eventForWrite);
+    const pendingResult = this.pendingStore.add(eventForWrite);
     
     // Step 3: Update problem progress for execution events
     if (this.shouldUseBackend() && eventForWrite.eventType === 'execution' && eventForWrite.problemId) {
       const progressPayload = {
+        eventId: eventForWrite.id,
         solved: eventForWrite.successful === true,
         incrementAttempts: true,
         lastCode: eventForWrite.code,
@@ -1065,12 +1026,17 @@ class DualStorageManager {
         // Event remains in pending store, will be retried
         this.queueInteractionForRetry(eventForWrite);
       });
+    } else if (this.config.useBackend) {
+      // Offline is not backend confirmation: retain the event for retry.
+      this.queueInteractionForRetry(eventForWrite);
     } else {
       // No backend - mark as confirmed locally
       this.pendingStore.markConfirmedInteraction(eventForWrite.id);
     }
     
-    return localResult;
+    return this.config.useBackend && !pendingResult.success
+      ? { success: false, quotaExceeded: pendingResult.quotaExceeded }
+      : localResult;
   }
 
   private trackBackendAck(): void {

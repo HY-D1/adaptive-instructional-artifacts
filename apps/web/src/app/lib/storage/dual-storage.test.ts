@@ -68,6 +68,65 @@ beforeAll(async () => {
   dualStorageModule = await import('./dual-storage');
 });
 
+describe('durable offline backlog', () => {
+  const internals = () => dualStorageModule.dualStorage as unknown as {
+    pendingStore: { clear: () => void; add: (event: InteractionEvent) => unknown };
+    offlineQueue: {
+      queue: unknown[];
+      add: (item: { id: string; type: 'interaction'; data: InteractionEvent }) => void;
+      processQueue: () => Promise<void>;
+    };
+  };
+  const event = (id: string): InteractionEvent => ({
+    id, learnerId: 'backlog-learner', sessionId: 'backlog-session',
+    timestamp: Date.now(), eventType: 'execution', problemId: 'problem-1',
+  });
+
+  it('persists every pending event when the backlog exceeds 100', () => {
+    const store = internals().pendingStore;
+    store.clear();
+    for (let i = 0; i < 101; i++) store.add(event(`backlog-${i}`));
+    const persisted = JSON.parse(localStorage.getItem('sql-adapt-pending-interactions')!);
+    expect(persisted).toHaveLength(101);
+    expect(persisted.map((item: { id: string }) => item.id)).toContain('backlog-0');
+    store.clear();
+  });
+
+  it('does not replace older pending events with a truncated fallback on quota errors', () => {
+    const store = internals().pendingStore;
+    store.clear();
+    for (let i = 0; i < 60; i++) store.add(event(`quota-${i}`));
+    const previous = localStorage.getItem('sql-adapt-pending-interactions');
+    const original = localStorage.setItem.bind(localStorage);
+    const spy = vi.spyOn(localStorage, 'setItem').mockImplementation((key, value) => {
+      if (key === 'sql-adapt-pending-interactions' && JSON.parse(value).length > 50) {
+        throw new DOMException('Full', 'QuotaExceededError');
+      }
+      return original(key, value);
+    });
+    const result = store.add(event('quota-extra'));
+    expect(result).toMatchObject({ success: false, quotaExceeded: true });
+    expect(localStorage.getItem('sql-adapt-pending-interactions')).toBe(previous);
+    spy.mockRestore();
+    store.clear();
+  });
+
+  it('serializes simultaneous processQueue calls while health check is pending', async () => {
+    const queue = internals().offlineQueue;
+    queue.queue = [];
+    const item = event('race-queue-unique');
+    queue.add({ id: item.id, type: 'interaction', data: item });
+    let resolveHealth!: (value: boolean) => void;
+    checkBackendHealthMock.mockImplementation(() => new Promise(resolve => { resolveHealth = resolve; }));
+    const first = queue.processQueue();
+    const second = queue.processQueue();
+    expect(checkBackendHealthMock).toHaveBeenCalledTimes(1);
+    resolveHealth(true);
+    await Promise.all([first, second]);
+    expect(logInteractionsBatchVerifiedMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 afterAll(() => {
   vi.unstubAllEnvs();
   vi.resetModules();
@@ -105,6 +164,21 @@ beforeEach(() => {
 });
 
 describe('dual-storage critical write semantics', () => {
+  it('keeps an interaction pending when the configured backend is offline', async () => {
+    checkBackendHealthMock.mockResolvedValue(false);
+    await dualStorageModule.dualStorage.checkHealth();
+    const event: InteractionEvent = {
+      id: 'offline-interaction-unique', learnerId: 'learner-1',
+      sessionId: 'offline-session-unique', timestamp: Date.now(),
+      eventType: 'execution', problemId: 'problem-1', successful: false,
+    };
+    expect(dualStorageModule.dualStorage.saveInteraction(event).success).toBe(true);
+    expect(dualStorageModule.dualStorage.getPendingInteractionsForSession(event.sessionId!))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: event.id })]));
+    expect(JSON.parse(localStorage.getItem('sql-adapt-offline-queue') || '[]'))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: event.id })]));
+  });
+
   it('forwards helper-created research interactions to the backend with core identifiers', async () => {
     localStorage.setItem('sql-learning-active-session', 'session-research-helper');
     await dualStorageModule.dualStorage.checkHealth();
@@ -1051,6 +1125,7 @@ describe('dual-storage progress persistence sync', () => {
         'problem-1',
         expect.objectContaining({
           solved: true,
+          eventId: 'exec-progress-1',
           incrementAttempts: true,
           lastCode: 'SELECT * FROM users',
         }),

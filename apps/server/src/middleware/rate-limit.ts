@@ -8,7 +8,7 @@
  * use user+session keys to prevent students from throttling each other.
  */
 
-import { rateLimit } from 'express-rate-limit';
+import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import { Request, Response } from 'express';
 
 /**
@@ -122,7 +122,7 @@ export const signupRateLimiter = rateLimit({
     retryAfter: '15 minutes',
   },
   keyGenerator: (req: Request) => {
-    return `signup:${req.ip ?? 'unknown'}`;
+    return `signup:${ipKeyGenerator(req.ip ?? 'unknown')}`;
   },
   handler: (_req: Request, res: Response) => {
     res.status(429).json({

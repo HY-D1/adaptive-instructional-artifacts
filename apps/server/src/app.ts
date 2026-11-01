@@ -49,7 +49,7 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-export const RESEARCH_CONTRACT_VERSION = 'v2.2.0';
+export const RESEARCH_CONTRACT_VERSION = 'v2.4.0';
 
 let schemaInitPromise: Promise<void> | null = null;
 

@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   resolvePracticeDraftState,
+  restoreDraftFromProgress,
   resolvePracticeProblemFromSources,
 } from './LearningInterface';
 import type { SQLProblem } from '../types';
@@ -36,6 +37,31 @@ const problems: SQLProblem[] = [
 const fallbackProblem = problems[0];
 
 describe('LearningInterface restore precedence', () => {
+  it('restores the selected problem lastCode when no meaningful draft exists', async () => {
+    const fetchProgress = vi.fn().mockResolvedValue({ lastCode: 'SELECT * FROM users;' });
+    expect(await restoreDraftFromProgress({
+      learnerId: 'learner-1', problemId: 'problem-1', draft: null, fetchProgress,
+    })).toBe('SELECT * FROM users;');
+    expect(fetchProgress).toHaveBeenCalledWith('learner-1', 'problem-1');
+  });
+
+  it('keeps a local draft and skips progress lookup, while ignoring empty saved code', async () => {
+    const fetchProgress = vi.fn().mockResolvedValue({ lastCode: '' });
+    expect(await restoreDraftFromProgress({
+      learnerId: 'learner-1', problemId: 'problem-1', draft: 'SELECT unsent;', fetchProgress,
+    })).toBe('SELECT unsent;');
+    expect(fetchProgress).not.toHaveBeenCalled();
+    expect(await restoreDraftFromProgress({
+      learnerId: 'learner-1', problemId: 'problem-1', draft: null, fetchProgress,
+    })).toBeNull();
+  });
+
+  it('leaves the editor usable if the progress request fails', async () => {
+    const fetchProgress = vi.fn().mockRejectedValue(new Error('offline'));
+    expect(await restoreDraftFromProgress({
+      learnerId: 'learner-1', problemId: 'problem-1', draft: null, fetchProgress,
+    })).toBeNull();
+  });
   it('prefers backend session problem over stale persisted UI state in account mode', () => {
     const resolved = resolvePracticeProblemFromSources({
       problems,

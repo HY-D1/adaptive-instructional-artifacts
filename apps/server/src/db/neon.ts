@@ -257,6 +257,15 @@ export async function initializeSchema(): Promise<void> {
   await db`CREATE INDEX IF NOT EXISTS idx_problem_progress_user_id ON problem_progress(user_id)`;
   await db`CREATE INDEX IF NOT EXISTS idx_problem_progress_problem_id ON problem_progress(problem_id)`;
 
+  await db`
+    CREATE TABLE IF NOT EXISTS problem_progress_events (
+      event_id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      problem_id TEXT NOT NULL,
+      PRIMARY KEY (user_id, event_id)
+    )
+  `;
+
   // Interaction events (append-only research log)
   await db`
     CREATE TABLE IF NOT EXISTS interaction_events (
@@ -269,6 +278,9 @@ export async function initializeSchema(): Promise<void> {
       problem_id TEXT NOT NULL,
       problem_set_id TEXT,
       problem_number INTEGER,
+      condition_id TEXT,
+      execution_time_ms DOUBLE PRECISION,
+      metadata TEXT,
       code TEXT,
       error TEXT,
       error_subtype_id TEXT,
@@ -376,6 +388,9 @@ export async function initializeSchema(): Promise<void> {
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS total_time INTEGER`;
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS problems_attempted INTEGER`;
   await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS problems_solved INTEGER`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS condition_id TEXT`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS execution_time_ms DOUBLE PRECISION`;
+  await db`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS metadata TEXT`;
 
   // Textbook units (My Textbook)
   await db`
@@ -777,10 +792,51 @@ export async function updateProblemProgress(
     incrementAttempts?: boolean;
     incrementHints?: boolean;
     lastCode?: string;
+    eventId?: string;
   }
 ): Promise<void> {
   const db = getDb();
   const now = new Date().toISOString();
+
+  if (update.eventId) {
+    // The claim and progress upsert are one statement: either both commit or
+    // neither does, even when independent requests deliver the same event.
+    const applied = await db`
+      WITH claimed AS (
+        INSERT INTO problem_progress_events (event_id, user_id, problem_id)
+        VALUES (${update.eventId}, ${userId}, ${problemId})
+        ON CONFLICT (user_id, event_id) DO NOTHING
+        RETURNING event_id
+      )
+      INSERT INTO problem_progress (
+        user_id, problem_id, solved, attempts_count, hints_used, last_code,
+        first_attempted_at, solved_at, updated_at
+      ) SELECT ${userId}, ${problemId}, ${update.solved ?? false},
+        ${update.incrementAttempts ? 1 : 0}, ${update.incrementHints ? 1 : 0},
+        ${update.lastCode ?? null}, ${now}, ${update.solved ? now : null}, ${now}
+      FROM claimed
+      ON CONFLICT (user_id, problem_id) DO UPDATE SET
+        solved = problem_progress.solved OR EXCLUDED.solved,
+        attempts_count = problem_progress.attempts_count + EXCLUDED.attempts_count,
+        hints_used = problem_progress.hints_used + EXCLUDED.hints_used,
+        last_code = COALESCE(EXCLUDED.last_code, problem_progress.last_code),
+        solved_at = CASE WHEN EXCLUDED.solved AND NOT problem_progress.solved
+          THEN EXCLUDED.solved_at ELSE problem_progress.solved_at END,
+        updated_at = EXCLUDED.updated_at
+      RETURNING user_id
+    `;
+    if (applied.length === 0) {
+      // A duplicate ID may only acknowledge the original learner/problem.
+      const existing = await db`
+        SELECT user_id, problem_id FROM problem_progress_events
+        WHERE user_id = ${userId} AND event_id = ${update.eventId}
+      `;
+      if (!existing[0] || existing[0].user_id !== userId || existing[0].problem_id !== problemId) {
+        throw new Error('Progress event ID belongs to a different problem');
+      }
+    }
+    return;
+  }
 
   // Race-condition safe atomic upsert:
   // - attempts_count and hints_used reference the CURRENT database value
@@ -885,7 +941,7 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
   await db`
     INSERT INTO interaction_events (
       id, user_id, section_id, session_id, timestamp, event_type, problem_id,
-      problem_set_id, problem_number, code, error, error_subtype_id,
+      problem_set_id, problem_number, condition_id, execution_time_ms, metadata, code, error, error_subtype_id,
       hint_id, explanation_id, hint_text, hint_level, help_request_index,
       sql_engage_subtype, sql_engage_row_id, policy_version, time_spent,
       successful, rule_fired, template_id, input_hash, model,
@@ -915,6 +971,9 @@ export async function createInteraction(data: CreateInteractionRequest & { id: s
       ${data.problemId},
       ${payload.problemSetId || null},
       ${payload.problemNumber || null},
+      ${payload.conditionId ?? null},
+      ${payload.executionTimeMs ?? null},
+      ${payload.metadata == null ? null : JSON.stringify(payload.metadata)},
       ${payload.code || null},
       ${payload.error || null},
       ${payload.errorSubtypeId || null},
@@ -1436,6 +1495,9 @@ function rowToInteraction(row: any): Interaction {
     sectionId: row.section_id ?? null,
     problemSetId: row.problem_set_id,
     problemNumber: row.problem_number,
+    conditionId: row.condition_id ?? undefined,
+    executionTimeMs: row.execution_time_ms ?? undefined,
+    metadata: parseJson(row.metadata) ?? undefined,
     code: row.code,
     error: row.error,
     errorSubtypeId: row.error_subtype_id,
@@ -1948,12 +2010,14 @@ export async function updateLearnerProfileFromEvent(
       solved: true,
       incrementAttempts: true,
       lastCode: event.code,
+      eventId: event.eventId,
     });
   } else if (event.eventType === 'execution' && event.problemId) {
     // Failed execution - just increment attempts
     await updateProblemProgress(learnerId, event.problemId, {
       incrementAttempts: true,
       lastCode: event.code,
+      eventId: event.eventId,
     });
   }
 

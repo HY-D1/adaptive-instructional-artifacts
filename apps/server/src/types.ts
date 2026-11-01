@@ -233,6 +233,7 @@ export interface Interaction {
   problemId: string;
   problemSetId?: string;
   problemNumber?: number;
+  conditionId?: string;
   
   // Code/Error fields
   code?: string;
@@ -361,6 +362,7 @@ export interface Interaction {
  * Required fields: learnerId, timestamp, eventType, problemId
  */
 export interface CreateInteractionRequest {
+  eventId?: string;
   learnerId: string;
   sectionId?: string | null;
   sessionId?: string;
@@ -369,6 +371,7 @@ export interface CreateInteractionRequest {
   problemId: string;
   problemSetId?: string;
   problemNumber?: number;
+  conditionId?: string;
   
   // Code/Error fields
   code?: string;

@@ -131,6 +131,18 @@ describe('storage-client telemetry contract', () => {
     });
   });
 
+  it('restores the condition ID and event metadata when reading backend events', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: [{
+      id: 'event-fields', learnerId: 'learner-1', sessionId: 'session-1',
+      timestamp: '2026-04-05T00:00:00.000Z', eventType: 'execution',
+      problemId: 'problem-1', conditionId: 'condition-1', executionTimeMs: 0,
+      metadata: { source: 'test' },
+    }] }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    const { getInteractions } = await import('./storage-client');
+    const result = await getInteractions('learner-1');
+    expect(result.events[0]).toMatchObject({ conditionId: 'condition-1', executionTimeMs: 0, metadata: { source: 'test' } });
+  });
+
   it('keeps hintId when reading hint_view interactions from backend', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(

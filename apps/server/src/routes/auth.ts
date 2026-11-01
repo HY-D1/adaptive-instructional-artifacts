@@ -9,13 +9,15 @@
 
 import { Router, type Request, type Response } from 'express';
 import bcrypt from 'bcryptjs';
+import { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
 
 import { isUsingNeon, createUser } from '../db/index.js';
-import { createAuthEvent, getDb, saveLearnerProfile } from '../db/neon.js';
+import { createAuthEvent, getDb } from '../db/neon.js';
 import {
   createAuthAccount,
+  createStudentAccount,
   getAuthAccountByEmail,
   getAuthAccountById,
   type AuthAccountPublic,
@@ -43,7 +45,8 @@ import {
   getSectionBySignupCode,
   getSectionForStudent,
 } from '../db/sections.js';
-import { loginRateLimiter, signupRateLimiter } from '../middleware/rate-limit.js';
+import { loginRateLimiter } from '../middleware/rate-limit.js';
+import { consumeSignupLimit } from '../db/signup-rate-limit.js';
 
 const router = Router();
 
@@ -148,7 +151,7 @@ async function logAuthEvent(params: {
 // POST /api/auth/signup
 // ============================================================================
 
-router.post('/signup', signupRateLimiter, async (req: Request, res: Response) => {
+router.post('/signup', async (req: Request, res: Response) => {
   // Auth routes require Neon (SQLite has no real auth)
   if (!isUsingNeon()) {
     res.status(503).json({
@@ -163,6 +166,37 @@ router.post('/signup', signupRateLimiter, async (req: Request, res: Response) =>
       ? req.body.email.trim().toLowerCase()
       : undefined;
   const parsed = SignupSchema.safeParse(req.body);
+  // All counters live in the shared database; an unavailable store fails closed.
+  let validatedSection: Awaited<ReturnType<typeof getSectionBySignupCode>> = null;
+  try {
+    const db = getDb();
+    const ip = ipKeyGenerator(req.ip ?? 'unknown');
+    const deny = () => res.status(429).json({
+      success: false, error: 'Too many signup attempts',
+      message: 'Too many signup attempts. Please try again later.', retryAfter: '15 minutes',
+    });
+    if (!await consumeSignupLimit(db, 'signup-ip', [ip], 120)) {
+      deny();
+      return;
+    }
+    if (parsed.success && parsed.data.role === 'student' && parsed.data.classCode?.trim()) {
+      validatedSection = await getSectionBySignupCode(parsed.data.classCode);
+    }
+    if (parsed.success && parsed.data.role === 'student' && validatedSection) {
+      if (!await consumeSignupLimit(db, 'signup-class-ip', [validatedSection.id, ip], 60) ||
+          !await consumeSignupLimit(db, 'signup-email-ip', [parsed.data.email, ip], 5)) {
+        deny();
+        return;
+      }
+    } else if (!await consumeSignupLimit(db, 'signup-other-ip', [ip], 5)) {
+      deny();
+      return;
+    }
+  } catch (err) {
+    console.error('[auth/signup-rate-limit]', err);
+    res.status(503).json({ success: false, error: 'Signup temporarily unavailable' });
+    return;
+  }
   if (!parsed.success) {
     await logAuthEvent({
       email: telemetryEmail,
@@ -228,7 +262,7 @@ router.post('/signup', signupRateLimiter, async (req: Request, res: Response) =>
         });
         return;
       }
-      studentSection = await getSectionBySignupCode(classCode);
+      studentSection = validatedSection;
       if (!studentSection) {
         await logAuthEvent({
           email,
@@ -265,42 +299,12 @@ router.post('/signup', signupRateLimiter, async (req: Request, res: Response) =>
 
     // Create learner profile (users table)
     const learnerId = uuidv4();
-    await createUser(learnerId, { name, role });
-
-    // Create auth account
-    const account = await createAuthAccount(db, {
-      email,
-      passwordHash,
-      role,
-      learnerId,
-      name,
-    });
-
-    if (role === 'student') {
-      await saveLearnerProfile(learnerId, {
-        name,
-        conceptsCovered: [],
-        conceptCoverageEvidence: {},
-        errorHistory: {},
-        interactionCount: 0,
-        currentStrategy: 'adaptive-medium',
-        preferences: {
-          escalationThreshold: 3,
-          aggregationDelay: 300000,
-          autoTextbookEnabled: true,
-          notificationsEnabled: true,
-          theme: 'system',
-        },
-        extendedData: {},
-      });
-    }
-
-    if (role === 'student' && studentSection) {
-      await enrollStudentInSection({
-        sectionId: studentSection.id,
-        studentUserId: learnerId,
-      });
-    }
+    const account = role === 'student' && studentSection
+      ? await createStudentAccount(db, { email, passwordHash, learnerId, name, sectionId: studentSection.id })
+      : await (async () => {
+          await createUser(learnerId, { name, role });
+          return createAuthAccount(db, { email, passwordHash, role, learnerId, name });
+        })();
 
     if (role === 'instructor') {
       await createSectionForInstructor({
@@ -335,6 +339,12 @@ router.post('/signup', signupRateLimiter, async (req: Request, res: Response) =>
       csrfToken,
     });
   } catch (err) {
+    if (typeof err === 'object' && err !== null && 'code' in err && err.code === '23505' &&
+        'constraint' in err && err.constraint === 'auth_accounts_email_key') {
+      await logAuthEvent({ email: telemetryEmail, outcome: 'failure', failureReason: 'duplicate_email' });
+      res.status(409).json({ success: false, error: 'An account with this email already exists' });
+      return;
+    }
     await logAuthEvent({
       email: telemetryEmail,
       outcome: 'failure',

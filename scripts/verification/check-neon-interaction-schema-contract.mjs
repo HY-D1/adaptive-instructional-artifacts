@@ -9,6 +9,13 @@ const repoRoot = join(__dirname, '..', '..');
 
 const DEFAULT_RUNTIME_PATH = join(repoRoot, 'apps/server/src/db/neon.ts');
 const DEFAULT_MIGRATION_PATH = join(repoRoot, 'apps/server/src/db/migrate-neon.sql');
+const DEFAULT_EVENT_FIELDS_MIGRATION_PATH = join(repoRoot, 'apps/server/src/db/migrations/20261031-interaction-event-fields.sql');
+
+const EVENT_FIELDS_COLUMNS = [
+  ['condition_id', 'TEXT'],
+  ['execution_time_ms', 'DOUBLE PRECISION'],
+  ['metadata', 'TEXT'],
+];
 
 export const REQUIRED_RESEARCH_COLUMNS = [
   ['hint_id', 'TEXT'],
@@ -44,6 +51,7 @@ function findMissingColumns(block) {
 export function verifyInteractionSchemaContract({
   runtimePath = DEFAULT_RUNTIME_PATH,
   migrationPath = DEFAULT_MIGRATION_PATH,
+  eventFieldsMigrationPath = DEFAULT_EVENT_FIELDS_MIGRATION_PATH,
 } = {}) {
   const errors = [];
   const checkedFiles = [
@@ -69,6 +77,18 @@ export function verifyInteractionSchemaContract({
     const missing = findMissingColumns(block);
     for (const [columnName, columnType] of missing) {
       errors.push(`${label} missing interaction_events column: ${columnName} ${columnType}`);
+    }
+  }
+
+  for (const [label, filePath] of [['runtime schema', runtimePath], ['event fields migration', eventFieldsMigrationPath]]) {
+    if (!existsSync(filePath)) {
+      errors.push(`${label} file missing: ${filePath}`);
+      continue;
+    }
+    const source = readFileSync(filePath, 'utf8');
+    for (const [name, type] of EVENT_FIELDS_COLUMNS) {
+      const pattern = new RegExp(`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS ${name}\\s+${type}\\b`, 'i');
+      if (!pattern.test(source)) errors.push(`${label} missing additive interaction_events column: ${name} ${type}`);
     }
   }
 

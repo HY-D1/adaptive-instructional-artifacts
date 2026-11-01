@@ -710,6 +710,7 @@ export async function updateProfileFromEvent(
     method: 'POST',
     body: JSON.stringify({
       event: {
+        eventId: event.id,
         learnerId: event.learnerId,
         sessionId: event.sessionId,
         timestamp: new Date(event.timestamp).toISOString(),
@@ -1063,6 +1064,7 @@ function convertToFrontendEvent(i: BackendInteraction): InteractionEvent {
     // Problem context
     problemSetId: i.problemSetId,
     problemNumber: i.problemNumber,
+    conditionId: i.conditionId ?? undefined,
     
     // Code/Error fields
     code: i.code,
@@ -1681,6 +1683,7 @@ export async function updateProblemProgress(
     incrementAttempts?: boolean;
     incrementHints?: boolean;
     lastCode?: string;
+    eventId?: string;
   }
 ): Promise<ProblemProgress | null> {
   const response = await fetchApi<ProblemProgress>(`/learners/${learnerId}/progress/${problemId}`, {

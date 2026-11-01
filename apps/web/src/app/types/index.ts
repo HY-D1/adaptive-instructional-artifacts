@@ -550,7 +550,9 @@ export type SQLProblem = {
   schema: string; // SQL schema for the problem
   expectedQuery: string;
   expectedResult?: any[];
-  gradingMode?: 'result' | 'exec-only';
+  gradingMode?: 'result' | 'exec-only' | 'database-state-v1';
+  /** Query used to compare the database after a mutation with the reference. */
+  gradingStateQuery?: string;
   hints?: string[];
   /** Topic category for grouping and scaffolded progression */
   topic: SQLProblemTopic;

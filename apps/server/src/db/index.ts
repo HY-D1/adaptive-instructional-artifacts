@@ -233,6 +233,7 @@ export async function updateProblemProgress(
     incrementAttempts?: boolean;
     incrementHints?: boolean;
     lastCode?: string;
+    eventId?: string;
   }
 ): Promise<void> {
   return isUsingNeon()

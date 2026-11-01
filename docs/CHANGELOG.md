@@ -3,11 +3,487 @@
 > **Single Source of Truth for Project Progress and Decisions**
 > 
 > Format: [Keep a Changelog](https://keepachangelog.com/)  
-> Last Updated: 2026-04-10
+> Last Updated: 2026-10-31
 
 ---
 
 ## [Unreleased] - Harderning/Research-Grade-Tightening
+
+### In progress - 2026-10-31 (minimal 50-student implementation)
+
+**Status: PASS for the selected isolated 50-student core workflow.** Scope is the approved
+registration/login, practice, answer, hint, note, and persistence workflow;
+historical progress totals are not reconstructed. Existing unrelated work and
+the eight original untracked files remain preserved. No commit or push made.
+
+- Signup uses shared atomic Neon counters: 120/IP overall, 60/validated-class/IP,
+  5/email/IP, and 5/IP for invalid/instructor requests per 15-minute window.
+  Database errors fail closed. Student user/account/profile/enrollment writes
+  are one transaction; email conflicts retain HTTP 409 and bcrypt retains 12
+  rounds. Changed auth route/database code, added `db/signup-rate-limit.ts`,
+  additive signup migration and focused tests.
+- Progress requests carry the existing interaction ID. A learner/event claim
+  and progress UPSERT are one SQL statement; duplicates do not increment again.
+  Single/batch interactions acknowledge only after required progress writes.
+  Optional IDs are validated on progress/profile routes; missing IDs retain
+  legacy semantics. Historical interactions are marked handled at migration
+  cutover without changing totals. Changed Neon progress/routes, frontend
+  storage/profile serializers and focused tests; contract advances to v2.4.0.
+- The real copied database had `users.username TEXT NOT NULL` without a default,
+  absent from this checkout's canonical schema. This reproduced SQLSTATE 23502.
+  A guarded legacy-column migration supplies a generated UUID default only for
+  that existing column shape, preserving all values, NOT NULL and uniqueness.
+- Applied `20261031-signup-rate-limits.sql`,
+  `20261031-problem-progress-events.sql`, and
+  `20261031-legacy-username-default.sql` only to verified test branch
+  `br-wispy-fire-an9uvhuy` before preview traffic. The previous event-field
+  migration is also satisfied there. Production migrations remain unapplied.
+- Real isolated PostgreSQL checks passed: 70 concurrent limiter requests admitted
+  exactly 60; 40 concurrent duplicate progress requests produced one attempt;
+  an overflowing progress update rolled back its claim and retried successfully;
+  a foreign-key enrollment failure rolled back student user/account/profile.
+  The first database check exposed the username mismatch; the enrollment
+  rollback was retested after its migration and verified SQLSTATE 23503.
+- The existing load helper now synchronizes signup/login and exercises five
+  cycles over five minutes, with exact event/progress readback, notes, sessions,
+  cross-user denial and interrupted-response retry. A new opt-in browser test
+  covers real UI registration, login, answers, hint, notes and clean-context
+  recovery. Neither is a substitute for the other.
+
+Final local checks at this checkpoint: focused Vitest PASS (14 files, 174 tests),
+`npm run build` PASS, `npm run server:build` PASS; `npm run replay:gate` exits 0
+with checksum **SKIPPED** due changed inputs. No replay baseline was refreshed.
+
+Isolated previews (uncommitted reviewed-source snapshot; no local environment
+files or unrelated untracked files uploaded): backend
+`https://adaptive-instructional-artifacts-api-backend-2tadln7hb.vercel.app`,
+initial frontend `https://adaptive-instructional-artifacts-oy7r6i3jw-hy-d1s-projects.vercel.app`.
+Deployment-specific `DATABASE_URL` resolves to the verified Neon endpoint;
+a unique failed-login canary was found on that exact isolated database. The
+frontend bundle contains the isolated backend URL. Fresh test JWT/instructor
+secrets override inherited values; LLM is disabled for deterministic fallback
+checks. Shared Vercel preview/production variables remain unchanged. The first
+CLI dry run used the backend subdirectory and failed because the project already
+specifies that root; the corrected deployment used the repository snapshot root.
+
+Hosted 50-student API run **PASS**: run `1793507656126-5fce3336`, five cycles over
+300000ms (305840.78ms including setup), 3003 requests, 9.82 requests/second,
+zero unexpected failures, zero 429s and zero 5xxs. All 50 registration/login
+requests succeeded. Signup p50/p95/p99: 1638.45/1769.48/1799.19ms; login:
+517.34/613.60/1606.71ms. Session-save p95 298.43ms, event retry 209.22ms,
+progress write 248.05ms, profile write 207.92ms, note save 173.20ms.
+All persisted event/attempt counts, code/session/note readbacks, 100 cross-user
+denials and 250 interrupted accepted responses followed by retries passed.
+Evidence: `dist/beta/50-student-readiness/1793507961975-local-auth.json`.
+The first browser attempt failed on an overly narrow test selector; the second
+asserted a logout redirect instead of session invalidation. Those test
+assumptions were corrected without application changes. The next browser run
+reproduced a real clean-context editor recovery failure: progress held lastCode,
+but editor restoration considered only session/local drafts. The smallest fix in
+`apps/web/src/app/pages/LearningInterface.tsx` uses selected-problem lastCode only
+when no meaningful draft exists, guards pending restore against new edits, and
+leaves the editor usable on a failed lookup. Its existing test file covers
+saved-code restoration, draft precedence, empty code and failed requests.
+Focused restore/storage tests PASS (2 files, 42 tests); frontend build and
+TypeScript check PASS. Backend unchanged, so the measured 50-user API run was
+reused instead of repeated.
+
+Final frontend preview:
+`https://adaptive-instructional-artifacts-5l0fdzruo-hy-d1s-projects.vercel.app`
+(`dpl_GhmV5esSHbSKhJpxQSKbdEtFBHGF`), pointed at the same verified backend
+`dpl_BPARLkL8sMy7srAT4gojGZDMU15v`. Updated bundle target rechecked.
+The real-browser core test PASS (1 test, 18.4s): UI registration, logout verified
+by HTTP 401, login, incorrect/correct SQL, deterministic hint, save-to-notes,
+same-context refresh, and fresh-context login restoring saved SQL and notes.
+Command: `npx --no-install playwright test -c playwright.config.ts
+--project=chromium tests/e2e/regression/pilot-student-core.spec.ts --reporter=line`
+with verified preview URLs and test class code supplied through environment;
+Chromium required sandbox escalation. No unsafe browser security flags or
+local-storage auth seeding were used. Final `git diff --check` PASS.
+
+Failure-snapshot output is
+disabled for this credential-bearing test. Test credentials are private
+temporary files only. Cleanup must remove those credentials and explicitly
+dispose of synthetic resources on the test copy; never run cleanup on the
+parent. Rollback application deployments before removing additive tables/defaults;
+retaining them preserves data and retry claims. Legacy clients without IDs and
+historical partial writes remain outside the new idempotency guarantee. Profile
+evidence retries are not deduplicated by the progress ledger. Signup counter
+rows expire logically but have no background deletion job. No new topic work.
+
+Cleanup/rollback: the two preview URLs and copied branch are retained for review;
+production aliases, environment settings, database and parent branch were not
+changed. Remove disposable preview deployments when no longer needed; delete
+only copied branch `br-wispy-fire-an9uvhuy` after a deliberate disposal decision.
+Do not clean up by broad DELETE against inherited records or the parent.
+On application rollback retain the additive tables/default and ledger claims;
+a later production rollout requires its own paused-write migration cutover.
+Temporary local test credential/connection files are removed after validation.
+The short workload establishes the recorded API capacity and browser flow only;
+live LLM capacity, an actual upstream outage, and historical data repair were
+not tested. Replay checksum remains explicitly SKIPPED; no baseline update.
+Suggested commit: `fix(persistence): stabilize classroom writes`.
+
+### In progress - 2026-10-31 (isolated pilot database)
+
+**Status: PARTIAL.** With explicit user approval to copy the parent database,
+created Neon branch `pilot-system-stable-20261031` (`br-wispy-fire-an9uvhuy`)
+in project `ancient-star-01392879`. Neon reports it ready, non-primary,
+non-default, and initialized from parent data; it contains inherited records
+and must be handled as sensitive. Its database is `neondb`.
+
+On that branch only, inspected `interaction_events` column metadata and applied
+`ALTER TABLE interaction_events ADD COLUMN IF NOT EXISTS execution_time_ms DOUBLE PRECISION`.
+The branch already had `condition_id` and `metadata`; all three columns now
+exist with the intended types and are nullable. No synthetic accounts, test
+data, deployment, or load test has been created. A real event round trip is
+still unverified. Retain nullable columns on rollback after reverting application
+code. Cleanup of the copy requires a deliberate deletion decision because it
+contains parent records.
+
+The inherited Vercel preview database target remains unverified; do not deploy
+or generate test traffic until branch-specific frontend and backend configuration
+and their effective targets are verified. Idempotent progress recovery, shared-IP
+signup capacity, browser workflows, and 50-user performance remain open; replay
+checksum comparison remains SKIPPED.
+
+Two synthetic, transaction-scoped PostgreSQL checks on the isolated branch
+used temporary tables and synthetic IDs only: a repeated event ID incremented
+once, and a simulated progress constraint failure rolled back the candidate
+claim before a successful retry. The temporary tables were dropped on commit;
+no inherited rows were read. These checks validate a SQL pattern, not the
+application, concurrent sessions, or legacy-event reconciliation. No event
+idempotency fix has been applied. Historical events do not identify whether
+their independent progress write succeeded; existing clients also lack a common
+event ID and complete payload across all writers. A rollout needs a deliberate
+reconciliation policy and application-level concurrent integration tests.
+
+The Vercel connector rejected a branch-specific environment-variable creation.
+The authenticated Vercel CLI also rejected it because Git branch
+`test_branch/system-stable-test` is not present in the connected remote
+repository. `vercel env ls preview test_branch/system-stable-test --project
+prj_vR3HTHqulLCVqv5EnSMfnStWP4cZ --scope team_BxlA36kEPgWxAMjQnJ4DBtQ2`
+confirmed no branch-scoped variables; no Vercel setting was created. The local
+branch was not pushed. A deployment-specific override or a separately authorized
+remote branch needs verification before connecting a preview to this database.
+
+### In progress - 2026-10-31 (preview isolation and event storage)
+
+**Status: PARTIAL.** After Vercel CLI authentication, preview variable names
+were inspected successfully. Neither project has branch-specific variables for
+`test_branch/system-stable-test`; both have inherited preview configuration,
+including a backend `DATABASE_URL`. Its target has not been verified as isolated.
+Do not deploy or send load to that inherited target. An attempt to create a new
+empty Neon project failed with `action restricted: organization is managed by
+Vercel`. At that point, the available Neon branch tool required explicit user
+approval to copy parent data. No project, branch, accounts, database writes, or
+deployment resulted from that attempt; see the later checkpoint above.
+
+Further grading work: `problem-11` has one synthetic low-value order for an
+existing user, `problem-22` one empty synthetic department, and `problem-24` one
+additional low-paid synthetic employee. These rows were created solely to
+distinguish missing filters in the existing exercises; shared schemas, existing
+IDs, expected results, and reference queries remain unchanged. The exercise
+seed datasets and accepted answers therefore changed for these three IDs.
+Focused positive and negative tests pass (`188/188` in the three SQL regression
+suites). The general expression comparator still accepts swapped values when
+expression labels are involved; correcting that while preserving alias and
+column-order tolerance requires an explicit mapping contract.
+
+An in-memory test of the actual batch route confirmed that a failed progress
+write can still return HTTP 201 and include that event in `confirmedIds`; calling
+the real progress helper twice with the same event ID causes two attempt
+increments. No atomic fix has been applied: three existing update paths, legacy
+callers without event IDs, and repair of previously inserted events require an
+isolated PostgreSQL integration test before choosing safe transaction semantics.
+
+After the exercise-data changes, `npm run test:unit` first had 1886 assertions
+pass and 2 skip but exited 1 with a Vitest worker `EnvironmentTeardownError` in
+`progress-persistence.integration.test.ts`; that file passed 15/15 in isolation.
+One subsequent full run passed (95 files, 1886 passed, 2 skipped); intermittent
+teardown behavior remains unverified. `npm run build`, `npm run server:build`,
+the three SQL regression suites, schema-guard tests, and `git diff --check`
+passed on the updated files. Replay remains SKIPPED.
+
+- Added `apps/server/src/db/migrations/20261031-interaction-event-fields.sql`
+  and updated Neon initialization, insert/read mappings, strict route validation,
+  schema guard, frontend deserialization, and focused tests to preserve existing
+  `conditionId`, `executionTimeMs`, and `metadata`. Frontend and backend research
+  contract versions are now `v2.3.0`. Legacy rows may have null values. The
+  migration is **not applied** and real Neon round-trip remains `Unverified`.
+  Apply it only to a verified isolated database before deploying this code when
+  `AUTO_SCHEMA_INIT=false`; rollback application code first and retain columns.
+- Hardened IPv6 rate-limit keys using the installed `ipKeyGenerator`, preserving
+  existing limits. Real Express middleware tests reproduced an IPv6 rotation
+  bypass and now pass; the five-signups-per-IP limit still blocks a 50-student
+  shared-network signup burst. Distributed enforcement remains `Unverified`.
+- The actual progress-update helper increments twice for two deliveries of the
+  same event ID. Three independent progress-update paths and batch confirmation
+  after a progress-write failure require an atomic, event-ID-aware design; no
+  live database concurrency or recovery behavior has been established.
+
+Verification: `npm run test:unit` PASS (95 files, 1883 passed, 2 skipped),
+`npm run build` PASS, `npm run server:build` PASS,
+`node --test scripts/verification/check-neon-interaction-schema-contract.test.mjs`
+PASS (3 tests), and `git diff --check` PASS. `npm run replay:gate` remains
+SKIPPED because input digests differ. With sandbox escalation, the isolated local
+Playwright student-navigation smoke passed (1 test); this does not verify backend
+authentication, deployed behavior, or 50-user capacity. No production data or
+remote load was written. Existing changes and eight original untracked files
+remain in place. Continue only with explicit isolation verification, idempotent
+progress and grading fixes, then the staged preview tests.
+
+### In progress - 2026-10-31 (50-student stability, continued)
+
+**Status: PARTIAL. Not ready for the 50-student pilot.** No preview or load test
+has been deployed or run; no test accounts or database writes have been made.
+
+Changes on `test_branch/system-stable-test`:
+
+- Problems 18–20 opt into `database-state-v1` grading with a state-query field.
+  Each mutation attempt starts from its seed; the reference and submission run
+  in separate SQLite databases and compare complete rows. Existing SELECT and
+  exec-only grading paths remain available. Changes: `apps/web/src/app/types/index.ts`,
+  `apps/web/src/app/data/problems.ts`, `apps/web/src/app/components/features/sql/SQLEditor.tsx`,
+  `apps/web/src/app/lib/sql-state-grading.ts`, and their focused tests.
+- `apps/server/src/routes/neon-interactions.ts` accepts explicit typed fields
+  already mapped to Neon columns while retaining strict unknown-field rejection;
+  focused contract tests cover single and batch requests. This is partial:
+  `conditionId`, `executionTimeMs`, and `metadata` still require an explicit
+  backward-compatible storage migration and round-trip verification.
+- `apps/web/src/app/lib/storage/dual-storage.ts` retains the complete pending
+  backlog rather than truncating it to 100, does not replace persisted backlogs
+  with shorter quota fallbacks, keeps configured-backend events pending while
+  offline, and locks queue processing before its asynchronous health check.
+  `safe-storage.ts` no longer evicts offline, pending, or dead-letter records as
+  recoverable caches. Focused tests cover backlog, quota, and concurrent calls.
+  Quota exhaustion can still leave new writes only in memory; reload recovery and
+  user-facing reporting under real quota pressure remain unverified.
+- `scripts/beta/beta-50-student-readiness.mjs` retains auth cookies and CSRF,
+  checks required authenticated steps and readback, supports staged user counts,
+  and requires explicit target/isolation acknowledgement. Its tests use mocked
+  local HTTP. It is API-only: browser interaction, hint generation, sustained
+  30-minute operation, isolation, and actual 50-user capacity are unverified.
+
+Verification after these changes:
+
+| Command | Result |
+|---------|--------|
+| `npm run test:unit` | PASS: 93 files, 1877 passed, 2 skipped |
+| Focused grading, storage, API contract, and readiness tests | PASS: 8 files, 184 tests (`/tmp/sql-pilot-focused-final.log`) |
+| `npm run build` | PASS; existing cache-trimmer chunk warning |
+| `npm run server:build` | PASS after `npm ci` in `apps/server` using its existing lockfile |
+| `npx --no-install tsc --noEmit --pretty false` | PASS |
+| `npm run replay:gate` | SKIPPED: input digest mismatch; checksum not compared |
+| `git diff --check` | PASS |
+| `VITE_API_BASE_URL='' VITE_BACKEND_URL='http://127.0.0.1:9' npx --no-install playwright test -c playwright.config.ts --project=chromium tests/e2e/regression/phase1-demo-access.spec.ts --grep 'Student login redirects to /practice' --reporter=line` | BLOCKED: Chromium failed to launch with macOS MachPort permission denied (SIGTRAP); application flow did not run |
+
+The backend `npm ci` reported 25 dependency advisories. A separate
+`npm audit --omit=dev --json` reported 23 advisories (3 critical, 10 high,
+8 moderate, 2 low); no dependencies or lockfiles were upgraded. Assess
+applicability and remediation separately; do not assume all reported paths are
+exploitable in deployment.
+
+Vercel and Neon project metadata was readable; existing Neon preview branches
+inherit parent data and were not proven disposable. The connected Vercel app
+returned 403 when listing project environment metadata. After the user signed
+into the local Vercel CLI, branch-specific preview environment listings returned
+no variables for either project. Checking inherited preview variables required
+automatic approval review, which failed due to the usage limit; the actions were
+not executed. Do not send load until frontend/backend targets and a separate test
+database are independently verified. A successful CLI login does not establish
+database isolation.
+
+Remaining pilot blockers: shared-IP signup limit of five per 15 minutes;
+event fields without verified persistence and their additive migration; possible
+duplicate progress increments across retry and independent update paths; real
+quota/reload recovery; the expression-column comparator and weak seeds for
+problems 11/22/24; replay checksum drift; browser and deployed-flow validation;
+and 5/15/50-user plus 30-minute fault/load tests. Existing audit found three
+independent progress update paths; deployed duplicate counts are unverified.
+
+Next: regain approval-review availability and verify preview/test-database
+isolation. In parallel, implement and test the event-field migration and an
+idempotent progress-update design without applying migrations to an existing
+database. Repeat focused and end-to-end tests before any load. Preserve the
+eight pre-existing untracked files and the earlier CHANGELOG entry. No commit,
+push, or production deployment has been performed. Suggested commit for this
+work once verified: `fix(reliability): harden pilot workflows`.
+
+### In progress - 2026-10-30 (50-student stability)
+
+**Status: PARTIAL.** Branch `test_branch/system-stable-test` was created from
+`9112c5a` with the existing CHANGELOG change and eight untracked files preserved.
+Baseline: `npm run build` PASS; `npm run test:unit` PASS (1857 passed, 2
+skipped); `npm run server:build` FAIL (pre-existing TS2688 duplicate `@types/* 2`
+directories); `npm run replay:gate` SKIPPED (exit 0, changed input digests).
+
+Vercel frontend and backend projects and the Neon project are accessible for
+inspection. Existing Neon preview branches were copied from a parent and their
+data/usage cannot be assumed disposable. No preview database isolation has been
+verified and no load traffic, test accounts, deployment, or database writes have
+been made. Establish an isolated test database and independently verify both
+preview targets before any load-generating writes. Current reference: repository
+scripts/beta/beta-50-student-readiness.mjs, rate limiter in
+apps/server/src/middleware/rate-limit.ts, and the prior audit below.
+
+### Added - 2026-10-30 17:20 PDT (Local Codex Implementation Skills)
+
+**Status: PARTIAL** — instruction artifacts, skill catalog discovery, and both
+analysis-only forward tests passed. Direct `/skills` UI visibility remains
+`Unverified`: the computer-use tool prohibits controlling Codex itself. Pilot
+readiness also remains `PARTIAL`; the application defects from the audit were
+not fixed by this instruction-only preparation.
+
+#### Scope and delivered files
+
+- `AGENTS.md`: appended current checkout facts, valid commands, the eight
+  implementation rules, Ponytail's minimal-change meaning, and the shared
+  checkpoint convention. All original bytes remain an unchanged prefix.
+- `.agents/skills/minimal-fix/SKILL.md`: added the requested metadata, bug/failing
+  test trigger, evidence-first workflow, regression checks, and analysis-only
+  boundary; excludes feature requests and broad refactors.
+- `.agents/skills/sql-adapt-implement/SKILL.md`: added the requested metadata,
+  required professor inputs, actual SQLProblem/execution path, equivalence and
+  negative checks, write-state verification, concept/trace checks, and limits.
+- `docs/CHANGELOG.md`: this single checkpoint records preparation and readiness;
+  no new progress, task-list, or completion-report files were created.
+
+| Task | Result | Evidence or remaining boundary |
+|------|--------|--------------------------------|
+| 2 — Repository guidance | PASS | Original AGENTS rules preserved; current commands and baseline failures documented |
+| 3 — minimal-fix | PASS | YAML/metadata validation, catalog discovery, and analysis-only bug reproduction |
+| 4 — sql-adapt-implement | PASS | YAML/metadata validation, catalog discovery, and missing-input/readiness analysis |
+| 5 — Integration/readiness | PARTIAL | Both skills discovered and forward-tested; direct UI selection not observed |
+
+AGENTS.md and `.agents/` intentionally remain local and Git-ignored, as requested.
+`.gitignore`, existing `run-phase`/`quality-loop` skills, application code, tests,
+manifests, lockfiles, versions, schemas, policies, and all eight original
+untracked files were preserved. No exercise was added. No commit, push,
+deployment, dependency installation, or replay-baseline update was performed.
+
+#### Baseline and verification
+
+Checkout: `main` at `9112c5a`. Environment: Node `v24.3.0`, npm `11.4.2`;
+`.nvmrc` specifies Node 22. Dependencies were present, so `npm ci` was not needed
+for the preparation. Backend dependency repair remains a separate task.
+
+The four implementation-session baselines below ran before instruction edits.
+Their results remain applicable because runtime inputs and dependencies did not
+change during the preparation.
+
+| Exact command | Result |
+|---------------|--------|
+| `npm run build` | PASS, exit 0; four integrity guards passed and Vite built in 3.93s; existing cache-trimmer static/dynamic import warning remains |
+| `npm run replay:gate` | SKIPPED, exit 0; toy replay executed, but changed fixture/policy input digests skipped checksum comparison |
+| `npx --no-install vitest run apps/web/src/app/data/problems.regression.test.ts` | PASS, 82/82; reference-query tests do not prove incorrect answers are rejected |
+| `npm run server:build` | FAIL, exit 2; pre-existing TS2688 errors from duplicate `@types/* 2` directories |
+
+Earlier results from the read-only audit in this same session were reused:
+`npm run test:unit` passed 1857 tests in 90 files with 2 skipped;
+`npx --no-install tsc --noEmit --pretty false` passed; Playwright
+`--list --project=chromium` collected 821 tests in 82 files without executing
+browser flows. `npm run demo:weekly -- --list` failed because its named spec is
+missing. `npm run check:source-grounding` failed because it resolves the wrong
+repository root. These are recorded limitations, not fixes made here.
+
+Skill and change validation:
+
+- Fresh independent Codex agents saw both new names in their available-skills
+  catalogs before file searches, then explicitly loaded their SKILL.md files.
+  This verifies discovery/loading, separately from the unobserved native UI.
+- The bundled `quick_validate.py` attempt was blocked by missing Python PyYAML.
+  Used the existing Node `yaml` parser instead, with no dependency changes:
+  `node /tmp/sql-adapt-codex-setup-8s9hdun7/validate-skills.mjs` passed for both
+  skills, including exact requested metadata, unique YAML keys, valid names,
+  and no unfinished scaffold.
+- `git diff --check` and direct ignored-file checks passed:
+  `git diff --no-index --check /tmp/sql-adapt-codex-setup-8s9hdun7/AGENTS.before.md AGENTS.md`,
+  plus `git diff --no-index --check /dev/null` for each new SKILL.md. For these
+  no-index checks, exit 1 with no diagnostics means differing files, not a
+  whitespace error.
+- `python3 /tmp/sql-adapt-codex-setup-8s9hdun7/verify-setup.py` checked hashes of
+  646 pre-existing tracked/untracked files, original instruction bytes, and
+  existing skills. Only this CHANGELOG changed among tracked files.
+- A separate read-only CLI app-server discovery probe exited before returning a
+  skills listing; it was not used as discovery evidence. No UI restriction was
+  bypassed.
+
+Temporary baseline logs, validation scripts, and original-file snapshots are in
+`/tmp/sql-adapt-codex-setup-8s9hdun7/`; this directory is local and ephemeral.
+
+#### Analysis-only forward tests
+
+- `minimal-fix`: the real SQLExecutor and actual SQLEditor grading functions,
+  evaluated in memory with local sql.js WASM, confirmed that problem-18 accepts
+  `SELECT 1` without inserting the required row. Correct and wrong-value INSERTs
+  also pass the current exec-only contract. The agent identified a focused
+  component regression and state-based fix proposal without creating a test or
+  modifying code. Existing reference cases run with
+  `npx --no-install vitest run apps/web/src/app/data/problems.regression.test.ts -t 'problem-18' --cache=false`
+  passed 2 tests, with 80 intentionally filtered out.
+- `sql-adapt-implement`: the agent inspected existing EXISTS/correlated-query
+  patterns, reproduced weak fixture/comparator behavior in memory, and required
+  the missing professor prompt, provenance, schema/seed, reference SQL, expected
+  behavior, and learning objectives. No substitute question or exercise ID was
+  invented. The subtype mapping check passed 23/23; this does not validate all
+  advanced concept IDs or coverage statistics.
+- Both evaluators confirmed no application edits or external writes. Their
+  final rereads accepted the clarification that build/replay requirements apply
+  after implementation, while analysis-only mode remains non-mutating.
+
+#### Pilot readiness and smallest subsequent work
+
+Reusable now: problem-10/11 IN subqueries, problem-22 correlated EXISTS,
+problem-23 correlated scalar subquery, and problem-24/25 window references.
+The audited sql.js/SQLite engine supports NOT EXISTS. No editor rebuild or new
+grading system is needed to start designing an approved challenge.
+
+Blockers for new challenges: no actual professor questions or reference
+solutions have been supplied; zero-row SELECTs need explicit result grading;
+seeds must distinguish missing correlation/filters; expression comparison can
+lose column/value associations; and the advanced taxonomy/coverage paths are
+not aligned. Registry/graph use `exist-clause`, problem-22 uses `exists`, and
+problem-23 uses `correlated-subqueries`; legacy coverage recognizes six IDs.
+Do not silently rename historical IDs or reinterpret coverage semantics.
+
+For the Wednesday stable-demo goal, first select an explicit existing route and
+run it in a browser. If backend persistence is demonstrated, repair the local
+backend install with its existing lockfile and pass the unmodified build before
+verifying login, save, and refresh. If the demo claims correct automatic grading
+for problems 18–20, or negative-answer rejection for 11/22/24, fix and test those
+specific gaps first. Record replay SKIPPED honestly. These implementation
+changes require separately bounded tasks and were not included in preparation.
+
+Smallest subsequent sequence: validate the chosen demo route; address only its
+blocking grading/data/environment issue with `minimal-fix`; obtain actual
+professor material; then implement one approved exercise end-to-end with
+`sql-adapt-implement` and focused positive/negative tests. Full taxonomy/coverage
+unification, real/experiment replay gates, and unrelated cleanup can follow.
+Before real/experiment replay use, also resolve the export script's
+`scripts/dist/policies.json` versus root `dist/policies.json` path mismatch.
+
+Full browser E2E, deployed behavior, Neon trace persistence, cross-device
+recovery, and the professor's future exercises remain `Unverified`. Later
+exercise work must record IDs, concepts, reference query/source, grading mode,
+trace fields, results, and required schema/policy/behavior versions here.
+
+Example invocations (Ponytail is the minimal-change approach, not another CLI):
+
+```text
+$minimal-fix 按 Ponytail 最小变更原则，analysis-only 审查 problem-18
+为什么 SELECT 1 能通过；先复现并提出最小修复和回归测试，不改文件。
+
+$sql-adapt-implement 按 Ponytail 最小变更原则，analysis-only 分析我提供的
+高级 SQL 题面、schema/seed 和参考解；核实方言、等价解、负例、概念和日志。
+必要输入不足时列出缺项，不编造新题，不修改文件。
+```
+
+No application version bump or migration. Recovery for the setup is limited to
+restoring the original AGENTS from the temporary snapshot, removing only the two
+new skill directories, and reverting only this dated CHANGELOG entry; preserve
+all unrelated work. Suggested commit for the tracked checkpoint only:
+`docs(workflow): record local Codex skill setup`.
 
 ### Fixed - 2026-04-10 (3 Live Bugs: Dashboard, Textbook, Save to Notes)
 
