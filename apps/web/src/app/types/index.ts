@@ -292,6 +292,8 @@ export type ConceptCoverageEvidence = {
 
 export type LearnerProfile = {
   id: string;
+  /** Server concurrency token; distinct from the local storage version. */
+  serverRevision?: number;
   name: string;
   conceptsCovered: Set<string>;
   conceptCoverageEvidence: Map<string, ConceptCoverageEvidence>; // conceptId -> evidence

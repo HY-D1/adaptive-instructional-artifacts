@@ -8,7 +8,7 @@ describe('production migration manifest', () => {
   it('lists only the explicitly reviewed production migrations', () => {
     const entries = readFileSync(resolve(directory, 'production-manifest.txt'), 'utf8')
       .split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#'));
-    expect(entries).toEqual(['20261031-interaction-event-fields.sql', '20261031-signup-rate-limits.sql', '20261031-problem-progress-events.sql']);
+    expect(entries).toEqual(['20261031-interaction-event-fields.sql', '20261031-signup-rate-limits.sql', '20261031-problem-progress-events.sql', '20261101-learner-profile-events.sql']);
     expect(entries.every(entry => existsSync(resolve(directory, entry)))).toBe(true);
   });
 

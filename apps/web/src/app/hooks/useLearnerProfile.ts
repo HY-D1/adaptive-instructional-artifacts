@@ -121,9 +121,7 @@ export function useLearnerProfile(
     
     try {
       const success = await learnerProfileClient.saveProfile(newProfile);
-      if (success) {
-        setProfile(newProfile);
-      }
+      await loadProfile(true);
       return success;
     } catch (err) {
       const error = err instanceof Error ? err : new Error('Failed to save profile');
@@ -132,7 +130,7 @@ export function useLearnerProfile(
     } finally {
       setIsSyncing(false);
     }
-  }, []);
+  }, [loadProfile]);
   
   // Update profile from a single event
   const updateFromEvent = useCallback(async (event: InteractionEvent) => {

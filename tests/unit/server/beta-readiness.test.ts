@@ -7,7 +7,7 @@ import path from 'node:path';
 
 const script = path.resolve('scripts/beta/beta-50-student-readiness.mjs');
 const fakeBackend = `
-const sessions = new Map(), notes = new Map(), events = new Map(), claims = new Map(), firstSignals = new Map();
+const sessions = new Map(), notes = new Map(), events = new Map(), claims = new Map(), firstSignals = new Map(), completed = new Set();
 let signupCount = 0;
 if (process.env.SLOW_REQUESTS) { let clock = 0; Object.defineProperty(globalThis, 'performance', { value: { now: () => (clock += 6001) } }); }
 globalThis.fetch = async (url, options = {}) => {
@@ -30,14 +30,21 @@ globalThis.fetch = async (url, options = {}) => {
     if (auth === 'instructor') return response({ success: true, user: { ownedSections: [{ studentSignupCode: 'class-code' }] } });
     return response({ success: true, user: { learnerId: process.env.MISSING_LEARNER ? '' : auth } });
   }
+  if (request.pathname === '/api/surveys/status') return response({success:true, data:{completed: completed.has(auth), username:auth}});
+  if (request.pathname === '/api/surveys') return response({success:true, data:[{instance:'pre', status:'pending', username:auth, surveyUrl:'https://survey.example/?instance=pre&username='+encodeURIComponent(auth)+'&completion_token=fixture-token'}]});
+  if (request.pathname === '/api/surveys/complete') {
+    if (process.env.REJECT_SURVEY || request.searchParams.get('username') !== auth || request.searchParams.get('completion_token') !== 'fixture-token' || !request.searchParams.get('ResponseID')) return new Response(null,{status:302,headers:{location:'/pre-survey-required'}});
+    completed.add(auth); return new Response(null,{status:302,headers:{location:'/practice'}});
+  }
   if (options.method === 'POST' && headers.get('x-crf-token') && !headers.get('x-csrf-token')) return response({ success: false }, 403);
   if (options.method === 'POST' && headers.get('x-csrf-token') !== 'fixture') return response({ success: false }, 403);
   if (request.pathname.startsWith('/api/sessions/')) {
+    if (!completed.has(auth)) return response({success:false,code:'PRE_SURVEY_REQUIRED'},403);
     if (options.method === 'POST') sessions.set(auth, body);
     return response({ success: true, data: process.env.BAD_READBACK && options.method === 'GET' ? null : sessions.get(auth) || null });
   }
   if (request.pathname === '/api/interactions' && options.method === 'POST') {
-    if (body.learnerId !== auth || body.problemId !== 'problem-1') return response({success:false},400);
+    if (body.learnerId !== auth || body.problemId !== 'problem-1' || body.conditionId !== (Number(auth.split('-').at(-1)) % 2 ? 'control' : 'adaptive')) return response({success:false},400);
     if (!events.has(body.id)) { events.set(body.id, body); firstSignals.set(body.id, options.signal); claims.set(auth, (claims.get(auth) || 0) + 1); }
     else if (!firstSignals.get(body.id).aborted) return response({success:false},409);
     return response({ success: true }, 201);
@@ -46,6 +53,10 @@ globalThis.fetch = async (url, options = {}) => {
   if (request.pathname.startsWith('/api/learners/')) {
     const user = decodeURIComponent(request.pathname.split('/')[3]);
     if (auth !== user) return response({ success: false }, 403);
+    if (request.pathname.endsWith('/condition-assignment') && options.method === 'POST') {
+      if (process.env.INELIGIBLE_SECTION) return response({success:false}, 400);
+      return response({success:true,data:{userId:auth,conditionId:Number(auth.split('-').at(-1)) % 2 ? 'control' : 'adaptive'}});
+    }
     if (request.pathname.endsWith('/profile/events')) {
       if (!events.has(body.event?.eventId) || body.event.learnerId !== auth) return response({success:false},400);
       return response({success:true, data:{interactionCount: claims.get(auth)}});
@@ -67,7 +78,7 @@ function runFake(extra: Record<string, string> = {}) {
   const credentials = path.join(dir, 'credentials.json');
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', fakeBackend], {
     encoding: 'utf8', timeout: 30000,
-    env: { ...process.env, INSTRUCTOR_SIGNUP_CODE: 'fixture', PILOT_CREDENTIALS_FILE: credentials, PILOT_INSTRUCTOR_EMAIL: '', PILOT_INSTRUCTOR_PASSWORD: '', PILOT_CLASS_CODE: '', VERCEL_AUTOMATION_BYPASS_SECRET: '', ...extra },
+    env: { ...process.env, PILOT_ISOLATED_TARGET: 'true', INSTRUCTOR_SIGNUP_CODE: 'fixture', PILOT_CREDENTIALS_FILE: credentials, PILOT_INSTRUCTOR_EMAIL: '', PILOT_INSTRUCTOR_PASSWORD: '', PILOT_CLASS_CODE: '', VERCEL_AUTOMATION_BYPASS_SECRET: '', ...extra },
   });
   let saved: { mode: number; data: { students: unknown[]; classCode: string; instructor: { password: string } } } | undefined;
   try { saved = { mode: statSync(credentials).mode & 0o777, data: JSON.parse(readFileSync(credentials, 'utf8')) }; } catch { /* failure may precede creation */ }
@@ -81,6 +92,11 @@ describe('50-student readiness harness', () => {
     expect(result.status, result.stderr + result.stdout).toBe(1); // short tests cannot qualify
     expect(result.stdout).toMatch(/signup: requests=50 failures=0/);
     expect(result.stdout).toMatch(/login: requests=50 failures=0/);
+    expect(result.stdout).toMatch(/condition-assignment: requests=50 failures=0/);
+    expect(result.stdout).toMatch(/Condition assignments: adaptive=25 control=25/);
+    expect(result.stdout).toMatch(/survey-gate: requests=50 failures=0/);
+    expect(result.stdout).toMatch(/survey-completion: requests=50 failures=0/);
+    expect(result.stdout + result.stderr).not.toContain('fixture-token');
     expect(result.stdout).toMatch(/event-response-interrupted: requests=100 failures=0/);
     expect(result.stdout).toMatch(/progress-retry: requests=100 failures=0/);
     expect(result.stdout).toMatch(/profile-write: requests=100 failures=0/);
@@ -92,6 +108,18 @@ describe('50-student readiness harness', () => {
     expect(saved?.data.classCode).toBe('class-code');
     expect(result.stdout + result.stderr).not.toContain('class-code');
     expect(result.stdout + result.stderr).not.toContain(saved?.data.instructor.password);
+  });
+  it('fails clearly when the section is ineligible for condition assignment', () => {
+    const { result } = runFake({ INELIGIBLE_SECTION: '1' });
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).toMatch(/Condition assignment failed; confirm each student is enrolled in an eligible production-type section/);
+    expect(result.stdout).not.toContain('survey-gate:');
+  });
+  it('fails closed when signed completion is rejected or isolation is not attested', () => {
+    expect(runFake({ REJECT_SURVEY: '1' }).result.stdout).toMatch(/Failure: Required student stage failed/);
+    const unattested = runFake({ PILOT_ISOLATED_TARGET: '' }).result;
+    expect(unattested.status).not.toBe(0);
+    expect(unattested.stderr).toContain('PILOT_ISOLATED_TARGET');
   });
   it('fails when learner identity is missing', () => {
     const { result } = runFake({ MISSING_LEARNER: '1' });

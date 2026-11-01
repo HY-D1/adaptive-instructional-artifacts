@@ -8,6 +8,7 @@ import { requireAuth } from '../../../apps/server/src/middleware/auth';
 describe('maintenance guard', () => {
   let server: Server;
   let baseUrl: string;
+  const ollamaHandler = vi.fn((_req, res) => res.sendStatus(200));
 
   beforeAll(async () => {
     const app = express();
@@ -16,6 +17,8 @@ describe('maintenance guard', () => {
     app.get('/api/system/persistence-status', (_req, res) => res.sendStatus(200));
     app.all('/api/surveys/complete', (_req, res) => res.sendStatus(200));
     app.all('/api/protected', requireAuth, (_req, res) => res.sendStatus(200));
+    app.get('/ollama/api/tags', ollamaHandler);
+    app.post('/ollama/api/generate', ollamaHandler);
     server = await new Promise<Server>(resolve => {
       const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
     });
@@ -24,7 +27,7 @@ describe('maintenance guard', () => {
     baseUrl = `http://127.0.0.1:${address.port}`;
   });
 
-  afterEach(() => vi.unstubAllEnvs());
+  afterEach(() => { vi.unstubAllEnvs(); ollamaHandler.mockClear(); });
   afterAll(async () => {
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
   });
@@ -52,6 +55,21 @@ describe('maintenance guard', () => {
     }
     expect((await fetch(`${baseUrl}/api/system/persistence-status`, { method: 'POST' })).status).toBe(503);
     expect((await fetch(`${baseUrl}/api/protected`, { method: 'OPTIONS' })).status).not.toBe(503);
+  });
+
+  it('blocks legacy Ollama aliases before their handlers during maintenance', async () => {
+    vi.stubEnv('MAINTENANCE_MODE', 'true');
+    expect((await fetch(`${baseUrl}/ollama/api/tags`)).status).toBe(503);
+    expect((await fetch(`${baseUrl}/ollama/api/generate`, { method: 'POST' })).status).toBe(503);
+    expect(ollamaHandler).not.toHaveBeenCalled();
+  });
+
+  it('keeps legacy aliases available with maintenance disabled or a valid bypass', async () => {
+    vi.stubEnv('MAINTENANCE_MODE', '');
+    expect((await fetch(`${baseUrl}/ollama/api/tags`)).status).toBe(200);
+    vi.stubEnv('MAINTENANCE_MODE', 'true');
+    vi.stubEnv('MAINTENANCE_BYPASS_KEY', 'synthetic-operator-key');
+    expect((await fetch(`${baseUrl}/ollama/api/generate`, { method: 'POST', headers: { 'x-maintenance-key': 'synthetic-operator-key' } })).status).toBe(200);
   });
 
   it('rejects missing, empty, and incorrect keys and preserves auth for a valid bypass', async () => {

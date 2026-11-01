@@ -87,6 +87,7 @@ export interface ErrorHistoryEntry {
  * Stored in learner_profiles table with both structured columns and JSON extensibility
  */
 export interface LearnerProfile {
+  serverRevision?: number;
   id: string;
   name: string;
   conceptsCovered: string[]; // Set serialized as array

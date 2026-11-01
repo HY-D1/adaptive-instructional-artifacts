@@ -3,3 +3,4 @@
 20261031-interaction-event-fields.sql
 20261031-signup-rate-limits.sql
 20261031-problem-progress-events.sql
+20261101-learner-profile-events.sql

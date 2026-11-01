@@ -9,6 +9,123 @@
 
 ## [Unreleased] - Harderning/Research-Grade-Tightening
 
+### In progress - 2026-11-01 (final exposure and compatibility audit)
+
+**Status: PARTIAL; production cutover is not authorized by this checkpoint.**
+Runtime changes are on top of `bfd3f16`, integrated with main `f32b4b2` (two
+commits ahead, zero behind at baseline). No PR, production migration, production
+configuration change or production promotion occurred. Eight unrelated original
+untracked files are preserved. No dependencies or exercise topics were added.
+
+Confirmed minimal fixes:
+- Maintenance now covers legacy Ollama tags/generate aliases. The regression
+  reproduced HTTP 200 under maintenance before the fix; focused checks PASS 7/7.
+  Operator bypass still requires ordinary authentication/authorization/CSRF.
+- Identified profile events now claim a shared database ledger and update profile
+  evidence atomically with revision checking. Retry queues retain failed events,
+  original IDs, code and success, and only remove the acknowledged snapshot IDs.
+  Legacy event/progress requests without IDs retain their historical semantics.
+- A real stale snapshot reproduced a newer profile count being replaced (5 to 4).
+  User selected explicit rejection/reload/retry. Full-profile PUT now requires
+  `expectedRevision`; missing returns 428, stale returns 409 plus latest profile.
+  Frontend carries `serverRevision`, reloads conflict state, warns the user and
+  does not blindly replay rejected snapshots. Older open frontend tabs must
+  refresh; this is an intentional API change, not an account/data migration.
+  Both research contract constants are v2.6.0. Real Neon checks verified a stale
+  write cannot replace evidence and exactly one same-revision concurrent save wins.
+- Survey-aware load/browser checks use real signed invitations and test-only
+  completion callbacks. They preserve pre-survey enforcement and current
+  control/adaptive assignment. Test callback traffic is not a Qualtrics submission.
+
+Data preservation rehearsal PASS on fresh isolated Neon branch
+`br-cool-glitter-anetgfgy` (`migration-rehearsal-20261101`), project
+`ancient-star-01392879`, copied from `br-delicate-glitter-an2fuzzq`.
+Controlled returning instructor/control/adaptive accounts were created using
+archived main services before migration, including usernames, password hashes,
+assignments, notes, session drafts and answers. An initial setup failed because
+of an incorrect saveSession helper arity; corrected to the actual signature.
+Partial synthetic records remain only in the disposable copy.
+
+All four production-manifest migrations ran transactionally with lock_timeout=5s
+and statement_timeout=60s on the copy only. Before functional activity, consistent
+counts and SHA-256 fingerprints over original columns compared **124170 original
+rows across 20 tables: zero missing rows and zero changed original values**.
+Private aggregate proof files: /tmp/sql-final-rehearsal/before-migration.json and
+after-migration.json. No historical totals were reconstructed. The historical
+UUID-default migration remains excluded from the production manifest.
+
+Tested isolated deployments (source: bfd3f16 plus this checkpoint's runtime diff):
+- Backend dpl_BXAQUuvKV1FdVFDgnLLyMPkE51QM:
+  https://adaptive-instructional-artifacts-api-backend-54jshoybi.vercel.app
+- Frontend dpl_38vghM7Lp2eQrHnXJwTUBd435oZd:
+  https://adaptive-instructional-artifacts-alpyl8pem-hy-d1s-projects.vercel.app
+- Dedicated rehearsal alias:
+  https://adaptive-instructional-artifacts-rehearsal-hy-d1s-projects.vercel.app
+
+Deployment-specific environment binds the backend to the copy and frontend to
+that exact backend, with fresh test signing secrets, AUTO_SCHEMA_INIT=false,
+maintenance disabled, LLM/provider credentials disabled, and invalid-domain
+survey destinations. Shared preview variables and production aliases unchanged.
+Served entry/preload assets contained none of the exact private database/auth/
+survey keys checked; this is a limited asset check, not blanket leak clearance.
+Credentials remain in private temporary state (0600), never in source/report.
+
+Verification:
+- `npx --no-install vitest run --silent`: PASS 120 files, 2038 passed, 2 skipped.
+  Previous nonsilent runs encountered Vitest EnvironmentTeardownError in console
+  forwarding for progress-persistence integration; final silent run completed 0.
+- `npm run build`, `npm run server:build`, frontend `tsc --noEmit`: PASS.
+- Focused harness checks after condition validation: PASS 11/11.
+- `npm run replay:gate`: **SKIPPED**, inputs changed; baseline not updated.
+- Hosted returning instructor/control/adaptive API checks PASS: old credentials,
+  identity, assignments, saved work, survey block/completion, instructor section
+  scope, CSRF, anonymous denial, cross-student denial, stale PUT409 and retry200.
+- Real Neon duplicate-event proof PASS: 20 duplicate deliveries plus 3 distinct
+  IDs apply exactly 4 profile effects and 4 progress attempts.
+- New-student browser workflow PASS: register, survey gate/completion, logout/
+  login, incorrect/correct query, hint, note, refresh and clean-context readback.
+  Initial browser attempt failed because the test checked welcome-dialog visibility
+  before it appeared; helper now waits for the actual dialog. No UI bypass added.
+  Returning control/adaptive browser checks also PASS 2/2 (49.2s), including
+  clean-context recovery. Their initial test attempt correctly encountered the
+  existing post-survey logout reminder; the test now chooses Log out anyway.
+  New-account check PASS separately (23.6s); runtime identical for all checks.
+- One integrated 50-user API run PASS: run 1793568017497-183c9082, 5 cycles over
+  300000ms (306439ms including setup), adaptive23/control27, 3302 requests,
+  throughput10.78 requests/s; zero unexpected errors, 429s, 5xx or timeouts.
+  Signup p50/p95/p99=1679/1763/2162ms; login=522/624/1467ms.
+  Every step p95<5000ms; session-save p95=326ms, progress-write224ms,
+  profile-write275ms, note-save178ms. Intentional survey/cross-user403s passed.
+  Interrupted successful response then identical-ID retry produced no duplicate
+  events/attempts. Session/code/notes readback matched every cycle. Final direct
+  database readback confirms all50 profile counts, profile/progress ledgers and
+  attempt counts equal exactly5. A first readback query used the wrong account
+  join column; corrected against auth.ts before obtaining the passing result.
+  Artifact: dist/beta/50-student-readiness/1793568323952-local-auth.json.
+  This is an API workload, not 50 browsers or a provider-outage simulation.
+
+Pre-existing source concerns remain explicitly limited: student-owned learner
+role updates can create users/auth_accounts inconsistency (privilege escalation
+not demonstrated); unauthenticated LLM routes may permit provider spending when
+LLM is enabled (not exercised live). Production exposure/provider logs, real
+Qualtrics, full security clearance and production cutover remain Unverified.
+Hint provider latency/failure was not measured because rehearsal LLM is disabled.
+
+Rollback/cleanup: restore prior matching frontend/backend deployments on failure;
+retain additive tables/claims and legitimate activity. Never restore the copy
+onto production or reset historical rows. Keep the dedicated preview/copy for
+review; later delete only these disposable resources and revoke their test keys.
+Do not log private credentials or run setup/migrations again against production.
+Final diff whitespace check PASS; exact private-value scan of all23 changed
+tracked files found zero matches. Main was fetched again and remains fully
+included (HEAD two ahead, zero behind before this commit); author HY-D1.
+Selected classroom persistence workflow and migration rehearsal PASS on the
+same runtime revision. Overall release remains PARTIAL because replay checksum,
+provider/live-survey/security boundaries above are not fully verified. Reviewed
+changes are prepared for the authorized test-branch push only, without a PR.
+Production needs the separate maintenance,
+identity/recovery-point checks, migration comparison and explicit cutover gate.
+
 ### In progress - 2026-11-01 (current-main compatibility and migration safety)
 
 **Status: PARTIAL. Production migration is not verified or performed.**

@@ -15,6 +15,8 @@
  * Remote authenticated targets require --acknowledge-isolated-test-target after
  * independently verifying their database is disposable and isolated from
  * production. The attestation is not proof of database isolation.
+ * Authenticated runs also require PILOT_ISOLATED_TARGET=true; they simulate
+ * survey callbacks using signed invitations, without contacting Qualtrics.
  * The qualifying API workload is 50 users for 300000ms at 60000ms intervals.
  * --duration-ms, --interval-ms and --users permit nonqualifying focused tests.
  */
@@ -212,6 +214,7 @@ async function runProductionPublicLoadTest(apiBaseUrl, users) {
 }
 
 async function runLocalAuthenticatedFlow(apiBaseUrl, instructorCode, users, durationMs, intervalMs) {
+  if (process.env.PILOT_ISOLATED_TARGET !== 'true') throw new Error('Set PILOT_ISOLATED_TARGET=true only after verifying an isolated test environment');
   const { randomBytes } = await import('node:crypto');
   const fs = await import('node:fs');
   const path = await import('node:path');
@@ -272,6 +275,35 @@ async function runLocalAuthenticatedFlow(apiBaseUrl, instructorCode, users, dura
       if (!student.learnerId) throw new Error('Student session is missing learnerId');
     });
     if (new Set(students.map((student) => student.learnerId)).size !== users) throw new Error('Learner IDs are not distinct');
+    try {
+      await safeStage(async (student) => {
+        const assignment = jsonData(await request('condition-assignment', `/api/learners/${encodeURIComponent(student.learnerId)}/condition-assignment`, post(student.auth.cookie, student.auth.csrf, {}))).data;
+        if (assignment?.userId !== student.learnerId || !['adaptive', 'control'].includes(assignment.conditionId)) throw new Error('Invalid condition assignment');
+        student.conditionId = assignment.conditionId;
+      });
+    } catch {
+      throw new Error('Condition assignment failed; confirm each student is enrolled in an eligible production-type section in the isolated test database');
+    }
+    await safeStage(async (student) => {
+      const cookie = student.auth.cookie;
+      const status = jsonData(await request('survey-status-before', '/api/surveys/status', get(cookie))).data;
+      if (typeof status?.completed !== 'boolean') throw new Error('Invalid survey status');
+      if (!status.completed) {
+        const gate = await request('survey-gate', `/api/sessions/${encodeURIComponent(student.learnerId)}/active`, post(cookie, student.auth.csrf, {}), 403);
+        if (JSON.parse(gate.body || '{}').code !== 'PRE_SURVEY_REQUIRED') throw new Error('Pre-survey gate was not enforced');
+        const invitations = jsonData(await request('survey-invitations', '/api/surveys', get(cookie))).data;
+        const invitation = Array.isArray(invitations) && invitations.find((item) => item.instance === 'pre' && item.status === 'pending');
+        if (!invitation?.surveyUrl || !invitation.username) throw new Error('Signed pre-survey invitation unavailable');
+        const survey = new URL(invitation.surveyUrl);
+        const token = survey.searchParams.get('completion_token');
+        if (!token || survey.searchParams.get('instance') !== 'pre' || survey.searchParams.get('username') !== invitation.username) throw new Error('Invalid signed pre-survey invitation');
+        const params = new URLSearchParams({ instance: 'pre', username: invitation.username, completion_token: token, ResponseID: `pilot-${randomBytes(16).toString('hex')}` });
+        const completion = await request('survey-completion', `/api/surveys/complete?${params}`, get(cookie), 302);
+        const location = completion.headers?.get('location');
+        if (!location || new URL(location, apiBaseUrl).pathname !== '/practice') throw new Error('Signed survey completion was rejected');
+      }
+      if (jsonData(await request('survey-status-after', '/api/surveys/status', get(cookie))).data?.completed !== true) throw new Error('Pre-survey completion did not persist');
+    });
     await safeStage(async (student, i) => {
       const other = students[(i + 1) % users];
       if (other === student) return;
@@ -294,7 +326,7 @@ async function runLocalAuthenticatedFlow(apiBaseUrl, instructorCode, users, dura
         const sessionRoute = `/api/sessions/${learner}/active`;
         const progressRoute = `/api/learners/${learner}/progress/problem-1`;
         const noteRoute = `/api/textbooks/${learner}/units`;
-        const interaction = { id: eventId, learnerId: student.learnerId, sessionId, timestamp: new Date().toISOString(), eventType: 'execution', problemId: 'problem-1', code, successful: true, conceptIds: ['select-basic'], policyVersion: 'sql-engage-index-v3-hintid-contract' };
+        const interaction = { id: eventId, learnerId: student.learnerId, sessionId, conditionId: student.conditionId, timestamp: new Date().toISOString(), eventType: 'execution', problemId: 'problem-1', code, successful: true, conceptIds: ['select-basic'], policyVersion: 'sql-engage-index-v3-hintid-contract' };
         jsonData(await request('session-save', sessionRoute, post(auth.cookie, auth.csrf, { sessionId, currentProblemId: 'problem-1', currentCode: code })));
         // Interrupt the first successful response after headers, then retry the
         // identical ID. The server already reported acceptance in its status.
@@ -333,11 +365,13 @@ async function runLocalAuthenticatedFlow(apiBaseUrl, instructorCode, users, dura
   }
   const slowSteps = Object.entries(byStep).filter(([, value]) => value.p95 > 5000).map(([name]) => name);
   const qualified = !failure && users === 50 && durationMs === 300000 && intervalMs === 60000 && cycles === 5 && slowSteps.length === 0;
+  const conditionMix = { adaptive: students.filter((student) => student.conditionId === 'adaptive').length, control: students.filter((student) => student.conditionId === 'control').length };
+  console.log(`Condition assignments: adaptive=${conditionMix.adaptive} control=${conditionMix.control}`);
   console.log(`Workload: users=${users} durationMs=${durationMs} intervalMs=${intervalMs} cycles=${cycles} wallMs=${wallMs.toFixed(2)} throughput=${(metrics.length * 1000 / wallMs).toFixed(2)} requests/s`);
   console.log(`Qualifying API run: ${qualified}`);
   if (failure) console.log(`Failure: ${failure}`);
   if (slowSteps.length) console.log(`p95 > 5000ms: ${slowSteps.join(', ')}`);
-  return { target: apiBaseUrl, mode: 'local-authenticated', runId, concurrentUsers: users, durationMs, intervalMs, cycles, wallMs, throughput: metrics.length * 1000 / wallMs, byStep, failure, slowSteps, qualified, timestamp: new Date().toISOString() };
+  return { target: apiBaseUrl, mode: 'local-authenticated', runId, concurrentUsers: users, durationMs, intervalMs, cycles, wallMs, throughput: metrics.length * 1000 / wallMs, conditionMix, byStep, failure, slowSteps, qualified, timestamp: new Date().toISOString() };
 }
 
 async function main() {

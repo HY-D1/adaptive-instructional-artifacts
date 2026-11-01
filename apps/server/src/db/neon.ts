@@ -575,6 +575,16 @@ export async function initializeSchema(): Promise<void> {
   await db`CREATE INDEX IF NOT EXISTS idx_learner_profiles_last_activity ON learner_profiles(last_activity_at)`;
 
   await db`
+    CREATE TABLE IF NOT EXISTS learner_profile_events (
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      event_id TEXT NOT NULL,
+      problem_id TEXT,
+      event_type TEXT,
+      PRIMARY KEY (user_id, event_id)
+    )
+  `;
+
+  await db`
     CREATE TABLE IF NOT EXISTS student_condition_assignments (
       user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
       condition_id TEXT NOT NULL CHECK (condition_id IN ('adaptive', 'control')),
@@ -2245,6 +2255,7 @@ export async function getLearnerProfile(
 
   return {
     id: result.learner_id,
+    serverRevision: Number(result.version),
     name: result.name,
     conceptsCovered: parseJson(result.concept_coverage) || [],
     conceptCoverageEvidence: parseJson(result.concept_evidence) || {},
@@ -2269,9 +2280,14 @@ export async function getLearnerProfile(
   };
 }
 
+export class ProfileRevisionConflict extends Error {
+  constructor() { super('Profile changed; reload the latest profile and retry'); }
+}
+
 export async function saveLearnerProfile(
   learnerId: string,
   profile: Partial<LearnerProfile>,
+  expectedRevision?: number,
 ): Promise<LearnerProfile | null> {
   const db = getDb();
   const now = new Date().toISOString();
@@ -2279,6 +2295,9 @@ export async function saveLearnerProfile(
 
   // Get existing profile or create new
   const existing = await getLearnerProfile(learnerId);
+  if (expectedRevision !== undefined && expectedRevision !== (existing?.serverRevision ?? 0)) {
+    throw new ProfileRevisionConflict();
+  }
 
   const mergedProfile: LearnerProfile = {
     id: learnerId,
@@ -2305,7 +2324,7 @@ export async function saveLearnerProfile(
   };
 
   // Atomic upsert with version increment for optimistic locking
-  await db`
+  const saved = await db`
     INSERT INTO learner_profiles (
       learner_id, name, concept_coverage, concept_evidence, error_history,
       interaction_count, strategy, preferences, last_activity_at, profile_data, version, updated_at
@@ -2335,7 +2354,11 @@ export async function saveLearnerProfile(
       profile_data = EXCLUDED.profile_data,
       version = learner_profiles.version + 1,
       updated_at = EXCLUDED.updated_at
+    WHERE ${expectedRevision ?? null}::integer IS NULL OR learner_profiles.version = ${expectedRevision ?? null}
+    RETURNING version
   `;
+  if (expectedRevision !== undefined && saved.length === 0) throw new ProfileRevisionConflict();
+  mergedProfile.serverRevision = saved[0]?.version;
 
   return mergedProfile;
 }
@@ -2417,49 +2440,7 @@ export async function getLearnerProfilesByIds(
     .filter((profile): profile is LearnerProfile => Boolean(profile));
 }
 
-/**
- * Update learner profile from an interaction event.
- * Uses SELECT FOR UPDATE row locking to prevent race conditions during
- * concurrent event processing.
- */
-export async function updateLearnerProfileFromEvent(
-  learnerId: string,
-  event: CreateInteractionRequest,
-): Promise<LearnerProfile | null> {
-  const db = getDb();
-  const now = new Date().toISOString();
-  const nowMs = Date.now();
-
-  // Step 1: Ensure profile exists (atomic initialization - safe for concurrent calls)
-  await db`
-    INSERT INTO learner_profiles (learner_id, name, created_at, updated_at, version)
-    VALUES (${learnerId}, ${learnerId}, ${now}, ${now}, 1)
-    ON CONFLICT (learner_id) DO NOTHING
-  `;
-
-  // Step 2: Atomic increment of interaction_count - race condition safe
-  // Each concurrent call increments the counter separately
-  await db`
-    UPDATE learner_profiles
-    SET interaction_count = interaction_count + 1,
-        last_activity_at = ${now},
-        version = version + 1,
-        updated_at = ${now}
-    WHERE learner_id = ${learnerId}
-  `;
-
-  // Step 3: For complex JSON updates, use SELECT FOR UPDATE to lock the row
-  // This ensures exclusive access during the read-modify-write cycle
-  const [lockedRow] = await db`
-    SELECT * FROM learner_profiles
-    WHERE learner_id = ${learnerId}
-    FOR UPDATE
-  `;
-
-  if (!lockedRow) {
-    return getLearnerProfile(learnerId);
-  }
-
+function deriveProfileEventUpdate(lockedRow: any, event: CreateInteractionRequest, nowMs: number) {
   // Parse current values from locked row
   const currentErrorHistory = parseJson(lockedRow.error_history) || {};
   const currentConceptEvidence = parseJson(lockedRow.concept_evidence) || {};
@@ -2554,17 +2535,111 @@ export async function updateLearnerProfileFromEvent(
     }
   }
 
-  // Apply updates if any JSON fields changed
-  if (hasUpdates) {
+  return { hasUpdates, updatedErrorHistory, updatedConceptEvidence, updatedConceptCoverage };
+}
+
+/** Apply an identified event once, retrying if another writer changed the profile. */
+async function applyIdentifiedProfileEvent(
+  learnerId: string, event: CreateInteractionRequest, now: string, nowMs: number,
+): Promise<void> {
+  const db = getDb();
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const [row] = await db`SELECT * FROM learner_profiles WHERE learner_id = ${learnerId}`;
+    if (!row) throw new Error('Learner profile not found');
+    const update = deriveProfileEventUpdate(row, event, nowMs);
+    // Lock and version-check before claiming: a failed update cannot consume the ID.
+    const applied = await db`
+      WITH eligible AS (
+        SELECT learner_id FROM learner_profiles
+        WHERE learner_id = ${learnerId} AND version = ${row.version}
+        FOR UPDATE
+      ), claimed AS (
+        INSERT INTO learner_profile_events (user_id, event_id, problem_id, event_type)
+        SELECT ${learnerId}, ${event.eventId}, ${event.problemId ?? null}, ${event.eventType ?? null}
+        FROM eligible ON CONFLICT (user_id, event_id) DO NOTHING
+        RETURNING user_id
+      )
+      UPDATE learner_profiles
+      SET interaction_count = interaction_count + 1,
+          last_activity_at = ${now},
+          error_history = CASE WHEN ${update.hasUpdates} THEN ${JSON.stringify(update.updatedErrorHistory)} ELSE error_history END,
+          concept_evidence = CASE WHEN ${update.hasUpdates} THEN ${JSON.stringify(update.updatedConceptEvidence)} ELSE concept_evidence END,
+          concept_coverage = CASE WHEN ${update.hasUpdates} THEN ${JSON.stringify(update.updatedConceptCoverage)} ELSE concept_coverage END,
+          version = version + ${update.hasUpdates ? 2 : 1}, updated_at = ${now}
+      FROM claimed WHERE learner_profiles.learner_id = claimed.user_id
+      RETURNING learner_profiles.learner_id
+    `;
+    if (applied.length) return;
+    const [existing] = await db`
+      SELECT problem_id, event_type FROM learner_profile_events
+      WHERE user_id = ${learnerId} AND event_id = ${event.eventId}
+    `;
+    if (existing) {
+      if (existing.problem_id !== (event.problemId ?? null) || existing.event_type !== (event.eventType ?? null)) {
+        throw new Error('Profile event ID belongs to a different event');
+      }
+      return;
+    }
+  }
+  throw new Error('Profile event update conflicted repeatedly');
+}
+
+/** Update a learner profile; event IDs provide idempotent, concurrent-safe updates. */
+export async function updateLearnerProfileFromEvent(
+  learnerId: string,
+  event: CreateInteractionRequest,
+): Promise<LearnerProfile | null> {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const nowMs = Date.now();
+
+  // Step 1: Ensure profile exists (atomic initialization - safe for concurrent calls)
+  await db`
+    INSERT INTO learner_profiles (learner_id, name, created_at, updated_at, version)
+    VALUES (${learnerId}, ${learnerId}, ${now}, ${now}, 1)
+    ON CONFLICT (learner_id) DO NOTHING
+  `;
+
+  if (event.eventId) {
+    await applyIdentifiedProfileEvent(learnerId, event, now, nowMs);
+  } else {
+    // Legacy callers without event IDs retain their existing update behavior.
+    // Each concurrent call increments the counter separately
     await db`
       UPDATE learner_profiles
-      SET error_history = ${JSON.stringify(updatedErrorHistory)},
-          concept_evidence = ${JSON.stringify(updatedConceptEvidence)},
-          concept_coverage = ${JSON.stringify(updatedConceptCoverage)},
+      SET interaction_count = interaction_count + 1,
+          last_activity_at = ${now},
           version = version + 1,
           updated_at = ${now}
       WHERE learner_id = ${learnerId}
     `;
+
+    // Legacy HTTP queries are separate transactions; this lock is not held across them.
+    const [lockedRow] = await db`
+      SELECT * FROM learner_profiles
+      WHERE learner_id = ${learnerId}
+      FOR UPDATE
+    `;
+
+    if (!lockedRow) {
+      return getLearnerProfile(learnerId);
+    }
+
+    const { hasUpdates, updatedErrorHistory, updatedConceptEvidence, updatedConceptCoverage } =
+      deriveProfileEventUpdate(lockedRow, event, nowMs);
+
+    // Apply updates if any JSON fields changed
+    if (hasUpdates) {
+      await db`
+        UPDATE learner_profiles
+        SET error_history = ${JSON.stringify(updatedErrorHistory)},
+            concept_evidence = ${JSON.stringify(updatedConceptEvidence)},
+            concept_coverage = ${JSON.stringify(updatedConceptCoverage)},
+            version = version + 1,
+            updated_at = ${now}
+        WHERE learner_id = ${learnerId}
+      `;
+    }
   }
 
   // Update problem_progress on successful execution

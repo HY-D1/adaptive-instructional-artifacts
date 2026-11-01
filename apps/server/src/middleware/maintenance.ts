@@ -4,7 +4,8 @@ import type { NextFunction, Request, Response } from 'express';
 /** Reject API traffic during a controlled cutover; authentication still runs after bypass. */
 export function maintenanceGuard(req: Request, res: Response, next: NextFunction): void {
   if (process.env.MAINTENANCE_MODE !== 'true' || req.method === 'OPTIONS' ||
-      !/^\/api(?:\/|$)/i.test(req.path)) {
+      (!/^\/api(?:\/|$)/i.test(req.path) &&
+       !/^\/ollama\/api\/(?:tags|generate)\/?$/i.test(req.path))) {
     next();
     return;
   }

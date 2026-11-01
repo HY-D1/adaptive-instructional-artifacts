@@ -6,7 +6,8 @@ import { getEditorText, replaceEditorText } from '../../helpers/test-helpers';
 process.env.PLAYWRIGHT_NO_COPY_PROMPT = '1';
 // Explicit opt-in: this test creates a student on an independently verified preview.
 test.use({ trace: 'off', screenshot: 'off', video: 'off' });
-test('isolated pilot: signup, login, answer, hint, notes and clean-context recovery', async ({ page, browser }) => {
+for (const scenario of ['new', 'returning-control', 'returning-adaptive']) {
+test(`isolated pilot ${scenario}: login, answer, hint, notes and clean-context recovery`, async ({ page, browser }) => {
   test.skip(process.env.PILOT_ISOLATED_TARGET !== 'true', 'Requires verified isolated preview');
   test.setTimeout(180_000);
   page.setDefaultTimeout(15_000);
@@ -15,8 +16,10 @@ test('isolated pilot: signup, login, answer, hint, notes and clean-context recov
   const classCode = process.env.E2E_STUDENT_CLASS_CODE!;
   expect(base && api && classCode).toBeTruthy();
   expect(new URL(base).hostname).not.toBe('adaptive-instructional-artifacts.vercel.app');
-  const email = `pilot-browser-${Date.now()}@sql-adapt.test`;
-  const password = `Pilot!${randomBytes(24).toString('hex')}`;
+  const prefix = scenario === 'returning-control' ? 'PILOT_RETURNING_CONTROL' : 'PILOT_RETURNING_ADAPTIVE';
+  test.skip(scenario !== 'new' && !process.env[`${prefix}_EMAIL`], 'Requires controlled pre-migration account');
+  const email = scenario === 'new' ? `pilot-browser-${Date.now()}@sql-adapt.test` : process.env[`${prefix}_EMAIL`]!;
+  const password = scenario === 'new' ? `Pilot!${randomBytes(24).toString('hex')}` : process.env[`${prefix}_PASSWORD`]!;
   const correct = 'SELECT * FROM users;';
   const read = (p: Page, path: string) => p.evaluate(async url => {
     const response = await fetch(url, { credentials: 'include' });
@@ -24,7 +27,7 @@ test('isolated pilot: signup, login, answer, hint, notes and clean-context recov
   }, `${api}${path}`);
   const closeWelcome = async (p: Page) => {
     const close = p.getByRole('button', { name: 'Close welcome dialog', exact: true });
-    if (await close.isVisible({ timeout: 2_000 }).catch(() => false)) await close.click();
+    if (await close.waitFor({ state: 'visible', timeout: 5_000 }).then(() => true).catch(() => false)) await close.click();
   };
   const login = async (p: Page) => {
     await p.goto(`${base}/login`);
@@ -36,6 +39,7 @@ test('isolated pilot: signup, login, answer, hint, notes and clean-context recov
     await expect(p.getByRole('button', { name: 'Run Query', exact: true })).toBeEnabled();
   };
 
+  if (scenario === 'new') {
   await page.goto(`${base}/login?tab=signup`);
   await page.locator('#signup-name').fill('Pilot Browser Student');
   await page.locator('#signup-email').fill(email);
@@ -43,9 +47,42 @@ test('isolated pilot: signup, login, answer, hint, notes and clean-context recov
   await page.getByRole('button', { name: 'Student Practice SQL', exact: true }).click();
   await page.locator('#signup-code').fill(classCode);
   await page.getByRole('button', { name: /Create Account/i }).last().click();
-  await expect(page).toHaveURL(/\/practice/);
+  await expect(page).toHaveURL(/\/pre-survey-required/);
+  const identityBefore = await read(page, '/api/auth/me');
+  expect(identityBefore.status).toBe(200);
+  const learnerBefore = identityBefore.body.user.learnerId;
+  expect((await read(page, '/api/surveys/status')).body.data.completed).toBe(false);
+  const csrf = (await page.context().cookies(api)).find(cookie => cookie.name === 'sql_adapt_csrf')?.value;
+  expect(Boolean(csrf)).toBe(true);
+  const gated = await page.request.post(`${api}/api/sessions/${encodeURIComponent(learnerBefore)}/active`, { headers: { 'x-csrf-token': csrf! }, data: {}, failOnStatusCode: false });
+  expect(gated.status()).toBe(403);
+  expect((await gated.json()).code).toBe('PRE_SURVEY_REQUIRED');
+  const invitations = await read(page, '/api/surveys');
+  const invitation = invitations.body.data?.find((item: { instance: string; status: string }) => item.instance === 'pre' && item.status === 'pending');
+  expect(Boolean(invitation?.surveyUrl && invitation?.username)).toBe(true);
+  const survey = new URL(invitation.surveyUrl);
+  const token = survey.searchParams.get('completion_token');
+  expect(Boolean(token && survey.searchParams.get('username') === invitation.username && survey.searchParams.get('instance') === 'pre')).toBe(true);
+  const callback = new URL('/api/surveys/complete', api);
+  callback.search = new URLSearchParams({ instance: 'pre', username: invitation.username, completion_token: token!, ResponseID: `pilot-${randomBytes(16).toString('hex')}` }).toString();
+  // The token is sensitive. Suppress request errors that could contain its URL.
+  let completed = false;
+  try {
+    const response = await page.request.get(callback.toString(), { maxRedirects: 0, failOnStatusCode: false });
+    const location = response.headers().location;
+    completed = response.status() === 302 && !!location && new URL(location, base).pathname === '/practice';
+  } catch { /* Report only the sanitized failure below. */ }
+  expect(completed).toBe(true);
+  expect((await read(page, '/api/surveys/status')).body.data.completed).toBe(true);
+  } else {
+    await login(page);
+    expect((await read(page, '/api/surveys/status')).body.data.completed).toBe(true);
+  }
+  await page.goto(`${base}/practice`);
   await closeWelcome(page);
   await page.getByRole('button', { name: 'Logout', exact: true }).first().click();
+  const logoutAnyway = page.getByRole('button', { name: 'Log out anyway', exact: true });
+  if (await logoutAnyway.waitFor({ state: 'visible', timeout: 5_000 }).then(() => true).catch(() => false)) await logoutAnyway.click();
   await expect.poll(async () => (await read(page, '/api/auth/me')).status).toBe(401);
   await login(page);
   const identity = await read(page, '/api/auth/me');
@@ -76,7 +113,8 @@ test('isolated pilot: signup, login, answer, hint, notes and clean-context recov
   await page.reload();
   await expect.poll(() => getEditorText(page)).toContain(correct);
 
-  const clean = await browser.newContext();
+  const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? process.env.E2E_VERCEL_BYPASS_SECRET;
+  const clean = await browser.newContext({ extraHTTPHeaders: bypass ? { 'x-vercel-protection-bypass': bypass, 'x-vercel-set-bypass-cookie': 'true' } : {} });
   try {
     const second = await clean.newPage();
     await login(second);
@@ -93,3 +131,5 @@ test('isolated pilot: signup, login, answer, hint, notes and clean-context recov
     await clean.close();
   }
 });
+
+}

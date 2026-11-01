@@ -57,6 +57,23 @@ const CHUNK_SIZE = 100;
 const RETRY_INTERVAL_MS = 5000;
 const BATCH_SIZE = 25;
 
+function applyServerProfile(submitted: LearnerProfile, latest: LearnerProfile | null, conflict: boolean): void {
+  if (latest) {
+    const current = localStorageManager.getProfile(submitted.id);
+    const snapshot = (profile: LearnerProfile) => JSON.stringify({
+      name: profile.name, conceptsCovered: [...profile.conceptsCovered],
+      conceptCoverageEvidence: [...profile.conceptCoverageEvidence], errorHistory: [...profile.errorHistory],
+      solvedProblemIds: [...profile.solvedProblemIds], interactionCount: profile.interactionCount,
+      currentStrategy: profile.currentStrategy, preferences: profile.preferences,
+    });
+    // A successful earlier save must not replace edits made while it was in flight.
+    if (conflict || !current || snapshot(current) === snapshot(submitted)) {
+      localStorageManager.saveProfile(latest, true);
+    }
+  }
+  if (conflict && typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('sql-adapt-profile-conflict'));
+}
+
 // RESEARCH-1: Durable pending store for all interactions
 const PENDING_INTERACTIONS_KEY = 'sql-adapt-pending-interactions';
 
@@ -647,7 +664,17 @@ class OfflineQueueManager {
             break;
           }
           case 'profile':
-            success = await storageClient.saveProfile(item.data as LearnerProfile);
+            {
+              let conflict = false;
+              success = await storageClient.saveProfile(item.data as LearnerProfile, (latest, isConflict) => {
+                applyServerProfile(item.data as LearnerProfile, latest, isConflict);
+                if (isConflict) {
+                  conflict = true;
+                }
+              });
+              // A stale snapshot must never be replayed automatically.
+              if (conflict) success = true;
+            }
             break;
           case 'session': {
             const { learnerId, data } = item.data as { learnerId: string; data: unknown };
@@ -2072,19 +2099,23 @@ class DualStorageManager {
    * Save a learner's full profile to backend and localStorage
    */
   saveProfile(profile: LearnerProfile): void {
-    // Send to backend FIRST (primary source of truth) - async in background
+    // Cache synchronously before starting the asynchronous backend write.
+    localStorageManager.saveProfile(profile);
     if (this.shouldUseBackend()) {
-      storageClient.saveProfile(profile).then(success => {
-        if (!success) {
+      let conflict = false;
+      storageClient.saveProfile(profile, (latest, isConflict) => {
+        applyServerProfile(profile, latest, isConflict);
+        if (isConflict) {
+          conflict = true;
+        }
+      }).then(success => {
+        if (!success && !conflict) {
           this.queueProfileForRetry(profile, '[DualStorage] Backend saveProfile failed, queued for retry.');
         }
       }).catch(err => {
         this.queueProfileForRetry(profile, '[DualStorage] Failed to sync profile to backend, queuing.', 'full-profile', err);
       });
     }
-    
-    // Always cache in localStorage (synchronous)
-    localStorageManager.saveProfile(profile);
   }
 
   /**
@@ -2111,8 +2142,14 @@ class DualStorageManager {
     const profile = localStorageManager.createDefaultProfile(learnerId, strategy);
 
     if (this.shouldUseBackend()) {
-      storageClient.saveProfile(profile).then(success => {
-        if (!success) {
+      let conflict = false;
+      storageClient.saveProfile(profile, (latest, isConflict) => {
+        applyServerProfile(profile, latest, isConflict);
+        if (isConflict) {
+          conflict = true;
+        }
+      }).then(success => {
+        if (!success && !conflict) {
           this.queueProfileForRetry(profile, '[DualStorage] Backend createDefaultProfile failed, queued for retry.');
         }
       }).catch(err => {

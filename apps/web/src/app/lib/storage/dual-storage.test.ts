@@ -21,7 +21,7 @@ const logInteractionMock = vi.fn<(event: unknown) => Promise<{
 const logInteractionsBatchMock = vi.fn<(events: unknown[]) => Promise<boolean>>();
 const logInteractionsBatchVerifiedMock = vi.fn<(events: unknown[]) => Promise<{ confirmed: string[]; failed: string[] }>>();
 const logInteractionsBatchKeepaliveMock = vi.fn<(events: unknown[]) => Promise<{ success: boolean; confirmedIds?: string[] }>>();
-const saveProfileMock = vi.fn<(profile: unknown) => Promise<boolean>>();
+const saveProfileMock = vi.fn<(profile: unknown, onServerProfile?: (profile: LearnerProfile | null, conflict: boolean) => void) => Promise<boolean>>();
 const updateProblemProgressMock = vi.fn<(learnerId: string, problemId: string, update: unknown) => Promise<unknown>>();
 const getAllProblemProgressMock = vi.fn<(learnerId: string) => Promise<Array<{ problemId: string; solved: boolean }>>>();
 const createLearnerMock = vi.fn<(profile: unknown) => Promise<boolean>>();
@@ -428,7 +428,7 @@ describe('dual-storage critical write semantics', () => {
     );
 
     await vi.waitFor(() => {
-      expect(saveProfileMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'learner-new' }));
+      expect(saveProfileMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'learner-new' }), expect.any(Function));
     });
   });
 
@@ -446,8 +446,37 @@ describe('dual-storage critical write semantics', () => {
 
     await vi.waitFor(() => {
       expect(saveProfileMock).toHaveBeenCalledTimes(2);
-      expect(saveProfileMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ id: 'learner-queued' }));
+      expect(saveProfileMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ id: 'learner-queued' }), expect.any(Function));
     });
+  });
+
+  it('replaces stale cache and does not queue a conflicted profile snapshot', async () => {
+    await dualStorageModule.dualStorage.checkHealth();
+    const notify = vi.fn();
+    window.addEventListener('sql-adapt-profile-conflict', notify);
+    const latest = createBackendProfile({ name: 'Latest', serverRevision: 8, solvedProblemIds: new Set() });
+    saveProfileMock.mockImplementationOnce(async (_profile, callback) => { callback?.(latest, true); return false; });
+    dualStorageModule.dualStorage.saveProfile(createBackendProfile({ name: 'Stale', serverRevision: 7, solvedProblemIds: new Set(['problem-stale']) }));
+    await vi.waitFor(() => expect(notify).toHaveBeenCalledOnce());
+    const cached = dualStorageModule.dualStorage.getProfile('learner-1');
+    expect(cached).toMatchObject({ name: 'Latest', serverRevision: 8 });
+    expect(cached?.solvedProblemIds.has('problem-stale')).toBe(false);
+    await dualStorageModule.dualStorage.processOfflineQueue();
+    expect(saveProfileMock).toHaveBeenCalledTimes(1);
+    window.removeEventListener('sql-adapt-profile-conflict', notify);
+  });
+
+  it('preserves newer local edits when an earlier profile save succeeds', async () => {
+    await dualStorageModule.dualStorage.checkHealth();
+    let complete!: (profile: LearnerProfile | null, conflict: boolean) => void;
+    saveProfileMock.mockImplementationOnce(async (_profile, callback) => {
+      complete = callback!;
+      return new Promise<boolean>(() => {});
+    });
+    dualStorageModule.dualStorage.saveProfile(createBackendProfile({ name: 'First', serverRevision: 7 }));
+    dualStorageModule.dualStorage.cacheProfile(createBackendProfile({ name: 'Newer edit', serverRevision: 7 }));
+    complete(createBackendProfile({ name: 'First', serverRevision: 8 }), false);
+    expect(dualStorageModule.dualStorage.getProfile('learner-1')?.name).toBe('Newer edit');
   });
 
   it('sends the active session fallback to backend for background interaction writes', async () => {

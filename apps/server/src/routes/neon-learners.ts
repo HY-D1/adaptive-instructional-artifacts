@@ -339,6 +339,15 @@ router.get('/:id/profile', async (req: Request, res: Response) => {
 // PUT /api/learners/:id/profile - Save/update learner's full profile
 router.put('/:id/profile', requirePreSurveyCompleted, async (req: Request, res: Response) => {
   try {
+    const revision = req.body.expectedRevision;
+    if (revision === undefined) {
+      res.status(428).json({ success: false, code: 'PROFILE_REVISION_REQUIRED', error: 'Reload the latest profile before saving', data: await db.getLearnerProfile(req.params.id) });
+      return;
+    }
+    if (!Number.isInteger(revision) || revision < 0 || revision > 2147483647) {
+      res.status(400).json({ success: false, error: 'Invalid expectedRevision' });
+      return;
+    }
     const {
       name,
       conceptsCovered,
@@ -361,7 +370,7 @@ router.put('/:id/profile', requirePreSurveyCompleted, async (req: Request, res: 
       preferences,
       lastActive,
       extendedData,
-    });
+    }, revision);
 
     if (!profile) {
       res.status(500).json({ success: false, error: 'Failed to save profile' });
@@ -370,6 +379,10 @@ router.put('/:id/profile', requirePreSurveyCompleted, async (req: Request, res: 
 
     res.json({ success: true, data: profile });
   } catch (error) {
+    if (error instanceof db.ProfileRevisionConflict) {
+      res.status(409).json({ success: false, code: 'PROFILE_REVISION_CONFLICT', error: error.message, data: await db.getLearnerProfile(req.params.id) });
+      return;
+    }
     console.error('Error saving learner profile:', error);
     res.status(500).json({ success: false, error: 'Failed to save learner profile' });
   }
