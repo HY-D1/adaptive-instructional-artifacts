@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  resolvePracticeLearnerProfile,
   GeneratedExplanationCard,
   GeneratedExplanationPreview,
   SessionConfigErrorCard,
@@ -10,6 +11,7 @@ import {
   restoreDraftFromProgress,
   resolvePracticeProblemFromSources,
 } from './LearningInterface';
+import { storage } from '../lib/storage';
 import type { SQLProblem } from '../types';
 
 const problems: SQLProblem[] = [
@@ -222,5 +224,30 @@ describe('SessionConfigErrorCard', () => {
     render(<div data-testid="session-ready" />);
 
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('practice profile readiness', () => {
+  it('initializes a missing local profile and preserves it on subsequent loads', () => {
+    const id = 'local-profile-readiness';
+    const profile = resolvePracticeLearnerProfile(id, false);
+    expect(profile?.id).toBe(id);
+    expect(profile?.currentStrategy).toBe('adaptive-medium');
+    const stored = storage.getProfile(id);
+    expect(stored).not.toBeNull();
+    expect(resolvePracticeLearnerProfile(id, false)).toEqual(stored);
+  });
+
+  it('waits for account hydration without creating a replacement and uses the hydrated profile', () => {
+    const id = 'account-profile-readiness';
+    expect(resolvePracticeLearnerProfile(id, true)).toBeNull();
+    expect(storage.getProfile(id)).toBeNull();
+    const hydrated = storage.createDefaultProfile(id);
+    hydrated.interactionCount = 7;
+    hydrated.solvedProblemIds.add('problem-1');
+    storage.cacheProfile(hydrated);
+    const loaded = resolvePracticeLearnerProfile(id, true);
+    expect(loaded?.interactionCount).toBe(7);
+    expect(loaded?.solvedProblemIds.has('problem-1')).toBe(true);
   });
 });

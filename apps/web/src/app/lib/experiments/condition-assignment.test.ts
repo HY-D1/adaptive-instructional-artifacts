@@ -3,6 +3,7 @@ import {
   hashString,
   generateSessionId,
   assignCondition,
+  assignLocalDemoCondition,
   reconstructSessionConfig,
   getConditionDistribution,
   validateSessionConfig,
@@ -650,5 +651,17 @@ describe("@weekly Condition Assignment", () => {
         sessionStorage.setItem = originalSetItem;
       });
     });
+  });
+});
+
+describe('explicit offline assignment boundary', () => {
+  it('allows offline demo assignment but rejects configured account mode', () => {
+    try {
+      vi.stubEnv('VITE_API_BASE_URL', '');
+      vi.stubEnv('VITE_TEST_MODE', 'true');
+      expect(assignLocalDemoCondition('offline-test').learnerId).toBe('offline-test');
+      vi.stubEnv('VITE_API_BASE_URL', 'https://backend.example.invalid');
+      expect(() => assignLocalDemoCondition('account-test')).toThrow('explicit offline');
+    } finally { vi.unstubAllEnvs(); }
   });
 });

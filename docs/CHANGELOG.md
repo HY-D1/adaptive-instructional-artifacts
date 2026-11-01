@@ -9,6 +9,42 @@
 
 ## [Unreleased] - Harderning/Research-Grade-Tightening
 
+### 2026-11-01 — PR32 regression-gate correction
+
+Status: PARTIAL pending the complete GitHub two-shard run. PR32 run41353021329
+failed in both browser shards; consolidation correctly propagated their failure.
+CI traces pinpointed null conceptsCovered in prerequisite monitoring. The same
+indicators test failed locally before the fix. Local profile initialization had
+been removed for account hydration safety, also unintentionally affecting offline
+practice. Restore only offline initialization, guard missing monitoring profiles,
+and rerun monitoring on session/hydration readiness. Account mode still waits for
+backend profiles and never seeds empty replacements.
+
+After the null fix, browser execution reproduced another failure: offline tests
+requested durable condition assignments from absent localhost3001. Explicit
+local demo/test mode now uses the existing deterministic assignment implementation
+and tab session cache; configured account mode retains the strict durable loader.
+A focused boundary test proves configured accounts cannot use offline assignment.
+The first new profile test incorrectly compared pre/post-storage version shapes;
+corrected to compare the actual persisted snapshot without changing old assertions.
+
+Workflow retains all weekly tests, both shards and Playwright's one retry. Removed
+outer --last-failed rerun (it repeated failures and could omit interrupted tests).
+Emit/upload per-shard JSON and make missing reports or non-success dependencies
+fail consolidation. No increased timeout, excluded tests or dependency changes.
+Files: LearningInterface.tsx/test, condition-assignment.ts/test,
+.github/workflows/regression-gate.yml, this checkpoint.
+
+Verification: CI-style VITE_TEST_MODE=true npm run build PASS; frontend tsc PASS;
+representative Chromium indicators, hint persistence and mobile welcome checks
+PASS3/3 in5.3s after both fixes. Focused Vitest PASS70/70 across2 files.
+Replay comparison remains SKIPPED. git diff --check PASS. Backend checks reused;
+no backend/migration/configuration change. No PR merge or production release.
+Automatic production promotion remains disabled. Original eight untracked files
+preserved. Next: one complete GitHub run; investigate remaining distinct failures
+before claiming PR merge readiness. Rollback is reverting this bounded commit;
+production database remains untouched.
+
 ### 2026-11-01 — Safe-to-merge staging gate
 
 **SAFE TO MERGE INTO STAGED MAIN: PASS. Production cutover: PENDING.**

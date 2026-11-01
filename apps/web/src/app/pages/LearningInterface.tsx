@@ -74,7 +74,7 @@ import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync 
 import { useAuth } from '../lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
 import { getProblemProgress } from '../lib/api/storage-client';
-import { isSharedBanditEnabled } from '../lib/runtime-config';
+import { isSharedBanditEnabled, isDevDemoModeEnabled, isTestEnvironment } from '../lib/runtime-config';
 import { getSharedBanditState, recordSharedBanditReward } from '../lib/api/storage-client';
 import { clearUiStateForActor, getUiState, setUiState } from '../lib/ui-state';
 import type { QueryResult } from '../lib/sql-executor';
@@ -98,7 +98,8 @@ import type { HDIComponents, HDILevel } from '../types';
 import { safeGetStrategy, safeGetProfileOverride } from '../lib/storage/storage-validation';
 import { assignProfile, getProfileById, type EscalationProfile } from '../lib/ml/escalation-profiles';
 import { 
-  assignCondition, 
+  assignCondition,
+  assignLocalDemoCondition,
   loadSessionConfig,
   loadSessionConfigAsync,
   saveSessionConfig,
@@ -528,6 +529,12 @@ export function SessionConfigErrorCard() {
       </div>
     </div>
   );
+}
+
+export function resolvePracticeLearnerProfile(learnerId: string, backendConfigured: boolean): LearnerProfile | null {
+  const existing = storage.getProfile(learnerId);
+  // Local practice owns its initial profile; account mode must await backend hydration.
+  return existing || (backendConfigured ? null : storage.createDefaultProfile(learnerId));
 }
 
 export function LearningInterface() {
@@ -1228,7 +1235,13 @@ export function LearningInterface() {
         setSessionConfigError(undefined);
 
         // Use async loader: backend -> sessionStorage -> assign
-        const result = await loadSessionConfigAsync(learnerId, authUser?.sectionId);
+        const offlineDemo = !AUTH_BACKEND_CONFIGURED && (isDevDemoModeEnabled() || isTestEnvironment());
+        const cachedConfig = offlineDemo ? loadSessionConfig() : null;
+        const result = offlineDemo
+          ? { config: cachedConfig?.learnerId === learnerId ? cachedConfig : assignLocalDemoCondition(learnerId),
+              isNewAssignment: cachedConfig?.learnerId !== learnerId, source: 'sessionStorage' }
+          : await loadSessionConfigAsync(learnerId, authUser?.sectionId);
+        if (offlineDemo) saveSessionConfig(result.config);
 
         if (cancelled) return;
 
@@ -1322,15 +1335,7 @@ export function LearningInterface() {
     };
 
     const initializeSessionState = async () => {
-      // Initialize learner profile if doesn't exist
-      let profile = storage.getProfile(learnerId);
-      if (!profile) {
-        // Do NOT eagerly create a default profile here.
-        // hydrateLearner (in account mode) or updateProfileStatsFromEvent
-        // will create it with proper solved state when needed.
-        // Creating an empty profile here races with backend hydration and
-        // can overwrite progress that hasn't been loaded yet.
-      }
+      resolvePracticeLearnerProfile(learnerId, AUTH_BACKEND_CONFIGURED);
 
       // Prefer active session from storage (hydrated from backend in account mode).
       // Fall back to sessionConfig only when storage still has its sentinel value.
@@ -1585,19 +1590,22 @@ export function LearningInterface() {
   useEffect(() => {
     if (!learnerId) return;
     
+    const learnerProfile = storage.getProfile(learnerId);
+    if (!learnerProfile) return;
+
     // Build initial learning path
     const path = buildLearningPath(learnerId, 'prerequisite_first');
     setLearningPath(path);
     
     // Check prerequisites for current problem
-    const readiness = checkProblemReadiness(currentProblem.concepts, storage.getProfile(learnerId)!);
+    const readiness = checkProblemReadiness(currentProblem.concepts, learnerProfile);
     setPrerequisiteWarnings(readiness.warnings);
     
     // Log if there are violations
     if (readiness.violations.length > 0) {
       console.log('[Knowledge] Prerequisite violations detected:', readiness.violations);
     }
-  }, [learnerId, currentProblem.id]);
+  }, [learnerId, currentProblem.id, sessionId, isHydrating]);
   
   // Effect 5: Mastery tracking - update mastery on successful submissions
   useEffect(() => {

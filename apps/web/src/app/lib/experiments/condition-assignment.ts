@@ -15,6 +15,7 @@
  * @module experiments/condition-assignment
  */
 
+import { isBackendConfigured, isDevDemoModeEnabled, isTestEnvironment } from "../runtime-config";
 import type { SessionConfig } from "../../types";
 import { POLICY_IDS, getPolicyById } from "../policies/policy-definitions";
 import { storageClient, isBackendAvailable } from "../api/storage-client";
@@ -107,6 +108,14 @@ export function assignCondition(
     `[DEPRECATED] Legacy session condition assignment called for ${learnerId}; use the durable student condition assignment API.`,
   );
   return legacyAssignCondition(learnerId, _options);
+}
+
+/** Explicit offline demo/test assignment; never used for account-mode students. */
+export function assignLocalDemoCondition(learnerId: string): SessionConfig {
+  if (isBackendConfigured() || (!isDevDemoModeEnabled() && !isTestEnvironment())) {
+    throw new Error('Local assignment requires explicit offline demo/test mode');
+  }
+  return legacyAssignCondition(learnerId);
 }
 
 function legacyAssignCondition(
