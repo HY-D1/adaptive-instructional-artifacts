@@ -85,7 +85,7 @@ import { buildPdfIndexOutputFields } from '../lib/api/pdf-retrieval';
 import { createEventId } from '../lib/utils/event-id';
 import { startBackgroundAnalysis, stopBackgroundAnalysis, runAnalysisOnce, ANALYSIS_INTERVAL_MS } from '../lib/trace-analyzer';
 import type { AnalysisResult } from '../lib/trace-analyzer';
-import { getConcept, getTextbookCorpusMode } from '../lib/content/concept-loader';
+import { getConcept, getTextbookCorpusMode, getProblemsForConcept } from '../lib/content/concept-loader';
 import {
   banditManager,
   PROFILE_TO_ARM_ID,
@@ -1041,7 +1041,7 @@ export function LearningInterface() {
       }
     } else if (conceptId) {
       // Find first problem with this concept
-      const problem = sqlProblems.find(p => p.concepts.includes(conceptId));
+      const problem = getProblemsForConcept(conceptId)[0];
       if (problem) {
         setCurrentProblem(problem);
         setActiveConceptId(conceptId);

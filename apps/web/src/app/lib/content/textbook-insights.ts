@@ -1,5 +1,5 @@
 import { InstructionalUnit, InteractionEvent } from '../../types';
-import { conceptNodes, getConceptById, getConceptIdsForSqlEngageSubtype } from '../../data/sql-engage';
+import { conceptNodes, getConceptById, getConceptIdsForSqlEngageSubtype, getKnownSqlEngageSubtypes, errorSubtypes } from '../../data/sql-engage';
 import { 
   buildConceptGraph, 
   CONCEPT_GRAPH, 
@@ -108,7 +108,7 @@ function orderUnitsByQuality(units: InstructionalUnit[]): InstructionalUnit[] {
       return scoreB - scoreA; // Higher score first
     }
     // Tie-breaker: newer units first
-    return (b.updatedTimestamp ?? b.addedTimestamp) - (a.updatedTimestamp ?? a.addedTimestamp);
+    return (b.updatedTimestamp ?? b.addedTimestamp) - (a.updatedTimestamp ?? a.addedTimestamp) || a.id.localeCompare(b.id);
   });
 }
 
@@ -119,7 +119,7 @@ function orderUnitsByNewest(units: InstructionalUnit[]): InstructionalUnit[] {
   return [...units].sort((a, b) => {
     const timeA = a.updatedTimestamp ?? a.addedTimestamp;
     const timeB = b.updatedTimestamp ?? b.addedTimestamp;
-    return timeB - timeA;
+    return timeB - timeA || a.id.localeCompare(b.id);
   });
 }
 
@@ -130,7 +130,7 @@ function orderUnitsByOldest(units: InstructionalUnit[]): InstructionalUnit[] {
   return [...units].sort((a, b) => {
     const timeA = a.updatedTimestamp ?? a.addedTimestamp;
     const timeB = b.updatedTimestamp ?? b.addedTimestamp;
-    return timeA - timeB;
+    return timeA - timeB || a.id.localeCompare(b.id);
   });
 }
 
@@ -447,7 +447,7 @@ function orderUnitsByPrerequisite(units: InstructionalUnit[]): InstructionalUnit
       return titleDelta;
     }
 
-    return a.addedTimestamp - b.addedTimestamp;
+    return a.addedTimestamp - b.addedTimestamp || a.id.localeCompare(b.id);
   });
 }
 
@@ -467,11 +467,15 @@ function formatDuration(ms: number): string {
 function buildMisconceptionCards(interactions: InteractionEvent[]): MisconceptionCard[] {
   const grouped = new Map<string, { count: number; lastSeenAt: number; evidenceIds: string[] }>();
 
+  const seen = new Set<string>();
+  const known = new Set([...getKnownSqlEngageSubtypes(), ...errorSubtypes.map(subtype => subtype.id)]);
   interactions
-    .filter((interaction) => interaction.eventType === 'error' || interaction.eventType === 'hint_view' || interaction.eventType === 'explanation_view')
+    .filter((interaction) => interaction.eventType === 'error')
     .forEach((interaction) => {
       const subtype = (interaction.sqlEngageSubtype || interaction.errorSubtypeId || 'unknown-subtype').trim();
-      const key = subtype || 'unknown-subtype';
+      if (!interaction.id || seen.has(interaction.id) || !known.has(subtype)) return;
+      seen.add(interaction.id);
+      const key = subtype;
       const current = grouped.get(key) || { count: 0, lastSeenAt: 0, evidenceIds: [] };
       current.count += 1;
       current.lastSeenAt = Math.max(current.lastSeenAt, interaction.timestamp);
@@ -485,9 +489,8 @@ function buildMisconceptionCards(interactions: InteractionEvent[]): Misconceptio
       if (a[1].count !== b[1].count) {
         return b[1].count - a[1].count;
       }
-      return b[1].lastSeenAt - a[1].lastSeenAt;
+      return b[1].lastSeenAt - a[1].lastSeenAt || a[0].localeCompare(b[0]);
     })
-    .slice(0, 4)
     .map(([subtype, stats]) => {
       const conceptNames = getConceptIdsForSqlEngageSubtype(subtype)
         .map((conceptId) => getConceptById(conceptId)?.name || conceptId)
@@ -505,7 +508,7 @@ function buildMisconceptionCards(interactions: InteractionEvent[]): Misconceptio
 }
 
 function buildSpacedReviewPrompts(cards: MisconceptionCard[], nowTimestamp: number): SpacedReviewPrompt[] {
-  return cards.slice(0, 3).map((card) => {
+  return cards.map((card) => {
     const intervalMs = card.count >= 5 ? 60 * 60 * 1000 : card.count >= 3 ? 6 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
     const dueAt = card.lastSeenAt + intervalMs;
     const remaining = dueAt - nowTimestamp;
@@ -515,13 +518,13 @@ function buildSpacedReviewPrompts(cards: MisconceptionCard[], nowTimestamp: numb
       id: `review-${sanitizeId(card.subtype)}`,
       title: `Review ${card.subtype}`,
       message: isDueNow
-        ? `Ready now. You revisited this ${card.count} times.`
-        : `Review in ${formatDuration(remaining)} based on recent attempts (${card.count}).`,
+        ? `Ready now. Recorded ${card.count} distinct errors.`
+        : `Review in ${formatDuration(remaining)} based on distinct errors (${card.count}).`,
       dueAt,
       lastSeenAt: card.lastSeenAt,
       evidenceIds: card.evidenceIds.slice(-6)
     };
-  });
+  }).sort((a, b) => a.dueAt - b.dueAt || a.title.localeCompare(b.title)).slice(0, 3);
 }
 
 /**
@@ -621,8 +624,9 @@ export function buildTextbookInsights(options: {
       break;
   }
   
-  const misconceptionCards = buildMisconceptionCards(options.interactions);
-  const spacedReviewPrompts = buildSpacedReviewPrompts(misconceptionCards, nowTimestamp);
+  const allErrorCards = buildMisconceptionCards(options.interactions);
+  const misconceptionCards = allErrorCards.slice(0, 4);
+  const spacedReviewPrompts = buildSpacedReviewPrompts(allErrorCards, nowTimestamp);
   
   // Calculate summary statistics
   const averageStrength = prerequisiteStrengths.length > 0

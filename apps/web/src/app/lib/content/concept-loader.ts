@@ -1168,11 +1168,32 @@ export function getRefinedHintsForConcept(conceptId: string): RefinedHintSet | n
  * Get practice problems for a concept
  */
 export function getProblemsForConcept(conceptId: string): SQLProblem[] {
-  // Resolve to plain ID for problem lookup
-  const plainId = conceptId.includes('/') 
-    ? conceptId.split('/').pop()! 
-    : conceptId;
-  return sqlProblems.filter(p => p.concepts.includes(plainId) || p.concepts.includes(conceptId));
+  const suffix = conceptId.split('/').pop() || conceptId;
+  const aliases: Record<string, string[]> = {
+    'select-statement-murach': ['select-basic'],
+    'where-clause-murach': ['where-clause'],
+    'order-by-murach': ['order-by'],
+    'joins-murach': ['joins'],
+    'inner-join': ['joins'], 'inner-join-murach': ['joins'],
+    'outer-join': ['joins'], 'outer-join-murach': ['joins'],
+    'aggregate-functions': ['aggregation'], 'aggregate-functions-murach': ['aggregation'],
+    'group-by': ['aggregation'], 'group-by-murach': ['aggregation'],
+    'having': ['aggregation'], 'having-murach': ['aggregation'], 'having-clause': ['aggregation'],
+    'subqueries-murach': ['subqueries'],
+    'correlated-subquery': ['correlated-subqueries'],
+    'correlated-subquery-murach': ['correlated-subqueries'],
+    'insert-murach': ['insert'], 'update-murach': ['update'], 'delete-murach': ['delete'],
+    'unions': ['union'], 'set-operations': ['union'],
+    'case-expression': ['case-expressions'], 'exist-clause': ['exists'],
+    'self-join': ['self-joins'],
+  };
+  const tags = new Set([conceptId, suffix, ...(aliases[suffix] || [])]);
+  const clause = /^(group-by|having)(-murach|-clause)?$/.test(suffix)
+    ? (suffix.startsWith('having') ? /\bHAVING\b/i : /\bGROUP\s+BY\b/i)
+    : /^(inner-join|outer-join)(-murach)?$/.test(suffix)
+      ? (suffix.startsWith('outer') ? /\b(LEFT|RIGHT|FULL)\s+(OUTER\s+)?JOIN\b/i : /\bINNER\s+JOIN\b/i)
+      : null;
+  return sqlProblems.filter(problem => problem.concepts.some(tag => tags.has(tag)) && (!clause || clause.test(problem.expectedQuery || '')));
 }
 
 /**

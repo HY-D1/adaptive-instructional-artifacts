@@ -90,7 +90,7 @@ test.describe('@regression @ux-bugs @no-external Concept readability — helper 
 
     // 2. The "Learn" tab (default) must be active
     await expect(
-      page.getByRole('button', { name: 'Learn' })
+      page.getByRole('tab', { name: 'Learn', exact: true })
     ).toBeVisible();
 
     // 3. learnerSafeSummary must be visible in the fallback Overview box
@@ -325,7 +325,7 @@ test.describe('@regression @ux-bugs @no-external Concept readability — helper 
     ).toBeVisible({ timeout: 30_000 });
 
     // Navigate to Examples tab
-    await page.getByRole('button', { name: 'Examples' }).click();
+    await page.getByRole('tab', { name: 'Examples', exact: true }).click();
 
     // Verify both example titles are visible
     await expect(page.getByText('Basic SELECT Query')).toBeVisible({ timeout: 10_000 });
@@ -388,7 +388,7 @@ test.describe('@regression @ux-bugs @no-external Concept readability — helper 
     ).toBeVisible({ timeout: 30_000 });
 
     // Navigate to Examples tab
-    await page.getByRole('button', { name: 'Examples' }).click();
+    await page.getByRole('tab', { name: 'Examples', exact: true }).click();
 
     // Should show "no verified examples" message
     await expect(
@@ -543,7 +543,7 @@ test.describe('@regression @ux-bugs @no-external Concept readability — helper 
     await expect(banner).toBeVisible({ timeout: 10_000 });
 
     // Navigate to Examples tab
-    await page.getByRole('button', { name: 'Examples' }).click();
+    await page.getByRole('tab', { name: 'Examples', exact: true }).click();
 
     // Should show "no verified examples" message because all examples were filtered
     await expect(
@@ -554,7 +554,7 @@ test.describe('@regression @ux-bugs @no-external Concept readability — helper 
     ).toBeVisible();
 
     // learnerSafeSummary and key points should still be visible in Learn tab
-    await page.getByRole('button', { name: 'Learn' }).click();
+    await page.getByRole('tab', { name: 'Learn', exact: true }).click();
     const overviewBox = page.getByTestId('learner-safe-summary');
     await expect(overviewBox).toBeVisible({ timeout: 10_000 });
     await expect(overviewBox).toContainText(/corrupted examples that should be hidden/i);
@@ -623,7 +623,7 @@ test.describe('@regression @ux-bugs @no-external Concept readability — helper 
     ).toBeVisible({ timeout: 30_000 });
 
     // Navigate to Examples tab
-    await page.getByRole('button', { name: 'Examples' }).click();
+    await page.getByRole('tab', { name: 'Examples', exact: true }).click();
 
     // All acceptable examples should be visible (use heading role to match titles specifically)
     await expect(page.getByRole('heading', { name: 'Simple SELECT' })).toBeVisible({ timeout: 10_000 });
@@ -702,7 +702,7 @@ test.describe('@regression @ux-bugs @no-external Concept readability — helper 
     ).toBeVisible({ timeout: 30_000 });
 
     // Navigate to Examples tab
-    await page.getByRole('button', { name: 'Examples' }).click();
+    await page.getByRole('tab', { name: 'Examples', exact: true }).click();
 
     // Good examples should be visible (use heading role to match titles specifically)
     await expect(page.getByRole('heading', { name: 'Good Example', exact: true })).toBeVisible({ timeout: 10_000 });
