@@ -1,39 +1,50 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { listConcepts } from '../lib/content/concept-loader';
+import { listConcepts, loadConceptMap } from '../lib/content/concept-loader';
 import { BookOpen, Clock, GraduationCap, Search, X } from 'lucide-react';
 import { CommandTrigger } from '../components/shared/CommandMenu';
 import { Input } from '../components/ui/input';
+import { getConceptLesson, getLessonReadTime, TOPIC_LABELS } from '../data/concept-lessons';
 
 export function ConceptLibraryPage() {
   const [concepts, setConcepts] = useState<Array<{id: string; title: string; difficulty: string}>>([]);
   const [filter, setFilter] = useState<'all' | 'beginner' | 'intermediate' | 'advanced'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [topic, setTopic] = useState('all');
+  const [source, setSource] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const mounted = useRef(true);
 
   const loadConcepts = async () => {
     try {
       setLoading(true);
       setError(null);
+      if (!await loadConceptMap()) throw new Error('Concept catalog unavailable');
       const data = await listConcepts();
-      setConcepts(data);
+      if (mounted.current) setConcepts(data);
     } catch (e) {
-      setError('Failed to load concepts. Please try again.');
+      if (mounted.current) setError('Failed to load concepts. Please try again.');
     } finally {
-      setLoading(false);
+      if (mounted.current) setLoading(false);
     }
   };
 
   useEffect(() => {
+    mounted.current = true;
     loadConcepts();
+    return () => { mounted.current = false; };
   }, []);
 
   const filtered = concepts.filter(c => {
     const matchesFilter = filter === 'all' || c.difficulty === filter;
     const matchesSearch = c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          c.id.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesFilter && matchesSearch;
+    return matchesFilter && matchesSearch && (topic === 'all' || getConceptLesson(c.id)?.topic === topic) && (source === 'all' || c.id.startsWith(source + '/'));
+  }).sort((a, b) => {
+    const topics = Object.keys(TOPIC_LABELS);
+    const topicOrder = topics.indexOf(getConceptLesson(a.id)?.topic || '') - topics.indexOf(getConceptLesson(b.id)?.topic || '');
+    return topicOrder || concepts.indexOf(a) - concepts.indexOf(b);
   });
 
   if (loading) {
@@ -94,7 +105,7 @@ export function ConceptLibraryPage() {
           </div>
           <div className="bg-white rounded-lg p-4 border">
             <div className="text-2xl font-bold text-purple-600">
-              {Math.round(concepts.reduce((acc, c) => acc + (c.difficulty === 'beginner' ? 5 : c.difficulty === 'intermediate' ? 8 : 12), 0) / concepts.length) || 5}
+              {Math.round(concepts.reduce((acc, c) => acc + (getConceptLesson(c.id) ? getLessonReadTime(getConceptLesson(c.id)!) : getConceptTime(c.difficulty)), 0) / concepts.length) || 1}
             </div>
             <div className="text-sm text-gray-600">Avg. Minutes per Concept</div>
           </div>
@@ -155,11 +166,17 @@ export function ConceptLibraryPage() {
           )}
         </div>
 
+        <div className="flex flex-wrap gap-4 mb-5">
+          <label className="text-sm font-medium">Topic<select className="block border rounded-lg p-3 bg-white mt-1 max-w-full" value={topic} onChange={e => setTopic(e.target.value)}><option value="all">All topics</option>{Object.entries(TOPIC_LABELS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
+          <label className="text-sm font-medium">Source<select className="block border rounded-lg p-3 bg-white mt-1" value={source} onChange={e => setSource(e.target.value)}><option value="all">All sources</option><option value="murachs-mysql-3rd-edition">Murach’s MySQL</option><option value="dbms-ramakrishnan-3rd-edition">Database Management Systems</option></select></label>
+        </div>
+        <p role="status" className="mb-4 text-sm text-gray-600">{filtered.length} of {concepts.length} concepts · Follow the topic groups from foundations to administration.</p>
         {/* Filters */}
         <div className="flex flex-wrap gap-2 mb-6">
           {(['all', 'beginner', 'intermediate', 'advanced'] as const).map(diff => (
             <button
               key={diff}
+              aria-pressed={filter === diff}
               onClick={() => setFilter(diff)}
               className={`px-4 py-2 rounded-lg capitalize transition-colors ${
                 filter === diff 
@@ -174,7 +191,9 @@ export function ConceptLibraryPage() {
         
         {/* Concept Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(concept => (
+          {filtered.map((concept, index) => (
+            <Fragment key={concept.id}>
+            {(index === 0 || getConceptLesson(filtered[index - 1].id)?.topic !== getConceptLesson(concept.id)?.topic) && <h2 className="col-span-full mt-4 text-xl font-semibold text-gray-900">{TOPIC_LABELS[getConceptLesson(concept.id)?.topic || ''] || 'Further reading'}</h2>}
             <Link
               key={concept.id}
               to={`/concepts/${concept.id}`}
@@ -188,13 +207,15 @@ export function ConceptLibraryPage() {
                   {getConceptIcon(concept.id)}
                 </span>
               </div>
+              <p className="text-xs text-blue-700 mb-2">{TOPIC_LABELS[getConceptLesson(concept.id)?.topic || ''] || 'Further reading'}</p>
               <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
                 {concept.title}
               </h3>
+<p className="text-xs text-gray-500 mb-3">{concept.id.startsWith('murachs-mysql') ? "Murach’s MySQL" : concept.id.startsWith('dbms-ramakrishnan') ? 'Database Management Systems' : 'Course source'}</p>
               <div className="flex items-center gap-4 text-sm text-gray-500">
                 <span className="flex items-center gap-1">
                   <Clock className="w-4 h-4" />
-                  {getConceptTime(concept.difficulty)} min
+                  {getConceptLesson(concept.id) ? getLessonReadTime(getConceptLesson(concept.id)!) : getConceptTime(concept.difficulty)} min
                 </span>
                 <span className="flex items-center gap-1">
                   <GraduationCap className="w-4 h-4" />
@@ -202,6 +223,7 @@ export function ConceptLibraryPage() {
                 </span>
               </div>
             </Link>
+            </Fragment>
           ))}
         </div>
         

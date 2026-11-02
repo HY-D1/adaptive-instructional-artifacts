@@ -1,6 +1,9 @@
 import { useParams, Link } from 'react-router';
 import { useEffect, useState } from 'react';
-import { loadConceptContent, getProblemsForConcept, assessConceptQuality, filterSaneExamples, filterLearnerSafeExamples, normalizeMistakes, selectReadableExamples, toLearnerSafeParagraph, type LoadedConcept, type CodeExample, type Mistake, type QualityMetadata } from '../lib/content/concept-loader';
+import { getConceptLesson, getLessonReadTime } from '../data/concept-lessons';
+import { InteractiveExample } from '../components/features/concepts/InteractiveExample';
+import { ConceptChecks } from '../components/features/concepts/ConceptChecks';
+import { loadConceptContent, listConcepts, getProblemsForConcept, assessConceptQuality, filterSaneExamples, filterLearnerSafeExamples, normalizeMistakes, selectReadableExamples, toLearnerSafeParagraph, type LoadedConcept, type CodeExample, type Mistake, type QualityMetadata } from '../lib/content/concept-loader';
 import { ChevronLeft, BookOpen, Clock, Dumbbell, AlertCircle, CheckCircle, XCircle, Lightbulb, Play, Info } from 'lucide-react';
 
 export function ConceptDetailPage() {
@@ -9,17 +12,27 @@ export function ConceptDetailPage() {
   const [contentQuality, setContentQuality] = useState<'good' | 'fallback'>('good');
   const [qualityMetadata, setQualityMetadata] = useState<QualityMetadata | undefined>();
   const [problems, setProblems] = useState<ReturnType<typeof getProblemsForConcept>>([]);
-  const [activeTab, setActiveTab] = useState<'learn' | 'examples' | 'mistakes'>('learn');
+  const [activeTab, setActiveTab] = useState<'learn' | 'examples' | 'mistakes' | 'checks'>('learn');
   const [loading, setLoading] = useState(true);
 
+  const [previous, setPrevious] = useState<{id:string;title:string} | null>(null);
+  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const [showAllProblems, setShowAllProblems] = useState(false);
+  const lesson = getConceptLesson(conceptId || '');
   useEffect(() => {
-    if (!conceptId) return;
+    let cancelled = false;
+    setLoading(true); setConcept(null); setPrevious(null); setQualityMetadata(undefined); setContentQuality('good');
+    setActiveTab('learn'); setShowAllProblems(false); setError(false);
+    if (!conceptId) { setLoading(false); return; }
 
     const loadData = async () => {
-      const [conceptData] = await Promise.all([
-        loadConceptContent(conceptId),
-        Promise.resolve(setProblems(getProblemsForConcept(conceptId)))
-      ]);
+      const [conceptData, catalog] = await Promise.all([loadConceptContent(conceptId), listConcepts()]);
+      if (cancelled) return;
+      const index = catalog.findIndex(item => item.id === conceptId);
+      setPrevious(index > 0 ? catalog[index - 1] : null);
+      setProblems(getProblemsForConcept(conceptId));
+      if (!conceptData && catalog.some(item => item.id === conceptId)) setError(true);
       setConcept(conceptData);
       if (conceptData) {
         setContentQuality(assessConceptQuality(conceptData));
@@ -28,8 +41,9 @@ export function ConceptDetailPage() {
       setLoading(false);
     };
 
-    loadData();
-  }, [conceptId]);
+    loadData().catch(() => { if (!cancelled) { setError(true); setLoading(false); } });
+    return () => { cancelled = true; };
+  }, [conceptId, attempt]);
   
   if (loading) {
     return (
@@ -39,6 +53,7 @@ export function ConceptDetailPage() {
     );
   }
   
+  if (error) return <div className="p-8" role="alert">Could not load this lesson. <button className="underline p-3" onClick={() => setAttempt(a => a + 1)}>Retry</button></div>;
   if (!concept) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -68,15 +83,15 @@ export function ConceptDetailPage() {
               <span className="hidden sm:inline text-sm font-medium">Back to Concepts</span>
             </Link>
             <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold text-gray-900 truncate">{concept.title}</h1>
+              <h1 className="text-2xl font-bold text-gray-900 break-words">{concept.title}</h1>
               <div className="flex items-center gap-4 text-sm text-gray-500 mt-1 flex-wrap">
                 <span className="flex items-center gap-1">
                   <Clock className="w-4 h-4" />
-                  {concept.estimatedReadTime} min read
+                  {lesson ? getLessonReadTime(lesson) : (concept.estimatedReadTime || Math.max(1, Math.ceil(concept.content.explanation.split(/\s+/).length / 180)))} min read
                 </span>
                 <span className="flex items-center gap-1">
                   <BookOpen className="w-4 h-4" />
-                  Pages {concept.pageNumbers.join(', ')}
+                  Pages {compactPages(concept.pageNumbers)}
                 </span>
                 <span className={`px-2 py-0.5 rounded text-xs font-medium ${getDifficultyStyle(concept.difficulty)}`}>
                   {concept.difficulty}
@@ -90,12 +105,20 @@ export function ConceptDetailPage() {
       <div className="max-w-6xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Main Content */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 min-w-0">
             {/* Tabs */}
-            <div className="flex gap-2 mb-6 bg-white p-1 rounded-lg border">
-              {(['learn', 'examples', 'mistakes'] as const).map(tab => (
+            <div role="tablist" aria-label="Lesson sections" className="grid grid-cols-2 sm:flex gap-2 mb-6 bg-white p-1 rounded-lg border">
+              {(['learn', 'examples', 'mistakes', ...(lesson ? ['checks' as const] : [])] as const).map(tab => (
                 <button
                   key={tab}
+                  id={`lesson-tab-${tab}`} role="tab" aria-selected={activeTab === tab}
+                  aria-controls="lesson-panel" tabIndex={activeTab === tab ? 0 : -1}
+                  onKeyDown={event => {
+                    const tabs = Array.from(event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+                    const current = tabs.indexOf(event.currentTarget);
+                    const next = event.key === 'ArrowRight' ? (current + 1) % tabs.length : event.key === 'ArrowLeft' ? (current + tabs.length - 1) % tabs.length : event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : -1;
+                    if (next >= 0) { event.preventDefault(); tabs[next].click(); tabs[next].focus(); }
+                  }}
                   onClick={() => setActiveTab(tab)}
                   className={`flex-1 py-2.5 px-4 rounded-md capitalize text-sm font-medium transition-colors ${
                     activeTab === tab 
@@ -106,6 +129,7 @@ export function ConceptDetailPage() {
                   {tab === 'learn' && 'Learn'}
                   {tab === 'examples' && 'Examples'}
                   {tab === 'mistakes' && 'Common Mistakes'}
+                  {tab === 'checks' && 'Check Understanding'}
                 </button>
               ))}
             </div>
@@ -119,18 +143,22 @@ export function ConceptDetailPage() {
               >
                 <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <p className="text-sm text-amber-800">
-                  <strong>Source quality limited.</strong> Some content from this textbook export could not be verified as learner-safe. We're showing the definition and confirmed examples only.
+                  <strong>Source quality limited.</strong> Some content from this textbook export could not be verified as learner-safe. The extracted source is shown with its safety filters. Authored learning activities below are separate from this extraction.
                 </p>
               </div>
             )}
 
             {/* Tab Content */}
-            <div className="bg-white rounded-xl border shadow-sm">
-              {activeTab === 'learn' && <LearnTab content={concept.content} quality={contentQuality} qualityMetadata={qualityMetadata} />}
-              {activeTab === 'examples' && <ExamplesTab examples={concept.content.examples} quality={contentQuality} qualityMetadata={qualityMetadata} />}
+            <div id="lesson-panel" role="tabpanel" aria-labelledby={`lesson-tab-${activeTab}`} className="bg-white rounded-xl border shadow-sm min-w-0">
+              {lesson && activeTab === 'learn' && <div className="p-6 space-y-4"><p className="text-sm text-blue-700">Authored learning guide · {lesson.dialect}</p><h2 className="text-lg font-semibold">Learning objectives</h2><ul className="list-disc pl-5">{lesson.objectives.map(o => <li key={o}>{o}</li>)}</ul>{lesson.prerequisites.length > 0 && <nav aria-label="Prerequisites">Before this lesson: {lesson.prerequisites.map(id => <Link key={id} className="inline-block p-2 underline" to={`/concepts/${id}`}>{getConceptLesson(id)?.title || id.split('/').pop()}</Link>)}</nav>}{lesson.explanation.map((paragraph, i) => <p key={i} className="leading-relaxed text-gray-700">{paragraph}</p>)}</div>}
+              {lesson && activeTab === 'examples' && <div className="divide-y">{lesson.examples.map((example, i) => <InteractiveExample key={`${conceptId}-${i}`} example={example} />)}</div>}
+              {lesson && activeTab === 'checks' && <ConceptChecks key={conceptId} checks={lesson.checks} />}
+              {activeTab === 'learn' && <section data-testid="extracted-source-learn" aria-label="Extracted source explanation">{lesson && <h2 className="px-6 pt-6 text-sm font-semibold border-t">Extracted source explanation</h2>}<LearnTab content={concept.content} quality={contentQuality} qualityMetadata={qualityMetadata} /></section>}
+              {activeTab === 'examples' && <section data-testid="extracted-source-examples" aria-label="Extracted source examples">{lesson && <h2 className="p-6 border-t text-sm font-semibold">Extracted source examples (separate from the authored activities)</h2>}<ExamplesTab examples={concept.content.examples} quality={contentQuality} qualityMetadata={qualityMetadata} /></section>}
               {activeTab === 'mistakes' && (
                 <MistakesTab
-                  mistakes={concept.content.commonMistakes}
+                  authored={Boolean(lesson)}
+                  mistakes={lesson?.mistakes || concept.content.commonMistakes}
                   quality={contentQuality}
                   qualityMetadata={qualityMetadata}
                 />
@@ -149,7 +177,7 @@ export function ConceptDetailPage() {
               
               {problems.length > 0 ? (
                 <div className="space-y-3">
-                  {problems.slice(0, 3).map(problem => (
+                  {(showAllProblems ? problems : problems.slice(0, 3)).map(problem => (
                     <Link
                       key={problem.id}
                       to={`/practice?problemId=${problem.id}&conceptId=${conceptId}`}
@@ -164,45 +192,45 @@ export function ConceptDetailPage() {
                     </Link>
                   ))}
                   {problems.length > 3 && (
-                    <Link 
-                      to={`/practice?conceptId=${conceptId}`}
-                      className="block text-center text-blue-600 text-sm hover:underline py-2"
-                    >
-                      View all {problems.length} problems →
-                    </Link>
+                    <button type="button" onClick={() => setShowAllProblems(v => !v)} className="block w-full text-center text-blue-600 text-sm underline py-3" aria-expanded={showAllProblems}>
+                      {showAllProblems ? 'Show fewer problems' : `View all ${problems.length} problems →`}
+                    </button>
                   )}
                 </div>
               ) : (
                 <p className="text-gray-500 text-sm">No practice problems for this concept yet.</p>
               )}
               
-              <Link
-                to={`/practice?conceptId=${conceptId}`}
+              {problems.length > 0 && <Link
+                to={`/practice?problemId=${problems[0].id}&conceptId=${encodeURIComponent(conceptId || '')}`}
                 className="mt-4 flex items-center justify-center gap-2 w-full bg-blue-600 text-white py-2.5 rounded-lg hover:bg-blue-700 transition-colors font-medium"
               >
                 <Play className="w-4 h-4" />
                 Start Practicing
-              </Link>
+              </Link>}
             </div>
             
             {/* Related Concepts */}
-            {concept.relatedConcepts.length > 0 && (
+            {(lesson?.relatedConcepts || concept.relatedConcepts).length > 0 && (
               <div className="bg-white rounded-xl border shadow-sm p-6">
                 <h3 className="font-semibold text-gray-900 mb-4">Related Concepts</h3>
                 <div className="space-y-2">
-                  {concept.relatedConcepts.slice(0, 5).map(relatedId => (
+                  {(lesson?.relatedConcepts || concept.relatedConcepts).slice(0, 5).map(relatedId => (
                     <Link
                       key={relatedId}
                       to={`/concepts/${relatedId}`}
                       className="block text-gray-700 hover:text-blue-600 hover:bg-gray-50 p-2 rounded-lg transition-colors text-sm"
                     >
-                      → {relatedId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      → {getConceptLesson(relatedId)?.title || relatedId.split('/').pop()?.replace(/-/g, ' ')}
                     </Link>
                   ))}
                 </div>
               </div>
             )}
             
+            {previous && <Link className="block rounded-lg border p-4 text-blue-700" to={`/concepts/${previous.id}`}>← Previous lesson: {previous.title}</Link>}
+            {lesson?.nextConcept && <Link className="block rounded-lg border p-4 text-blue-700" to={`/concepts/${lesson.nextConcept}`}>Next lesson: {getConceptLesson(lesson.nextConcept)?.title || 'Continue learning'} →</Link>}
+            {lesson && <div className="rounded-lg border p-4 text-sm"><h3 className="font-semibold">Learning guide references</h3><p>Examples are authored instructional material, separate from the extracted textbook.</p>{lesson.sources.map(url => <a className="block py-2 underline break-words" href={url} key={url} target="_blank" rel="noreferrer">{url}</a>)}</div>}
             {/* Textbook Source */}
             <div className="bg-blue-50 rounded-xl border border-blue-200 p-6">
               <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
@@ -210,10 +238,10 @@ export function ConceptDetailPage() {
                 Textbook Source
               </h3>
               <p className="text-sm text-blue-800 mb-2">
-                Content extracted from official SQL Course Textbook
+                {concept.sourceDocId === 'murachs-mysql-3rd-edition' ? "Murach’s MySQL, 3rd edition" : concept.sourceDocId === 'dbms-ramakrishnan-3rd-edition' ? 'Database Management Systems, Ramakrishnan, 3rd edition' : concept.sourceDocId || 'Textbook source'}
               </p>
               <p className="text-xs text-blue-600">
-                Pages: {concept.pageNumbers.join(', ')}
+                Pages: {compactPages(concept.pageNumbers)}
               </p>
             </div>
           </div>
@@ -347,10 +375,12 @@ function ExamplesTab({ examples, quality = 'good', qualityMetadata }: { examples
 }
 
 function MistakesTab({
+  authored = false,
   mistakes,
   quality = 'good',
   qualityMetadata,
 }: {
+  authored?: boolean;
   mistakes: Mistake[];
   quality?: 'good' | 'fallback';
   qualityMetadata?: QualityMetadata;
@@ -432,7 +462,7 @@ function MistakesTab({
             <Lightbulb className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
             <div>
               <p className="text-sm font-medium text-yellow-800 mb-1">Why this happens</p>
-              <p className="text-sm text-yellow-700">{toLearnerSafeParagraph(mistake.why, 220)}</p>
+              <p className="text-sm text-yellow-700">{authored ? mistake.why : toLearnerSafeParagraph(mistake.why, 220)}</p>
             </div>
           </div>
         </div>
@@ -457,4 +487,11 @@ function getDifficultyLightStyle(difficulty: string): string {
     case 'hard': return 'bg-red-100 text-red-700';
     default: return 'bg-gray-100 text-gray-700';
   }
+}
+
+function compactPages(pages: number[]): string {
+  const sorted = [...new Set(pages)].sort((a, b) => a - b);
+  const ranges: string[] = [];
+  for (let i = 0; i < sorted.length; i++) { const start = sorted[i]; let end = start; while (sorted[i + 1] === end + 1) end = sorted[++i]; ranges.push(start === end ? `${start}` : `${start}–${end}`); }
+  return ranges.join(', ') || 'Not supplied';
 }

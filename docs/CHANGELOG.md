@@ -1250,3 +1250,67 @@ all unrelated work. Suggested commit for the tracked checkpoint only:
 **Last Commit**: 8c41e5a (Runtime import fix)  
 **Next Expected Commit**: Persistence hardening fix  
 **Branch**: `hardening/research-grade-tightening`
+
+
+### 2026-11-01 — Concept refinements (local branch)
+
+Status: PASS for scoped local acceptance; production deployment/authenticated smoke unverified.
+Branch: test_branch/concept-refinements, based on dc4a733. Preserved pre-existing
+changelog edits and eight unrelated untracked files. No commit/push/deploy performed.
+
+Baseline:266 focused tests,10 readability browser tests, build, corpus/map checks PASS.
+Original source audit:70 routes,43 fallback_only,64 without helper safe examples,
+67 mistake placeholders; all70 omitted read times and related links. Local transient
+inventory: docs/audit/CONCEPT_REFINEMENTS_SOURCE_AUDIT_2026-11-01.md (Git-ignored by policy).
+
+Added independent concept-lessons-v1 catalog:47 topics mapped to all70 source routes,
+action objectives, prerequisite links, explanations, runnable examples/scenarios,
+misconceptions and two self-checks each. SQL fixtures use bundled SQLite3.49.1;
+unsupported MySQL/theory topics use scenarios. Original extraction/provenance retained.
+Library topic/source groups/filtering/counts and lesson accessible keyboard tabs,
+read time, source pages/references, previous/next navigation, errors/retry/stale load
+protection added. Practice resolver maps existing tags/source IDs; explicit exercise
+links and expanded matches replace misleading empty-topic actions. SQL examples use
+disposable module workers with10s initialization/3s query deadline, cancellation,
+fresh seed each run, mutation inspection and100-row result limit. No persisted
+self-check progress, mastery/logging writes, backend/schema/policy/grading changes.
+
+Verification commands/results:
+- npx --no-install vitest run apps/web/src/app/data/concept-lessons.test.ts apps/web/src/app/lib/content/concept-practice.test.ts apps/web/src/app/lib/content/concept-example-runner.test.ts apps/web/src/app/lib/content/concept-example-worker.test.ts apps/web/src/app/components/features/concepts apps/web/src/app/data/problems.regression.test.ts apps/web/src/app/lib/sql-executor.regression.test.ts apps/web/src/app/lib/content/concept-loader.test.ts apps/web/src/app/lib/content/concept-quality.test.ts apps/web/src/app/lib/content/concept-resolution-audit.test.ts apps/web/src/app/data/concept-graph.test.ts — PASS289 tests/12files.
+- npx --no-install playwright test -c playwright.config.ts --project=chromium tests/e2e/regression/concept-learning.spec.ts tests/e2e/regression/concept-example-isolation.spec.ts tests/e2e/regression/ux-bugs-concept-readability.spec.ts --reporter=line — PASS16/16 before three robustness cases added.
+- npx --no-install playwright test -c playwright.config.ts --project=chromium tests/e2e/regression/concept-learning.spec.ts --reporter=line — final PASS6/6;19 distinct browser cases across runs. Desktop1280/mobile375, actual worker/WASM, errors/reset/cancel, result cap, disposable mutations, saved state preservation, retry/missing/stale routes covered.
+- npm run build — PASS (existing cache-trimmer import warning retained).
+- npx --no-install tsc --noEmit — final PASS. Initial failure in new test Array.at corrected toES2020 indexing; catalog six tests rerun PASS.
+- npm run validate:corpus — PASS70 files; npm run check:concept-map — PASS23 mapped subtypes.
+- npm run replay:gate — SKIPPED fixture/policy inputs changed; baseline not updated.
+- git diff --check — PASS.
+
+Material attempts: sandbox Chromium startup failed before assertions; allowed local
+escalated runs passed. A mobile test raced concurrent Vite HMR; unchanged stable
+full journey rerun passed. No runtime workaround or weakened assertions used.
+
+Limitations: no claim of measured learning improvement or independent instructor
+content review. Production protected page not checked as authenticated learner;
+new features are local only. Read/check state intentionally ephemeral. Rollback:
+revert only this scoped feature diff; no database or stored-data migration required.
+Suggested commit: feat(concepts): add interactive SQL lessons
+
+Exact feature files changed/created (plus this checkpoint):
+- apps/web/src/app/components/features/concepts/ConceptChecks.test.tsx
+- apps/web/src/app/components/features/concepts/ConceptChecks.tsx
+- apps/web/src/app/components/features/concepts/InteractiveExample.test.tsx
+- apps/web/src/app/components/features/concepts/InteractiveExample.tsx
+- apps/web/src/app/data/concept-lessons.test.ts
+- apps/web/src/app/data/concept-lessons.ts
+- apps/web/src/app/lib/content/concept-example-runner.test.ts
+- apps/web/src/app/lib/content/concept-example-runner.ts
+- apps/web/src/app/lib/content/concept-example-worker.test.ts
+- apps/web/src/app/lib/content/concept-example-worker.ts
+- apps/web/src/app/lib/content/concept-loader.ts
+- apps/web/src/app/lib/content/concept-practice.test.ts
+- apps/web/src/app/pages/ConceptDetailPage.tsx
+- apps/web/src/app/pages/ConceptLibraryPage.tsx
+- apps/web/src/app/pages/LearningInterface.tsx
+- tests/e2e/regression/concept-example-isolation.spec.ts
+- tests/e2e/regression/concept-learning.spec.ts
+- tests/e2e/regression/ux-bugs-concept-readability.spec.ts
