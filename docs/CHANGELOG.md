@@ -1314,3 +1314,49 @@ Exact feature files changed/created (plus this checkpoint):
 - tests/e2e/regression/concept-example-isolation.spec.ts
 - tests/e2e/regression/concept-learning.spec.ts
 - tests/e2e/regression/ux-bugs-concept-readability.spec.ts
+
+
+### 2026-11-01 — Minimal My Textbook reader refinements
+
+Status PASS for scoped local acceptance on test_branch/concept-refinements.
+Baseline: existing markdown renderer1/1 PASS; synthetic local reproduction showed
+same-ID content remained stale after focus/storage refresh and help-only activity
+created repeated-error/review cards. Exact protected preview unit remains unverified.
+
+Changed only:
+- apps/web/src/app/components/features/textbook/AdaptiveTextbook.tsx
+- apps/web/src/app/lib/content/textbook-insights.ts
+- apps/web/src/app/lib/content/textbook-insights.test.ts (new)
+- tests/e2e/regression/textbook-reader.spec.ts (new)
+- docs/CHANGELOG.md (this appended checkpoint; prior unrelated entries retained)
+
+Reader selects by ID and derives fresh note data; saved-note search, labeled sort,
+missing-note recovery, linked archive visibility, selected-group expansion and
+mobile navigator/focus added. Review suggestions separately expandable. Existing
+trace search, hydration timing, synchronization, provenance, telemetry and clear
+confirmation retained. Reader-only error display now deduplicates known-subtype
+error events, excludes help views, and ranks review candidates by due time before
+limits. Existing thresholds/intervals unchanged; deterministic sorting ties by ID.
+No backend/schema/migration/mastery/generation/grading/experiment policy changes.
+
+Checks:
+- npx --no-install vitest run apps/web/src/app/lib/content/textbook-insights.test.ts — PASS7/7.
+- npx --no-install playwright test -c playwright.config.ts --project=chromium tests/e2e/regression/textbook-reader.spec.ts --reporter=line — PASS4/4.
+- npx --no-install playwright test -c playwright.config.ts --project=chromium tests/e2e/regression/textbook-renderer.spec.ts --reporter=line — PASS5/5 (markdown, HTML, sanitization, code blocks, empty state).
+- npx --no-install tsc --noEmit — PASS.
+- npm run build — PASS; pre-existing cache-trimmer mixed import warning remains.
+- npm run replay:gate — SKIPPED fixture/policy inputs changed; no baseline update.
+- git diff --check — PASS.
+
+Initial reader tests had expectation errors: existing textbook_view increments
+profile counters/zero-score coverage, and missing-note wording differed from
+the selector. Corrected tests preserve existing logging while checking notes,
+drafts and identity exactly, plus unchanged covered concepts and positive scores.
+No runtime bypass introduced. Synthetic local fixtures only; no production writes.
+
+Compatibility: existing unit IDs, saved records and helper return shapes retained.
+All saved notes remain accessible regardless of prerequisites. No claim of measured
+learning improvement. Specific authenticated preview note and deployed behavior
+remain unverified. No commit, push, merge or deployment performed.
+Rollback: revert only the four feature/test files and this entry; no data migration.
+Suggested commit: fix(textbook): refresh and organize saved notes

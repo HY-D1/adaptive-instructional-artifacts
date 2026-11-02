@@ -3,7 +3,7 @@ import { Card } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Badge } from '../../ui/badge';
 import { Separator } from '../../ui/separator';
-import { Book, Trash2, ChevronRight, ChevronDown, Folder, FileText, Star, ArrowUpDown, Layers, Archive } from 'lucide-react';
+import { Book, Trash2, ChevronRight, ChevronDown, Folder, FileText, Star, Layers, Archive } from 'lucide-react';
 import { ConfirmDialog } from '../../ui/confirm-dialog';
 import DOMPurify from 'dompurify';
 import { Link } from 'react-router';
@@ -16,8 +16,7 @@ import { buildTextbookInsights, SortMode } from '../../../lib/content/textbook-i
 import { 
   isBestQualityUnit, 
   getUnitDisplayStatus, 
-  getAlternativeUnits,
-  filterUnitsByStatus
+  getAlternativeUnits
 } from '../../../lib/storage/textbook-units';
 
 interface AdaptiveTextbookProps {
@@ -113,7 +112,12 @@ export function AdaptiveTextbook({
   buildEvidenceHref
 }: AdaptiveTextbookProps) {
   const [textbookUnits, setTextbookUnits] = useState<InstructionalUnit[]>([]);
-  const [selectedUnit, setSelectedUnit] = useState<InstructionalUnit | null>(null);
+  const [activeUnitId, setActiveUnitId] = useState<string | undefined>(selectedUnitId);
+  const selectedUnit = textbookUnits.find(unit => unit.id === activeUnitId) || null;
+  const [noteSearch, setNoteSearch] = useState('');
+  const [navigatorOpen, setNavigatorOpen] = useState(!selectedUnitId);
+  const readerHeadingRef = useRef<HTMLHeadingElement>(null);
+  const focusReaderRef = useRef(Boolean(selectedUnitId));
   const [sortMode, setSortMode] = useState<SortMode>('quality');
   const [showArchived, setShowArchived] = useState(false);
   const [expandedAlternatives, setExpandedAlternatives] = useState<Record<string, boolean>>({});
@@ -123,6 +127,11 @@ export function AdaptiveTextbook({
   const pendingUnitIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    pendingUnitIdRef.current = null;
+    setActiveUnitId(selectedUnitId);
+    setNoteSearch('');
+    setNavigatorOpen(!selectedUnitId);
+    focusReaderRef.current = Boolean(selectedUnitId);
     loadTextbook();
   }, [learnerId]);
 
@@ -201,34 +210,34 @@ export function AdaptiveTextbook({
   const prerequisiteStrengths = textbookInsights.prerequisiteStrengths;
 
   useEffect(() => {
-    if (orderedUnits.length === 0) {
-      if (selectedUnit) {
-        setSelectedUnit(null);
-        onSelectedUnitChange?.(undefined);
-      }
-      pendingUnitIdRef.current = null;
-      return;
-    }
-
-    // If we have a pending selection from user click, check if parent has confirmed
     if (pendingUnitIdRef.current) {
-      if (selectedUnitId === pendingUnitIdRef.current) {
-        // Parent confirmed, clear pending
-        pendingUnitIdRef.current = null;
-      } else {
-        // Still waiting for parent to update prop, don't override user's selection
-        return;
+      if (selectedUnitId === pendingUnitIdRef.current || !onSelectedUnitChange) pendingUnitIdRef.current = null;
+      else return;
+    }
+    const requested = selectedUnitId || activeUnitId;
+    if (requested) {
+      if (requested !== activeUnitId) {
+        setActiveUnitId(requested);
+        setNavigatorOpen(false);
+        focusReaderRef.current = true;
       }
+      return; // An invalid deep link must not silently open a different note.
     }
+    const first = orderedUnits.find(unit => unit.status !== 'archived');
+    if (first) { setActiveUnitId(first.id); onSelectedUnitChange?.(first.id); }
+  }, [orderedUnits, selectedUnitId, activeUnitId, onSelectedUnitChange]);
 
-    const selectedId = selectedUnitId || selectedUnit?.id || orderedUnits[0].id;
-    const resolvedUnit = orderedUnits.find((unit) => unit.id === selectedId) || orderedUnits[0];
-
-    if (resolvedUnit.id !== selectedUnit?.id) {
-      setSelectedUnit(resolvedUnit);
-      onSelectedUnitChange?.(resolvedUnit.id);
+  useEffect(() => {
+    if (!selectedUnit) return;
+    const name = getConceptById(selectedUnit.conceptId)?.name || 'Other';
+    const group = `${name}-${selectedUnit.title || selectedUnit.problemId || 'General'}`;
+    setExpandedConcepts(previous => previous[name] ? previous : { ...previous, [name]: true });
+    setExpandedProblems(previous => previous[group] ? previous : { ...previous, [group]: true });
+    if (focusReaderRef.current) {
+      focusReaderRef.current = false;
+      if (window.matchMedia('(max-width: 1023px)').matches) readerHeadingRef.current?.focus();
     }
-  }, [orderedUnits, selectedUnitId, selectedUnit, onSelectedUnitChange]);
+  }, [selectedUnit?.id]);
 
   const selectedConcept = useMemo(
     () => (selectedUnit ? getConceptById(selectedUnit.conceptId) : null),
@@ -280,7 +289,12 @@ export function AdaptiveTextbook({
 
   const handleUnitSelect = (unit: InstructionalUnit) => {
     pendingUnitIdRef.current = unit.id;
-    setSelectedUnit(unit);
+    setActiveUnitId(unit.id);
+    setNavigatorOpen(false);
+    focusReaderRef.current = true;
+    if (selectedUnit?.id === unit.id && window.matchMedia('(max-width: 1023px)').matches) {
+      requestAnimationFrame(() => readerHeadingRef.current?.focus());
+    }
     storage.logConceptView({
       learnerId,
       sessionId: unit.sessionId,
@@ -299,18 +313,18 @@ export function AdaptiveTextbook({
   const confirmClear = () => {
     storage.clearTextbook(learnerId);
     setTextbookUnits([]);
-    setSelectedUnit(null);
+    setActiveUnitId(undefined);
     onSelectedUnitChange?.(undefined);
     setShowClearConfirm(false);
   };
 
   const filteredUnits = useMemo(() => {
-    if (showArchived) {
-      return orderedUnits;
-    }
-    // By default, show only primary and alternative units (hide archived)
-    return filterUnitsByStatus(orderedUnits, ['primary', 'alternative']);
-  }, [orderedUnits, showArchived]);
+    const visible = showArchived ? orderedUnits : orderedUnits.filter(unit =>
+      unit.status !== 'archived' || unit.id === selectedUnitId);
+    const query = noteSearch.trim().toLocaleLowerCase();
+    return query ? visible.filter(unit => [unit.title, unit.content, unit.problemId,
+      getConceptById(unit.conceptId)?.name, unit.conceptId].some(value => value?.toLocaleLowerCase().includes(query))) : visible;
+  }, [orderedUnits, showArchived, selectedUnitId, noteSearch]);
 
   // Group units by concept, then by problem title (for folding)
   const groupedUnits = filteredUnits.reduce((acc, unit) => {
@@ -386,6 +400,7 @@ export function AdaptiveTextbook({
   if (orderedUnits.length === 0) {
     return (
       <Card className="p-8 text-center">
+        {selectedUnitId && <p role="alert">The requested saved note is not available.</p>}
         <Book className="size-12 mx-auto text-gray-600 mb-4" />
         <h3 className="font-semibold text-lg mb-2">Your Textbook is Empty</h3>
         <p className="text-gray-600 mb-3">
@@ -400,27 +415,16 @@ export function AdaptiveTextbook({
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full min-w-0">
+      <Button className="lg:hidden" variant="outline" aria-expanded={navigatorOpen} aria-controls="saved-note-navigator" onClick={() => setNavigatorOpen(open => !open)}>Browse saved notes</Button>
       {/* Table of Contents */}
-      <Card className="p-4 lg:col-span-1 overflow-y-auto">
+      <Card id="saved-note-navigator" className={`p-4 lg:col-span-1 overflow-y-auto min-w-0 ${navigatorOpen ? '' : 'hidden lg:block'}`}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold flex items-center gap-2">
             <Book className="size-5" />
             My Textbook
           </h3>
           <div className="flex items-center gap-1">
-            <Button
-              onClick={() => setSortMode(prev => {
-                const modes: SortMode[] = ['quality', 'newest', 'oldest', 'prerequisite'];
-                const currentIndex = modes.indexOf(prev);
-                return modes[(currentIndex + 1) % modes.length];
-              })}
-              variant="ghost"
-              size="sm"
-              title={`Sort: ${sortMode}`}
-            >
-              <ArrowUpDown className="size-4" />
-            </Button>
             <Button
               onClick={handleClear}
               variant="ghost"
@@ -432,6 +436,16 @@ export function AdaptiveTextbook({
           </div>
         </div>
         
+        <label className="block text-sm font-medium mb-3">Search saved notes
+          <input className="mt-1 w-full rounded border p-2" type="search" value={noteSearch} onChange={event => setNoteSearch(event.target.value)} />
+        </label>
+        {noteSearch && <Button size="sm" variant="outline" onClick={() => setNoteSearch('')}>Clear note search</Button>}
+        <p role="status" className="my-2 text-sm">{filteredUnits.length} of {orderedUnits.length} saved notes</p>
+        <label className="block text-sm font-medium mb-3">Sort saved notes
+          <select className="block mt-1 w-full rounded border p-2" value={sortMode} onChange={event => setSortMode(event.target.value as SortMode)}>
+            <option value="quality">Quality</option><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="prerequisite">Learning path</option>
+          </select>
+        </label>
         {/* Sort indicator */}
         <div className="flex items-center gap-2 mb-3">
           <Badge variant="outline" className="text-[10px]">
@@ -462,6 +476,7 @@ export function AdaptiveTextbook({
           </div>
         )}
 
+        {filteredUnits.length === 0 && <p className="my-3 text-sm text-gray-600">No saved notes match the current search and archive filter.</p>}
         <div className="space-y-2">
           {Object.entries(groupedUnits).map(([conceptName, problems]) => {
             const isConceptExpanded = expandedConcepts[conceptName] ?? false;
@@ -665,15 +680,16 @@ export function AdaptiveTextbook({
           </div>
         )}
 
+        <details className="mt-4"><summary className="cursor-pointer font-medium">Review suggestions</summary>
         {textbookInsights.misconceptionCards.length > 0 && (
           <div className="mt-4 rounded border border-amber-200 bg-amber-50 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">You Keep Hitting</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Repeated errors</p>
             <div className="mt-2 space-y-2">
               {textbookInsights.misconceptionCards.map((card) => (
                 <div key={card.id} className="rounded border border-amber-200 bg-white p-2" data-testid="misconception-card">
                   <p className="text-sm font-medium text-amber-900">{card.subtype}</p>
                   <p className="text-xs text-amber-800">
-                    {card.count} related interactions • last seen {new Date(card.lastSeenAt).toLocaleString()}
+                    {card.count} distinct errors • last seen {new Date(card.lastSeenAt).toLocaleString()}
                   </p>
                   {card.conceptNames.length > 0 && (
                     <p className="text-[11px] text-amber-700 mt-1">
@@ -700,6 +716,7 @@ export function AdaptiveTextbook({
           </div>
         )}
 
+        </details>
         <Separator className="my-4" />
 
         {/* Status filter toggle */}
@@ -746,7 +763,9 @@ export function AdaptiveTextbook({
       </Card>
 
       {/* Content Viewer */}
-      <Card className="p-6 lg:col-span-2 overflow-y-auto">
+      <Card className="p-6 lg:col-span-2 overflow-y-auto min-w-0">
+        {activeUnitId && !selectedUnit && <div role="alert" className="mb-4"><p>The requested saved note is not available.</p>{orderedUnits.length > 0 && <Button variant="outline" onClick={() => handleUnitSelect(orderedUnits.find(unit => unit.status !== 'archived') || orderedUnits[0])}>Open an available note</Button>}</div>}
+        {selectedUnit && !filteredUnits.some(unit => unit.id === selectedUnit.id) && <p role="status" className="mb-4">This open note is outside the current results. Clear note search or show archived notes to find it in the navigator.</p>}
         {selectedUnit ? (
           <div className="prose prose-sm max-w-none">
             <div className="flex items-center gap-2 mb-4">
@@ -778,7 +797,7 @@ export function AdaptiveTextbook({
               )}
             </div>
 
-            <h2 className="text-2xl font-bold mb-4">{selectedUnit.title}</h2>
+            <h2 ref={readerHeadingRef} tabIndex={-1} className="text-2xl font-bold mb-4 break-words">{selectedUnit.title}</h2>
 
             <div 
               className="space-y-4"
