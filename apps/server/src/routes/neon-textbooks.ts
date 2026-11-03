@@ -4,13 +4,14 @@
 
 import { Router, Request, Response } from 'express';
 import * as db from '../db/neon.js';
-import { requireOwnership } from '../middleware/auth.js';
+import { requireOwnership, requireSelfForWrite } from '../middleware/auth.js';
 import { requirePreSurveyCompleted } from '../middleware/pre-survey.js';
 
 const router = Router();
 
 // Verify ownership for all :userId routes
 router.param('userId', requireOwnership);
+router.param('userId', (req, res, next) => requireSelfForWrite(req, res, next));
 
 // ============================================================================
 // Textbook Units

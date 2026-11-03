@@ -43,12 +43,21 @@ router.post('/reward', banditRewardRateLimiter, async (req: Request, res: Respon
     res.status(403).json({ success: false, error: 'Adaptive bandit is unavailable for this condition' });
     return;
   }
-  const result = await db.recordSharedBanditReward({
-    ...parsed.data,
-    studentId: req.auth.learnerId,
-    conditionId: assignment.conditionId,
-  });
-  res.json({ success: true, data: result });
+  try {
+    const result = await db.recordSharedBanditReward({
+      ...parsed.data,
+      studentId: req.auth.learnerId,
+      conditionId: assignment.conditionId,
+    });
+    res.json({ success: true, data: result });
+  } catch (error) {
+    if (error instanceof db.BanditSelectionNotFoundError) {
+      res.status(409).json({ success: false, error: error.message });
+      return;
+    }
+    console.error('[bandit/reward]', error);
+    res.status(500).json({ success: false, error: 'Failed to record bandit reward' });
+  }
 });
 
 export { router as neonBanditRouter };

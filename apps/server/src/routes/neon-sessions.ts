@@ -5,7 +5,7 @@
 
 import { Router, Request, Response } from 'express';
 import * as db from '../db/neon.js';
-import { requireOwnership } from '../middleware/auth.js';
+import { requireOwnership, requireSelfForWrite } from '../middleware/auth.js';
 import { requirePreSurveyCompleted } from '../middleware/pre-survey.js';
 import type { SessionData } from '../types.js';
 
@@ -107,6 +107,7 @@ function resolveSessionWriteBody(
 
 // Verify ownership for all :learnerId routes
 router.param('learnerId', requireOwnership);
+router.param('learnerId', (req, res, next) => requireSelfForWrite(req, res, next));
 
 // ============================================================================
 // Active Session Endpoints (Frontend Contract)

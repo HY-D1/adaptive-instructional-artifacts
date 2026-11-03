@@ -392,6 +392,12 @@ async function resolveScopedTarget(
     return { learnerId: requestedLearnerId, sectionId: null };
   }
 
+  if (mode === 'write') {
+    throw new AccessError(403, 'Access denied: only the learner can log their own interactions', {
+      targetLearnerId: requestedLearnerId,
+    });
+  }
+
   const scopedSection = await getSectionForLearnerInInstructorScope({
     instructorUserId: auth.learnerId,
     learnerId: requestedLearnerId,
@@ -495,7 +501,8 @@ router.post('/', requirePreSurveyCompleted, async (req: Request, res: Response) 
       try {
         await db.linkTextbookRetrievals(id, validatedEvent.textbookUnitsRetrieved);
       } catch (err) {
-        console.warn('[neon-interactions] Failed to link retrievals:', err);
+        // Research provenance is lost for this event; make it visible in logs.
+        console.error('[neon-interactions/retrieval-link-failed]', { eventId: id, error: err instanceof Error ? err.message : String(err) });
         // Don't fail the entire request for retrieval linking issues
       }
     }
@@ -652,7 +659,7 @@ router.post('/batch', requirePreSurveyCompleted, async (req: Request, res: Respo
           try {
             await db.linkTextbookRetrievals(id, event.textbookUnitsRetrieved);
           } catch (err) {
-            console.warn('[neon-interactions] Failed to link retrievals:', err);
+            console.error('[neon-interactions/retrieval-link-failed]', { eventId: id, error: err instanceof Error ? err.message : String(err) });
             // Don't fail the entire request for retrieval linking issues
           }
         }

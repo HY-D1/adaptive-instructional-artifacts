@@ -4,7 +4,7 @@
 
 import { Router, Request, Response } from 'express';
 import * as db from '../db/neon.js';
-import { requireInstructor, requireOwnership } from '../middleware/auth.js';
+import { requireInstructor, requireOwnership, requireSelfForWrite } from '../middleware/auth.js';
 import { getInstructorScopedLearnerIds } from '../db/sections.js';
 import { requirePreSurveyCompleted } from '../middleware/pre-survey.js';
 
@@ -37,6 +37,7 @@ router.get('/profiles', requireInstructor, async (req: Request, res: Response) =
 
 // Verify ownership for all :id routes (students can only access their own data)
 router.param('id', requireOwnership);
+router.param('id', (req, res, next) => requireSelfForWrite(req, res, next));
 
 router.get('/:id/condition-assignment', async (req: Request, res: Response) => {
   try {
@@ -99,24 +100,24 @@ router.get('/', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/learners - Create new user
+// POST /api/learners - Create the caller's own user row (idempotent).
+// The id must be the authenticated learner and the role comes from the token,
+// so clients cannot create arbitrary rows or pick their own role.
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { id, name, role } = req.body;
+    const auth = req.auth!;
+    const { id, name } = req.body ?? {};
 
-    if (!id || !name || !role) {
+    if (!id || !name) {
       res.status(400).json({
         success: false,
-        error: 'Missing required fields: id, name, role',
+        error: 'Missing required fields: id, name',
       });
       return;
     }
 
-    if (!['student', 'instructor'].includes(role)) {
-      res.status(400).json({
-        success: false,
-        error: 'Role must be "student" or "instructor"',
-      });
+    if (id !== auth.learnerId) {
+      res.status(403).json({ success: false, error: 'Access denied: can only create your own learner record' });
       return;
     }
 
@@ -129,7 +130,7 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const user = await db.createUser(id, { name, role });
+    const user = await db.createUser(id, { name, role: auth.role });
     res.status(201).json({ success: true, data: user });
   } catch (error) {
     console.error('Error creating user:', error);
@@ -154,20 +155,18 @@ router.get('/:id', async (req: Request, res: Response) => {
   }
 });
 
-// PUT /api/learners/:id - Update user
+// PUT /api/learners/:id - Update the learner's display name.
+// Role is owned by the auth account and cannot be changed through this route.
 router.put('/:id', async (req: Request, res: Response) => {
   try {
-    const { name, role } = req.body;
+    const { name, role } = req.body ?? {};
 
-    if (role && !['student', 'instructor'].includes(role)) {
-      res.status(400).json({
-        success: false,
-        error: 'Role must be "student" or "instructor"',
-      });
+    if (role !== undefined) {
+      res.status(400).json({ success: false, error: 'Role cannot be changed through this endpoint' });
       return;
     }
 
-    const user = await db.updateUser(req.params.id, { name, role });
+    const user = await db.updateUser(req.params.id, { name });
 
     if (!user) {
       res.status(404).json({ success: false, error: 'User not found' });
@@ -181,21 +180,11 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
-// DELETE /api/learners/:id - Delete user
-router.delete('/:id', async (req: Request, res: Response) => {
-  try {
-    const deleted = await db.deleteUser(req.params.id);
-
-    if (!deleted) {
-      res.status(404).json({ success: false, error: 'User not found' });
-      return;
-    }
-
-    res.json({ success: true, message: 'User deleted' });
-  } catch (error) {
-    console.error('Error deleting user:', error);
-    res.status(500).json({ success: false, error: 'Failed to delete user' });
-  }
+// DELETE /api/learners/:id is intentionally not supported: deleting a user
+// cascades to the learner's research record (interactions, progress, bandit
+// rewards, survey invitations). Data removal is an operator task.
+router.delete('/:id', (_req: Request, res: Response) => {
+  res.status(405).json({ success: false, error: 'Learner deletion is not available through the API' });
 });
 
 // ============================================================================

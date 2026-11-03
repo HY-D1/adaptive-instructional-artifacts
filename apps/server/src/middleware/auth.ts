@@ -186,6 +186,37 @@ export function requireOwnership(req: Request, res: Response, next: NextFunction
   });
 }
 
+const READ_ONLY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/**
+ * After requireOwnership: mutating requests on a learner-scoped route must come
+ * from that learner. Instructors keep read access to their sections but cannot
+ * rewrite students' progress, profiles, sessions, textbooks or assignments.
+ */
+export function requireSelfForWrite(req: Request, res: Response, next: NextFunction): void {
+  if (READ_ONLY_METHODS.has(req.method)) {
+    next();
+    return;
+  }
+  const auth = req.auth;
+  if (!auth) {
+    res.status(401).json({ success: false, error: 'Authentication required' });
+    return;
+  }
+  const paramLearnerId = req.params.learnerId ?? req.params.id ?? req.params.userId;
+  if (paramLearnerId && paramLearnerId !== auth.learnerId) {
+    console.warn('[authz/write_denied]', {
+      route: `${req.method} ${req.baseUrl}${req.path}`,
+      actorRole: auth.role,
+      actorId: auth.learnerId,
+      targetLearnerId: paramLearnerId,
+    });
+    res.status(403).json({ success: false, error: 'Access denied: only the learner can modify their own data' });
+    return;
+  }
+  next();
+}
+
 /**
  * Section-aware access check for routes that accept learner IDs via either
  * params or query values.

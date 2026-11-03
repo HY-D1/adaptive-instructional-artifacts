@@ -458,6 +458,24 @@ export async function initializeSchema(): Promise<void> {
   await db`CREATE INDEX IF NOT EXISTS idx_textbook_unit_event_links_unit_id ON textbook_unit_event_links(unit_id)`;
   await db`CREATE INDEX IF NOT EXISTS idx_textbook_unit_event_links_event_id ON textbook_unit_event_links(event_id)`;
 
+  // Retrieval provenance (RESEARCH-5). Previously only created by
+  // migrate-neon.sql, so DBs provisioned via initializeSchema() silently
+  // dropped every linkTextbookRetrievals() write.
+  await db`
+    CREATE TABLE IF NOT EXISTS interaction_textbook_unit_retrievals (
+      id SERIAL PRIMARY KEY,
+      event_id TEXT NOT NULL REFERENCES interaction_events(id) ON DELETE CASCADE,
+      unit_id TEXT NOT NULL,
+      rank INTEGER,
+      source_kind TEXT,
+      score NUMERIC,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      CONSTRAINT unique_event_unit_retrieval UNIQUE (event_id, unit_id)
+    )
+  `;
+  await db`CREATE INDEX IF NOT EXISTS idx_retrievals_event_id ON interaction_textbook_unit_retrievals(event_id)`;
+  await db`CREATE INDEX IF NOT EXISTS idx_retrievals_unit_id ON interaction_textbook_unit_retrievals(unit_id)`;
+
   // Processed corpus tables (raw PDFs remain local-only; Neon stores processed outputs only)
   await db`CREATE EXTENSION IF NOT EXISTS vector`;
 
@@ -759,6 +777,15 @@ export async function getSharedBanditState(): Promise<SharedBanditArmState[]> {
   }));
 }
 
+export class BanditSelectionNotFoundError extends Error {
+  readonly status = 409;
+
+  constructor() {
+    super('No matching bandit_arm_selected event for this student and arm');
+    this.name = 'BanditSelectionNotFoundError';
+  }
+}
+
 export async function recordSharedBanditReward(params: {
   eventId: string;
   selectionEventId: string;
@@ -769,14 +796,25 @@ export async function recordSharedBanditReward(params: {
   reward: number;
 }): Promise<SharedBanditArmState & { applied: boolean }> {
   const db = getDb();
+  // A reward is only accepted for a selection this student actually logged for
+  // this arm; otherwise any client could bias the pooled posterior.
   const [row] = await db`
-    WITH inserted AS (
+    WITH selection AS (
+      SELECT 1
+      FROM interaction_events
+      WHERE id = ${params.selectionEventId}
+        AND user_id = ${params.studentId}
+        AND event_type = 'bandit_arm_selected'
+        AND selected_arm = ${params.armId}
+      LIMIT 1
+    ), inserted AS (
       INSERT INTO bandit_reward_events (
         event_id, selection_event_id, student_id, condition_id, arm_id, reward, experiment_version
-      ) VALUES (
+      )
+      SELECT
         ${params.eventId}, ${params.selectionEventId}, ${params.studentId}, ${params.conditionId},
         ${params.armId}, CAST(${params.reward} AS NUMERIC), ${SHARED_BANDIT_EXPERIMENT_VERSION}
-      )
+      WHERE EXISTS (SELECT 1 FROM selection)
       ON CONFLICT DO NOTHING
       RETURNING event_id
     ), updated AS (
@@ -791,11 +829,15 @@ export async function recordSharedBanditReward(params: {
     )
     SELECT state.arm_id, state.experiment_version, state.alpha, state.beta,
            state.pull_count, state.updated_at,
-           EXISTS (SELECT 1 FROM updated) AS applied
+           EXISTS (SELECT 1 FROM updated) AS applied,
+           EXISTS (SELECT 1 FROM selection) AS selection_found
     FROM bandit_arm_state state
     WHERE state.arm_id = ${params.armId}
   `;
   if (!row) throw new Error('Shared bandit arm was not found');
+  if (!row.selection_found) {
+    throw new BanditSelectionNotFoundError();
+  }
   return {
     armId: row.arm_id as SharedBanditArm,
     experimentVersion: row.experiment_version,
@@ -1066,9 +1108,9 @@ export async function updateUser(
 
 export async function deleteUser(id: string): Promise<boolean> {
   const db = getDb();
-  const result = await db`DELETE FROM users WHERE id = ${id}`;
-  // Result is array of rows for SELECT, or empty array for DELETE
-  return Array.isArray(result) && result.length === 0;
+  // Operator use only (no API route). Cascades to the learner's research data.
+  const rows = await db`DELETE FROM users WHERE id = ${id} RETURNING id`;
+  return rows.length > 0;
 }
 
 async function resolveSectionIdForLearner(
