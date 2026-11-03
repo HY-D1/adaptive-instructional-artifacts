@@ -14,6 +14,7 @@ import {
   OLLAMA_FALLBACK_MODEL,
   GROQ_API_KEY,
   GROQ_MODEL,
+  GROQ_BASE_URL,
 } from '../config.js';
 import {
   createLLMProvider,
@@ -34,6 +35,7 @@ function getProvider(): LLMProvider {
       groqConfig: {
         apiKey: GROQ_API_KEY,
         defaultModel: GROQ_MODEL,
+        baseUrl: GROQ_BASE_URL,
         timeoutMs: 30000,
       },
     });

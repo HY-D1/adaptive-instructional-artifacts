@@ -45,15 +45,32 @@ interface GroqChatCompletionResponse {
 interface GroqModelInfo {
   id: string;
   object: string;
-  created: number;
+  created?: number;
   owned_by: string;
-  active: boolean;
-  context_window: number;
+  active?: boolean;
+  context_window?: number;
 }
 
 interface GroqModelsResponse {
   object: string;
   data: GroqModelInfo[];
+}
+
+function mapModelInfo(entry: GroqModelInfo): LLMModelInfo {
+  let modifiedAt: string | undefined;
+  if (typeof entry.created === 'number' && Number.isFinite(entry.created)) {
+    const date = new Date(entry.created * 1000);
+    if (Number.isFinite(date.getTime())) {
+      modifiedAt = date.toISOString();
+    }
+  }
+
+  return {
+    name: entry.id,
+    size: undefined,
+    parameterCount: undefined,
+    modifiedAt,
+  };
 }
 
 export class GroqProvider implements LLMProvider {
@@ -179,12 +196,7 @@ export class GroqProvider implements LLMProvider {
 
       const data = await response.json() as GroqModelsResponse;
       return Array.isArray(data?.data)
-        ? data.data.map((entry) => ({
-            name: entry.id,
-            size: undefined,
-            parameterCount: undefined,
-            modifiedAt: new Date(entry.created * 1000).toISOString(),
-          }))
+        ? data.data.map(mapModelInfo)
         : [];
     } catch {
       return [];
@@ -221,16 +233,9 @@ export class GroqProvider implements LLMProvider {
       }
 
       const data = await response.json() as GroqModelsResponse;
-      const models = Array.isArray(data?.data)
-        ? data.data.map((entry) => ({
-            name: entry.id,
-            size: undefined,
-            parameterCount: undefined,
-            modifiedAt: new Date(entry.created * 1000).toISOString(),
-          }))
-        : [];
+      const models = Array.isArray(data?.data) ? data.data.map(mapModelInfo) : [];
 
-      const activeModels = data.data?.filter((m) => m.active) || [];
+      const activeModels = Array.isArray(data?.data) ? data.data.filter((m) => m.active) : [];
 
       return {
         ok: true,

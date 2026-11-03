@@ -51,6 +51,7 @@ export const OLLAMA_FALLBACK_MODEL = process.env.OLLAMA_FALLBACK_MODEL || 'llama
  */
 export const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 export const GROQ_MODEL = process.env.GROQ_MODEL || 'openai/gpt-oss-20b';
+export const GROQ_BASE_URL = process.env.GROQ_BASE_URL || 'https://api.groq.com/openai/v1';
 
 // ============================================================================
 // PDF Index Configuration
@@ -276,6 +277,7 @@ export async function getFeatureStatus(): Promise<FeatureStatus> {
               groqConfig: {
                 apiKey: GROQ_API_KEY,
                 defaultModel: GROQ_MODEL,
+                baseUrl: GROQ_BASE_URL,
               },
             }
           : {
