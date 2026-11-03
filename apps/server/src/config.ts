@@ -192,9 +192,11 @@ const DEFAULT_CORS_ORIGINS = [
   'https://adaptive-instructional-artifacts.vercel.app',
 ];
 
-const DEFAULT_CORS_ORIGIN_PATTERNS = [
-  'https://adaptive-instructional-artifacts-*.vercel.app',
-];
+// No default wildcard: a bare `<project>-*.vercel.app` pattern also matches
+// same-named projects in other Vercel scopes. Preview origins must be listed via
+// CORS_ORIGIN_PATTERNS and should pin the team slug, e.g.
+// https://adaptive-instructional-artifacts-*-<team-slug>.vercel.app
+const DEFAULT_CORS_ORIGIN_PATTERNS: string[] = [];
 
 function parseCsv(value: string | undefined): string[] {
   if (!value) return [];

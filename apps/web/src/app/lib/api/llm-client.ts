@@ -1,6 +1,7 @@
 import { LLMGenerationParams } from '../../types';
 import { isDemoMode, shouldAttemptLLM } from '../utils/demo-mode';
 import { isBackendConfigured, isHostedMode, getLLMUnavailableError, getApiBaseUrl } from '../runtime-config';
+import { withCsrfHeader } from './csrf-client';
 
 export const OLLAMA_MODEL = 'qwen3:4b';
 export const OLLAMA_FALLBACK_MODEL = 'llama3.2:3b';
@@ -306,6 +307,7 @@ export async function getLLMStatus(): Promise<LLMStatus> {
   try {
     const response = await fetch(`${API_BASE_URL}/api/llm/status`, {
       method: 'GET',
+      credentials: 'include',
       signal: AbortSignal.timeout(HEALTHCHECK_TIMEOUT_MS),
     });
 
@@ -404,8 +406,9 @@ export async function generateWithLLM(prompt: string, options?: LLMGenerateOptio
     const timeoutId = setTimeout(() => controller.abort(), params.timeoutMs);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/llm/generate`, {
+      const response = await fetch(`${API_BASE_URL}/api/llm/generate`, withCsrfHeader({
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json'
         },
@@ -419,7 +422,7 @@ export async function generateWithLLM(prompt: string, options?: LLMGenerateOptio
           }
         }),
         signal: controller.signal
-      });
+      }));
 
       if (!response.ok) {
         if (response.status === 503) {

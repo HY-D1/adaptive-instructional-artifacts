@@ -87,7 +87,28 @@ interface GenerateResponse {
 // Validation
 // ============================================================================
 
-function validateGenerateRequest(body: unknown): { valid: boolean; error?: string; data?: GenerateRequest } {
+/** Hard cap on prompt size; app prompts are a few KB, so this only stops abuse. */
+export const MAX_PROMPT_CHARS = 32_000;
+
+function parseCsvEnv(value: string | undefined): string[] {
+  return (value ?? '').split(',').map((entry) => entry.trim()).filter(Boolean);
+}
+
+/** Models a caller may request; anything else falls back to the provider default. */
+export function getAllowedModels(env: NodeJS.ProcessEnv = process.env): Set<string> {
+  const base = LLM_PROVIDER === 'groq'
+    ? [GROQ_MODEL]
+    : [OLLAMA_DEFAULT_MODEL, OLLAMA_FALLBACK_MODEL];
+  return new Set([...base, ...parseCsvEnv(env.LLM_ALLOWED_MODELS)]);
+}
+
+export function resolveAllowedModel(requested: unknown, allowed: Set<string> = getAllowedModels()): string | undefined {
+  if (typeof requested !== 'string') return undefined;
+  const trimmed = requested.trim();
+  return trimmed && allowed.has(trimmed) ? trimmed : undefined;
+}
+
+export function validateGenerateRequest(body: unknown): { valid: boolean; error?: string; data?: GenerateRequest } {
   if (!body || typeof body !== 'object') {
     return { valid: false, error: 'Request body must be an object' };
   }
@@ -98,8 +119,12 @@ function validateGenerateRequest(body: unknown): { valid: boolean; error?: strin
     return { valid: false, error: 'prompt is required and must be a non-empty string' };
   }
 
+  if (req.prompt.length > MAX_PROMPT_CHARS) {
+    return { valid: false, error: `prompt exceeds maximum length of ${MAX_PROMPT_CHARS} characters` };
+  }
+
   const result: GenerateRequest = {
-    model: typeof req.model === 'string' && req.model.trim().length > 0 ? req.model.trim() : undefined,
+    model: resolveAllowedModel(req.model),
     prompt: req.prompt,
     stream: typeof req.stream === 'boolean' ? req.stream : false,
   };

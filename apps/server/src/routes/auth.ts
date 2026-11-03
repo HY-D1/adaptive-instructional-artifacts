@@ -9,6 +9,7 @@
 
 import { Router, type Request, type Response } from 'express';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'node:crypto';
 import { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
@@ -51,6 +52,17 @@ import { consumeSignupLimit } from '../db/signup-rate-limit.js';
 const router = Router();
 
 const SALT_ROUNDS = 12;
+
+// A real bcrypt hash (60 chars, same cost) for unknown emails. bcryptjs returns
+// false immediately for malformed hashes, which would make unknown-email logins
+// measurably faster than real ones. Computed lazily to keep cold starts fast.
+let timingDummyHash: Promise<string> | null = null;
+export function getTimingDummyHash(): Promise<string> {
+  if (!timingDummyHash) {
+    timingDummyHash = bcrypt.hash(randomBytes(16).toString('hex'), SALT_ROUNDS);
+  }
+  return timingDummyHash;
+}
 
 // ============================================================================
 // Validation schemas
@@ -393,8 +405,8 @@ router.post('/login', loginRateLimiter, async (req: Request, res: Response) => {
     const db = getDb();
     const account = await getAuthAccountByEmail(db, email);
 
-    // Use timing-safe comparison even if account not found
-    const hashToCompare = account?.passwordHash ?? '$2a$12$invalidhashfortimingattackprevention';
+    // Always pay the bcrypt cost, even if the account does not exist
+    const hashToCompare = account?.passwordHash ?? await getTimingDummyHash();
     const passwordMatch = await bcrypt.compare(password, hashToCompare);
 
     if (!account || !passwordMatch) {

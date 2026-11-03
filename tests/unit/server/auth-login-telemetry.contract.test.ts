@@ -325,3 +325,21 @@ describe('auth login telemetry contract', () => {
     );
   });
 });
+
+describe('login timing protection', () => {
+  it('compares unknown emails against a well-formed bcrypt hash', async () => {
+    const bcrypt = (await import('../../../apps/server/node_modules/bcryptjs/index.js')).default;
+    const { authRouter, getTimingDummyHash } = await import('../../../apps/server/src/routes/auth.js');
+    const dummy = await getTimingDummyHash();
+    expect(dummy).toHaveLength(60);
+    expect(dummy.startsWith('$2')).toBe(true);
+
+    const compareSpy = vi.spyOn(bcrypt, 'compare');
+    getAuthAccountByEmailMock.mockResolvedValue(null);
+    const handler = getRouteHandler(authRouter, 'post', '/login');
+    const result = await invokeJsonHandler(handler, { email: 'nobody@example.test', password: 'whatever-123' });
+    expect(result.status).toBe(401);
+    expect(compareSpy).toHaveBeenCalledWith('whatever-123', expect.stringMatching(/^\$2[aby]\$12\$.{53}$/));
+    compareSpy.mockRestore();
+  });
+});

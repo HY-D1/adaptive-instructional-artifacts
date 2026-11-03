@@ -30,14 +30,13 @@ import { authRouter } from './routes/auth.js';
 import { instructorRouter } from './routes/instructor.js';
 import { corpusRouter } from './routes/corpus.js';
 import {
-  ENABLE_LLM,
   CORS_ORIGIN_PATTERNS,
   CORS_ORIGINS,
   getFeatureStatus,
-  OLLAMA_BASE_URL,
 } from './config.js';
 import { isUsingNeon } from './db/index.js';
 import { resolveDbEnv, resolveEnvironment, resolveDbTarget } from './db/env-resolver.js';
+import { wildcardPatternToRegExp } from './lib/cors-patterns.js';
 import { optionalAuth, requireAuth, requireInstructor } from './middleware/auth.js';
 import { requireCsrf } from './middleware/csrf.js';
 import { maintenanceGuard } from './middleware/maintenance.js';
@@ -106,13 +105,6 @@ function isValidOrigin(origin: string): boolean {
   } catch {
     return false;
   }
-}
-
-function wildcardPatternToRegExp(pattern: string): RegExp {
-  const escaped = pattern
-    .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
-    .replace(/\*/g, '[^/]*');
-  return new RegExp(`^${escaped}$`);
 }
 
 function originGuard(req: Request, res: Response, next: NextFunction): void {
@@ -264,6 +256,22 @@ app.get('/api/system/persistence-status', (_req: Request, res: Response) => {
 
 const usingNeon = isUsingNeon();
 
+// Fail closed: a hosted deployment without a database must not fall back to
+// the unauthenticated SQLite routes.
+export function isHostedEnvironment(env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(env.VERCEL_ENV) || env.NODE_ENV === 'production';
+}
+
+if (!usingNeon && isHostedEnvironment()) {
+  console.error('[startup] No database URL configured in a hosted environment; refusing to serve /api data routes.');
+  app.use('/api', (_req: Request, res: Response) => {
+    res.status(503).json({
+      success: false,
+      error: 'Service unavailable: database is not configured',
+    });
+  });
+}
+
 // ============================================================================
 // DATABASE PATH SELECTION
 // ============================================================================
@@ -305,45 +313,7 @@ app.use('/api/research', researchRateLimiter, requireAuth, requireInstructor, re
 app.use('/api/instructor', researchRateLimiter, requireAuth, instructorRouter);
 app.use('/api/corpus', studentDataLimiter, corpusRouter);
 app.use('/api/pdf-index', generalApiLimiter, pdfIndexRouter);
-app.use('/api/llm', llmRateLimiter, llmRouter);
-
-app.post('/ollama/api/generate', async (req: Request, res: Response) => {
-  if (!ENABLE_LLM) {
-    res.status(503).json({
-      error: 'LLM generation not available',
-      mode: 'deterministic-only',
-      message: 'Set ENABLE_LLM=true to enable LLM features',
-    });
-    return;
-  }
-
-  req.url = '/api/llm/generate';
-  llmRouter(req, res, () => {});
-});
-
-app.get('/ollama/api/tags', async (_req: Request, res: Response) => {
-  if (!ENABLE_LLM) {
-    res.json({ models: [] });
-    return;
-  }
-
-  try {
-    const response = await fetch(`${OLLAMA_BASE_URL}/api/tags`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(5000),
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      res.json(data);
-      return;
-    }
-
-    res.json({ models: [] });
-  } catch {
-    res.json({ models: [] });
-  }
-});
+app.use('/api/llm', llmRateLimiter, requireAuth, requireCsrf, llmRouter);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({
