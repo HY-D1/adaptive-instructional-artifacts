@@ -10,149 +10,52 @@ import {
   calculateIndependentSuccess,
   calculateErrorReduction,
   calculateTimeEfficiency,
-  DEFAULT_REWARD_WEIGHTS,
+  buildRewardComponents,
   REWARD_CALCULATOR_VERSION,
   type RewardComponents,
 } from './reward-calculator';
 
-describe('calculateReward', () => {
-  it('should return 0.5 for neutral components', () => {
-    const components: RewardComponents = {
-      independentSuccess: 0,
-      errorReduction: 0,
-      delayedRetention: 0,
-      dependencyPenalty: 0,
-      timeEfficiency: 0,
-    };
-    
-    const reward = calculateReward(components);
-    expect(reward).toBe(0.5); // (0 + 1) / 2
+describe('calculateReward (shared equal-weight formula)', () => {
+  const c = (overrides: Partial<RewardComponents> = {}): RewardComponents => ({
+    independentSuccess: 0, errorReduction: 0, delayedRetention: 0, dependencyPenalty: 0, timeEfficiency: 0,
+    ...overrides,
   });
 
-  it('should return 1 for maximum positive components', () => {
-    const components: RewardComponents = {
-      independentSuccess: 1,
-      errorReduction: 1,
-      delayedRetention: 1,
-      dependencyPenalty: 0, // No penalty
-      timeEfficiency: 1,
-    };
-    
-    const reward = calculateReward(components);
-    // With default weights: (0.35*1 + 0.25*1 + 0.20*1 - 0.15*0 + 0.05*1 + 1) / 2
-    expect(reward).toBeGreaterThan(0.8);
-    expect(reward).toBeLessThanOrEqual(1);
+  it('is the mean of the five components', () => {
+    expect(calculateReward(c({ independentSuccess: 1, errorReduction: 0.5, timeEfficiency: 1 }))).toBeCloseTo(0.5, 10);
   });
 
-  it('should return 0 for maximum negative components', () => {
-    const components: RewardComponents = {
-      independentSuccess: -1,
-      errorReduction: -1,
-      delayedRetention: -1,
-      dependencyPenalty: -1, // Maximum penalty
-      timeEfficiency: -1,
-    };
-    
-    const reward = calculateReward(components);
-    expect(reward).toBeGreaterThanOrEqual(0);
-    expect(reward).toBeLessThan(0.3);
+  it('clamps to [0, 1]', () => {
+    expect(calculateReward(c({ independentSuccess: -1, errorReduction: -1, timeEfficiency: -1 }))).toBe(0);
+    expect(calculateReward(c({ independentSuccess: 5, errorReduction: 5 }))).toBe(1);
   });
 
-  it('should normalize to [0, 1] range', () => {
-    const randomComponents: RewardComponents = {
-      independentSuccess: Math.random() * 2 - 1,
-      errorReduction: Math.random() * 2 - 1,
-      delayedRetention: Math.random() * 2 - 1,
-      dependencyPenalty: -(Math.random()), // Negative penalty
-      timeEfficiency: Math.random() * 2 - 1,
-    };
-    
-    const reward = calculateReward(randomComponents);
-    expect(reward).toBeGreaterThanOrEqual(0);
-    expect(reward).toBeLessThanOrEqual(1);
+  it('reaches at most 0.6 with no retention signal and zero HDI', () => {
+    expect(calculateReward(c({ independentSuccess: 1, errorReduction: 1, timeEfficiency: 1 }))).toBeCloseTo(0.6, 10);
   });
 
-  it('should use default weights when not specified', () => {
-    const components: RewardComponents = {
-      independentSuccess: 1,
-      errorReduction: 0,
-      delayedRetention: 0,
-      dependencyPenalty: 0,
-      timeEfficiency: 0,
-    };
-    
-    const reward = calculateReward(components);
-    // With default weights, independentSuccess has 0.35 weight
-    // Expected: (0.35 * 1 + 1) / 2 = 0.675
-    expect(reward).toBeCloseTo(0.675, 2);
+  it('penalizes dependency through -HDI', () => {
+    const independent = calculateReward(c({ independentSuccess: 1, errorReduction: 1, timeEfficiency: 1 }));
+    const dependent = calculateReward(c({ independentSuccess: 1, errorReduction: 1, timeEfficiency: 1, dependencyPenalty: -0.8 }));
+    expect(dependent).toBeLessThan(independent);
+  });
+});
+
+describe('buildRewardComponents', () => {
+  it('reproduces the shared pool components (values used since launch)', () => {
+    expect(buildRewardComponents({ solved: true, usedExplanation: false, errorCount: 1, timeSpentMs: 600_000, hdiScore: 0.25 }))
+      .toEqual({ independentSuccess: 1, errorReduction: 1 - 1 / 3, delayedRetention: 0, dependencyPenalty: -0.25, timeEfficiency: 0.5 });
   });
 
-  it('should use custom weights when specified', () => {
-    const components: RewardComponents = {
-      independentSuccess: 1,
-      errorReduction: 0,
-      delayedRetention: 0,
-      dependencyPenalty: 0,
-      timeEfficiency: 0,
-    };
-    
-    const customWeights = {
-      independentSuccess: 0.1,
-      errorReduction: 0.2,
-      delayedRetention: 0.3,
-      dependency: -0.2,
-      timeEfficiency: 0.2,
-    };
-    
-    const reward = calculateReward(components, customWeights);
-    // With custom weights: (0.1 * 1 + 1) / 2 = 0.55
-    expect(reward).toBeCloseTo(0.55, 2);
+  it('gives no independent-success credit after an explanation or without a solve', () => {
+    expect(buildRewardComponents({ solved: true, usedExplanation: true, errorCount: 0, timeSpentMs: 1, hdiScore: 0 }).independentSuccess).toBe(0);
+    expect(buildRewardComponents({ solved: false, usedExplanation: false, errorCount: 0, timeSpentMs: 1, hdiScore: 0 }).independentSuccess).toBe(0);
   });
 
-  it('should reward independent success without explanation higher', () => {
-    const withoutExplanation: RewardComponents = {
-      independentSuccess: 1.0, // Solved without explanation
-      errorReduction: 0,
-      delayedRetention: 0,
-      dependencyPenalty: 0,
-      timeEfficiency: 0,
-    };
-    
-    const withExplanation: RewardComponents = {
-      independentSuccess: 0.5, // Solved with explanation
-      errorReduction: 0,
-      delayedRetention: 0,
-      dependencyPenalty: 0,
-      timeEfficiency: 0,
-    };
-    
-    const rewardWithout = calculateReward(withoutExplanation);
-    const rewardWith = calculateReward(withExplanation);
-    
-    expect(rewardWithout).toBeGreaterThan(rewardWith);
-  });
-
-  it('should penalize high dependency', () => {
-    const lowDependency: RewardComponents = {
-      independentSuccess: 0.5,
-      errorReduction: 0,
-      delayedRetention: 0,
-      dependencyPenalty: -0.1,
-      timeEfficiency: 0,
-    };
-    
-    const highDependency: RewardComponents = {
-      independentSuccess: 0.5,
-      errorReduction: 0,
-      delayedRetention: 0,
-      dependencyPenalty: -0.9,
-      timeEfficiency: 0,
-    };
-    
-    const rewardLow = calculateReward(lowDependency);
-    const rewardHigh = calculateReward(highDependency);
-    
-    expect(rewardLow).toBeGreaterThan(rewardHigh);
+  it('floors error reduction at 0 and caps time efficiency at 1', () => {
+    const parts = buildRewardComponents({ solved: true, usedExplanation: false, errorCount: 9, timeSpentMs: 10, hdiScore: 0 });
+    expect(parts.errorReduction).toBe(0);
+    expect(parts.timeEfficiency).toBe(1);
   });
 });
 
@@ -229,25 +132,6 @@ describe('calculateTimeEfficiency', () => {
   });
 });
 
-describe('DEFAULT_REWARD_WEIGHTS', () => {
-  it('should have correct default weights', () => {
-    expect(DEFAULT_REWARD_WEIGHTS.independentSuccess).toBe(0.35);
-    expect(DEFAULT_REWARD_WEIGHTS.errorReduction).toBe(0.25);
-    expect(DEFAULT_REWARD_WEIGHTS.delayedRetention).toBe(0.20);
-    expect(DEFAULT_REWARD_WEIGHTS.dependency).toBe(-0.15);
-    expect(DEFAULT_REWARD_WEIGHTS.timeEfficiency).toBe(0.05);
-  });
-
-  it('should have weights that sum to 1.0 (absolute value)', () => {
-    const sum = Math.abs(DEFAULT_REWARD_WEIGHTS.independentSuccess) +
-      Math.abs(DEFAULT_REWARD_WEIGHTS.errorReduction) +
-      Math.abs(DEFAULT_REWARD_WEIGHTS.delayedRetention) +
-      Math.abs(DEFAULT_REWARD_WEIGHTS.dependency) +
-      Math.abs(DEFAULT_REWARD_WEIGHTS.timeEfficiency);
-    expect(sum).toBeCloseTo(1.0, 2);
-  });
-});
-
 describe('Version constant', () => {
   it('should export version string', () => {
     expect(typeof REWARD_CALCULATOR_VERSION).toBe('string');
@@ -266,20 +150,19 @@ describe('Reward calculation edge cases', () => {
     };
     
     const reward = calculateReward(components);
-    expect(reward).toBe(0.5);
+    expect(reward).toBe(0);
   });
 
   it('should handle mixed positive and negative', () => {
     const components: RewardComponents = {
-      independentSuccess: 1,    // +0.35 * 1
-      errorReduction: -1,       // +0.25 * -1
+      independentSuccess: 1,
+      errorReduction: 0.5,
       delayedRetention: 0,
-      dependencyPenalty: -0.5,  // -0.15 * -0.5 = +0.075
-      timeEfficiency: 0,
+      dependencyPenalty: -0.5,
+      timeEfficiency: 0.5,
     };
-    
+
     const reward = calculateReward(components);
-    expect(reward).toBeGreaterThan(0);
-    expect(reward).toBeLessThan(1);
+    expect(reward).toBeCloseTo(0.3, 10); // (1 + 0.5 + 0 - 0.5 + 0.5) / 5
   });
 });

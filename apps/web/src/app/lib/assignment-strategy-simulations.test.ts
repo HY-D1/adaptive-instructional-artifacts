@@ -500,18 +500,10 @@ describe('Assignment Strategy: Bandit', () => {
     for (let i = 0; i < 30; i++) {
       const armId = manager.selectProfileForLearner(learnerId).armId;
 
-      // Give high reward only to conservative arm
-      const outcome: LearningOutcome = {
-        solved: true,
-        usedExplanation: false,
-        errorCount: 1,
-        baselineErrors: 3,
-        timeSpentMs: 5000,
-        medianTimeMs: 10000,
-        hdiScore: 0.2,
-      };
-
-      const reward = armId === 'conservative' ? 0.9 : 0.3;
+      // Strong outcomes only for the conservative arm
+      const outcome: LearningOutcome = armId === 'conservative'
+        ? { solved: true, usedExplanation: false, errorCount: 0, baselineErrors: 3, timeSpentMs: 5000, medianTimeMs: 10000, hdiScore: 0 }
+        : { solved: true, usedExplanation: true, errorCount: 3, baselineErrors: 3, timeSpentMs: 5000, medianTimeMs: 10000, hdiScore: 0.6 };
       manager.recordOutcome(learnerId, armId, outcome);
     }
 
@@ -519,8 +511,12 @@ describe('Assignment Strategy: Bandit', () => {
     const stats = manager.getLearnerStats(learnerId);
     const conservativeStats = stats.find((s) => s.armId === 'conservative');
 
-    // Conservative arm should have higher mean reward
-    expect(conservativeStats?.meanReward).toBeGreaterThan(0.5);
+    // The arm with better outcomes must end with a higher posterior mean than
+    // every other arm that was pulled (holds on any reward scale).
+    const others = stats.filter((s) => s.armId !== 'conservative' && s.pullCount > 0);
+    for (const other of others) {
+      expect(conservativeStats?.meanReward ?? 0).toBeGreaterThan(other.meanReward);
+    }
   });
 
   it('tracks reward components correctly', () => {
@@ -999,17 +995,9 @@ describe('Assignment Strategy: Complete Integration Flows', () => {
       armSelectionCounts[armId] = (armSelectionCounts[armId] || 0) + 1;
 
       // Simulate outcome - make 'adaptive' arm perform best
-      const outcome: LearningOutcome = {
-        solved: true,
-        usedExplanation: armId !== 'conservative',
-        errorCount: armId === 'conservative' ? 1 : 2,
-        baselineErrors: 3,
-        timeSpentMs: 5000,
-        medianTimeMs: 10000,
-        hdiScore: armId === 'conservative' ? 0.1 : 0.4,
-      };
-
-      const reward = armId === 'adaptive' ? 0.9 : 0.4;
+      const outcome: LearningOutcome = armId === 'adaptive'
+        ? { solved: true, usedExplanation: false, errorCount: 0, baselineErrors: 3, timeSpentMs: 5000, medianTimeMs: 10000, hdiScore: 0 }
+        : { solved: true, usedExplanation: true, errorCount: 3, baselineErrors: 3, timeSpentMs: 5000, medianTimeMs: 10000, hdiScore: 0.6 };
       manager.recordOutcome(learnerId, armId, outcome);
     }
 
@@ -1017,8 +1005,12 @@ describe('Assignment Strategy: Complete Integration Flows', () => {
     const stats = manager.getLearnerStats(learnerId);
     const adaptiveStats = stats.find((s) => s.armId === 'adaptive');
 
-    // Adaptive arm should have highest mean reward (>= 0.5 due to randomness)
-    expect(adaptiveStats?.meanReward).toBeGreaterThanOrEqual(0.5);
+    // The arm with better outcomes must end with a higher posterior mean than
+    // every other arm that was pulled (holds on any reward scale).
+    const others = stats.filter((s) => s.armId !== 'adaptive' && s.pullCount > 0);
+    for (const other of others) {
+      expect(adaptiveStats?.meanReward ?? 0).toBeGreaterThan(other.meanReward);
+    }
   });
 });
 

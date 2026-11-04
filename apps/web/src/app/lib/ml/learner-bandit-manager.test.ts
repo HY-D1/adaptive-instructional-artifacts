@@ -226,8 +226,11 @@ describe('LearnerBanditManager', () => {
     });
     
     const stats = bandit.getArmStats('aggressive');
-    // Good outcome should increase mean reward
-    expect(stats?.meanReward).toBeGreaterThan(0.5);
+    // Shared formula: (1 + (1 - 1/3) + 0 - 0.2 + 1) / 5; Beta(1,1) + one fractional update.
+    const reward = (1 + (1 - 1 / 3) + 0 - 0.2 + 1) / 5;
+    expect(stats?.meanReward).toBeCloseTo((1 + reward) / 3, 10);
+    expect(stats?.alpha).toBeCloseTo(1 + reward, 10);
+    expect(stats?.beta).toBeCloseTo(2 - reward, 10);
   });
 
   it('should calculate reward correctly for poor outcome', () => {

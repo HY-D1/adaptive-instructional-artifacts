@@ -197,6 +197,8 @@ export class MultiArmedBandit {
     meanReward: number;
     confidenceInterval: [number, number];
     pullCount: number;
+    alpha: number;
+    beta: number;
   } | null {
     const arm = this.arms.get(armId);
     if (!arm) {
@@ -228,6 +230,8 @@ export class MultiArmedBandit {
       meanReward,
       confidenceInterval,
       pullCount: arm.pullCount,
+      alpha: arm.alpha,
+      beta: arm.beta,
     };
   }
 

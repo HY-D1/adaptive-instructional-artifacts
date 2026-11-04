@@ -976,8 +976,8 @@ describe('Simulation: Edge Cases', () => {
     };
 
     const maxReward = calculateReward(components);
-    expect(maxReward).toBeGreaterThan(0.9);
-    expect(maxReward).toBeLessThanOrEqual(1);
+    // Shared equal-weight formula: (1 + 1 + 1 + 0 + 1) / 5
+    expect(maxReward).toBeCloseTo(0.8, 10);
 
     const minComponents: RewardComponents = {
       independentSuccess: -1,
@@ -1127,27 +1127,22 @@ describe('Simulation: Component Integration', () => {
     for (let i = 0; i < 30; i++) {
       const armId = manager.selectProfileForLearner(learnerId).armId;
 
-      // Give high reward only for 'conservative' arm
-      const outcome: LearningOutcome = {
-        solved: true,
-        usedExplanation: false,
-        errorCount: 1,
-        baselineErrors: 3,
-        timeSpentMs: 5000,
-        medianTimeMs: 10000,
-        hdiScore: 0.2,
-      };
-
-      // Give reward based on arm
-      const reward = armId === 'conservative' ? 0.95 : 0.3;
+      // Strong outcomes only for the 'conservative' arm
+      const outcome: LearningOutcome = armId === 'conservative'
+        ? { solved: true, usedExplanation: false, errorCount: 0, baselineErrors: 3, timeSpentMs: 5000, medianTimeMs: 10000, hdiScore: 0 }
+        : { solved: true, usedExplanation: true, errorCount: 3, baselineErrors: 3, timeSpentMs: 5000, medianTimeMs: 10000, hdiScore: 0.6 };
       manager.recordOutcome(learnerId, armId, outcome);
     }
 
     const stats = manager.getLearnerStats(learnerId);
     const conservativeStats = stats.find(s => s.armId === 'conservative');
 
-    // Conservative arm should have highest mean reward
-    expect(conservativeStats?.meanReward).toBeGreaterThan(0.5);
+    // The arm with better outcomes must end with a higher posterior mean than
+    // every other arm that was pulled (holds on any reward scale).
+    const others = stats.filter((s) => s.armId !== 'conservative' && s.pullCount > 0);
+    for (const other of others) {
+      expect(conservativeStats?.meanReward ?? 0).toBeGreaterThan(other.meanReward);
+    }
   });
 
   it('HDI trajectory affects intervention recommendations', () => {

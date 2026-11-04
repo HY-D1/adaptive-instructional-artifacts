@@ -188,6 +188,32 @@ function gammaRandom(shape: number, scale: number): number {
 
 ---
 
+## Reward (single formula, decision 2026-11-04)
+
+One function, `calculateReward(buildRewardComponents(outcome))` in
+`apps/web/src/app/lib/ml/reward-calculator.ts`, produces the reward used by the
+shared server pool (`POST /api/bandit/reward`), the local fallback bandit, and
+the logged `bandit_reward_observed` value. Version: `reward-calc-v2-equal-weight`.
+
+| Component | Value |
+|---|---|
+| independentSuccess | 1 if solved without viewing an explanation, else 0 |
+| errorReduction | max(0, 1 - errors / 3) |
+| delayedRetention | 0 (not measured yet) |
+| dependencyPenalty | -HDI |
+| timeEfficiency | min(1, 300000 ms / max(time, 1000 ms)) |
+
+reward = clamp(sum / 5, 0, 1). The maximum reachable value is 0.6. This is the
+formula the shared pool has used since launch, so pooled posteriors are not
+mixed across scales. Before this change the local fallback used a different
+weighted formula (0.35/0.25/0.20/-0.15/0.05, mapped to (raw + 1) / 2), and
+`bandit_updated` events written without server state carried synthesized
+alpha/beta values; such events should be excluded from posterior analysis.
+`bandit_updated` now logs the real server or local alpha/beta.
+
+Rewards are recorded only for correct results and only for a logged selection
+(see the server check on `selectionEventId`).
+
 ## Per-Learner Bandits
 
 Each learner gets their own bandit (personalized):

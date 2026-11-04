@@ -10,11 +10,8 @@
 
 import { MultiArmedBandit, BanditArm } from "./multi-armed-bandit";
 import {
+  buildRewardComponents,
   calculateReward,
-  RewardComponents,
-  calculateIndependentSuccess,
-  calculateErrorReduction,
-  calculateTimeEfficiency,
 } from "./reward-calculator";
 import {
   FAST_ESCALATOR,
@@ -97,6 +94,9 @@ export interface ArmStatistics {
   profileName: string;
   meanReward: number;
   pullCount: number;
+  /** Beta posterior parameters, for logging the real state */
+  alpha: number;
+  beta: number;
 }
 
 /**
@@ -194,23 +194,15 @@ export class LearnerBanditManager {
   ): void {
     const bandit = this.getBanditForLearner(learnerId);
 
-    // Calculate reward components
-    const components: RewardComponents = {
-      independentSuccess: calculateIndependentSuccess(
-        outcome.usedExplanation,
-        outcome.solved,
-      ),
-      errorReduction: calculateErrorReduction(
-        outcome.errorCount,
-        outcome.baselineErrors,
-      ),
-      delayedRetention: 0, // Not available immediately
-      dependencyPenalty: -outcome.hdiScore, // Negative because it's a penalty
-      timeEfficiency: calculateTimeEfficiency(
-        outcome.timeSpentMs,
-        outcome.medianTimeMs,
-      ),
-    };
+    // Same components and formula as the shared server pool (reward-calculator.ts),
+    // so the local fallback and the logged reward agree with the server.
+    const components = buildRewardComponents({
+      solved: outcome.solved,
+      usedExplanation: outcome.usedExplanation,
+      errorCount: outcome.errorCount,
+      timeSpentMs: outcome.timeSpentMs,
+      hdiScore: outcome.hdiScore,
+    });
 
     // Calculate reward
     const reward = calculateReward(components);
@@ -241,6 +233,8 @@ export class LearnerBanditManager {
         profileName: BANDIT_ARM_PROFILES[armId as BanditArmId].name,
         meanReward: stats?.meanReward ?? 0,
         pullCount: stats?.pullCount ?? 0,
+        alpha: stats?.alpha ?? 1,
+        beta: stats?.beta ?? 1,
       };
     });
   }

@@ -50,75 +50,47 @@ export interface RewardComponents {
 }
 
 /**
- * Weights for combining reward components
+ * Single reward formula used by the shared server bandit pool, the local
+ * fallback bandit, and the logged bandit_reward_observed value (decision
+ * 2026-11-04: keep the equal-weight formula the pool has always used).
+ *
+ * reward = clamp((independentSuccess + errorReduction + delayedRetention
+ *                 + dependencyPenalty + timeEfficiency) / 5, 0, 1)
+ *
+ * With delayedRetention = 0 and dependencyPenalty = -HDI, the maximum reachable
+ * reward is 0.6.
  */
-export interface RewardWeights {
-  /** Weight for independent success component */
-  independentSuccess: number;
-  /** Weight for error reduction component */
-  errorReduction: number;
-  /** Weight for delayed retention component */
-  delayedRetention: number;
-  /** Weight for dependency penalty (typically negative) */
-  dependency: number;
-  /** Weight for time efficiency component */
-  timeEfficiency: number;
+export function calculateReward(components: RewardComponents): number {
+  const total =
+    components.independentSuccess +
+    components.errorReduction +
+    components.delayedRetention +
+    components.dependencyPenalty +
+    components.timeEfficiency;
+  return Math.max(0, Math.min(1, total / 5));
 }
 
-/**
- * Default reward weights based on pedagogical priorities
- * 
- * - Independent success: 35% (highest - encourage self-sufficiency)
- * - Error reduction: 25% (improvement over baseline)
- * - Delayed retention: 20% (long-term learning)
- * - Dependency: -15% (penalty for over-reliance on hints)
- * - Time efficiency: 5% (minor factor)
- */
-export const DEFAULT_REWARD_WEIGHTS: RewardWeights = {
-  independentSuccess: 0.35,
-  errorReduction: 0.25,
-  delayedRetention: 0.20,
-  dependency: -0.15,  // Negative penalty
-  timeEfficiency: 0.05,
-};
+/** Baselines used by the shared reward components. */
+export const REWARD_BASELINE_ERRORS = 3;
+export const REWARD_BASELINE_TIME_MS = 300_000;
 
-/**
- * Calculate weighted reward from components
- * 
- * Formula: sum of (weight * component) for all components
- * Then normalize to [0, 1] range for Beta distribution updates
- * 
- * @param components - Individual reward components
- * @param weights - Weights for each component (defaults to DEFAULT_REWARD_WEIGHTS)
- * @returns Normalized reward in [0, 1] range
- * 
- * @example
- * ```typescript
- * const reward = calculateReward({
- *   independentSuccess: 1.0,
- *   errorReduction: 0.5,
- *   delayedRetention: 0,
- *   dependencyPenalty: -0.3,
- *   timeEfficiency: 0.8
- * });
- * // Returns normalized value between 0 and 1
- * ```
- */
-export function calculateReward(
-  components: RewardComponents,
-  weights: RewardWeights = DEFAULT_REWARD_WEIGHTS
-): number {
-  // Calculate weighted sum
-  const rawReward = 
-    weights.independentSuccess * components.independentSuccess +
-    weights.errorReduction * components.errorReduction +
-    weights.delayedRetention * components.delayedRetention +
-    weights.dependency * (-components.dependencyPenalty) +  // Flip sign: high penalty (negative) should reduce reward
-    weights.timeEfficiency * components.timeEfficiency;
-  
-  // Normalize to [0, 1]
-  // Theoretical bounds: [-1.0, 1.0] based on component ranges
-  return (rawReward + 1) / 2;
+export interface RewardOutcome {
+  solved: boolean;
+  usedExplanation: boolean;
+  errorCount: number;
+  timeSpentMs: number;
+  hdiScore: number;
+}
+
+/** Components exactly as the shared pool has computed them since launch. */
+export function buildRewardComponents(outcome: RewardOutcome): RewardComponents {
+  return {
+    independentSuccess: outcome.solved && !outcome.usedExplanation ? 1 : 0,
+    errorReduction: Math.max(0, 1 - outcome.errorCount / REWARD_BASELINE_ERRORS),
+    delayedRetention: 0,
+    dependencyPenalty: -outcome.hdiScore,
+    timeEfficiency: Math.min(1, REWARD_BASELINE_TIME_MS / Math.max(outcome.timeSpentMs, 1000)),
+  };
 }
 
 /**
@@ -178,4 +150,4 @@ export function calculateTimeEfficiency(
  * Version identifier for reward calculator
  * Used for policy reproducibility and A/B testing
  */
-export const REWARD_CALCULATOR_VERSION = 'reward-calc-v1';
+export const REWARD_CALCULATOR_VERSION = 'reward-calc-v2-equal-weight';

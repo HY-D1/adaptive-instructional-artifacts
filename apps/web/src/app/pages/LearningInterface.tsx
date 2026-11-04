@@ -97,6 +97,7 @@ import { calculateHDI, calculateHDIComponents } from '../lib/ml/hdi-calculator';
 import type { HDIComponents, HDILevel } from '../types';
 import { safeGetStrategy, safeGetProfileOverride } from '../lib/storage/storage-validation';
 import { assignProfile, getProfileById, type EscalationProfile } from '../lib/ml/escalation-profiles';
+import { buildRewardComponents, calculateReward } from '../lib/ml/reward-calculator';
 import { 
   assignCondition,
   assignLocalDemoCondition,
@@ -2046,15 +2047,16 @@ export function LearningInterface() {
             hdiScore: currentHDI,
           });
 
-          // Log reward observed event for research analysis
-          const rewardComponents = {
-            independentSuccess: usedExplanation ? 0 : 1,
-            errorReduction: Math.max(0, 1 - errorCount / 3),
-            delayedRetention: 0,
-            dependencyPenalty: -currentHDI,
-            timeEfficiency: Math.min(1, 300000 / Math.max(timeSpent, 1000)),
-          };
-          const totalReward = Object.values(rewardComponents).reduce((a, b) => a + b, 0) / 5;
+          // Log reward observed event for research analysis. Same components and
+          // formula as the local bandit above (reward-calculator.ts).
+          const rewardComponents = buildRewardComponents({
+            solved: true,
+            usedExplanation,
+            errorCount,
+            timeSpentMs: timeSpent,
+            hdiScore: currentHDI,
+          });
+          const totalReward = calculateReward(rewardComponents);
 
           const serverBanditState = isSharedBanditEnabled() ? await recordSharedBanditReward({
             eventId: createEventId('bandit', 'reward'),
@@ -2072,13 +2074,15 @@ export function LearningInterface() {
           );
 
           // Log bandit updated event with new alpha/beta values
+          // Real posterior: the shared server state when available, otherwise the
+          // local fallback bandit's actual alpha/beta (never synthesized values).
           const armStats = serverBanditState ?? banditManager.getLearnerStats(learnerId).find(s => s.armId === currentProfileId);
           if (armStats) {
             storage.logBanditUpdated(
               learnerId,
               currentProfileId,
-              'alpha' in armStats ? armStats.alpha : armStats.pullCount + 1,
-              'beta' in armStats ? armStats.beta : Math.max(1, armStats.pullCount * 0.5),
+              armStats.alpha,
+              armStats.beta,
               armStats.pullCount
             );
           }
