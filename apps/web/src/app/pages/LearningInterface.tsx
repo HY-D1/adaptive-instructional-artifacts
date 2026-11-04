@@ -1509,6 +1509,8 @@ export function LearningInterface() {
     };
   }, [learnerId, isHydrating, isRoleLoading]);
 
+  const textbookDisabled = Boolean(sessionConfig?.textbookDisabled);
+
   // Effect 2: Background analysis - handles trace analysis lifecycle
   useEffect(() => {
     // Only start analysis when we have a valid session
@@ -1521,7 +1523,8 @@ export function LearningInterface() {
     
     const stopAnalysis = startBackgroundAnalysis(learnerId, sessionId, {
       intervalMs: ANALYSIS_INTERVAL_MS,
-      enableAutoCreation: true,
+      // "Textbook off" conditions get no background-created units either.
+      enableAutoCreation: !textbookDisabled,
       onAnalysisComplete: (result) => {
         setAnalysisStatus({ isRunning: true, lastResult: result });
       },
@@ -1561,7 +1564,7 @@ export function LearningInterface() {
         stopAnalysisRef.current = null;
       }
     };
-  }, [learnerId, sessionId]);
+  }, [learnerId, sessionId, textbookDisabled]);
 
   // Effect 3: Reinforcement prompt checking - periodic check for due prompts
   useEffect(() => {
@@ -2105,7 +2108,7 @@ export function LearningInterface() {
       );
     const decision = orchestrator.makeDecision(profile, scopedInteractions, currentProblem.id);
 
-    if (decision.decision === 'add_to_textbook' && resolvedSubtype) {
+    if (decision.decision === 'add_to_textbook' && resolvedSubtype && !textbookDisabled) {
       const sourceIds = collectNoteEvidenceIds([event.id]);
       setIsGeneratingUnit(true);
       setGenerationError(undefined);
@@ -2188,6 +2191,11 @@ export function LearningInterface() {
       setLastError(escalationSubtype);
     }
 
+    if (textbookDisabled) {
+      // The explanation is still shown; it is just not saved to My Textbook.
+      return;
+    }
+
     setIsGeneratingUnit(true);
     setGenerationError(undefined);
     void persistGeneratedUnit('explanation.v1', sourceIds, escalationSubtype, 'show-explanation-escalation')
@@ -2246,6 +2254,11 @@ export function LearningInterface() {
     }
     if (!lastError) {
       setLastError(noteSubtype);
+    }
+
+    if (textbookDisabled) {
+      setGenerationError('My Textbook is not available in this session.');
+      return;
     }
 
     const sourceIds = collectNoteEvidenceIds([], { maxInteractions: 12 });
