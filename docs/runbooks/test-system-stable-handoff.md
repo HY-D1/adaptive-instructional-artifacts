@@ -229,7 +229,7 @@ The delete guard blocks all `DELETE` and `TRUNCATE` on `users`, `course_sections
   COMMIT;
   ```
 
-- Check the counts before `COMMIT`; use `ROLLBACK` if they are not what you expect. The guard takes a lock with a 5 s timeout, so a stuck session fails fast instead of hanging.
+- Check the counts before `COMMIT`; use `ROLLBACK` if they are not what you expect. The guard itself sets no lock timeout: the `lock_timeout = '5s'` is only inside the migration that installs it. A withdrawal transaction waits for locks as long as Postgres's default allows; add `SET LOCAL lock_timeout = '5s';` after `BEGIN` if you want it to fail fast instead of hanging.
 - Record who, when and why outside the database.
 
 ### Groq

@@ -18,8 +18,9 @@
 -- A cascade from users into interaction_events also fires the interaction_events
 -- trigger; the same SET LOCAL covers it.
 --
--- Additive and idempotent; triggers only fire on row deletes, which the
--- application never issues, so older code keeps working on the migrated schema.
+-- Additive and idempotent; triggers only fire on DELETE (row-level) and
+-- TRUNCATE (statement-level), neither of which the application issues on these
+-- tables, so older code keeps working on the migrated schema.
 -- Applied by this migration only; initializeSchema() (AUTO_SCHEMA_INIT=false in
 -- production) deliberately does not install it.
 BEGIN;
