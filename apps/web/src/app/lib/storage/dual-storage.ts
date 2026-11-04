@@ -161,6 +161,8 @@ interface PendingInteraction {
   retryCount: number;       // Number of send attempts
   sessionId: string;
   eventType: string;
+  /** Why the entry was dead-lettered, e.g. `http_403`. Absent on older entries. */
+  deadLetterReason?: string;
 }
 
 // ============================================================================
@@ -317,6 +319,7 @@ class DurablePendingStore {
     const item = this.interactions.get(id);
     if (item) {
       item.status = 'dead_letter';
+      item.deadLetterReason = reason;
       this.savePending();
       console.error('[telemetry_dead_letter]', { count: 1, reason });
     }
@@ -402,12 +405,16 @@ class DurablePendingStore {
     );
   }
 
-  /** Move dead-lettered entries back to backend_pending; returns the moved entries. */
-  requeueDeadLetters(): PendingInteraction[] {
+  /**
+   * Move dead-lettered entries (optionally only those `include` accepts) back
+   * to backend_pending; returns the moved entries.
+   */
+  requeueDeadLetters(include: (item: PendingInteraction) => boolean = () => true): PendingInteraction[] {
     const moved: PendingInteraction[] = [];
     for (const item of this.interactions.values()) {
-      if (item.status === 'dead_letter' && !this.confirmedIds.has(item.id)) {
+      if (item.status === 'dead_letter' && !this.confirmedIds.has(item.id) && include(item)) {
         item.status = 'backend_pending';
+        item.deadLetterReason = undefined;
         moved.push(item);
       }
     }
@@ -797,7 +804,7 @@ class DualStorageManager {
     });
     
     // Stranded dead letters must be retried before the first queue run.
-    this.requeueDeadLettersOnce();
+    this.requeueDeadLettersOnStartup();
 
     // Check backend health on init
     if (this.config.useBackend) {
@@ -839,29 +846,45 @@ class DualStorageManager {
   }
 
   /**
-   * One-time recovery of events dead-lettered by older clients (for example
-   * 401/403 responses). The server ignores repeated event ids, so resending is
-   * safe; truly invalid events simply dead-letter again. Returns how many moved.
+   * Startup recovery of dead-lettered events. The server ignores repeated event
+   * ids, so resending is safe, and sends are filtered to the signed-in learner.
+   *
+   * - Every startup: requeue entries dead-lettered by an auth failure
+   *   (http_401 / http_403). A tab still running an older bundle can keep
+   *   producing these after the one-time pass below, and they are recoverable
+   *   once the learner signs in again.
+   * - Once per device (flag `sql-adapt-deadletter-requeue-v1`): requeue every
+   *   other dead letter, including older entries that recorded no reason.
+   *   The flag is written only after that pass completes.
+   *
+   * Truly invalid events simply dead-letter again. Returns how many moved.
    */
-  requeueDeadLettersOnce(): number {
+  requeueDeadLettersOnStartup(): number {
     const FLAG = 'sql-adapt-deadletter-requeue-v1';
+    let oneTimePassDone = true;
     try {
-      if (localStorage.getItem(FLAG)) return 0;
+      oneTimePassDone = Boolean(localStorage.getItem(FLAG));
     } catch {
-      return 0;
+      // Unknown flag state: recover only the auth failures this time.
     }
+    const isAuthFailure = (item: { deadLetterReason?: string }) =>
+      item.deadLetterReason === 'http_401' || item.deadLetterReason === 'http_403';
+
     let moved = 0;
     try {
-      const items = this.pendingStore.requeueDeadLetters();
+      const items = this.pendingStore.requeueDeadLetters(oneTimePassDone ? isAuthFailure : () => true);
       for (const item of items) this.offlineQueue.requeueInteraction(item.event);
       moved = items.length;
     } catch (error) {
       console.warn('[DualStorage] Dead-letter requeue failed:', error);
+      return moved;
     }
-    try {
-      localStorage.setItem(FLAG, String(Date.now()));
-    } catch {
-      // Storage unavailable; the requeue is idempotent so a repeat is harmless.
+    if (!oneTimePassDone) {
+      try {
+        localStorage.setItem(FLAG, String(Date.now()));
+      } catch {
+        // Storage unavailable; the requeue is idempotent so a repeat is harmless.
+      }
     }
     return moved;
   }

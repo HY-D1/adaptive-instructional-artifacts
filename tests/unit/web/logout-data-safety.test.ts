@@ -138,28 +138,60 @@ describe('logout keeps unsynced data', () => {
   });
 });
 
-describe('requeueDeadLettersOnce', () => {
-  it('moves http_403 dead letters to backend_pending exactly once', () => {
+describe('requeueDeadLettersOnStartup', () => {
+  const FLAG = 'sql-adapt-deadletter-requeue-v1';
+
+  it('moves every stranded dead letter to backend_pending on the first startup', () => {
     const store = internals().pendingStore;
     store.add(event('dl-1', 'learner-a'));
-    store.markDeadLetter('dl-1', 'http_403');
+    store.markDeadLetter('dl-1', 'http_400');
     expect(store.get('dl-1')?.status).toBe('dead_letter');
-    localStorage.removeItem('sql-adapt-deadletter-requeue-v1');
+    localStorage.removeItem(FLAG);
 
-    expect(mod.dualStorage.requeueDeadLettersOnce()).toBe(1);
+    expect(mod.dualStorage.requeueDeadLettersOnStartup()).toBe(1);
     expect(store.get('dl-1')?.status).toBe('backend_pending');
-    expect(localStorage.getItem('sql-adapt-deadletter-requeue-v1')).toBeTruthy();
+    expect(localStorage.getItem(FLAG)).toBeTruthy();
     const queued = internals().offlineQueue.queue as Array<{ id: string }>;
     expect(queued.filter((q) => q.id === 'dl-1')).toHaveLength(1);
+  });
 
-    store.markDeadLetter('dl-1', 'http_400');
-    expect(mod.dualStorage.requeueDeadLettersOnce()).toBe(0);
-    expect(store.get('dl-1')?.status).toBe('dead_letter');
+  it('after the one-time pass, still requeues 401/403 dead letters on every startup', () => {
+    const store = internals().pendingStore;
+    localStorage.setItem(FLAG, '1');
+    store.add(event('dl-403', 'learner-a'));
+    store.markDeadLetter('dl-403', 'http_403');
+    store.add(event('dl-401', 'learner-a'));
+    store.markDeadLetter('dl-401', 'http_401');
+    store.add(event('dl-400', 'learner-a'));
+    store.markDeadLetter('dl-400', 'http_400');
+
+    expect(mod.dualStorage.requeueDeadLettersOnStartup()).toBe(2);
+    expect(store.get('dl-403')?.status).toBe('backend_pending');
+    expect(store.get('dl-401')?.status).toBe('backend_pending');
+    expect(store.get('dl-400')?.status).toBe('dead_letter');
+
+    // A stale tab dead-letters it again: the next startup recovers it again.
+    store.markDeadLetter('dl-403', 'http_403');
+    expect(mod.dualStorage.requeueDeadLettersOnStartup()).toBe(1);
+    expect(store.get('dl-403')?.status).toBe('backend_pending');
+    expect(store.get('dl-400')?.status).toBe('dead_letter');
+  });
+
+  it('does not set the flag when the requeue fails part-way', () => {
+    const store = internals().pendingStore;
+    localStorage.removeItem(FLAG);
+    store.add(event('dl-x', 'learner-a'));
+    store.markDeadLetter('dl-x', 'http_400');
+    const spy = vi.spyOn(internals().offlineQueue as unknown as { requeueInteraction: () => void }, 'requeueInteraction')
+      .mockImplementation(() => { throw new Error('quota'); });
+    mod.dualStorage.requeueDeadLettersOnStartup();
+    spy.mockRestore();
+    expect(localStorage.getItem(FLAG)).toBeNull();
   });
 
   it('does not throw when storage throws', () => {
     const spy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied'); });
-    expect(() => mod.dualStorage.requeueDeadLettersOnce()).not.toThrow();
+    expect(() => mod.dualStorage.requeueDeadLettersOnStartup()).not.toThrow();
     spy.mockRestore();
   });
 });
