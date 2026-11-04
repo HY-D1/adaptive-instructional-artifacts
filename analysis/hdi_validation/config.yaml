@@ -8,7 +8,7 @@ formula:
   er: 0.3
   reae: 0.133
   iwh: 0.134
-  hpa_cap: 3
+  # HPA is capped at 1 (app formula); the former hpa_cap: 3 normalisation was removed.
 
 sensitivity:
   - name: balanced

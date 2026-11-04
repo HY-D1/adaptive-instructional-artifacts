@@ -1,0 +1,22 @@
+{
+  "description": "Shared HDI fixture: app (hdi-calculator.ts) and Python (validate_hdi.py) must both produce these values.",
+  "events": [
+    { "eventType": "execution", "problemId": "p1", "timestamp": 1, "successful": false },
+    { "eventType": "hint_request", "problemId": "p1", "timestamp": 2, "hintLevel": 1 },
+    { "eventType": "hint_view", "problemId": "p1", "timestamp": 3, "hintLevel": 1 },
+    { "eventType": "error", "problemId": "p1", "timestamp": 4 },
+    { "eventType": "hint_request", "problemId": "p1", "timestamp": 5, "hintLevel": 2 },
+    { "eventType": "hint_view", "problemId": "p1", "timestamp": 6, "hintLevel": 2 },
+    { "eventType": "explanation_view", "problemId": "p1", "timestamp": 7 },
+    { "eventType": "error", "problemId": "p1", "timestamp": 8 },
+    { "eventType": "execution", "problemId": "p1", "timestamp": 9, "successful": true },
+    { "eventType": "execution", "problemId": "p2", "timestamp": 10, "successful": true },
+    { "eventType": "guidance_request", "problemId": "p3", "timestamp": 11, "hintLevel": 3 },
+    { "eventType": "execution", "problemId": "p3", "timestamp": 12, "successful": false }
+  ],
+  "expected": {
+    "components": { "hpa": 0.75, "aed": 0.4, "er": 0.25, "reae": 0.5, "iwh": 0.5 },
+    "hdi": 0.4867,
+    "level": "medium"
+  }
+}

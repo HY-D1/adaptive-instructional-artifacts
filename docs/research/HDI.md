@@ -29,6 +29,35 @@
 
 ---
 
+## Canonical Formula (authoritative, decision 2026-11-04)
+
+The live app implementation in `apps/web/src/app/lib/ml/hdi-calculator.ts` is the
+canonical HDI. The Python validation (`analysis/hdi_validation/validate_hdi.py`)
+mirrors it, and both are pinned to the same values by
+`tests/fixtures/hdi-parity.json` (`tests/unit/web/hdi-parity.test.ts` and
+`analysis/hdi_validation/tests/test_hdi_parity.py`).
+
+Let *executions* be `execution` events (queries that ran without an SQL error).
+
+| Component | Formula |
+|---|---|
+| HPA | (`hint_request` + `guidance_request` events) / executions, capped at 1 |
+| AED | mean `hintLevel` over `hint_request`, `guidance_request`, `guidance_view`, `hint_view` events that carry a level; then (mean - 1) / 2, clamped to [0, 1] |
+| ER | `explanation_view` events / executions, capped at 1 |
+| REAE | errors after the first `explanation_view` / all `error` events |
+| IWH | solved problems (successful execution) with no `hint_request`, `guidance_request` or `hint_view` before that success, divided by solved problems |
+
+HDI = 0.3·HPA + 0.133·AED + 0.3·ER + 0.133·REAE + 0.134·(1 − IWH), clamped to [0, 1]
+(weights in `apps/web/src/app/lib/ml/hdi-weights.json`). Levels: low < 0.3,
+medium 0.3 to 0.6 inclusive, high > 0.6.
+
+Known limitation: HPA and ER divide by executions only, so a learner whose
+submissions all raise SQL errors scores 0 on both.
+
+The component pseudo-code below is the original design sketch. Where it differs
+from the table above (for example HPA "/3", AED by escalation depth, IWH by
+error-to-success sequences), the table is authoritative.
+
 ## HDI Components
 
 ### Component 1: Hints Per Attempt (HPA)
