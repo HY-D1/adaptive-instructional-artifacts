@@ -638,9 +638,9 @@ export function HintSystem({
     const fallbackSubtype = errorSubtypeId || 'incomplete query';
     const effectiveSubtype = activeHintSubtype ||
       canonicalizeSqlEngageSubtype(overrideSubtype || fallbackSubtype);
-    // Clamp level to valid hint range - this is intentional as we only have maxHintLevel
-    // hint levels before escalating to explanations (help request autoEscalationThreshold+)
-    const levelForSelection = Math.max(1, Math.min(maxHintLevel, helpRequestIndex)) as 1 | 2 | 3;
+    // Clamp level to the GuidanceRung range 1-3. A profile may allow more than
+    // 3 hints (slow escalator: 4); extra hints repeat L3 rather than inventing L4.
+    const levelForSelection = Math.max(1, Math.min(3, maxHintLevel, helpRequestIndex)) as 1 | 2 | 3;
 
     return orchestrator.getNextHint(
       effectiveSubtype,
@@ -1069,8 +1069,8 @@ export function HintSystem({
         sessionId
       });
 
-      // Determine rung level for this hint
-      const levelForSelection = Math.max(1, Math.min(maxHintLevel, nextHelpRequestIndex)) as 1 | 2 | 3;
+      // Determine rung level for this hint (GuidanceRung is 1-3; see getHelpSelectionForIndex)
+      const levelForSelection = Math.max(1, Math.min(3, maxHintLevel, nextHelpRequestIndex)) as 1 | 2 | 3;
 
       // Try to generate enhanced hint (uses LLM/Textbook if available)
       let hintSelection: {
@@ -1160,8 +1160,11 @@ export function HintSystem({
 
       // Log interaction with escalation metadata
       // will_escalate indicates that viewing this hint will trigger auto-escalation
-      // This happens at max hint level when no explanation has been shown yet
-      const willEscalate = hintSelection.hintLevel === maxHintLevel && !showExplanation;
+      // This happens on the profile's last hint request (rungExhausted) when no
+      // explanation has been shown yet. Keyed on the request count, not the
+      // logged level, because the level is capped at 3.
+      const isLastLadderHint = nextHelpRequestIndex >= maxHintLevel;
+      const willEscalate = isLastLadderHint && !showExplanation;
       const retrievedChunkIds = Array.from(
         new Set([
           ...hintSelection.retrievedChunkIds,
@@ -1264,8 +1267,8 @@ export function HintSystem({
         sessionId
       });
 
-      // Escalate automatically after max hint level reached.
-      if (hintSelection.hintLevel === maxHintLevel && !showExplanation) {
+      // Escalate automatically after the profile's last ladder hint.
+      if (isLastLadderHint && !showExplanation) {
         // Week 3 D8: Log escalation event before transitioning
         storage.logGuidanceEscalate({
           learnerId,
