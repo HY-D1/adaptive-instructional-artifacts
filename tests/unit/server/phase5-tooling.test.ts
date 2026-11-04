@@ -4,7 +4,8 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { planMigrations, readManifest } from '../../../apps/server/src/db/migrate';
+import { createHash } from 'node:crypto';
+import { parseMigrateArgs, planMarkApplied, planMigrations, readManifest } from '../../../apps/server/src/db/migrate';
 import { sanitizeUploadFilename } from '../../../apps/server/src/routes/pdf-index';
 import { sanitizeUploadFilename as sanitizeDevUploadFilename } from '../../../apps/web/src/server/pdf-index-server';
 
@@ -18,6 +19,7 @@ describe('migration runner', () => {
       '20261101-learner-profile-events.sql',
       '20261104-interaction-retrievals.sql',
       '20261104-survey-verification.sql',
+      '20261105-protect-research-deletes.sql',
     ]);
     expect(manifest.every((entry) => /^[0-9a-f]{64}$/.test(entry.checksum))).toBe(true);
   });
@@ -35,6 +37,61 @@ describe('migration runner', () => {
     expect(plan.applied).toEqual(['a.sql']);
     expect(plan.changed).toEqual([{ filename: 'b.sql', applied: 'old', current: 'bbb' }]);
     expect(plan.pending.map((entry) => entry.filename)).toEqual(['c.sql']);
+  });
+
+  it('manifest lists 20261105-protect-research-deletes.sql after the 20261104 files', () => {
+    const names = readManifest().map((entry) => entry.filename);
+    const guard = names.indexOf('20261105-protect-research-deletes.sql');
+    expect(guard).toBeGreaterThan(names.indexOf('20261104-survey-verification.sql'));
+    expect(guard).toBeGreaterThan(names.indexOf('20261104-interaction-retrievals.sql'));
+    expect(guard).toBe(names.length - 1);
+  });
+
+  it('parses --mark-applied lists and refuses combining modes', () => {
+    expect(parseMigrateArgs(['--mark-applied', 'a.sql,b.sql']).markApplied).toEqual(['a.sql', 'b.sql']);
+    expect(parseMigrateArgs([]).apply).toBe(false);
+    expect(() => parseMigrateArgs(['--mark-applied'])).toThrow(/requires/);
+    expect(() => parseMigrateArgs(['--mark-applied', 'a.sql', '--apply'])).toThrow(/only one/i);
+    expect(() => parseMigrateArgs(['--baseline', '--apply'])).toThrow(/only one/i);
+  });
+
+  it('--mark-applied rejects a file not in the manifest', () => {
+    const manifest = readManifest();
+    expect(() => planMarkApplied(manifest, ['not-in-manifest.sql'], [])).toThrow(/not in the manifest/);
+    expect(() => planMarkApplied(manifest, ['20261031-interaction-event-fields.sql', 'nope.sql'], [])).toThrow(/nope\.sql/);
+  });
+
+  it('--mark-applied records sha256 of raw file content and does not execute it', () => {
+    const raw = readFileSync(resolve('apps/server/src/db/migrations/20261105-protect-research-deletes.sql'), 'utf8');
+    const plan = planMarkApplied(readManifest(), ['20261105-protect-research-deletes.sql'], []);
+    expect(plan.record).toEqual([
+      { filename: '20261105-protect-research-deletes.sql', checksum: createHash('sha256').update(raw).digest('hex') },
+    ]);
+    expect(plan.alreadyRecorded).toEqual([]);
+    // plan carries only filename+checksum: there is no SQL to execute.
+    expect(Object.keys(plan.record[0]).sort()).toEqual(['checksum', 'filename']);
+  });
+
+  it('--mark-applied is idempotent for the same checksum and refuses a mismatch', () => {
+    const manifest = readManifest();
+    const entry = manifest[0];
+    const same = planMarkApplied(manifest, [entry.filename], [{ filename: entry.filename, checksum: entry.checksum }]);
+    expect(same.record).toEqual([]);
+    expect(same.alreadyRecorded).toEqual([entry.filename]);
+    expect(() => planMarkApplied(manifest, [entry.filename], [{ filename: entry.filename, checksum: 'stale' }])).toThrow(/checksum/i);
+  });
+
+  it('protect-deletes migration SQL is additive: no UPDATE/DELETE/ALTER COLUMN TYPE', () => {
+    const sql = readFileSync(resolve('apps/server/src/db/migrations/20261105-protect-research-deletes.sql'), 'utf8')
+      .split('\n').filter((line) => !line.trim().startsWith('--')).join('\n');
+    expect(sql).not.toMatch(/DELETE\s+FROM/i);
+    expect(sql).not.toMatch(/UPDATE\s+\S+\s+SET/i);
+    expect(sql).not.toMatch(/ALTER\s+COLUMN\s+\S+\s+(SET\s+DATA\s+)?TYPE/i);
+    expect(sql).toContain("sql_adapt.allow_research_delete");
+    expect(sql).toContain('research rows are protected');
+    for (const table of ['users', 'course_sections', 'section_enrollments', 'interaction_events']) {
+      expect(sql).toContain(table);
+    }
   });
 
   it('is wired to npm run db:migrate', () => {

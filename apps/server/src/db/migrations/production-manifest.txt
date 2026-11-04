@@ -6,3 +6,4 @@
 20261101-learner-profile-events.sql
 20261104-interaction-retrievals.sql
 20261104-survey-verification.sql
+20261105-protect-research-deletes.sql

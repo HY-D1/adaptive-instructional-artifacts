@@ -6,9 +6,13 @@
  *
  *   npm run db:migrate                 # dry run (default): show pending/changed
  *   npm run db:migrate -- --apply      # execute pending migrations
- *   npm run db:migrate -- --baseline   # record all listed files as applied
- *                                      # WITHOUT running them (for databases
- *                                      # where they were applied by hand)
+ *   npm run db:migrate -- --mark-applied a.sql,b.sql
+ *                                      # record ONLY the named manifest files as
+ *                                      # applied, never running them (for files
+ *                                      # that were applied by hand)
+ *   npm run db:migrate -- --baseline   # DANGEROUS on a live database: records
+ *                                      # EVERY pending manifest file as applied
+ *                                      # WITHOUT running it, including new ones
  *
  * Target: MIGRATE_DATABASE_URL, else the normal DATABASE_URL resolution.
  * Each file must be idempotent (IF NOT EXISTS / ON CONFLICT); files may carry
@@ -71,6 +75,65 @@ export function planMigrations(manifest: ManifestEntry[], appliedRows: AppliedRo
   return plan;
 }
 
+export interface MigrateArgs {
+  apply: boolean;
+  baseline: boolean;
+  markApplied: string[] | null;
+}
+
+export function parseMigrateArgs(argv: string[]): MigrateArgs {
+  const apply = argv.includes('--apply');
+  const baseline = argv.includes('--baseline');
+  const idx = argv.indexOf('--mark-applied');
+  let markApplied: string[] | null = null;
+  if (idx !== -1) {
+    const value = argv[idx + 1];
+    if (!value || value.startsWith('--')) {
+      throw new Error('--mark-applied requires a comma-separated list of manifest filenames');
+    }
+    markApplied = value.split(',').map((name) => name.trim()).filter(Boolean);
+    if (markApplied.length === 0) throw new Error('--mark-applied requires at least one filename');
+  }
+  if ([apply, baseline, markApplied !== null].filter(Boolean).length > 1) {
+    throw new Error('Use only one of --apply, --baseline, --mark-applied');
+  }
+  return { apply, baseline, markApplied };
+}
+
+export interface MarkAppliedPlan {
+  record: Array<{ filename: string; checksum: string }>;
+  alreadyRecorded: string[];
+}
+
+/** Pure: validates every name before anything is written; never carries SQL. */
+export function planMarkApplied(
+  manifest: ManifestEntry[],
+  names: string[],
+  appliedRows: AppliedRow[],
+): MarkAppliedPlan {
+  const byName = new Map(manifest.map((entry) => [entry.filename, entry]));
+  const unknown = names.filter((name) => !byName.has(name));
+  if (unknown.length > 0) {
+    throw new Error(`Refusing --mark-applied: not in the manifest: ${unknown.join(', ')}`);
+  }
+  const applied = new Map(appliedRows.map((row) => [row.filename, row.checksum]));
+  const plan: MarkAppliedPlan = { record: [], alreadyRecorded: [] };
+  for (const name of [...new Set(names)]) {
+    const entry = byName.get(name)!;
+    const recorded = applied.get(name);
+    if (recorded === undefined) {
+      plan.record.push({ filename: name, checksum: entry.checksum });
+    } else if (recorded === entry.checksum) {
+      plan.alreadyRecorded.push(name);
+    } else {
+      throw new Error(
+        `Refusing --mark-applied: checksum mismatch for ${name} (ledger ${recorded.slice(0, 12)} != file ${entry.checksum.slice(0, 12)})`,
+      );
+    }
+  }
+  return plan;
+}
+
 const LEDGER_DDL = `
   CREATE TABLE IF NOT EXISTS schema_migrations (
     filename TEXT PRIMARY KEY,
@@ -80,24 +143,46 @@ const LEDGER_DDL = `
 `;
 
 async function main(): Promise<void> {
-  const args = new Set(process.argv.slice(2));
-  const apply = args.has('--apply');
-  const baseline = args.has('--baseline');
-  if (apply && baseline) throw new Error('Use either --apply or --baseline, not both');
+  const { apply, baseline, markApplied } = parseMigrateArgs(process.argv.slice(2));
+  const manifest = readManifest();
+  // Validate names against the manifest before touching any database.
+  if (markApplied) planMarkApplied(manifest, markApplied, []);
 
   const url = process.env.MIGRATE_DATABASE_URL || resolveDbEnv().url;
   if (!url) throw new Error('Set MIGRATE_DATABASE_URL or DATABASE_URL');
   console.log(`Target host: ${new URL(url).hostname}`);
-  console.log(`Mode: ${apply ? 'APPLY' : baseline ? 'BASELINE (record only)' : 'DRY RUN'}`);
+  console.log(
+    `Mode: ${apply ? 'APPLY' : baseline ? 'BASELINE (record only)' : markApplied ? 'MARK-APPLIED (record only)' : 'DRY RUN'}`,
+  );
+  if (baseline) {
+    console.warn(
+      'WARNING: --baseline records EVERY pending manifest file as applied WITHOUT running it. ' +
+        'On a live database this skips new migrations. Prefer --mark-applied <file>[,<file>].',
+    );
+  }
 
   const pool = new Pool({ connectionString: url });
   try {
-    if (apply || baseline) await pool.query(LEDGER_DDL);
+    if (apply || baseline || markApplied) await pool.query(LEDGER_DDL);
     const ledgerExists = (await pool.query(`SELECT to_regclass('public.schema_migrations') AS t`)).rows[0]?.t;
     const appliedRows: AppliedRow[] = ledgerExists
       ? (await pool.query('SELECT filename, checksum FROM schema_migrations')).rows
       : [];
-    const plan = planMigrations(readManifest(), appliedRows);
+
+    if (markApplied) {
+      const markPlan = planMarkApplied(manifest, markApplied, appliedRows);
+      for (const name of markPlan.alreadyRecorded) console.log(`  already recorded  ${name}`);
+      for (const row of markPlan.record) {
+        await pool.query(
+          'INSERT INTO schema_migrations (filename, checksum) VALUES ($1, $2) ON CONFLICT (filename) DO NOTHING',
+          [row.filename, row.checksum],
+        );
+        console.log(`Recorded ${row.filename} (not executed)`);
+      }
+      return;
+    }
+
+    const plan = planMigrations(manifest, appliedRows);
 
     for (const name of plan.applied) console.log(`  applied  ${name}`);
     for (const change of plan.changed) console.log(`  CHANGED  ${change.filename} (ledger ${change.applied.slice(0, 12)} != file ${change.current.slice(0, 12)})`);
