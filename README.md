@@ -160,6 +160,7 @@ scripts/            → Verification, audit, and research scripts
 - Counterfactual replay across escalation strategies
 - Multi-armed bandit for strategy optimization
 - Hint Dependency Index (HDI) for measuring help-seeking behavior
+- Note: correctness (`successful`/`solved`) is graded in the browser and is self-reported, not proctored (see `docs/research/DATA_CONTRACTS.md`)
 
 ---
 

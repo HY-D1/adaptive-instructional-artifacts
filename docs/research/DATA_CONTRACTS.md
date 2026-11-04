@@ -23,6 +23,22 @@ This document defines the complete data contract for research data exports from 
 
 ---
 
+## Correctness Fields Are Client-Asserted (decision 2026-11-04)
+
+Correctness is computed in the student's browser, not on the server:
+
+- `interaction_events.successful` and `problem_progress.solved` come from
+  in-browser grading (sql.js) and are accepted by the server as sent.
+- All reference solutions (`expectedQuery`, `expectedResult`) ship in the client
+  bundle, so a determined student can read them or forge a correct result.
+- Server-side checks exist for provenance (a bandit reward must match a logged
+  `bandit_arm_selected` event; rewards and learning-path success require a
+  correct result), but not for correctness itself.
+
+Treat these fields as self-reported correctness, suitable for formative
+analysis, not as proctored outcomes or grades. Moving grading to the server is
+tracked as a separate project.
+
 ## Field Preservation Contract
 
 The following fields are guaranteed to be preserved in all exports:
