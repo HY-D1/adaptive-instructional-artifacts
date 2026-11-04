@@ -5,6 +5,7 @@ import {
   LEARNER_CACHE_KEYS,
   UNSYNCED_QUEUE_KEYS,
   clearLearnerCachesAfterLogout,
+  shouldKeepSharedLearnerCaches,
 } from '../../../apps/web/src/app/lib/auth/logout-learner';
 
 type DualStorageModule = typeof import('../../../apps/web/src/app/lib/storage/dual-storage');
@@ -101,6 +102,33 @@ describe('logout keeps unsynced data', () => {
     expect(mod.dualStorage.hasUnsyncedForLearner('learner-a')).toBe(false);
     internals().pendingStore.markDeadLetter('ev-b1', 'http_403');
     expect(mod.dualStorage.hasUnsyncedForLearner('learner-b')).toBe(true);
+  });
+
+  it("keeps the shared interaction/textbook keys when B logs out while A has unsynced events", () => {
+    internals().offlineQueue.add({ id: 'ev-a2', type: 'interaction', data: event('ev-a2', 'learner-a') });
+    expect(mod.dualStorage.hasUnsyncedForLearner('learner-b')).toBe(false);
+    expect(mod.dualStorage.hasAnyUnsynced()).toBe(true);
+
+    const local = memoryStorage(all);
+    clearLearnerCachesAfterLogout(local, null, {
+      keepUnsyncedData: shouldKeepSharedLearnerCaches('learner-b', mod.dualStorage),
+    });
+    expect(local.map.has('sql-learning-interactions')).toBe(true);
+    expect(local.map.has('sql-learning-textbook')).toBe(true);
+    expect(local.map.has('sql-learning-profiles')).toBe(false);
+  });
+
+  it('hasAnyUnsynced sees pending-store and dead-letter items of any learner', () => {
+    expect(mod.dualStorage.hasAnyUnsynced()).toBe(false);
+    internals().pendingStore.add(event('ev-c1', 'learner-c'));
+    expect(mod.dualStorage.hasAnyUnsynced()).toBe(true);
+    internals().pendingStore.markDeadLetter('ev-c1', 'http_400');
+    expect(mod.dualStorage.hasAnyUnsynced()).toBe(true);
+  });
+
+  it('clears the shared keys when nothing on the device is unsynced, and keeps them when the learner is unknown', () => {
+    expect(shouldKeepSharedLearnerCaches('learner-b', mod.dualStorage)).toBe(false);
+    expect(shouldKeepSharedLearnerCaches(null, mod.dualStorage)).toBe(true);
   });
 
   it('drafts survive logout', () => {

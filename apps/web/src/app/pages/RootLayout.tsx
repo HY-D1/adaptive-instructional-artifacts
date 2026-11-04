@@ -13,7 +13,11 @@ import { isPreviewModeActive } from '../lib/auth-guard';
 import { clearAllUiState, clearUiStateForActor } from '../lib/ui-state';
 import { useAuth } from '../lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
-import { clearLearnerCachesAfterLogout, resolveLogoutLearnerId } from '../lib/auth/logout-learner';
+import {
+  clearLearnerCachesAfterLogout,
+  resolveLogoutLearnerId,
+  shouldKeepSharedLearnerCaches,
+} from '../lib/auth/logout-learner';
 import { getSurveyInvitationsResult } from '../lib/api/storage-client';
 import { useToast } from '../components/ui/toast';
 import {
@@ -492,9 +496,10 @@ export function RootLayout() {
     // learner's cached data from this (possibly shared) device.
     if (AUTH_BACKEND_CONFIGURED) {
       try {
-        // Keep the local copies while any of this learner's events are unsynced
-        // (also when unsure: a missing id is treated as having unsynced data).
-        const keepUnsyncedData = learnerId ? storage.hasUnsyncedForLearner(learnerId) : true;
+        // The interaction and textbook caches are shared by every learner on
+        // this device: keep them while anyone's events are unsynced (also when
+        // unsure: a missing id is treated as having unsynced data).
+        const keepUnsyncedData = shouldKeepSharedLearnerCaches(learnerId, storage);
         clearLearnerCachesAfterLogout(localStorage, sessionStorage, { keepUnsyncedData });
       } catch (error) {
         console.warn('[logout] Failed to clear learner caches:', error);

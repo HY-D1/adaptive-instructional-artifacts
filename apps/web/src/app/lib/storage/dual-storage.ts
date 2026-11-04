@@ -554,6 +554,11 @@ class OfflineQueueManager {
     );
   }
 
+  /** True when any learner owns an unconfirmed queue or dead-letter entry. */
+  hasAnyUnconfirmed(): boolean {
+    return this.getPending().length > 0 || this.deadLetter.length > 0;
+  }
+
   incrementRetry(id: string, error?: Error, retryAfterMs?: number): void {
     const item = this.queue.find(i => i.id === id);
     if (item) {
@@ -820,6 +825,17 @@ class DualStorageManager {
     }
     if (this.offlineQueue.hasUnconfirmedForLearner(learnerId)) return true;
     return this.readPendingSessionEnds().some(item => item.event.learnerId === learnerId);
+  }
+
+  /**
+   * True when any learner on this device has an unconfirmed pending, sent,
+   * queued or dead-letter item. The local interaction and textbook caches are
+   * shared across learners, so logout keeps them while this is true.
+   */
+  hasAnyUnsynced(): boolean {
+    if (this.pendingStore.getAllUnconfirmed().length > 0) return true;
+    if (this.offlineQueue.hasAnyUnconfirmed()) return true;
+    return this.readPendingSessionEnds().length > 0;
   }
 
   /**

@@ -58,10 +58,24 @@ const UNSYNCED_CACHE_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Whether logout must keep the interaction and textbook caches. Those keys are
+ * shared by every learner on the device, so they stay while any learner has
+ * unsynced work, and also when the signed-out learner is unknown.
+ */
+export function shouldKeepSharedLearnerCaches(
+  learnerId: string | null | undefined,
+  storage: { hasAnyUnsynced(): boolean },
+): boolean {
+  if (!cleanId(learnerId)) return true;
+  return storage.hasAnyUnsynced();
+}
+
+/**
  * Remove the signed-out learner's cached data. The unsynced queues are never
  * removed here: sends are filtered to the signed-in learner, so another
  * learner's queued events simply wait for that learner. The local interaction
- * and textbook caches are also kept while the learner still has unsynced work.
+ * and textbook caches are shared across learners and are also kept while any
+ * learner on the device still has unsynced work.
  * Practice drafts are local-only and stay.
  */
 export function clearLearnerCachesAfterLogout(
