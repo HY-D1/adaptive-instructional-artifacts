@@ -13,7 +13,7 @@ import { isPreviewModeActive } from '../lib/auth-guard';
 import { clearAllUiState, clearUiStateForActor } from '../lib/ui-state';
 import { useAuth } from '../lib/auth-context';
 import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
-import { resolveLogoutLearnerId } from '../lib/auth/logout-learner';
+import { clearLearnerCachesAfterLogout, resolveLogoutLearnerId } from '../lib/auth/logout-learner';
 import { getSurveyInvitationsResult } from '../lib/api/storage-client';
 import { useToast } from '../components/ui/toast';
 import {
@@ -474,7 +474,7 @@ export function RootLayout() {
     clearAllUiState();
   }, [syncedProfile?.id]);
 
-  const finalizeLocalSignOut = useCallback(() => {
+  const finalizeLocalSignOut = useCallback((syncConfirmed = false) => {
     // Clear all cached UI state on account switches to prevent stale role-scoped views.
     // Also clear debug settings to prevent them from persisting across user switches.
     clearAllUiState();
@@ -482,6 +482,15 @@ export function RootLayout() {
     clearProfile();
     localStorage.removeItem('sql-adapt-debug-profile');
     localStorage.removeItem('sql-adapt-debug-strategy');
+    // Backend mode: the server is the system of record, so remove the previous
+    // learner's cached data from this (possibly shared) device.
+    if (AUTH_BACKEND_CONFIGURED) {
+      try {
+        clearLearnerCachesAfterLogout(localStorage, sessionStorage, { syncConfirmed });
+      } catch (error) {
+        console.warn('[logout] Failed to clear learner caches:', error);
+      }
+    }
   }, [clearScopedUiState, clearProfile]);
 
   const handleLogout = useCallback(async () => {
@@ -499,6 +508,7 @@ export function RootLayout() {
       authLearnerId: authUser?.learnerId,
       cachedProfileId: storage.getUserProfile()?.id,
     });
+    let syncConfirmed = false;
     if (learnerId && AUTH_BACKEND_CONFIGURED) {
       const FINALIZE_TIMEOUT_MS = 8000; // 8 seconds max wait
       
@@ -513,6 +523,7 @@ export function RootLayout() {
       ]);
       
       const finalizeStatus = await finalizeWithTimeout;
+      syncConfirmed = finalizeStatus.backendConfirmed === true;
       
       // Even if finalize fails/times out, proceed with logout after showing warning
       // This prevents users from being trapped in a broken logout state
@@ -535,7 +546,7 @@ export function RootLayout() {
       return;
     }
 
-    finalizeLocalSignOut();
+    finalizeLocalSignOut(syncConfirmed);
     setMobileMenuOpen(false);
     navigate(postLogoutPath, { replace: true });
     setIsLoggingOut(false);

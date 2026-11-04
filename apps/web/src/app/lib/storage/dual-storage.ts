@@ -612,9 +612,18 @@ class OfflineQueueManager {
     const pending = this.getPending().filter(
       (item) => !item.nextRetryAt || item.nextRetryAt <= Date.now(),
     );
-    
+
+    // On a shared device the queue may still hold another learner's events.
+    // Only send the signed-in learner's events; the rest wait for that learner.
+    const currentLearnerId = localStorageManager.getUserProfile()?.id;
+    const belongsToCurrentLearner = (item: (typeof pending)[number]): boolean => {
+      if (item.type !== 'interaction' || !currentLearnerId) return true;
+      const eventLearnerId = (item.data as InteractionEvent | undefined)?.learnerId;
+      return !eventLearnerId || eventLearnerId === currentLearnerId;
+    };
+
     // Process interactions in batches for efficiency
-    const interactions = pending.filter(item => item.type === 'interaction');
+    const interactions = pending.filter(item => item.type === 'interaction' && belongsToCurrentLearner(item));
     const others = pending.filter(item => item.type !== 'interaction');
     
     // Process interactions in batches

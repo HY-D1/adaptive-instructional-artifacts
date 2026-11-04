@@ -1987,13 +1987,23 @@ export function LearningInterface() {
       setGenerationError(undefined);
       setLatestGeneratedUnit(null);
       
-      // Knowledge-Structure: Update mastery on success
+      // Knowledge-Structure: mastery scoring already weights correct (+15)
+      // vs. incorrect (+5) executions via event.successful.
       const masteryUpdates = updateMasteryFromInteraction(event, learnerId);
       if (masteryUpdates.length > 0) {
         // Propagate mastery through the graph
         propagateMastery(learnerId);
-        
-        // Update learning path
+      }
+
+      // A query that runs without an SQL error is not necessarily correct.
+      // Learning-path success and bandit rewards must only follow a correct
+      // result, otherwise wrong answers are rewarded as "solved".
+      if (!actuallyCorrect) {
+        setSolvedRefreshKey(prev => prev + 1);
+        return;
+      }
+
+      if (masteryUpdates.length > 0) {
         const updatedPath = updatePathAfterSuccess(learnerId, currentProblem.concepts[0]);
         setLearningPath(updatedPath);
       }

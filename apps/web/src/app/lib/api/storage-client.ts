@@ -161,8 +161,15 @@ function retryAfterMilliseconds(response: Response): number | undefined {
   return Number.isFinite(retryAt) ? Math.max(0, retryAt - Date.now()) : undefined;
 }
 
-function isPermanentClientFailure(status: number | undefined): boolean {
-  return status !== undefined && status >= 400 && status < 500 && status !== 408 && status !== 429;
+/**
+ * 4xx responses that retrying can never fix. 401 (expired session) and 403
+ * (stale CSRF token, or events queued by a different learner on this device)
+ * are recoverable after re-authentication, so those events stay queued
+ * instead of being dead-lettered and lost.
+ */
+export function isPermanentClientFailure(status: number | undefined): boolean {
+  return status !== undefined && status >= 400 && status < 500 &&
+    status !== 401 && status !== 403 && status !== 408 && status !== 429;
 }
 
 interface BatchConfirmationResponse {

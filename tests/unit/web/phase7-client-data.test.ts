@@ -1,0 +1,70 @@
+import { describe, expect, it } from 'vitest';
+import {
+  LEARNER_CACHE_KEYS,
+  UNSYNCED_QUEUE_KEYS,
+  clearLearnerCachesAfterLogout,
+} from '../../../apps/web/src/app/lib/auth/logout-learner';
+import { isPermanentClientFailure } from '../../../apps/web/src/app/lib/api/storage-client';
+
+function memoryStorage(keys: string[]) {
+  const map = new Map(keys.map((key) => [key, 'x']));
+  return {
+    map,
+    get length() { return map.size; },
+    key: (index: number) => Array.from(map.keys())[index] ?? null,
+    removeItem: (key: string) => { map.delete(key); },
+  };
+}
+
+describe('logout cache cleanup', () => {
+  const keep = ['sql-learning-practice-drafts', 'unrelated-key'];
+  const all = [...LEARNER_CACHE_KEYS, ...UNSYNCED_QUEUE_KEYS, 'chat-history-a-p1', 'hint-cache:abc', ...keep];
+
+  it('removes learner caches but keeps unsynced queues when sync was not confirmed', () => {
+    const local = memoryStorage(all);
+    const removedSession: string[] = [];
+    clearLearnerCachesAfterLogout(local, { removeItem: (key) => removedSession.push(key) }, { syncConfirmed: false });
+    for (const key of LEARNER_CACHE_KEYS) expect(local.map.has(key)).toBe(false);
+    for (const key of UNSYNCED_QUEUE_KEYS) expect(local.map.has(key)).toBe(true);
+    expect(local.map.has('chat-history-a-p1')).toBe(false);
+    expect(local.map.has('hint-cache:abc')).toBe(false);
+    for (const key of keep) expect(local.map.has(key)).toBe(true);
+    expect(removedSession).toEqual(['sql-adapt-session-config']);
+  });
+
+  it('also removes the queues once the backend confirmed the logout sync', () => {
+    const local = memoryStorage(all);
+    clearLearnerCachesAfterLogout(local, null, { syncConfirmed: true });
+    for (const key of UNSYNCED_QUEUE_KEYS) expect(local.map.has(key)).toBe(false);
+    expect(local.map.has('sql-learning-practice-drafts')).toBe(true);
+  });
+});
+
+describe('dead-letter classification', () => {
+  it('keeps auth and CSRF failures retryable', () => {
+    expect(isPermanentClientFailure(401)).toBe(false);
+    expect(isPermanentClientFailure(403)).toBe(false);
+    expect(isPermanentClientFailure(429)).toBe(false);
+  });
+
+  it('still treats validation failures as permanent', () => {
+    expect(isPermanentClientFailure(400)).toBe(true);
+    expect(isPermanentClientFailure(413)).toBe(true);
+    expect(isPermanentClientFailure(500)).toBe(false);
+  });
+});
+
+describe('bandit reward gating (source contract)', () => {
+  it('returns before recording a bandit outcome when the result is not correct', async () => {
+    const { readFileSync } = await import('node:fs');
+    const source = readFileSync('apps/web/src/app/pages/LearningInterface.tsx', 'utf8');
+    const handler = source.slice(source.indexOf('const handleExecute = async'));
+    const gate = handler.indexOf('if (!actuallyCorrect) {');
+    expect(gate).toBeGreaterThan(0);
+    const beforeGate = handler.slice(0, gate);
+    expect(beforeGate).not.toContain('banditManager.recordOutcome(');
+    expect(beforeGate).not.toContain('recordSharedBanditReward(');
+    expect(beforeGate).not.toContain('updatePathAfterSuccess(');
+    expect(handler.indexOf('banditManager.recordOutcome(')).toBeGreaterThan(gate);
+  });
+});
