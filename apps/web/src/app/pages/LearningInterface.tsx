@@ -837,7 +837,12 @@ export function LearningInterface() {
           if (!banditSelectionAllowed) {
             effectiveProfile = assignProfile({ learnerId }, 'static');
             effectiveArmId = getArmIdFromProfileId(effectiveProfile.id);
-            selectionReason = 'bandit_blocked_for_condition';
+            // Control students keep a hash-assigned sub-schedule (fast / adaptive /
+            // slow escalator). It is logged explicitly so analysis can stratify
+            // control by profile instead of reading it as "bandit".
+            selectionReason = sessionConfig?.conditionId === 'control'
+              ? 'control_static_hash_profile'
+              : 'bandit_blocked_for_condition';
             break;
           }
           // Use Thompson sampling bandit selection
@@ -882,7 +887,7 @@ export function LearningInterface() {
       storage.logProfileAssigned(
         learnerId,
         effectiveProfile.id,
-        debugProfileOverride ? 'static' : assignmentStrategy,
+        debugProfileOverride || selectionReason === 'control_static_hash_profile' ? 'static' : assignmentStrategy,
         currentProblem.id,
         selectionReason
       );
@@ -1259,8 +1264,14 @@ export function LearningInterface() {
             conditionId: config.conditionId,
             profileId: config.escalationPolicy,
             strategyAssigned: config.conditionId,
-            assignmentStrategy: config.staticHintMode ? 'static' : (config.adaptiveLadderDisabled ? 'diagnostic' : 'bandit'),
+            assignmentStrategy: config.conditionId === 'control' || config.staticHintMode
+              ? 'static'
+              : (config.adaptiveLadderDisabled ? 'diagnostic' : 'bandit'),
             metadata: {
+              // Control sub-schedule covariate (hash of learner id; see ESCALATION_POLICIES.md)
+              ...(config.conditionId === 'control'
+                ? { controlSubSchedule: assignProfile({ learnerId }, 'static').id }
+                : {}),
               sessionConfigVersion: getConditionAssignmentVersion(),
               sessionConfigSource: result.source,
               textbookDisabled: config.textbookDisabled,

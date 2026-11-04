@@ -250,6 +250,32 @@ export function assignProfileBandit(learnerId: string): EscalationProfile {
 
 ---
 
+## Control Condition Sub-Schedules (decision 2026-11-04)
+
+Control students are not one uniform schedule. Every control help request follows
+the fixed rule in `resolveControlDecision` (`lib/ml/textbook-orchestrator.ts`):
+requests 1-2 show a hint, request 3 shows the explanation. In addition, each
+control student receives an escalation profile from a hash of their learner ID
+(static assignment above), and that profile sets the maximum hint level
+(`HintSystem.tsx`, `maxHintLevel = triggers.rungExhausted`) with automatic
+escalation once that level is shown:
+
+| Control sub-schedule | Share (by hash) | Effective help sequence |
+|---|---|---|
+| `fast-escalator` (max hint 2) | about 1/3 | hint 1, hint 2, then the explanation automatically |
+| `adaptive-escalator` (max hint 3) | about 1/3 | hint 1, hint 2, explanation at request 3 |
+| `slow-escalator` (max hint 4) | about 1/3 | same as adaptive: the fixed rule shows the explanation at request 3 |
+
+This variation is kept deliberately (no behaviour change) and is logged so
+analysis can stratify control:
+
+- `profile_assigned`: `strategy = 'static'`, `reason = 'control_static_hash_profile'`, `profileId` = the sub-schedule.
+- `condition_assigned`: `assignmentStrategy = 'static'` and `metadata.controlSubSchedule` = the sub-schedule.
+
+Events logged before this change recorded control as `assignmentStrategy = 'bandit'`
+with reason `bandit_blocked_for_condition`; the sub-schedule can be recomputed for
+those learners with `assignProfile({ learnerId }, 'static')`, which is deterministic.
+
 ## Integration with Guidance Ladder
 
 ```typescript
