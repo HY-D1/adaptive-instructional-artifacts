@@ -167,6 +167,8 @@ Production facts (read-only `GET /health`, 2026-11-04):
    MIGRATE_DATABASE_URL='<production url>' npm run server:db:migrate -- --mark-applied 20261031-interaction-event-fields.sql,20261031-signup-rate-limits.sql,20261031-problem-progress-events.sql,20261101-learner-profile-events.sql
    ```
 
+   Check the printed `Mode:` line before continuing; stop if it is not the mode you asked for. (`--mark-applied` and `--apply` print their own mode; a plain run prints `Mode: DRY RUN`.)
+
    The dry run must list EXACTLY the 3 new files as pending (`20261104-interaction-retrievals`, `20261104-survey-verification`, `20261105-protect-research-deletes`). If it lists anything else, stop.
 
    ```bash
@@ -185,6 +187,8 @@ Production facts (read-only `GET /health`, 2026-11-04):
    ```
 
 ### Vercel backend env (Production and Preview), then redeploy
+
+- **Unset `MAINTENANCE_MODE`** in the Vercel backend project's Production env before the merge deploy (`apps/server/src/middleware/maintenance.ts` honours exactly `'true'`). The merge deploy then picks up the change.
 
 - `CORS_ORIGIN_PATTERNS=https://adaptive-instructional-artifacts-*-hy-d1s-projects.vercel.app`
   - Without it, preview frontends are refused.

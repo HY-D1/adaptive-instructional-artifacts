@@ -13,7 +13,7 @@
     "server:build": "cd apps/server && npm run build",
     "server:start": "cd apps/server && npm run start",
     "server:db:init": "cd apps/server && npm run db:init",
-    "server:db:migrate": "cd apps/server && npm run db:migrate",
+    "server:db:migrate": "npm --prefix apps/server run db:migrate --",
     "test:unit": "npx vitest run",
     "test:sql:regression": "npx vitest run apps/web/src/app/lib/sql-executor.regression.test.ts",
     "test:e2e": "npx playwright test -c playwright.config.ts",
