@@ -67,7 +67,7 @@ export type SqlEngageRecord = {
   intended_learning_outcome: string;
 };
 
-const SQL_ENGAGE_POLICY_VERSION = 'sql-engage-index-v3-hintid-contract';
+const SQL_ENGAGE_POLICY_VERSION = 'sql-engage-index-v4-semantic-classifier';
 
 function parseCsvLine(line: string): string[] {
   const values: string[] = [];

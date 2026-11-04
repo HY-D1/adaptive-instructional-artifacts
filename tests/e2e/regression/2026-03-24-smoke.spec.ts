@@ -169,7 +169,7 @@ test('@weekly textbook provenance readability: merged source IDs and PDF citatio
         hintLevel: 1,
         helpRequestIndex: 1,
         sqlEngageRowId: 'sql-engage:787',
-        policyVersion: 'sql-engage-index-v3-hintid-contract'
+        policyVersion: 'sql-engage-index-v4-semantic-classifier'
       },
       {
         id: 'evt-3',
@@ -182,7 +182,7 @@ test('@weekly textbook provenance readability: merged source IDs and PDF citatio
         sqlEngageSubtype: 'incomplete query',
         helpRequestIndex: 4,
         sqlEngageRowId: 'sql-engage:787',
-        policyVersion: 'sql-engage-index-v3-hintid-contract'
+        policyVersion: 'sql-engage-index-v4-semantic-classifier'
       }
     ];
 

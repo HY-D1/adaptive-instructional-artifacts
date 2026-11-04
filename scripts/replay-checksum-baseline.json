@@ -1,17 +1,18 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "mode": "toy",
   "description": "Replay checksum regression baseline. Enforce exact checksum only when fixture/policy input digests are unchanged.",
   "fixture_policy_input_digests_sha256": {
-    "fixture": "048df28d241977cf6e6e9d6bcbaafb5e5098901d99ed40db4f410e3cd673c258",
-    "sql_engage_ts": "bdf840e0c780a784a8ad9c39886e99dd1403b1ca9cb23b19a0a10d1b2cbbc077",
+    "fixture": "065338d7efb56eaf50935fa6d26b2a3d0437555d7f60f4f8f1f82bd8e13c7a1b",
+    "sql_engage_ts": "e4401183d4a44267ef8cce1f5967f56bf81e037be2fa91a9171b2f247e0735b2",
     "sql_engage_csv": "7ddef2732b8b98aed797768cecebf3495790c6f5daa2057d0235a9d0e9a81e90",
     "replay_harness": "2b5f4bd69653873ad5b8345a3dcce3b4f3b6a5ee27e9b72ecb657d2cd81a1019"
   },
   "expected": {
-    "policy_only_checksum_sha256": "31354ed8ccd4a29c7bf965b096134a814319fc512729a7692671fdc6ab83fd5e",
+    "policy_only_checksum_sha256": "76bfc2431e5695b680f54a4483d3297e4b129edc1f05cab63c80fcd28c5e0c18",
     "replay_harness_version": "toy-replay-harness-v3",
     "replay_policy_semantics_version": "orchestrator-auto-escalation-variant-v2",
-    "sql_engage_policy_version": "sql-engage-index-v3-hintid-contract"
+    "sql_engage_policy_version": "sql-engage-index-v4-semantic-classifier"
   },
-  "updated_at": "2026-02-14T01:40:12.620Z"
+  "updated_at": "2026-11-04T17:20:10.281Z"
 }

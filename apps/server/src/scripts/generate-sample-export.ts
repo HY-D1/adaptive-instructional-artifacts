@@ -186,7 +186,7 @@ function generateSyntheticSamples(): SampleRecord[] {
       time_spent: 1862,
       concept_ids: JSON.stringify(['select-basic']),
       condition_id: 'aggressive',
-      policy_version: 'sql-engage-index-v3-hintid-contract',
+      policy_version: 'sql-engage-index-v4-semantic-classifier',
     },
     {
       id: 'evt-escalation-001',

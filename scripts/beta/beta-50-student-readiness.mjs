@@ -326,7 +326,7 @@ async function runLocalAuthenticatedFlow(apiBaseUrl, instructorCode, users, dura
         const sessionRoute = `/api/sessions/${learner}/active`;
         const progressRoute = `/api/learners/${learner}/progress/problem-1`;
         const noteRoute = `/api/textbooks/${learner}/units`;
-        const interaction = { id: eventId, learnerId: student.learnerId, sessionId, conditionId: student.conditionId, timestamp: new Date().toISOString(), eventType: 'execution', problemId: 'problem-1', code, successful: true, conceptIds: ['select-basic'], policyVersion: 'sql-engage-index-v3-hintid-contract' };
+        const interaction = { id: eventId, learnerId: student.learnerId, sessionId, conditionId: student.conditionId, timestamp: new Date().toISOString(), eventType: 'execution', problemId: 'problem-1', code, successful: true, conceptIds: ['select-basic'], policyVersion: 'sql-engage-index-v4-semantic-classifier' };
         jsonData(await request('session-save', sessionRoute, post(auth.cookie, auth.csrf, { sessionId, currentProblemId: 'problem-1', currentCode: code })));
         // Interrupt the first successful response after headers, then retry the
         // identical ID. The server already reported acceptance in its status.

@@ -12,7 +12,8 @@
 // RESEARCH CONTRACT VERSION - Bump when deployment semantics change
 // v2.2.0: Exact backend confirmation, durable pagehide/session_end barriers, bounded hint cache, production batch validation
 // v2.6.0: Full-profile saves require a server revision; stale snapshots are rejected.
-export const RESEARCH_CONTRACT_VERSION = 'v2.6.0';
+// v2.7.0: Wrong-but-runnable executions carry a semantic error subtype (policy sql-engage-index-v4-semantic-classifier).
+export const RESEARCH_CONTRACT_VERSION = 'v2.7.0';
 
 /**
  * Research Runtime Mode
