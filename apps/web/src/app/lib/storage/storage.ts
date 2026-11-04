@@ -923,10 +923,12 @@ class StorageManager {
           }
         }
         
-        // Merge errorHistory: sum the counts
+        // Merge errorHistory: both copies are cumulative counts of the same
+        // history (e.g. a server snapshot during hydration), so take the
+        // per-key maximum. Summing double-counted on every merge.
         mergedErrorHistory = new Map(existingProfile.errorHistory);
         for (const [errorType, count] of profile.errorHistory.entries()) {
-          mergedErrorHistory.set(errorType, (mergedErrorHistory.get(errorType) || 0) + count);
+          mergedErrorHistory.set(errorType, Math.max(mergedErrorHistory.get(errorType) || 0, count));
         }
       }
     }

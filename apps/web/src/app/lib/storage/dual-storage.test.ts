@@ -185,6 +185,21 @@ describe('dual-storage critical write semantics', () => {
       .toEqual(expect.arrayContaining([expect.objectContaining({ id: event.id })]));
   });
 
+  it('still sends an interaction to the backend when localStorage is full', async () => {
+    await dualStorageModule.dualStorage.checkHealth();
+    const { storage: localManager } = await import('./storage');
+    const spy = vi.spyOn(localManager, 'saveInteraction').mockReturnValue({ success: false, quotaExceeded: true });
+    const result = dualStorageModule.dualStorage.saveInteraction({
+      id: 'quota-full-interaction-1', learnerId: 'learner-1', sessionId: 'session-quota-1',
+      timestamp: Date.now(), eventType: 'execution', problemId: 'problem-1',
+    });
+    expect(result).toMatchObject({ success: false, quotaExceeded: true });
+    await vi.waitFor(() => {
+      expect(logInteractionMock).toHaveBeenCalledWith(expect.objectContaining({ id: 'quota-full-interaction-1' }));
+    });
+    spy.mockRestore();
+  });
+
   it('dead-letters permanent interaction failures instead of retrying them', async () => {
     logInteractionMock.mockResolvedValueOnce({
       success: false,
@@ -370,6 +385,24 @@ describe('dual-storage critical write semantics', () => {
 
     expect(getProfileMock).toHaveBeenCalledWith('learner-1');
     expect(dualStorageModule.dualStorage.getProfile('learner-1')?.solvedProblemIds.has('problem-9')).toBe(true);
+  });
+
+  it('keeps helper-logged bandit events queued while the backend is unhealthy', async () => {
+    checkBackendHealthMock.mockResolvedValue(false);
+    await dualStorageModule.dualStorage.checkHealth();
+    dualStorageModule.dualStorage.logBanditArmSelected({
+      eventId: 'bandit-offline-selection-1',
+      learnerId: 'learner-1',
+      problemId: 'problem-1',
+      armId: 'adaptive',
+      selectionMethod: 'thompson_sampling',
+      sessionId: 'session-bandit-offline',
+    });
+    expect(logInteractionMock).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'bandit-offline-selection-1' }));
+    expect(JSON.parse(localStorage.getItem('sql-adapt-offline-queue') || '[]'))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'bandit-offline-selection-1' })]));
+    checkBackendHealthMock.mockResolvedValue(true);
+    await dualStorageModule.dualStorage.checkHealth();
   });
 
   it('adds conditionId to bandit selection events when provided', async () => {

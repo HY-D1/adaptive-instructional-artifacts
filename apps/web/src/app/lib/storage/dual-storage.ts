@@ -970,12 +970,26 @@ class DualStorageManager {
   }
 
   private sendInteractionToBackend(event: InteractionEvent, source: string): void {
+    const eventForWrite = this.withActiveSessionFallback(event);
+    if (!this.config.useBackend) {
+      return;
+    }
+    // Track the event durably first (same lifecycle as saveInteraction) so
+    // condition/bandit/escalation/HDI events survive an unknown or failed
+    // backend health state and the pagehide flush instead of being dropped.
+    this.pendingStore.add(eventForWrite);
     if (!this.shouldUseBackend()) {
+      this.queueInteractionForRetry(eventForWrite);
       return;
     }
 
-    const eventForWrite = this.withActiveSessionFallback(event);
+    this.pendingStore.markSent(eventForWrite.id);
     storageClient.logInteraction(eventForWrite).then(result => {
+      if (result.success && result.confirmed) {
+        this.pendingStore.markConfirmedInteraction(eventForWrite.id);
+        this.trackBackendAck();
+        return;
+      }
       if (result.permanentFailure) {
         this.pendingStore.markDeadLetter(eventForWrite.id, `http_${result.status}`);
         return;
@@ -1032,8 +1046,11 @@ class DualStorageManager {
     // RESEARCH-1: Durable write semantics
     // Step 1: Save to localStorage FIRST (synchronous, always succeeds or fails fast)
     const localResult = localStorageManager.saveInteraction(eventForWrite);
-    if (!localResult.success) {
-      return localResult;  // Return quota exceeded or other local failure
+    // A full localStorage must not also stop the event reaching the backend
+    // (the system of record): keep sending, but still report the local failure.
+    const localQuotaOnly = !localResult.success && localResult.quotaExceeded === true && this.shouldUseBackend();
+    if (!localResult.success && !localQuotaOnly) {
+      return localResult;  // Return blocked or other local failure
     }
     
     // Step 2: Add to durable pending store BEFORE network send
@@ -1096,6 +1113,9 @@ class DualStorageManager {
       this.pendingStore.markConfirmedInteraction(eventForWrite.id);
     }
     
+    if (localQuotaOnly) {
+      return localResult;
+    }
     return this.config.useBackend && !pendingResult.success
       ? { success: false, quotaExceeded: pendingResult.quotaExceeded }
       : localResult;

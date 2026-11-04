@@ -68,3 +68,28 @@ describe('bandit reward gating (source contract)', () => {
     expect(handler.indexOf('banditManager.recordOutcome(')).toBeGreaterThan(gate);
   });
 });
+
+describe('profile merge does not compound error counts', () => {
+  it('keeps error counts stable when the same cumulative profile is merged repeatedly', async () => {
+    const { storage } = await import('../../../apps/web/src/app/lib/storage/storage');
+    const id = `merge-test-${Date.now()}`;
+    const base = {
+      id,
+      name: 'M',
+      conceptsCovered: new Set<string>(),
+      conceptCoverageEvidence: new Map(),
+      errorHistory: new Map([['missing commas', 3]]),
+      interactionCount: 0,
+      currentStrategy: 'adaptive-medium',
+      preferences: { escalationThreshold: 3, aggregationDelay: 300000 },
+      solvedProblemIds: new Set<string>(),
+    };
+    storage.saveProfile(base as never, true);
+    storage.saveProfile(base as never, true); // local version is now ahead
+    for (let i = 0; i < 3; i += 1) {
+      // A versionless snapshot (as hydration provides) takes the merge path.
+      storage.saveProfile({ ...base, errorHistory: new Map([['missing commas', 3]]) } as never);
+    }
+    expect(storage.getProfile(id)?.errorHistory.get('missing commas')).toBe(3);
+  });
+});
