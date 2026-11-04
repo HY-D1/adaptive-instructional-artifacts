@@ -75,6 +75,16 @@ The deployed callback host and the exact Qualtrics piping syntax for `ResponseID
 
 Do not add `user_id` to the survey URL, Embedded Data, redirect, or logs.
 
+## Completion verification
+
+The completion token is delivered inside the student's own survey URL, so the callback alone cannot prove the survey was finished. The server therefore:
+
+- rejects a `ResponseID` that is not shaped like a Qualtrics ID (`R_` plus 15 letters or digits) whenever the configured survey URL is on `*.qualtrics.com`. Synthetic IDs are accepted for local stubs, or when `SURVEY_ALLOW_SYNTHETIC_RESPONSE_IDS=true` is set on an isolated test deployment (never production);
+- rejects a `ResponseID` that already completed another invitation;
+- stores every completion with `verification_status = 'unverified'`, unless the Qualtrics API confirms it.
+
+Optional live check: set `QUALTRICS_API_TOKEN` and `QUALTRICS_DATACENTER` (for example `yul1`). The server then calls `GET https://<datacenter>.qualtrics.com/API/v3/surveys/<SV_ id from the survey URL>/responses/<ResponseID>` with a 3 s timeout. A 404 rejects the completion. A network error leaves it `unverified` rather than blocking the student. The endpoint shape is **unverified** against a live account.
+
 ## Resume and reconciliation
 
 Leaving a survey unfinished leaves its invitation pending. Opening the same invitation again issues a fresh signed token. An expired token redirects to the pre-survey screen with a friendly retry message; the student should return to the app for a fresh link.
@@ -93,4 +103,4 @@ The JSON export must contain an array, or an object with a `responses` array. Ea
 - `quarantine`: response username does not match the snapshot.
 - `responseAbsentFromExport`: the invitation's stored `ResponseID` is missing from the supplied export.
 
-The script never updates invitation records or replaces the stored username snapshot.
+By default the script never updates invitation records or replaces the stored username snapshot. With `--apply-verification` (and a write-capable URL) it sets `verification_status = 'verified'` for completed invitations whose stored ResponseID and username both match the export, and changes nothing else.

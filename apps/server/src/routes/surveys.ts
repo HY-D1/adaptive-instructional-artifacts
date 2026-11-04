@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import * as db from '../db/neon.js';
 import { verifySurveyCompletionToken } from '../lib/survey-links.js';
+import { checkResponseIdFormat, verifyQualtricsResponse } from '../lib/survey-response-verification.js';
 import { strictRateLimiter } from '../middleware/rate-limit.js';
 import { requireAuth } from '../middleware/auth.js';
 
@@ -97,17 +98,30 @@ router.get('/complete', strictRateLimiter, async (req: Request, res: Response) =
     redirectToSurveyApp(res, '/pre-survey-required?reason=survey-link-invalid');
     return;
   }
+  const formatProblem = checkResponseIdFormat(responseId, instance);
+  if (formatProblem) {
+    console.warn('[surveys/complete] rejected response id', { instance, reason: formatProblem });
+    redirectToSurveyApp(res, '/pre-survey-required?reason=survey-link-invalid');
+    return;
+  }
   const verified = verifySurveyCompletionToken(token, instance);
   if (!verified || verified.username !== username) {
     redirectToSurveyApp(res, '/pre-survey-required?reason=survey-link-expired');
     return;
   }
   try {
+    const apiCheck = await verifyQualtricsResponse(responseId, instance);
+    if (apiCheck === 'not_found') {
+      console.warn('[surveys/complete] response id not found in Qualtrics', { instance });
+      redirectToSurveyApp(res, '/pre-survey-required?reason=survey-link-invalid');
+      return;
+    }
     const invitation = await db.completeSurveyInvitation(
       verified.username,
       instance,
       verified.invitationNonce,
       responseId,
+      apiCheck === 'verified' ? 'verified' : 'unverified',
     );
     if (!invitation) {
       redirectToSurveyApp(res, '/pre-survey-required?reason=survey-link-invalid');
@@ -115,6 +129,11 @@ router.get('/complete', strictRateLimiter, async (req: Request, res: Response) =
     }
     redirectToSurveyApp(res, '/practice');
   } catch (error) {
+    if (error instanceof db.DuplicateSurveyResponseError) {
+      console.warn('[surveys/complete] response id already used', { instance });
+      redirectToSurveyApp(res, '/pre-survey-required?reason=survey-link-invalid');
+      return;
+    }
     console.error('[surveys/complete]', error);
     redirectToSurveyApp(res, '/pre-survey-required?reason=survey-link-unavailable');
   }

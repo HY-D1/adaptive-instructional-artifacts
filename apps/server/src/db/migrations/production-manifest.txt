@@ -5,3 +5,4 @@
 20261031-problem-progress-events.sql
 20261101-learner-profile-events.sql
 20261104-interaction-retrievals.sql
+20261104-survey-verification.sql

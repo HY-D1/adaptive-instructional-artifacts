@@ -27,3 +27,18 @@ export function classifySurveyLinkage(invitations, responses) {
   }
   return { invitationCount: invitations.length, exportResponseCount: responseById.size, counts };
 }
+/** Invitations whose stored ResponseID and username both match the export. */
+export function listVerifiedInvitations(invitations, responses) {
+  const usernameById = new Map();
+  for (const response of responses) {
+    const responseId = response.ResponseID ?? response.responseId;
+    const username = response.username ?? response.Username;
+    if (typeof responseId === 'string' && responseId.trim() && typeof username === 'string') {
+      usernameById.set(responseId.trim(), username.trim());
+    }
+  }
+  return invitations.filter((invitation) =>
+    invitation.qualtrics_response_id &&
+    usernameById.get(invitation.qualtrics_response_id) === invitation.username,
+  );
+}

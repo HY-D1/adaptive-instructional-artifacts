@@ -226,7 +226,21 @@ router.get('/active-runs', async (_req: Request, res: Response) => {
   }
 });
 
+/**
+ * The active run changes textbook retrieval for every section, so only
+ * operators listed in CORPUS_ADMIN_LEARNER_IDS may switch it.
+ */
+export function isCorpusAdmin(learnerId: string | undefined, env: NodeJS.ProcessEnv = process.env): boolean {
+  if (!learnerId) return false;
+  const admins = (env.CORPUS_ADMIN_LEARNER_IDS ?? '').split(',').map((id) => id.trim()).filter(Boolean);
+  return admins.includes(learnerId);
+}
+
 router.post('/active-run', requireAuth, requireInstructor, requireCsrf, async (req: Request, res: Response) => {
+  if (!isCorpusAdmin(req.auth?.learnerId)) {
+    res.status(403).json({ success: false, error: 'Corpus administration is restricted to configured operators' });
+    return;
+  }
   if (!isUsingNeon()) {
     const response: ApiResponse<never> = {
       success: false,

@@ -657,6 +657,31 @@ export async function initializeSchema(): Promise<void> {
   `;
   await db`ALTER TABLE survey_invitations ADD COLUMN IF NOT EXISTS username TEXT`;
   await db`ALTER TABLE survey_invitations ADD COLUMN IF NOT EXISTS completion_nonce TEXT`;
+  // Completion callbacks cannot prove the student finished the survey (they
+  // hold their own signed token), so completions start 'unverified' until the
+  // Qualtrics API or the reconciliation script confirms the ResponseID.
+  await db`
+    ALTER TABLE survey_invitations ADD COLUMN IF NOT EXISTS verification_status TEXT NOT NULL DEFAULT 'unverified'
+      CHECK (verification_status IN ('unverified', 'verified'))
+  `;
+  // One Qualtrics response can complete at most one invitation. Skipped (not
+  // fatal) when legacy duplicates exist; the dated migration reports them.
+  await db`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM survey_invitations
+        WHERE qualtrics_response_id IS NOT NULL
+        GROUP BY qualtrics_response_id HAVING COUNT(*) > 1
+      ) THEN
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_survey_invitations_response_id_unique
+          ON survey_invitations(qualtrics_response_id)
+          WHERE qualtrics_response_id IS NOT NULL;
+      ELSE
+        RAISE NOTICE 'Duplicate qualtrics_response_id values exist; unique index not created';
+      END IF;
+    END $$
+  `;
   await db`CREATE INDEX IF NOT EXISTS idx_survey_invitations_status ON survey_invitations(status)`;
 
   console.log("✅ Neon PostgreSQL schema initialized");
@@ -1057,22 +1082,41 @@ export async function getSurveyInvitations(
   return rows.map(rowToSurveyInvitation);
 }
 
+export class DuplicateSurveyResponseError extends Error {
+  constructor() {
+    super('This survey response has already been used');
+    this.name = 'DuplicateSurveyResponseError';
+  }
+}
+
 export async function completeSurveyInvitation(
   username: string,
   instance: SurveyInstance,
   invitationNonce: string,
   qualtricsResponseId?: string,
+  verificationStatus: 'unverified' | 'verified' = 'unverified',
 ): Promise<SurveyInvitation | null> {
   const db = getDb();
-  const [row] = await db`
-    UPDATE survey_invitations
-    SET status = 'completed',
-        qualtrics_response_id = COALESCE(qualtrics_response_id, ${qualtricsResponseId ?? null}),
-        completed_at = COALESCE(completed_at, NOW())
-    WHERE username = ${username} AND instance = ${instance} AND completion_nonce = ${invitationNonce}
-    RETURNING user_id, instance, username, completion_nonce, qualtrics_response_id, status, created_at, completed_at
-  `;
-  return row ? rowToSurveyInvitation(row) : null;
+  try {
+    const [row] = await db`
+      UPDATE survey_invitations
+      SET status = 'completed',
+          qualtrics_response_id = COALESCE(qualtrics_response_id, ${qualtricsResponseId ?? null}),
+          verification_status = CASE
+            WHEN ${verificationStatus} = 'verified' THEN 'verified'
+            ELSE verification_status
+          END,
+          completed_at = COALESCE(completed_at, NOW())
+      WHERE username = ${username} AND instance = ${instance} AND completion_nonce = ${invitationNonce}
+      RETURNING user_id, instance, username, completion_nonce, qualtrics_response_id, status, created_at, completed_at
+    `;
+    return row ? rowToSurveyInvitation(row) : null;
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      throw new DuplicateSurveyResponseError();
+    }
+    throw error;
+  }
 }
 
 export async function updateUser(
