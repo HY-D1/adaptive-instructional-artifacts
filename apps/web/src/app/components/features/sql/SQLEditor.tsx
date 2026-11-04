@@ -6,7 +6,7 @@ import { Card } from '../../ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
 import { Badge } from '../../ui/badge';
 import { Play, RotateCcw, CheckCircle, XCircle, AlertCircle, Terminal, Loader2, Copy, Check, Trash2, Keyboard, Lightbulb, RefreshCw } from 'lucide-react';
-import { SQLExecutor, QueryResult, resetSQLInitialization } from '../../../lib/sql-executor';
+import { SQLExecutor, QueryResult, resetSQLInitialization, hasTopLevelOrderBy } from '../../../lib/sql-executor';
 import { gradeDatabaseState } from '../../../lib/sql-state-grading';
 import { SQLProblem } from '../../../types';
 
@@ -293,8 +293,11 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
     }
     
     const comparison = currentExecutor.compareResults(actualResults, problem.expectedResult!);
-    
-    return { match: comparison.match, mode: 'result' };
+    // Rows are compared as a set (ties make strict positions unreliable), so
+    // tasks that ask for an order also require the query to impose one.
+    const orderSatisfied = !problem.orderSensitive || hasTopLevelOrderBy(code);
+
+    return { match: comparison.match && orderSatisfied, mode: 'result' };
   };
 
   const handleExecute = async () => {
@@ -302,12 +305,11 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
 
     setIsExecuting(true);
     try {
-      // Each mutation attempt starts from the exercise seed, so a wrong INSERT
-      // cannot make a subsequent corrected submission fail a uniqueness check.
-      if (problem.gradingMode === 'database-state-v1') {
-        executor.close();
-        await executor.initialize(problem.schema);
-      }
+      // Every attempt starts from the exercise seed: a wrong INSERT/DELETE/DROP
+      // must not make later correct submissions fail (or a destructive query
+      // followed by SELECT pass) in either grading mode.
+      executor.close();
+      await executor.initialize(problem.schema);
       const queryResult = await executor.executeQuery(code);
       const stateGrade = queryResult.success && problem.gradingMode === 'database-state-v1'
         ? await gradeDatabaseState(problem, code)

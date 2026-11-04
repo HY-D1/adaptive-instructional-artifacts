@@ -164,6 +164,24 @@ export interface SingleQueryResult {
 /**
  * Result of executing a SQL query
  */
+/**
+ * True when the SQL has an ORDER BY outside parentheses (so window-function
+ * `OVER (ORDER BY ...)` and subqueries do not count), ignoring string
+ * literals and comments.
+ */
+export function hasTopLevelOrderBy(sql: string): boolean {
+  const withoutComments = sql.replace(/--[^\n]*/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const withoutStrings = withoutComments.replace(/'(?:''|[^'])*'/g, "''").replace(/"(?:""|[^"])*"/g, '""');
+  let depth = 0;
+  let topLevel = '';
+  for (const char of withoutStrings) {
+    if (char === '(') depth += 1;
+    else if (char === ')') depth = Math.max(0, depth - 1);
+    else if (depth === 0) topLevel += char;
+  }
+  return /\border\s+by\b/i.test(topLevel);
+}
+
 export interface QueryResult {
   /** Whether execution succeeded */
   success: boolean;

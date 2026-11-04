@@ -554,6 +554,8 @@ export type SQLProblem = {
   expectedQuery: string;
   expectedResult?: any[];
   gradingMode?: 'result' | 'exec-only' | 'database-state-v1';
+  /** The task asks for a specific order: the submission must use a top-level ORDER BY. */
+  orderSensitive?: boolean;
   /** Query used to compare the database after a mutation with the reference. */
   gradingStateQuery?: string;
   hints?: string[];
