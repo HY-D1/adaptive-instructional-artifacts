@@ -9,7 +9,7 @@
 
 import { Router, type Request, type Response } from 'express';
 import bcrypt from 'bcryptjs';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { ipKeyGenerator } from 'express-rate-limit';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
@@ -39,6 +39,7 @@ import {
   requireCsrf,
 } from '../middleware/csrf.js';
 import { INSTRUCTOR_SIGNUP_CODE } from '../config.js';
+import { resolveDbEnv } from '../db/env-resolver.js';
 import {
   createSectionForInstructor,
   enrollStudentInSection,
@@ -47,6 +48,7 @@ import {
   getSectionForStudent,
 } from '../db/sections.js';
 import { loginRateLimiter } from '../middleware/rate-limit.js';
+import { clientIpKey, sharedRateLimit } from '../middleware/shared-rate-limit.js';
 import { consumeSignupLimit } from '../db/signup-rate-limit.js';
 
 const router = Router();
@@ -371,7 +373,17 @@ router.post('/signup', async (req: Request, res: Response) => {
 // POST /api/auth/login
 // ============================================================================
 
-router.post('/login', loginRateLimiter, async (req: Request, res: Response) => {
+const sharedLoginLimiter = sharedRateLimit({
+  scope: 'login-email-ip',
+  limit: 10,
+  label: 'login',
+  keyParts: (req) => [
+    typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : 'unknown',
+    clientIpKey(req),
+  ],
+});
+
+router.post('/login', loginRateLimiter, sharedLoginLimiter, async (req: Request, res: Response) => {
   if (!isUsingNeon()) {
     res.status(503).json({
       success: false,
@@ -495,6 +507,15 @@ router.get('/me', (req: Request, res: Response) => {
           res.status(401).json({ success: false, error: 'Account not found' });
           return;
         }
+        // Sliding session: re-issue from the current account so role or name
+        // changes take effect and active users are not logged out mid-study.
+        setAuthCookie(res, signToken({
+          accountId: account.id,
+          learnerId: account.learnerId,
+          email: account.email,
+          role: account.role,
+          name: account.name,
+        }));
         const csrfToken = getOrCreateCsrfToken(req, res);
         withSectionContext(toPublicAccount(account))
           .then((userWithContext) => {
@@ -534,9 +555,26 @@ router.get('/me', (req: Request, res: Response) => {
 // Requires E2E_TEST_SEED_SECRET to be set (matches secret in auth.setup.ts)
 // ============================================================================
 
-const TEST_SEED_SECRET = process.env.E2E_TEST_SEED_SECRET;
-const ENVIRONMENT = process.env.VERCEL_ENV || process.env.NODE_ENV || 'development';
-const IS_PREVIEW = ENVIRONMENT === 'preview' || ENVIRONMENT === 'development';
+/**
+ * Test seeding creates accounts with passwords committed in this file, so it
+ * is allowed only on an explicit preview/development/test environment and
+ * never against the database the Vercel Neon integration labels production.
+ */
+export function isTestSeedAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
+  if (env.VERCEL_ENV === 'production') return false;
+  const explicitNonProd = env.VERCEL_ENV === 'preview' ||
+    (!env.VERCEL_ENV && (env.NODE_ENV === 'development' || env.NODE_ENV === 'test'));
+  if (!explicitNonProd) return false;
+  const { source } = resolveDbEnv(env);
+  return source !== 'adaptive_data_DATABASE_URL' && source !== 'adaptive_data_POSTGRES_URL';
+}
+
+function secretMatches(provided: unknown, expected: string | undefined): boolean {
+  if (!expected || typeof provided !== 'string') return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 // Deterministic E2E test credentials
 const DETERMINISTIC_INSTRUCTOR = {
@@ -552,8 +590,8 @@ const DETERMINISTIC_STUDENT = {
 };
 
 router.post('/test-seed', async (req: Request, res: Response) => {
-  // Security: Only available in preview/development environments
-  if (!IS_PREVIEW) {
+  // Security: Only available in explicit preview/development environments
+  if (!isTestSeedAllowed()) {
     res.status(403).json({
       success: false,
       error: 'Test seed endpoint only available in preview/development environments',
@@ -563,7 +601,7 @@ router.post('/test-seed', async (req: Request, res: Response) => {
 
   // Security: Require secret header
   const providedSecret = req.headers['x-e2e-test-seed-secret'];
-  if (!TEST_SEED_SECRET || providedSecret !== TEST_SEED_SECRET) {
+  if (!secretMatches(providedSecret, process.env.E2E_TEST_SEED_SECRET)) {
     res.status(401).json({
       success: false,
       error: 'Invalid or missing test seed secret',
@@ -657,7 +695,7 @@ router.post('/test-seed', async (req: Request, res: Response) => {
 
     res.json({
       success: true,
-      environment: ENVIRONMENT,
+      environment: process.env.VERCEL_ENV || process.env.NODE_ENV || 'development',
       credentials: {
         instructor: {
           email: DETERMINISTIC_INSTRUCTOR.email,
@@ -677,7 +715,7 @@ router.post('/test-seed', async (req: Request, res: Response) => {
     res.status(500).json({
       success: false,
       error: 'Failed to provision test accounts',
-      details: error instanceof Error ? error.message : 'Unknown error',
+      
     });
   }
 });

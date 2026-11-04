@@ -21,6 +21,7 @@ import {
   LLMProvider,
   LLMGenerationParams,
 } from '../llm/index.js';
+import { clientErrorMessage } from '../lib/client-error.js';
 
 const router = Router();
 
@@ -204,7 +205,7 @@ router.get('/status', async (_req: Request, res: Response) => {
     const response: ApiResponse<never> = {
       success: false,
       error: 'Failed to get LLM status',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: clientErrorMessage(error),
     };
     res.status(500).json(response);
   }
@@ -238,7 +239,7 @@ router.get('/models', async (_req: Request, res: Response) => {
     const response: ApiResponse<{ models: string[] }> = {
       success: true,
       data: { models: [] },
-      message: `Failed to get models: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      message: `Failed to get models: ${clientErrorMessage(error)}`,
     };
     res.json(response);
   }
@@ -313,7 +314,7 @@ router.post('/generate', async (req: Request, res: Response) => {
     const response: ApiResponse<never> = {
       success: false,
       error: 'Failed to generate text',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: clientErrorMessage(error),
     };
     res.status(500).json(response);
   }
@@ -363,7 +364,7 @@ router.post('/generate/validate', (req: Request, res: Response) => {
     const response: ApiResponse<never> = {
       success: false,
       error: 'Validation failed',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: clientErrorMessage(error),
     };
     res.status(500).json(response);
   }

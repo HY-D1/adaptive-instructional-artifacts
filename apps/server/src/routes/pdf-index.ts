@@ -22,6 +22,7 @@ import {
   PDF_EMBEDDING_DIMENSION,
   getDocAlias,
 } from '../config.js';
+import { clientErrorMessage } from '../lib/client-error.js';
 
 const router = Router();
 const execFileAsync = promisify(execFile);
@@ -165,7 +166,7 @@ router.get('/status', async (_req: Request, res: Response) => {
     const response: ApiResponse<never> = {
       success: false,
       error: 'Failed to get PDF index status',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: clientErrorMessage(error),
     };
     res.status(500).json(response);
   }
@@ -232,7 +233,7 @@ router.post('/load', checkEnabled, async (_req: Request, res: Response) => {
     const response: ApiResponse<never> = {
       success: false,
       error: 'Failed to load/build PDF index',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: clientErrorMessage(error),
     };
     res.status(500).json(response);
   }
@@ -317,7 +318,7 @@ router.post('/upload', checkEnabled, async (req: Request, res: Response) => {
         const response: ApiResponse<never> = {
           success: false,
           error: 'Failed to process uploaded PDF',
-          message: error instanceof Error ? error.message : 'Unknown error',
+          message: clientErrorMessage(error),
         };
         res.status(500).json(response);
       }
@@ -327,7 +328,7 @@ router.post('/upload', checkEnabled, async (req: Request, res: Response) => {
       const response: ApiResponse<never> = {
         success: false,
         error: 'Upload error',
-        message: error instanceof Error ? error.message : 'Unknown error',
+        message: clientErrorMessage(error),
       };
       res.status(500).json(response);
     });
@@ -335,7 +336,7 @@ router.post('/upload', checkEnabled, async (req: Request, res: Response) => {
     const response: ApiResponse<never> = {
       success: false,
       error: 'Failed to process upload',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: clientErrorMessage(error),
     };
     res.status(500).json(response);
   }

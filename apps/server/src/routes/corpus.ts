@@ -12,6 +12,7 @@ import {
 } from '../db/index.js';
 import { requireAuth, requireInstructor } from '../middleware/auth.js';
 import { requireCsrf } from '../middleware/csrf.js';
+import { clientErrorMessage } from '../lib/client-error.js';
 
 const router = Router();
 
@@ -191,7 +192,7 @@ router.get('/manifest', async (_req: Request, res: Response) => {
     const response: ApiResponse<never> = {
       success: false,
       error: 'Failed to read corpus manifest',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: clientErrorMessage(error),
     };
     res.status(500).json(response);
   }
@@ -220,7 +221,7 @@ router.get('/active-runs', async (_req: Request, res: Response) => {
     const response: ApiResponse<never> = {
       success: false,
       error: 'Failed to read corpus active-run mappings',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: clientErrorMessage(error),
     };
     res.status(500).json(response);
   }
@@ -275,7 +276,7 @@ router.post('/active-run', requireAuth, requireInstructor, requireCsrf, async (r
     const response: ApiResponse<never> = {
       success: false,
       error: 'Failed to set active corpus run',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: clientErrorMessage(error),
     };
     res.status(400).json(response);
   }
@@ -326,7 +327,7 @@ router.get('/unit/:unitId', async (req: Request, res: Response) => {
     const response: ApiResponse<never> = {
       success: false,
       error: 'Failed to read corpus unit',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: clientErrorMessage(error),
     };
     res.status(500).json(response);
   }
@@ -383,7 +384,7 @@ router.post('/search', async (req: Request, res: Response) => {
     const response: ApiResponse<never> = {
       success: false,
       error: 'Corpus search failed',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: clientErrorMessage(error),
     };
     res.status(500).json(response);
   }

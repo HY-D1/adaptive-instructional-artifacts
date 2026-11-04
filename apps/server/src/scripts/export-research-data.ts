@@ -12,6 +12,7 @@ import { neon } from '@neondatabase/serverless';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { toCsvCell } from '../lib/research-export.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,16 +60,7 @@ export function buildInteractionEventsCsv(events: any[]): string {
   const headers = columns.join(',');
   const rows = events.map(event => {
     return columns.map(col => {
-      const value = event[col];
-      if (value === null || value === undefined) {
-        return '';
-      }
-      // Escape quotes and wrap in quotes if contains comma
-      const str = String(value).replace(/"/g, '""');
-      if (str.includes(',') || str.includes('\n') || str.includes('"')) {
-        return `"${str}"`;
-      }
-      return str;
+      return toCsvCell(event[col]);
     }).join(',');
   });
 
@@ -86,15 +78,7 @@ export function buildAuthEventsCsv(events: any[]): string {
   const headers = columns.join(',');
   const rows = events.map(event => {
     return columns.map(col => {
-      const value = event[col];
-      if (value === null || value === undefined) {
-        return '';
-      }
-      const str = String(value).replace(/"/g, '""');
-      if (str.includes(',') || str.includes('\n') || str.includes('"')) {
-        return `"${str}"`;
-      }
-      return str;
+      return toCsvCell(event[col]);
     }).join(',');
   });
 

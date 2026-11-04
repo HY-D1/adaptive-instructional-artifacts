@@ -28,7 +28,10 @@ const EXPORT_CONFIG = {
 
 router.use(requireInstructor);
 
-const INSTRUCTOR_ANALYTICS_CONCEPT_TOTAL = 6;
+// Coverage only records the concepts in StorageManager.VALID_CONCEPT_IDS
+// (apps/web/src/app/lib/storage/storage.ts); keep this equal to that set's
+// size (guarded by tests/unit/server/phase4-exports-config.test.ts).
+export const INSTRUCTOR_ANALYTICS_CONCEPT_TOTAL = 6;
 
 router.get('/overview', async (req: Request, res: Response) => {
   try {
@@ -121,11 +124,11 @@ router.get('/analytics/summary', async (req: Request, res: Response) => {
     );
     const averageConceptCoverageCount =
       learnerIds.length > 0 ? conceptCoverageTotal / learnerIds.length : 0;
-    const averageConceptCoverage = Math.round(
+    const averageConceptCoverage = Math.min(100, Math.round(
       learnerIds.length > 0
         ? (averageConceptCoverageCount / INSTRUCTOR_ANALYTICS_CONCEPT_TOTAL) * 100
         : 0,
-    );
+    ));
 
     console.info('[instructor/analytics/summary]', {
       instructorId,
@@ -493,6 +496,8 @@ router.get('/export', async (req: Request, res: Response) => {
           interactionCount: number;
           textbookUnitCount: number;
           fieldsPreserved: string[];
+          truncated: boolean;
+          truncatedLearnerIds: string[];
         };
         learners: (typeof learners)[number][];
         interactions: typeof interactions;
@@ -521,6 +526,8 @@ router.get('/export', async (req: Request, res: Response) => {
           interactionCount: interactions.length,
           textbookUnitCount: textbookByLearner.reduce((acc, item) => acc + item.units.length, 0),
           fieldsPreserved: ['id', 'learnerId', 'sectionId', 'sessionId', 'timestamp', 'eventType', 'problemId'],
+          truncated: learnersWithLimitReached.length > 0,
+          truncatedLearnerIds: learnersWithLimitReached,
         },
         learners,
         interactions,

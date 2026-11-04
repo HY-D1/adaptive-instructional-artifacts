@@ -3,6 +3,7 @@
  * Local/dev entrypoint that binds the Express app to a port.
  */
 
+import './load-env.js';
 import app, { ensureSchemaInitialized } from './app.js';
 import { closeDb, isUsingNeon } from './db/index.js';
 import { ENABLE_PDF_INDEX, ENABLE_LLM, PORT, OLLAMA_BASE_URL } from './config.js';

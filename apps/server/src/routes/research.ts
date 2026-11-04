@@ -6,14 +6,15 @@
 
 import { Router } from 'express';
 import {
-  getAuthEvents,
+  getAuthEventsByLearnerIds,
   getUserById,
   getInteractionsByUser,
   getTextbookUnitsByUser,
-  getAllUsers,
+  getUsersByIds,
   getInteractionAggregatesByUsers,
   getTextbookUnitCountsByUsers,
 } from '../db/neon.js';
+import { pseudonymizeLearner, rekeyEmailHash, toCsvCell } from '../lib/research-export.js';
 import type {
   ApiResponse,
   ClassStats,
@@ -26,6 +27,7 @@ import {
   getOwnedSectionsByInstructor,
   getProductionSections,
 } from '../db/sections.js';
+import { clientErrorMessage } from '../lib/client-error.js';
 
 const router = Router();
 
@@ -57,8 +59,8 @@ router.get('/aggregates', async (req, res) => {
   try {
     const instructorUserId = req.auth!.learnerId;
     const scopedLearnerIds = await getScopedLearnerIdsForInstructor(instructorUserId);
-    const learners = (await getAllUsers()).filter((learner) => scopedLearnerIds.has(learner.id));
-    
+    const learners = await getUsersByIds([...scopedLearnerIds]);
+
     // Use single aggregated queries instead of N+1 loops
     const learnerIds = learners.map(l => l.id);
     const [aggregates, unitCounts] = await Promise.all([
@@ -92,7 +94,7 @@ router.get('/aggregates', async (req, res) => {
     const response: ApiResponse<never> = {
       success: false,
       error: 'Failed to fetch aggregates',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: clientErrorMessage(error),
     };
     res.status(500).json(response);
   }
@@ -130,7 +132,9 @@ router.get('/learner/:id/trajectory', async (req, res) => {
       return;
     }
 
-    const interactions = (await getInteractionsByUser(id, { limit: 10000 })).interactions;
+    const TRAJECTORY_LIMIT = 10000;
+    const trajectoryResult = await getInteractionsByUser(id, { limit: TRAJECTORY_LIMIT });
+    const interactions = trajectoryResult.interactions;
     const textbookUnits = await getTextbookUnitsByUser(id);
 
     // Calculate summary stats
@@ -148,9 +152,11 @@ router.get('/learner/:id/trajectory', async (req, res) => {
       ? hdiReadings.reduce((a, b) => a + b, 0) / hdiReadings.length 
       : undefined;
 
-    const trajectory: LearnerTrajectory & { 
+    const trajectory: LearnerTrajectory & {
       hdiStats?: { average: number | null; readings: number; lastLevel?: string | null };
       escalationCount?: number;
+      truncated?: boolean;
+      totalInteractionsAvailable?: number;
     } = {
       learner,
       interactions,
@@ -164,6 +170,8 @@ router.get('/learner/:id/trajectory', async (req, res) => {
         sessionCount: uniqueSessions.size,
       },
       escalationCount: escalations,
+      truncated: trajectoryResult.total > interactions.length,
+      totalInteractionsAvailable: trajectoryResult.total,
     };
     
     // Add HDI stats if available
@@ -183,14 +191,14 @@ router.get('/learner/:id/trajectory', async (req, res) => {
     const response: ApiResponse<never> = {
       success: false,
       error: 'Failed to fetch learner trajectory',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: clientErrorMessage(error),
     };
     res.status(500).json(response);
   }
 });
 
 // ============================================================================
-// GET /api/research/export - Full dataset export (lossless)
+// GET /api/research/export - Dataset export (per-learner cap; see summary.truncated)
 // ============================================================================
 
 router.get('/export', async (req, res) => {
@@ -204,9 +212,10 @@ router.get('/export', async (req, res) => {
     const learnerIds = req.query.learnerIds ? (req.query.learnerIds as string).split(',') : undefined;
     const eventTypes = req.query.eventTypes ? (req.query.eventTypes as string).split(',') as EventType[] : undefined;
 
-    // Get all learners (filtered if learnerIds provided)
-    let learners = await getAllUsers();
-    learners = learners.filter((l) => scopedLearnerIds.has(l.id));
+    const includeNames = req.query.includeNames === 'true';
+
+    // Learners in the instructor's scope (filtered if learnerIds provided)
+    let learners = await getUsersByIds([...scopedLearnerIds]);
     if (learnerIds && learnerIds.length > 0) {
       learners = learners.filter(l => learnerIds.includes(l.id));
     }
@@ -231,8 +240,8 @@ router.get('/export', async (req, res) => {
     if (startDate) dateFilterOptions.startDate = new Date(startDate).toISOString();
     if (endDate) dateFilterOptions.endDate = new Date(endDate).toISOString();
 
-    // Fetch interactions with SQL-level filtering
-    const interactionsByLearner = await Promise.all(
+    // Fetch interactions with SQL-level filtering; keep totals so truncation is reported
+    const perLearner = await Promise.all(
       learners.map(async (learner) => {
         // If eventTypes are specified, we need to fetch for each type separately
         // because the API supports multiple event types (OR logic)
@@ -249,20 +258,30 @@ router.get('/export', async (req, res) => {
           // Merge and deduplicate by interaction id
           const merged = results.flatMap(r => r.interactions);
           const seen = new Set<string>();
-          return merged.filter(i => {
+          const interactions = merged.filter(i => {
             if (seen.has(i.id)) return false;
             seen.add(i.id);
             return true;
           });
+          return {
+            learnerId: learner.id,
+            interactions,
+            total: results.reduce((sum, r) => sum + r.total, 0),
+          };
         }
-        
+
         // No event type filter - fetch all interactions with date filter
-        return getInteractionsByUser(learner.id, {
+        const result = await getInteractionsByUser(learner.id, {
           ...dateFilterOptions,
           limit: INTERACTIONS_PER_LEARNER,
-        }).then(r => r.interactions);
+        });
+        return { learnerId: learner.id, interactions: result.interactions, total: result.total };
       })
     );
+    const interactionsByLearner = perLearner.map((item) => item.interactions);
+    const truncatedLearners = perLearner
+      .filter((item) => item.total > item.interactions.length)
+      .map((item) => ({ learnerId: item.learnerId, returned: item.interactions.length, total: item.total }));
 
     let filteredInteractions = interactionsByLearner.flat();
 
@@ -279,9 +298,8 @@ router.get('/export', async (req, res) => {
     const banditEvents = filteredInteractions.filter(i => 
       ['bandit_arm_selected', 'bandit_reward_observed', 'bandit_updated'].includes(i.eventType)
     );
-    const authEvents = (await getAuthEvents()).filter((event) =>
-      event.learnerId !== null && scopedLearnerIds.has(event.learnerId)
-    );
+    const authEvents = (await getAuthEventsByLearnerIds(learners.map((learner) => learner.id)))
+      .map((event) => ({ ...event, emailHash: rekeyEmailHash(event.emailHash) }));
 
     const exportData = {
       exportedAt: new Date().toISOString(),
@@ -306,8 +324,12 @@ router.get('/export', async (req, res) => {
         hdiReadingCount: hdiEvents.length,
         banditEventCount: banditEvents.length,
         fieldsPreserved: RESEARCH_EXPORT_FIELDS_PRESERVED,
+        interactionLimitPerLearner: INTERACTIONS_PER_LEARNER,
+        truncated: truncatedLearners.length > 0,
+        truncatedLearners,
+        pseudonymized: !includeNames,
       },
-      learners,
+      learners: learners.map((learner) => pseudonymizeLearner(learner, includeNames)),
       authEvents,
       interactions: filteredInteractions, // Full events preserved
       textbookUnits: allTextbookUnits,
@@ -332,7 +354,7 @@ router.get('/export', async (req, res) => {
     const response: ApiResponse<never> = {
       success: false,
       error: 'Failed to export data',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: clientErrorMessage(error),
     };
     res.status(500).json(response);
   }
@@ -350,7 +372,7 @@ router.get('/learners', async (req, res) => {
   try {
     const instructorUserId = req.auth!.learnerId;
     const scopedLearnerIds = await getScopedLearnerIdsForInstructor(instructorUserId);
-    let learners = (await getAllUsers()).filter((learner) => scopedLearnerIds.has(learner.id));
+    const learners = await getUsersByIds([...scopedLearnerIds]);
 
     // Pagination parameters
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
@@ -409,18 +431,11 @@ router.get('/learners', async (req, res) => {
     };
 
     res.json(responseData);
-    return;
-
-    const response: ApiResponse<typeof learnersWithStats> = {
-      success: true,
-      data: learnersWithStats,
-    };
-    res.json(response);
   } catch (error) {
     const response: ApiResponse<never> = {
       success: false,
       error: 'Failed to fetch learners',
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: clientErrorMessage(error),
     };
     res.status(500).json(response);
   }
@@ -471,52 +486,19 @@ export function convertInteractionsToCsv(interactions: Interaction[]): string {
     'createdAt',
   ];
 
-  const escapeCsv = (value: string): string => {
-    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
-      return `"${value.replace(/"/g, '""')}"`;
-    }
-    return value;
+  const jsonDefaults: Record<string, string> = {
+    conceptIds: '[]',
+    hdiComponents: '{}',
+    sourceInteractionIds: '[]',
+    retrievedSourceIds: '[]',
+    payload: '{}',
+    metadata: '{}',
   };
 
-  const rows = interactions.map(i => [
-    i.id,
-    i.learnerId,
-    i.sessionId || '',
-    i.timestamp,
-    i.eventType,
-    i.problemId,
-    i.hintId || '',
-    i.problemSetId || '',
-    i.problemNumber?.toString() || '',
-    escapeCsv(i.code || ''),
-    escapeCsv(i.error || ''),
-    i.errorSubtypeId || '',
-    i.executionTimeMs?.toString() || '',
-    i.rung?.toString() || '',
-    i.fromRung?.toString() || '',
-    i.toRung?.toString() || '',
-    i.trigger || '',
-    i.conceptId || '',
-    escapeCsv(JSON.stringify(i.conceptIds || [])),
-    i.source || '',
-    i.totalTime?.toString() || '',
-    i.problemsAttempted?.toString() || '',
-    i.problemsSolved?.toString() || '',
-    i.hdi?.toString() || '',
-    i.hdiLevel || '',
-    escapeCsv(JSON.stringify(i.hdiComponents || {})),
-    i.scheduleId || '',
-    i.promptId || '',
-    escapeCsv(i.response || ''),
-    i.isCorrect?.toString() || '',
-    i.unitId || '',
-    i.action || '',
-    escapeCsv(JSON.stringify(i.sourceInteractionIds || [])),
-    escapeCsv(JSON.stringify(i.retrievedSourceIds || [])),
-    escapeCsv(JSON.stringify(i.payload || {})),
-    escapeCsv(JSON.stringify(i.metadata || {})),
-    i.createdAt,
-  ]);
+  const rows = interactions.map((interaction) => {
+    const record = interaction as unknown as Record<string, unknown>;
+    return headers.map((header) => toCsvCell(record[header], jsonDefaults[header] ?? ''));
+  });
 
   return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
 }

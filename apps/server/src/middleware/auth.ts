@@ -40,10 +40,13 @@ declare global {
 // ============================================================================
 
 export const COOKIE_NAME = 'sql_adapt_auth';
-export const COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+// 7-day sessions, renewed by GET /api/auth/me (sliding), so a stolen or stale
+// token stops working within a week of the last visit.
+export const COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 export function signToken(payload: AuthPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '30d' });
+  const { accountId, learnerId, email, role, name } = payload;
+  return jwt.sign({ accountId, learnerId, email, role, name }, JWT_SECRET, { expiresIn: '7d' });
 }
 
 export function verifyToken(token: string): AuthPayload | null {

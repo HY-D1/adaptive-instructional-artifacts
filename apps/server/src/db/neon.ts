@@ -753,6 +753,16 @@ export async function getAllUsers(): Promise<Learner[]> {
   return results.map(rowToLearner);
 }
 
+/** Users by id with the pseudonymous username, for scoped research queries. */
+export async function getUsersByIds(
+  ids: string[],
+): Promise<Array<Learner & { username: string | null }>> {
+  if (ids.length === 0) return [];
+  const db = getDb();
+  const results = await db`SELECT * FROM users WHERE id = ANY(${ids}) ORDER BY created_at DESC`;
+  return results.map((row) => ({ ...rowToLearner(row), username: row.username ?? null }));
+}
+
 export type StudentCondition = "adaptive" | "control";
 
 export interface StudentConditionAssignment {
@@ -2289,6 +2299,15 @@ export async function createAuthEvent(
     RETURNING *
   `;
   return rowToAuthEvent(result as Record<string, unknown>);
+}
+
+export async function getAuthEventsByLearnerIds(learnerIds: string[]): Promise<AuthEventRow[]> {
+  if (learnerIds.length === 0) return [];
+  const db = getDb();
+  const results = await db`
+    SELECT * FROM auth_events WHERE learner_id = ANY(${learnerIds}) ORDER BY timestamp DESC
+  `;
+  return results.map((row) => rowToAuthEvent(row as Record<string, unknown>));
 }
 
 export async function getAuthEvents(): Promise<AuthEventRow[]> {

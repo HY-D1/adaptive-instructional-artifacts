@@ -3,7 +3,7 @@
  * Creates the Express app without binding to a port.
  */
 
-import dotenv from 'dotenv';
+import './load-env.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import express, { Request, Response, NextFunction } from 'express';
@@ -40,8 +40,10 @@ import { wildcardPatternToRegExp } from './lib/cors-patterns.js';
 import { optionalAuth, requireAuth, requireInstructor } from './middleware/auth.js';
 import { requireCsrf } from './middleware/csrf.js';
 import { maintenanceGuard } from './middleware/maintenance.js';
+import { sharedRateLimit } from './middleware/shared-rate-limit.js';
 import {
   generalApiLimiter,
+  LLM_RATE_LIMIT,
   llmRateLimiter,
   researchRateLimiter,
   studentDataLimiter,
@@ -49,9 +51,6 @@ import {
 } from './middleware/rate-limit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const envPath = path.resolve(__dirname, '../.env');
-dotenv.config({ path: envPath });
-dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
 const DATA_DIR = path.resolve(__dirname, '../data');
 if (!fs.existsSync(DATA_DIR)) {
@@ -179,9 +178,20 @@ app.use(async (_req: Request, _res: Response, next: NextFunction) => {
   }
 });
 
+let loggedClientIpCheck = false;
 app.use((req: Request, _res: Response, next: NextFunction) => {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] ${req.method} ${req.path}`);
+  // One-time check for deployments: IP-keyed rate limits are only per-client
+  // when req.ip reflects the caller (set TRUST_PROXY=true behind Vercel).
+  if (!loggedClientIpCheck && process.env.VERCEL_ENV !== 'production') {
+    loggedClientIpCheck = true;
+    console.info('[startup/client-ip-check]', {
+      reqIp: req.ip,
+      forwardedFor: req.get('x-forwarded-for') ?? null,
+      trustProxy: process.env.TRUST_PROXY === 'true',
+    });
+  }
   next();
 });
 
@@ -313,7 +323,17 @@ app.use('/api/research', researchRateLimiter, requireAuth, requireInstructor, re
 app.use('/api/instructor', researchRateLimiter, requireAuth, instructorRouter);
 app.use('/api/corpus', studentDataLimiter, corpusRouter);
 app.use('/api/pdf-index', generalApiLimiter, pdfIndexRouter);
-app.use('/api/llm', llmRateLimiter, requireAuth, requireCsrf, llmRouter);
+// LLM calls spend the provider budget, so the per-user cap is shared across
+// serverless instances (generate only; status/model reads stay in-memory).
+const sharedLlmGenerateLimiter = sharedRateLimit({
+  scope: 'llm-generate-user',
+  limit: LLM_RATE_LIMIT,
+  label: 'LLM',
+  keyParts: (req) => [req.auth?.learnerId ?? 'anonymous'],
+});
+app.use('/api/llm', llmRateLimiter, requireAuth, requireCsrf);
+app.post('/api/llm/generate', sharedLlmGenerateLimiter);
+app.use('/api/llm', llmRouter);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({
