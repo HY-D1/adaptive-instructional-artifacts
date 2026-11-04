@@ -10,9 +10,9 @@
  * tests pin it so the behaviour is explicit rather than incidental.
  */
 import { describe, it, expect } from 'vitest';
-import { resolveExecutionSubtype } from './execution-subtype';
+import { resolveExecutionSubtype, latestMistakeSubtype } from './execution-subtype';
 import { sqlProblems } from '../data/problems';
-import type { SQLProblem } from '../types';
+import type { InteractionEvent, SQLProblem } from '../types';
 
 function problem(id: string): SQLProblem {
   const found = sqlProblems.find((candidate) => candidate.id === id);
@@ -92,5 +92,55 @@ describe('resolveExecutionSubtype', () => {
         instructorSubtypeOverride: 'incorrect select usage'
       })
     ).toBe('incorrect select usage');
+  });
+});
+
+describe('latestMistakeSubtype', () => {
+  function event(overrides: Partial<InteractionEvent>): InteractionEvent {
+    return {
+      id: `evt-${Math.random()}`,
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      problemId: 'problem-6',
+      timestamp: 1,
+      eventType: 'execution',
+      ...overrides
+    } as InteractionEvent;
+  }
+
+  it('prefers a later wrong-result run over an earlier engine error', () => {
+    const interactions = [
+      event({ eventType: 'error', timestamp: 100, errorSubtypeId: 'undefined column', sqlEngageSubtype: 'undefined column' }),
+      event({ eventType: 'execution', successful: false, timestamp: 200, errorSubtypeId: 'incorrect select usage', sqlEngageSubtype: 'incorrect select usage' })
+    ];
+    expect(latestMistakeSubtype(interactions)).toBe('incorrect select usage');
+  });
+
+  it('gives a learner with only wrong-result runs that subtype rather than nothing', () => {
+    const interactions = [
+      event({ eventType: 'execution', successful: false, timestamp: 100, errorSubtypeId: 'incorrect select usage', sqlEngageSubtype: 'incorrect select usage' })
+    ];
+    expect(latestMistakeSubtype(interactions)).toBe('incorrect select usage');
+  });
+
+  it('ignores successful runs and mistakes that carry no subtype', () => {
+    const interactions = [
+      event({ eventType: 'error', timestamp: 100, errorSubtypeId: 'undefined table', sqlEngageSubtype: 'undefined table' }),
+      event({ eventType: 'execution', successful: false, timestamp: 200 }),
+      event({ eventType: 'execution', successful: true, timestamp: 300, errorSubtypeId: 'undefined column' })
+    ];
+    expect(latestMistakeSubtype(interactions)).toBe('undefined table');
+  });
+
+  it('orders by timestamp, not by array position', () => {
+    const interactions = [
+      event({ eventType: 'execution', successful: false, timestamp: 300, sqlEngageSubtype: 'incorrect select usage' }),
+      event({ eventType: 'error', timestamp: 100, sqlEngageSubtype: 'undefined table' })
+    ];
+    expect(latestMistakeSubtype(interactions)).toBe('incorrect select usage');
+  });
+
+  it('returns undefined when there is no mistake', () => {
+    expect(latestMistakeSubtype([event({ eventType: 'hint_view' as InteractionEvent['eventType'] })])).toBeUndefined();
   });
 });

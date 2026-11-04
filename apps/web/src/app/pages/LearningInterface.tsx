@@ -68,7 +68,7 @@ import { sqlProblems } from '../data/problems';
 import { getProblemsByDifficultyRank } from '../lib/adaptive-problem-selector';
 import { getFirstProblem } from '../lib/problem-ranking';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
-import { resolveExecutionSubtype } from '../lib/execution-subtype';
+import { resolveExecutionSubtype, latestMistakeSubtype } from '../lib/execution-subtype';
 import { useUserRole } from '../hooks/useUserRole';
 import { useLocation, Link } from 'react-router';
 import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync } from '../lib/storage';
@@ -1778,22 +1778,17 @@ export function LearningInterface() {
   };
 
   const resolveLatestProblemErrorSubtype = (): string | undefined => {
-    const latestErrorInteraction = storage
-      .getInteractionsByLearner(learnerId)
-      .filter(
-        (interaction) =>
-          interaction.sessionId === sessionId &&
-          interaction.problemId === currentProblem.id &&
-          // An engine error, or a query that ran but answered wrongly. Both now
-          // carry a subtype, and the most recent mistake is what a hint should
-          // target.
-          (interaction.eventType === 'error' ||
-            (interaction.eventType === 'execution' && interaction.successful === false)) &&
-          Boolean(interaction.sqlEngageSubtype || interaction.errorSubtypeId)
-      )
-      .sort((a, b) => b.timestamp - a.timestamp)[0];
-
-    const subtype = latestErrorInteraction?.sqlEngageSubtype || latestErrorInteraction?.errorSubtypeId;
+    // An engine error, or a query that ran but answered wrongly. Both carry a
+    // subtype, and the most recent mistake is what a hint should target.
+    const subtype = latestMistakeSubtype(
+      storage
+        .getInteractionsByLearner(learnerId)
+        .filter(
+          (interaction) =>
+            interaction.sessionId === sessionId &&
+            interaction.problemId === currentProblem.id
+        )
+    );
     return subtype ? canonicalizeSqlEngageSubtype(subtype) : undefined;
   };
 
@@ -2599,14 +2594,12 @@ export function LearningInterface() {
   }, [currentProblem.id, rankedProblems]);
 
   // Memoized error and attempt calculations
-  const latestProblemErrorEvent = useMemo(() => 
-    [...problemInteractions]
-      .reverse()
-      .find((interaction) => interaction.eventType === 'error'),
+  // Same predicate as resolveLatestProblemErrorSubtype: wrong-result runs count,
+  // so after a remount the hint panel still targets the latest mistake.
+  const latestProblemErrorSubtype = useMemo(
+    () => latestMistakeSubtype(problemInteractions),
     [problemInteractions]
   );
-
-  const latestProblemErrorSubtype = latestProblemErrorEvent?.sqlEngageSubtype || latestProblemErrorEvent?.errorSubtypeId;
   const effectiveLastError = lastError || latestProblemErrorSubtype;
   // Show Save to Notes when student has engaged with the problem:
   // 1. After hint escalation with an error (original behavior)
