@@ -8,7 +8,7 @@ import type { GuidanceRung } from '../guidance-ladder';
 import type { EnhancedHint, HintGenerationOptions, HintSourceMetadata, RetrievalSignalMeta } from './types';
 import { checkAvailableResources } from './resources';
 import { buildEnhancedRetrievalBundle, extractRetrievalSignals, MIN_RETRIEVAL_CONFIDENCE } from './retrieval';
-import { generateSqlEngageFallbackHint, createUltimateFallbackHint, mergeFallbackReasons } from './fallback';
+import { buildFallbackSeed, generateSqlEngageFallbackHint, createUltimateFallbackHint, mergeFallbackReasons } from './fallback';
 import { generateTextbookEnhancedHint } from './textbook-generation';
 import { generateLLMEnhancedHint } from './llm-generation';
 import { resolveRefinedHintForProblem } from './refined-hints';
@@ -40,6 +40,7 @@ export async function generateEnhancedHint(options: HintGenerationOptions): Prom
     // Fallback to SQL-Engage hint if bundle creation fails
     if (errorSubtypeId) {
       return generateSqlEngageFallbackHint(errorSubtypeId, rung, {
+        seed: buildFallbackSeed(options.learnerId, options.problemId, errorSubtypeId, rung),
         retrievalConfidence: 0,
         fallbackReason: 'retrieval_bundle_unavailable',
         safetyFilterApplied: true,
@@ -99,6 +100,7 @@ export async function generateEnhancedHint(options: HintGenerationOptions): Prom
   if (retrievalSignals.retrievalConfidence < MIN_RETRIEVAL_CONFIDENCE) {
     if (errorSubtypeId) {
       return generateSqlEngageFallbackHint(errorSubtypeId, rung, {
+        seed: buildFallbackSeed(options.learnerId, options.problemId, errorSubtypeId, rung),
         ...retrievalSignals,
         fallbackReason: mergeFallbackReasons('low_retrieval_confidence', refinedFallbackReason),
         safetyFilterApplied: true,
@@ -122,6 +124,7 @@ export async function generateEnhancedHint(options: HintGenerationOptions): Prom
   // CASE 2: Neither LLM nor Textbook → SQL-Engage CSV fallback
   if (errorSubtypeId) {
     return generateSqlEngageFallbackHint(errorSubtypeId, rung, {
+      seed: buildFallbackSeed(options.learnerId, options.problemId, errorSubtypeId, rung),
       ...retrievalSignals,
       fallbackReason: mergeFallbackReasons('no_llm_or_textbook', refinedFallbackReason),
       ...llmFailureMetadata,

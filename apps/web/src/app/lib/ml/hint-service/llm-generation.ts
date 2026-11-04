@@ -10,7 +10,7 @@ import type { AdaptiveHintContext, AdaptiveHintOutput, EnhancedHint, LearningSig
 import type { AvailableResources } from './types';
 import type { EnhancedRetrievalBundle, HintGenerationOptions } from './types';
 import { applyHintSafetyLayer } from './safety';
-import { generateSqlEngageFallbackHint, mergeFallbackReasons } from './fallback';
+import { buildFallbackSeed, generateSqlEngageFallbackHint, mergeFallbackReasons } from './fallback';
 import { generateTextbookEnhancedHint } from './textbook-generation';
 import { getCachedHint, saveCachedHint } from './hint-cache';
 import { HINT_PROMPT_VERSION, MIN_RETRIEVAL_CONFIDENCE } from './types';
@@ -81,6 +81,7 @@ export async function generateLLMEnhancedHint(
     }
     if (errorSubtypeId) {
       return generateSqlEngageFallbackHint(errorSubtypeId, rung, {
+        seed: buildFallbackSeed(options.learnerId, options.problemId, errorSubtypeId, rung),
         ...retrievalSignals,
         fallbackReason: 'llm_unavailable',
       });
@@ -182,6 +183,7 @@ export async function generateLLMEnhancedHint(
 
     if (errorSubtypeId) {
       return generateSqlEngageFallbackHint(errorSubtypeId, rung, {
+        seed: buildFallbackSeed(options.learnerId, options.problemId, errorSubtypeId, rung),
         ...retrievalSignals,
         fallbackReason: mergeFallbackReasons('llm_error', retrievalSignals.fallbackReason),
         hintSource: 'static',

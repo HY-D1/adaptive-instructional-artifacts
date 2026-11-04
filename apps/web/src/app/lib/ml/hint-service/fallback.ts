@@ -7,11 +7,24 @@
 import type { GuidanceRung } from '../guidance-ladder';
 import {
   canonicalizeSqlEngageSubtype,
+  getDeterministicSqlEngageAnchor,
   getProgressiveSqlEngageHintText,
   getSqlEngageRowsBySubtype,
 } from '../../../data/sql-engage';
 import type { EnhancedHint, HintSourceMetadata, RetrievalSignalMeta } from './types';
 import { applyHintSafetyLayer, getGenericFallbackHint, mergeFallbackReasons } from './safety';
+
+/**
+ * Build the deterministic row-selection seed. Same format as the orchestrator.
+ */
+export function buildFallbackSeed(
+  learnerId: string,
+  problemId: string,
+  errorSubtypeId: string,
+  rung: GuidanceRung
+): string {
+  return `${learnerId}|${problemId}|${canonicalizeSqlEngageSubtype(errorSubtypeId)}|L${rung}`;
+}
 
 /**
  * Generate fallback hint from SQL-Engage CSV only
@@ -27,6 +40,8 @@ export function generateSqlEngageFallbackHint(
   retrievalMeta?: Partial<RetrievalSignalMeta> & {
     fallbackReason?: string | null;
     safetyFilterApplied?: boolean;
+    /** Optional seed; picks a deterministic SQL-Engage row. Omitted = first row. */
+    seed?: string;
   } & HintSourceMetadata
 ): EnhancedHint {
   const canonicalSubtype = canonicalizeSqlEngageSubtype(errorSubtypeId);
@@ -37,7 +52,9 @@ export function generateSqlEngageFallbackHint(
 
   if (records.length > 0) {
     // Use progressive hint from SQL-Engage
-    const record = records[0];
+    const record = retrievalMeta?.seed
+      ? getDeterministicSqlEngageAnchor(canonicalSubtype, retrievalMeta.seed)
+      : records[0];
     content = getProgressiveSqlEngageHintText(canonicalSubtype, rung, record);
   } else {
     // Ultimate fallback: generic hint based on rung

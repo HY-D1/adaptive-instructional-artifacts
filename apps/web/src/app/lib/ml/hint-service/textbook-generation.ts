@@ -9,7 +9,7 @@ import type { EnhancedHint, HintGenerationOptions, HintSourceMetadata, Retrieval
 import type { AvailableResources } from './types';
 import type { EnhancedRetrievalBundle } from './types';
 import { applyHintSafetyLayer } from './safety';
-import { generateSqlEngageFallbackHint } from './fallback';
+import { buildFallbackSeed, generateSqlEngageFallbackHint } from './fallback';
 
 /**
  * Generate hint enhanced with textbook content
@@ -35,6 +35,7 @@ export function generateTextbookEnhancedHint(
   if (errorSubtypeId) {
     // Start with SQL-Engage hint as base
     const fallback = generateSqlEngageFallbackHint(errorSubtypeId, rung, {
+      seed: buildFallbackSeed(options.learnerId, options.problemId, errorSubtypeId, rung),
       ...retrievalSignals,
       fallbackReason: null,
     });
