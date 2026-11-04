@@ -81,17 +81,26 @@ describe('migration runner', () => {
     expect(() => planMarkApplied(manifest, [entry.filename], [{ filename: entry.filename, checksum: 'stale' }])).toThrow(/checksum/i);
   });
 
-  it('protect-deletes migration SQL is additive: no UPDATE/DELETE/ALTER COLUMN TYPE', () => {
+  it('protect-deletes migration SQL is additive and guards the 4 tables against DELETE and TRUNCATE', () => {
     const sql = readFileSync(resolve('apps/server/src/db/migrations/20261105-protect-research-deletes.sql'), 'utf8')
       .split('\n').filter((line) => !line.trim().startsWith('--')).join('\n');
     expect(sql).not.toMatch(/DELETE\s+FROM/i);
     expect(sql).not.toMatch(/UPDATE\s+\S+\s+SET/i);
     expect(sql).not.toMatch(/ALTER\s+COLUMN\s+\S+\s+(SET\s+DATA\s+)?TYPE/i);
-    expect(sql).toContain("sql_adapt.allow_research_delete");
+    expect(sql).not.toMatch(/DROP\s+TABLE/i);
+    expect(sql).not.toMatch(/DROP\s+COLUMN/i);
+    // TRUNCATE only as trigger-event keyword, never as a statement.
+    expect(sql).not.toMatch(/(^|;)\s*TRUNCATE\b/im);
+    expect(sql.replace(/BEFORE\s+TRUNCATE/gi, '')).not.toMatch(/\bTRUNCATE\b/i);
+    expect(sql).toContain('sql_adapt.allow_research_delete');
     expect(sql).toContain('research rows are protected');
-    for (const table of ['users', 'course_sections', 'section_enrollments', 'interaction_events']) {
-      expect(sql).toContain(table);
-    }
+    expect(sql).toContain("ARRAY['users', 'course_sections', 'section_enrollments', 'interaction_events']");
+    expect(sql).toContain('protect_research_delete');
+    expect(sql).toContain('protect_research_truncate');
+    expect(sql).toMatch(/BEFORE DELETE ON public\.%I FOR EACH ROW/);
+    expect(sql).toMatch(/BEFORE TRUNCATE ON public\.%I FOR EACH STATEMENT/);
+    expect(sql).toMatch(/BEGIN;\s*SET LOCAL lock_timeout = '5s';/);
+    expect(sql).toMatch(/ELSE\s+RAISE EXCEPTION/i); // missing table must fail the migration
   });
 
   it('is wired to npm run db:migrate', () => {
