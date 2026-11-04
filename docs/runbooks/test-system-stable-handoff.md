@@ -1,6 +1,6 @@
 # Handoff: `test/system_stable`
 
-Last updated 2026-11-04. Repository `HY-D1/adaptive-instructional-artifacts`.
+Last updated 2026-11-04 (cutover update). Repository `HY-D1/adaptive-instructional-artifacts`.
 
 Every commit is authored and committed as `HY-D1 <93563405+HY-D1@users.noreply.github.com>`, with no co-author or session trailers.
 
@@ -30,7 +30,7 @@ git log origin/test/system_stable..HEAD --format='%h %an <%ae>%n%b' | grep -i "c
 
 | Item | State |
 |---|---|
-| Branch | `test/system_stable`, branched from `main` at `06bc666`. 17 commits ahead: 15 fixes, the instructor-logging fix and this handoff |
+| Branch | `test/system_stable`, branched from `main` at `06bc666`. commits ahead of `main`: the 17 listed in the first table below plus the cutover commits in the second table |
 | `main` (production) | `06bc666`, untouched. A merge would be a fast-forward with no conflicts (checked 2026-11-04) |
 | Merged to production? | **No.** Merging changes production behaviour on purpose (section 5) |
 | Unit tests (run 2026-11-04) | PASS: 2093 passed, 2 skipped (vitest, all files, including the instructor-logging test) |
@@ -61,6 +61,20 @@ git log origin/test/system_stable..HEAD --format='%h %an <%ae>%n%b' | grep -i "c
 | `93d8a98` | **Instructor actions.**<br>• Dashboard "intervene" and "override profile" log under the **instructor's own ID** (`authUser?.learnerId ?? profile?.id`), with the student in `payload.targetLearnerId`.<br>• The override uses the new event type `instructor_profile_override` instead of a fake `condition_assigned`.<br>• Without this, after `67ae97f` these writes got 403 and stayed queued. | Instructors (actions are now saved) |
 | (this file) | `docs/runbooks/test-system-stable-handoff.md` | Nobody |
 
+Cutover commits (after the table above, oldest first):
+
+| Commit | Summary | Who notices |
+|---|---|---|
+| `10ef940` | **Logout and queues.** Logout no longer removes unsynced queue keys. Caches are cleared only when the learner has nothing unsynced. A one-time requeue of stranded dead-lettered events (flag `sql-adapt-deadletter-requeue-v1`). | Students on shared PCs |
+| `4f51c4c` | **Each help action is logged once.** `explanation_view` is keyed by explanation id, one `guidance_request` per click, escalation only on new events, textbook double-click guard. | Analysis (fewer duplicates) |
+| `54a312d` | **Logged hint level capped at 3.** The slow escalator still gives 4 hints. Hints 3 and 4 share `hint_id` `...:L3` and differ by `help_request_index`. The static-path slow escalator now auto-escalates after the 4th hint. | Analysis |
+| `b1ecf99`, `5046b7d`, `2c6991a` | **Classifier port from `front_end_test`.** Syntax errors no longer default to `missing commas`. Wrong-result runs get a semantic subtype on `execution` events with `successful: false`. The `ORDER BY` rule applies only to order-sensitive problems; state-graded problems are skipped. 20 of 23 subtypes are reachable, 3 are in `SEMANTIC_SUBTYPE_EXCLUSIONS`. Server `error_history` counts these `execution` events; local dashboard counters count only `eventType 'error'` (known divergence). | Students (hints), analysis |
+| `897a368` | **Cutover marker.** `SQL_ENGAGE_POLICY_VERSION` `sql-engage-index-v4-semantic-classifier`, `RESEARCH_CONTRACT_VERSION` `v2.7.0`. | Analysis |
+| `88ab677` | **SQL-Engage fallback row** is seeded per learner, problem, subtype and rung. | Students |
+| `a61bfe4`, `7e3452e` | **Server-assigned condition.** The `student_condition_assignments` row is authoritative for `condition_id` on events and sessions (a mismatch logs `[condition/override]`). If the lookup fails, the client value is used (`[condition/lookup-failed]`). The client accepts `control` session configs. | Analysis |
+| `32d4391`, `c087a9f` | **Research rows are guarded against deletes.** Migration `20261105-protect-research-deletes.sql`: `BEFORE DELETE` row triggers and `BEFORE TRUNCATE` statement triggers on `users`, `course_sections`, `section_enrollments`, `interaction_events` (lock timeout 5 s; fails if a table is missing). `migrate.ts --mark-applied <file>[,<file>]` records already-applied files without running them; `--baseline` now warns. | Operators |
+| (cutover docs) | `docs(research): cutover notes and historical-data rules; CI requires type check`. Cutover and historical-data sections in `LOGGING.md` and `DATA_CONTRACTS.md`, canonical event-type list plus `tests/unit/web/event-type-doc-sync.test.ts`, and `smoke-test` (build and `tsc --noEmit`) added to the CI gate's `needs`. | Analysts, CI |
+
 ## 3. Decisions on record
 
 - **Protocol choices:**
@@ -70,6 +84,11 @@ git log origin/test/system_stable..HEAD --format='%h %an <%ae>%n%b' | grep -i "c
   - D4: keep the equal-weight reward.
   - D5: accept and document client-side grading.
   - Instructor actions are logged under the instructor's ID.
+- **Cutover decisions (2026-11-04):**
+  - Remove `MAINTENANCE_MODE` and stay live. There is no maintenance window; production keeps serving during the merge.
+  - Cap the logged hint level at 3 (`GuidanceRung` stays 1 | 2 | 3; no rung 4 is added).
+  - Do the full classifier port from `front_end_test`.
+  - HY-D1 makes all commits, with no trailers.
 - **Audit correction:** the instructor concept-coverage denominator of 6 is correct, because coverage only records the 6 `VALID_CONCEPT_IDS` in `storage.ts`. Only a clamp to 100% was added.
 - **Survey format check:** it applies only to `*.qualtrics.com` survey URLs, because pilot and manual tooling submit synthetic IDs (`pilot-…`, `manual-stub-…`). `SURVEY_ALLOW_SYNTHETIC_RESPONSE_IDS=true` allows them again on isolated test targets.
 
@@ -124,34 +143,31 @@ Production facts (read-only `GET /health`, 2026-11-04):
 
 ### Blockers (do these before merging)
 
-1. **Apply migration `20261104-survey-verification.sql` first.** Without the `verification_status` column, every survey completion fails and students cannot get past the pre-survey gate.
-2. **Check the ResponseID format, which is unverified.** The check is `^R_[A-Za-z0-9]{15}$` (`apps/server/src/lib/survey-response-verification.ts`). Compare it against real stored IDs (read-only query):
+1. **Apply the migrations first (blocker 3), above all `20261104-survey-verification.sql`.** Without the `verification_status` column, every survey completion fails and students cannot get past the pre-survey gate. `20261105-protect-research-deletes.sql` is applied in the same run.
+2. **CLEARED (checked 2026-11-04, read-only, against production): ResponseID format.** All 13 stored IDs match `^R_[A-Za-z0-9]{15}$` (`apps/server/src/lib/survey-response-verification.ts`), so the regex needs no change. Re-check only if more surveys complete before the merge:
 
    ```sql
    SELECT qualtrics_response_id FROM survey_invitations WHERE qualtrics_response_id IS NOT NULL LIMIT 20;
    ```
 
-   If the real IDs differ, loosen the regex before merging (for example `^R_[A-Za-z0-9]{8,32}$`).
-3. **Do not run `migrate --baseline` or a plain `--apply` on production yet.** The production manifest (`apps/server/src/db/migrations/production-manifest.txt`) lists 6 files: 4 older ones that are probably already applied by hand, and the 2 new `20261104-*` files.
-   - `--baseline` would also mark the 2 new files as applied without running them.
+   If any real ID differs, loosen the regex before merging (for example `^R_[A-Za-z0-9]{8,32}$`).
+3. **Do not run `migrate --baseline` or a plain `--apply` on production yet.** The production manifest (`apps/server/src/db/migrations/production-manifest.txt`) lists 7 files: 4 older ones that are probably already applied by hand, and 3 new ones (`20261104-interaction-retrievals`, `20261104-survey-verification`, `20261105-protect-research-deletes`).
+   - `--baseline` would mark the new files as applied without running them (it now prints a warning).
    - `--apply` would re-run the 4 older files. Re-running `20261101-learner-profile-events.sql` marks every stored interaction as profile-handled.
 
-   Instead, record the 4 older files by hand, but only after confirming their objects exist. Then apply. `migrate.ts` stores the sha256 of the raw file content, so `shasum -a 256` gives the same value.
+   Instead, confirm the old objects exist, record the 4 old files with `--mark-applied`, then check the dry run, then apply. `--mark-applied` creates the ledger if needed and stores the same sha256 that `migrate.ts` computes.
 
    ```sql
-   -- 1. confirm the old objects exist
+   -- confirm the old objects exist (read-only)
    SELECT to_regclass('public.signup_rate_limits'), to_regclass('public.problem_progress_events'), to_regclass('public.learner_profile_events');
    SELECT column_name FROM information_schema.columns WHERE table_name='interaction_events' AND column_name IN ('condition_id','execution_time_ms','metadata');
-   -- 2. create the ledger and record the 4 old files (checksum = shasum -a 256 apps/server/src/db/migrations/<file>)
-   CREATE TABLE IF NOT EXISTS schema_migrations (filename TEXT PRIMARY KEY, checksum TEXT NOT NULL, applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW());
-   INSERT INTO schema_migrations (filename, checksum) VALUES
-     ('20261031-interaction-event-fields.sql','<sha256>'),
-     ('20261031-signup-rate-limits.sql','<sha256>'),
-     ('20261031-problem-progress-events.sql','<sha256>'),
-     ('20261101-learner-profile-events.sql','<sha256>');
    ```
 
-   The dry run must list ONLY the 2 `20261104` files as pending:
+   ```bash
+   MIGRATE_DATABASE_URL='<production url>' npm run server:db:migrate -- --mark-applied 20261031-interaction-event-fields.sql,20261031-signup-rate-limits.sql,20261031-problem-progress-events.sql,20261101-learner-profile-events.sql
+   ```
+
+   The dry run must list EXACTLY the 3 new files as pending (`20261104-interaction-retrievals`, `20261104-survey-verification`, `20261105-protect-research-deletes`). If it lists anything else, stop.
 
    ```bash
    MIGRATE_DATABASE_URL='<production url>' npm run server:db:migrate
@@ -161,8 +177,8 @@ Production facts (read-only `GET /health`, 2026-11-04):
    MIGRATE_DATABASE_URL='<production url>' npm run server:db:migrate -- --apply
    ```
 
-   Rehearse all of this on a Neon branch first (section 6). If the runner cannot open Neon's WebSocket connection from your network, run the 2 SQL files in the Neon SQL editor instead. Both are additive and idempotent.
-4. **Check for duplicate ResponseIDs.** If this returns rows, the unique index is skipped:
+   Rehearse all of this on a Neon branch first (section 6). If the runner cannot open Neon's WebSocket connection from your network, run the 3 SQL files in the Neon SQL editor instead. All are additive and idempotent. The delete guard does not block inserts or updates, and old (`main`) code still runs on the migrated schema.
+4. **CLEARED (checked 2026-11-04, read-only, against production): duplicate ResponseIDs.** There are none. Re-check before merging; if this returns rows, the unique index is skipped:
 
    ```sql
    SELECT qualtrics_response_id, COUNT(*) FROM survey_invitations WHERE qualtrics_response_id IS NOT NULL GROUP BY 1 HAVING COUNT(*) > 1;
@@ -188,6 +204,29 @@ Production facts (read-only `GET /health`, 2026-11-04):
 - Instructors can't modify student records. Learner DELETE is gone.
 - The research export is pseudonymized. No frontend screen uses `/research/export`.
 - Analysis must note the cutover date, because control events get new labels and the local-fallback reward changes scale.
+- Fill in the merge timestamp (`<MERGE_TIMESTAMP_UTC — fill on merge day>`) in `docs/research/LOGGING.md` and `DATA_CONTRACTS.md` on merge day.
+- Historical rows are never rewritten. Apply the rules in "Historical data (before cutover) — never rewritten" (`docs/research/LOGGING.md`) at analysis time.
+- Research tables now refuse `DELETE` and `TRUNCATE` (see the withdrawal procedure below).
+
+### Withdrawal procedure (deleting a participant's research rows)
+
+The delete guard blocks all `DELETE` and `TRUNCATE` on `users`, `course_sections`, `section_enrollments` and `interaction_events`, including from psql. A withdrawal is a deliberate manual action:
+- Do it only on a written withdrawal request, in a manual `psql` session as an operator. Never from application code or a script.
+- Take a Neon snapshot or branch first. Prefer to count rows first and keep the output.
+- The bypass is transaction-local, so it cannot leak into other sessions:
+
+  ```sql
+  BEGIN;
+  SET LOCAL sql_adapt.allow_research_delete = 'on';
+  -- count first, then delete the participant's rows (children before parents), e.g.
+  -- SELECT COUNT(*) FROM interaction_events WHERE learner_id = '<learner id>';
+  -- DELETE FROM interaction_events WHERE learner_id = '<learner id>';
+  -- ...
+  COMMIT;
+  ```
+
+- Check the counts before `COMMIT`; use `ROLLBACK` if they are not what you expect. The guard takes a lock with a 5 s timeout, so a stuck session fails fast instead of hanging.
+- Record who, when and why outside the database.
 
 ### Groq
 
@@ -252,8 +291,7 @@ Use a **Neon branch created from production**. Delete it afterwards, because it 
 ## 7. Backlog (open, by priority)
 
 1. **Before the merge:**
-   - Verify or loosen the ResponseID regex (section 5, blocker 2).
-   - Add `migrate.ts --baseline-only <files>`, to replace the manual ledger SQL in section 5.
+   - Blockers 2 and 4 are cleared. Blocker 3 (`--mark-applied`, dry run, `--apply`) and the rehearsal on a Neon branch remain.
    - Optionally add an `--http` mode (HTTPS driver) for networks that block WebSockets.
 2. **Load readiness:**
    - Cache `provider.health()` for about 30 s in `apps/server/src/routes/llm.ts`. This halves the Groq calls.
@@ -267,7 +305,7 @@ Use a **Neon branch created from production**. Delete it afterwards, because it 
    - The `chromium:auth` and `chromium:instructor` projects never run in CI.
    - `tests/e2e/regression/weekly-smoke.spec.ts` is missing, so `demo:weekly` and the jq gates are dead.
    - Coverage thresholds and the replay gate are not enforced.
-   - The type-check job is not in the summary job's `needs`.
+   - The type-check job (`smoke-test`) is now in the summary job's `needs`, so a type error blocks the merge.
 4. **Repo hygiene:**
    - The root `.gitignore` `*.md` rule silently drops new docs. README and `docs/INDEX.md` link to missing files. `docs/runbooks/**/*.md` is allowed.
    - There are 3 different instructor passcodes across env files and tests.

@@ -90,7 +90,7 @@ The system adapts based on 23 SQL error subtypes and 30 concepts from the SQL-En
 - Route modules:
   - `auth.ts` — Signup, login, token refresh
   - `learners.ts` / `sessions.ts` — Progress tracking
-  - `interactions.ts` — Event ingestion (31 event types)
+  - `interactions.ts` — Event ingestion (event types: see `docs/research/LOGGING.md`)
   - `textbooks.ts` — CRUD for personal textbook units
   - `instructor.ts` — Class dashboards, section enrollment
   - `llm.ts` — Groq proxy with prompt templates
@@ -156,7 +156,7 @@ scripts/            → Verification, audit, and research scripts
 - Research data export
 
 **For Researchers**
-- Immutable interaction event log with 31 event types
+- Immutable interaction event log (canonical event-type list in `docs/research/LOGGING.md`)
 - Counterfactual replay across escalation strategies
 - Multi-armed bandit for strategy optimization
 - Hint Dependency Index (HDI) for measuring help-seeking behavior

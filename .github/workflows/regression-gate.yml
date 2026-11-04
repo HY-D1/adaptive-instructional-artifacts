@@ -155,7 +155,7 @@ jobs:
   consolidate-results:
     name: Consolidate Test Results
     runs-on: ubuntu-latest
-    needs: [verify, unit-tests]
+    needs: [verify, unit-tests, smoke-test]
     if: always()
     
     steps:
@@ -194,16 +194,21 @@ jobs:
           # Check for failures
           UNIT_FAILED="${{ needs.unit-tests.result != 'success' }}"
           E2E_FAILED="${{ needs.verify.result != 'success' }}"
+          # smoke-test runs the production build and `tsc --noEmit`. A skipped
+          # run (for example because unit-tests failed) also counts as failed.
+          SMOKE_FAILED="${{ needs.smoke-test.result != 'success' }}"
           
-          if [ "$UNIT_FAILED" == "true" ] || [ "$E2E_FAILED" == "true" ] || [ "$MISSING_REPORT" == "true" ]; then
+          if [ "$UNIT_FAILED" == "true" ] || [ "$E2E_FAILED" == "true" ] || [ "$SMOKE_FAILED" == "true" ] || [ "$MISSING_REPORT" == "true" ]; then
             echo "- Status: ❌ FAILED" >> $GITHUB_STEP_SUMMARY
             [ "$UNIT_FAILED" == "true" ] && echo "- Unit Tests: ❌ FAILED" >> $GITHUB_STEP_SUMMARY
             [ "$E2E_FAILED" == "true" ] && echo "- E2E Tests: ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+            [ "$SMOKE_FAILED" == "true" ] && echo "- Build and type check: ❌ FAILED" >> $GITHUB_STEP_SUMMARY
             echo "failed=true" >> $GITHUB_OUTPUT
           else
             echo "- Status: ✅ PASSED" >> $GITHUB_STEP_SUMMARY
             echo "- Unit Tests: ✅ PASSED" >> $GITHUB_STEP_SUMMARY
             echo "- E2E Tests: ✅ PASSED" >> $GITHUB_STEP_SUMMARY
+            echo "- Build and type check: ✅ PASSED" >> $GITHUB_STEP_SUMMARY
             echo "failed=false" >> $GITHUB_OUTPUT
           fi
           

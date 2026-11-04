@@ -43,7 +43,7 @@ Navigation hub for SQL-Adapt documentation.
 |----------|-------------|
 | [research/OVERVIEW.md](research/OVERVIEW.md) | Project scope, timeline, deliverables |
 | [research/ARCHITECTURE.md](research/ARCHITECTURE.md) | System design for research instrumentation |
-| [research/LOGGING.md](research/LOGGING.md) | Event schema, 31 event types, field contracts |
+| [research/LOGGING.md](research/LOGGING.md) | Event schema, canonical event types, cutover notes, field contracts |
 | [research/ESCALATION_POLICIES.md](research/ESCALATION_POLICIES.md) | Hint ladder configuration and profiles |
 | [research/HDI.md](research/HDI.md) | Hint Dependency Index calculation |
 | [research/BANDIT.md](research/BANDIT.md) | Multi-armed bandit for strategy selection |

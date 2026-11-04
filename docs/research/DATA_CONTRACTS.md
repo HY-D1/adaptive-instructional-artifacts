@@ -39,6 +39,76 @@ Treat these fields as self-reported correctness, suitable for formative
 analysis, not as proctored outcomes or grades. Moving grading to the server is
 tracked as a separate project.
 
+See `LOGGING.md` for the full cutover notes. They are repeated here because exports depend on them.
+
+## Cutover to `sql-engage-index-v4-semantic-classifier` / `v2.7.0`
+
+Merge timestamp (UTC): `<MERGE_TIMESTAMP_UTC — fill on merge day>`
+
+| Version | Value |
+|---------|-------|
+| `SQL_ENGAGE_POLICY_VERSION` | `sql-engage-index-v4-semantic-classifier` |
+| `RESEARCH_CONTRACT_VERSION` | `v2.7.0` (server `app.ts` and web `runtime-config.ts`) |
+
+Semantics that change at the cutover:
+
+- **Subtypes on wrong-result runs.** A query that runs but returns the wrong
+  result now gets a semantic `sql_engage_subtype` on its `execution` event
+  (with `successful: false`). Syntax errors no longer default to
+  `missing commas`. Problems that are graded on database state are skipped by
+  the semantic classifier, and the `ORDER BY` rule applies only to
+  order-sensitive problems. 20 of the 23 subtypes are reachable; three are
+  excluded (`SEMANTIC_SUBTYPE_EXCLUSIONS`). The server `error_history` now
+  counts these `execution` events, while the local dashboard counters count
+  only `eventType = 'error'` (known divergence).
+- **Help events are logged once.** `explanation_view` is keyed by explanation
+  id, there is one `guidance_request` per click, escalation is logged only for
+  new events, and the textbook has a double-click guard.
+- **Logged hint level is capped at 3.** The slow escalator still gives 4 hints,
+  but hints 3 and 4 share `hint_id` `...:L3` and are told apart by
+  `help_request_index`. `GuidanceRung` stays 1 | 2 | 3.
+- **Server-assigned condition.** The `student_condition_assignments` row is
+  authoritative for `condition_id` on events and sessions. A mismatch is logged
+  as `[condition/override]`. If the lookup fails the server uses the client
+  value (`[condition/lookup-failed]`). Control sessions persist.
+- **ORDER BY grading.** Problems 6, 14, 15 and 16 require a top-level
+  `ORDER BY`.
+- **Reward scale.** One equal-weight reward formula with a maximum of 0.6
+  (`reward-calculator.ts`). Rewards before the cutover on the local-fallback
+  path used a different scale.
+- **SQL-Engage fallback row.** The fallback row is chosen per
+  learner, problem, subtype and rung, so learners no longer all see the same
+  row.
+- **Logout and queues.** Logout keeps unsynced queue keys. Caches are cleared
+  only when the learner has nothing unsynced. A one-time requeue (flag
+  `sql-adapt-deadletter-requeue-v1`) re-sends events stranded in the dead-letter
+  queue.
+- **Research rows are guarded against deletes.** Migration
+  `20261105-protect-research-deletes.sql` blocks `DELETE` and `TRUNCATE` on
+  `users`, `course_sections`, `section_enrollments` and `interaction_events`.
+  See the withdrawal procedure in `docs/runbooks/test-system-stable-handoff.md`.
+
+## Historical data (before cutover) — never rewritten
+
+Rows written before the cutover are never updated or deleted. Apply the rules
+below at analysis time, read-only.
+
+1. **Drop repeated help events.** Remove identical help-event repeats within
+   2 seconds: same user, problem, `event_type` and `explanation_id` / `hint_id`
+   / payload, for `explanation_view`, `guidance_request` and `guidance_view`.
+2. **Do not trust pre-cutover subtypes.** `sql_engage_subtype` before the
+   cutover is unreliable (74% were `missing commas`).
+3. **Select the cohort by section id, not `section_type`.** Every Spring
+   section is typed `test` by the column default. Use the explicit section ids
+   (for example from `bandit/config.yaml`).
+4. **Take the condition from `condition_assigned` events.**
+   `learner_sessions.condition_id` is `default` and the per-event
+   `condition_id` is mostly `NULL` before the cutover.
+5. **Merge `hint_level` with `rung`.** Escalation depth is `hint_view.hint_level`
+   together with `guidance_view.rung`. Four pre-cutover rows have `rung = 4`.
+6. **Treat `error_history` as inflated.** Pre-cutover counts may be inflated
+   (the compounding bug fixed in `accf155`) and are never recomputed.
+
 ## Field Preservation Contract
 
 The following fields are guaranteed to be preserved in all exports:
@@ -152,7 +222,7 @@ All percentages are calculated as `non_null_count / total_count`.
 
 ### Core Event Types
 
-Guaranteed event types for filtering:
+The full canonical list of `eventType` values is in `LOGGING.md` ("Canonical Event Types"). Guaranteed event types for filtering:
 
 | Type | Description |
 |------|-------------|
