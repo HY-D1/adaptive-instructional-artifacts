@@ -107,6 +107,8 @@ export type InteractionEvent = {
     | 'hdi_calculated'
     | 'hdi_trajectory_updated'
     | 'dependency_intervention_triggered'
+    // Instructor action, logged under the instructor's own id (target in payload)
+    | 'instructor_profile_override'
     // Component 10: Knowledge Consolidation (Reinforcement)
     | 'reinforcement_scheduled'
     | 'reinforcement_prompt_shown'

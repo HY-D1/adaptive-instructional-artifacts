@@ -168,6 +168,7 @@ export function InstructorDashboard() {
   const navigate = useNavigate();
   const { isStudent, isLoading: isRoleLoading, profile } = useUserRole();
   const { user: authUser } = useAuth();
+  const instructorActorId = authUser?.learnerId ?? profile?.id ?? 'instructor-local';
   
   // Use backend profiles with automatic synchronization
   const {
@@ -681,13 +682,18 @@ export function InstructorDashboard() {
     setInterveningStudents(prev => new Set(prev).add(student.learnerId));
     
     // Log intervention event with correct event type
+    // Instructor actions are logged under the instructor's own id: the server
+    // only accepts writes from the learner themself, and the student's record
+    // stays untouched. The student is identified by payload.targetLearnerId.
     const interventionEvent: InteractionEvent = {
       id: `intervention-${Date.now()}`,
-      learnerId: student.learnerId,
+      learnerId: instructorActorId,
       timestamp: Date.now(),
       eventType: 'dependency_intervention_triggered',
       problemId: 'instructor-dashboard',
       payload: {
+        targetLearnerId: student.learnerId,
+        actorRole: 'instructor',
         hdi: student.hdi,
         hdiLevel: student.hdi > 0.8 ? 'high' : 'medium',
         reason: student.hdi > 0.8 ? 'high_dependency' : 'degrading_trend',
@@ -1279,15 +1285,17 @@ export function InstructorDashboard() {
                           className="text-sm border rounded px-2 py-1 bg-white"
                           onChange={(e) => {
                             if (e.target.value) {
+                              // Logged as an instructor action, not as a fake
+                              // condition_assigned on the student's record.
                               const overrideEvent: InteractionEvent = {
                                 id: `override-${Date.now()}`,
-                                learnerId: student.learnerId,
+                                learnerId: instructorActorId,
                                 timestamp: Date.now(),
-                                eventType: 'condition_assigned',
+                                eventType: 'instructor_profile_override',
                                 problemId: 'instructor-override',
-                                conditionId: e.target.value,
-                                strategyAssigned: e.target.value,
                                 payload: {
+                                  targetLearnerId: student.learnerId,
+                                  actorRole: 'instructor',
                                   profile: e.target.value,
                                   strategy: 'static',
                                   reason: 'instructor_override'
