@@ -16,7 +16,11 @@
  */
 import { describe, it, expect } from 'vitest';
 import { SQLExecutor } from './sql-executor';
-import { classifySemanticSqlIssue, SEMANTIC_SUBTYPE_EXCLUSIONS } from './sql-semantic-classifier';
+import {
+  classifySemanticSqlIssue,
+  SEMANTIC_SUBTYPE_EXCLUSIONS,
+  type SemanticClassifierInput
+} from './sql-semantic-classifier';
 import {
   canonicalizeSqlEngageSubtype,
   getKnownSqlEngageSubtypes,
@@ -75,8 +79,11 @@ const ENGINE_CASES: [string, string, string][] = [
   ]
 ];
 
-/** Queries SQLite accepts but which answer wrongly. [label, query, expectedQuery, subtype] */
-const SEMANTIC_CASES: [string, string, string, string][] = [
+/**
+ * Queries SQLite accepts but which answer wrongly.
+ * [label, query, expectedQuery, subtype, problem grading fields]
+ */
+const SEMANTIC_CASES: [string, string, string, string, Partial<SemanticClassifierInput>?][] = [
   [
     'comma join with no predicate produces a cartesian product',
     'SELECT users.name, orders.product FROM users, orders;',
@@ -123,7 +130,10 @@ const SEMANTIC_CASES: [string, string, string, string][] = [
     'ORDER BY omitted',
     'SELECT name FROM users;',
     'SELECT name FROM users ORDER BY age DESC;',
-    'incorrect order by usage'
+    'incorrect order by usage',
+    // Only order-sensitive problems grade row order, so only they can be
+    // answered wrongly by a missing ORDER BY.
+    { orderSensitive: true }
   ]
 ];
 
@@ -163,7 +173,7 @@ describe('semantic classification (queries that run but answer wrongly)', () => 
   it('classifies wrong-but-runnable queries into the intended subtypes', async () => {
     const mismatches = await withExecutor(async (executor) => {
       const found: string[] = [];
-      for (const [label, query, expectedQuery, expected] of SEMANTIC_CASES) {
+      for (const [label, query, expectedQuery, expected, grading] of SEMANTIC_CASES) {
         const result = await executor.executeQuery(query);
 
         // The premise of this module: the engine does not complain, so the
@@ -173,7 +183,7 @@ describe('semantic classification (queries that run but answer wrongly)', () => 
           continue;
         }
 
-        const actual = classifySemanticSqlIssue({ query, expectedQuery });
+        const actual = classifySemanticSqlIssue({ query, expectedQuery, ...grading });
         if (actual !== expected) {
           found.push(`${label}: expected "${expected}", got "${actual}"`);
         }
@@ -185,8 +195,8 @@ describe('semantic classification (queries that run but answer wrongly)', () => 
   });
 
   it('only ever returns subtypes the SQL-Engage dataset can serve', () => {
-    for (const [label, query, expectedQuery] of SEMANTIC_CASES) {
-      const subtype = classifySemanticSqlIssue({ query, expectedQuery });
+    for (const [label, query, expectedQuery, , grading] of SEMANTIC_CASES) {
+      const subtype = classifySemanticSqlIssue({ query, expectedQuery, ...grading });
       expect(subtype, `${label} returned nothing`).not.toBeNull();
       // A label absent from the dataset is silently rewritten to the fallback,
       // which mislabels the error instead of failing loudly.
@@ -220,6 +230,90 @@ describe('semantic classification (queries that run but answer wrongly)', () => 
   });
 });
 
+describe('ORDER BY rule follows the grader', () => {
+  // SQLEditor grades row order only for `orderSensitive` problems, and only by
+  // checking for a top-level ORDER BY (`hasTopLevelOrderBy`). The rule must
+  // agree with the grader, or it labels a mistake the grader never penalised.
+  const expectedQuery = 'SELECT name, age FROM users ORDER BY age DESC;';
+
+  it('fires for an order-sensitive problem when the query has no top-level ORDER BY', () => {
+    expect(
+      classifySemanticSqlIssue({ query: 'SELECT name, age FROM users;', expectedQuery, orderSensitive: true })
+    ).toBe('incorrect order by usage');
+  });
+
+  it('does not fire when the problem is not order-sensitive', () => {
+    // Row order is not graded here, so a missing ORDER BY cannot be why the
+    // answer was wrong.
+    expect(classifySemanticSqlIssue({ query: 'SELECT name, age FROM users;', expectedQuery })).toBeNull();
+    expect(
+      classifySemanticSqlIssue({ query: 'SELECT name, age FROM users;', expectedQuery, orderSensitive: false })
+    ).toBeNull();
+  });
+
+  it('does not fire for an ORDER BY the problem does not need', () => {
+    expect(
+      classifySemanticSqlIssue({
+        query: 'SELECT name, age FROM users ORDER BY age;',
+        expectedQuery: 'SELECT name, age FROM users;'
+      })
+    ).toBeNull();
+  });
+
+  it('counts only a top-level ORDER BY, as the grader does', () => {
+    // An ORDER BY inside a subquery does not order the outer result.
+    expect(
+      classifySemanticSqlIssue({
+        query: 'SELECT name, age FROM (SELECT name, age FROM users ORDER BY age DESC);',
+        expectedQuery,
+        orderSensitive: true
+      })
+    ).toBe('incorrect order by usage');
+    // A top-level ORDER BY satisfies the grader's order check, so a wrong
+    // answer has some other cause.
+    expect(
+      classifySemanticSqlIssue({
+        query: 'SELECT name, age FROM users ORDER BY age ASC;',
+        expectedQuery,
+        orderSensitive: true
+      })
+    ).toBeNull();
+  });
+});
+
+describe('state-graded problems', () => {
+  it('skips classification for gradingMode database-state-v1', () => {
+    // Mutation problems are graded on the resulting database state, not on the
+    // rows the query returns, so comparing SELECT lists says nothing about
+    // why the attempt was wrong.
+    expect(
+      classifySemanticSqlIssue({
+        query: "INSERT INTO users (id, name) VALUES (6, 'Frank');",
+        expectedQuery: "INSERT INTO users VALUES (6, 'Frank', 'frank@email.com', 40, 'Austin');",
+        gradingMode: 'database-state-v1'
+      })
+    ).toBeNull();
+    expect(
+      classifySemanticSqlIssue({
+        query: 'SELECT * FROM users;',
+        expectedQuery: 'SELECT name, email FROM users;',
+        gradingMode: 'database-state-v1'
+      })
+    ).toBeNull();
+  });
+});
+
+describe('syntax errors are not all missing commas', () => {
+  it('does not label near "SELEC": syntax error as missing commas', async () => {
+    const query = 'SELEC name FROM users;';
+    const error = await withExecutor(async (executor) => (await executor.executeQuery(query)).error);
+    expect(error).toMatch(/near "SELEC": syntax error/);
+    const subtype = normalizeSqlErrorSubtype(error as string, query);
+    expect(subtype).not.toBe('missing commas');
+    expect(subtype).toBe('misspelling');
+  });
+});
+
 describe('subtype reachability', () => {
   it('leaves every canonical subtype either reachable or explicitly excluded', async () => {
     const emitted = await withExecutor(async (executor) => {
@@ -228,8 +322,8 @@ describe('subtype reachability', () => {
         const result = await executor.executeQuery(query);
         if (result.error) seen.add(normalizeSqlErrorSubtype(result.error, query));
       }
-      for (const [, query, expectedQuery] of SEMANTIC_CASES) {
-        const subtype = classifySemanticSqlIssue({ query, expectedQuery });
+      for (const [, query, expectedQuery, , grading] of SEMANTIC_CASES) {
+        const subtype = classifySemanticSqlIssue({ query, expectedQuery, ...grading });
         if (subtype) seen.add(subtype);
       }
       return seen;

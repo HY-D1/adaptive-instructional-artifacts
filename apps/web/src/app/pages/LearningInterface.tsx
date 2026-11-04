@@ -68,7 +68,7 @@ import { sqlProblems } from '../data/problems';
 import { getProblemsByDifficultyRank } from '../lib/adaptive-problem-selector';
 import { getFirstProblem } from '../lib/problem-ranking';
 import { canonicalizeSqlEngageSubtype, getKnownSqlEngageSubtypes, getSqlEngagePolicyVersion, getConceptById } from '../data/sql-engage';
-import { classifySemanticSqlIssue } from '../lib/sql-semantic-classifier';
+import { resolveExecutionSubtype } from '../lib/execution-subtype';
 import { useUserRole } from '../hooks/useUserRole';
 import { useLocation, Link } from 'react-router';
 import { storage, subscribeToSync, clearAllDebugSettingsWithSync, broadcastSync } from '../lib/storage';
@@ -1957,20 +1957,16 @@ export function LearningInterface() {
     // An engine error arrives with its own subtype from normalizeSqlErrorSubtype.
     // A query that ran but answered wrongly arrived with none, which is why 12 of
     // the 23 canonical subtypes could never be emitted and the hint pipeline —
-    // which selects on subtype — had nothing to target for those attempts.
-    const semanticSubtype =
-      result.success && !actuallyCorrect
-        ? classifySemanticSqlIssue({
-            query,
-            expectedQuery: currentProblem.expectedQuery
-          })
-        : null;
-
-    const resolvedSubtype = !result.success
-      ? canonicalizeSqlEngageSubtype(instructorSubtypeOverride || result.errorSubtypeId)
-      : semanticSubtype
-        ? canonicalizeSqlEngageSubtype(instructorSubtypeOverride || semanticSubtype)
-        : undefined;
+    // which selects on subtype — had nothing to target for those attempts. The
+    // semantic classifier follows the grader: ORDER BY only for orderSensitive
+    // problems, and nothing for database-state-v1 problems.
+    const resolvedSubtype = resolveExecutionSubtype({
+      query,
+      result,
+      actuallyCorrect,
+      problem: currentProblem,
+      instructorSubtypeOverride
+    });
     const event: InteractionEvent = {
       id: createEventId('event', 'execution'),
       sessionId,

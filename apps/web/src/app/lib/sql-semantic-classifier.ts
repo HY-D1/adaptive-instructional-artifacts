@@ -18,6 +18,9 @@
  * problem they do not have.
  */
 
+import { hasTopLevelOrderBy } from './sql-executor';
+import type { SQLProblem } from '../types';
+
 /**
  * Canonical subtypes this classifier deliberately never emits, with the reason.
  * Making these fire would recreate the over-broad-branch defect that made every
@@ -37,6 +40,17 @@ export type SemanticClassifierInput = {
   query: string;
   /** The problem's reference solution. */
   expectedQuery: string;
+  /**
+   * The problem grades row order (SQLEditor requires a top-level ORDER BY).
+   * Only then can a missing ORDER BY be the reason an answer was wrong.
+   */
+  orderSensitive?: SQLProblem['orderSensitive'];
+  /**
+   * How the problem is graded. `database-state-v1` problems are graded on the
+   * database after a mutation, not on returned rows, so a comparison of
+   * SELECT lists says nothing about why the attempt failed.
+   */
+  gradingMode?: SQLProblem['gradingMode'];
 };
 
 const AGGREGATE_PATTERN = /\b(count|sum|avg|min|max|total|group_concat)\s*\(/gi;
@@ -157,10 +171,14 @@ function sameColumns(a: string[], b: string[]): boolean {
  *
  * Ordered by how directly the mistake produces a wrong result: a cartesian
  * product or an ungrouped aggregate is always wrong, whereas a missing
- * `ORDER BY` is graded correct today (`compareResults` matches rows in any
- * order), so it is checked last.
+ * `ORDER BY` only fails `orderSensitive` problems, so it is checked last.
+ *
+ * Returns `null` for `database-state-v1` problems: they are graded on the
+ * resulting database state, which none of these rules inspect.
  */
 export function classifySemanticSqlIssue(input: SemanticClassifierInput): string | null {
+  if (input.gradingMode === 'database-state-v1') return null;
+
   const query = normalize(input.query);
   const expected = normalize(input.expectedQuery);
   if (!query) return null;
@@ -216,7 +234,11 @@ export function classifySemanticSqlIssue(input: SemanticClassifierInput): string
     return 'incorrect distinct usage';
   }
 
-  if (hasClause(expected, 'order by') !== hasClause(query, 'order by')) {
+  // Mirrors the grader (SQLEditor): row order is checked only for
+  // order-sensitive problems, and only by the presence of a top-level ORDER BY.
+  // An ORDER BY on any other problem, or one the grader accepted, cannot be why
+  // the answer was wrong.
+  if (input.orderSensitive && !hasTopLevelOrderBy(input.query)) {
     return 'incorrect order by usage';
   }
 

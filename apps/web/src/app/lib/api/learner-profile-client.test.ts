@@ -155,6 +155,70 @@ describe('learner-profile-client', () => {
     });
   });
 
+  it('sends the semantic subtype of a wrong-result execution to the profile events endpoint', async () => {
+    // A query that ran but answered wrongly stays eventType 'execution' and now
+    // carries a semantic subtype. The server increments error_history for any
+    // event with errorSubtypeId (deriveProfileEventUpdate in
+    // apps/server/src/db/neon.ts), so this run counts as an error for that
+    // subtype. That is intended: wrong answers get targeted hints.
+    vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.test');
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          success: true,
+          data: {
+            id: 'learner-1',
+            name: 'Learner 1',
+            conceptsCovered: [],
+            conceptCoverageEvidence: {},
+            errorHistory: { 'incorrect order by usage': 1 },
+            solvedProblemIds: [],
+            interactionCount: 1,
+            currentStrategy: 'adaptive-medium',
+            preferences: { escalationThreshold: 3, aggregationDelay: 5000 },
+            createdAt: 1_700_000_000_000,
+            lastActive: 1_700_000_001_000,
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+
+    const { resolveExecutionSubtype } = await import('../execution-subtype');
+    const { sqlProblems } = await import('../../data/problems');
+    const orderProblem = sqlProblems.find((p) => p.id === 'problem-6')!;
+    const subtype = resolveExecutionSubtype({
+      query: 'SELECT name, age FROM users;',
+      result: { success: true },
+      actuallyCorrect: false,
+      problem: orderProblem,
+    });
+    expect(subtype).toBe('incorrect order by usage');
+
+    const { updateProfileFromEvent } = await import('./learner-profile-client');
+    await updateProfileFromEvent('learner-1', {
+      id: 'execution-wrong-1',
+      learnerId: 'learner-1',
+      sessionId: 'session-1',
+      timestamp: 1_700_000_000_000,
+      eventType: 'execution',
+      problemId: 'problem-6',
+      successful: false,
+      code: 'SELECT name, age FROM users;',
+      errorSubtypeId: subtype,
+      sqlEngageSubtype: subtype,
+    });
+
+    const [url, request] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain('/learners/learner-1/profile/events');
+    const body = JSON.parse(String(request?.body));
+    expect(body.event).toMatchObject({
+      eventType: 'execution',
+      successful: false,
+      errorSubtypeId: 'incorrect order by usage',
+    });
+  });
+
   it('retains an ambiguous failed event and sends its ID and grading fields on retry', async () => {
     vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.test');
     fetchMock.mockRejectedValueOnce(new Error('connection lost after write'));
