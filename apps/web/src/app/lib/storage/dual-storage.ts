@@ -395,6 +395,26 @@ class DurablePendingStore {
     };
   }
 
+  /** Entries that are not confirmed (backend_pending, sent or dead_letter). */
+  getAllUnconfirmed(): PendingInteraction[] {
+    return Array.from(this.interactions.values()).filter(
+      item => !this.confirmedIds.has(item.id) && item.status !== 'backend_confirmed',
+    );
+  }
+
+  /** Move dead-lettered entries back to backend_pending; returns the moved entries. */
+  requeueDeadLetters(): PendingInteraction[] {
+    const moved: PendingInteraction[] = [];
+    for (const item of this.interactions.values()) {
+      if (item.status === 'dead_letter' && !this.confirmedIds.has(item.id)) {
+        item.status = 'backend_pending';
+        moved.push(item);
+      }
+    }
+    if (moved.length > 0) this.savePending();
+    return moved;
+  }
+
   /**
    * Clear all pending interactions (use with caution)
    */
@@ -514,6 +534,24 @@ class OfflineQueueManager {
 
   getAllUnconfirmed(): QueuedItem[] {
     return this.getPending();
+  }
+
+  /** Queue an interaction again unless it is already queued or confirmed. */
+  requeueInteraction(event: InteractionEvent): void {
+    if (this.queue.some(item => item.id === event.id)) return;
+    this.add({ id: event.id, type: 'interaction', data: event });
+  }
+
+  /** Learners that own unconfirmed queue or dead-letter entries. */
+  hasUnconfirmedForLearner(learnerId: string): boolean {
+    const owner = (item: { type: string; data: unknown }): string | undefined => {
+      const data = item.data as { learnerId?: string; id?: string } | undefined;
+      return item.type === 'profile' ? data?.id : data?.learnerId;
+    };
+    return (
+      this.getPending().some(item => owner(item) === learnerId) ||
+      this.deadLetter.some(item => owner(item) === learnerId)
+    );
   }
 
   incrementRetry(id: string, error?: Error, retryAfterMs?: number): void {
@@ -753,6 +791,9 @@ class DualStorageManager {
       }
     });
     
+    // Stranded dead letters must be retried before the first queue run.
+    this.requeueDeadLettersOnce();
+
     // Check backend health on init
     if (this.config.useBackend) {
       void this.checkHealth().then((healthy) => {
@@ -766,6 +807,47 @@ class DualStorageManager {
         });
       }
     }
+  }
+
+  /**
+   * True when any unconfirmed pending, sent, queued or dead-letter item belongs
+   * to this learner. Used to keep local caches through logout.
+   */
+  hasUnsyncedForLearner(learnerId: string): boolean {
+    if (!learnerId) return false;
+    if (this.pendingStore.getAllUnconfirmed().some(item => item.event.learnerId === learnerId)) {
+      return true;
+    }
+    if (this.offlineQueue.hasUnconfirmedForLearner(learnerId)) return true;
+    return this.readPendingSessionEnds().some(item => item.event.learnerId === learnerId);
+  }
+
+  /**
+   * One-time recovery of events dead-lettered by older clients (for example
+   * 401/403 responses). The server ignores repeated event ids, so resending is
+   * safe; truly invalid events simply dead-letter again. Returns how many moved.
+   */
+  requeueDeadLettersOnce(): number {
+    const FLAG = 'sql-adapt-deadletter-requeue-v1';
+    try {
+      if (localStorage.getItem(FLAG)) return 0;
+    } catch {
+      return 0;
+    }
+    let moved = 0;
+    try {
+      const items = this.pendingStore.requeueDeadLetters();
+      for (const item of items) this.offlineQueue.requeueInteraction(item.event);
+      moved = items.length;
+    } catch (error) {
+      console.warn('[DualStorage] Dead-letter requeue failed:', error);
+    }
+    try {
+      localStorage.setItem(FLAG, String(Date.now()));
+    } catch {
+      // Storage unavailable; the requeue is idempotent so a repeat is harmless.
+    }
+    return moved;
   }
 
   /**

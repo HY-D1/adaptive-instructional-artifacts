@@ -20,23 +20,16 @@ describe('logout cache cleanup', () => {
   const keep = ['sql-learning-practice-drafts', 'unrelated-key'];
   const all = [...LEARNER_CACHE_KEYS, ...UNSYNCED_QUEUE_KEYS, 'chat-history-a-p1', 'hint-cache:abc', ...keep];
 
-  it('removes learner caches but keeps unsynced queues when sync was not confirmed', () => {
+  it('removes learner caches but never the unsynced queues', () => {
     const local = memoryStorage(all);
     const removedSession: string[] = [];
-    clearLearnerCachesAfterLogout(local, { removeItem: (key) => removedSession.push(key) }, { syncConfirmed: false });
+    clearLearnerCachesAfterLogout(local, { removeItem: (key) => removedSession.push(key) }, { keepUnsyncedData: false });
     for (const key of LEARNER_CACHE_KEYS) expect(local.map.has(key)).toBe(false);
     for (const key of UNSYNCED_QUEUE_KEYS) expect(local.map.has(key)).toBe(true);
     expect(local.map.has('chat-history-a-p1')).toBe(false);
     expect(local.map.has('hint-cache:abc')).toBe(false);
     for (const key of keep) expect(local.map.has(key)).toBe(true);
     expect(removedSession).toEqual(['sql-adapt-session-config']);
-  });
-
-  it('also removes the queues once the backend confirmed the logout sync', () => {
-    const local = memoryStorage(all);
-    clearLearnerCachesAfterLogout(local, null, { syncConfirmed: true });
-    for (const key of UNSYNCED_QUEUE_KEYS) expect(local.map.has(key)).toBe(false);
-    expect(local.map.has('sql-learning-practice-drafts')).toBe(true);
   });
 });
 

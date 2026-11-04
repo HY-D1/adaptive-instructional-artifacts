@@ -51,16 +51,23 @@ interface StorageLike {
   removeItem(key: string): void;
 }
 
+/** Locally cached copies that may be the only copy of a learner's unsynced work. */
+const UNSYNCED_CACHE_KEYS: ReadonlySet<string> = new Set([
+  'sql-learning-interactions',
+  'sql-learning-textbook',
+]);
+
 /**
- * Remove the signed-out learner's cached data. Unsynced queues are removed only
- * when the logout sync was confirmed; otherwise they are kept so research events
- * are never discarded (they are retried when that learner signs in again).
+ * Remove the signed-out learner's cached data. The unsynced queues are never
+ * removed here: sends are filtered to the signed-in learner, so another
+ * learner's queued events simply wait for that learner. The local interaction
+ * and textbook caches are also kept while the learner still has unsynced work.
  * Practice drafts are local-only and stay.
  */
 export function clearLearnerCachesAfterLogout(
   local: StorageLike,
   session: Pick<StorageLike, 'removeItem'> | null,
-  options: { syncConfirmed: boolean },
+  options: { keepUnsyncedData: boolean },
 ): string[] {
   const removed: string[] = [];
   const keys: string[] = [];
@@ -68,11 +75,9 @@ export function clearLearnerCachesAfterLogout(
     const key = local.key(index);
     if (key) keys.push(key);
   }
-  const exact = new Set<string>([
-    ...LEARNER_CACHE_KEYS,
-    ...(options.syncConfirmed ? UNSYNCED_QUEUE_KEYS : []),
-  ]);
+  const exact = new Set<string>(LEARNER_CACHE_KEYS);
   for (const key of keys) {
+    if (options.keepUnsyncedData && UNSYNCED_CACHE_KEYS.has(key)) continue;
     if (exact.has(key) || LEARNER_CACHE_PREFIXES.some((prefix) => key.startsWith(prefix))) {
       local.removeItem(key);
       removed.push(key);
