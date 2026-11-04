@@ -111,14 +111,14 @@
     "clsx": "2.1.1",
     "cmdk": "^1.1.1",
     "d3-format": "^3.1.2",
-    "dompurify": "^3.4.1",
+    "dompurify": "^3.4.17",
     "lodash": "^4.17.21",
     "lucide-react": "0.487.0",
     "marked": "^14.0.0",
     "motion": "12.23.24",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "react-router": "7.13.0",
+    "react-router": "7.18.5",
     "recharts": "2.15.2",
     "sql.js": "^1.14.0",
     "tailwind-merge": "3.2.0",
@@ -165,6 +165,7 @@
     "node": ">=22.x"
   },
   "overrides": {
-    "dompurify": "^3.4.1"
+    "dompurify": "^3.4.17",
+    "monaco-editor": "^0.57.0"
   }
 }
