@@ -195,6 +195,7 @@ export function HintSystem({
   const pendingAutoEscalationTimeoutRef = useRef<number | null>(null);
   const visibleHintCountRef = useRef(0);
   const escalationGuardRef = useRef<EscalationGuardState | null>(null);
+  const textbookGuardRef = useRef<EscalationGuardState | null>(null);
   
   // Enhanced hint system hook
   const {
@@ -261,6 +262,16 @@ export function HintSystem({
   // Week 3 D7: Handle "Add to My Textbook" (learner-initiated rung 3)
   const handleAddToTextbook = async () => {
     if (!sessionId || !profile) return;
+
+    // isAddingToTextbook cannot block a double-click: this handler never
+    // awaits, so the button re-enables within the same render. Suppress a
+    // repeat within the window so one click logs one request/escalate/view.
+    const textbookGuardKey = `${getHelpFlowKey()}|textbook`;
+    const textbookNow = Date.now();
+    if (shouldSuppressEscalation(textbookGuardRef.current, textbookGuardKey, textbookNow)) {
+      return;
+    }
+    textbookGuardRef.current = { key: textbookGuardKey, timestamp: textbookNow };
 
     setSaveToNotesError(null);
     setIsAddingToTextbook(true);
@@ -419,8 +430,14 @@ export function HintSystem({
     nextHelpRequestIndexRef.current = allocated + 1;
     return allocated;
   };
-  const registerHelpEvent = (eventType: HelpEventType, helpRequestIndex: number) => {
-    const dedupeKey = `${getHelpFlowKey()}|${eventType}|${helpRequestIndex}`;
+  const buildHelpEventDedupeKey = (eventType: HelpEventType, key: string | number) =>
+    `${getHelpFlowKey()}|${eventType}|${key}`;
+  // Hints are keyed by help request index (one hint_view per request). The
+  // explanation is keyed by its stable explanation id, so repeat clicks, the
+  // auto-escalation timer and a remount cannot log the same explanation twice.
+  // The set is cleared when the ladder restarts or the help flow changes.
+  const registerHelpEvent = (eventType: HelpEventType, key: string | number) => {
+    const dedupeKey = buildHelpEventDedupeKey(eventType, key);
     if (emittedHelpEventKeysRef.current.has(dedupeKey)) {
       return false;
     }
@@ -569,6 +586,19 @@ export function HintSystem({
     // Reconstruct explanation state even when there are no visible hints.
     const hasExplanation = explanationEvents.length > 0;
     if (hasExplanation) {
+      // Seed the explanation dedupe keys so a remount does not re-log an
+      // explanation the learner has already seen. Only explanations after the
+      // latest hint count: an explanation followed by hints belongs to an
+      // earlier pass of the ladder, and the next escalation is a genuine one.
+      const latestHintTimestamp = hintEvents.reduce(
+        (latest, event) => Math.max(latest, event.timestamp),
+        Number.NEGATIVE_INFINITY,
+      );
+      for (const event of explanationEvents) {
+        if (event.explanationId && event.timestamp > latestHintTimestamp) {
+          registerHelpEvent('explanation_view', event.explanationId);
+        }
+      }
       const latestExplanation = explanationEvents[explanationEvents.length - 1];
       const helpRequestCount = latestExplanation?.helpRequestIndex ?? explanationEvents.length;
       setShowExplanation(true);
@@ -802,15 +832,6 @@ export function HintSystem({
     clearPendingAutoEscalation();
     setHintRuntimeError(null);
 
-    // Week 3 D8: Log guidance request for explanation
-    storage.logGuidanceRequest({
-      learnerId,
-      problemId,
-      requestType: 'explanation',
-      currentRung: currentRung,
-      sessionId
-    });
-
     const problemTrace = traceOverride || getProblemTrace();
     const requestedHelpRequestIndex = forcedHelpRequestIndex ?? allocateNextHelpRequestIndex(problemTrace);
     const nextHelpRequestIndex = Math.max(requestedHelpRequestIndex, 4);
@@ -819,10 +840,20 @@ export function HintSystem({
     if (!helpSelection) {
       return;
     }
-    const isNewEvent = registerHelpEvent('explanation_view', nextHelpRequestIndex);
-    
-    // Always show explanation and call onEscalate, even if event was already logged
-    // This ensures the explanation UI is shown when user clicks "Get More Help"
+    const isNewEvent = registerHelpEvent('explanation_view', buildStableExplanationId(helpSelection));
+
+    if (isNewEvent) {
+      // Week 3 D8: Log guidance request for explanation (once per explanation)
+      storage.logGuidanceRequest({
+        learnerId,
+        problemId,
+        requestType: 'explanation',
+        currentRung: currentRung,
+        sessionId
+      });
+    }
+
+    // Always show the explanation UI, even if the event was already logged.
     setShowExplanation(true);
     setCurrentRung(2); // Week 3 D7: Explanation is rung 2
     const latestProblemError = [...scopedInteractions]
@@ -835,7 +866,11 @@ export function HintSystem({
     // Pass the active hint subtype explicitly so the parent does not need to
     // infer it from interaction history (fixes Save-to-Notes silent failure
     // when no SQL error has been submitted yet).
-    onEscalate?.(sourceInteractionIds, activeHintSubtype || errorSubtypeId || undefined);
+    // Only escalate for a new explanation: the parent logs escalation_triggered
+    // and generates the explanation unit, which already happened otherwise.
+    if (isNewEvent) {
+      onEscalate?.(sourceInteractionIds, activeHintSubtype || errorSubtypeId || undefined);
+    }
 
     // Calculate evidence for escalation logging
     const errorCount = problemTrace.filter((interaction) => interaction.eventType === 'error').length;
@@ -936,15 +971,6 @@ export function HintSystem({
     const isStaleRequest = () => hintRequestVersionRef.current !== requestVersion;
 
     try {
-      // Week 3 D8: Log guidance request event
-      storage.logGuidanceRequest({
-        learnerId,
-        problemId,
-        requestType: 'hint',
-        currentRung: currentRung,
-        sessionId
-      });
-
       const problemTrace = getProblemTrace();
       const hasExplanationHistory = problemTrace.some(
         (interaction) => interaction.eventType === 'explanation_view'
@@ -1031,6 +1057,17 @@ export function HintSystem({
         await handleShowExplanation('auto', nextHelpRequestIndex, problemTrace);
         return;
       }
+
+      // Week 3 D8: Log guidance request event. Logged only once this request is
+      // known to be a hint: the branches above hand off to handleShowExplanation,
+      // which logs the 'explanation' request itself.
+      storage.logGuidanceRequest({
+        learnerId,
+        problemId,
+        requestType: 'hint',
+        currentRung: currentRung,
+        sessionId
+      });
 
       // Determine rung level for this hint
       const levelForSelection = Math.max(1, Math.min(maxHintLevel, nextHelpRequestIndex)) as 1 | 2 | 3;
