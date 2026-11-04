@@ -21,6 +21,21 @@ import { POLICY_IDS, getPolicyById } from "../policies/policy-definitions";
 import { storageClient, isBackendAvailable } from "../api/storage-client";
 
 /**
+ * Escalation policies a persisted SessionConfig may carry. 'control' is the
+ * durable study condition (server student_condition_assignments), not a
+ * registered escalation policy, so it is accepted here without being added to
+ * POLICY_IDS (other code iterates POLICY_IDS as the policy registry).
+ */
+const SESSION_ESCALATION_POLICIES: readonly SessionConfig["escalationPolicy"][] = [
+  ...POLICY_IDS,
+  "control",
+];
+
+function isSessionEscalationPolicy(value: unknown): value is SessionConfig["escalationPolicy"] {
+  return SESSION_ESCALATION_POLICIES.includes(value as SessionConfig["escalationPolicy"]);
+}
+
+/**
  * Hash a string to a numeric value for deterministic assignment
  * Uses the same algorithm as escalation-profiles.ts for consistency
  *
@@ -350,7 +365,7 @@ export function validateSessionConfig(config: SessionConfig): {
     errors.push("Missing conditionId");
   }
 
-  if (!POLICY_IDS.includes(config.escalationPolicy)) {
+  if (!isSessionEscalationPolicy(config.escalationPolicy)) {
     errors.push(`Invalid escalationPolicy: ${config.escalationPolicy}`);
   }
 
@@ -723,7 +738,7 @@ function isValidBackendSession(
   // Must have valid escalation policy
   if (
     !session.escalationPolicy ||
-    !POLICY_IDS.includes(session.escalationPolicy)
+    !isSessionEscalationPolicy(session.escalationPolicy)
   ) {
     return false;
   }
@@ -750,7 +765,7 @@ function convertBackendSessionToConfig(
       : undefined;
   const escalationPolicy =
     durableConditionPolicy ||
-    (session.escalationPolicy && POLICY_IDS.includes(session.escalationPolicy)
+    (session.escalationPolicy && isSessionEscalationPolicy(session.escalationPolicy)
       ? session.escalationPolicy
       : (conditionId as SessionConfig["escalationPolicy"]));
 

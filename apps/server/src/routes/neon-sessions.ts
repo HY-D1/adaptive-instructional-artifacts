@@ -76,16 +76,26 @@ function resolveSessionWriteBody(
   learnerId: string,
   body: SessionWriteBody,
   activeSession: PersistedSession,
+  assignedConditionId: string | undefined,
+  route: string,
 ) {
+  const clientConditionId = body.conditionId ?? activeSession?.conditionId;
+  // A durable student_condition_assignments row is authoritative over the
+  // client body; learners without one keep today's behaviour.
+  if (assignedConditionId && clientConditionId && clientConditionId !== assignedConditionId) {
+    console.warn('[condition/override]', {
+      route,
+      learnerId,
+      clientConditionId,
+      assignedConditionId,
+    });
+  }
   return {
     actualSessionId:
       body.sessionId ||
       activeSession?.sessionId ||
       `session-${learnerId}-${Date.now()}`,
-    actualConditionId:
-      body.conditionId ??
-      activeSession?.conditionId ??
-      'default',
+    actualConditionId: assignedConditionId ?? clientConditionId ?? 'default',
     mergedSessionData: {
       sectionId: body.sectionId ?? activeSession?.sectionId ?? null,
       currentProblemId: body.currentProblemId ?? activeSession?.currentProblemId ?? null,
@@ -157,10 +167,13 @@ router.post('/:learnerId/active', requirePreSurveyCompleted, async (req: Request
     }
 
     const activeSession = await db.getActiveSession(req.params.learnerId);
+    const assignment = await db.getStudentConditionAssignment(req.params.learnerId);
     const { actualSessionId, actualConditionId, mergedSessionData } = resolveSessionWriteBody(
       req.params.learnerId,
       body,
       activeSession,
+      assignment?.conditionId,
+      routeLabel(req),
     );
 
     await db.saveSession(req.params.learnerId, actualSessionId, actualConditionId, {
@@ -198,10 +211,13 @@ router.put('/:learnerId/active', requirePreSurveyCompleted, async (req: Request,
     }
 
     const activeSession = await db.getActiveSession(req.params.learnerId);
+    const assignment = await db.getStudentConditionAssignment(req.params.learnerId);
     const { actualSessionId, actualConditionId, mergedSessionData } = resolveSessionWriteBody(
       req.params.learnerId,
       body,
       activeSession,
+      assignment?.conditionId,
+      routeLabel(req),
     );
 
     await db.saveSession(req.params.learnerId, actualSessionId, actualConditionId, {

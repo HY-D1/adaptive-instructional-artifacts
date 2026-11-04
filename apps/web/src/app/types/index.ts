@@ -782,7 +782,8 @@ export interface SessionConfig {
   staticHintMode: boolean;
 
   // Policy assignment
-  escalationPolicy: 'aggressive' | 'conservative' | 'explanation_first' | 'adaptive' | 'no_hints';
+  // 'control' is the durable study condition; it is not in POLICY_IDS.
+  escalationPolicy: 'aggressive' | 'conservative' | 'explanation_first' | 'adaptive' | 'no_hints' | 'control';
 
   // Randomization
   conditionId: string; // For A/B test group assignment

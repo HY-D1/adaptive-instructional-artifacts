@@ -188,6 +188,31 @@ function logInteractionValidationRejection(
   });
 }
 
+/**
+ * The durable student_condition_assignments row is authoritative: when it exists
+ * its conditionId replaces whatever the client sent. Learners without a row
+ * (historical / non-production sections) keep the client value unchanged.
+ */
+async function resolveAuthoritativeConditionId<T extends string>(
+  learnerId: string,
+  clientConditionId: T | undefined,
+  route: string,
+): Promise<T | db.StudentCondition | undefined> {
+  const assignedConditionId = (await db.getStudentConditionAssignment(learnerId))?.conditionId;
+  if (!assignedConditionId) {
+    return clientConditionId;
+  }
+  if (clientConditionId && clientConditionId !== assignedConditionId) {
+    console.warn('[condition/override]', {
+      route,
+      learnerId,
+      clientConditionId,
+      assignedConditionId,
+    });
+  }
+  return assignedConditionId;
+}
+
 function isAdaptiveBanditEvent(eventType: string): boolean {
   return eventType === 'bandit_arm_selected' || eventType === 'bandit_reward_observed';
 }
@@ -450,9 +475,11 @@ router.post('/', requirePreSurveyCompleted, async (req: Request, res: Response) 
     const scopedTarget = await resolveScopedTarget(req, validatedEvent.learnerId, 'write');
     validatedEvent.learnerId = scopedTarget.learnerId;
     validatedEvent.sectionId = scopedTarget.sectionId;
-    if (!validatedEvent.conditionId) {
-      validatedEvent.conditionId = (await db.getStudentConditionAssignment(validatedEvent.learnerId))?.conditionId;
-    }
+    validatedEvent.conditionId = await resolveAuthoritativeConditionId(
+      validatedEvent.learnerId,
+      validatedEvent.conditionId,
+      routeLabel(req),
+    );
 
     if (isAdaptiveBanditEvent(validatedEvent.eventType) && validatedEvent.conditionId !== 'adaptive') {
       const issues = ['Adaptive bandit events require adaptive condition'];
@@ -624,9 +651,11 @@ router.post('/batch', requirePreSurveyCompleted, async (req: Request, res: Respo
         const scopedTarget = await resolveScopedTarget(req, event.learnerId, 'write');
         event.learnerId = scopedTarget.learnerId;
         event.sectionId = scopedTarget.sectionId;
-        if (!event.conditionId) {
-          event.conditionId = (await db.getStudentConditionAssignment(event.learnerId))?.conditionId;
-        }
+        event.conditionId = await resolveAuthoritativeConditionId(
+          event.learnerId,
+          event.conditionId,
+          routeLabel(req),
+        );
         if (isAdaptiveBanditEvent(event.eventType) && event.conditionId !== 'adaptive') {
           const reason = 'Adaptive bandit events require adaptive condition';
           logInteractionValidationRejection('batch', event.eventType, [reason]);

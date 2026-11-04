@@ -6,12 +6,14 @@ const getActiveSessionMock = vi.fn();
 const saveSessionMock = vi.fn();
 const getSessionMock = vi.fn();
 const getSurveyInvitationsMock = vi.fn();
+const getStudentConditionAssignmentMock = vi.fn(async () => null);
 
 vi.mock('../../../apps/server/src/db/neon.js', () => ({
   getActiveSession: getActiveSessionMock,
   saveSession: saveSessionMock,
   getSession: getSessionMock,
   getSurveyInvitations: getSurveyInvitationsMock,
+  getStudentConditionAssignment: getStudentConditionAssignmentMock,
 }));
 
 vi.mock('../../../apps/server/src/middleware/auth.js', () => ({
