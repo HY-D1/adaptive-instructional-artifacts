@@ -37,6 +37,11 @@ INSERT INTO orders VALUES (101, 1, 'Laptop', 999.99);`;
 const CASES: [string, string, string][] = [
   ['misspelled SELECT keyword', 'SELCT * FROM users;', 'misspelling'],
   ['misspelled FROM keyword', 'SELECT * FORM users;', 'misspelling'],
+  // `FROM users WHRE id = 1` is not here: SQLite reads WHRE as a table alias and
+  // reports near "id", so the misspelled word never reaches the classifier.
+  ['misspelled ORDER keyword', 'SELECT * FROM users WHERE age > 30 ORDR BY age;', 'misspelling'],
+  ['transposed GROUP keyword', 'SELECT city FROM users WHERE age > 30 GRUOP BY city;', 'misspelling'],
+  ['truncated SELECT keyword', 'SELEC name FROM users;', 'misspelling'],
   ['unknown table', 'SELECT * FROM userz;', 'undefined table'],
   ['unknown column', 'SELECT nmae FROM users;', 'undefined column'],
   ['truncated after FROM', 'SELECT * FROM', 'incomplete query'],
@@ -68,6 +73,29 @@ describe('SQL error subtype classification', () => {
     executor.close();
 
     expect(mismatches, `\n${mismatches.join('\n')}\n`).toEqual([]);
+  });
+
+  // Short identifiers sit within two edits of short keywords (age/as, id/on,
+  // dept/left). A stray identifier is a structural error, not a misspelling.
+  it('does not call a stray short identifier a misspelled keyword', async () => {
+    const executor = new SQLExecutor();
+    await executor.initialize(SCHEMA);
+
+    const strays: [string, string][] = [
+      ['age', 'SELECT * FROM users WHERE id = 1 age > 30;'],
+      ['id', "SELECT * FROM users WHERE name = 'Alice' id = 1;"],
+      ['dept', 'SELECT * FROM users WHERE id = 1 dept = 2;'],
+    ];
+    const wrong: string[] = [];
+    for (const [token, query] of strays) {
+      const result = await executor.executeQuery(query);
+      expect(result.error, `${query} should fail`).toMatch(new RegExp(`near "${token}": syntax error`));
+      const subtype = normalizeSqlErrorSubtype(result.error as string, query);
+      if (subtype === 'misspelling') wrong.push(`near "${token}" labelled misspelling`);
+    }
+    executor.close();
+
+    expect(wrong, `\n${wrong.join('\n')}\n`).toEqual([]);
   });
 
   it('only ever returns subtypes the SQL-Engage dataset can serve', async () => {

@@ -561,28 +561,41 @@ const COMMON_SQL_KEYWORDS = [
   'union', 'and', 'or', 'not', 'null', 'like', 'between', 'exists', 'as',
 ];
 
-/** Levenshtein distance, bounded early since we only care about small edits. */
+/**
+ * Edit distance counting an adjacent transposition as one edit (optimal string
+ * alignment), so FORM is one edit from FROM. Bounded early since we only care
+ * about small edits.
+ */
 function editDistance(a: string, b: string): number {
   if (Math.abs(a.length - b.length) > 2) return 3;
-  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
-  const curr = new Array<number>(b.length + 1).fill(0);
+  const rows = Array.from({ length: a.length + 1 }, (_, i) =>
+    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+  );
   for (let i = 1; i <= a.length; i += 1) {
-    curr[0] = i;
     for (let j = 1; j <= b.length; j += 1) {
-      curr[j] = Math.min(
-        prev[j] + 1,
-        curr[j - 1] + 1,
-        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1),
-      );
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      rows[i][j] = Math.min(rows[i - 1][j] + 1, rows[i][j - 1] + 1, rows[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        rows[i][j] = Math.min(rows[i][j], rows[i - 2][j - 2] + 1);
+      }
     }
-    for (let j = 0; j <= b.length; j += 1) prev[j] = curr[j];
   }
-  return prev[b.length];
+  return rows[a.length][b.length];
+}
+
+/**
+ * Edits a token may be from a keyword and still count as a misspelling of it.
+ * Short keywords allow only one: two edits turn AS, ON, OR, SET or LEFT into
+ * ordinary column names (age, id, dept), and a stray identifier is a
+ * structural error, not a typo.
+ */
+function maxMisspellingEdits(keyword: string): number {
+  return keyword.length <= 4 ? 1 : 2;
 }
 
 /**
  * SQLite reports the offending token as: near "TOKEN": syntax error.
- * A token one or two edits away from a SQL keyword is a misspelling rather
+ * A token a small edit away from a SQL keyword is a misspelling rather
  * than a punctuation problem, which is what the learner needs told.
  */
 function isLikelyMisspelledKeyword(errorMessage: string): boolean {
@@ -591,7 +604,7 @@ function isLikelyMisspelledKeyword(errorMessage: string): boolean {
   const token = near[1].toLowerCase();
   if (token.length < 2 || !/^[a-z_]+$/.test(token)) return false;
   if (COMMON_SQL_KEYWORDS.includes(token)) return false;
-  return COMMON_SQL_KEYWORDS.some((kw) => editDistance(token, kw) <= 2);
+  return COMMON_SQL_KEYWORDS.some((kw) => editDistance(token, kw) <= maxMisspellingEdits(kw));
 }
 
 /** Removes string literals so identifier scans never match inside a value. */
