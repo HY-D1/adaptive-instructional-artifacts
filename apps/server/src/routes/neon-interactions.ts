@@ -197,12 +197,26 @@ async function resolveAuthoritativeConditionId<T extends string>(
   learnerId: string,
   clientConditionId: T | undefined,
   route: string,
+  context: ConditionResolutionContext = createConditionResolutionContext(),
 ): Promise<T | db.StudentCondition | undefined> {
-  const assignedConditionId = (await db.getStudentConditionAssignment(learnerId))?.conditionId;
-  if (!assignedConditionId) {
+  let lookup = context.lookups.get(learnerId);
+  if (!lookup) {
+    lookup = lookupAssignedCondition(learnerId, route);
+    context.lookups.set(learnerId, lookup);
+  }
+  const result = await lookup;
+  // Degrade, never fail closed: if the lookup failed, or no row exists, keep
+  // exactly the pre-assignment-authority behaviour (the client value).
+  if (result.failed || !result.conditionId) {
     return clientConditionId;
   }
-  if (clientConditionId && clientConditionId !== assignedConditionId) {
+  const assignedConditionId = result.conditionId;
+  if (
+    clientConditionId &&
+    clientConditionId !== assignedConditionId &&
+    !context.warnedLearnerIds.has(learnerId)
+  ) {
+    context.warnedLearnerIds.add(learnerId);
     console.warn('[condition/override]', {
       route,
       learnerId,
@@ -211,6 +225,37 @@ async function resolveAuthoritativeConditionId<T extends string>(
     });
   }
   return assignedConditionId;
+}
+
+type AssignmentLookupResult =
+  | { failed: true }
+  | { failed: false; conditionId?: db.StudentCondition };
+
+/** Per-request memo: one assignment lookup and at most one override log per learner. */
+interface ConditionResolutionContext {
+  lookups: Map<string, Promise<AssignmentLookupResult>>;
+  warnedLearnerIds: Set<string>;
+}
+
+function createConditionResolutionContext(): ConditionResolutionContext {
+  return { lookups: new Map(), warnedLearnerIds: new Set() };
+}
+
+async function lookupAssignedCondition(
+  learnerId: string,
+  route: string,
+): Promise<AssignmentLookupResult> {
+  try {
+    const assignment = await db.getStudentConditionAssignment(learnerId);
+    return { failed: false, conditionId: assignment?.conditionId };
+  } catch (error) {
+    console.error('[condition/lookup-failed]', {
+      route,
+      learnerId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { failed: true };
+  }
 }
 
 function isAdaptiveBanditEvent(eventType: string): boolean {
@@ -642,6 +687,7 @@ router.post('/batch', requirePreSurveyCompleted, async (req: Request, res: Respo
 
     const results = [];
     const confirmedIds: string[] = [];
+    const conditionContext = createConditionResolutionContext();
     
     // Process each event, tracking partial failures
     for (let i = 0; i < events.length; i++) {
@@ -655,6 +701,7 @@ router.post('/batch', requirePreSurveyCompleted, async (req: Request, res: Respo
           event.learnerId,
           event.conditionId,
           routeLabel(req),
+          conditionContext,
         );
         if (isAdaptiveBanditEvent(event.eventType) && event.conditionId !== 'adaptive') {
           const reason = 'Adaptive bandit events require adaptive condition';

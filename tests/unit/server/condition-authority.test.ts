@@ -197,3 +197,79 @@ describe('server-authoritative condition on sessions', () => {
     expect(db.saveSession).toHaveBeenCalledWith('student-1', 'session-1', 'adaptive', expect.any(Object));
   });
 });
+
+describe('assignment lookup degrades instead of failing closed', () => {
+  it('lookup throws -> single POST stores the client value and succeeds', async () => {
+    db.getStudentConditionAssignment.mockRejectedValue(new Error('db down'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const response = await post('/api/interactions', {
+      learnerId: 'student-1',
+      eventType: 'execution',
+      problemId: 'problem-1',
+      successful: true,
+      conditionId: 'adaptive',
+    });
+
+    expect(response.status).toBe(201);
+    expect(storedConditionIds()).toEqual(['adaptive']);
+    expect(error).toHaveBeenCalledWith(
+      '[condition/lookup-failed]',
+      expect.objectContaining({ learnerId: 'student-1', error: 'db down' }),
+    );
+    error.mockRestore();
+  });
+
+  it('lookup throws in batch -> events stored with client values', async () => {
+    db.getStudentConditionAssignment.mockRejectedValue(new Error('db down'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const response = await post('/api/interactions/batch', {
+      events: [
+        { id: 'e1', learnerId: 'student-1', eventType: 'execution', problemId: 'problem-1', successful: true, conditionId: 'adaptive' },
+        { id: 'e2', learnerId: 'student-1', eventType: 'execution', problemId: 'problem-2', successful: true, conditionId: 'control' },
+      ],
+    });
+
+    expect(response.status).toBeLessThan(300);
+    expect(storedConditionIds()).toEqual(['adaptive', 'control']);
+    error.mockRestore();
+  });
+
+  it('lookup throws -> session write keeps body.conditionId and succeeds', async () => {
+    db.getStudentConditionAssignment.mockRejectedValue(new Error('db down'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const response = await post('/api/sessions/student-1/active', {
+      sessionId: 'session-1',
+      conditionId: 'adaptive',
+      currentProblemId: 'problem-1',
+    });
+
+    expect(response.status).toBe(200);
+    expect(db.saveSession).toHaveBeenCalledWith('student-1', 'session-1', 'adaptive', expect.any(Object));
+    error.mockRestore();
+  });
+});
+
+describe('batch assignment lookup is memoized per request', () => {
+  it('batch of N events for one learner calls getStudentConditionAssignment once and warns once', async () => {
+    db.getStudentConditionAssignment.mockResolvedValue({ conditionId: 'control' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const events = Array.from({ length: 5 }, (_, index) => ({
+      id: `e${index}`,
+      learnerId: 'student-1',
+      eventType: 'execution',
+      problemId: `problem-${index}`,
+      successful: true,
+      conditionId: 'adaptive',
+    }));
+    await post('/api/interactions/batch', { events });
+
+    expect(db.getStudentConditionAssignment).toHaveBeenCalledTimes(1);
+    expect(storedConditionIds()).toEqual(Array(5).fill('control'));
+    expect(warn.mock.calls.filter(([tag]) => tag === '[condition/override]')).toHaveLength(1);
+    warn.mockRestore();
+  });
+});

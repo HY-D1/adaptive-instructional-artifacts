@@ -72,6 +72,27 @@ function hasSessionMutationPayload(body: SessionWriteBody): boolean {
   );
 }
 
+/**
+ * Durable assignment lookup for session writes. On failure it degrades to
+ * undefined, i.e. exactly the pre-assignment-authority behaviour, so a lookup
+ * outage never turns a session write into a 500.
+ */
+async function lookupAssignedConditionId(
+  req: Request,
+  learnerId: string,
+): Promise<string | undefined> {
+  try {
+    return (await db.getStudentConditionAssignment(learnerId))?.conditionId;
+  } catch (error) {
+    console.error('[condition/lookup-failed]', {
+      route: routeLabel(req),
+      learnerId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return undefined;
+  }
+}
+
 function resolveSessionWriteBody(
   learnerId: string,
   body: SessionWriteBody,
@@ -167,12 +188,12 @@ router.post('/:learnerId/active', requirePreSurveyCompleted, async (req: Request
     }
 
     const activeSession = await db.getActiveSession(req.params.learnerId);
-    const assignment = await db.getStudentConditionAssignment(req.params.learnerId);
+    const assignedConditionId = await lookupAssignedConditionId(req, req.params.learnerId);
     const { actualSessionId, actualConditionId, mergedSessionData } = resolveSessionWriteBody(
       req.params.learnerId,
       body,
       activeSession,
-      assignment?.conditionId,
+      assignedConditionId,
       routeLabel(req),
     );
 
@@ -211,12 +232,12 @@ router.put('/:learnerId/active', requirePreSurveyCompleted, async (req: Request,
     }
 
     const activeSession = await db.getActiveSession(req.params.learnerId);
-    const assignment = await db.getStudentConditionAssignment(req.params.learnerId);
+    const assignedConditionId = await lookupAssignedConditionId(req, req.params.learnerId);
     const { actualSessionId, actualConditionId, mergedSessionData } = resolveSessionWriteBody(
       req.params.learnerId,
       body,
       activeSession,
-      assignment?.conditionId,
+      assignedConditionId,
       routeLabel(req),
     );
 
