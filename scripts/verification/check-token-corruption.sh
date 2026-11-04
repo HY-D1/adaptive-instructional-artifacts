@@ -13,8 +13,11 @@ else
   exit 2
 fi
 
+SELF_PATH='scripts/verification/check-token-corruption.sh'
+
 if [ "$#" -gt 0 ]; then
   targets=("$@")
+  signature_targets=("$@")
 else
   # Default to launch-critical source + build/test config surface.
   targets=(
@@ -28,15 +31,18 @@ else
     tsconfig.json
     vercel.json
   )
+  # The interleaved signature never occurs naturally, so it is also checked in
+  # tooling dirs. The bare fixed token is not: it appears in real dates there.
+  signature_targets=("${targets[@]}" scripts tests .github)
 fi
 
 if [ "$SCAN_TOOL" = 'rg' ]; then
-  corrupted_files="$(rg -l --pcre2 --glob '!scripts/check-token-corruption.sh' -- "$SIGNATURE_REGEX" "${targets[@]}" 2>/dev/null || true)"
+  corrupted_files="$(rg -l --pcre2 --glob "!${SELF_PATH}" -- "$SIGNATURE_REGEX" "${signature_targets[@]}" 2>/dev/null || true)"
 else
   corrupted_files="$(
     {
-      grep -R -E -l -- "$SIGNATURE_REGEX" "${targets[@]}" 2>/dev/null \
-        | awk '$0 != "scripts/check-token-corruption.sh"'
+      grep -R -E -l -- "$SIGNATURE_REGEX" "${signature_targets[@]}" 2>/dev/null \
+        | awk -v self="$SELF_PATH" '$0 != self'
     } || true
   )"
 fi
@@ -54,7 +60,7 @@ else
   fixed_token_hits="$(
     {
       grep -R -n -F -- "$FIXED_TOKEN" "${targets[@]}" 2>/dev/null \
-        | awk '$0 !~ /^scripts\/check-token-corruption\.sh:/'
+        | awk -v self="$SELF_PATH" 'index($0, self ":") != 1'
     } || true
   )"
 fi
@@ -64,4 +70,4 @@ if [ -n "$fixed_token_hits" ]; then
   exit 1
 fi
 
-echo "[PASS] no tokenized corruption signature or fixed token markers found for: ${targets[*]} (scanner: ${SCAN_TOOL})"
+echo "[PASS] no tokenized corruption signature in: ${signature_targets[*]}; no fixed token in: ${targets[*]} (scanner: ${SCAN_TOOL})"

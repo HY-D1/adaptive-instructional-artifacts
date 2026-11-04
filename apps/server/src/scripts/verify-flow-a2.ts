@@ -2,12 +2,8 @@
  * Verify Flow A2 Data in Neon
  */
 
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import '../load-env.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 import { getDb } from '../db/neon.js';
 

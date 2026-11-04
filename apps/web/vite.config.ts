@@ -88,6 +88,19 @@ function pdfIndexApiPlugin() {
           return
         }
 
+        // Dev-only endpoint: refuse cross-site form posts from other pages.
+        const origin = req.headers.origin as string | undefined
+        if (origin) {
+          let sameHost = false
+          try { sameHost = new URL(origin).host === req.headers.host } catch { sameHost = false }
+          if (!sameHost) {
+            res.statusCode = 403
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: 'Cross-origin upload rejected' }))
+            return
+          }
+        }
+
         try {
           const chunks: Buffer[] = []
           req.on('data', (chunk: Buffer) => chunks.push(chunk))

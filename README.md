@@ -98,8 +98,9 @@ The system adapts based on 23 SQL error subtypes and 30 concepts from the SQL-En
 
 **Database Layer**
 - Neon PostgreSQL (production) with connection pooling
-- SQLite3 fallback for local dev (zero external deps)
-- Auto-migration on server startup
+- SQLite3 fallback for local dev only (legacy routes; no accounts). Hosted deployments without a database URL return 503 instead of falling back.
+- Schema creation (`CREATE ... IF NOT EXISTS`) runs on cold start unless `AUTO_SCHEMA_INIT=false` (the backend's `vercel.json` sets false)
+- Dated migrations in `apps/server/src/db/migrations/` are listed in `production-manifest.txt` and applied with `npm run server:db:migrate` (dry run by default; `-- --apply` to execute, `-- --baseline` to record files already applied by hand). `migrate-neon.sql`, `db-migrations/` and `db-migration-code-snippets/` are legacy references.
 
 ### Data Flow
 

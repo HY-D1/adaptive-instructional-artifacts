@@ -52,7 +52,10 @@ async function startServer() {
       console.error('[FATAL] Unhandled rejection at:', promise, 'reason:', reason);
     });
 
-    const server = app.listen(PORT, () => {
+    // Local entrypoint: bind to loopback unless HOST is set explicitly, so a
+    // dev server (possibly in open SQLite mode) is not exposed to the LAN.
+    const host = process.env.HOST || '127.0.0.1';
+    const server = app.listen(PORT, host, () => {
       displayServerStatus();
     });
 

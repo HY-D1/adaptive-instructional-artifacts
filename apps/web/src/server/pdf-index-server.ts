@@ -523,6 +523,17 @@ function uniqueDocId(baseId: string, usedDocIds: Set<string>): string {
   return uniqueId;
 }
 
+/**
+ * Multipart filenames are client-controlled; keep only the base name and a
+ * safe character set so `../` cannot escape the temp or source directories.
+ */
+export function sanitizeUploadFilename(filename: string): string {
+  const base = path.basename(filename.replace(/\\/g, '/'));
+  const cleaned = base.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/^\.+/, '');
+  const withExt = cleaned.toLowerCase().endsWith('.pdf') ? cleaned : `${cleaned || 'upload'}.pdf`;
+  return withExt.slice(-200);
+}
+
 export async function buildPdfIndexFromBuffer(
   pdfBuffer: Buffer,
   filename: string,
@@ -539,6 +550,8 @@ export async function buildPdfIndexFromBuffer(
   if (chunkOverlapWords >= chunkSizeWords) {
     throw new Error('Invalid chunker config: overlap must be smaller than chunk size.');
   }
+
+  filename = sanitizeUploadFilename(filename);
 
   // Write buffer to temp file for pdftotext processing
   const tempDir = path.join(config.indexDir, '.temp');

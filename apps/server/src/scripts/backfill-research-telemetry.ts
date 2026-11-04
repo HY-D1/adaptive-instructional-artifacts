@@ -3,7 +3,8 @@
  * Research Telemetry Backfill Script
  *
  * One-off backfill for paper-data contract compliance.
- * Run with: npx tsx apps/server/src/scripts/backfill-research-telemetry.ts [--dry-run]
+ * Run with: npx tsx apps/server/src/scripts/backfill-research-telemetry.ts [--apply]
+ * Dry run by default; --apply writes to the database.
  *
  * Responsibilities:
  * 1. Populate missing hint_id deterministically where evidence exists
@@ -23,7 +24,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const DATABASE_URL = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL;
-const DRY_RUN = process.argv.includes('--dry-run');
+// Writes are opt-in: anything other than an explicit --apply is a dry run.
+const DRY_RUN = !process.argv.includes('--apply');
 
 interface BackfillReport {
   timestamp: string;
