@@ -1,5 +1,6 @@
+/* @vitest-environment node */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GroqProvider } from './groq.js';
+import { GroqProvider } from '../../../apps/server/src/llm/providers/groq.js';
 
 const params = {
   temperature: 0,
