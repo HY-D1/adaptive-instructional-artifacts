@@ -175,12 +175,12 @@ By project completion (April 30, 2026):
 
 | Document | Purpose |
 |----------|---------|
-| [PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md) | **This file** — Executive summary, research vision |
-| [RESEARCH_ARCHITECTURE.md](./RESEARCH_ARCHITECTURE.md) | Logical components, 17 research components |
-| [LOGGING_SPECIFICATION.md](./LOGGING_SPECIFICATION.md) | Canonical event schema, reproducibility contract |
+| [OVERVIEW.md](./OVERVIEW.md) | **This file** — Executive summary, research vision |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | Logical components, 17 research components |
+| [LOGGING.md](./LOGGING.md) | Canonical event schema, reproducibility contract |
 | [ARTIFACT_PACKAGING.md](./ARTIFACT_PACKAGING.md) | Artifact bundle requirements, FAIR principles |
 | [ESCALATION_POLICIES.md](./ESCALATION_POLICIES.md) | Profile definitions, assignment strategies |
-| [MULTI_ARMED_BANDIT.md](./MULTI_ARMED_BANDIT.md) | Thompson sampling, online optimization |
+| [BANDIT.md](./BANDIT.md) | Thompson sampling, online optimization |
 | [HDI.md](./HDI.md) | Hint Dependency Index specification |
 | [KNOWLEDGE_CONSOLIDATION.md](./KNOWLEDGE_CONSOLIDATION.md) | Spaced reinforcement, micro-checks |
 | [ERROR_TRAJECTORY.md](./ERROR_TRAJECTORY.md) | Error transition modeling |

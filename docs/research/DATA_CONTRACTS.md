@@ -556,7 +556,7 @@ This will:
 
 ## Related Documents
 
-- `docs/research/LOGGING_SPECIFICATION.md` - Full telemetry specification
+- `docs/research/LOGGING.md` - Full telemetry specification
 - `docs/runbooks/beta-telemetry-readiness.md` - Beta readiness checklist
 - `docs/operations/STATUS.md` - Current system status
 - `docs/audit/neon-research-readiness-sql-queries-2026-04-07.sql` - Audit SQL bundle

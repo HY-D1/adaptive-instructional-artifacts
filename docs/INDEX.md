@@ -57,3 +57,4 @@ Navigation hub for SQL-Adapt documentation.
 | [operations/BETA_LAUNCH.md](operations/BETA_LAUNCH.md) | Staged rollout plan, stop conditions, rollback |
 | [operations/TESTING.md](operations/TESTING.md) | E2E test inventory, auth seeding, CI sharding |
 | [operations/INCIDENTS.md](operations/INCIDENTS.md) | Incident response playbooks |
+| [runbooks/test-system-stable-handoff.md](runbooks/test-system-stable-handoff.md) | `test/system_stable` handoff: checks, merge-to-main steps, open work |

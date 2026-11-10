@@ -18,7 +18,7 @@
 | Event Logging | ✅ Complete | `profile_assigned`, `escalation_triggered`, `profile_adjusted` |
 | Unit Tests | ✅ Complete | 53 tests passing |
 
-**Test Coverage**: 53 unit tests in `apps/web/src/app/lib/escalation-profiles.test.ts`
+**Test Coverage**: 53 unit tests in `apps/web/src/app/lib/ml/escalation-profiles.test.ts`
 
 ---
 
@@ -27,7 +27,7 @@
 ### Profile 1: Fast Escalator
 
 ```typescript
-// apps/web/src/app/lib/escalation-profiles.ts
+// apps/web/src/app/lib/ml/escalation-profiles.ts
 
 export const FAST_ESCALATOR: EscalationProfile = {
   id: 'fast-escalator',
@@ -220,7 +220,7 @@ export function assignProfileDiagnostic(learnerId: string): EscalationProfile {
 
 ### Bandit Assignment
 
-See [MULTI_ARMED_BANDIT.md](./MULTI_ARMED_BANDIT.md) for full details.
+See [BANDIT.md](./BANDIT.md) for full details.
 
 ```typescript
 export function assignProfileBandit(learnerId: string): EscalationProfile {
@@ -279,7 +279,7 @@ those learners with `assignProfile({ learnerId }, 'static')`, which is determini
 ## Integration with Guidance Ladder
 
 ```typescript
-// apps/web/src/app/lib/guidance-ladder.ts
+// apps/web/src/app/lib/ml/guidance-ladder.ts
 
 export class GuidanceLadder {
   private currentProfile: EscalationProfile;
@@ -537,7 +537,7 @@ db.events.aggregate([
 ### Test File
 
 ```typescript
-// apps/web/src/app/lib/escalation-profiles.test.ts
+// apps/web/src/app/lib/ml/escalation-profiles.test.ts
 
 describe('EscalationProfiles', () => {
   test('FAST_ESCALATOR has correct thresholds', () => {
@@ -569,9 +569,9 @@ describe('EscalationProfiles', () => {
 
 | File | Purpose | Lines |
 |------|---------|-------|
-| `apps/web/src/app/lib/escalation-profiles.ts` | Profile definitions and selection | ~200 |
-| `apps/web/src/app/lib/escalation-profiles.test.ts` | Unit tests (30 tests) | ~280 |
-| `apps/web/src/app/lib/guidance-ladder.ts` | Profile-aware escalation | ~50 (integration) |
+| `apps/web/src/app/lib/ml/escalation-profiles.ts` | Profile definitions and selection | ~200 |
+| `apps/web/src/app/lib/ml/escalation-profiles.test.ts` | Unit tests (30 tests) | ~280 |
+| `apps/web/src/app/lib/ml/guidance-ladder.ts` | Profile-aware escalation | ~50 (integration) |
 | `apps/web/src/app/pages/LearningInterface.tsx` | Profile badge display | ~30 |
 | `apps/web/src/app/pages/SettingsPage.tsx` | Debug controls | ~60 |
 

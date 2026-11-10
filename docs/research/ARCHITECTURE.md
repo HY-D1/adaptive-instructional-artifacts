@@ -251,7 +251,7 @@ R = α·𝟙[solved] - β·hint_depth_used - γ·dependency_signal + δ·delayed
 | dependency_signal | γ = 0.2 | HDI component |
 | delayed_recall_gain | δ = 0.2 | spaced reinforcement |
 
-→ **See**: [MULTI_ARMED_BANDIT.md](./MULTI_ARMED_BANDIT.md)
+→ **See**: [BANDIT.md](./BANDIT.md)
 
 ---
 
@@ -592,9 +592,9 @@ The architecture enables testing these publishable claims:
 
 | Document | Component | Status |
 |----------|-----------|--------|
-| [PROJECT_OVERVIEW.md](./PROJECT_OVERVIEW.md) | All | Complete |
+| [OVERVIEW.md](./OVERVIEW.md) | All | Complete |
 | [ESCALATION_POLICIES.md](./ESCALATION_POLICIES.md) | 7 | Complete |
-| [MULTI_ARMED_BANDIT.md](./MULTI_ARMED_BANDIT.md) | 8 | Complete |
+| [BANDIT.md](./BANDIT.md) | 8 | Complete |
 | [HDI.md](./HDI.md) | 9 | Complete |
 | [KNOWLEDGE_CONSOLIDATION.md](./KNOWLEDGE_CONSOLIDATION.md) | 10 | Draft |
 | [ERROR_TRAJECTORY.md](./ERROR_TRAJECTORY.md) | 11 | Draft |

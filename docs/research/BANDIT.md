@@ -19,7 +19,7 @@
 | Assignment Strategy | ✅ Complete | Static/Diagnostic/Bandit options |
 | Unit Tests | ✅ Complete | 89 tests passing (60 bandit + 29 manager) |
 
-**Test Coverage**: 89 unit tests in `apps/web/src/app/lib/multi-armed-bandit.test.ts` (60) and `learner-bandit-manager.test.ts` (29)
+**Test Coverage**: 89 unit tests in `apps/web/src/app/lib/ml/multi-armed-bandit.test.ts` (60) and `learner-bandit-manager.test.ts` (29)
 
 ---
 
@@ -54,7 +54,7 @@ Instead of manually assigning escalation profiles, use a **multi-armed bandit** 
 ### Bandit Manager
 
 ```typescript
-// apps/web/src/app/lib/multi-armed-bandit.ts
+// apps/web/src/app/lib/ml/multi-armed-bandit.ts
 
 export interface BanditArm {
   id: string;
@@ -191,7 +191,7 @@ function gammaRandom(shape: number, scale: number): number {
 ## Reward (single formula, decision 2026-11-04)
 
 One function, `calculateReward(buildRewardComponents(outcome))` in
-`apps/web/src/app/lib/ml/reward-calculator.ts`, produces the reward used by the
+`apps/web/src/app/lib/ml/ml/reward-calculator.ts`, produces the reward used by the
 shared server pool (`POST /api/bandit/reward`), the local fallback bandit, and
 the logged `bandit_reward_observed` value. Version: `reward-calc-v2-equal-weight`.
 
@@ -219,7 +219,7 @@ Rewards are recorded only for correct results and only for a logged selection
 Each learner gets their own bandit (personalized):
 
 ```typescript
-// apps/web/src/app/lib/learner-bandit-manager.ts
+// apps/web/src/app/lib/ml/learner-bandit-manager.ts
 
 export class LearnerBanditManager {
   private bandits: Map<string, MultiArmedBandit> = new Map();
@@ -279,7 +279,7 @@ export const banditManager = new LearnerBanditManager();
 ## Profile Selection
 
 ```typescript
-// apps/web/src/app/lib/escalation-profiles.ts
+// apps/web/src/app/lib/ml/escalation-profiles.ts
 
 export type AssignmentStrategy = 'static' | 'diagnostic' | 'bandit';
 
@@ -584,7 +584,7 @@ function getEscalationProfileForLearner(
 ### Test File
 
 ```typescript
-// apps/web/src/app/lib/multi-armed-bandit.test.ts
+// apps/web/src/app/lib/ml/multi-armed-bandit.test.ts
 
 describe('MultiArmedBandit', () => {
   test('selectArm returns valid arm', () => {
@@ -620,11 +620,11 @@ describe('MultiArmedBandit', () => {
 
 | File | Purpose | Lines |
 |------|---------|-------|
-| `apps/web/src/app/lib/multi-armed-bandit.ts` | Core bandit implementation (Thompson Sampling) | ~376 |
-| `apps/web/src/app/lib/multi-armed-bandit.test.ts` | Unit tests for bandit core | ~350 |
-| `apps/web/src/app/lib/learner-bandit-manager.ts` | Per-learner bandit management | ~263 |
-| `apps/web/src/app/lib/reward-calculator.ts` | Reward calculation for learning outcomes | ~150 |
-| `apps/web/src/app/lib/escalation-profiles.ts` | Profile definitions | ~150 |
+| `apps/web/src/app/lib/ml/multi-armed-bandit.ts` | Core bandit implementation (Thompson Sampling) | ~376 |
+| `apps/web/src/app/lib/ml/multi-armed-bandit.test.ts` | Unit tests for bandit core | ~350 |
+| `apps/web/src/app/lib/ml/learner-bandit-manager.ts` | Per-learner bandit management | ~263 |
+| `apps/web/src/app/lib/ml/reward-calculator.ts` | Reward calculation for learning outcomes | ~150 |
+| `apps/web/src/app/lib/ml/escalation-profiles.ts` | Profile definitions | ~150 |
 | `apps/web/src/app/pages/LearningInterface.tsx` | Profile selection integration | ~40 |
 | `apps/web/src/app/pages/SettingsPage.tsx` | Bandit debug panel | ~100 |
 

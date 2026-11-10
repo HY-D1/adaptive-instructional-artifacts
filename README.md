@@ -130,7 +130,7 @@ Background sync to Neon (if online)
 ```
 apps/web/           → Vite + React frontend
   src/app/lib/      → Core logic (adaptive engine, storage, auth)
-  src/app/routes/   → Page components
+  src/app/pages/    → Page components
 apps/server/        → Express backend (Vercel Functions)
   src/routes/       → API endpoints
   src/db/           → Neon/SQLite abstractions
@@ -182,7 +182,7 @@ npm run integrity:scan   # Pre-deploy verification
 ```bash
 npm run test:unit                    # Vitest unit tests
 npm run test:e2e                     # Playwright E2E tests
-npm run test:e2e:weekly              # CI regression suite
+npm run test:e2e:weekly              # Weekly browser suite (@weekly specs)
 npm run replay:gate                  # Replay determinism check
 ```
 
