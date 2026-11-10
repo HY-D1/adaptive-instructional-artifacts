@@ -599,6 +599,9 @@ function performAnalysis(
             autoUpdated: autoCreationResult.totalUpdated
           });
         }
+      })
+      .catch((error) => {
+        console.warn('[TraceAnalyzer] Auto-creation analysis follow-up failed:', error);
       });
   } else {
     // Log results without auto-creation
