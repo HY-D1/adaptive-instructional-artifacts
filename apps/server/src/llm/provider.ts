@@ -86,11 +86,3 @@ export interface LLMProvider {
    */
   isConfigured(): boolean;
 }
-
-/**
- * Factory function to create providers
- */
-export interface LLMProviderFactory {
-  createProvider(type: LLMProviderType): LLMProvider;
-  getDefaultProvider(): LLMProvider;
-}

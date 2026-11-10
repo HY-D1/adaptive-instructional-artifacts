@@ -179,10 +179,6 @@ export async function updateUser(id: string, data: UpdateLearnerRequest): Promis
   return isUsingNeon() ? neonDb.updateUser(id, data) : sqliteDb.updateLearner(id, data);
 }
 
-export async function deleteUser(id: string): Promise<boolean> {
-  return isUsingNeon() ? neonDb.deleteUser(id) : sqliteDb.deleteLearner(id);
-}
-
 // ============================================================================
 // Unified Session Operations (used by Neon routes)
 // ============================================================================
@@ -342,10 +338,6 @@ export async function getCorpusActiveRuns() {
   return isUsingNeon() ? neonDb.listCorpusActiveRuns() : [];
 }
 
-export async function getCorpusActiveRun(docId: string) {
-  return isUsingNeon() ? neonDb.getCorpusActiveRun(docId) : null;
-}
-
 export async function setCorpusActiveRun(
   docId: string,
   runId: string,
@@ -362,10 +354,7 @@ export async function setCorpusActiveRun(
 // ============================================================================
 
 export {
-  getDb as getNeonDb,
-  resetDb as resetNeonDb,
   linkTextbookRetrievals,
-  getTextbookRetrievalsForEvent,
 } from './neon.js';
 
 // ============================================================================

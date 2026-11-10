@@ -1160,13 +1160,6 @@ export async function updateUser(
   return result ? rowToLearner(result) : null;
 }
 
-export async function deleteUser(id: string): Promise<boolean> {
-  const db = getDb();
-  // Operator use only (no API route). Cascades to the learner's research data.
-  const rows = await db`DELETE FROM users WHERE id = ${id} RETURNING id`;
-  return rows.length > 0;
-}
-
 async function resolveSectionIdForLearner(
   userId: string,
 ): Promise<string | null> {
@@ -1695,36 +1688,6 @@ export interface GetInteractionsOptions {
   endDate?: string; // ISO date string
   limit?: number;
   offset?: number;
-}
-
-/**
- * Count interactions for a user with optional filters.
- * Uses the same filter logic as getInteractionsByUser for consistency.
- */
-export async function countInteractionsByUser(
-  userId: string,
-  options?: Omit<GetInteractionsOptions, "limit" | "offset">,
-): Promise<number> {
-  const db = getDb();
-
-  const conditions = [db`user_id = ${userId}`];
-  if (options?.sessionId)
-    conditions.push(db`session_id = ${options.sessionId}`);
-  if (options?.eventType)
-    conditions.push(db`event_type = ${options.eventType}`);
-  if (options?.problemId)
-    conditions.push(db`problem_id = ${options.problemId}`);
-  if (options?.startDate)
-    conditions.push(db`timestamp >= ${options.startDate}`);
-  if (options?.endDate) conditions.push(db`timestamp <= ${options.endDate}`);
-
-  const [result] = await db`
-    SELECT COUNT(*) as count
-    FROM interaction_events
-    WHERE ${conditions.reduce((acc, cond, i) => (i === 0 ? cond : db`${acc} AND ${cond}`), db``)}
-  `;
-
-  return parseInt(result?.count as string, 10) || 0;
 }
 
 /**
@@ -2307,12 +2270,6 @@ export async function getAuthEventsByLearnerIds(learnerIds: string[]): Promise<A
   const results = await db`
     SELECT * FROM auth_events WHERE learner_id = ANY(${learnerIds}) ORDER BY timestamp DESC
   `;
-  return results.map((row) => rowToAuthEvent(row as Record<string, unknown>));
-}
-
-export async function getAuthEvents(): Promise<AuthEventRow[]> {
-  const db = getDb();
-  const results = await db`SELECT * FROM auth_events ORDER BY timestamp DESC`;
   return results.map((row) => rowToAuthEvent(row as Record<string, unknown>));
 }
 
@@ -3231,39 +3188,3 @@ export async function linkTextbookRetrievals(
     `;
   }
 }
-
-/**
- * Get textbook retrievals for an event
- */
-export async function getTextbookRetrievalsForEvent(eventId: string): Promise<
-  Array<{
-    unitId: string;
-    rank: number | null;
-    sourceKind: string | null;
-    score: number | null;
-    createdAt: string;
-  }>
-> {
-  const db = getDb();
-
-  const rows = await db`
-    SELECT unit_id, rank, source_kind, score, created_at
-    FROM interaction_textbook_unit_retrievals
-    WHERE event_id = ${eventId}
-    ORDER BY rank ASC NULLS LAST
-  `;
-
-  return rows.map((row) => ({
-    unitId: row.unit_id,
-    rank: row.rank,
-    sourceKind: row.source_kind,
-    score: row.score,
-    createdAt: new Date(row.created_at).toISOString(),
-  }));
-}
-
-// ============================================================================
-// Schema Version
-// ============================================================================
-
-export const DB_SCHEMA_VERSION = "v1.1.0";

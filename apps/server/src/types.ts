@@ -63,26 +63,6 @@ export interface ConceptCoverageEvidence {
 }
 
 /**
- * Concept coverage map - tracks which concepts learner has encountered
- */
-export interface ConceptCoverage {
-  concepts: string[];
-  mastered: string[];
-  struggling: string[];
-  lastUpdated: number;
-}
-
-/**
- * Error history entry with metadata
- */
-export interface ErrorHistoryEntry {
-  count: number;
-  lastOccurred: number;
-  firstOccurred: number;
-  conceptIds: string[];
-}
-
-/**
  * Full learner profile with concept coverage, evidence, and learning state
  * Stored in learner_profiles table with both structured columns and JSON extensibility
  */
@@ -101,58 +81,6 @@ export interface LearnerProfile {
   lastActive: number;
   // Extended profile data (stored in profile_data JSON column)
   extendedData?: Record<string, unknown>;
-}
-
-/**
- * Request to create/update a full learner profile
- */
-export interface SaveLearnerProfileRequest {
-  name?: string;
-  conceptsCovered?: string[];
-  conceptCoverageEvidence?: Record<string, ConceptCoverageEvidence>;
-  errorHistory?: Record<string, number>;
-  interactionCount?: number;
-  currentStrategy?: string;
-  preferences?: LearnerPreferences;
-  lastActive?: number;
-  extendedData?: Record<string, unknown>;
-}
-
-/**
- * Request to update profile from a single event
- */
-export interface UpdateProfileFromEventRequest {
-  event: CreateInteractionRequest;
-}
-
-/**
- * Profile update event - partial update for event-driven profile changes
- */
-export interface ProfileUpdateEvent {
-  learnerId: string;
-  eventType: 'error' | 'success' | 'hint_request' | 'explanation_view' | 'notes_added';
-  timestamp: number;
-  problemId: string;
-  conceptIds?: string[];
-  errorSubtypeId?: string;
-  metadata?: Record<string, unknown>;
-}
-
-/**
- * Database row for learner_profiles table
- */
-export interface LearnerProfileRow {
-  learner_id: string;
-  profile_json: string;
-  concept_coverage: string;
-  concept_evidence: string;
-  error_history: string;
-  interaction_count: number;
-  strategy: string;
-  preferences: string;
-  last_activity_at: string | null;
-  profile_data: string;
-  updated_at: string;
 }
 
 // ============================================================================
@@ -494,10 +422,6 @@ export interface CreateInteractionRequest {
   metadata?: Record<string, unknown>;
 }
 
-export interface BatchInteractionRequest {
-  events: CreateInteractionRequest[];
-}
-
 export interface InteractionQueryParams {
   learnerId?: string;
   sessionId?: string;
@@ -618,14 +542,6 @@ export interface LearnerTrajectory {
     textbookUnitsCreated: number;
     sessionCount: number;
   };
-}
-
-export interface ResearchExportOptions {
-  format: 'json' | 'csv';
-  startDate?: string;
-  endDate?: string;
-  learnerIds?: string[];
-  eventTypes?: EventType[];
 }
 
 // ============================================================================

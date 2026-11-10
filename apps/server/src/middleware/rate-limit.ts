@@ -8,7 +8,7 @@
  * use user+session keys to prevent students from throttling each other.
  */
 
-import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
+import { rateLimit } from 'express-rate-limit';
 import { Request, Response } from 'express';
 
 /**
@@ -215,35 +215,6 @@ export const loginRateLimiter = rateLimit({
 });
 
 /**
- * Legacy configurable per-IP signup limiter. The auth signup route uses
- * shared database counters instead; this export remains for compatibility.
- */
-export const signupRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  limit: SIGNUP_RATE_LIMIT,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    error: 'Too many signup attempts',
-    message: 'Too many signup attempts. Please try again later.',
-    retryAfter: '15 minutes',
-  },
-  keyGenerator: (req: Request) => {
-    return `signup:${ipKeyGenerator(req.ip ?? 'unknown')}`;
-  },
-  handler: (_req: Request, res: Response) => {
-    res.setHeader('Retry-After', String(15 * 60));
-    res.status(429).json({
-      success: false,
-      error: 'Too many signup attempts',
-      message: 'Too many signup attempts. Please try again later.',
-      retryAfter: '15 minutes',
-    });
-  },
-});
-
-/**
  * Stricter rate limiter for sensitive operations
  * 10 requests per 15 minutes per user
  * 
@@ -269,8 +240,3 @@ export const strictRateLimiter = rateLimit({
   },
 });
 
-/**
- * Legacy export for backward compatibility during transition
- * @deprecated Use loginRateLimiter or signupRateLimiter instead
- */
-export const authRateLimiter = loginRateLimiter;

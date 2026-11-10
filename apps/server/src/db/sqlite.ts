@@ -600,54 +600,6 @@ export async function getTextbookUnit(learnerId: string, unitId: string): Promis
 }
 
 // ============================================================================
-// Class Stats Operations
-// ============================================================================
-
-export async function getClassStats(): Promise<{
-  totalLearners: number;
-  totalInteractions: number;
-  interactionsByType: Record<EventType, number>;
-  totalTextbookUnits: number;
-  averageUnitsPerLearner: number;
-  recentActivity: {
-    last24Hours: number;
-    last7Days: number;
-    last30Days: number;
-  };
-}> {
-  const db = getDb();
-
-  const learnersCount = await getAsync<{ count: number }>(db, 'SELECT COUNT(*) as count FROM learners');
-  const interactionsCount = await getAsync<{ count: number }>(db, 'SELECT COUNT(*) as count FROM interactions');
-  const textbooksCount = await getAsync<{ count: number }>(db, 'SELECT COUNT(*) as count FROM textbooks');
-
-  const now = new Date();
-  const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-  const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
-
-  const last24hCount = await getAsync<{ count: number }>(db, 'SELECT COUNT(*) as count FROM interactions WHERE timestamp > ?', [last24Hours]);
-  const last7dCount = await getAsync<{ count: number }>(db, 'SELECT COUNT(*) as count FROM interactions WHERE timestamp > ?', [last7Days]);
-  const last30dCount = await getAsync<{ count: number }>(db, 'SELECT COUNT(*) as count FROM interactions WHERE timestamp > ?', [last30Days]);
-
-  const totalLearners = learnersCount?.count || 0;
-  const totalTextbookUnits = textbooksCount?.count || 0;
-
-  return {
-    totalLearners,
-    totalInteractions: interactionsCount?.count || 0,
-    interactionsByType: {} as Record<EventType, number>, // Would need to query by type
-    totalTextbookUnits,
-    averageUnitsPerLearner: totalLearners > 0 ? totalTextbookUnits / totalLearners : 0,
-    recentActivity: {
-      last24Hours: last24hCount?.count || 0,
-      last7Days: last7dCount?.count || 0,
-      last30Days: last30dCount?.count || 0,
-    },
-  };
-}
-
-// ============================================================================
 // Helper Functions
 // ============================================================================
 

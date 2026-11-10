@@ -117,23 +117,6 @@ export async function getOwnedSectionsByInstructor(
   return rows.map((row) => mapCourseSection(row as Record<string, unknown>));
 }
 
-export async function getSectionsByType(
-  sectionType: 'test' | 'production' | 'pilot'
-): Promise<CourseSection[]> {
-  const db = getDb();
-  const rows = await db`
-    SELECT *
-    FROM course_sections
-    WHERE section_type = ${sectionType}
-    ORDER BY created_at ASC
-  `;
-  return rows.map((row) => mapCourseSection(row as Record<string, unknown>));
-}
-
-export async function getProductionSections(): Promise<CourseSection[]> {
-  return getSectionsByType('production');
-}
-
 export async function getSectionForStudent(studentUserId: string): Promise<CourseSection | null> {
   const db = getDb();
   const rows = await db`

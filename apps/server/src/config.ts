@@ -170,13 +170,6 @@ export const JWT_SECRET: string = (() => {
 export const INSTRUCTOR_SIGNUP_CODE: string =
   process.env.INSTRUCTOR_SIGNUP_CODE || (process.env.NODE_ENV !== 'production' ? 'TeachSQL2024' : '');
 
-/**
- * Code required for student signup.
- * Set STUDENT_SIGNUP_CODE on the backend to gate student account creation.
- */
-export const STUDENT_SIGNUP_CODE: string =
-  process.env.STUDENT_SIGNUP_CODE || (process.env.NODE_ENV !== 'production' ? 'ClassSQL2024' : '');
-
 // ============================================================================
 // Server Configuration
 // ============================================================================

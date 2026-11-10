@@ -10,7 +10,6 @@ const db = {
   getUserById: vi.fn(),
   createUser: vi.fn(),
   updateUser: vi.fn(),
-  deleteUser: vi.fn(),
   getAllProblemProgress: vi.fn(async () => []),
   updateProblemProgress: vi.fn(async () => undefined),
   getProblemProgress: vi.fn(async () => ({ solved: true })),
@@ -106,13 +105,11 @@ describe('learner deletion is not exposed', () => {
   it('returns 405 for a student deleting themself and never touches the database', async () => {
     const response = await call(student, 'DELETE', '/api/learners/student-1');
     expect(response.status).toBe(405);
-    expect(db.deleteUser).not.toHaveBeenCalled();
   });
 
   it('blocks an instructor from deleting an in-section student', async () => {
     const response = await call(instructor, 'DELETE', '/api/learners/student-1');
     expect(response.status).toBe(403);
-    expect(db.deleteUser).not.toHaveBeenCalled();
   });
 });
 

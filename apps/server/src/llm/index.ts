@@ -49,17 +49,3 @@ export function createLLMProvider(config: LLMProviderFactoryConfig): LLMProvider
       throw new Error(`Unknown provider type: ${config.type}`);
   }
 }
-
-/**
- * Get the default provider based on environment configuration
- */
-export function getDefaultProvider(
-  llmProviderType: LLMProviderType,
-  ollamaConfig: OllamaConfig,
-  groqConfig: GroqConfig
-): LLMProvider {
-  if (llmProviderType === 'groq') {
-    return new GroqProvider(groqConfig);
-  }
-  return new OllamaProvider(ollamaConfig);
-}

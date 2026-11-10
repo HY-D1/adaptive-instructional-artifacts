@@ -35,7 +35,6 @@ vi.mock('../../../apps/server/src/db/neon.js', () => ({
   getAllUsers: vi.fn(),
   createUser: vi.fn(),
   updateUser: vi.fn(),
-  deleteUser: vi.fn(),
   getActiveSession: vi.fn(),
   saveSession: vi.fn(),
   getSession: vi.fn(),
