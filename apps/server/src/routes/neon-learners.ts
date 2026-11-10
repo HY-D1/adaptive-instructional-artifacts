@@ -369,8 +369,15 @@ router.put('/:id/profile', requirePreSurveyCompleted, async (req: Request, res: 
     res.json({ success: true, data: profile });
   } catch (error) {
     if (error instanceof db.ProfileRevisionConflict) {
-      res.status(409).json({ success: false, code: 'PROFILE_REVISION_CONFLICT', error: error.message, data: await db.getLearnerProfile(req.params.id) });
-      return;
+      try {
+        const latest = await db.getLearnerProfile(req.params.id);
+        res.status(409).json({ success: false, code: 'PROFILE_REVISION_CONFLICT', error: error.message, data: latest });
+        return;
+      } catch (reloadError) {
+        console.error('Error reloading learner profile after revision conflict:', reloadError);
+        res.status(500).json({ success: false, error: 'Failed to save learner profile' });
+        return;
+      }
     }
     console.error('Error saving learner profile:', error);
     res.status(500).json({ success: false, error: 'Failed to save learner profile' });

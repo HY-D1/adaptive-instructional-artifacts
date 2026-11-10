@@ -20,12 +20,17 @@ router.get('/state', banditReadRateLimiter, async (req: Request, res: Response) 
     res.status(403).json({ success: false, error: 'Adaptive bandit is student-only' });
     return;
   }
-  const assignment = await db.getStudentConditionAssignment(req.auth.learnerId);
-  if (assignment?.conditionId !== 'adaptive') {
-    res.status(403).json({ success: false, error: 'Adaptive bandit is unavailable for this condition' });
-    return;
+  try {
+    const assignment = await db.getStudentConditionAssignment(req.auth.learnerId);
+    if (assignment?.conditionId !== 'adaptive') {
+      res.status(403).json({ success: false, error: 'Adaptive bandit is unavailable for this condition' });
+      return;
+    }
+    res.json({ success: true, data: await db.getSharedBanditState() });
+  } catch (error) {
+    console.error('[bandit/state]', error);
+    res.status(500).json({ success: false, error: 'Failed to load bandit state' });
   }
-  res.json({ success: true, data: await db.getSharedBanditState() });
 });
 
 router.post('/reward', banditRewardRateLimiter, async (req: Request, res: Response) => {
@@ -38,7 +43,14 @@ router.post('/reward', banditRewardRateLimiter, async (req: Request, res: Respon
     res.status(400).json({ success: false, error: 'Invalid bandit reward' });
     return;
   }
-  const assignment = await db.getStudentConditionAssignment(req.auth.learnerId);
+  let assignment: Awaited<ReturnType<typeof db.getStudentConditionAssignment>>;
+  try {
+    assignment = await db.getStudentConditionAssignment(req.auth.learnerId);
+  } catch (error) {
+    console.error('[bandit/reward]', error);
+    res.status(500).json({ success: false, error: 'Failed to record bandit reward' });
+    return;
+  }
   if (assignment?.conditionId !== 'adaptive') {
     res.status(403).json({ success: false, error: 'Adaptive bandit is unavailable for this condition' });
     return;

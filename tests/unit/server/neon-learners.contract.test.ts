@@ -9,6 +9,8 @@ const getProblemProgressMock = vi.fn();
 const updateLearnerProfileFromEventMock = vi.fn();
 const getLearnerProfileMock = vi.fn();
 const assignStudentConditionMock = vi.fn();
+const saveLearnerProfileMock = vi.fn();
+class ProfileRevisionConflictMock extends Error {}
 class StudentConditionAssignmentErrorMock extends Error {
   readonly status = 400;
 }
@@ -27,6 +29,8 @@ vi.mock('../../../apps/server/src/db/neon.js', () => ({
   getLearnerProfile: getLearnerProfileMock,
   assignStudentCondition: assignStudentConditionMock,
   StudentConditionAssignmentError: StudentConditionAssignmentErrorMock,
+  saveLearnerProfile: saveLearnerProfileMock,
+  ProfileRevisionConflict: ProfileRevisionConflictMock,
   getUserById: vi.fn(),
   getAllUsers: vi.fn(),
   createUser: vi.fn(),
@@ -45,7 +49,7 @@ vi.mock('../../../apps/server/src/middleware/auth.js', () => ({
 
 function getRouteHandler(
   router: { stack?: Array<{ route?: { path?: string; methods?: Record<string, boolean>; stack?: Array<{ handle?: Function }> } }> },
-  method: 'get' | 'post',
+  method: 'get' | 'post' | 'put',
   path: string,
 ): Function {
   const layer = router.stack?.find(
@@ -206,5 +210,47 @@ describe('neon learners profile contract', () => {
       success: false,
       error: 'Student is not enrolled in an eligible production section',
     });
+  });
+
+  it('returns 500 (not a hang) when the 409 conflict reload of the profile rejects', async () => {
+    const { neonLearnersRouter } = await import('../../../apps/server/src/routes/neon-learners');
+    const saveProfile = getRouteHandler(
+      neonLearnersRouter as unknown as Parameters<typeof getRouteHandler>[0],
+      'put',
+      '/:id/profile',
+    );
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    saveLearnerProfileMock.mockRejectedValue(new ProfileRevisionConflictMock('stale'));
+    getLearnerProfileMock.mockRejectedValue(new Error('db down'));
+    let statusCode = 200;
+    let payload: unknown = null;
+    const res = {
+      status(code: number) { statusCode = code; return this; },
+      json(data: unknown) { payload = data; return this; },
+    };
+    await saveProfile({ params: { id: 'learner-1' }, body: { expectedRevision: 1 } }, res);
+    expect(statusCode).toBe(500);
+    expect(payload).toEqual({ success: false, error: 'Failed to save learner profile' });
+    errSpy.mockRestore();
+  });
+
+  it('still returns 409 with the latest profile when the conflict reload succeeds', async () => {
+    const { neonLearnersRouter } = await import('../../../apps/server/src/routes/neon-learners');
+    const saveProfile = getRouteHandler(
+      neonLearnersRouter as unknown as Parameters<typeof getRouteHandler>[0],
+      'put',
+      '/:id/profile',
+    );
+    saveLearnerProfileMock.mockRejectedValue(new ProfileRevisionConflictMock('stale'));
+    getLearnerProfileMock.mockResolvedValue({ id: 'learner-1', revision: 2 });
+    let statusCode = 200;
+    let payload: unknown = null;
+    const res = {
+      status(code: number) { statusCode = code; return this; },
+      json(data: unknown) { payload = data; return this; },
+    };
+    await saveProfile({ params: { id: 'learner-1' }, body: { expectedRevision: 1 } }, res);
+    expect(statusCode).toBe(409);
+    expect(payload).toEqual({ success: false, code: 'PROFILE_REVISION_CONFLICT', error: 'stale', data: { id: 'learner-1', revision: 2 } });
   });
 });

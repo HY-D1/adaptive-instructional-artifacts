@@ -60,4 +60,39 @@ describe('shared bandit routes', () => {
     expect(res.statusCode).toBe(400);
     expect(recordReward).not.toHaveBeenCalled();
   });
+
+  it('returns 500 (not a hang) when the state assignment lookup rejects', async () => {
+    const { neonBanditRouter } = await import('../../../apps/server/src/routes/neon-bandit.js');
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    getAssignment.mockRejectedValue(new Error('db down'));
+    const res = response();
+    await getHandler(neonBanditRouter, 'get', '/state')({ auth: { role: 'student', learnerId: 's1' } }, res, () => {});
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toMatchObject({ success: false });
+    errSpy.mockRestore();
+  });
+
+  it('returns 500 (not a hang) when reading shared state rejects', async () => {
+    const { neonBanditRouter } = await import('../../../apps/server/src/routes/neon-bandit.js');
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    getAssignment.mockResolvedValue({ conditionId: 'adaptive' });
+    getState.mockRejectedValue(new Error('db down'));
+    const res = response();
+    await getHandler(neonBanditRouter, 'get', '/state')({ auth: { role: 'student', learnerId: 's1' } }, res, () => {});
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toMatchObject({ success: false });
+    errSpy.mockRestore();
+  });
+
+  it('returns 500 (not a hang) when the reward assignment lookup rejects', async () => {
+    const { neonBanditRouter } = await import('../../../apps/server/src/routes/neon-bandit.js');
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    getAssignment.mockRejectedValue(new Error('db down'));
+    const res = response();
+    await getHandler(neonBanditRouter, 'post', '/reward')({ auth: { role: 'student', learnerId: 's1' }, body: { eventId: 'e', selectionEventId: 's', armId: 'adaptive', reward: 0.5, assignmentStrategy: 'bandit' } }, res, () => {});
+    expect(res.statusCode).toBe(500);
+    expect(res.body).toEqual({ success: false, error: 'Failed to record bandit reward' });
+    expect(recordReward).not.toHaveBeenCalled();
+    errSpy.mockRestore();
+  });
 });
