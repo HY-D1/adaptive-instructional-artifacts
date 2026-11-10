@@ -4,6 +4,7 @@
  */
 
 import { storage } from './storage';
+import { PREVIEW_MODE_KEY } from './storage/storage-validation';
 import type { UserRole } from '../types';
 
 // Route paths
@@ -21,9 +22,6 @@ const ROLE_ROUTES: Record<UserRole, string[]> = {
   student: ['/', '/textbook', '/concepts', '/practice'],
   instructor: ['/', '/textbook', '/research', '/instructor-dashboard'],
 };
-
-// Preview mode localStorage key (must match InstructorDashboard.tsx)
-const PREVIEW_MODE_KEY = 'sql-adapt-preview-mode';
 
 /**
  * Check if preview mode is active

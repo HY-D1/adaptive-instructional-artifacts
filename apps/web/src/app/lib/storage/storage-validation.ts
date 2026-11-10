@@ -16,15 +16,17 @@ export const VALID_PROFILE_IDS = new Set([
 // Valid assignment strategies
 export const VALID_STRATEGIES = new Set(['static', 'diagnostic', 'bandit']);
 
+// Single source of truth for the preview-mode localStorage key
+export const PREVIEW_MODE_KEY = 'sql-adapt-preview-mode';
+
 // Storage keys for localStorage
 export const STORAGE_KEYS = {
   PROFILE_OVERRIDE: 'sql-adapt-debug-profile',
   STRATEGY: 'sql-adapt-debug-strategy',
-  PREVIEW_MODE: 'sql-adapt-preview-mode'
+  PREVIEW_MODE: PREVIEW_MODE_KEY
 } as const;
 
 // localStorage keys
-const PREVIEW_MODE_KEY = 'sql-adapt-preview-mode';
 const DEBUG_PROFILE_KEY = 'sql-adapt-debug-profile';
 const DEBUG_STRATEGY_KEY = 'sql-adapt-debug-strategy';
 

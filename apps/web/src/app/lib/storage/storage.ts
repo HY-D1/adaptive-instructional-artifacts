@@ -49,6 +49,7 @@ import {
   isValidProfileId,
   isValidStrategy,
   isValidUserProfile,
+  PREVIEW_MODE_KEY,
 } from './storage-validation';
 import { reinforcementManager } from '../content/reinforcement-manager';
 import { scoreSelfExplanation, type ReflectionQualityScore } from '../content/self-explanation-scorer';
@@ -3443,7 +3444,6 @@ const SYNC_CHANNEL = 'sql-adapt-sync';
 /**
  * Storage keys for synced state
  */
-const PREVIEW_MODE_KEY = 'sql-adapt-preview-mode';
 const DEBUG_PROFILE_KEY = 'sql-adapt-debug-profile';
 const DEBUG_STRATEGY_KEY = 'sql-adapt-debug-strategy';
 

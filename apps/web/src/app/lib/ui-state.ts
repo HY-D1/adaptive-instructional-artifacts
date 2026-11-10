@@ -1,4 +1,5 @@
 import { safeSet } from './storage/safe-storage';
+import { PREVIEW_MODE_KEY } from './storage/storage-validation';
 
 type UiRole = 'student' | 'instructor' | 'anonymous';
 
@@ -22,7 +23,7 @@ function normalizeScope(scope: Partial<UiScope>): UiScope {
 function isPreviewModeActive(): boolean {
   if (typeof window === 'undefined') return false;
   try {
-    return localStorage.getItem('sql-adapt-preview-mode') === 'true';
+    return localStorage.getItem(PREVIEW_MODE_KEY) === 'true';
   } catch {
     return false;
   }
