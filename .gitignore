@@ -55,7 +55,7 @@ chat-history/
 .codex/
 .agents/
 
-# But KEEP the production-grade quality-loop system
+# Other agent tool directories (local only)
 .kimi/
 .cursor/
 .aider*
@@ -89,8 +89,6 @@ docs/audits/
 # AI-generated reports (except curated runbooks)
 !docs/runbooks/*.md
 !docs/runbooks/**/*.md
-!docs/runbooks/*.md
-!docs/runbooks/**/*.md
 
 # Architecture diagrams (local only)
 diagrams/
@@ -105,11 +103,6 @@ raw_pdf/
 tools/pdf_ingest/.venv/
 tools/pdf_ingest/.pytest_cache/
 tools/pdf_ingest/.mypy_cache/
-.local/ingest-runs/
-
-# Generated PDF index (rebuildable from source)
-dist/pdf-index/
-!dist/pdf-index/.gitkeep
 
 # But KEEP the static textbook content for deployment
 # The directory itself, all sub-paths, and specifically all concept markdown files
@@ -129,9 +122,6 @@ dist/pdf-index/
 PDF_HELPER_INTEGRATION_GUIDE.md
 TEXTBOOK_INTEGRATION_PLAN.md
 
-# Test output logs
-test-output.log
-
 # Launch proof artifacts (temporary validation files)
 artifacts/
 
@@ -141,28 +131,17 @@ ux-audit-evidence/
 # Debug artifacts - ad hoc scripts and local testing
 debug/
 
-# Historical reports and audits (archived)
-.claude/archived/
-
 # Debug artifacts
 cookies.txt
 *.cookies.txt
 
-# Root-level test screenshots
-/concept-*.png
-/concepts-*.png
-
 # Backend
-apps/server/node_modules/
 apps/server/data/*.db
 apps/server/data/*.db-shm
 apps/server/data/*.db-wal
-apps/server/dist/
 .vercel
 .gstack/
-.env*.local
 .local/
-.env.pdf-local
 # Neon export data and dumps
 .neon
 neon-export/
