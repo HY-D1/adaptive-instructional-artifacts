@@ -21,8 +21,7 @@
   },
   "include": [
     "apps/web/src/**/*",
-    "apps/web/vite.config.ts",
-    "apps/web/src/server/**/*"
+    "apps/web/vite.config.ts"
   ],
   "exclude": [
     "node_modules",
