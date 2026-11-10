@@ -84,6 +84,8 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      // Same '@' alias as apps/web/vite.config.ts (resolves to apps/web/src)
+      '@': path.resolve(__dirname, 'apps/web/src'),
       // Ensure proper path resolution
       // Resolve express from server directory for unit tests importing server routes
       'express': path.resolve(__dirname, 'apps/server/node_modules/express')
