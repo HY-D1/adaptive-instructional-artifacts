@@ -6,7 +6,8 @@
  *
  * requireAuth  - blocks unauthenticated requests (401)
  * optionalAuth - attaches user if cookie present, continues regardless
- * requireOwnership - verifies req.auth.learnerId === route :learnerId (or user is instructor)
+ * requireOwnership - verifies req.auth.learnerId === route :learnerId (or, for an
+ *                    instructor, that the learner is in one of their sections)
  */
 
 import type { Request, Response, NextFunction } from 'express';
@@ -130,7 +131,9 @@ export function requireInstructor(req: Request, res: Response, next: NextFunctio
 
 /**
  * After requireAuth: verifies that the route :learnerId or :id param belongs
- * to the authenticated user. Instructors may access any learner's data.
+ * to the authenticated user. Instructors may access their own data and that of
+ * learners in their own sections (getSectionForLearnerInInstructorScope);
+ * any other learner is a 403.
  *
  * Usage: router.get('/:learnerId/...', requireAuth, requireOwnership, handler)
  */

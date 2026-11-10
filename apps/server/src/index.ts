@@ -6,7 +6,7 @@
 import './load-env.js';
 import app, { ensureSchemaInitialized } from './app.js';
 import { closeDb, isUsingNeon } from './db/index.js';
-import { ENABLE_PDF_INDEX, ENABLE_LLM, PORT, OLLAMA_BASE_URL } from './config.js';
+import { ENABLE_PDF_INDEX, ENABLE_LLM, PORT, OLLAMA_BASE_URL, LLM_PROVIDER, GROQ_MODEL } from './config.js';
 
 function displayServerStatus() {
   const dbType = isUsingNeon() ? 'Neon PostgreSQL' : 'SQLite';
@@ -31,7 +31,8 @@ function displayServerStatus() {
 
   if (ENABLE_LLM) {
     console.log(`║   🤖 LLM Proxy: ENABLED                                    ║`);
-    console.log(`║      → Ollama: ${OLLAMA_BASE_URL}`.padEnd(59) + '║');
+    const providerDetail = LLM_PROVIDER === 'groq' ? `groq (${GROQ_MODEL})` : `ollama (${OLLAMA_BASE_URL})`;
+    console.log(`║      → Provider: ${providerDetail}`.padEnd(59) + '║');
     console.log(`║      → POST /api/llm/generate                              ║`);
     console.log(`║      → GET  /api/llm/models                                ║`);
     console.log(`║      → GET  /api/llm/status                                ║`);

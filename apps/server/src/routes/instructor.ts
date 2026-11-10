@@ -238,7 +238,8 @@ router.get('/learners', async (req: Request, res: Response) => {
     const instructorId = req.auth!.learnerId;
     const learnerIds = await getInstructorScopedLearnerIds(instructorId);
 
-    // Batch fetch all section data to avoid N+1 queries
+    // One section lookup per learner, run concurrently (still N queries, not a
+    // single batched query).
     const learnerSections = await Promise.all(
       learnerIds.map((learnerId) =>
         getSectionForLearnerInInstructorScope({
