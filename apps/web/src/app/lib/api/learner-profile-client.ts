@@ -254,7 +254,9 @@ export async function getProfile(learnerId: string, forceRefresh: boolean = fals
   if (!forceRefresh && !USE_BACKEND) {
     const cached = getCachedProfile(learnerId);
     if (cached) {
-      console.log('[ProfileClient] Using cached profile for', learnerId);
+      if (import.meta.env.DEV) {
+        console.log('[ProfileClient] Using cached profile for', learnerId);
+      }
       return cached.profile;
     }
   }
@@ -269,7 +271,9 @@ export async function getProfile(learnerId: string, forceRefresh: boolean = fals
     // Fallback to cache on error
     const cached = getCachedProfile(learnerId);
     if (cached) {
-      console.log('[ProfileClient] Backend error, using cached profile');
+      if (import.meta.env.DEV) {
+        console.log('[ProfileClient] Backend error, using cached profile');
+      }
       return cached.profile;
     }
     return null;
@@ -587,7 +591,9 @@ export async function syncPendingUpdates(learnerId: string): Promise<boolean> {
     return false;
   }
   
-  console.log(`[ProfileClient] Syncing ${cached.pendingUpdates.length} pending updates for ${learnerId}`);
+  if (import.meta.env.DEV) {
+    console.log(`[ProfileClient] Syncing ${cached.pendingUpdates.length} pending updates for ${learnerId}`);
+  }
   const pending = [...cached.pendingUpdates];
   
   const response = await fetchApi<BackendLearnerProfile>(`/learners/${learnerId}/profile/events/batch`, {

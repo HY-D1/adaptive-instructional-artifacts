@@ -1613,7 +1613,9 @@ export function LearningInterface() {
     
     // Log if there are violations
     if (readiness.violations.length > 0) {
-      console.log('[Knowledge] Prerequisite violations detected:', readiness.violations);
+      if (import.meta.env.DEV) {
+        console.log('[Knowledge] Prerequisite violations detected:', readiness.violations);
+      }
     }
   }, [learnerId, currentProblem.id, sessionId, isHydrating]);
   
