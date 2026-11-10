@@ -9,7 +9,7 @@
  */
 
 import { withCsrfHeader, setCsrfToken, clearCsrfToken } from './csrf-client';
-import { isResearchSafe, getResearchRuntimeMode, getApiBaseUrl, isBackendConfigured } from '../runtime-config';
+import { isResearchSafe, getApiBaseUrl, isBackendConfigured } from '../runtime-config';
 
 // '' for same-origin (relative /api/auth), a URL otherwise, undefined when unset.
 const _API_BASE = getApiBaseUrl();
@@ -21,22 +21,6 @@ export const AUTH_ENABLED = AUTH_BACKEND_CONFIGURED || import.meta.env.DEV;
 
 /** Research-safe flag - true when backend is configured for data durability */
 export const AUTH_RESEARCH_SAFE = isResearchSafe();
-
-/**
- * Get research runtime mode for auth
- * @returns 'research-safe' | 'research-unsafe' | 'dev-demo'
- */
-export function getAuthResearchMode(): ReturnType<typeof getResearchRuntimeMode> {
-  return getResearchRuntimeMode();
-}
-
-/**
- * Check if auth is in research-safe mode
- * Data durability is guaranteed when this returns true
- */
-export function isAuthResearchSafe(): boolean {
-  return isResearchSafe();
-}
 
 function formatNetworkError(error: Error): string {
   const base = error.message || 'Network request failed';

@@ -473,26 +473,6 @@ export async function generateWithLLM(prompt: string, options?: LLMGenerateOptio
 }
 
 /**
- * @deprecated Use generateWithLLM for new code.
- */
-export async function generateWithOllama(prompt: string, options?: OllamaGenerateOptions): Promise<{
-  text: string;
-  model: string;
-  params: LLMGenerationParams;
-}> {
-  return generateWithLLM(prompt, options);
-}
-
-/**
- * Check if LLM is enabled on the backend
- * @returns Promise<boolean> indicating if LLM is enabled
- */
-export async function isLLMEnabled(): Promise<boolean> {
-  const status = await getLLMStatus();
-  return status.enabled;
-}
-
-/**
  * Check if LLM is available (enabled and Ollama reachable)
  * @returns Promise<boolean> indicating if LLM is available
  */
@@ -584,22 +564,6 @@ export async function checkLLMHealth(model?: string): Promise<LLMHealthStatus> {
       enabled: true,
     };
   }
-}
-
-/**
- * @deprecated Use checkLLMHealth for new code.
- */
-export async function checkOllamaHealth(model: string = OLLAMA_MODEL): Promise<OllamaHealthStatus> {
-  return checkLLMHealth(model);
-}
-
-/**
- * Check if LLM feature is enabled via environment
- * This is a client-side check that reads the VITE_ENABLE_LLM env var
- * Note: The actual enforcement happens on the backend
- */
-export function isLLMFeatureEnabled(): boolean {
-  return import.meta.env.VITE_ENABLE_LLM === 'true';
 }
 
 /**

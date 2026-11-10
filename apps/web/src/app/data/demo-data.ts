@@ -146,7 +146,3 @@ function simulateLearnerSession(
     });
   });
 }
-
-export function clearDemoData() {
-  storage.clearAll();
-}

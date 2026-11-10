@@ -705,10 +705,3 @@ export function hasDemoData(): boolean {
     DEMO_LEARNERS.some(dl => dl.id === i.learnerId)
   );
 }
-
-/**
- * Get demo learner IDs for filtering
- */
-export function getDemoLearnerIds(): string[] {
-  return DEMO_LEARNERS.map(l => l.id);
-}

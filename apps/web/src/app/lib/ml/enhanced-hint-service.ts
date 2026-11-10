@@ -45,6 +45,3 @@ export {
   generateLLMEnhancedHint,
   saveHintToTextbook,
 } from './hint-service';
-
-// Legacy version constant for backward compatibility
-export const ENHANCED_HINT_SERVICE_VERSION_LEGACY = 'enhanced-hint-v2.0.0-adaptive';

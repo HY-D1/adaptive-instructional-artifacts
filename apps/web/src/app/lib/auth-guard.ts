@@ -74,67 +74,10 @@ export function getDefaultRouteForRole(role: UserRole | null | undefined): strin
 }
 
 /**
- * Require a specific role - returns redirect path if unauthorized
- * Preview mode allows instructors to satisfy student role requirement
- * @returns null if authorized, redirect path if unauthorized
- */
-export function requireRole(role: UserRole): string | null {
-  const profile = storage.getUserProfile();
-  
-  if (!profile) {
-    // Redirect to home (start page) since there's no dedicated login page
-    return ROUTES.HOME;
-  }
-  
-  // Preview mode: instructors can satisfy student role requirement
-  if (role === 'student' && profile.role === 'instructor' && isPreviewModeActive()) {
-    return null; // Allow access
-  }
-  
-  if (profile.role !== role) {
-    // Redirect to appropriate page based on actual role
-    return getDefaultRouteForRole(profile.role);
-  }
-  
-  return null;
-}
-
-/**
  * Check if user is authenticated
  */
 export function isAuthenticated(): boolean {
   return storage.getUserProfile() !== null;
-}
-
-/**
- * Redirect if authenticated - for login page
- * @returns redirect path if authenticated, null if not
- */
-export function redirectIfAuthenticated(): string | null {
-  const profile = storage.getUserProfile();
-  
-  if (profile) {
-    return getDefaultRouteForRole(profile.role);
-  }
-  
-  return null;
-}
-
-/**
- * Get current user profile with role checks
- */
-export function getCurrentUser() {
-  const profile = storage.getUserProfile();
-  
-  if (!profile) {
-    return null;
-  }
-  
-  return {
-    ...profile,
-    isStudent: profile.role === 'student',
-    isInstructor: profile.role === 'instructor',
-  };
 }
 
 /**
@@ -178,65 +121,4 @@ export function protectRoute(options: {
   }
   
   return { allowed: true };
-}
-
-/**
- * Hook-compatible guard that can be used in useEffect
- * Returns true if access is allowed, false otherwise
- * Side effect: redirects if not allowed
- */
-export function checkRouteAccess(
-  path: string,
-  navigate: (path: string) => void
-): boolean {
-  const profile = storage.getUserProfile();
-  
-  // No profile - redirect to home (start page)
-  if (!profile) {
-    navigate(ROUTES.HOME);
-    return false;
-  }
-  
-  // Check role-based access
-  if (!canAccessRoute(profile.role, path)) {
-    navigate(getDefaultRouteForRole(profile.role));
-    return false;
-  }
-  
-  return true;
-}
-
-/**
- * Navigation guard for React Router loader functions
- * Returns a Response for redirects, null for allowed access
- * Preview mode allows instructors to access student routes
- */
-export function loaderGuard(
-  request: Request,
-  options?: { requiredRole?: UserRole }
-): Response | null {
-  const profile = storage.getUserProfile();
-  
-  // Not authenticated - redirect to home (start page)
-  if (!profile) {
-    return new Response(null, {
-      status: 302,
-      headers: { Location: ROUTES.HOME },
-    });
-  }
-  
-  // Preview mode: instructors can access student routes
-  if (options?.requiredRole === 'student' && profile.role === 'instructor' && isPreviewModeActive()) {
-    return null; // Allow access
-  }
-  
-  // Role check
-  if (options?.requiredRole && profile.role !== options.requiredRole) {
-    return new Response(null, {
-      status: 302,
-      headers: { Location: getDefaultRouteForRole(profile.role) },
-    });
-  }
-  
-  return null;
 }

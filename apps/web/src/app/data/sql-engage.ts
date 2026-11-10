@@ -436,18 +436,6 @@ function ensureSqlEngageRow(row: SqlEngageRecord | undefined, canonicalSubtype: 
   };
 }
 
-export function getDeterministicSqlEngageHint(
-  subtype: string,
-  hintLevel: number,
-  seed: string
-): SqlEngageRecord {
-  const canonicalSubtype = canonicalizeSqlEngageSubtype(subtype);
-  const rows = getSqlEngageRowsBySubtype(canonicalSubtype);
-  const sourceRows = rows.length > 0 ? rows : [getFallbackSqlEngageRow()];
-  const index = stableHash(`${canonicalSubtype}|${hintLevel}|${seed}`) % sourceRows.length;
-  return ensureSqlEngageRow(sourceRows[index], canonicalSubtype);
-}
-
 export function getDeterministicSqlEngageAnchor(
   subtype: string,
   seed: string
@@ -547,10 +535,6 @@ export function getConceptIdsForSqlEngageSubtype(subtype?: string): string[] {
   if (!subtype) return [];
   const normalized = canonicalizeSqlEngageSubtype(subtype);
   return subtypeToConceptMap[normalized] || [];
-}
-
-export function getMappedSqlEngageSubtypes(): string[] {
-  return Object.keys(subtypeToConceptMap).sort((a, b) => a.localeCompare(b));
 }
 
 /** SQL keywords a learner is most likely to mistype. */
@@ -959,18 +943,4 @@ export const hintTemplates: HintTemplate[] = [
 // Helper functions to retrieve from SQL-Engage
 export function getConceptById(id: string): ConceptNode | undefined {
   return conceptNodes.find(c => c.id === id);
-}
-
-export function getErrorSubtype(errorMessage: string): ErrorSubtype | undefined {
-  return errorSubtypes.find(e => e.pattern.test(errorMessage));
-}
-
-export function getHintsForError(errorSubtypeId: string, level: number = 1): HintTemplate[] {
-  return hintTemplates.filter(h => 
-    h.errorSubtypeId === errorSubtypeId && h.hintLevel <= level
-  );
-}
-
-export function getConceptsByIds(ids: string[]): ConceptNode[] {
-  return conceptNodes.filter(c => ids.includes(c.id));
 }

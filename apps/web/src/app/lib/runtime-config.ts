@@ -476,13 +476,6 @@ export function getApiBaseUrl(): string | undefined {
 }
 
 /**
- * Get the Ollama URL (for local development)
- */
-export function getOllamaUrl(): string {
-  return import.meta.env.VITE_OLLAMA_URL || 'http://127.0.0.1:11434';
-}
-
-/**
  * Runtime configuration object
  * Use this for feature flags and configuration checks
  */

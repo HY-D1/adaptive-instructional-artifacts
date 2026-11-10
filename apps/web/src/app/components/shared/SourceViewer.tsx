@@ -291,28 +291,6 @@ function PassageCard({
 }
 
 /**
- * Compact source badge showing count of sources
- * @param props - Badge props with count and optional click handler
- */
-export function SourceBadge({
-  count,
-  onClick
-}: {
-  count: number;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100 transition-colors"
-    >
-      <BookOpen className="size-3" />
-      <span>{count} source{count !== 1 ? 's' : ''}</span>
-    </button>
-  );
-}
-
-/**
  * Guidance ladder rung indicator badge
  * @param props - Rung props with level, label visibility, and size
  */

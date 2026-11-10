@@ -423,75 +423,6 @@ export function upsertTextbookUnit(
   };
 }
 
-// Create unit input from LLM guidance output (rung 3)
-export function createUnitInputFromRung3(
-  learnerId: string,
-  sessionId: string,
-  llmOutput: LLMGuidanceOutput,
-  sourceInteractionIds: string[],
-  errorSubtypeId?: string
-): CreateUnitInput {
-  // Parse rung 3 content for sections
-  const parsed = parseRung3Content(llmOutput.content);
-  
-  return {
-    learnerId,
-    sessionId,
-    conceptIds: llmOutput.conceptIds,
-    type: 'summary', // Rung 3 creates summary units
-    title: parsed.title || 'Reflective Note',
-    content: llmOutput.content,
-    sourceInteractionIds,
-    summary: parsed.summary,
-    commonMistakes: parsed.commonMistakes,
-    minimalExample: parsed.minimalExample,
-    sourceRefIds: llmOutput.sourceRefIds,
-    llmOutput,
-    errorSubtypeId
-  };
-}
-
-// Parse Rung 3 content into sections
-function parseRung3Content(content: string): {
-  title?: string;
-  summary?: string;
-  commonMistakes?: string[];
-  minimalExample?: string;
-} {
-  const result: ReturnType<typeof parseRung3Content> = {};
-  
-  // Extract summary
-  const summaryMatch = content.match(/##?\s*Summary\s*\n([^#]+)/i);
-  if (summaryMatch) {
-    result.summary = summaryMatch[1].trim();
-  }
-  
-  // Extract common mistakes
-  const mistakesMatch = content.match(/##?\s*Common\s*(?:Mistakes|Errors)\s*\n([^#]+)/i);
-  if (mistakesMatch) {
-    const mistakesText = mistakesMatch[1];
-    result.commonMistakes = mistakesText
-      .split('\n')
-      .map((line) => line.replace(/^[-*]\s*/, '').trim())
-      .filter((line) => line.length > 0);
-  }
-  
-  // Extract minimal example (SQL code block)
-  const exampleMatch = content.match(/##?\s*(?:Minimal\s*)?Example\s*\n```sql\s*\n([\s\S]*?)```/i);
-  if (exampleMatch) {
-    result.minimalExample = exampleMatch[1].trim();
-  }
-  
-  // Extract title from first line if it looks like a heading
-  const lines = content.split('\n');
-  const firstLine = lines[0].trim();
-  if (firstLine.startsWith('#') && !firstLine.startsWith('##')) {
-    result.title = firstLine.replace(/^#\s*/, '');
-  }
-  
-  return result;
-}
-
 /**
  * Competition result from comparing a new unit against existing units
  */
@@ -709,13 +640,6 @@ export function filterUnitsByStatus(
 }
 
 /**
- * Get primary units only (for default display)
- */
-export function getPrimaryUnits(units: InstructionalUnit[]): InstructionalUnit[] {
-  return filterUnitsByStatus(units, ['primary']);
-}
-
-/**
  * Get alternative units for a concept
  */
 export function getAlternativeUnits(
@@ -729,54 +653,4 @@ export function getAlternativeUnits(
       u.status === 'alternative' &&
       (type === undefined || u.type === type)
   );
-}
-
-// Get unit statistics for display
-export function getUnitStats(unit: InstructionalUnit): {
-  age: number;
-  revisionCount: number;
-  sourceCount: number;
-  isFresh: boolean;
-  qualityScore: number;
-  qualityTier: 'best' | 'good' | 'average' | 'basic';
-  isAutoCreated: boolean;
-} {
-  const now = Date.now();
-  const age = now - unit.addedTimestamp;
-  const revisionCount = unit.revisionCount || 0;
-  const sourceCount = (unit.sourceRefIds || []).length;
-  const isFresh = age < 7 * 24 * 60 * 60 * 1000; // Less than 7 days
-  const qualityScore = unit.qualityScore ?? 0;
-  const isAutoCreated = unit.autoCreated ?? false;
-  
-  return { 
-    age, 
-    revisionCount, 
-    sourceCount, 
-    isFresh, 
-    qualityScore,
-    qualityTier: getQualityTierLabel(unit),
-    isAutoCreated
-  };
-}
-
-/**
- * Check if a unit was auto-created by the trace analyzer
- */
-export function isAutoCreatedUnit(unit: InstructionalUnit): boolean {
-  return unit.autoCreated ?? false;
-}
-
-/**
- * Get all auto-created units from a list
- */
-export function getAutoCreatedUnits(units: InstructionalUnit[]): InstructionalUnit[] {
-  return units.filter((u) => u.autoCreated === true);
-}
-
-/**
- * Get the count of auto-created units
- */
-export function getAutoCreatedUnitCount(units: InstructionalUnit[]): number {
-  return units.filter((u) => u.autoCreated === true).length;
 }

@@ -20,7 +20,6 @@ const PDF_INDEX_KEY = 'sql-learning-pdf-index';
 
 // Size limits
 export const MAX_CHAT_MESSAGES = 50;
-export const MAX_HINT_BACKUP_PER_LEARNER_PROBLEM = 20; // Per learner/problem as per requirement
 
 // Storage quota thresholds
 const QUOTA_WARNING_THRESHOLD = 0.85; // 85% full triggers warning

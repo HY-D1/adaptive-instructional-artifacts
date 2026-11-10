@@ -7,8 +7,7 @@ import type {
   ConceptRegistry, 
   AlignmentMap, 
   ConceptRegistryEntry, 
-  AlignmentMapEntry,
-  ConceptRegistrySourceRef
+  AlignmentMapEntry
 } from '../types';
 
 // Concept Registry (Week 3 D1)
@@ -109,42 +108,13 @@ export function getConceptFromRegistry(conceptId: string): ConceptRegistryEntry 
   return conceptRegistry.concepts.find(c => c.conceptId === conceptId);
 }
 
-export function getVerifiedConcepts(): ConceptRegistryEntry[] {
-  return conceptRegistry.concepts.filter(c => c.status === 'verified');
-}
-
-export function getConceptsByTag(tag: string): ConceptRegistryEntry[] {
-  return conceptRegistry.concepts.filter(c => c.tags.includes(tag));
-}
-
-export function getSourceRefsForConcept(conceptId: string): ConceptRegistrySourceRef[] {
-  const concept = getConceptFromRegistry(conceptId);
-  return concept?.sourceRefs ?? [];
-}
-
 // Helper functions for alignment map (Week 3 D3)
 export function getAlignmentForSubtype(sqlEngageSubtype: string): AlignmentMapEntry | undefined {
   return alignmentMap.mappings.find(m => m.sqlEngageSubtype === sqlEngageSubtype);
-}
-
-export function getTextbookConceptIdsForSubtype(sqlEngageSubtype: string): string[] {
-  return getAlignmentForSubtype(sqlEngageSubtype)?.textbookConceptIds ?? [];
-}
-
-export function isSubtypeVerified(sqlEngageSubtype: string): boolean {
-  return getAlignmentForSubtype(sqlEngageSubtype)?.status === 'verified';
 }
 
 export function canAutoEscalate(sqlEngageSubtype: string): boolean {
   const mapping = getAlignmentForSubtype(sqlEngageSubtype);
   if (!mapping) return false;
   return mapping.status === 'verified' && !mapping.excludedFromAutoEscalation;
-}
-
-export function getVerifiedMappings(): AlignmentMapEntry[] {
-  return alignmentMap.mappings.filter(m => m.status === 'verified');
-}
-
-export function getAutoEscalationEligibleMappings(): AlignmentMapEntry[] {
-  return alignmentMap.mappings.filter(m => m.status === 'verified' && !m.excludedFromAutoEscalation);
 }

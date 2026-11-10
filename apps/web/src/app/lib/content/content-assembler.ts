@@ -16,10 +16,7 @@ import { RetrievalBundle } from './retrieval-bundle';
 import {
   generateDeterministicFromBundle,
 } from './deterministic-generator';
-import { 
-  getErrorTemplate,
-  getRelatedConceptIds 
-} from './error-templates';
+import { getErrorTemplate } from './error-templates';
 import {
   canonicalizeSqlEngageSubtype,
   getConceptIdsForSqlEngageSubtype,
@@ -233,26 +230,6 @@ export function generateMinimalFallbackUnit(
 }
 
 /**
- * Main assembly function - orchestrates content generation
- * 
- * Priority:
- * 1. If preferDeterministic=true OR LLM not available: use deterministic
- * 2. Otherwise: try LLM first, fall back to deterministic
- */
-export async function assembleTextbookUnit(
-  params: AssemblyParams
-): Promise<AssemblyResult> {
-  // If deterministic is preferred or LLM is not available, use deterministic
-  if (params.preferDeterministic || !shouldAttemptLLM()) {
-    return assembleTextbookUnitDeterministic(params);
-  }
-  
-  // In a full implementation, this would try LLM first
-  // For now, we use deterministic as the primary method
-  return assembleTextbookUnitDeterministic(params);
-}
-
-/**
  * Quick assembly for immediate display (no async)
  * Returns a minimal unit that can be enriched later
  */
@@ -371,20 +348,5 @@ export function assembleQuickUnit(
       generationTimeMs: Math.round(performance.now() - startTime),
       sourceCount: sourceIds.length
     }
-  };
-}
-
-/**
- * Get assembly statistics for monitoring
- */
-export function getAssemblyStats(): {
-  deterministicAvailable: boolean;
-  llmAvailable: boolean;
-  templateCoverage: string[];
-} {
-  return {
-    deterministicAvailable: true,
-    llmAvailable: shouldAttemptLLM(),
-    templateCoverage: getRelatedConceptIds([])
   };
 }

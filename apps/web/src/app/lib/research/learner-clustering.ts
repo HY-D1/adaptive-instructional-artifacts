@@ -257,13 +257,3 @@ function calculateCentroids(cluster: LearnerFeatures[]): {
     independence: cluster.reduce((s, f) => s + f.independence, 0) / cluster.length
   };
 }
-
-/**
- * Get cluster statistics for a specific learner
- */
-export function getLearnerClusterInfo(
-  learnerId: string,
-  clusters: LearnerCluster[]
-): LearnerCluster | undefined {
-  return clusters.find(c => c.members.includes(learnerId));
-}

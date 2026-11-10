@@ -1041,27 +1041,6 @@ function getAutoCreationConfig(): {
   };
 }
 
-/**
- * Publish an interaction to the trace analyzer for real-time analysis.
- * This allows the analyzer to process interactions as they occur.
- * 
- * Currently stores the interaction for periodic batch analysis.
- * Future: Could trigger immediate analysis for high-priority patterns.
- */
-export function publishInteraction(event: InteractionEvent): void {
-  // Store interaction for background analysis
-  // The background analysis will pick this up in the next cycle
-  
-  // Check if this is a high-priority error pattern that should trigger immediate analysis
-  if (event.eventType === 'error') {
-    const subtype = event.sqlEngageSubtype || event.errorSubtypeId;
-    if (subtype) {
-      // Could trigger immediate analysis here for critical patterns
-      // Error subtype: subtype (logged for debugging if needed)
-    }
-  }
-}
-
 // ============================================================================
 // Knowledge-Structure Analysis Functions
 // ============================================================================
@@ -1186,71 +1165,3 @@ export function analyzeKnowledgeStructure(
   };
 }
 
-/**
- * Run complete trace analysis including knowledge-structure
- * @param learnerId - Learner identifier
- * @param sessionId - Optional session ID
- * @returns Combined analysis results
- */
-export function runCompleteAnalysis(
-  learnerId: string,
-  sessionId?: string
-): {
-  traceAnalysis: AnalysisResult;
-  knowledgeAnalysis: KnowledgeStructureAnalysis;
-} {
-  const interactions = storage.getInteractionsByLearner(learnerId);
-  const textbookUnits = storage.getTextbook(learnerId);
-  
-  // Run standard trace analysis
-  const traceAnalysis = analyzeInteractionTraces(interactions, textbookUnits, {
-    learnerId
-  });
-  
-  // Run knowledge-structure analysis
-  const knowledgeAnalysis = analyzeKnowledgeStructure(learnerId);
-  
-  // Log combined analysis
-  logKnowledgeAnalysis(knowledgeAnalysis, learnerId, sessionId);
-  
-  return {
-    traceAnalysis,
-    knowledgeAnalysis
-  };
-}
-
-/**
- * Log knowledge analysis results
- */
-function logKnowledgeAnalysis(
-  analysis: KnowledgeStructureAnalysis,
-  learnerId: string,
-  sessionId?: string
-): void {
-  const event: InteractionEvent = {
-    id: createEventId('knowledge', 'analysis'),
-    sessionId,
-    learnerId,
-    timestamp: Date.now(),
-    eventType: 'concept_extraction',
-    problemId: 'knowledge-structure',
-    inputs: {
-      masteredCount: analysis.mastery.stats.byLevel.mastered,
-      atRiskCount: analysis.mastery.atRisk.length,
-      weakAreasCount: analysis.mastery.weakAreas.length,
-      recentViolations: analysis.prerequisites.recentViolations.length,
-      violationTrend: analysis.prerequisites.violationTrend
-    },
-    outputs: {
-      recommendations: analysis.recommendations.length,
-      recommendationTypes: analysis.recommendations.map(r => r.type),
-      highPriorityRecs: analysis.recommendations.filter(r => r.priority === 'high').length
-    },
-    conceptIds: [
-      ...analysis.mastery.recentlyMastered,
-      ...analysis.mastery.weakAreas
-    ]
-  };
-  
-  storage.saveInteraction(event);
-}

@@ -712,18 +712,6 @@ export function hasErrorTemplate(subtypeId: string): boolean {
 }
 
 /**
- * Get templates for multiple subtypes
- */
-export function getTemplatesForSubtypes(subtypeIds: string[]): ErrorTemplate[] {
-  return subtypeIds
-    .map(id => getErrorTemplate(id))
-    .filter((template, index, self) => 
-      // Remove duplicates based on subtypeId
-      self.findIndex(t => t.subtypeId === template.subtypeId) === index
-    );
-}
-
-/**
  * Extract concept IDs from templates for a list of subtypes
  */
 export function getRelatedConceptIds(subtypeIds: string[]): string[] {

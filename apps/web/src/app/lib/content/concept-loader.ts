@@ -1209,11 +1209,3 @@ export async function listConcepts(): Promise<Array<{id: string; title: string; 
     difficulty: info.difficulty
   }));
 }
-
-/**
- * Get concept title
- */
-export async function getConceptTitle(conceptId: string): Promise<string> {
-  const concept = await getConcept(conceptId);
-  return concept?.title || conceptId;
-}
