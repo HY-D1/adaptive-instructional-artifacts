@@ -53,6 +53,7 @@ import {
 import { reinforcementManager } from '../content/reinforcement-manager';
 import { scoreSelfExplanation, type ReflectionQualityScore } from '../content/self-explanation-scorer';
 import learnerProfileClient from '../api/learner-profile-client';
+import { initializeCacheTrimmer } from './cache-trimmer';
 import type {
   ConceptCoverageEvidence,
   GuidanceEscalationTrigger,
@@ -3621,10 +3622,10 @@ export {
 if (typeof window !== 'undefined') {
   // Defer to avoid blocking initial render
   setTimeout(() => {
-    import('./cache-trimmer').then(({ initializeCacheTrimmer }) => {
+    try {
       initializeCacheTrimmer();
-    }).catch((error) => {
+    } catch (error) {
       console.warn('[Storage] Failed to initialize cache trimmer:', error);
-    });
+    }
   }, 1000);
 }
