@@ -628,6 +628,7 @@ router.post('/test-seed', async (req: Request, res: Response) => {
   try {
     // Create or get instructor
     let instructorAccount = await getAuthAccountByEmail(db, DETERMINISTIC_INSTRUCTOR.email);
+    const instructorCreated = !instructorAccount;
     let instructorSectionCode: string | undefined;
 
     if (!instructorAccount) {
@@ -659,12 +660,13 @@ router.post('/test-seed', async (req: Request, res: Response) => {
 
     results.instructor = {
       email: DETERMINISTIC_INSTRUCTOR.email,
-      created: !instructorAccount,
+      created: instructorCreated,
       sectionCode: instructorSectionCode,
     };
 
     // Create or get student
     let studentAccount = await getAuthAccountByEmail(db, DETERMINISTIC_STUDENT.email);
+    const studentCreated = !studentAccount;
 
     if (!studentAccount) {
       const studentLearnerId = uuidv4();
@@ -689,7 +691,7 @@ router.post('/test-seed', async (req: Request, res: Response) => {
 
     results.student = {
       email: DETERMINISTIC_STUDENT.email,
-      created: !studentAccount,
+      created: studentCreated,
       classCode: instructorSectionCode,
     };
 
