@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "sql-adapt-pdf-ingest"
 version = "0.1.0"
 description = "Local-only PDF ingest worker for SQL-Adapt"
-readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "docling",
@@ -14,12 +13,12 @@ dependencies = [
   "mlx-lm",
   "pydantic>=2.7",
   "psycopg[binary]>=3.2",
-  "python-dotenv",
-  "orjson",
-  "requests",
   "pypdf>=5.0",
   "PyMuPDF>=1.24",
 ]
+
+[project.optional-dependencies]
+test = ["pytest"]
 
 [project.scripts]
 pdf-ingest = "pdf_ingest.cli:main"
