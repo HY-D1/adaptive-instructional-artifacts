@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # SQL-Adapt Learning System - Quick Start Script
-# Usage: ./start.sh
+# Usage: ./scripts/dev-start.sh (run from the project root)
 # Aligns with README.md Quick Start section
 
 set -e

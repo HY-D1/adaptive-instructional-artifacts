@@ -6,7 +6,7 @@
  * Fails if there is any drift between the two sources of truth.
  * 
  * Usage:
- *   node scripts/test-policy-parity.mjs
+ *   node scripts/verification/test-policy-parity.mjs
  * 
  * @version policy-parity-test-v1
  */
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const REPO_ROOT = path.resolve(__dirname, '..');
+const REPO_ROOT = path.resolve(__dirname, '../..');
 
 const POLICIES_JSON_PATH = path.join(REPO_ROOT, 'dist/policies.json');
 const POLICY_TS_PATH = path.join(REPO_ROOT, 'apps/web/src/app/lib/policies/policy-definitions.ts');

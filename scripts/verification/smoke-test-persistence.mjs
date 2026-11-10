@@ -6,7 +6,7 @@
  * Exercises: create learner → save session → save interaction → save textbook unit
  *
  * Usage:
- *   node scripts/smoke-test-persistence.mjs [API_BASE_URL]
+ *   node scripts/verification/smoke-test-persistence.mjs [API_BASE_URL]
  *
  * The API_BASE_URL arg or VITE_API_BASE_URL env var must point to the backend
  * base URL (no trailing /api), e.g.:
@@ -27,7 +27,7 @@ const BASE_URL = process.argv[2] || process.env.VITE_API_BASE_URL;
 
 if (!BASE_URL) {
   console.error('ERROR: Provide API base URL as first arg or set VITE_API_BASE_URL');
-  console.error('  node scripts/smoke-test-persistence.mjs https://my-api.vercel.app');
+  console.error('  node scripts/verification/smoke-test-persistence.mjs https://my-api.vercel.app');
   process.exit(1);
 }
 
