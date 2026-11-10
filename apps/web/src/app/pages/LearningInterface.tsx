@@ -1617,45 +1617,6 @@ export function LearningInterface() {
     }
   }, [learnerId, currentProblem.id, sessionId, isHydrating]);
   
-  // Effect 5: Mastery tracking - update mastery on successful submissions
-  useEffect(() => {
-    if (!learnerId || !sessionId) return;
-    
-    // Subscribe to successful executions
-    const handleExecution = (event: Event) => {
-      const customEvent = event as CustomEvent<{
-        problemId: string;
-        successful: boolean;
-        conceptIds: string[];
-      }>;
-      
-      if (customEvent.detail.successful) {
-        // Update mastery
-        const updates = updateMasteryFromInteraction({
-          id: createEventId('mastery', 'update'),
-          learnerId,
-          timestamp: Date.now(),
-          eventType: 'execution',
-          problemId: customEvent.detail.problemId,
-          conceptIds: customEvent.detail.conceptIds,
-          successful: true
-        } as InteractionEvent, learnerId);
-        
-        if (updates.length > 0) {
-          // Propagate mastery to dependent concepts
-          propagateMastery(learnerId);
-          
-          // Update learning path after success
-          const updatedPath = updatePathAfterSuccess(learnerId, customEvent.detail.conceptIds[0]);
-          setLearningPath(updatedPath);
-        }
-      }
-    };
-    
-    window.addEventListener('sql-execution-result', handleExecution);
-    return () => window.removeEventListener('sql-execution-result', handleExecution);
-  }, [learnerId, sessionId]);
-
   const instructorSubtypeOverride = isInstructor && subtypeOverride !== 'auto'
     ? canonicalizeSqlEngageSubtype(subtypeOverride)
     : undefined;

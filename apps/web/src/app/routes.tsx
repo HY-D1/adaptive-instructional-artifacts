@@ -267,7 +267,3 @@ export const router = createBrowserRouter([
     ],
   },
 ]);
-
-// Re-export guard utilities for use in components
-export { ProtectedRoute, StudentRoute, InstructorRoute, AuthenticatedRoute };
-export { ROUTES, protectRoute, getDefaultRouteForRole } from './lib/auth-guard';

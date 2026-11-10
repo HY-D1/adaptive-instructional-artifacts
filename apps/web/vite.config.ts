@@ -282,9 +282,6 @@ export default defineConfig({
     pdfIndexApiPlugin(),
     tailwindcss(),
   ],
-  define: {
-    __API_BASE_URL__: JSON.stringify(process.env.VITE_API_BASE_URL || ''),
-  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
