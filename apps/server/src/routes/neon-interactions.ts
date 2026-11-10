@@ -17,6 +17,7 @@ import {
 } from '../db/index.js';
 import type { EventType } from '../types.js';
 import { requirePreSurveyCompleted } from '../middleware/pre-survey.js';
+import { lookupAssignedCondition, type AssignmentLookupResult } from '../lib/condition-lookup.js';
 
 const router = Router();
 const MAX_BATCH_BODY_BYTES = 3 * 1024 * 1024;
@@ -227,10 +228,6 @@ async function resolveAuthoritativeConditionId<T extends string>(
   return assignedConditionId;
 }
 
-type AssignmentLookupResult =
-  | { failed: true }
-  | { failed: false; conditionId?: db.StudentCondition };
-
 /** Per-request memo: one assignment lookup and at most one override log per learner. */
 interface ConditionResolutionContext {
   lookups: Map<string, Promise<AssignmentLookupResult>>;
@@ -239,23 +236,6 @@ interface ConditionResolutionContext {
 
 function createConditionResolutionContext(): ConditionResolutionContext {
   return { lookups: new Map(), warnedLearnerIds: new Set() };
-}
-
-async function lookupAssignedCondition(
-  learnerId: string,
-  route: string,
-): Promise<AssignmentLookupResult> {
-  try {
-    const assignment = await db.getStudentConditionAssignment(learnerId);
-    return { failed: false, conditionId: assignment?.conditionId };
-  } catch (error) {
-    console.error('[condition/lookup-failed]', {
-      route,
-      learnerId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return { failed: true };
-  }
 }
 
 function isAdaptiveBanditEvent(eventType: string): boolean {

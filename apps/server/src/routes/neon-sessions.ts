@@ -8,6 +8,7 @@ import * as db from '../db/neon.js';
 import { requireOwnership, requireSelfForWrite } from '../middleware/auth.js';
 import { requirePreSurveyCompleted } from '../middleware/pre-survey.js';
 import type { SessionData } from '../types.js';
+import { lookupAssignedCondition } from '../lib/condition-lookup.js';
 
 const router = Router();
 
@@ -81,16 +82,8 @@ async function lookupAssignedConditionId(
   req: Request,
   learnerId: string,
 ): Promise<string | undefined> {
-  try {
-    return (await db.getStudentConditionAssignment(learnerId))?.conditionId;
-  } catch (error) {
-    console.error('[condition/lookup-failed]', {
-      route: routeLabel(req),
-      learnerId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return undefined;
-  }
+  const lookup = await lookupAssignedCondition(learnerId, routeLabel(req));
+  return lookup.failed ? undefined : lookup.conditionId;
 }
 
 function resolveSessionWriteBody(
@@ -168,26 +161,23 @@ router.get('/:learnerId/active', async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/sessions/:learnerId/active - Save active session
-router.post('/:learnerId/active', requirePreSurveyCompleted, async (req: Request, res: Response) => {
+// POST/PUT /api/sessions/:learnerId/active - Save active session (PUT is an alias)
+async function writeActiveSession(req: Request, res: Response): Promise<void> {
   try {
     const body = req.body as SessionWriteBody;
+    const activeSession = await db.getActiveSession(req.params.learnerId);
 
     // Treat heartbeat-only writes as read-through when an active session exists.
     // This prevents session bootstrapping calls from replacing resumable state
     // with an empty session that has null currentCode.
-    if (!hasSessionMutationPayload(body)) {
-      const activeSession = await db.getActiveSession(req.params.learnerId);
-      if (activeSession) {
-        res.json({
-          success: true,
-          data: buildSessionResponse(activeSession),
-        });
-        return;
-      }
+    if (!hasSessionMutationPayload(body) && activeSession) {
+      res.json({
+        success: true,
+        data: buildSessionResponse(activeSession),
+      });
+      return;
     }
 
-    const activeSession = await db.getActiveSession(req.params.learnerId);
     const assignedConditionId = await lookupAssignedConditionId(req, req.params.learnerId);
     const { actualSessionId, actualConditionId, mergedSessionData } = resolveSessionWriteBody(
       req.params.learnerId,
@@ -209,54 +199,18 @@ router.post('/:learnerId/active', requirePreSurveyCompleted, async (req: Request
     });
     logSessionWrite(req, req.params.learnerId, session?.sectionId ?? null);
   } catch (error) {
-    console.error('Error saving session:', error);
-    res.status(500).json({ success: false, error: 'Failed to save session' });
-  }
-});
-
-// PUT /api/sessions/:learnerId/active - Update active session (alias for POST)
-router.put('/:learnerId/active', requirePreSurveyCompleted, async (req: Request, res: Response) => {
-  // Delegate to POST handler logic
-  try {
-    const body = req.body as SessionWriteBody;
-
-    if (!hasSessionMutationPayload(body)) {
-      const activeSession = await db.getActiveSession(req.params.learnerId);
-      if (activeSession) {
-        res.json({
-          success: true,
-          data: buildSessionResponse(activeSession),
-        });
-        return;
-      }
+    if (req.method === 'PUT') {
+      console.error('Error updating session:', error);
+      res.status(500).json({ success: false, error: 'Failed to update session' });
+    } else {
+      console.error('Error saving session:', error);
+      res.status(500).json({ success: false, error: 'Failed to save session' });
     }
-
-    const activeSession = await db.getActiveSession(req.params.learnerId);
-    const assignedConditionId = await lookupAssignedConditionId(req, req.params.learnerId);
-    const { actualSessionId, actualConditionId, mergedSessionData } = resolveSessionWriteBody(
-      req.params.learnerId,
-      body,
-      activeSession,
-      assignedConditionId,
-      routeLabel(req),
-    );
-
-    await db.saveSession(req.params.learnerId, actualSessionId, actualConditionId, {
-      ...mergedSessionData,
-    });
-
-    const session = await db.getSession(req.params.learnerId, actualSessionId);
-
-    res.json({
-      success: true,
-      data: buildSessionResponse(session),
-    });
-    logSessionWrite(req, req.params.learnerId, session?.sectionId ?? null);
-  } catch (error) {
-    console.error('Error updating session:', error);
-    res.status(500).json({ success: false, error: 'Failed to update session' });
   }
-});
+}
+
+router.post('/:learnerId/active', requirePreSurveyCompleted, writeActiveSession);
+router.put('/:learnerId/active', requirePreSurveyCompleted, writeActiveSession);
 
 // DELETE /api/sessions/:learnerId/active - Clear active session
 router.delete('/:learnerId/active', requirePreSurveyCompleted, async (req: Request, res: Response) => {
