@@ -307,7 +307,7 @@ Use a **Neon branch created from production**. Delete it afterwards, because it 
    - PRs run only 9 browser tests.
    - The `@weekly` suite exceeds the 600 s global timeout.
    - The `chromium:auth` and `chromium:instructor` projects never run in CI.
-   - `tests/e2e/regression/weekly-smoke.spec.ts` is missing, so `demo:weekly` and the jq gates are dead.
+   - `demo:weekly` and the jq gates were removed in commit 2877fb4 (cleanup pass 2026-11-10).
    - Coverage thresholds and the replay gate are not enforced.
    - The type-check job (`smoke-test`) is now in the summary job's `needs`, so a type error blocks the merge.
 4. **Repo hygiene:**
