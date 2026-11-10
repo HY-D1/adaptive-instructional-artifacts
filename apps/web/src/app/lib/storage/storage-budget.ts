@@ -14,7 +14,7 @@
  * - Performance-conscious (uses requestIdleCallback when available)
  */
 
-import { emergencyEviction } from './cache-trimmer';
+import { emergencyEviction, runStartupTrimPass } from './cache-trimmer';
 
 // ============================================================================
 // Constants
@@ -226,9 +226,6 @@ const monitoringState: MonitoringState = {
  * Imports and runs the startup trim pass from cache-trimmer
  */
 function runProactiveTrimming(): { freedBytes: number; actionTaken: boolean } {
-  // Import dynamically to avoid circular dependencies
-  const { runStartupTrimPass } = require('./cache-trimmer');
-  
   console.info('[StorageBudget] Running proactive trimming at warning threshold');
   
   const result = runStartupTrimPass();
