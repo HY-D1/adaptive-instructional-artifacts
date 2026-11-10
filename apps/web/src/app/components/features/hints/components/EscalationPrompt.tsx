@@ -8,7 +8,6 @@
 import { ArrowUpCircle, Lightbulb, BookOpen } from 'lucide-react';
 import { Button } from '../../../ui/button';
 import { Card } from '../../../ui/card';
-import { cn } from '../../../ui/utils';
 
 export interface EscalationPromptProps {
   /** Current rung level (1 or 2) */

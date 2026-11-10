@@ -38,16 +38,13 @@ import { createEventId } from './utils/event-id';
 import { canonicalizeSqlEngageSubtype, getConceptIdsForSqlEngageSubtype } from '../data/sql-engage';
 import { generateUnitFromLLM, buildBundleForCurrentProblem } from './content/content-generator';
 import { sqlProblems } from '../data/problems';
-import { 
-  getMasterySnapshot, 
-  getMasteryStats, 
-  propagateMastery,
-  getMasteryLevel 
+import {
+  getMasterySnapshot,
+  getMasteryStats,
 } from './knowledge/mastery-engine';
-import { 
-  getViolationSummary, 
-  checkProblemReadiness,
-  type PrerequisiteViolation
+import {
+  getViolationSummary,
+  type PrerequisiteViolation,
 } from './knowledge/prerequisite-monitor';
 
 // Constants for analysis configuration

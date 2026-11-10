@@ -25,13 +25,12 @@ import { getConceptFromRegistry } from '../../../data';
 // Enhanced Hint System imports
 import { useEnhancedHints } from '../../../hooks/useEnhancedHints';
 import { HintSourceStatus } from './HintSourceStatus';
-import type { EnhancedHint } from '../../../lib/ml/enhanced-hint-service';
 import { useUserRole } from '../../../hooks/useUserRole';
 import { useStorageFeedback } from '../../../hooks/useStorageFeedback';
 import type { EscalationProfile } from '../../../lib/ml/escalation-profiles';
 import type { SessionConfig } from '../../../types';
 import { orchestrate, resolveConditionFlags, resolveControlDecision, type OrchestrationDecision } from '../../../lib/ml/textbook-orchestrator';
-import { buildHintViewEvent, buildStableHintId } from '../../../lib/telemetry/build-hint-view-event';
+import { buildHintViewEvent } from '../../../lib/telemetry/build-hint-view-event';
 import { clearProblemHints, loadHintInfo, saveHintSnapshot } from '../../../lib/storage/hint-cache';
 
 export function buildHintSourceMetadata(selection: {

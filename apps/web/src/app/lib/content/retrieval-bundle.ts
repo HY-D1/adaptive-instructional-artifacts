@@ -11,7 +11,7 @@ import {
   getConceptFromRegistry
 } from '../../data';
 import { getActivePdfIndexProvenance, retrievePdfChunks } from '../api/pdf-retrieval';
-import { retrieveSourcePassages, RetrievedSourcePassage } from '../utils/source-ref-lookup';
+import { retrieveSourcePassages } from '../utils/source-ref-lookup';
 import { getConceptChunks } from './concept-loader';
 
 /**

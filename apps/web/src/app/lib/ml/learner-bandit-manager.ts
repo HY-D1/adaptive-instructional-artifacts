@@ -8,7 +8,7 @@
  * Policy Version: learner-bandit-v1
  */
 
-import { MultiArmedBandit, BanditArm } from "./multi-armed-bandit";
+import { MultiArmedBandit } from "./multi-armed-bandit";
 import {
   buildRewardComponents,
   calculateReward,
@@ -20,7 +20,6 @@ import {
   EXPLANATION_FIRST,
   type EscalationProfile,
 } from "./escalation-profiles";
-import type { InteractionEvent } from "../../types";
 
 /**
  * Bandit arm IDs and their corresponding escalation profiles

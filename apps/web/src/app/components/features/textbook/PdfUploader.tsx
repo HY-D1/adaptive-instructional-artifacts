@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Button } from '../../ui/button';
 import { Upload, X, CheckCircle, AlertCircle, Loader2, FileText, Trash2 } from 'lucide-react';
 import { cn } from '../../ui/utils';
 import { storage } from '../../../lib/storage';

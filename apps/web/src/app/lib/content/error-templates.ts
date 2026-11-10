@@ -8,7 +8,6 @@
  * source-grounded instructional content.
  */
 
-import { InstructionalUnit } from '../../types';
 
 /**
  * Template for generating deterministic explanations

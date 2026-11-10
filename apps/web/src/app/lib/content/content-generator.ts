@@ -12,16 +12,13 @@ import { buildRetrievalBundle, RetrievalBundle } from './retrieval-bundle';
 import { renderPrompt, TemplateId } from '../../prompts/templates';
 import { storage } from '../storage/storage';
 import { calculateQualityScore } from '../storage/textbook-units';
-import { 
+import {
   generateDeterministicFromBundle,
-  hasRichTemplateForSubtype
 } from './deterministic-generator';
-import { 
-  assembleTextbookUnitDeterministic,
-  shouldAttemptLLM as checkLLMAvailable
+import {
+  shouldAttemptLLM as checkLLMAvailable,
 } from './content-assembler';
 import DOMPurify from 'dompurify';
-import { marked } from 'marked';
 
 /**
  * Options for generating an instructional unit from LLM

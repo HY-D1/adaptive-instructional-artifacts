@@ -5,7 +5,7 @@
  * When a learner masters a concept, they partially master concepts that require it.
  */
 
-import { buildConceptGraph, type ConceptNode, CONCEPT_GRAPH } from '../../data/concept-graph';
+import { buildConceptGraph, type ConceptNode } from '../../data/concept-graph';
 import type { LearnerProfile } from '../../types';
 
 export interface MasteryPropagation {

@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { InteractionEvent, InstructionalUnit } from '../types';
+import type { InteractionEvent } from '../types';
 import type { GuidanceRung } from '../lib/ml/guidance-ladder';
 import {
   generateEnhancedHint,

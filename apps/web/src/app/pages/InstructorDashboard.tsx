@@ -17,10 +17,9 @@ import {
   FileText,
   Eye,
   Play,
-  X,
   Database,
   RotateCcw,
-  CheckCircle2
+  CheckCircle2,
 } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -47,7 +46,6 @@ import { ConfirmDialog } from '../components/ui/confirm-dialog';
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from '../components/ui/tooltip';
 import { storage, broadcastSync, setDebugProfileWithSync, setDebugStrategyWithSync } from '../lib/storage';

@@ -12,7 +12,7 @@
  * - Tracks violation patterns for analytics
  */
 
-import type { InteractionEvent, LearnerProfile, ConceptNode } from '../../types';
+import type { InteractionEvent, LearnerProfile } from '../../types';
 import { buildConceptGraph, type ConceptGraph } from '../../data/concept-graph';
 import { storage } from '../storage/storage';
 import { createEventId } from '../utils/event-id';

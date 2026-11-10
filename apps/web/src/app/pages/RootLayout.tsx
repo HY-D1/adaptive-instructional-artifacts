@@ -21,7 +21,6 @@ import {
 import { getSurveyInvitationsResult } from '../lib/api/storage-client';
 import { useToast } from '../components/ui/toast';
 import {
-  getPendingPostSurveyUrl,
   getPendingPostSurveyUrlWithTimeout,
   LogoutSurveyReminderDialog,
 } from '../components/features/surveys/LogoutSurveyReminderDialog';

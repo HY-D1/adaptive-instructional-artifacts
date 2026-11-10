@@ -22,7 +22,6 @@ import {
   ROUTES,
   getDefaultRouteForRole,
   isPreviewModeActive,
-  canAccessRoute
 } from './lib/auth-guard';
 import { useToast } from './components/ui/toast';
 

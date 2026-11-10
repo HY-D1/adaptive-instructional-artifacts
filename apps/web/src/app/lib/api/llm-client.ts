@@ -1,6 +1,6 @@
 import { LLMGenerationParams } from '../../types';
 import { isDemoMode, shouldAttemptLLM } from '../utils/demo-mode';
-import { isBackendConfigured, isHostedMode, getLLMUnavailableError, getApiBaseUrl } from '../runtime-config';
+import { isBackendConfigured, getLLMUnavailableError, getApiBaseUrl } from '../runtime-config';
 import { withCsrfHeader } from './csrf-client';
 
 export const OLLAMA_MODEL = 'qwen3:4b';

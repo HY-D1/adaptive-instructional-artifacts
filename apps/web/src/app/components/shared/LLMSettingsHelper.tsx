@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Slider } from '../ui/slider';
 import { Badge } from '../ui/badge';

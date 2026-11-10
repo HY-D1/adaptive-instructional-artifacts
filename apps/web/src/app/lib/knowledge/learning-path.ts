@@ -12,7 +12,7 @@
  * - Support multiple learning path strategies
  */
 
-import type { LearnerProfile, ConceptNode, InteractionEvent } from '../../types';
+import type { LearnerProfile, InteractionEvent } from '../../types';
 import { buildConceptGraph, type ConceptGraph, getLearningPath } from '../../data/concept-graph';
 import { storage } from '../storage/storage';
 import { createEventId } from '../utils/event-id';

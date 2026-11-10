@@ -18,7 +18,7 @@
  */
 
 import type { LearnerProfile, ConceptCoverageEvidence, InteractionEvent } from '../../types';
-import { buildConceptGraph, type ConceptGraph } from '../../data/concept-graph';
+import { buildConceptGraph } from '../../data/concept-graph';
 import { storage } from '../storage/storage';
 import { createEventId } from '../utils/event-id';
 

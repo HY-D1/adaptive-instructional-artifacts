@@ -7,10 +7,9 @@
 
 import { useState } from 'react';
 import DOMPurify from 'dompurify';
-import { ChevronDown, ChevronUp, Sparkles, ThumbsUp, ThumbsDown, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Sparkles, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { Button } from '../../../ui/button';
 import { cn } from '../../../ui/utils';
-import type { EnhancedHint } from '../../../../lib/ml/hint-service';
 
 export interface HintDisplayProps {
   /** Hint index in the list */

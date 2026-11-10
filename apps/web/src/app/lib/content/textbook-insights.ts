@@ -1,12 +1,9 @@
 import { InstructionalUnit, InteractionEvent } from '../../types';
 import { conceptNodes, getConceptById, getConceptIdsForSqlEngageSubtype, getKnownSqlEngageSubtypes, errorSubtypes } from '../../data/sql-engage';
-import { 
-  buildConceptGraph, 
-  CONCEPT_GRAPH, 
-  getPrerequisites, 
-  type ConceptNode 
+import {
+  buildConceptGraph,
 } from '../../data/concept-graph';
-import { checkPrerequisites, getPrerequisiteChain } from '../content/prerequisite-checker';
+import { getPrerequisiteChain } from '../content/prerequisite-checker';
 import { storage } from '../storage';
 
 /**

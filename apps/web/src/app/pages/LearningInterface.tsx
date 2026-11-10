@@ -41,12 +41,11 @@ import {
   Zap,
   Sprout,
   TrendingUp,
-  X,
   Eye,
   LogOut,
   ChevronLeft,
   ChevronRight,
-  XCircle
+  XCircle,
 } from 'lucide-react';
 
 import { Card } from '../components/ui/card';
@@ -62,7 +61,6 @@ import { SurveyInvitationLinks } from '../components/features/surveys/SurveyInvi
 import { ConceptCoverage } from '../components/features/research/ConceptCoverage';
 import { AskMyTextbookChat } from '../components/features/chat/AskMyTextbookChat';
 import { ReinforcementPrompt } from '../components/features/reinforcement/ReinforcementPrompt';
-import { useLLMSettings } from '../components/shared/LLMSettingsHelper';
 import { useScreenReaderAnnouncer } from '../components/shared/ScreenReaderAnnouncer';
 import { sqlProblems } from '../data/problems';
 import { getProblemsByDifficultyRank } from '../lib/adaptive-problem-selector';
@@ -94,36 +92,32 @@ import {
   shouldSelectBanditForLearner,
   shouldUpdateBandit,
 } from '../lib/ml/learner-bandit-manager';
-import { calculateHDI, calculateHDIComponents } from '../lib/ml/hdi-calculator';
+import { calculateHDI } from '../lib/ml/hdi-calculator';
 import type { HDIComponents, HDILevel } from '../types';
 import { safeGetStrategy, safeGetProfileOverride } from '../lib/storage/storage-validation';
 import { assignProfile, getProfileById, type EscalationProfile } from '../lib/ml/escalation-profiles';
 import { buildRewardComponents, calculateReward } from '../lib/ml/reward-calculator';
-import { 
-  assignCondition,
+import {
   assignLocalDemoCondition,
   loadSessionConfig,
   loadSessionConfigAsync,
   saveSessionConfig,
-  getConditionAssignmentVersion
+  getConditionAssignmentVersion,
 } from '../lib/experiments/condition-assignment';
 import type { SessionConfig } from '../types';
 import type { BanditArmId } from '../lib/ml/learner-bandit-manager';
 import type { SQLProblem, InteractionEvent, InstructionalUnit, LearnerProfile, RetrievedChunkInfo, HDITrend } from '../types';
 import { reinforcementManager, type ActivePrompt } from '../lib/content/reinforcement-manager';
-import { detectPrerequisiteViolation, logPrerequisiteViolation, type PrerequisiteViolation } from '../lib/content/prerequisite-detector';
+import { detectPrerequisiteViolation, logPrerequisiteViolation } from '../lib/content/prerequisite-detector';
 import { checkPrerequisites } from '../lib/content/prerequisite-checker';
-import { getUnlockedConcepts } from '../data/concept-graph';
-import { 
+import {
   checkProblemReadiness,
   buildLearningPath,
   updatePathAfterSuccess,
-  getNextRecommendedConcept,
   updateMasteryFromInteraction,
   propagateMastery,
-  assessReflection,
   type LearningPathRecommendation,
-  type PathProgress
+  type PathProgress,
 } from '../lib/knowledge';
 import { useDebouncedCodeChange } from '../hooks/useDebouncedCodeChange';
 import { useLearnerProgress } from '../hooks/useLearnerProgress';

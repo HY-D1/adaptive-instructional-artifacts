@@ -35,7 +35,6 @@ import { useToast } from '../components/ui/toast';
 import { banditManager, BANDIT_ARM_PROFILES } from '../lib/ml/learner-bandit-manager';
 import { safeSet, safeRemove } from '../lib/storage/safe-storage';
 import type { BanditArmId } from '../lib/ml/learner-bandit-manager';
-import { assignProfile } from '../lib/ml/escalation-profiles';
 import type { AssignmentStrategy } from '../lib/ml/escalation-profiles';
 import { storage, broadcastSync } from '../lib/storage';
 import type { InteractionEvent, SessionConfig } from '../types';

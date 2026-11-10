@@ -4,7 +4,6 @@
  * Textbook-enhanced hint generation (no LLM required).
  */
 
-import type { GuidanceRung } from '../guidance-ladder';
 import type { EnhancedHint, HintGenerationOptions, HintSourceMetadata, RetrievalSignalMeta } from './types';
 import type { AvailableResources } from './types';
 import type { EnhancedRetrievalBundle } from './types';

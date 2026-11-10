@@ -3,17 +3,16 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router';
 import { Command } from 'cmdk';
-import { 
-  Search, 
-  BookOpen, 
-  FileText, 
-  Layout, 
-  GraduationCap, 
-  Clock,
+import {
+  Search,
+  BookOpen,
+  FileText,
+  Layout,
+  GraduationCap,
   ArrowRight,
   History,
   Sparkles,
-  X
+  X,
 } from 'lucide-react';
 import { cn } from '../ui/utils';
 import { useCommandSearch, type SearchItem } from '../../hooks/useCommandSearch';

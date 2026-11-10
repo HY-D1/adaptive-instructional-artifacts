@@ -5,7 +5,7 @@ import { Button } from '../../ui/button';
 import { Card } from '../../ui/card';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
 import { Badge } from '../../ui/badge';
-import { Play, RotateCcw, CheckCircle, XCircle, AlertCircle, Terminal, Loader2, Copy, Check, Trash2, Keyboard, Lightbulb, RefreshCw } from 'lucide-react';
+import { Play, RotateCcw, CheckCircle, XCircle, AlertCircle, Terminal, Loader2, Copy, Check, Trash2, Lightbulb, RefreshCw } from 'lucide-react';
 import { SQLExecutor, QueryResult, resetSQLInitialization, hasTopLevelOrderBy } from '../../../lib/sql-executor';
 import { gradeDatabaseState } from '../../../lib/sql-state-grading';
 import { SQLProblem } from '../../../types';

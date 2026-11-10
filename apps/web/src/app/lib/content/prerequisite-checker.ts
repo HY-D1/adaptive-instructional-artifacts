@@ -5,7 +5,7 @@
  * their covered concepts and the prerequisite dependency graph.
  */
 
-import { buildConceptGraph, type ConceptNode, CONCEPT_GRAPH } from '../../data/concept-graph';
+import { buildConceptGraph, type ConceptNode } from '../../data/concept-graph';
 
 export interface PrerequisiteStatus {
   conceptId: string;

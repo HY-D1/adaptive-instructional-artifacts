@@ -48,13 +48,7 @@ import {
 import {
   isValidProfileId,
   isValidStrategy,
-  parseBooleanString,
-  safeGetProfileOverride,
-  safeGetStrategy,
-  safeGetPreviewMode,
-  safeSetProfileOverride,
-  safeSetStrategy,
-  isValidUserProfile
+  isValidUserProfile,
 } from './storage-validation';
 import { reinforcementManager } from '../content/reinforcement-manager';
 import { scoreSelfExplanation, type ReflectionQualityScore } from '../content/self-explanation-scorer';

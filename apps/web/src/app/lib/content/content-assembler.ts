@@ -14,9 +14,7 @@
 import { InstructionalUnit, LLMGenerationParams } from '../../types';
 import { RetrievalBundle } from './retrieval-bundle';
 import {
-  generateDeterministicExplanation,
   generateDeterministicFromBundle,
-  DeterministicGenerationResult
 } from './deterministic-generator';
 import { 
   getErrorTemplate,
