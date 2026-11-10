@@ -31,7 +31,7 @@
 
 ## Canonical Formula (authoritative, decision 2026-11-04)
 
-The live app implementation in `apps/web/src/app/lib/ml/ml/hdi-calculator.ts` is the
+The live app implementation in `apps/web/src/app/lib/ml/hdi-calculator.ts` is the
 canonical HDI. The Python validation (`analysis/hdi_validation/validate_hdi.py`)
 mirrors it, and both are pinned to the same values by
 `tests/fixtures/hdi-parity.json` (`tests/unit/web/hdi-parity.test.ts` and
@@ -48,7 +48,7 @@ Let *executions* be `execution` events (queries that ran without an SQL error).
 | IWH | solved problems (successful execution) with no `hint_request`, `guidance_request` or `hint_view` before that success, divided by solved problems |
 
 HDI = 0.3·HPA + 0.133·AED + 0.3·ER + 0.133·REAE + 0.134·(1 − IWH), clamped to [0, 1]
-(weights in `apps/web/src/app/lib/ml/ml/hdi-weights.json`). Levels: low < 0.3,
+(weights in `apps/web/src/app/lib/ml/hdi-weights.json`). Levels: low < 0.3,
 medium 0.3 to 0.6 inclusive, high > 0.6.
 
 Known limitation: HPA and ER divide by executions only, so a learner whose

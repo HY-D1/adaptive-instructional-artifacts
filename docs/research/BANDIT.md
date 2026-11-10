@@ -191,7 +191,7 @@ function gammaRandom(shape: number, scale: number): number {
 ## Reward (single formula, decision 2026-11-04)
 
 One function, `calculateReward(buildRewardComponents(outcome))` in
-`apps/web/src/app/lib/ml/ml/reward-calculator.ts`, produces the reward used by the
+`apps/web/src/app/lib/ml/reward-calculator.ts`, produces the reward used by the
 shared server pool (`POST /api/bandit/reward`), the local fallback bandit, and
 the logged `bandit_reward_observed` value. Version: `reward-calc-v2-equal-weight`.
 
