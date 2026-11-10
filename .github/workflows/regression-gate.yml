@@ -17,7 +17,6 @@ on:
 
 env:
   NODE_VERSION: 22
-  PLAYWRIGHT_VERSION: 1.53.0
   CI: true
 
 jobs:
@@ -36,8 +35,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       
       - name: Setup Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
@@ -55,14 +52,7 @@ jobs:
             playwright-${{ runner.os }}-
       
       - name: Install dependencies
-        run: |
-          npm ci
-          # Verify vite is installed
-          if [ ! -f "node_modules/.bin/vite" ]; then
-            echo "vite not found in node_modules/.bin"
-            echo "Installing vite explicitly..."
-            npm install vite --save-dev
-          fi
+        run: npm ci
       
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
@@ -101,15 +91,6 @@ jobs:
           PLAYWRIGHT_LOCAL_DEV: 'true'
           PLAYWRIGHT_JSON_OUTPUT_NAME: test-results-shard-${{ matrix.shard }}.json
       
-      - name: Create demo directory
-        if: success() && matrix.shard == 1
-        run: mkdir -p dist/weekly-demo
-      
-      - name: Generate demo artifacts
-        if: success() && matrix.shard == 1
-        run: npm run demo:weekly
-        continue-on-error: true
-      
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: always()
@@ -119,15 +100,6 @@ jobs:
             test-results/
             test-results-shard-${{ matrix.shard }}.json
             playwright-report/
-          retention-days: 7
-          if-no-files-found: warn
-      
-      - name: Upload demo artifacts
-        uses: actions/upload-artifact@v4
-        if: success() && matrix.shard == 1
-        with:
-          name: demo-artifacts
-          path: dist/weekly-demo/
           retention-days: 7
           if-no-files-found: warn
       
@@ -165,13 +137,6 @@ jobs:
           pattern: test-results-shard-*
           path: all-test-results
           merge-multiple: true
-      
-      - name: Download demo artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: demo-artifacts
-          path: all-demo-artifacts
-        continue-on-error: true
       
       - name: Generate test summary
         id: summary
@@ -214,22 +179,13 @@ jobs:
           
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "- Test results: \\"test-results-shard-{1-4}\\"" >> $GITHUB_STEP_SUMMARY
-          echo "- Demo artifacts: \\"demo-artifacts\\" (if shard 1 passed)" >> $GITHUB_STEP_SUMMARY
+          echo "- Test results: \\"test-results-shard-{1-2}\\"" >> $GITHUB_STEP_SUMMARY
       
       - name: Upload consolidated test results
         uses: actions/upload-artifact@v4
         with:
           name: test-results-consolidated
           path: all-test-results/
-          retention-days: 7
-          if-no-files-found: warn
-      
-      - name: Upload consolidated demo artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: demo-artifacts-consolidated
-          path: all-demo-artifacts/
           retention-days: 7
           if-no-files-found: warn
       
