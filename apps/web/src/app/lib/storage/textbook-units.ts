@@ -8,7 +8,7 @@
  */
 
 import type { InstructionalUnit, SaveTextbookUnitResult, TextbookUnitStatus, UnitProvenance } from '../../types';
-import type { LLMGuidanceOutput } from '../llm-contracts';
+import type { LLMGuidanceOutput } from '../api/llm-contracts';
 
 // Quality score weights (must sum to 1.0)
 export const QUALITY_SCORE_WEIGHTS = {
