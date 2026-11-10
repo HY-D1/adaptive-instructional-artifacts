@@ -156,6 +156,28 @@ router.get('/', async (_req, res) => {
 });
 
 // ============================================================================
+// GET /api/learners/profiles - Get all profiles (for instructor dashboard)
+// ============================================================================
+
+router.get('/profiles', async (_req, res) => {
+  try {
+    const profiles = await getAllLearnerProfiles();
+    const response: ApiResponse<LearnerProfile[]> = {
+      success: true,
+      data: profiles,
+    };
+    res.json(response);
+  } catch (error) {
+    const response: ApiResponse<never> = {
+      success: false,
+      error: 'Failed to get profiles',
+      message: error instanceof Error ? error.message : 'Unknown error',
+    };
+    res.status(500).json(response);
+  }
+});
+
+// ============================================================================
 // GET /api/learners/:id - Get single learner (basic info)
 // ============================================================================
 
@@ -508,28 +530,6 @@ router.post('/:id/profile/events/batch', async (req, res) => {
     const response: ApiResponse<never> = {
       success: false,
       error: 'Failed to batch update profile from events',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    };
-    res.status(500).json(response);
-  }
-});
-
-// ============================================================================
-// GET /api/learners/profiles - Get all profiles (for instructor dashboard)
-// ============================================================================
-
-router.get('/profiles', async (_req, res) => {
-  try {
-    const profiles = await getAllLearnerProfiles();
-    const response: ApiResponse<LearnerProfile[]> = {
-      success: true,
-      data: profiles,
-    };
-    res.json(response);
-  } catch (error) {
-    const response: ApiResponse<never> = {
-      success: false,
-      error: 'Failed to get profiles',
       message: error instanceof Error ? error.message : 'Unknown error',
     };
     res.status(500).json(response);
