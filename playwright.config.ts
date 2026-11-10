@@ -1,5 +1,6 @@
 import fs from 'fs';
 import { defineConfig, devices, chromium, webkit, firefox } from '@playwright/test';
+import { STUDENT_AUTH_FILE, INSTRUCTOR_AUTH_FILE } from './tests/e2e/helpers/auth-state-paths';
 
 function isBrowserInstalled(browser: typeof chromium) {
   try {
@@ -9,7 +10,6 @@ function isBrowserInstalled(browser: typeof chromium) {
   }
 }
 
-const IS_CHROMIUM_INSTALLED = isBrowserInstalled(chromium);
 const IS_WEBKIT_INSTALLED = isBrowserInstalled(webkit);
 const IS_FIREFOX_INSTALLED = isBrowserInstalled(firefox);
 
@@ -47,8 +47,7 @@ const VERCEL_BYPASS_SECRET =
 // ─── Auth state file paths ────────────────────────────────────────────────────
 // Created by the 'setup:auth' project via tests/e2e/setup/auth.setup.ts.
 // Consumed by the 'chromium:auth' and 'chromium:instructor' projects.
-export const STUDENT_AUTH_FILE = 'playwright/.auth/student.json';
-export const INSTRUCTOR_AUTH_FILE = 'playwright/.auth/instructor.json';
+// Paths live in tests/e2e/helpers/auth-state-paths.ts (shared with the setup spec).
 
 export default defineConfig({
   testDir: './tests/e2e',

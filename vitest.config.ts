@@ -66,7 +66,7 @@ export default defineConfig({
       // Current coverage: lines 73.5%, functions ~72%, branches ~65%, statements ~73%
       // Thresholds set 3-5% below current to allow gradual improvement
       // Added lcov reporter for CI integrations
-      // CI will fail if coverage drops below these thresholds
+      // Thresholds are enforced only when running with --coverage; CI runs plain `vitest run`, so they do not gate CI
       thresholds: {
         lines: 70,
         functions: 70,
