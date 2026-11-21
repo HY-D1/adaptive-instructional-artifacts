@@ -1276,7 +1276,7 @@ export function InstructorDashboard() {
                       </TableCell>
                       <TableCell>
                         <select aria-label="Override student profile" 
-                          className="text-sm border rounded px-2 py-1 bg-white"
+                          className="text-sm border rounded px-2 py-1 bg-white text-gray-900 dark:text-gray-100 dark:bg-gray-800 dark:border-gray-600 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-800 dark:[&>option]:text-gray-100"
                           onChange={(e) => {
                             if (e.target.value) {
                               const overrideEvent: InteractionEvent = {

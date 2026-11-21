@@ -37,7 +37,7 @@ test.describe('@weekly Enhanced Hint System', () => {
     await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
 
     // Request a hint
-    await page.getByRole('button', { name: 'Request Hint' }).click();
+    await page.getByRole('button', { name: /Get hint|Request Hint/i }).click();
 
     // Verify hint appears
     await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
@@ -83,7 +83,7 @@ test.describe('@weekly Enhanced Hint System', () => {
     await expect(page.locator('text=SQL Error')).toBeVisible({ timeout: 5000 });
 
     // Request hint
-    await page.getByRole('button', { name: 'Request Hint' }).click();
+    await page.getByRole('button', { name: /Get hint|Request Hint/i }).click();
     await expect(page.getByTestId('hint-label-1')).toBeVisible({ timeout: 5000 });
 
     // Verify interaction was logged correctly

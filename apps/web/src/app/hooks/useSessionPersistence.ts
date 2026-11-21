@@ -17,6 +17,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import type { UserProfile } from '../types';
 import { storage } from '../lib/storage';
+import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
 import { emitProfileUpdated, emitProfileCleared } from '../lib/storage/session-events';
 
 /**
@@ -143,6 +144,19 @@ export function useSessionPersistence(): UseSessionPersistenceReturn {
    * Check if session has expired based on last activity
    */
   const checkSessionExpiry = useCallback((): boolean => {
+    // With a real backend the server session (30-day cookie) is the authority.
+    // The 7-day local timer is only for the legacy local-only profile mode;
+    // applying it here wrongly signed out students whose browser still held an
+    // old timestamp (it was never refreshed by backend sign-in).
+    if (AUTH_BACKEND_CONFIGURED) {
+      try {
+        localStorage.removeItem(LAST_ACTIVE_KEY);
+      } catch {
+        // Ignore storage errors
+      }
+      return false;
+    }
+
     const lastActivity = getLastActivity();
     if (!lastActivity) return false;
     

@@ -298,6 +298,9 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     topic: 'basics',
     topicDifficultyLevel: 1,
     schema: usersPracticeSchema,
+    requiredConstructs: [
+      { pattern: 'SELECT\\s+(DISTINCT\\s+)?\\*', label: 'the * wildcard' },
+    ],
     expectedQuery: 'SELECT * FROM users;',
     expectedResult: [
       { id: 1, name: 'Alice', email: 'alice@email.com', age: 25, city: 'Seattle' },
@@ -316,6 +319,9 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     topic: 'basics',
     topicDifficultyLevel: 1,
     schema: usersPracticeSchema,
+    requiredConstructs: [
+      { pattern: 'SELECT\\s+(DISTINCT\\s+)?\\*', label: '* (list the columns by name instead)', forbid: true },
+    ],
     expectedQuery: 'SELECT name, email FROM users;',
     expectedResult: [
       { name: 'Alice', email: 'alice@email.com' },
@@ -351,6 +357,9 @@ INSERT INTO products VALUES (4, 'Chair', 'Furniture', 199.99);`,
     topicDifficultyLevel: 1,
     schema: `${usersOrdersPracticeSchema}
 INSERT INTO orders VALUES (107, 3, 'Pen', 9.99);`,
+    requiredConstructs: [
+      { pattern: '\\bIN\\s*\\(', label: 'IN' },
+    ],
     expectedQuery: 'SELECT name FROM users WHERE id IN (SELECT user_id FROM orders WHERE amount > 200);',
     expectedResult: [
       { name: 'Alice' },
@@ -527,6 +536,9 @@ INSERT INTO orders VALUES (107, 3, 'Pen', 9.99);`,
     topicDifficultyLevel: 2,
     schema: `${employeesDepartmentsSchema}
 INSERT INTO departments VALUES (5, 'Finance');`,
+    requiredConstructs: [
+      { pattern: '\\bEXISTS\\s*\\(', label: 'EXISTS' },
+    ],
     expectedQuery: 'SELECT dept_name FROM departments d WHERE EXISTS (SELECT 1 FROM employees e WHERE e.dept_id = d.dept_id);',
     expectedResult: [
       { dept_name: 'Engineering' },
@@ -544,6 +556,9 @@ INSERT INTO departments VALUES (5, 'Finance');`,
     topic: 'advanced',
     topicDifficultyLevel: 3,
     schema: employeesDepartmentsSchema,
+    requiredConstructs: [
+      { pattern: '\\(\\s*SELECT\\b', label: 'a subquery' },
+    ],
     expectedQuery: 'SELECT emp_name, salary FROM employees e WHERE salary > (SELECT AVG(salary) FROM employees WHERE dept_id = e.dept_id);',
     expectedResult: [
       { emp_name: 'Alice', salary: 90000 },
@@ -560,6 +575,9 @@ INSERT INTO departments VALUES (5, 'Finance');`,
     topicDifficultyLevel: 3,
     schema: `${employeesDepartmentsSchema}
 INSERT INTO employees VALUES (7, 'Grace', 60000, 1, 1, '2024-01-01');`,
+    requiredConstructs: [
+      { pattern: '\\bROW_NUMBER\\s*\\(', label: 'ROW_NUMBER()' },
+    ],
     expectedQuery: 'SELECT emp_name, dept_id, salary FROM (SELECT emp_name, dept_id, salary, ROW_NUMBER() OVER (PARTITION BY dept_id ORDER BY salary DESC) as rn FROM employees) WHERE rn <= 2;',
     expectedResult: [
       { emp_name: 'Alice', dept_id: 1, salary: 90000 },
@@ -579,6 +597,9 @@ INSERT INTO employees VALUES (7, 'Grace', 60000, 1, 1, '2024-01-01');`,
     topic: 'advanced',
     topicDifficultyLevel: 2,
     schema: employeesDepartmentsSchema,
+    requiredConstructs: [
+      { pattern: '(^|[^A-Z_])RANK\\s*\\(', label: 'RANK()' },
+    ],
     expectedQuery: 'SELECT emp_name, salary, RANK() OVER (ORDER BY salary DESC) as salary_rank FROM employees;',
     expectedResult: [
       { emp_name: 'Alice', salary: 90000, salary_rank: 1 },
@@ -632,6 +653,9 @@ INSERT INTO employees VALUES (7, 'Grace', 60000, 1, 1, '2024-01-01');`,
     topic: 'filtering',
     topicDifficultyLevel: 2,
     schema: tasksSchema,
+    requiredConstructs: [
+      { pattern: '\\bCOALESCE\\s*\\(', label: 'COALESCE' },
+    ],
     expectedQuery: 'SELECT task_name, COALESCE(priority, 0) as effective_priority FROM tasks;',
     expectedResult: [
       { task_name: 'Fix login bug', effective_priority: 1 },
@@ -650,6 +674,10 @@ INSERT INTO employees VALUES (7, 'Grace', 60000, 1, 1, '2024-01-01');`,
     topic: 'basics',
     topicDifficultyLevel: 3,
     schema: productsPracticeSchema,
+    requiredConstructs: [
+      { pattern: '\\bLIMIT\\b', label: 'LIMIT' },
+      { pattern: '\\bOFFSET\\b', label: 'OFFSET' },
+    ],
     expectedQuery: 'SELECT * FROM products LIMIT 3 OFFSET 2;',
     expectedResult: [
       { id: 3, name: 'Keyboard', category: 'Electronics', price: 79.99 },
@@ -666,6 +694,9 @@ INSERT INTO employees VALUES (7, 'Grace', 60000, 1, 1, '2024-01-01');`,
     topic: 'advanced',
     topicDifficultyLevel: 1,
     schema: salesSchema,
+    requiredConstructs: [
+      { pattern: '\\bUNION\\b', label: 'UNION' },
+    ],
     expectedQuery: 'SELECT region FROM sales UNION SELECT region FROM sales;',
     expectedResult: [
       { region: 'East' },
@@ -683,6 +714,9 @@ INSERT INTO employees VALUES (7, 'Grace', 60000, 1, 1, '2024-01-01');`,
     topic: 'joining',
     topicDifficultyLevel: 3,
     schema: employeesDepartmentsSchema,
+    requiredConstructs: [
+      { pattern: '\\bJOIN\\b', label: 'JOIN' },
+    ],
     expectedQuery: 'SELECT e.emp_name as employee, m.emp_name as manager FROM employees e LEFT JOIN employees m ON e.manager_id = m.emp_id;',
     expectedResult: [
       { employee: 'Alice', manager: null },

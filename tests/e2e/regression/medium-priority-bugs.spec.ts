@@ -552,7 +552,7 @@ test.describe('@weekly @integration @medium-priority-bugs Medium Priority Bug Fi
     }
 
     // Request hint
-    await page.getByRole('button', { name: 'Request Hint' }).click();
+    await page.getByRole('button', { name: /Get hint|Request Hint/i }).click();
     await expect(page.getByTestId('hint-label-1')).toBeVisible();
 
     // Verify hint event has ruleFired

@@ -49,8 +49,8 @@ export function ConceptLibraryPage() {
 
   if (loading) {
     return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex items-center gap-3 text-gray-600">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="flex items-center gap-3 text-gray-600 dark:text-gray-300">
           <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           Loading concepts...
         </div>
@@ -60,9 +60,9 @@ export function ConceptLibraryPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-600 mb-4">{error}</p>
+          <p className="text-red-600 dark:text-red-300 mb-4">{error}</p>
           <button
             onClick={loadConcepts}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -75,17 +75,17 @@ export function ConceptLibraryPage() {
   }
   
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
       <div className="max-w-6xl mx-auto px-4">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <BookOpen className="w-8 h-8 text-blue-600" />
-            <h1 className="text-3xl font-bold text-gray-900">
+            <BookOpen className="w-8 h-8 text-blue-600 dark:text-blue-300" />
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
               SQL Textbook
             </h1>
           </div>
-          <p className="text-gray-600 max-w-2xl">
+          <p className="text-gray-600 dark:text-gray-300 max-w-2xl">
             Learn SQL concepts step by step. Study the theory, see real examples, 
             understand common mistakes, then practice to master each concept.
           </p>
@@ -93,32 +93,32 @@ export function ConceptLibraryPage() {
         
         {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-white rounded-lg p-4 border">
-            <div className="text-2xl font-bold text-blue-600">{concepts.length}</div>
-            <div className="text-sm text-gray-600">Total Concepts</div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border">
+            <div className="text-2xl font-bold text-blue-600 dark:text-blue-300">{concepts.length}</div>
+            <div className="text-sm text-gray-600 dark:text-gray-300">Total Concepts</div>
           </div>
-          <div className="bg-white rounded-lg p-4 border">
-            <div className="text-2xl font-bold text-green-600">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border">
+            <div className="text-2xl font-bold text-green-600 dark:text-green-300">
               {concepts.filter(c => c.difficulty === 'beginner').length}
             </div>
-            <div className="text-sm text-gray-600">Beginner Friendly</div>
+            <div className="text-sm text-gray-600 dark:text-gray-300">Beginner Friendly</div>
           </div>
-          <div className="bg-white rounded-lg p-4 border">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border">
             <div className="text-2xl font-bold text-purple-600">
               {Math.round(concepts.reduce((acc, c) => acc + (getConceptLesson(c.id) ? getLessonReadTime(getConceptLesson(c.id)!) : getConceptTime(c.difficulty)), 0) / concepts.length) || 1}
             </div>
-            <div className="text-sm text-gray-600">Avg. Minutes per Concept</div>
+            <div className="text-sm text-gray-600 dark:text-gray-300">Avg. Minutes per Concept</div>
           </div>
         </div>
         
         {/* Search */}
         <div className="mb-6 space-y-3">
           <div className="max-w-xl space-y-2">
-            <label htmlFor="concept-library-search" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="concept-library-search" className="block text-sm font-medium text-gray-700 dark:text-gray-200">
               Search Concepts
             </label>
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-gray-500" />
               <Input
                 id="concept-library-search"
                 type="search"
@@ -132,33 +132,33 @@ export function ConceptLibraryPage() {
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 transition-colors hover:text-gray-600"
                   aria-label="Clear concept search"
                 >
                   <X className="h-4 w-4" />
                 </button>
               )}
             </div>
-            <p id="concept-library-search-help" className="text-sm text-gray-500">
+            <p id="concept-library-search-help" className="text-sm text-gray-500 dark:text-gray-400">
               Filter the concepts on this page. Use global search to jump anywhere in the app.
             </p>
           </div>
           <div className="flex items-center gap-3">
             <CommandTrigger className="justify-start" />
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-gray-500 dark:text-gray-400">
               Global search
               <span className="hidden sm:inline">
-                {' '}<kbd className="px-1.5 py-0.5 text-xs font-medium text-gray-600 bg-gray-100 rounded">⌘K</kbd>
+                {' '}<kbd className="px-1.5 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 rounded">⌘K</kbd>
               </span>
             </span>
           </div>
           {searchQuery && (
-            <div className="mt-3 flex items-center gap-2 text-sm text-gray-600">
+            <div className="mt-3 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
               <Search className="w-4 h-4" />
               <span>Filtering by: "{searchQuery}"</span>
               <button 
                 onClick={() => setSearchQuery('')}
-                className="text-blue-600 hover:underline ml-2"
+                className="text-blue-600 dark:text-blue-300 hover:underline ml-2"
               >
                 Clear
               </button>
@@ -167,10 +167,10 @@ export function ConceptLibraryPage() {
         </div>
 
         <div className="flex flex-wrap gap-4 mb-5">
-          <label className="text-sm font-medium">Topic<select className="block border rounded-lg p-3 bg-white mt-1 max-w-full" value={topic} onChange={e => setTopic(e.target.value)}><option value="all">All topics</option>{Object.entries(TOPIC_LABELS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
-          <label className="text-sm font-medium">Source<select className="block border rounded-lg p-3 bg-white mt-1" value={source} onChange={e => setSource(e.target.value)}><option value="all">All sources</option><option value="murachs-mysql-3rd-edition">Murach’s MySQL</option><option value="dbms-ramakrishnan-3rd-edition">Database Management Systems</option></select></label>
+          <label className="text-sm font-medium">Topic<select className="block border rounded-lg p-3 bg-white mt-1 max-w-full text-gray-900 dark:text-gray-100 dark:bg-gray-800 dark:border-gray-600 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-800 dark:[&>option]:text-gray-100" value={topic} onChange={e => setTopic(e.target.value)}><option value="all">All topics</option>{Object.entries(TOPIC_LABELS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select></label>
+          <label className="text-sm font-medium">Source<select className="block border rounded-lg p-3 bg-white mt-1 text-gray-900 dark:text-gray-100 dark:bg-gray-800 dark:border-gray-600 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-800 dark:[&>option]:text-gray-100" value={source} onChange={e => setSource(e.target.value)}><option value="all">All sources</option><option value="murachs-mysql-3rd-edition">Murach’s MySQL</option><option value="dbms-ramakrishnan-3rd-edition">Database Management Systems</option></select></label>
         </div>
-        <p role="status" className="mb-4 text-sm text-gray-600">{filtered.length} of {concepts.length} concepts · Follow the topic groups from foundations to administration.</p>
+        <p role="status" className="mb-4 text-sm text-gray-600 dark:text-gray-300">{filtered.length} of {concepts.length} concepts · Follow the topic groups from foundations to administration.</p>
         {/* Filters */}
         <div className="flex flex-wrap gap-2 mb-6">
           {(['all', 'beginner', 'intermediate', 'advanced'] as const).map(diff => (
@@ -181,7 +181,7 @@ export function ConceptLibraryPage() {
               className={`px-4 py-2 rounded-lg capitalize transition-colors ${
                 filter === diff 
                   ? 'bg-blue-600 text-white shadow-md' 
-                  : 'bg-white text-gray-700 hover:bg-gray-100 border'
+                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-100 border'
               }`}
             >
               {diff === 'all' ? 'All Concepts' : diff}
@@ -193,11 +193,11 @@ export function ConceptLibraryPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((concept, index) => (
             <Fragment key={concept.id}>
-            {(index === 0 || getConceptLesson(filtered[index - 1].id)?.topic !== getConceptLesson(concept.id)?.topic) && <h2 className="col-span-full mt-4 text-xl font-semibold text-gray-900">{TOPIC_LABELS[getConceptLesson(concept.id)?.topic || ''] || 'Further reading'}</h2>}
+            {(index === 0 || getConceptLesson(filtered[index - 1].id)?.topic !== getConceptLesson(concept.id)?.topic) && <h2 className="col-span-full mt-4 text-xl font-semibold text-gray-900 dark:text-gray-100">{TOPIC_LABELS[getConceptLesson(concept.id)?.topic || ''] || 'Further reading'}</h2>}
             <Link
               key={concept.id}
               to={`/concepts/${concept.id}`}
-              className={`group p-6 rounded-xl border-2 transition-all hover:shadow-lg bg-white ${getDifficultyBorder(concept.difficulty)}`}
+              className={`group p-6 rounded-xl border-2 transition-all hover:shadow-lg bg-white dark:bg-gray-800 ${getDifficultyBorder(concept.difficulty)}`}
             >
               <div className="flex items-start justify-between mb-3">
                 <span className={`px-3 py-1 rounded-full text-xs font-medium ${getDifficultyBadge(concept.difficulty)}`}>
@@ -207,12 +207,12 @@ export function ConceptLibraryPage() {
                   {getConceptIcon(concept.id)}
                 </span>
               </div>
-              <p className="text-xs text-blue-700 mb-2">{TOPIC_LABELS[getConceptLesson(concept.id)?.topic || ''] || 'Further reading'}</p>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+              <p className="text-xs text-blue-700 dark:text-blue-300 mb-2">{TOPIC_LABELS[getConceptLesson(concept.id)?.topic || ''] || 'Further reading'}</p>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 group-hover:text-blue-600 transition-colors">
                 {concept.title}
               </h3>
-<p className="text-xs text-gray-500 mb-3">{concept.id.startsWith('murachs-mysql') ? "Murach’s MySQL" : concept.id.startsWith('dbms-ramakrishnan') ? 'Database Management Systems' : 'Course source'}</p>
-              <div className="flex items-center gap-4 text-sm text-gray-500">
+<p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{concept.id.startsWith('murachs-mysql') ? "Murach’s MySQL" : concept.id.startsWith('dbms-ramakrishnan') ? 'Database Management Systems' : 'Course source'}</p>
+              <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
                 <span className="flex items-center gap-1">
                   <Clock className="w-4 h-4" />
                   {getConceptLesson(concept.id) ? getLessonReadTime(getConceptLesson(concept.id)!) : getConceptTime(concept.difficulty)} min
@@ -228,7 +228,7 @@ export function ConceptLibraryPage() {
         </div>
         
         {filtered.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
+          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
             {searchQuery
               ? `No concepts found matching "${searchQuery}"`
               : 'No concepts found for this filter.'}
@@ -241,19 +241,19 @@ export function ConceptLibraryPage() {
 
 function getDifficultyBorder(difficulty: string): string {
   switch (difficulty) {
-    case 'beginner': return 'border-green-200 hover:border-green-400';
-    case 'intermediate': return 'border-yellow-200 hover:border-yellow-400';
-    case 'advanced': return 'border-red-200 hover:border-red-400';
-    default: return 'border-gray-200';
+    case 'beginner': return 'border-green-200 dark:border-green-800 hover:border-green-400';
+    case 'intermediate': return 'border-yellow-200 dark:border-yellow-800 hover:border-yellow-400';
+    case 'advanced': return 'border-red-200 dark:border-red-800 hover:border-red-400';
+    default: return 'border-gray-200 dark:border-gray-700';
   }
 }
 
 function getDifficultyBadge(difficulty: string): string {
   switch (difficulty) {
-    case 'beginner': return 'bg-green-100 text-green-800';
-    case 'intermediate': return 'bg-yellow-100 text-yellow-800';
-    case 'advanced': return 'bg-red-100 text-red-800';
-    default: return 'bg-gray-100 text-gray-800';
+    case 'beginner': return 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200';
+    case 'intermediate': return 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-200';
+    case 'advanced': return 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200';
+    default: return 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100';
   }
 }
 

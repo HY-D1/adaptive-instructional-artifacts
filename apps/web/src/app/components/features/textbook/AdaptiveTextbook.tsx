@@ -401,12 +401,12 @@ export function AdaptiveTextbook({
     return (
       <Card className="p-8 text-center">
         {selectedUnitId && <p role="alert">The requested saved note is not available.</p>}
-        <Book className="size-12 mx-auto text-gray-600 mb-4" />
+        <Book className="size-12 mx-auto text-gray-600 dark:text-gray-300 mb-4" />
         <h3 className="font-semibold text-lg mb-2">Your Textbook is Empty</h3>
-        <p className="text-gray-600 mb-3">
+        <p className="text-gray-600 dark:text-gray-300 mb-3">
           Notes will appear here when you save them from the practice page.
         </p>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           While solving SQL problems, click <strong>"Save to Notes"</strong> after viewing hints
           or explanations to build your personalized study guide.
         </p>
@@ -442,7 +442,7 @@ export function AdaptiveTextbook({
         {noteSearch && <Button size="sm" variant="outline" onClick={() => setNoteSearch('')}>Clear note search</Button>}
         <p role="status" className="my-2 text-sm">{filteredUnits.length} of {orderedUnits.length} saved notes</p>
         <label className="block text-sm font-medium mb-3">Sort saved notes
-          <select className="block mt-1 w-full rounded border p-2" value={sortMode} onChange={event => setSortMode(event.target.value as SortMode)}>
+          <select className="block mt-1 w-full rounded border p-2 bg-white text-gray-900 dark:text-gray-100 dark:bg-gray-800 dark:border-gray-600 dark:[color-scheme:dark] [&>option]:bg-white [&>option]:text-gray-900 dark:[&>option]:bg-gray-800 dark:[&>option]:text-gray-100" value={sortMode} onChange={event => setSortMode(event.target.value as SortMode)}>
             <option value="quality">Quality</option><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="prerequisite">Learning path</option>
           </select>
         </label>
@@ -451,7 +451,7 @@ export function AdaptiveTextbook({
           <Badge variant="outline" className="text-[10px]">
             Sort: {sortMode}
           </Badge>
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-gray-500 dark:text-gray-400">
             {sortMode === 'quality' && 'Best explanations first'}
             {sortMode === 'newest' && 'Most recent first'}
             {sortMode === 'oldest' && 'Oldest first'}
@@ -461,7 +461,7 @@ export function AdaptiveTextbook({
 
         {/* Legacy HTML units warning */}
         {legacyUnitsInfo.hasLegacyUnits && (
-          <div className="mb-3 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+          <div className="mb-3 p-2 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded text-xs text-amber-800 dark:text-amber-200">
             <p className="font-medium">⚠️ Legacy Content Detected</p>
             <p>{legacyUnitsInfo.count} unit(s) may display formatting issues.</p>
             <p className="mt-1">
@@ -476,7 +476,7 @@ export function AdaptiveTextbook({
           </div>
         )}
 
-        {filteredUnits.length === 0 && <p className="my-3 text-sm text-gray-600">No saved notes match the current search and archive filter.</p>}
+        {filteredUnits.length === 0 && <p className="my-3 text-sm text-gray-600 dark:text-gray-300">No saved notes match the current search and archive filter.</p>}
         <div className="space-y-2">
           {Object.entries(groupedUnits).map(([conceptName, problems]) => {
             const isConceptExpanded = expandedConcepts[conceptName] ?? false;
@@ -495,7 +495,7 @@ export function AdaptiveTextbook({
                 <button
                   type="button"
                   onClick={() => toggleConcept(conceptName)}
-                  className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                  className="w-full flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   aria-expanded={isConceptExpanded}
                   aria-controls={`concept-content-${conceptName.replace(/\s+/g, '-').toLowerCase()}`}
                 >
@@ -505,7 +505,7 @@ export function AdaptiveTextbook({
                       <span className="font-medium text-sm">{conceptName}</span>
                       {corpusMeta?.sectionTitle && (
                         <span
-                          className="text-[10px] text-gray-600 leading-tight"
+                          className="text-[10px] text-gray-600 dark:text-gray-300 leading-tight"
                           data-testid="corpus-section-title"
                         >
                           {corpusMeta.sectionTitle}
@@ -517,9 +517,9 @@ export function AdaptiveTextbook({
                     </Badge>
                   </div>
                   {isConceptExpanded ? (
-                    <ChevronDown className="size-4 text-gray-600" />
+                    <ChevronDown className="size-4 text-gray-600 dark:text-gray-300" />
                   ) : (
-                    <ChevronRight className="size-4 text-gray-600" />
+                    <ChevronRight className="size-4 text-gray-600 dark:text-gray-300" />
                   )}
                 </button>
                 
@@ -535,14 +535,14 @@ export function AdaptiveTextbook({
                       const hasMultipleUnits = units.length > 1;
                       
                       return (
-                        <div key={problemKey} className="rounded-md border bg-white overflow-hidden">
+                        <div key={problemKey} className="rounded-md border bg-white dark:bg-gray-800 overflow-hidden">
                           {/* Problem Title */}
                           <button
                             type="button"
                             onClick={() => hasMultipleUnits ? toggleProblem(problemKey) : handleUnitSelect(units[0])}
-                            className={`w-full flex items-center justify-between p-2 text-left hover:bg-gray-50 transition-colors ${
+                            className={`w-full flex items-center justify-between p-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors ${
                               selectedUnit && units.some(u => u.id === selectedUnit.id) 
-                                ? 'bg-blue-50 border-blue-200' 
+                                ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800' 
                                 : ''
                             }`}
                             aria-expanded={hasMultipleUnits ? isProblemExpanded : undefined}
@@ -551,12 +551,12 @@ export function AdaptiveTextbook({
                             <div className="flex items-center gap-2 min-w-0">
                               {hasMultipleUnits ? (
                                 isProblemExpanded ? (
-                                  <ChevronDown className="size-3.5 text-gray-600 shrink-0" />
+                                  <ChevronDown className="size-3.5 text-gray-600 dark:text-gray-300 shrink-0" />
                                 ) : (
-                                  <ChevronRight className="size-3.5 text-gray-600 shrink-0" />
+                                  <ChevronRight className="size-3.5 text-gray-600 dark:text-gray-300 shrink-0" />
                                 )
                               ) : (
-                                <FileText className="size-3.5 text-gray-600 shrink-0" />
+                                <FileText className="size-3.5 text-gray-600 dark:text-gray-300 shrink-0" />
                               )}
                               <span className="text-sm truncate">{problemTitle}</span>
                             </div>
@@ -571,7 +571,7 @@ export function AdaptiveTextbook({
                           {(isProblemExpanded || !hasMultipleUnits) && (
                             <div 
                               id={`problem-content-${problemKey.replace(/\s+/g, '-').toLowerCase()}`}
-                              className="border-t bg-gray-50/50"
+                              className="border-t bg-gray-50/50 dark:bg-gray-900/40"
                             >
                               {units.map((unit) => {
                                 const isBest = isBestQualityUnit(unit);
@@ -583,8 +583,8 @@ export function AdaptiveTextbook({
                                     aria-label={unit.title}
                                     className={`w-full px-3 py-2 text-left text-sm transition-colors ${
                                       selectedUnit?.id === unit.id
-                                        ? 'bg-blue-100 text-blue-900'
-                                        : 'hover:bg-gray-100 text-gray-700'
+                                        ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-900 dark:text-blue-100'
+                                        : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200'
                                     }`}
                                   >
                                     <div className="flex items-center gap-2">
@@ -593,7 +593,7 @@ export function AdaptiveTextbook({
                                     </div>
                                     <span className="block truncate mt-0.5">{unit.title}</span>
                                     {unit.qualityScore !== undefined && (
-                                      <span className="text-[10px] text-gray-600">
+                                      <span className="text-[10px] text-gray-600 dark:text-gray-300">
                                         Score: {((unit.qualityScore) * 100).toFixed(0)}%
                                       </span>
                                     )}
@@ -614,37 +614,37 @@ export function AdaptiveTextbook({
 
         {/* Blocked Units - Prerequisites Not Met */}
         {blockedUnits.length > 0 && (
-          <div className="mt-4 rounded border border-red-200 bg-red-50 p-3" data-testid="blocked-units-section">
-            <p className="text-xs font-semibold uppercase tracking-wide text-red-800">
+          <div className="mt-4 rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 p-3" data-testid="blocked-units-section">
+            <p className="text-xs font-semibold uppercase tracking-wide text-red-800 dark:text-red-200">
               Blocked ({blockedUnits.length})
             </p>
-            <p className="text-[11px] text-red-700 mt-1">
+            <p className="text-[11px] text-red-700 dark:text-red-300 mt-1">
               Units requiring prerequisites you haven&apos;t mastered yet
             </p>
             <div className="mt-2 space-y-2">
               {blockedUnits.slice(0, 3).map((blocked) => (
-                <div key={blocked.unit.id} className="rounded border border-red-200 bg-white p-2">
+                <div key={blocked.unit.id} className="rounded border border-red-200 dark:border-red-800 bg-white dark:bg-gray-800 p-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm font-medium text-red-900 truncate">
+                    <p className="text-sm font-medium text-red-900 dark:text-red-100 truncate">
                       {blocked.unit.title}
                     </p>
                     <Badge variant="outline" className="text-[10px] ml-2">
                       {blocked.readinessScore}% ready
                     </Badge>
                   </div>
-                  <p className="text-[11px] text-red-700 mt-1">
+                  <p className="text-[11px] text-red-700 dark:text-red-300 mt-1">
                     Missing: {blocked.missingPrerequisites.slice(0, 2).join(', ')}
                     {blocked.missingPrerequisites.length > 2 && ` +${blocked.missingPrerequisites.length - 2} more`}
                   </p>
                   {blocked.recommendedUnlockOrder.length > 0 && (
-                    <p className="text-[10px] text-red-600 mt-1">
+                    <p className="text-[10px] text-red-600 dark:text-red-300 mt-1">
                       Learn first: {blocked.recommendedUnlockOrder.slice(0, 2).join(' → ')}
                     </p>
                   )}
                 </div>
               ))}
               {blockedUnits.length > 3 && (
-                <p className="text-xs text-red-600 text-center">
+                <p className="text-xs text-red-600 dark:text-red-300 text-center">
                   +{blockedUnits.length - 3} more blocked units
                 </p>
               )}
@@ -654,13 +654,13 @@ export function AdaptiveTextbook({
 
         {/* Prerequisite Strength Indicator */}
         {prerequisiteStrengths.length > 0 && (
-          <div className="mt-4 rounded border border-purple-200 bg-purple-50 p-3" data-testid="prerequisite-strength-section">
-            <p className="text-xs font-semibold uppercase tracking-wide text-purple-800">
+          <div className="mt-4 rounded border border-purple-200 bg-purple-50 dark:bg-purple-950/40 p-3" data-testid="prerequisite-strength-section">
+            <p className="text-xs font-semibold uppercase tracking-wide text-purple-800 dark:text-purple-200">
               Prerequisite Strength
             </p>
             <div className="mt-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-purple-700">Average Foundation Score</span>
+                <span className="text-purple-700 dark:text-purple-300">Average Foundation Score</span>
                 <span className="font-medium text-purple-900">
                   {textbookInsights.summary.averagePrerequisiteStrength}%
                 </span>
@@ -672,7 +672,7 @@ export function AdaptiveTextbook({
                 />
               </div>
               {prerequisiteStrengths.some(s => s.weakestPrerequisite && s.weakestPrerequisite.score < 40) && (
-                <p className="text-[11px] text-purple-700 mt-2">
+                <p className="text-[11px] text-purple-700 dark:text-purple-300 mt-2">
                   💡 Strengthen your understanding of prerequisites for better retention
                 </p>
               )}
@@ -682,17 +682,17 @@ export function AdaptiveTextbook({
 
         <details className="mt-4"><summary className="cursor-pointer font-medium">Review suggestions</summary>
         {textbookInsights.misconceptionCards.length > 0 && (
-          <div className="mt-4 rounded border border-amber-200 bg-amber-50 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">Repeated errors</p>
+          <div className="mt-4 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">Repeated errors</p>
             <div className="mt-2 space-y-2">
               {textbookInsights.misconceptionCards.map((card) => (
-                <div key={card.id} className="rounded border border-amber-200 bg-white p-2" data-testid="misconception-card">
-                  <p className="text-sm font-medium text-amber-900">{card.subtype}</p>
-                  <p className="text-xs text-amber-800">
+                <div key={card.id} className="rounded border border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-800 p-2" data-testid="misconception-card">
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100">{card.subtype}</p>
+                  <p className="text-xs text-amber-800 dark:text-amber-200">
                     {card.count} distinct errors • last seen {new Date(card.lastSeenAt).toLocaleString()}
                   </p>
                   {card.conceptNames.length > 0 && (
-                    <p className="text-[11px] text-amber-700 mt-1">
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-1">
                       Concepts: {card.conceptNames.join(', ')}
                     </p>
                   )}
@@ -703,13 +703,13 @@ export function AdaptiveTextbook({
         )}
 
         {textbookInsights.spacedReviewPrompts.length > 0 && (
-          <div className="mt-4 rounded border border-blue-200 bg-blue-50 p-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-blue-800">Spaced Review</p>
+          <div className="mt-4 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-800 dark:text-blue-200">Spaced Review</p>
             <div className="mt-2 space-y-2">
               {textbookInsights.spacedReviewPrompts.map((prompt) => (
-                <div key={prompt.id} className="rounded border border-blue-200 bg-white p-2" data-testid="spaced-review-prompt">
-                  <p className="text-sm font-medium text-blue-900">{prompt.title}</p>
-                  <p className="text-xs text-blue-800">{prompt.message}</p>
+                <div key={prompt.id} className="rounded border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-800 p-2" data-testid="spaced-review-prompt">
+                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100">{prompt.title}</p>
+                  <p className="text-xs text-blue-800 dark:text-blue-200">{prompt.message}</p>
                 </div>
               ))}
             </div>
@@ -728,16 +728,16 @@ export function AdaptiveTextbook({
           >
             {showArchived ? 'Showing All' : 'Primary Only'}
           </Badge>
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-gray-500 dark:text-gray-400">
             {showArchived ? 'Click to hide archived' : 'Click to show archived'}
           </span>
         </div>
 
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-gray-500 dark:text-gray-400">
           <p className="font-medium mb-1">Coverage</p>
           <p>{orderedUnits.length} accessible units</p>
           {blockedUnits.length > 0 && (
-            <p className="text-red-600">{blockedUnits.length} blocked (prerequisites needed)</p>
+            <p className="text-red-600 dark:text-red-300">{blockedUnits.length} blocked (prerequisites needed)</p>
           )}
           <p>{Object.keys(groupedUnits).length} concepts</p>
           <p>
@@ -777,7 +777,7 @@ export function AdaptiveTextbook({
                   Best Quality
                 </Badge>
               )}
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-gray-500 dark:text-gray-400">
                 Added {new Date(selectedUnit.addedTimestamp).toLocaleDateString()}
               </span>
               {selectedUnit.qualityScore !== undefined && (
@@ -787,13 +787,13 @@ export function AdaptiveTextbook({
               )}
             </div>
 
-            <div className="not-prose mb-4 rounded-lg border bg-slate-50 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500 mb-1">Concept</p>
-              <h3 className="font-semibold text-slate-900">
+            <div className="not-prose mb-4 rounded-lg border bg-slate-50 dark:bg-gray-900 p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-500 dark:text-gray-400 mb-1">Concept</p>
+              <h3 className="font-semibold text-slate-900 dark:text-gray-100">
                 {selectedConcept?.name || selectedUnit.conceptId}
               </h3>
               {selectedConcept?.description && (
-                <p className="mt-1 text-sm text-slate-700">{selectedConcept.description}</p>
+                <p className="mt-1 text-sm text-slate-700 dark:text-gray-200">{selectedConcept.description}</p>
               )}
             </div>
 
@@ -810,9 +810,9 @@ export function AdaptiveTextbook({
             />
 
             {selectedUnit.provenance && (
-              <details className="not-prose mt-4 rounded border bg-gray-50 p-3">
+              <details className="not-prose mt-4 rounded border bg-gray-50 dark:bg-gray-900 p-3">
                 <summary className="cursor-pointer text-sm font-medium">Provenance</summary>
-                <div className="mt-2 text-xs text-gray-700 space-y-1">
+                <div className="mt-2 text-xs text-gray-700 dark:text-gray-200 space-y-1">
                   <p><span className="font-medium">Template:</span> {selectedUnit.provenance.templateId}</p>
                   <p><span className="font-medium">Model:</span> {selectedUnit.provenance.model}</p>
                   <p>
@@ -839,13 +839,13 @@ export function AdaptiveTextbook({
 
             {selectedUnitEvidence.requestedIds.length > 0 && (
               <div className="not-prose mt-6 pt-4 border-t">
-                <p className="text-xs text-gray-500 mb-2">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                   This content was generated from {getSourceCount(selectedUnit)} interaction(s):{' '}
                   {selectedUnitEvidence.resolved.length} resolved, {selectedUnitEvidence.missingIds.length} missing
                 </p>
                 {selectedUnitEvidence.missingIds.length > 0 && (
                   <div
-                    className="mb-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900"
+                    className="mb-2 rounded border border-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2 text-xs text-amber-900 dark:text-amber-100"
                     data-testid="textbook-missing-evidence"
                   >
                     Missing interaction IDs: {toCompactList(selectedUnitEvidence.missingIds, 4)}
@@ -858,8 +858,8 @@ export function AdaptiveTextbook({
                     const href = buildEvidenceHref?.(interaction);
                     const className = `block rounded border p-2 text-sm transition-colors ${
                       activeEvidenceId === interaction.id
-                        ? 'border-blue-300 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
                     }`;
 
                     const content = (
@@ -867,9 +867,9 @@ export function AdaptiveTextbook({
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{getEvidenceLabel(interaction)}</span>
                           <Badge variant="outline" className="text-xs">{subtype}</Badge>
-                          <span className="text-[11px] text-gray-500">{interaction.id}</span>
+                          <span className="text-[11px] text-gray-500 dark:text-gray-400">{interaction.id}</span>
                         </div>
-                        <p className="text-xs text-gray-600 mt-1">
+                        <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
                           {new Date(interaction.timestamp).toLocaleString()}
                         </p>
                       </>
@@ -890,9 +890,9 @@ export function AdaptiveTextbook({
             )}
           </div>
         ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
+          <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
             <div className="text-center">
-              <Book className="size-12 mx-auto mb-4 text-gray-600" />
+              <Book className="size-12 mx-auto mb-4 text-gray-600 dark:text-gray-300" />
               <p>Select a topic from the left to view content</p>
             </div>
           </div>

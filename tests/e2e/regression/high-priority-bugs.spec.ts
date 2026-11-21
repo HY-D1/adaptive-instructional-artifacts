@@ -754,7 +754,7 @@ test.describe('@weekly @integration @high-priority-bugs High Priority Bug Fixes'
     await replaceEditorText(page, 'SELECT');
     await runUntilErrorCount(page, runQueryButton, 1);
     
-    await page.getByRole('button', { name: 'Request Hint' }).click();
+    await page.getByRole('button', { name: /Get hint|Request Hint/i }).click();
     await expect(page.getByTestId('hint-label-1')).toBeVisible();
     
     // Change to different problem (if available)

@@ -65,26 +65,26 @@ export function AuthPage() {
 
   if (isResearchUnsafeMode) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-red-50 p-4">
-        <Card className="w-full max-w-md border-red-300">
+      <div className="min-h-screen flex items-center justify-center bg-red-50 dark:bg-red-950/40 p-4">
+        <Card className="w-full max-w-md border-red-300 dark:border-red-800">
           <CardHeader>
             <div className="flex items-center gap-2 mb-2">
               <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
-                <Database className="w-4 h-4 text-red-600" />
+                <Database className="w-4 h-4 text-red-600 dark:text-red-300" />
               </div>
-              <CardTitle className="text-red-900">Research Data Collection Unavailable</CardTitle>
+              <CardTitle className="text-red-900 dark:text-red-100">Research Data Collection Unavailable</CardTitle>
             </div>
-            <CardDescription className="text-red-700">
+            <CardDescription className="text-red-700 dark:text-red-300">
               This deployment is not configured for research data collection.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="bg-red-50 p-3 rounded text-sm font-mono text-red-800 space-y-1">
+            <div className="bg-red-50 dark:bg-red-950/40 p-3 rounded text-sm font-mono text-red-800 dark:text-red-200 space-y-1">
               <p>Mode: {researchMode}</p>
               <p>Contract: {RESEARCH_CONTRACT_VERSION}</p>
               <p>Backend: Not configured</p>
             </div>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
               Please contact the research team or use the demo mode flag for local development.
             </p>
             <Button variant="outline" className="w-full" onClick={() => navigate('/')}>
@@ -98,12 +98,12 @@ export function AuthPage() {
 
   if (!AUTH_ENABLED) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle>Account system not available</CardTitle>
             <CardDescription>
-              Set <code className="bg-gray-100 px-1 rounded">VITE_API_BASE_URL</code> to enable account-based login.
+              Set <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">VITE_API_BASE_URL</code> to enable account-based login.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -201,27 +201,15 @@ export function AuthPage() {
   // ---- Render ---------------------------------------------------------------
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Header */}
-      <header className="bg-white border-b">
-        <div className="container mx-auto px-4 h-16 flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-            <Database className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="font-bold text-xl text-gray-900">SQL-Adapt</h1>
-            <p className="text-xs text-gray-500">Learning System</p>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
 
       <main className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
               {tab === 'login' ? 'Welcome back' : 'Create your account'}
             </h2>
-            <p className="text-gray-500 text-sm mt-1">
+            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
               {tab === 'login'
                 ? 'Sign in to continue your progress'
                 : 'Track your SQL progress across devices'}
@@ -229,7 +217,7 @@ export function AuthPage() {
           </div>
 
           {/* Tabs */}
-          <div className="flex border-b border-gray-200 mb-6">
+          <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
             {(['login', 'signup'] as Tab[]).map((t) => (
               <button
                 key={t}
@@ -237,8 +225,8 @@ export function AuthPage() {
                 className={cn(
                   'flex-1 py-3 text-sm font-medium transition-colors',
                   tab === t
-                    ? 'border-b-2 border-blue-600 text-blue-600'
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'border-b-2 border-blue-600 text-blue-600 dark:text-blue-300'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
                 )}
               >
                 {t === 'login' ? 'Sign In' : 'Create Account'}
@@ -252,7 +240,7 @@ export function AuthPage() {
               <div className="space-y-1">
                 <Label htmlFor="login-email">Email</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                   <Input
                     id="login-email"
                     name="email"
@@ -271,7 +259,7 @@ export function AuthPage() {
               <div className="space-y-1">
                 <Label htmlFor="login-password">Password</Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                   <Input
                     id="login-password"
                     name="current-password"
@@ -286,7 +274,7 @@ export function AuthPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600"
                     aria-label={showPassword ? "Hide password" : "Show password"}
                     aria-pressed={showPassword}
                   >
@@ -295,7 +283,7 @@ export function AuthPage() {
                 </div>
               </div>
               {loginError && (
-                <p className="text-sm text-red-600 font-medium" role="alert">{loginError}</p>
+                <p className="text-sm text-red-600 dark:text-red-300 font-medium" role="alert">{loginError}</p>
               )}
               <Button
                 type="submit"
@@ -311,11 +299,11 @@ export function AuthPage() {
                   'Sign In'
                 )}
               </Button>
-              <p className="text-center text-sm text-gray-500">
+              <p className="text-center text-sm text-gray-500 dark:text-gray-400">
                 Don't have an account?{' '}
                 <button
                   type="button"
-                  className="text-blue-600 hover:underline"
+                  className="text-blue-600 dark:text-blue-300 hover:underline"
                   onClick={() => setTab('signup')}
                 >
                   Create one
@@ -330,7 +318,7 @@ export function AuthPage() {
               <div className="space-y-1">
                 <Label htmlFor="signup-name">Display name</Label>
                 <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                   <Input
                     id="signup-name"
                     name="name"
@@ -348,7 +336,7 @@ export function AuthPage() {
               <div className="space-y-1">
                 <Label htmlFor="signup-email">Email</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                   <Input
                     id="signup-email"
                     name="email"
@@ -366,7 +354,7 @@ export function AuthPage() {
               <div className="space-y-1">
                 <Label htmlFor="signup-password">Password</Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" />
                   <Input
                     id="signup-password"
                     name="new-password"
@@ -385,7 +373,7 @@ export function AuthPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600"
                     aria-label={showPassword ? "Hide password" : "Show password"}
                     aria-pressed={showPassword}
                   >
@@ -395,12 +383,12 @@ export function AuthPage() {
                 {/* Password strength indicator */}
                 {signupPassword.length >= 8 && passwordStrength && (
                   <div className="flex items-center gap-2 text-xs mt-1">
-                    <span className="text-gray-500">Strength:</span>
+                    <span className="text-gray-500 dark:text-gray-400">Strength:</span>
                     <span className={cn(
                       "font-medium",
                       passwordStrength === 'weak' && "text-red-500",
                       passwordStrength === 'medium' && "text-yellow-600",
-                      passwordStrength === 'strong' && "text-green-600"
+                      passwordStrength === 'strong' && "text-green-600 dark:text-green-300"
                     )}>
                       {passwordStrength.charAt(0).toUpperCase() + passwordStrength.slice(1)}
                     </span>
@@ -418,14 +406,14 @@ export function AuthPage() {
                     className={cn(
                       'flex items-center gap-2 p-3 rounded-lg border-2 transition-colors text-left',
                       signupRole === 'student'
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-blue-200'
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-blue-200'
                     )}
                   >
-                    <BookOpen className="w-5 h-5 text-blue-600 shrink-0" />
+                    <BookOpen className="w-5 h-5 text-blue-600 dark:text-blue-300 shrink-0" />
                     <div>
                       <div className="font-medium text-sm">Student</div>
-                      <div className="text-xs text-gray-500">Practice SQL</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Practice SQL</div>
                     </div>
                   </button>
                   <button
@@ -435,13 +423,13 @@ export function AuthPage() {
                       'flex items-center gap-2 p-3 rounded-lg border-2 transition-colors text-left',
                       signupRole === 'instructor'
                         ? 'border-purple-500 bg-purple-50'
-                        : 'border-gray-200 hover:border-purple-200'
+                        : 'border-gray-200 dark:border-gray-700 hover:border-purple-200'
                     )}
                   >
                     <BarChart3 className="w-5 h-5 text-purple-600 shrink-0" />
                     <div>
                       <div className="font-medium text-sm">Instructor</div>
-                      <div className="text-xs text-gray-500">View analytics</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">View analytics</div>
                     </div>
                   </button>
                 </div>
@@ -454,7 +442,7 @@ export function AuthPage() {
                     <Lock className="w-4 h-4" />
                     {signupRole === 'student' ? 'Class code' : 'Instructor code'}
                   </Label>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     {signupRole === 'student'
                       ? "Use your instructor's class code."
                       : 'Use the instructor signup code from your course admin.'}
@@ -480,7 +468,7 @@ export function AuthPage() {
               )}
 
               {signupError && (
-                <p className="text-sm text-red-600 font-medium" role="alert">{signupError}</p>
+                <p className="text-sm text-red-600 dark:text-red-300 font-medium" role="alert">{signupError}</p>
               )}
 
               <Button
@@ -501,11 +489,11 @@ export function AuthPage() {
                 )}
               </Button>
 
-              <p className="text-center text-sm text-gray-500">
+              <p className="text-center text-sm text-gray-500 dark:text-gray-400">
                 Already have an account?{' '}
                 <button
                   type="button"
-                  className="text-blue-600 hover:underline"
+                  className="text-blue-600 dark:text-blue-300 hover:underline"
                   onClick={() => setTab('login')}
                 >
                   Sign in
@@ -516,8 +504,8 @@ export function AuthPage() {
 
           {/* Back to demo link */}
           {showDiagnostic && (
-            <div className="mt-6 text-center text-xs text-gray-500">
-              Auth API target: <code className="bg-gray-100 px-1 rounded">{apiBaseUrl}</code>
+            <div className="mt-6 text-center text-xs text-gray-500 dark:text-gray-400">
+              Auth API target: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">{apiBaseUrl}</code>
             </div>
           )}
         </div>

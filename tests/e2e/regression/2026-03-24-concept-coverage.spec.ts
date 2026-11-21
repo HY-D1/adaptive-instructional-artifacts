@@ -467,7 +467,7 @@ test.describe('@weekly @integration Feature 4: Concept Coverage Tracking', () =>
     await runUntilErrorCount(page, 1);
     
     // Request a hint
-    await page.getByRole('button', { name: 'Request Hint' }).click();
+    await page.getByRole('button', { name: /Get hint|Request Hint/i }).click();
     await expect(page.getByTestId('hint-label-1')).toBeVisible();
     
     // Wait for coverage to update

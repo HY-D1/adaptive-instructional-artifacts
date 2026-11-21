@@ -4,7 +4,7 @@ import { Button } from '../../ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
 import DOMPurify from 'dompurify';
 
-import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen, Loader2, HelpCircle, Sparkles, AlertCircle, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen, Loader2, HelpCircle, Sparkles, AlertCircle, ThumbsUp, ThumbsDown, Check } from 'lucide-react';
 import { HelpEventType, InteractionEvent } from '../../../types';
 import { orchestrator } from '../../../lib/adaptive-orchestrator';
 import { storage } from '../../../lib/storage';
@@ -74,6 +74,20 @@ interface HintSystemProps {
   sessionConfig?: SessionConfig | null;
   /** Whether an explanation generation request is currently in flight */
   isExplanationGenerating?: boolean;
+  /** True when the SQL editor has no real query (empty or only comments) */
+  isEditorEmpty?: boolean;
+}
+
+/**
+ * True when the editor has nothing a learner could get a hint about:
+ * empty text, or only SQL comments such as the starter line.
+ */
+export function isSqlEditorEmpty(code: string | null | undefined): boolean {
+  const withoutComments = (code ?? '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/--.*$/gm, '')
+    .trim();
+  return withoutComments.length === 0;
 }
 
 export type EscalationGuardState = {
@@ -90,6 +104,9 @@ export function shouldSuppressEscalation(
   return state?.key === key && now - state.timestamp < windowMs;
 }
 
+/** Fired by the mobile hint bar on the Practice page. */
+export const REQUEST_HINT_EVENT = 'sql-adapt-request-hint';
+
 export function HintSystem({ 
   sessionId,
   learnerId, 
@@ -102,7 +119,8 @@ export function HintSystem({
   onInteractionLogged,
   escalationProfile,
   sessionConfig,
-  isExplanationGenerating = false
+  isExplanationGenerating = false,
+  isEditorEmpty = false
 }: HintSystemProps) {
   const [hints, setHints] = useState<string[]>([]);
   const [hintPdfPassages, setHintPdfPassages] = useState<RetrievalPdfPassage[][]>([]);
@@ -114,9 +132,14 @@ export function HintSystem({
   const [conceptIds, setConceptIds] = useState<string[]>([]);
   const [showSourceViewer, setShowSourceViewer] = useState(false);
   const [isAddingToTextbook, setIsAddingToTextbook] = useState(false);
+  // How many hints were in the note the learner saved. Save to Notes stays off until a newer hint exists.
+  const [savedHintCount, setSavedHintCount] = useState<number | null>(null);
+  // Which hint is open. Null means "the newest one".
+  const [openHintIndex, setOpenHintIndex] = useState<number | null>(null);
   const [saveToNotesError, setSaveToNotesError] = useState<string | null>(null);
   const [isProcessingHint, setIsProcessingHint] = useState(false);
   const [hintRuntimeError, setHintRuntimeError] = useState<string | null>(null);
+  const [showEmptyEditorNotice, setShowEmptyEditorNotice] = useState(false);
   const [autoEscalationInfo, setAutoEscalationInfo] = useState<{
     triggered: boolean;
     helpRequestCount: number;
@@ -184,7 +207,8 @@ export function HintSystem({
   
   // Guidance Ladder constants - now profile-aware (Week 5)
   // Get threshold from profile or use defaults (adaptive: 3 hints)
-  const maxHintLevel = escalationProfile?.triggers.rungExhausted ?? 3;
+  // Hint levels are 1-3 in the research contract, so never allow a 4th hint level.
+  const maxHintLevel = Math.min(3, escalationProfile?.triggers.rungExhausted ?? 3);
   const autoEscalationThreshold = maxHintLevel + 1; // Threshold is one past max hints
   
   const helpFlowKeyRef = useRef('');
@@ -348,6 +372,7 @@ export function HintSystem({
         // using whatever subtype context it has available.
         onEscalate?.([], subtypeForSaveWithFallback || undefined);
       }
+      setSavedHintCount(hints.length);
     } catch (err) {
       setSaveToNotesError((err as Error).message || 'Failed to save note. Please try again.');
     } finally {
@@ -913,6 +938,12 @@ export function HintSystem({
       });
     }
   };
+  useEffect(() => {
+    if (!isEditorEmpty) {
+      setShowEmptyEditorNotice(false);
+    }
+  }, [isEditorEmpty]);
+
   const handleRequestHint = async () => {
     if (!profile) {
       return;
@@ -927,6 +958,12 @@ export function HintSystem({
     if (isProcessingHint) {
       return;
     }
+    // Nothing written yet: ask the learner to try first. No hint is used.
+    if (isEditorEmpty) {
+      setShowEmptyEditorNotice(true);
+      return;
+    }
+    setShowEmptyEditorNotice(false);
     setIsProcessingHint(true);
     setHintRuntimeError(null);
     clearPendingAutoEscalation();
@@ -1300,6 +1337,22 @@ export function HintSystem({
     ? orchestrator.makeDecision(profile, scopedInteractions, problemId, { sessionConfig })
     : { decision: 'show_hint' as const, reasoning: 'Learner profile unavailable' };
 
+  // Show the newest hint whenever a new one arrives.
+  useEffect(() => {
+    setOpenHintIndex(null);
+  }, [hints.length]);
+
+  // The mobile "Get hint" bar asks for a hint through this event.
+  const requestHintRef = useRef(handleRequestHint);
+  requestHintRef.current = handleRequestHint;
+  useEffect(() => {
+    const onRequest = () => {
+      void requestHintRef.current();
+    };
+    window.addEventListener(REQUEST_HINT_EVENT, onRequest);
+    return () => window.removeEventListener(REQUEST_HINT_EVENT, onRequest);
+  }, []);
+
   // Empty state when no profile exists
   if (!profile) {
     return (
@@ -1323,12 +1376,26 @@ export function HintSystem({
   const shouldOfferHintReset =
     hints.length === 0 && (showExplanation || autoEscalationInfo.triggered || hasExplanationHistory);
   const primaryActionLabel = shouldOfferHintReset
-    ? 'Request Hint'
+    ? 'Get hint'
     : nextHelpRequestIndex >= autoEscalationThreshold
-      ? 'Get More Help'
+      ? 'Get more help'
       : hints.length === 0
-        ? 'Request Hint'
-        : 'Next Hint';
+        ? 'Get hint'
+        : 'Next hint';
+  // Hints the student has opened so far (out of 3) for the counter in the header.
+  const hintsUsed = Math.min(hints.length, 3);
+  // Save to Notes only makes sense once there is a hint or explanation to save.
+  const hasSomethingToSave = hints.length > 0 || showExplanation;
+  // The full explanation is saved to My Textbook automatically, once per problem.
+  // After that, more help and saving would only add duplicate notes.
+  const helpExhausted = showExplanation || hasExplanationHistory;
+  const hintsAlreadySaved = savedHintCount !== null && savedHintCount >= hints.length;
+  const saveToNotesDone = helpExhausted || hintsAlreadySaved;
+  const actionDisabled = !profile || !sessionId || isProcessingHint || isExplanationGenerating || helpExhausted;
+  const openIndex = hints.length === 0 ? -1 : Math.min(openHintIndex ?? hints.length - 1, hints.length - 1);
+  // Draw the eye to the button until the student has opened a hint.
+  const shouldPulseAction = hints.length === 0 && !actionDisabled;
+  const actionLabel = helpExhausted ? 'Explanation saved' : primaryActionLabel;
   // Count hints that have been actually viewed - use hints.length directly to ensure sync
   const hintProgress = showExplanation 
     ? Math.min(hints.length + 1, 4)  // Hints + explanation mode
@@ -1339,32 +1406,123 @@ export function HintSystem({
 
   return (
     <Card className="p-4 space-y-4 shadow-sm" data-testid="hint-panel">
-      {/* Clean header with title and rung */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-amber-50 dark:bg-amber-900/30 rounded-lg">
-            <Lightbulb className="size-4 text-amber-500" />
+      {/* Header: title and the main hint button on the first row, hint toggles and counter on the second */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="p-1.5 bg-amber-50 dark:bg-amber-900/30 rounded-lg shrink-0">
+              <Lightbulb className="size-4 text-amber-600 dark:text-amber-300" />
+            </div>
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">
+              {isInstructor ? 'Guidance Ladder' : 'Hints'}
+            </h3>
           </div>
-          <div>
-            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Guidance Ladder</h3>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {showExplanation 
-                ? `Explain • ${Math.min(hints.length, 3)}/3`
-                : `Hint ${hintProgress} of 3`
-              }
-            </p>
-          </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {isInstructor && <RungIndicator rung={currentRung} size="sm" />}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleRequestHint}
+                disabled={actionDisabled}
+                data-testid="hint-action-button"
+                className={cn(
+                  'relative inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold shadow-sm transition-colors',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-900',
+                  actionDisabled
+                    ? 'cursor-not-allowed bg-gray-200 text-gray-600 opacity-60 dark:bg-gray-700 dark:text-gray-300'
+                    : 'bg-amber-500 text-gray-900 hover:bg-amber-400 active:bg-amber-600'
+                )}
+              >
+                {shouldPulseAction && (
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0 rounded-lg bg-amber-400/60 motion-safe:animate-ping"
+                  />
+                )}
+                {isExplanationGenerating ? (
+                  <span className="relative">Preparing…</span>
+                ) : (
+                  <>
+                    {isProcessingHint ? (
+                      <Loader2 className="relative size-4 shrink-0 animate-spin" />
+                    ) : helpExhausted ? (
+                      <Check className="relative size-4 shrink-0" />
+                    ) : (
+                      <Lightbulb className="relative size-4 shrink-0" />
+                    )}
+                    <span className="relative whitespace-nowrap">{actionLabel}</span>
+                  </>
+                )}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {helpExhausted ? (
+                <>
+                  <p>You have used the full explanation for this problem</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">It was saved to My Textbook</p>
+                </>
+              ) : (
+                <>
+                  <p>Get a hint to help solve the problem</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">Each hint gives a bit more help, up to {maxHintLevel}. The full explanation can be used one time only per problem.</p>
+                </>
+              )}
+            </TooltipContent>
+          </Tooltip>
         </div>
-        <RungIndicator rung={currentRung} size="sm" />
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5" data-testid="hint-counter">
+        <span className="flex items-center gap-1.5" role="group" aria-label="Hints">
+          {Array.from({ length: maxHintLevel }, (_, index) => index).map((index) => {
+            const obtained = index < hintsUsed;
+            const isOpen = index === openIndex;
+            return (
+              <button
+                key={index}
+                type="button"
+                disabled={!obtained}
+                onClick={() => setOpenHintIndex(index)}
+                aria-label={obtained ? `Show hint ${index + 1} of ${maxHintLevel}${isOpen ? ' (open)' : ''}` : `Hint ${index + 1} of ${maxHintLevel} not requested yet`}
+                aria-pressed={obtained ? isOpen : undefined}
+                data-testid={`hint-dot-${index + 1}`}
+                className={cn(
+                  'flex size-6 items-center justify-center rounded-full text-[11px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500',
+                  isOpen
+                    ? 'bg-amber-500 text-gray-900 ring-2 ring-amber-300 ring-offset-1 dark:ring-offset-gray-800'
+                    : obtained
+                      ? 'bg-amber-200 text-amber-900 hover:bg-amber-300 dark:bg-amber-700/60 dark:text-amber-50 dark:hover:bg-amber-600/70'
+                      : 'border border-dashed border-gray-400 text-gray-500 dark:border-gray-500 dark:text-gray-400'
+                )}
+              >
+                {index + 1}
+              </button>
+            );
+          })}
+        </span>
+          <span className="text-xs text-gray-600 dark:text-gray-300">{`${hintsUsed}/${maxHintLevel} ${maxHintLevel === 1 ? 'hint' : 'hints'}`}</span>
+          {showExplanation && (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
+              Explanation
+            </span>
+          )}
+        </div>
+        {!helpExhausted && (
+          <p className="text-[11px] leading-snug text-gray-600 dark:text-gray-300" data-testid="hint-once-note">
+            After {maxHintLevel} {maxHintLevel === 1 ? 'hint' : 'hints'}, <span className="font-medium">Get more help</span> gives a full explanation saved to My Textbook. You can use it <span className="font-medium">one time only</span> per problem.
+          </p>
+        )}
       </div>
 
       {/* Hint Source Status - Shows which resources are being used */}
-      <HintSourceStatus 
-        learnerId={learnerId} 
-        showDetails={false}
-        className="self-start"
-        studentMode={!isInstructor}
-      />
+      {isInstructor && (
+        <HintSourceStatus
+          learnerId={learnerId}
+          showDetails={false}
+          className="self-start"
+          studentMode={false}
+        />
+      )}
 
       {/* Concept tags */}
       {conceptIds.length > 0 && (
@@ -1377,7 +1535,7 @@ export function HintSystem({
             />
           ))}
           {conceptIds.length > 3 && (
-            <span className="text-xs text-gray-400 self-center">
+            <span className="text-xs text-gray-400 dark:text-gray-500 self-center">
               +{conceptIds.length - 3}
             </span>
           )}
@@ -1403,24 +1561,17 @@ export function HintSystem({
       )}
       
       {hints.length === 0 ? (
-        <div data-testid="hint-empty-state" className="rounded-lg border border-dashed border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-800/50 p-6 text-center">
+        <div data-testid="hint-empty-state" className="rounded-lg border border-dashed border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/40 dark:bg-gray-800/50 p-6 text-center">
           <div className="p-2 bg-amber-50 dark:bg-amber-900/30 rounded-full w-fit mx-auto mb-3">
             <HelpCircle className="size-5 text-amber-500" />
           </div>
           <p className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Need help?</p>
           <p className="text-sm text-gray-500 dark:text-gray-400">Request a hint to get personalized guidance</p>
-          <div className="mt-3 flex items-center justify-center gap-1 text-[10px] text-gray-400 dark:text-gray-500">
-            <span>Progresses through</span>
-            <span className="font-medium text-amber-600 dark:text-amber-400">L1</span>
-            <span>→</span>
-            <span className="font-medium text-amber-600 dark:text-amber-400">L2</span>
-            <span>→</span>
-            <span className="font-medium text-amber-600 dark:text-amber-400">L3</span>
-          </div>
         </div>
       ) : (
         <div className="space-y-3">
           {hints.map((hint, idx) => {
+            if (idx !== openIndex) return null;
             const pdfPassages = hintPdfPassages[idx] || [];
             const hasPdfSources = pdfPassages.length > 0;
             const isExpanded = expandedHintIndex === idx;
@@ -1463,7 +1614,7 @@ export function HintSystem({
                       {/* LLM failed badge - shows when AI was requested but unavailable */}
                       {enhancedInfo?.llmFailed && (
                         <span 
-                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700"
+                          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300"
                           title={enhancedInfo.llmErrorMessage || 'AI service unavailable'}
                         >
                           <AlertCircle className="size-3" />
@@ -1489,7 +1640,7 @@ export function HintSystem({
                         ) : (
                           <>
                             <ChevronDown className="size-3" />
-                            <span>Textbook Page {pdfPassages[0]?.page}</span>
+                            <span>{pdfPassages[0]?.page && pdfPassages[0].page > 0 ? `Textbook Page ${pdfPassages[0].page}` : 'Textbook Source'}</span>
                             {pdfPassages.length > 1 && ` +${pdfPassages.length - 1}`}
                           </>
                         )}
@@ -1648,42 +1799,21 @@ export function HintSystem({
       />
 
       <div className="flex flex-col gap-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              onClick={handleRequestHint}
-              variant="outline"
-              className="w-full h-9 text-sm"
-              disabled={!profile || !sessionId || isProcessingHint || isExplanationGenerating}
-              data-testid="hint-action-button"
-            >
-              {isExplanationGenerating ? (
-                <span className="truncate">Preparing your explanation…</span>
-              ) : isProcessingHint ? (
-                <Loader2 className="size-4 mr-2 shrink-0 animate-spin" />
-              ) : (
-                <Lightbulb className="size-4 mr-2 shrink-0" />
-              )}
-              <span className="truncate">{primaryActionLabel}</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            <p>Get a hint to help solve the problem</p>
-            <p className="text-xs text-gray-400 dark:text-gray-500">Progresses through L1 → L2 → L3 hints</p>
-          </TooltipContent>
-        </Tooltip>
         {/* Week 6: Conditionally hide Add to Textbook button if textbookDisabled */}
-        {(!sessionConfig?.textbookDisabled) && (
+        {(!sessionConfig?.textbookDisabled) && hasSomethingToSave && (
         <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
               onClick={handleAddToTextbook}
-              disabled={!profile || !sessionId || isAddingToTextbook}
+              disabled={!profile || !sessionId || isAddingToTextbook || saveToNotesDone}
+              data-testid="save-to-notes-button"
               className={cn(
                 'w-full h-9 text-sm px-2 rounded-md font-medium',
                 'inline-flex items-center justify-center gap-1 transition-colors',
-                (!profile || !sessionId)
+                saveToNotesDone
+                  ? 'bg-purple-600 text-white opacity-50 cursor-not-allowed'
+                  : (!profile || !sessionId)
                   ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                   : 'bg-purple-600 text-white hover:bg-purple-700'
               )}
@@ -1695,8 +1825,8 @@ export function HintSystem({
                 </>
               ) : (
                 <>
-                  <FileText className="h-4 w-4" />
-                  <span className="truncate">Save to Notes</span>
+                  {saveToNotesDone ? <Check className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                  <span className="truncate">{saveToNotesDone ? 'Saved to My Textbook' : 'Save to Notes'}</span>
                 </>
               )}
             </button>
@@ -1718,6 +1848,20 @@ export function HintSystem({
         >
           <AlertCircle className="size-4 text-red-500 shrink-0 mt-0.5" />
           <p className="text-sm text-red-700 dark:text-red-300">{saveToNotesError}</p>
+        </div>
+      )}
+
+      {showEmptyEditorNotice && isEditorEmpty && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-3 py-2 flex items-start gap-2"
+          data-testid="hint-empty-editor-notice"
+        >
+          <Lightbulb className="size-4 text-blue-600 dark:text-blue-300 shrink-0 mt-0.5" />
+          <p className="text-sm text-blue-800 dark:text-blue-200">
+            Write a query in the editor first, even a rough one. Hints work best when you have something to build on.
+          </p>
         </div>
       )}
 

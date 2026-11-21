@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
-import { BookOpen, BarChart3, Database, GraduationCap, Lock, LogIn, FlaskConical, ArrowRight } from 'lucide-react';
+import { BookOpen, BarChart3, GraduationCap, Lock, LogIn, FlaskConical, ArrowRight } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Alert, AlertDescription } from '../components/ui/alert';
@@ -184,8 +184,8 @@ export function StartPage() {
   // Show loading spinner while checking for existing profile
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="flex items-center gap-3 text-gray-500">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="flex items-center gap-3 text-gray-500 dark:text-gray-400">
           <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
           <span>Loading...</span>
         </div>
@@ -198,7 +198,7 @@ export function StartPage() {
   const hostedMode = isHostedMode();
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       {/* Redirect Alert (P1-003) */}
       {showRedirectAlert && (
         <Alert variant="destructive" className="m-4 max-w-2xl self-center">
@@ -209,34 +209,22 @@ export function StartPage() {
           </AlertDescription>
         </Alert>
       )}
-      {/* Header */}
-      <header className="bg-white border-b">
-        <div className="container mx-auto px-4 h-16 flex items-center gap-3">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-            <Database className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="font-bold text-xl text-gray-900">SQL-Adapt</h1>
-            <p className="text-xs text-gray-500">Learning System</p>
-          </div>
-        </div>
-      </header>
 
       {/* Main Content */}
       <main className="flex-1 flex items-center justify-center p-4">
         <div className="w-full max-w-2xl">
           {/* Welcome Title */}
           <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-3">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-3">
               SQL-Adapt Learning System
             </h2>
-            <p className="text-gray-600 max-w-md mx-auto">
+            <p className="text-gray-600 dark:text-gray-300 max-w-md mx-auto">
               Personalized SQL learning with adaptive hints and AI-powered explanations
             </p>
           </div>
 
           {ACCOUNT_MODE_ENABLED ? (
-            <Card className="border-blue-200 shadow-sm">
+            <Card className="border-blue-200 dark:border-blue-800 shadow-sm">
               <CardHeader>
                 <CardTitle>Sign in required</CardTitle>
                 <CardDescription>
@@ -244,7 +232,7 @@ export function StartPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   Students: use your instructor&apos;s class code when creating an account.
                   Instructors: use the instructor signup code.
                 </p>
@@ -265,8 +253,8 @@ export function StartPage() {
                   Create Account
                 </Button>
                 {showDiagnostic && (
-                  <p className="text-xs text-gray-500">
-                    API target: <code className="bg-gray-100 px-1 rounded">{import.meta.env.VITE_API_BASE_URL || 'not-configured'}</code>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    API target: <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">{import.meta.env.VITE_API_BASE_URL || 'not-configured'}</code>
                   </p>
                 )}
               </CardContent>
@@ -303,7 +291,7 @@ export function StartPage() {
               {usernameError && (
                 <p
                   id="username-error"
-                  className="text-sm text-red-600 font-medium"
+                  className="text-sm text-red-600 dark:text-red-300 font-medium"
                   role="alert"
                 >
                   {usernameError}
@@ -344,8 +332,8 @@ export function StartPage() {
                   aria-label="Student role"
                 >
                   <CardHeader className="pb-3">
-                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-3">
-                      <BookOpen className="w-6 h-6 text-blue-600" />
+                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 rounded-xl flex items-center justify-center mb-3">
+                      <BookOpen className="w-6 h-6 text-blue-600 dark:text-blue-300" />
                     </div>
                     <CardTitle className="text-lg">Student</CardTitle>
                     <CardDescription className="text-sm">
@@ -353,7 +341,7 @@ export function StartPage() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="pt-0">
-                    <ul className="text-sm text-gray-600 space-y-1">
+                    <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
                       <li className="flex items-center gap-2">
                         <span className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
                         32 practice problems
@@ -402,7 +390,7 @@ export function StartPage() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="pt-0">
-                      <ul className="text-sm text-gray-600 space-y-1">
+                      <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1">
                         <li className="flex items-center gap-2">
                           <span className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
                           Student analytics
@@ -455,7 +443,7 @@ export function StartPage() {
                 />
                 {passcodeError && (
                   <p 
-                    className="text-sm text-red-600 font-medium" 
+                    className="text-sm text-red-600 dark:text-red-300 font-medium" 
                     role="alert" 
                     aria-live="polite"
                   >
@@ -486,7 +474,7 @@ export function StartPage() {
             </Button>
 
             {!isFormValid && (
-              <p className="text-center text-sm text-gray-500">
+              <p className="text-center text-sm text-gray-500 dark:text-gray-400">
                 Please enter your username and select a role to continue
               </p>
             )}
@@ -495,8 +483,8 @@ export function StartPage() {
 
           {/* Feature Availability Notice */}
           {!isInstructorConfigured && (
-            <div className="mt-6 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-              <p className="text-sm text-amber-800">
+            <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
                 <strong>Instructor mode not configured.</strong>{' '}
                 Set <code className="bg-amber-100 px-1 rounded">VITE_INSTRUCTOR_PASSCODE</code>{' '}
                 environment variable and redeploy to enable instructor access.
@@ -505,8 +493,8 @@ export function StartPage() {
           )}
           
           {hostedMode && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-xs text-blue-700">
+            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <p className="text-xs text-blue-700 dark:text-blue-300">
                 <strong>Running in static hosting mode.</strong>{' '}
                 LLM and PDF features require a backend server. 
                 See{' '}
@@ -549,7 +537,7 @@ export function StartPage() {
 
           {/* Footer */}
           <div className="mt-8 text-center">
-            <p className="text-sm text-gray-400">
+            <p className="text-sm text-gray-400 dark:text-gray-500">
               {ACCOUNT_MODE_ENABLED
                 ? 'Your progress is saved to your account and restored when you sign in.'
                 : 'Your progress will be saved locally on this device'}

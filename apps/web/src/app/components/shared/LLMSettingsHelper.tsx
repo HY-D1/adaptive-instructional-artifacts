@@ -238,7 +238,7 @@ export function LLMSettingsHelper() {
             </SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
           {settings.provider === 'ollama'
             ? 'Use local Ollama instance. Requires Ollama running locally.'
             : 'Use hosted Groq API. Requires GROQ_API_KEY on backend.'}
@@ -253,12 +253,12 @@ export function LLMSettingsHelper() {
             Checking...
           </Badge>
         ) : healthStatus?.ok ? (
-          <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
+          <Badge className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900/40 dark:text-green-200 dark:border-green-800 text-xs">
             <CheckCircle className="size-3 mr-1" />
             Connected
           </Badge>
         ) : (
-          <Badge className="bg-red-100 text-red-800 border-red-200 text-xs">
+          <Badge className="bg-red-100 text-red-800 border-red-200 dark:bg-red-900/40 dark:text-red-200 dark:border-red-800 text-xs">
             <AlertCircle className="size-3 mr-1" />
             Offline
           </Badge>
@@ -279,8 +279,8 @@ export function LLMSettingsHelper() {
         <div className={cn(
           'p-2.5 rounded-lg text-xs',
           healthStatus.ok
-            ? 'bg-green-50 text-green-800 border border-green-200'
-            : 'bg-red-50 text-red-800 border border-red-200'
+            ? 'bg-green-50 text-green-800 border border-green-200 dark:bg-green-900/30 dark:text-green-200 dark:border-green-800'
+            : 'bg-red-50 text-red-800 border border-red-200 dark:bg-red-900/30 dark:text-red-200 dark:border-red-800'
         )}>
           <div className="flex items-center gap-1.5 mb-1">
             <ProviderIcon className="size-3" />
@@ -290,7 +290,7 @@ export function LLMSettingsHelper() {
           </div>
           {healthStatus.message}
           {healthStatus.availableModels && healthStatus.availableModels.length > 0 && (
-            <div className="mt-1 text-gray-600">
+            <div className="mt-1 text-gray-600 dark:text-gray-300">
               Available: {healthStatus.availableModels.slice(0, 3).join(', ')}
               {healthStatus.availableModels.length > 3 && ` +${healthStatus.availableModels.length - 3} more`}
             </div>
@@ -326,7 +326,7 @@ export function LLMSettingsHelper() {
             )}
           </SelectContent>
         </Select>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
           {settings.provider === 'groq'
             ? `Using ${GROQ_MODEL} for AI-powered features.`
             : availableModels.length === 0
@@ -342,7 +342,7 @@ export function LLMSettingsHelper() {
             <Thermometer className="size-3.5 text-orange-500" />
             <span className="text-sm font-medium">Temperature</span>
           </div>
-          <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">
+          <span className="text-xs font-mono bg-gray-100 dark:bg-gray-700 dark:text-gray-100 px-2 py-0.5 rounded">
             {settings.temperature.toFixed(1)}
           </span>
         </div>
@@ -354,7 +354,7 @@ export function LLMSettingsHelper() {
           step={0.1}
           className="w-full"
         />
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
           Lower = more focused hints. Higher = more creative variations.
         </p>
       </div>
@@ -366,7 +366,7 @@ export function LLMSettingsHelper() {
             <Cpu className="size-3.5 text-blue-500" />
             <span className="text-sm font-medium">Top-P</span>
           </div>
-          <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">
+          <span className="text-xs font-mono bg-gray-100 dark:bg-gray-700 dark:text-gray-100 px-2 py-0.5 rounded">
             {settings.topP.toFixed(1)}
           </span>
         </div>
@@ -378,7 +378,7 @@ export function LLMSettingsHelper() {
           step={0.1}
           className="w-full"
         />
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
           Controls diversity of token selection. Usually keep at 1.0.
         </p>
       </div>
@@ -387,10 +387,10 @@ export function LLMSettingsHelper() {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
-            <Clock className="size-3.5 text-gray-500" />
+            <Clock className="size-3.5 text-gray-500 dark:text-gray-400" />
             <span className="text-sm font-medium">Timeout</span>
           </div>
-          <span className="text-xs font-mono bg-gray-100 px-2 py-0.5 rounded">
+          <span className="text-xs font-mono bg-gray-100 dark:bg-gray-700 dark:text-gray-100 px-2 py-0.5 rounded">
             {formatTimeout(settings.timeoutMs)}
           </span>
         </div>
@@ -402,7 +402,7 @@ export function LLMSettingsHelper() {
           step={5000}
           className="w-full"
         />
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
           Maximum time to wait for LLM response. Increase for slower machines.
         </p>
       </div>
@@ -439,25 +439,25 @@ export function LLMSettingsHelper() {
 
       {/* Hint Preview */}
       <div className="pt-2 border-t">
-        <div className="flex items-center gap-1.5 text-xs text-gray-600 mb-2">
+        <div className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 mb-2">
           <Sparkles className="size-3.5 text-amber-500" />
           <span className="font-medium">Preview Effect</span>
         </div>
-        <div className="bg-gray-50 rounded-lg p-3 text-xs space-y-1.5">
+        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-xs space-y-1.5">
           {settings.temperature < 0.3 ? (
             <>
-              <p className="text-green-700 font-medium">🎯 Precise Mode</p>
-              <p className="text-gray-600">Hints will be consistent and focused on the most likely correct answers.</p>
+              <p className="text-green-700 dark:text-green-300 font-medium">🎯 Precise Mode</p>
+              <p className="text-gray-600 dark:text-gray-300">Hints will be consistent and focused on the most likely correct answers.</p>
             </>
           ) : settings.temperature < 0.7 ? (
             <>
-              <p className="text-blue-700 font-medium">⚖️ Balanced Mode</p>
-              <p className="text-gray-600">Hints will have slight variations while maintaining accuracy.</p>
+              <p className="text-blue-700 dark:text-blue-300 font-medium">⚖️ Balanced Mode</p>
+              <p className="text-gray-600 dark:text-gray-300">Hints will have slight variations while maintaining accuracy.</p>
             </>
           ) : (
             <>
-              <p className="text-purple-700 font-medium">🎨 Creative Mode</p>
-              <p className="text-gray-600">Hints may explore alternative explanations and approaches.</p>
+              <p className="text-purple-700 dark:text-purple-300 font-medium">🎨 Creative Mode</p>
+              <p className="text-gray-600 dark:text-gray-300">Hints may explore alternative explanations and approaches.</p>
             </>
           )}
         </div>

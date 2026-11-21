@@ -342,8 +342,8 @@ export function SettingsPage() {
           {/* Appearance Section */}
           <Card className="p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-indigo-100 rounded-lg">
-                <Eye className="size-5 text-indigo-600" />
+              <div className="p-2 bg-indigo-100 dark:bg-indigo-900/40 rounded-lg">
+                <Eye className="size-5 text-indigo-600 dark:text-indigo-300" />
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Appearance</h2>
@@ -374,8 +374,8 @@ export function SettingsPage() {
           {isInstructor && (
             <Card className="p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <FileText className="size-5 text-blue-600" />
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
+                  <FileText className="size-5 text-blue-600 dark:text-blue-300" />
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -400,11 +400,11 @@ export function SettingsPage() {
           {/* LLM Configuration Section */}
           <Card className="p-6">
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Bot className="size-5 text-purple-600" />
+              <div className="p-2 bg-purple-100 dark:bg-purple-900/40 rounded-lg">
+                <Bot className="size-5 text-purple-600 dark:text-purple-300" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                   LLM Configuration
                 </h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -418,11 +418,11 @@ export function SettingsPage() {
 
         {/* Week 5 Testing Controls - DEV Mode + Instructors Only */}
         {isDev && isInstructor && (
-          <Card className="mt-6 p-6 max-w-5xl border-amber-300" data-testid="week5-debug-controls">
+          <Card className="mt-6 p-6 max-w-5xl border-amber-300 dark:border-amber-700" data-testid="week5-debug-controls">
             <CardHeader className="px-0 pt-0">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-100 rounded-lg">
-                  <FlaskConical className="size-5 text-amber-600" />
+                <div className="p-2 bg-amber-100 dark:bg-amber-900/40 rounded-lg">
+                  <FlaskConical className="size-5 text-amber-600 dark:text-amber-300" />
                 </div>
                 <div>
                   <CardTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -667,11 +667,11 @@ export function SettingsPage() {
 
         {/* Week 6: Session Experimental Toggles - Instructors Only (Development Mode) */}
         {isDev && isInstructor && (
-          <Card className="mt-6 p-6 max-w-5xl border-indigo-200" data-testid="experimental-toggles-section">
+          <Card className="mt-6 p-6 max-w-5xl border-indigo-200 dark:border-indigo-800" data-testid="experimental-toggles-section">
             <CardHeader className="px-0 pt-0">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-100 rounded-lg">
-                  <FlaskConical className="size-5 text-indigo-600" />
+                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/40 rounded-lg">
+                  <FlaskConical className="size-5 text-indigo-600 dark:text-indigo-300" />
                 </div>
                 <div>
                   <CardTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -770,10 +770,10 @@ export function SettingsPage() {
 
         {/* Preview Mode Section - Instructors Only */}
         {isInstructor && (
-          <Card className="mt-6 p-6 max-w-5xl border-blue-200" data-testid="preview-mode-section">
+          <Card className="mt-6 p-6 max-w-5xl border-blue-200 dark:border-blue-800" data-testid="preview-mode-section">
             <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Eye className="size-5 text-blue-600" />
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
+                <Eye className="size-5 text-blue-600 dark:text-blue-300" />
               </div>
               <div className="flex-1">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">

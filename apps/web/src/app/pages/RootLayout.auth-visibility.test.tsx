@@ -48,6 +48,14 @@ vi.mock('../lib/storage', () => ({
   },
 }));
 
+vi.mock('../components/shared/TextbookUpdatesButton', () => ({
+  TextbookUpdatesButton: () => <span data-testid="textbook-updates-stub">My Textbook</span>,
+}));
+
+vi.mock('../components/features/surveys/SurveyInvitationLinks', () => ({
+  SurveyInvitationLinks: () => <span data-testid="survey-links-stub" />,
+}));
+
 vi.mock('../lib/auth-guard', () => ({
   isPreviewModeActive: () => false,
 }));
@@ -126,6 +134,7 @@ describe('RootLayout signed-in visibility', () => {
     expect(screen.queryByText('Student')).toBeNull();
     expect(screen.queryByText('My Textbook')).toBeNull();
     expect(screen.queryByText('Settings')).toBeNull();
+    expect(screen.queryAllByTestId('survey-links-stub')).toHaveLength(0);
   });
 
   it('hides authenticated controls while the session is loading', () => {
@@ -146,6 +155,7 @@ describe('RootLayout signed-in visibility', () => {
     expect(screen.getAllByRole('button', { name: 'Logout' })).toHaveLength(2);
     expect(screen.getAllByText('My Textbook')).toHaveLength(2);
     expect(screen.getAllByText('Settings')).toHaveLength(2);
+    expect(screen.getAllByTestId('survey-links-stub').length).toBeGreaterThan(0);
   });
 
   it('removes the role badge and both Logout controls after logout', async () => {
@@ -158,5 +168,6 @@ describe('RootLayout signed-in visibility', () => {
 
     expect(screen.queryAllByRole('button', { name: 'Logout' })).toHaveLength(0);
     expect(screen.queryByText('Student')).toBeNull();
+    expect(screen.queryAllByTestId('survey-links-stub')).toHaveLength(0);
   });
 });

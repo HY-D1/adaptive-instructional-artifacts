@@ -170,28 +170,28 @@ export function PdfUploader({ onUploadComplete, onError }: PdfUploaderProps) {
       {uploadStatus.type ? (
         <div className={cn(
           'p-3 rounded-lg mb-3',
-          uploadStatus.type === 'success' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+          uploadStatus.type === 'success' ? 'bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800'
         )}>
           <div className="flex items-start gap-2">
             {uploadStatus.type === 'success' ? (
-              <CheckCircle className="size-5 text-green-600 shrink-0 mt-0.5" />
+              <CheckCircle className="size-5 text-green-600 dark:text-green-300 shrink-0 mt-0.5" />
             ) : (
-              <AlertCircle className="size-5 text-red-600 shrink-0 mt-0.5" />
+              <AlertCircle className="size-5 text-red-600 dark:text-red-300 shrink-0 mt-0.5" />
             )}
             <div className="flex-1 min-w-0">
               <p className={cn(
                 'text-sm font-medium',
-                uploadStatus.type === 'success' ? 'text-green-800' : 'text-red-800'
+                uploadStatus.type === 'success' ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'
               )}>
                 {uploadStatus.message}
               </p>
               {uploadStatus.filename && (
-                <p className="text-xs text-gray-600 mt-1">
+                <p className="text-xs text-gray-600 dark:text-gray-300 mt-1">
                   <span className="font-medium">File:</span> {uploadStatus.filename}
                 </p>
               )}
               {uploadStatus.pageCount !== undefined && uploadStatus.chunkCount !== undefined && (
-                <p className="text-xs text-gray-600">
+                <p className="text-xs text-gray-600 dark:text-gray-300">
                   <span className="font-medium">Pages:</span> {uploadStatus.pageCount} | 
                   <span className="font-medium"> Chunks:</span> {uploadStatus.chunkCount}
                 </p>
@@ -201,7 +201,7 @@ export function PdfUploader({ onUploadComplete, onError }: PdfUploaderProps) {
               onClick={clearStatus}
               className="shrink-0 p-1 hover:bg-white/50 rounded"
             >
-              <X className="size-4 text-gray-500" />
+              <X className="size-4 text-gray-500 dark:text-gray-400" />
             </button>
           </div>
         </div>
@@ -214,8 +214,8 @@ export function PdfUploader({ onUploadComplete, onError }: PdfUploaderProps) {
           className={cn(
             'border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors',
             isDragging 
-              ? 'border-blue-500 bg-blue-50' 
-              : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
+              ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30' 
+              : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 hover:bg-gray-50'
           )}
         >
           <input
@@ -228,20 +228,20 @@ export function PdfUploader({ onUploadComplete, onError }: PdfUploaderProps) {
           
           {isUploading ? (
             <div className="flex flex-col items-center gap-2">
-              <Loader2 className="size-8 text-blue-600 animate-spin" />
-              <p className="text-sm text-gray-600">Uploading and indexing PDF...</p>
-              <p className="text-xs text-gray-500">This may take a moment</p>
+              <Loader2 className="size-8 text-blue-600 dark:text-blue-300 animate-spin" />
+              <p className="text-sm text-gray-600 dark:text-gray-300">Uploading and indexing PDF...</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">This may take a moment</p>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-2">
               <Upload className={cn(
                 'size-8',
-                isDragging ? 'text-blue-600' : 'text-gray-400'
+                isDragging ? 'text-blue-600 dark:text-blue-300' : 'text-gray-400 dark:text-gray-500'
               )} />
-              <p className="text-sm text-gray-600">
-                <span className="font-medium text-blue-600">Click to upload</span> or drag and drop
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                <span className="font-medium text-blue-600 dark:text-blue-300">Click to upload</span> or drag and drop
               </p>
-              <p className="text-xs text-gray-500">PDF files up to 50MB</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">PDF files up to 50MB</p>
             </div>
           )}
         </div>
@@ -250,22 +250,22 @@ export function PdfUploader({ onUploadComplete, onError }: PdfUploaderProps) {
       {/* Uploaded Files List */}
       {uploadedFiles.length > 0 && (
         <div className="mt-4 pt-4 border-t">
-          <h3 className="text-sm font-medium text-gray-700 mb-2">
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
             Uploaded Textbooks ({uploadedFiles.length})
           </h3>
           <div className="space-y-2">
             {uploadedFiles.map((file) => (
               <div
                 key={file.docId}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
+                className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg border"
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <FileText className="size-5 text-blue-500 shrink-0" />
                   <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-700 truncate">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate">
                       {file.filename}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
                       {file.pageCount} pages • {file.chunkCount} chunks • {formatDate(file.uploadedAt)}
                     </p>
                   </div>
@@ -280,7 +280,7 @@ export function PdfUploader({ onUploadComplete, onError }: PdfUploaderProps) {
               </div>
             ))}
           </div>
-          <p className="text-xs text-gray-500 mt-2">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
             These files are stored locally and will be remembered for future sessions.
           </p>
         </div>

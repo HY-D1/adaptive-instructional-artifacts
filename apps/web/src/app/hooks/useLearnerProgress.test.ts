@@ -97,6 +97,33 @@ describe('useLearnerProgress', () => {
     expect(result.current.isCurrentProblemSolved).toBe(true);
   });
 
+  it('counts a problem solved after login even when a hydrated set exists', () => {
+    vi.mocked(localStorageManager.getProfile).mockReturnValue({
+      id: mockLearnerId,
+      name: 'Test Learner',
+      conceptsCovered: new Set(),
+      conceptCoverageEvidence: new Map(),
+      errorHistory: new Map(),
+      solvedProblemIds: new Set([firstProblemId, ninthProblemId]),
+      interactionCount: 2,
+      currentStrategy: 'adaptive-medium',
+      preferences: { escalationThreshold: 2, aggregationDelay: 300000 },
+      createdAt: Date.now(),
+      lastActive: Date.now(),
+    });
+
+    const { result } = renderHook(() =>
+      useLearnerProgress({
+        learnerId: mockLearnerId,
+        currentProblemId: ninthProblemId,
+        hydratedSolvedIds: new Set([firstProblemId]),
+      })
+    );
+
+    expect(result.current.isCurrentProblemSolved).toBe(true);
+    expect(result.current.solvedCount).toBe(2);
+  });
+
   it('should correctly identify unsolved current problem', () => {
     vi.mocked(localStorageManager.getProfile).mockReturnValue({
       id: mockLearnerId,
