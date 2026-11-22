@@ -3,6 +3,8 @@ import { Card } from '../../ui/card';
 import { Button } from '../../ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip';
 import DOMPurify from 'dompurify';
+import { renderTextbookContent } from '../../../lib/content/textbook-renderer';
+import type { ProblemExplanation } from '../../../lib/content/latest-explanation';
 
 import { Lightbulb, FileText, ChevronDown, ChevronUp, BookOpen, Loader2, HelpCircle, Sparkles, AlertCircle, ThumbsUp, ThumbsDown, Check } from 'lucide-react';
 import { HelpEventType, InteractionEvent } from '../../../types';
@@ -78,6 +80,10 @@ interface HintSystemProps {
   isExplanationGenerating?: boolean;
   /** True when the SQL editor has no real query (empty or only comments) */
   isEditorEmpty?: boolean;
+  /** The full explanation for this problem, once it has been generated and saved. */
+  explanation?: ProblemExplanation | null;
+  /** Message to show in the explanation panel if generating or saving it failed. */
+  explanationError?: string;
 }
 
 /**
@@ -139,12 +145,16 @@ export function HintSystem({
   onInteractionLogged,
   sessionConfig,
   isExplanationGenerating = false,
+  explanation = null,
+  explanationError,
   isEditorEmpty = false
 }: HintSystemProps) {
   const [hints, setHints] = useState<string[]>([]);
   const [hintPdfPassages, setHintPdfPassages] = useState<RetrievalPdfPassage[][]>([]);
   const [expandedHintIndex, setExpandedHintIndex] = useState<number | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
+  // Which panel is open on the card: one of the hints, or the full explanation.
+  const [viewMode, setViewMode] = useState<'hints' | 'explanation'>('hints');
   const [activeHintSubtype, setActiveHintSubtype] = useState<string | null>(null);
   // Week 3 D7: Ladder state
   const [currentRung, setCurrentRung] = useState<1 | 2 | 3>(1);
@@ -287,6 +297,7 @@ export function HintSystem({
     setHintPdfPassages([]);
     setExpandedHintIndex(null);
     setShowExplanation(false);
+    setViewMode('hints');
     setActiveHintSubtype(null);
     setCurrentRung(1);
     setConceptIds([]);
@@ -1395,6 +1406,7 @@ export function HintSystem({
   const hintsAlreadySaved = savedHintCount !== null && savedHintCount >= hints.length;
   const saveToNotesDone = helpExhausted || hintsAlreadySaved;
   const actionDisabled = !profile || !sessionId || isProcessingHint || isExplanationGenerating || helpExhausted;
+  const showingExplanation = helpExhausted && viewMode === 'explanation';
   const openIndex = hints.length === 0 ? -1 : Math.min(openHintIndex ?? hints.length - 1, hints.length - 1);
   // Draw the eye to the button until the student has opened a hint.
   const shouldPulseAction = hints.length === 0 && !actionDisabled;
@@ -1480,13 +1492,16 @@ export function HintSystem({
         <span className="flex items-center gap-1.5" role="group" aria-label="Hints">
           {Array.from({ length: helpExhausted ? hintsUsed : maxHintLevel }, (_, index) => index).map((index) => {
             const obtained = index < hintsUsed;
-            const isOpen = index === openIndex;
+            const isOpen = !showingExplanation && index === openIndex;
             return (
               <button
                 key={index}
                 type="button"
                 disabled={!obtained}
-                onClick={() => setOpenHintIndex(index)}
+                onClick={() => {
+                  setOpenHintIndex(index);
+                  setViewMode('hints');
+                }}
                 aria-label={obtained ? `Show hint ${index + 1} of ${maxHintLevel}${isOpen ? ' (open)' : ''}` : `Hint ${index + 1} of ${maxHintLevel} not requested yet`}
                 aria-pressed={obtained ? isOpen : undefined}
                 data-testid={`hint-dot-${index + 1}`}
@@ -1504,18 +1519,29 @@ export function HintSystem({
             );
           })}
         </span>
+          {helpExhausted && (
+            <button
+              type="button"
+              onClick={() => setViewMode(showingExplanation ? 'hints' : 'explanation')}
+              aria-pressed={showingExplanation}
+              data-testid="explanation-toggle"
+              className={cn(
+                'rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500',
+                showingExplanation
+                  ? 'bg-emerald-600 text-white ring-2 ring-emerald-300 ring-offset-1 dark:ring-offset-gray-800'
+                  : 'bg-emerald-100 text-emerald-800 underline underline-offset-2 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:hover:bg-emerald-800/60'
+              )}
+            >
+              View explanation
+            </button>
+          )}
           <span className="text-xs text-gray-600 dark:text-gray-300">{helpExhausted
               ? `${hintsUsed} ${hintsUsed === 1 ? 'hint' : 'hints'} used`
               : `${hintsUsed}/${maxHintLevel} hints`}</span>
-          {showExplanation && (
-            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
-              Explanation
-            </span>
-          )}
         </div>
         {!helpExhausted && (
           <p className="text-[11px] leading-snug text-gray-600 dark:text-gray-300" data-testid="hint-once-note">
-            You get {maxHintLevel} hints. After that, <span className="font-medium">Get more help</span> gives a full explanation saved to My Textbook. You can use it <span className="font-medium">one time only</span> per problem.
+            You get {maxHintLevel} hints. After that, <span className="font-medium">Get more help</span> gives a full explanation you can read here and in My Textbook. You can use it <span className="font-medium">one time only</span> per problem.
           </p>
         )}
       </div>
@@ -1566,7 +1592,62 @@ export function HintSystem({
         </div>
       )}
       
-      {hints.length === 0 ? (
+      {showingExplanation ? (
+        <div
+          className="rounded-lg border border-l-4 border-emerald-100 border-l-emerald-500 bg-white shadow-sm overflow-hidden dark:border-emerald-900/40 dark:border-l-emerald-500 dark:bg-gray-800"
+          data-testid="explanation-card"
+        >
+          <div className="flex items-center justify-between gap-2 px-4 pt-3">
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">
+              Full explanation
+            </span>
+            <button
+              type="button"
+              onClick={() => setViewMode('hints')}
+              data-testid="explanation-close"
+              className="text-[11px] font-medium text-gray-600 underline underline-offset-2 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+            >
+              Close
+            </button>
+          </div>
+          <div
+            className="max-h-56 overflow-y-auto px-4 pb-4 pt-2 text-sm leading-7 text-gray-800 dark:text-gray-100"
+            data-testid="explanation-scroll"
+            role="region"
+            aria-label="Full explanation"
+            tabIndex={0}
+          >
+            {explanation ? (
+              <>
+                {/* The saved text already starts with its own title, so it is not repeated here. */}
+                <div
+                  className="prose prose-sm max-w-none dark:prose-invert [&_h1]:mb-2 [&_h1]:mt-0 [&_h1]:text-sm [&_h1]:font-semibold [&_h2]:mb-1 [&_h2]:mt-3 [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-3 [&_h3]:text-sm [&_h3]:font-semibold [&_h4]:mb-1 [&_h4]:mt-2 [&_h4]:text-sm [&_h4]:font-semibold [&_p]:my-2 [&_pre]:overflow-x-auto [&_pre]:text-xs"
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(
+                      renderTextbookContent({ content: explanation.content, contentFormat: explanation.contentFormat }),
+                      {
+                        ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'div', 'span', 'table', 'thead', 'tbody', 'tr', 'td', 'th'],
+                        ALLOWED_ATTR: ['class']
+                      }
+                    )
+                  }}
+                />
+              </>
+            ) : isExplanationGenerating ? (
+              <p className="flex items-center gap-2 text-gray-600 dark:text-gray-300" data-testid="explanation-loading">
+                <Loader2 className="size-4 animate-spin" />
+                Writing your explanation…
+              </p>
+            ) : (
+              <p className="text-gray-600 dark:text-gray-300" data-testid="explanation-unavailable">
+                {explanationError
+                  ? `We could not load the explanation here: ${explanationError}`
+                  : 'The explanation is not ready yet. If it does not appear in a moment, open it from My Textbook.'}
+              </p>
+            )}
+          </div>
+        </div>
+      ) : hints.length === 0 ? (
         <div data-testid="hint-empty-state" className="rounded-lg border border-dashed border-gray-200 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/40 dark:bg-gray-800/50 p-6 text-center">
           <div className="p-2 bg-amber-50 dark:bg-amber-900/30 rounded-full w-fit mx-auto mb-3">
             <HelpCircle className="size-5 text-amber-500" />
@@ -1880,25 +1961,6 @@ export function HintSystem({
         >
           <AlertCircle className="size-4 text-red-500 shrink-0 mt-0.5" />
           <p className="text-sm text-red-700 dark:text-red-300">{hintRuntimeError}</p>
-        </div>
-      )}
-
-      {showExplanation && (
-        <div className="rounded-md bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800 px-3 py-2">
-          {autoEscalationInfo.triggered ? (
-            <>
-              <p className="text-sm font-medium text-emerald-800 dark:text-emerald-300">
-                📚 Full Explanation Unlocked
-              </p>
-              <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-1">
-                After {autoEscalationInfo.helpRequestCount} help requests, we're providing a complete worked example to help you master this concept.
-              </p>
-            </>
-          ) : (
-            <p className="text-sm text-emerald-700 dark:text-emerald-300">
-              Explanation has been generated for this help flow.
-            </p>
-          )}
         </div>
       )}
     </Card>

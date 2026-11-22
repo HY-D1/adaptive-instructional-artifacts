@@ -85,8 +85,8 @@ import { clearUiStateForActor, getUiState, setUiState } from '../lib/ui-state';
 import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content/content-generator';
+import { findLatestExplanation } from '../lib/content/latest-explanation';
 import { renderTextbookContent } from '../lib/content/textbook-renderer';
-import { TEXTBOOK_CHANGED_EVENT } from '../lib/storage/textbook-updates';
 import { buildPdfIndexOutputFields } from '../lib/api/pdf-retrieval';
 import { createEventId } from '../lib/utils/event-id';
 import { startBackgroundAnalysis, stopBackgroundAnalysis, runAnalysisOnce, ANALYSIS_INTERVAL_MS } from '../lib/trace-analyzer';
@@ -2241,7 +2241,6 @@ export function LearningInterface() {
         ));
         // Signal other tabs (e.g. TextbookPage open alongside) to reload units.
         broadcastSync('sql-adapt-textbook', learnerId);
-        window.dispatchEvent(new Event(TEXTBOOK_CHANGED_EVENT));
       })
       .catch((error) => {
         setGenerationError((error as Error).message);
@@ -2468,6 +2467,20 @@ export function LearningInterface() {
     learnerSessionInteractions.filter(i => i.problemId === currentProblem.id),
     [learnerSessionInteractions, currentProblem.id]
   );
+
+  // The full explanation for this problem, shown on the hint card next to Hint 1-3.
+  // Read from the saved note events so it is still there after a reload.
+  const problemExplanation = useMemo(() => {
+    if (!learnerId) return null;
+    return findLatestExplanation(
+      storage.getInteractionsByLearner(learnerId),
+      currentProblem.id,
+      storage.getTextbook(learnerId),
+      latestGeneratedUnit
+    );
+    // `interactions` changes when the textbook_add / textbook_update event is logged.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [learnerId, currentProblem.id, interactions, latestGeneratedUnit]);
 
   // RESEARCH-4: Emit concept_view for problem source exactly once per (session, problem, concept)
   // This useEffect handles initial mount and problem switches; dedupe prevents duplicate emissions
@@ -3417,6 +3430,8 @@ export function LearningInterface() {
                 escalationProfile={currentEscalationProfile}
                 sessionConfig={sessionConfig}
                 isExplanationGenerating={isGeneratingUnit}
+                explanation={problemExplanation}
+                explanationError={generationError}
                 isEditorEmpty={isSqlEditorEmpty(sqlDraft)}
               />
 

@@ -5,7 +5,6 @@ import { cn } from '../components/ui/utils';
 import { Compass, BookOpen, BarChart3, FlaskConical, Code, HelpCircle, Menu, X, Keyboard, GraduationCap, LogOut, RefreshCw, AlertCircle, Users, Settings, Eye } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { MouseEvent } from 'react';
-import { TextbookUpdatesButton } from '../components/shared/TextbookUpdatesButton';
 import { SurveyInvitationLinks } from '../components/features/surveys/SurveyInvitationLinks';
 import { WelcomeModal } from '../components/shared/WelcomeModal';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
@@ -833,13 +832,6 @@ export function RootLayout() {
               {/* Desktop Navigation */}
               <div className="hidden xl:flex items-center gap-1">
                 {navItems.map((item) => (
-                  item.to === '/textbook' && showStudentNav ? (
-                    <TextbookUpdatesButton
-                      key={item.to}
-                      learnerId={authUser?.learnerId ?? syncedProfile?.id}
-                      isActive={item.isActive}
-                    />
-                  ) : (
                   <Tooltip key={item.to}>
                     <TooltipTrigger asChild>
                       <Button
@@ -859,7 +851,6 @@ export function RootLayout() {
                       <p>Go to {item.label}</p>
                     </TooltipContent>
                   </Tooltip>
-                  )
                 ))}
                 {showSurveyLinks && <SurveyInvitationLinks variant="nav" />}
               </div>

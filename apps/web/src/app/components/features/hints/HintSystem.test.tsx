@@ -294,6 +294,99 @@ describe('HintSystem quota handling', () => {
     expect(mockStorage.logGuidanceView).not.toHaveBeenCalled();
   });
 
+  describe('View explanation toggle', () => {
+    const usedInteractions = [
+      { id: 'e1', learnerId: 'learner-1', sessionId: 'session-1', problemId: 'problem-1', eventType: 'hint_view', timestamp: 1, hintLevel: 1 },
+      { id: 'e2', learnerId: 'learner-1', sessionId: 'session-1', problemId: 'problem-1', eventType: 'explanation_view', timestamp: 2 },
+    ] as never;
+    const explanation = { noteId: 'n1', title: 'Selecting columns', content: 'First paragraph.\n\n**Bold idea** and `SELECT *`.', contentFormat: 'markdown' as const };
+
+    it('does not show the toggle, or the old Explanation pill, before the explanation is used', () => {
+      render(
+        <ToastProvider>
+          <HintSystem learnerId="learner-1" problemId="problem-1" sessionId="session-1" recentInteractions={[]} />
+        </ToastProvider>,
+      );
+      expect(screen.queryByTestId('explanation-toggle')).toBeNull();
+      expect(screen.queryByText('Full Explanation Unlocked')).toBeNull();
+    });
+
+    it('shows View explanation once it is used, opens the scrollable explanation on the card and closes it again', async () => {
+      const user = userEvent.setup();
+      render(
+        <ToastProvider>
+          <HintSystem learnerId="learner-1" problemId="problem-1" sessionId="session-1" recentInteractions={usedInteractions} explanation={explanation} />
+        </ToastProvider>,
+      );
+      const toggle = screen.getByTestId('explanation-toggle');
+      expect(toggle.textContent).toBe('View explanation');
+      expect(screen.queryByTestId('explanation-card')).toBeNull();
+
+      await user.click(toggle);
+      const card = screen.getByTestId('explanation-card');
+      expect(card.textContent).toContain('First paragraph.');
+      expect(screen.getByTestId('explanation-scroll').className).toMatch(/overflow-y-auto/);
+      expect(screen.getByTestId('explanation-scroll').className).toMatch(/max-h-/);
+      expect(toggle.getAttribute('aria-pressed')).toBe('true');
+
+      await user.click(screen.getByTestId('explanation-close'));
+      expect(screen.queryByTestId('explanation-card')).toBeNull();
+      expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('toggles between the explanation and the hint dots', async () => {
+      const user = userEvent.setup();
+      render(
+        <ToastProvider>
+          <HintSystem learnerId="learner-1" problemId="problem-1" sessionId="session-1" recentInteractions={usedInteractions} explanation={explanation} />
+        </ToastProvider>,
+      );
+      await user.click(screen.getByTestId('explanation-toggle'));
+      expect(screen.getByTestId('explanation-card')).toBeTruthy();
+      expect(screen.getByTestId('hint-dot-1').getAttribute('aria-pressed')).toBe('false');
+
+      await user.click(screen.getByTestId('hint-dot-1'));
+      expect(screen.queryByTestId('explanation-card')).toBeNull();
+    });
+
+    it('says the explanation is being written while it is generating, and does not turn markup in the text into elements', async () => {
+      const user = userEvent.setup();
+      const { rerender } = render(
+        <ToastProvider>
+          <HintSystem learnerId="learner-1" problemId="problem-1" sessionId="session-1" recentInteractions={usedInteractions} isExplanationGenerating />
+        </ToastProvider>,
+      );
+      await user.click(screen.getByTestId('explanation-toggle'));
+      expect(screen.getByTestId('explanation-loading').textContent).toMatch(/writing your explanation/i);
+
+      rerender(
+        <ToastProvider>
+          <HintSystem
+            learnerId="learner-1"
+            problemId="problem-1"
+            sessionId="session-1"
+            recentInteractions={usedInteractions}
+            explanation={{ title: 'T', content: 'Safe<script>window.__x = 1</script><img src=x onerror="window.__x=1">' }}
+          />
+        </ToastProvider>,
+      );
+      // The markup in the text is shown as plain text; no script or image element is created.
+      expect(screen.getByTestId('explanation-card').querySelector('script, img')).toBeNull();
+      expect((window as unknown as { __x?: number }).__x).toBeUndefined();
+    });
+
+    it('explains when the explanation could not be loaded', async () => {
+      const user = userEvent.setup();
+      render(
+        <ToastProvider>
+          <HintSystem learnerId="learner-1" problemId="problem-1" sessionId="session-1" recentInteractions={usedInteractions} explanationError="Network down" />
+        </ToastProvider>,
+      );
+      await user.click(screen.getByTestId('explanation-toggle'));
+      expect(screen.getByTestId('explanation-unavailable').textContent).toContain('Network down');
+    });
+  });
+
   it('shows three numbered dots, all empty before the first hint', () => {
     render(
       <ToastProvider>

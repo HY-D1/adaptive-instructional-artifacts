@@ -89,8 +89,7 @@ async function submitQuery(page: Page, query: string) {
 }
 
 async function navigateToTextbook(page: Page) {
-  await page.getByTestId('textbook-updates-button').click();
-  await page.getByTestId('textbook-updates-open').click();
+  await page.getByRole('link', { name: 'My Textbook' }).first().click();
   await expect(page).toHaveURL(/\/textbook/, { timeout: 10000 });
   await page.waitForTimeout(1000);
 }
