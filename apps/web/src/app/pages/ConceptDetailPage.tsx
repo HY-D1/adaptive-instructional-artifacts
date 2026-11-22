@@ -47,8 +47,8 @@ export function ConceptDetailPage() {
   
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-gray-600">Loading concept...</div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-gray-600 dark:text-gray-300">Loading concept...</div>
       </div>
     );
   }
@@ -56,11 +56,11 @@ export function ConceptDetailPage() {
   if (error) return <div className="p-8" role="alert">Could not load this lesson. <button className="underline p-3" onClick={() => setAttempt(a => a + 1)}>Retry</button></div>;
   if (!concept) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Concept Not Found</h2>
-          <p className="text-gray-600 mb-4">The concept "{conceptId}" doesn't exist in the textbook.</p>
-          <Link to="/concepts" className="text-blue-600 hover:underline">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Concept Not Found</h2>
+          <p className="text-gray-600 dark:text-gray-300 mb-4">The concept "{conceptId}" doesn't exist in the textbook.</p>
+          <Link to="/concepts" className="text-blue-600 dark:text-blue-300 hover:underline">
             ← Back to Textbook
           </Link>
         </div>
@@ -69,22 +69,22 @@ export function ConceptDetailPage() {
   }
   
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <header className="bg-white border-b sticky top-0 z-10">
+      <header className="bg-white dark:bg-gray-800 border-b sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Link
               to="/concepts"
               aria-label="Back to concept library"
-              className="inline-flex items-center gap-2 rounded-lg p-2 text-gray-700 transition-colors hover:bg-gray-100"
+              className="inline-flex items-center gap-2 rounded-lg p-2 text-gray-700 dark:text-gray-200 transition-colors hover:bg-gray-100"
             >
-              <ChevronLeft className="w-5 h-5 text-gray-600" aria-hidden="true" />
+              <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" aria-hidden="true" />
               <span className="hidden sm:inline text-sm font-medium">Back to Concepts</span>
             </Link>
             <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-bold text-gray-900 break-words">{concept.title}</h1>
-              <div className="flex items-center gap-4 text-sm text-gray-500 mt-1 flex-wrap">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">{concept.title}</h1>
+              <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1 flex-wrap">
                 <span className="flex items-center gap-1">
                   <Clock className="w-4 h-4" />
                   {lesson ? getLessonReadTime(lesson) : (concept.estimatedReadTime || Math.max(1, Math.ceil(concept.content.explanation.split(/\s+/).length / 180)))} min read
@@ -107,7 +107,7 @@ export function ConceptDetailPage() {
           {/* Main Content */}
           <div className="lg:col-span-2 min-w-0">
             {/* Tabs */}
-            <div role="tablist" aria-label="Lesson sections" className="grid grid-cols-2 sm:flex gap-2 mb-6 bg-white p-1 rounded-lg border">
+            <div role="tablist" aria-label="Lesson sections" className="grid grid-cols-2 sm:flex gap-2 mb-6 bg-white dark:bg-gray-800 p-1 rounded-lg border">
               {(['learn', 'examples', 'mistakes', ...(lesson ? ['checks' as const] : [])] as const).map(tab => (
                 <button
                   key={tab}
@@ -123,7 +123,7 @@ export function ConceptDetailPage() {
                   className={`flex-1 py-2.5 px-4 rounded-md capitalize text-sm font-medium transition-colors ${
                     activeTab === tab 
                       ? 'bg-blue-600 text-white shadow-sm' 
-                      : 'text-gray-600 hover:bg-gray-100'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100'
                   }`}
                 >
                   {tab === 'learn' && 'Learn'}
@@ -139,18 +139,18 @@ export function ConceptDetailPage() {
               <div
                 role="note"
                 aria-label="Source quality notice"
-                className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3"
+                className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-4 py-3"
               >
                 <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-sm text-amber-800">
+                <p className="text-sm text-amber-800 dark:text-amber-200">
                   <strong>Source quality limited.</strong> Some content from this textbook export could not be verified as learner-safe. The extracted source is shown with its safety filters. Authored learning activities below are separate from this extraction.
                 </p>
               </div>
             )}
 
             {/* Tab Content */}
-            <div id="lesson-panel" role="tabpanel" aria-labelledby={`lesson-tab-${activeTab}`} className="bg-white rounded-xl border shadow-sm min-w-0">
-              {lesson && activeTab === 'learn' && <div className="p-6 space-y-4"><p className="text-sm text-blue-700">Authored learning guide · {lesson.dialect}</p><h2 className="text-lg font-semibold">Learning objectives</h2><ul className="list-disc pl-5">{lesson.objectives.map(o => <li key={o}>{o}</li>)}</ul>{lesson.prerequisites.length > 0 && <nav aria-label="Prerequisites">Before this lesson: {lesson.prerequisites.map(id => <Link key={id} className="inline-block p-2 underline" to={`/concepts/${id}`}>{getConceptLesson(id)?.title || id.split('/').pop()}</Link>)}</nav>}{lesson.explanation.map((paragraph, i) => <p key={i} className="leading-relaxed text-gray-700">{paragraph}</p>)}</div>}
+            <div id="lesson-panel" role="tabpanel" aria-labelledby={`lesson-tab-${activeTab}`} className="bg-white dark:bg-gray-800 rounded-xl border shadow-sm min-w-0">
+              {lesson && activeTab === 'learn' && <div className="p-6 space-y-4"><p className="text-sm text-blue-700 dark:text-blue-300">Authored learning guide · {lesson.dialect}</p><h2 className="text-lg font-semibold">Learning objectives</h2><ul className="list-disc pl-5">{lesson.objectives.map(o => <li key={o}>{o}</li>)}</ul>{lesson.prerequisites.length > 0 && <nav aria-label="Prerequisites">Before this lesson: {lesson.prerequisites.map(id => <Link key={id} className="inline-block p-2 underline" to={`/concepts/${id}`}>{getConceptLesson(id)?.title || id.split('/').pop()}</Link>)}</nav>}{lesson.explanation.map((paragraph, i) => <p key={i} className="leading-relaxed text-gray-700 dark:text-gray-200">{paragraph}</p>)}</div>}
               {lesson && activeTab === 'examples' && <div className="divide-y">{lesson.examples.map((example, i) => <InteractiveExample key={`${conceptId}-${i}`} example={example} />)}</div>}
               {lesson && activeTab === 'checks' && <ConceptChecks key={conceptId} checks={lesson.checks} />}
               {activeTab === 'learn' && <section data-testid="extracted-source-learn" aria-label="Extracted source explanation">{lesson && <h2 className="px-6 pt-6 text-sm font-semibold border-t">Extracted source explanation</h2>}<LearnTab content={concept.content} quality={contentQuality} qualityMetadata={qualityMetadata} /></section>}
@@ -169,9 +169,9 @@ export function ConceptDetailPage() {
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Practice Card */}
-            <div className="bg-white rounded-xl border shadow-sm p-6">
-              <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Dumbbell className="w-5 h-5 text-blue-600" />
+            <div className="bg-white dark:bg-gray-800 rounded-xl border shadow-sm p-6">
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
+                <Dumbbell className="w-5 h-5 text-blue-600 dark:text-blue-300" />
                 Practice Problems
               </h3>
               
@@ -183,7 +183,7 @@ export function ConceptDetailPage() {
                       to={`/practice?problemId=${problem.id}&conceptId=${conceptId}`}
                       className="block p-3 rounded-lg border hover:border-blue-400 hover:bg-blue-50 transition-all group"
                     >
-                      <p className="font-medium text-gray-900 group-hover:text-blue-700">{problem.title}</p>
+                      <p className="font-medium text-gray-900 dark:text-gray-100 group-hover:text-blue-700">{problem.title}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <span className={`text-xs px-2 py-0.5 rounded ${getDifficultyLightStyle(problem.difficulty)}`}>
                           {problem.difficulty}
@@ -192,13 +192,13 @@ export function ConceptDetailPage() {
                     </Link>
                   ))}
                   {problems.length > 3 && (
-                    <button type="button" onClick={() => setShowAllProblems(v => !v)} className="block w-full text-center text-blue-600 text-sm underline py-3" aria-expanded={showAllProblems}>
+                    <button type="button" onClick={() => setShowAllProblems(v => !v)} className="block w-full text-center text-blue-600 dark:text-blue-300 text-sm underline py-3" aria-expanded={showAllProblems}>
                       {showAllProblems ? 'Show fewer problems' : `View all ${problems.length} problems →`}
                     </button>
                   )}
                 </div>
               ) : (
-                <p className="text-gray-500 text-sm">No practice problems for this concept yet.</p>
+                <p className="text-gray-500 dark:text-gray-400 text-sm">No practice problems for this concept yet.</p>
               )}
               
               {problems.length > 0 && <Link
@@ -212,14 +212,14 @@ export function ConceptDetailPage() {
             
             {/* Related Concepts */}
             {(lesson?.relatedConcepts || concept.relatedConcepts).length > 0 && (
-              <div className="bg-white rounded-xl border shadow-sm p-6">
-                <h3 className="font-semibold text-gray-900 mb-4">Related Concepts</h3>
+              <div className="bg-white dark:bg-gray-800 rounded-xl border shadow-sm p-6">
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">Related Concepts</h3>
                 <div className="space-y-2">
                   {(lesson?.relatedConcepts || concept.relatedConcepts).slice(0, 5).map(relatedId => (
                     <Link
                       key={relatedId}
                       to={`/concepts/${relatedId}`}
-                      className="block text-gray-700 hover:text-blue-600 hover:bg-gray-50 p-2 rounded-lg transition-colors text-sm"
+                      className="block text-gray-700 dark:text-gray-200 hover:text-blue-600 hover:bg-gray-50 p-2 rounded-lg transition-colors text-sm"
                     >
                       → {getConceptLesson(relatedId)?.title || relatedId.split('/').pop()?.replace(/-/g, ' ')}
                     </Link>
@@ -228,19 +228,19 @@ export function ConceptDetailPage() {
               </div>
             )}
             
-            {previous && <Link className="block rounded-lg border p-4 text-blue-700" to={`/concepts/${previous.id}`}>← Previous lesson: {previous.title}</Link>}
-            {lesson?.nextConcept && <Link className="block rounded-lg border p-4 text-blue-700" to={`/concepts/${lesson.nextConcept}`}>Next lesson: {getConceptLesson(lesson.nextConcept)?.title || 'Continue learning'} →</Link>}
+            {previous && <Link className="block rounded-lg border p-4 text-blue-700 dark:text-blue-300" to={`/concepts/${previous.id}`}>← Previous lesson: {previous.title}</Link>}
+            {lesson?.nextConcept && <Link className="block rounded-lg border p-4 text-blue-700 dark:text-blue-300" to={`/concepts/${lesson.nextConcept}`}>Next lesson: {getConceptLesson(lesson.nextConcept)?.title || 'Continue learning'} →</Link>}
             {lesson && <div className="rounded-lg border p-4 text-sm"><h3 className="font-semibold">Learning guide references</h3><p>Examples are authored instructional material, separate from the extracted textbook.</p>{lesson.sources.map(url => <a className="block py-2 underline break-words" href={url} key={url} target="_blank" rel="noreferrer">{url}</a>)}</div>}
             {/* Textbook Source */}
-            <div className="bg-blue-50 rounded-xl border border-blue-200 p-6">
-              <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+            <div className="bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800 p-6">
+              <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
                 <BookOpen className="w-4 h-4" />
                 Textbook Source
               </h3>
-              <p className="text-sm text-blue-800 mb-2">
+              <p className="text-sm text-blue-800 dark:text-blue-200 mb-2">
                 {concept.sourceDocId === 'murachs-mysql-3rd-edition' ? "Murach’s MySQL, 3rd edition" : concept.sourceDocId === 'dbms-ramakrishnan-3rd-edition' ? 'Database Management Systems, Ramakrishnan, 3rd edition' : concept.sourceDocId || 'Textbook source'}
               </p>
-              <p className="text-xs text-blue-600">
+              <p className="text-xs text-blue-600 dark:text-blue-300">
                 Pages: {compactPages(concept.pageNumbers)}
               </p>
             </div>
@@ -262,16 +262,16 @@ function LearnTab({ content, quality = 'good', qualityMetadata }: {
   return (
     <div className="p-6">
       {/* Definition Box — always shown, always safe */}
-      <div className="bg-blue-50 border-l-4 border-blue-500 p-5 mb-6 rounded-r-lg">
-        <h3 className="text-sm font-semibold text-blue-900 mb-1 uppercase tracking-wide">Definition</h3>
-        <p className="text-blue-900 text-lg leading-relaxed">{definitionText || content.definition}</p>
+      <div className="bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500 p-5 mb-6 rounded-r-lg">
+        <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1 uppercase tracking-wide">Definition</h3>
+        <p className="text-blue-900 dark:text-blue-100 text-lg leading-relaxed">{definitionText || content.definition}</p>
       </div>
 
       {/* Explanation — hidden in fallback mode if garbled */}
       {quality === 'good' && explanationText && (
         <div className="prose max-w-none">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">What To Learn</h3>
-          <div className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">What To Learn</h3>
+          <div className="text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
             {explanationText}
           </div>
         </div>
@@ -283,15 +283,15 @@ function LearnTab({ content, quality = 'good', qualityMetadata }: {
           {qualityMetadata?.learnerSafeSummary ? (
             <div
               data-testid="learner-safe-summary"
-              className="rounded-lg border border-blue-100 bg-blue-50 p-4"
+              className="rounded-lg border border-blue-100 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 p-4"
             >
-              <p className="text-sm font-medium text-blue-900 mb-1">Overview</p>
-              <p className="text-sm text-blue-800 leading-relaxed">
+              <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">Overview</p>
+              <p className="text-sm text-blue-800 dark:text-blue-200 leading-relaxed">
                 {qualityMetadata.learnerSafeSummary}
               </p>
             </div>
           ) : (
-            <p className="text-sm text-gray-500 italic">
+            <p className="text-sm text-gray-500 dark:text-gray-400 italic">
               Full explanation is not available for this concept. Use the textbook pages listed in the sidebar for the complete coverage.
             </p>
           )}
@@ -299,10 +299,10 @@ function LearnTab({ content, quality = 'good', qualityMetadata }: {
           {/* Show helper-produced key points when available */}
           {qualityMetadata?.learnerSafeKeyPoints && qualityMetadata.learnerSafeKeyPoints.length > 0 && (
             <div data-testid="learner-safe-keypoints" className="rounded-lg border border-amber-100 bg-amber-50/50 p-4">
-              <p className="text-sm font-medium text-amber-900 mb-2">Key Points</p>
+              <p className="text-sm font-medium text-amber-900 dark:text-amber-100 mb-2">Key Points</p>
               <ul className="list-disc list-inside space-y-1">
                 {qualityMetadata.learnerSafeKeyPoints.map((point, idx) => (
-                  <li key={idx} className="text-sm text-amber-800 leading-relaxed">
+                  <li key={idx} className="text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
                     {point}
                   </li>
                 ))}
@@ -333,7 +333,7 @@ function ExamplesTab({ examples, quality = 'good', qualityMetadata }: { examples
 
   if (visibleExamples.length === 0) {
     return (
-      <div data-testid="no-verified-examples" className="p-12 text-center text-gray-500">
+      <div data-testid="no-verified-examples" className="p-12 text-center text-gray-500 dark:text-gray-400">
         {quality === 'fallback'
           ? 'No verified SQL examples are available for this concept.'
           : 'No examples available for this concept.'}
@@ -346,8 +346,8 @@ function ExamplesTab({ examples, quality = 'good', qualityMetadata }: { examples
       {visibleExamples.map((ex, i) => (
         <div key={i} className="p-6">
           <div className="flex items-center gap-2 mb-4">
-            <CheckCircle className="w-5 h-5 text-green-600" />
-            <h4 className="font-semibold text-gray-900">{ex.title}</h4>
+            <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-300" />
+            <h4 className="font-semibold text-gray-900 dark:text-gray-100">{ex.title}</h4>
           </div>
 
           {ex.code && (
@@ -359,13 +359,13 @@ function ExamplesTab({ examples, quality = 'good', qualityMetadata }: { examples
           )}
 
           {ex.explanation && (
-            <p className="text-gray-600 text-sm leading-relaxed">{toLearnerSafeParagraph(ex.explanation, 280)}</p>
+            <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">{toLearnerSafeParagraph(ex.explanation, 280)}</p>
           )}
 
           {(ex as CodeExample).output && (
-            <div className="mt-3 p-3 bg-gray-100 rounded-lg">
-              <p className="text-xs text-gray-500 mb-1">Output:</p>
-              <p className="text-sm text-gray-700 font-mono">{(ex as CodeExample).output}</p>
+            <div className="mt-3 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Output:</p>
+              <p className="text-sm text-gray-700 dark:text-gray-200 font-mono">{(ex as CodeExample).output}</p>
             </div>
           )}
         </div>
@@ -399,11 +399,11 @@ function MistakesTab({
     if (quality === 'fallback' && qualityMetadata?.learnerSafeKeyPoints && qualityMetadata.learnerSafeKeyPoints.length > 0) {
       return (
         <div className="p-6">
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-            <p className="text-sm font-semibold text-amber-900 mb-2">Focus Points</p>
+          <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-4">
+            <p className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-2">Focus Points</p>
             <ul className="list-disc list-inside space-y-1">
               {qualityMetadata.learnerSafeKeyPoints.slice(0, 6).map((point, idx) => (
-                <li key={idx} className="text-sm text-amber-800 leading-relaxed">
+                <li key={idx} className="text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
                   {toLearnerSafeParagraph(point, 200)}
                 </li>
               ))}
@@ -414,7 +414,7 @@ function MistakesTab({
     }
 
     return (
-      <div className="p-12 text-center text-gray-500">
+      <div className="p-12 text-center text-gray-500 dark:text-gray-400">
         No common mistakes listed for this concept.
       </div>
     );
@@ -425,32 +425,32 @@ function MistakesTab({
       {normalizedMistakes.map((mistake, i) => (
         <div key={i} className="p-6">
           <div className="flex items-center gap-2 mb-4">
-            <AlertCircle className="w-5 h-5 text-red-600" />
-            <h4 className="font-semibold text-gray-900">{mistake.title}</h4>
+            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-300" />
+            <h4 className="font-semibold text-gray-900 dark:text-gray-100">{mistake.title}</h4>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             {/* Incorrect */}
-            <div className="border border-red-200 rounded-lg overflow-hidden">
-              <div className="bg-red-50 px-3 py-2 border-b border-red-200 flex items-center gap-2">
-                <XCircle className="w-4 h-4 text-red-600" />
-                <span className="text-sm font-medium text-red-800">Incorrect</span>
+            <div className="border border-red-200 dark:border-red-800 rounded-lg overflow-hidden">
+              <div className="bg-red-50 dark:bg-red-950/40 px-3 py-2 border-b border-red-200 dark:border-red-800 flex items-center gap-2">
+                <XCircle className="w-4 h-4 text-red-600 dark:text-red-300" />
+                <span className="text-sm font-medium text-red-800 dark:text-red-200">Incorrect</span>
               </div>
               <div className="p-3 bg-red-50/50">
-                <pre className="text-red-700 font-mono text-sm overflow-x-auto max-w-full text-xs sm:text-sm">
+                <pre className="text-red-700 dark:text-red-300 font-mono text-sm overflow-x-auto max-w-full text-xs sm:text-sm">
                   <code>{mistake.incorrect || 'No incorrect SQL captured.'}</code>
                 </pre>
               </div>
             </div>
             
             {/* Correct */}
-            <div className="border border-green-200 rounded-lg overflow-hidden">
-              <div className="bg-green-50 px-3 py-2 border-b border-green-200 flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600" />
-                <span className="text-sm font-medium text-green-800">Correct</span>
+            <div className="border border-green-200 dark:border-green-800 rounded-lg overflow-hidden">
+              <div className="bg-green-50 dark:bg-green-950/40 px-3 py-2 border-b border-green-200 dark:border-green-800 flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-300" />
+                <span className="text-sm font-medium text-green-800 dark:text-green-200">Correct</span>
               </div>
               <div className="p-3 bg-green-50/50">
-                <pre className="text-green-700 font-mono text-sm overflow-x-auto max-w-full text-xs sm:text-sm">
+                <pre className="text-green-700 dark:text-green-300 font-mono text-sm overflow-x-auto max-w-full text-xs sm:text-sm">
                   <code>{mistake.correct || 'No corrected SQL captured.'}</code>
                 </pre>
               </div>
@@ -458,10 +458,10 @@ function MistakesTab({
           </div>
           
           {/* Why */}
-          <div className="flex items-start gap-2 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+          <div className="flex items-start gap-2 p-3 bg-yellow-50 dark:bg-yellow-950/40 rounded-lg border border-yellow-200 dark:border-yellow-800">
             <Lightbulb className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-yellow-800 mb-1">Why this happens</p>
+              <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200 mb-1">Why this happens</p>
               <p className="text-sm text-yellow-700">{authored ? mistake.why : toLearnerSafeParagraph(mistake.why, 220)}</p>
             </div>
           </div>
@@ -473,25 +473,30 @@ function MistakesTab({
 
 function getDifficultyStyle(difficulty: string): string {
   switch (difficulty) {
-    case 'beginner': return 'bg-green-100 text-green-800';
-    case 'intermediate': return 'bg-yellow-100 text-yellow-800';
-    case 'advanced': return 'bg-red-100 text-red-800';
-    default: return 'bg-gray-100 text-gray-800';
+    case 'beginner': return 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-200';
+    case 'intermediate': return 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-200';
+    case 'advanced': return 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200';
+    default: return 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-100';
   }
 }
 
 function getDifficultyLightStyle(difficulty: string): string {
   switch (difficulty) {
-    case 'easy': return 'bg-green-100 text-green-700';
-    case 'medium': return 'bg-yellow-100 text-yellow-700';
-    case 'hard': return 'bg-red-100 text-red-700';
-    default: return 'bg-gray-100 text-gray-700';
+    case 'easy': return 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300';
+    case 'medium': return 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700';
+    case 'hard': return 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300';
+    default: return 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200';
   }
 }
 
 function compactPages(pages: number[]): string {
   const sorted = [...new Set(pages)].sort((a, b) => a - b);
   const ranges: string[] = [];
-  for (let i = 0; i < sorted.length; i++) { const start = sorted[i]; let end = start; while (sorted[i + 1] === end + 1) end = sorted[++i]; ranges.push(start === end ? `${start}` : `${start}–${end}`); }
+  for (let i = 0; i < sorted.length; i++) {
+    const start = sorted[i];
+    let end = start;
+    while (sorted[i + 1] === end + 1) end = sorted[++i];
+    ranges.push(start === end ? `${start}` : `${start}–${end}`);
+  }
   return ranges.join(', ') || 'Not supplied';
 }

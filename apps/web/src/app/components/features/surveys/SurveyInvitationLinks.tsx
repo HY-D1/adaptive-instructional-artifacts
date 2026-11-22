@@ -11,7 +11,13 @@ const LABELS: Record<SurveyInvitation["instance"], string> = {
   post: "Post-activity survey",
 };
 
-export function SurveyInvitationLinks(): ReactNode {
+// Longer wording used in the top navigation bar.
+const NAV_LABELS: Record<SurveyInvitation["instance"], string> = {
+  pre: "Click here to start the pre-survey",
+  post: "Click here to complete the post-survey",
+};
+
+export function SurveyInvitationLinks({ variant = "default" }: { variant?: "default" | "nav" } = {}): ReactNode {
   const [invitations, setInvitations] = useState<SurveyInvitation[]>([]);
 
   useEffect(() => {
@@ -45,6 +51,28 @@ export function SurveyInvitationLinks(): ReactNode {
   if (invitations.length === 0) return null;
 
   const username = invitations.find((invitation) => invitation.username)?.username;
+
+  if (variant === "nav") {
+    // Top navigation: always visible, one compact button per pending survey.
+    return (
+      <div className="flex flex-wrap items-center gap-2" aria-label="Available surveys">
+        {invitations.map((invitation) => invitation.surveyUrl ? (
+          <a
+            key={invitation.instance}
+            href={invitation.surveyUrl}
+            target="_blank"
+            rel="noreferrer"
+            data-testid={`survey-link-${invitation.instance}`}
+            className="inline-flex items-center gap-1.5 rounded-md bg-red-700 px-2.5 py-1.5 text-xs font-medium text-white shadow-sm transition-colors hover:bg-red-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:focus-visible:ring-red-300 dark:focus-visible:ring-offset-gray-900">
+            <ClipboardCheck className="size-3.5 shrink-0" aria-hidden="true" />
+            <span className="hidden 2xl:inline">{NAV_LABELS[invitation.instance]}</span>
+            <span className="2xl:hidden">{invitation.instance === "post" ? "Post-survey" : "Pre-survey"}</span>
+            <ExternalLink className="size-3 shrink-0" aria-hidden="true" />
+          </a>
+        ) : null)}
+      </div>
+    );
+  }
 
   return (
     <div

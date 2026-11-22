@@ -99,43 +99,34 @@ export function SourceViewer({
   const uniqueConceptIds = Object.keys(passagesByConcept);
   const totalPassages = passages.length;
 
+  // Nothing to show: render nothing so no empty box takes up space.
   if (passages.length === 0) {
-    return (
-      <div className={cn('rounded-lg border border-dashed border-gray-200 bg-gray-50/50 p-4', className)}>
-        <div className="flex items-center gap-2 text-gray-400">
-          <BookOpen className="size-4" />
-          <span className="text-sm">No sources available</span>
-        </div>
-        <p className="text-xs text-gray-400 mt-2">
-          Sources will appear here when hints reference textbook content.
-        </p>
-      </div>
-    );
+    return null;
   }
 
   return (
-    <div className={cn('rounded-lg border border-gray-200 bg-white overflow-hidden', className)}>
+    <div className={cn('rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden', className)}>
       {/* Header */}
       <button
         onClick={handleToggleExpanded}
-        className="flex w-full items-center justify-between p-3 text-left hover:bg-gray-50/80 transition-all min-w-0"
+        className="flex w-full items-center justify-between p-3 text-left hover:bg-gray-50/80 dark:hover:bg-gray-700/50 transition-all min-w-0"
       >
         <div className="flex items-center gap-2 min-w-0">
-          <div className="p-1.5 bg-blue-50 rounded-md">
-            <BookOpen className="size-4 text-blue-600 shrink-0" />
+          <div className="p-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-md">
+            <BookOpen className="size-4 text-blue-600 dark:text-blue-300 shrink-0" />
           </div>
-          <span className="font-medium text-gray-900 text-sm truncate">
+          <span className="font-medium text-gray-900 dark:text-gray-100 text-sm truncate">
             Sources
           </span>
-          <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 shrink-0">
+          <span className="rounded-full bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 text-xs font-medium text-blue-700 dark:text-blue-300 shrink-0">
             {totalPassages}
           </span>
         </div>
         <div className="shrink-0 ml-2">
           {isExpanded ? (
-            <ChevronUp className="size-4 text-gray-400" />
+            <ChevronUp className="size-4 text-gray-400 dark:text-gray-500" />
           ) : (
-            <ChevronDown className="size-4 text-gray-400" />
+            <ChevronDown className="size-4 text-gray-400 dark:text-gray-500" />
           )}
         </div>
       </button>
@@ -155,8 +146,8 @@ export function SourceViewer({
                 <div key={conceptId} className="space-y-2">
                   {/* Concept header */}
                   <div className="flex items-center gap-2">
-                    <Hash className="size-3 text-gray-400" />
-                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    <Hash className="size-3 text-gray-400 dark:text-gray-500" />
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
                       {conceptLabel}
                     </span>
                   </div>
@@ -180,8 +171,8 @@ export function SourceViewer({
           </div>
           
           {/* Footer with grounding indicator */}
-          <div className="border-t border-gray-100 p-3 bg-gray-50/50">
-            <div className="flex items-center gap-2 text-xs text-gray-500">
+          <div className="border-t border-gray-100 p-3 bg-gray-50/50 dark:bg-gray-800/60">
+            <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
               <div className="size-2 rounded-full bg-green-500" />
               <span>Grounded in textbook sources</span>
             </div>
@@ -242,35 +233,39 @@ function PassageCard({
       className={cn(
         'rounded-md border p-3 cursor-pointer transition-all',
         isSelected 
-          ? 'border-blue-300 bg-blue-50/50 ring-1 ring-blue-200' 
-          : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+          ? 'border-blue-300 dark:border-blue-700 bg-blue-50/50 ring-1 ring-blue-200' 
+          : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 hover:shadow-sm'
       )}
     >
       {/* Passage header */}
       <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2 text-xs text-gray-500">
+        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
           <FileText className="size-3" />
           <span className="font-medium">{passage.docId}</span>
-          <span className="text-gray-300">|</span>
-          <span>Page {passage.page}</span>
+          {passage.page > 0 && (
+            <>
+              <span className="text-gray-300">|</span>
+              <span>Page {passage.page}</span>
+            </>
+          )}
           {isGrounded ? (
-            <span className="ml-1 inline-flex items-center rounded-full bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700" title="Actual PDF content retrieved">
+            <span className="ml-1 inline-flex items-center rounded-full bg-green-50 dark:bg-green-950/40 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:text-green-300" title="Actual PDF content retrieved">
               ✓ Grounded
             </span>
           ) : (
-            <span className="ml-1 inline-flex items-center rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700" title="PDF index not available">
+            <span className="ml-1 inline-flex items-center rounded-full bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300" title="PDF index not available">
               ⚠ Placeholder
             </span>
           )}
         </div>
         {isSelected && (
-          <span className="text-xs text-blue-600 font-medium">Selected</span>
+          <span className="text-xs text-blue-600 dark:text-blue-300 font-medium">Selected</span>
         )}
       </div>
       
       {/* Passage text */}
       <div className={`
-        text-sm text-gray-700 leading-relaxed prose prose-sm max-w-none
+        text-sm text-gray-700 dark:text-gray-200 leading-relaxed prose prose-sm max-w-none
         ${isSelected ? '' : 'line-clamp-4'}
       `}>
         {cleanedText.split('\n').map((paragraph, i) => (
@@ -282,7 +277,7 @@ function PassageCard({
       
       {/* Expand hint */}
       {!isSelected && cleanedText.length > 200 && (
-        <div className="mt-2 text-xs text-blue-600">
+        <div className="mt-2 text-xs text-blue-600 dark:text-blue-300">
           Click to expand
         </div>
       )}
@@ -304,7 +299,7 @@ export function SourceBadge({
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-1 text-xs text-blue-700 hover:bg-blue-100 transition-colors"
+      className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-900/30 px-2 py-1 text-xs text-blue-700 dark:text-blue-300 hover:bg-blue-100 transition-colors"
     >
       <BookOpen className="size-3" />
       <span>{count} source{count !== 1 ? 's' : ''}</span>
@@ -328,17 +323,17 @@ export function RungIndicator({
   const rungConfig = {
     1: { 
       label: 'Hint', 
-      color: 'bg-amber-50 text-amber-700 border-amber-200',
+      color: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
       iconColor: 'text-amber-500'
     },
     2: { 
       label: 'Explain', 
-      color: 'bg-blue-50 text-blue-700 border-blue-200',
+      color: 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
       iconColor: 'text-blue-500'
     },
     3: { 
       label: 'Note', 
-      color: 'bg-purple-50 text-purple-700 border-purple-200',
+      color: 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200',
       iconColor: 'text-purple-500'
     }
   };
@@ -380,11 +375,11 @@ export function ConceptTag({
     <span
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-1 rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-700',
+        'inline-flex items-center gap-1 rounded-md bg-gray-100 dark:bg-gray-800 px-2 py-1 text-xs text-gray-700 dark:text-gray-200',
         onClick && 'cursor-pointer hover:bg-gray-200'
       )}
     >
-      <Hash className="size-3 text-gray-400" />
+      <Hash className="size-3 text-gray-400 dark:text-gray-500" />
       <span className="truncate max-w-[120px]">{label || conceptId}</span>
     </span>
   );

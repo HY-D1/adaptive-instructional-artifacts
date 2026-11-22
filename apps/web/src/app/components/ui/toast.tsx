@@ -106,3 +106,8 @@ export function useToast() {
   }
   return context;
 }
+
+/** Like useToast, but returns undefined instead of throwing when no provider is mounted. */
+export function useOptionalToast() {
+  return useContext(ToastContext);
+}

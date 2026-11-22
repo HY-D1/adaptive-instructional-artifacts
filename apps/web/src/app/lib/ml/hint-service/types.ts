@@ -25,7 +25,7 @@ export type AvailableResources = {
 
 export type HintSource = 'llm' | 'llm_cache' | 'textbook' | 'static';
 
-export const HINT_PROMPT_VERSION = 'adaptive-hint-v2';
+export const HINT_PROMPT_VERSION = 'adaptive-hint-v3';
 
 export type HintSourceMetadata = {
   hintSource?: HintSource;

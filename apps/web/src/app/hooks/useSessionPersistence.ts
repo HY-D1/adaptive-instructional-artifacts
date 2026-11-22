@@ -17,7 +17,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import type { UserProfile } from '../types';
 import { storage } from '../lib/storage';
-import { emitProfileUpdated, emitProfileCleared } from '../lib/storage/session-events';
+import { AUTH_BACKEND_CONFIGURED } from '../lib/api/auth-client';
+import { emitProfileUpdated, emitProfileCleared, onSessionEvent } from '../lib/storage/session-events';
 
 /**
  * Source of the last sync operation
@@ -143,6 +144,19 @@ export function useSessionPersistence(): UseSessionPersistenceReturn {
    * Check if session has expired based on last activity
    */
   const checkSessionExpiry = useCallback((): boolean => {
+    // With a real backend the server session (30-day cookie) is the authority.
+    // The 7-day local timer is only for the legacy local-only profile mode;
+    // applying it here wrongly signed out students whose browser still held an
+    // old timestamp (it was never refreshed by backend sign-in).
+    if (AUTH_BACKEND_CONFIGURED) {
+      try {
+        localStorage.removeItem(LAST_ACTIVE_KEY);
+      } catch {
+        // Ignore storage errors
+      }
+      return false;
+    }
+
     const lastActivity = getLastActivity();
     if (!lastActivity) return false;
     
@@ -312,6 +326,15 @@ export function useSessionPersistence(): UseSessionPersistenceReturn {
     };
   }, [loadProfile]);
   
+  // Same-tab logout: drop the profile immediately so the navigation bar updates at once.
+  useEffect(() => {
+    return onSessionEvent('profile:cleared', () => {
+      if (!isMountedRef.current) return;
+      setProfile(null);
+      currentProfileRef.current = null;
+    });
+  }, []);
+
   // Listen for storage events (cross-tab sync)
   useEffect(() => {
     // Skip if SSR or localStorage not available

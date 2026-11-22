@@ -1,10 +1,11 @@
+import { FAST_ESCALATOR } from '../../../lib/ml/escalation-profiles';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ToastProvider } from '../../ui/toast';
-import { buildHintSourceMetadata, HintSystem, shouldSuppressEscalation } from './HintSystem';
+import { buildHintSourceMetadata, HintSystem, isSqlEditorEmpty, REQUEST_HINT_EVENT, shouldSuppressEscalation } from './HintSystem';
 
 const mockStorage = vi.hoisted(() => ({
   getProfile: vi.fn(),
@@ -150,7 +151,7 @@ describe('HintSystem quota handling', () => {
       </ToastProvider>,
     );
 
-    await user.click(screen.getByRole('button', { name: /request hint/i }));
+    await user.click(screen.getByRole('button', { name: /get hint/i }));
 
     expect(await screen.findByText('Try selecting only the columns you need.')).toBeTruthy();
     expect(await screen.findByText('Storage Full')).toBeTruthy();
@@ -190,13 +191,137 @@ describe('HintSystem quota handling', () => {
       </ToastProvider>,
     );
 
-    const button = screen.getByRole('button', { name: /preparing your explanation/i });
+    const button = screen.getByRole('button', { name: /preparing/i });
     await user.click(button);
     await user.click(button);
 
     expect(mockStorage.logGuidanceRequest).not.toHaveBeenCalled();
     expect(mockStorage.logGuidanceView).not.toHaveBeenCalled();
     expect(mockStorage.logGuidanceEscalate).not.toHaveBeenCalled();
+  });
+
+  it('shows a friendly notice and uses no hint when the editor is empty', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <ToastProvider>
+        <HintSystem
+          learnerId="learner-1"
+          problemId="problem-1"
+          sessionId="session-1"
+          recentInteractions={[]}
+          isEditorEmpty
+        />
+      </ToastProvider>,
+    );
+
+    await user.click(screen.getByTestId('hint-action-button'));
+
+    expect(screen.getByTestId('hint-empty-editor-notice')).toBeTruthy();
+    expect(mockStorage.logGuidanceRequest).not.toHaveBeenCalled();
+    expect(mockStorage.logGuidanceView).not.toHaveBeenCalled();
+  });
+
+  it('shows the Get hint button and a 0/3 counter at the top, with no Save to Notes before any hint', () => {
+    render(
+      <ToastProvider>
+        <HintSystem learnerId="learner-1" problemId="problem-1" sessionId="session-1" recentInteractions={[]} />
+      </ToastProvider>,
+    );
+    expect(screen.getByTestId('hint-action-button').textContent).toMatch(/get hint/i);
+    expect(screen.getByTestId('hint-counter').textContent).toContain('0/3 hints');
+    expect(screen.queryByText('Save to Notes')).toBeNull();
+    expect(screen.getByTestId('hint-panel-title').textContent).toBe('Guidance Ladder');
+  });
+
+  it('always gives exactly 3 hints, whatever the escalation profile says', () => {
+    render(
+      <ToastProvider>
+        <HintSystem
+          learnerId="learner-1"
+          problemId="problem-1"
+          sessionId="session-1"
+          recentInteractions={[]}
+          escalationProfile={FAST_ESCALATOR}
+        />
+      </ToastProvider>,
+    );
+    expect(screen.getByTestId('hint-counter').textContent).toContain('0/3 hints');
+    expect(screen.getByTestId('hint-dot-3')).toBeTruthy();
+    expect(screen.queryByTestId('hint-dot-4')).toBeNull();
+    expect(screen.getByTestId('hint-once-note').textContent).toContain('You get 3 hints');
+  });
+
+  it('once the explanation is used, shows only the hints actually used and says it can come early', () => {
+    const interactions = [
+      { id: 'e1', learnerId: 'learner-1', sessionId: 'session-1', problemId: 'problem-1', eventType: 'hint_view', timestamp: 1, hintLevel: 1 },
+      { id: 'e2', learnerId: 'learner-1', sessionId: 'session-1', problemId: 'problem-1', eventType: 'explanation_view', timestamp: 2 },
+    ] as never;
+    render(
+      <ToastProvider>
+        <HintSystem learnerId="learner-1" problemId="problem-1" sessionId="session-1" recentInteractions={interactions} />
+      </ToastProvider>,
+    );
+    expect(screen.getByTestId('hint-action-button').textContent).toMatch(/explanation saved/i);
+    expect(screen.queryByTestId('hint-dot-3')).toBeNull();
+    expect(screen.getByTestId('hint-counter').textContent).not.toContain('/3');
+  });
+
+  it('ignores hint requests from the mobile bar once the explanation has been used, and reports the disabled state', async () => {
+    const interactions = [
+      { id: 'e1', learnerId: 'learner-1', sessionId: 'session-1', problemId: 'problem-1', eventType: 'hint_view', timestamp: 1, hintLevel: 1 },
+      { id: 'e2', learnerId: 'learner-1', sessionId: 'session-1', problemId: 'problem-1', eventType: 'explanation_view', timestamp: 2 },
+    ] as never;
+    const onActionStateChange = vi.fn();
+    render(
+      <ToastProvider>
+        <HintSystem
+          learnerId="learner-1"
+          problemId="problem-1"
+          sessionId="session-1"
+          recentInteractions={interactions}
+          onActionStateChange={onActionStateChange}
+        />
+      </ToastProvider>,
+    );
+
+    expect(onActionStateChange).toHaveBeenCalledWith({ disabled: true, label: 'Explanation saved' });
+
+    window.dispatchEvent(new Event(REQUEST_HINT_EVENT));
+    await Promise.resolve();
+
+    expect(mockStorage.logGuidanceRequest).not.toHaveBeenCalled();
+    expect(mockStorage.logGuidanceView).not.toHaveBeenCalled();
+  });
+
+  it('shows three numbered dots, all empty before the first hint', () => {
+    render(
+      <ToastProvider>
+        <HintSystem learnerId="learner-1" problemId="problem-1" sessionId="session-1" recentInteractions={[]} />
+      </ToastProvider>,
+    );
+    for (const n of [1, 2, 3]) {
+      expect((screen.getByTestId(`hint-dot-${n}`) as HTMLButtonElement).disabled).toBe(true);
+    }
+  });
+
+  it('does not show hint step labels or the source status line to students', () => {
+    render(
+      <ToastProvider>
+        <HintSystem learnerId="learner-1" problemId="problem-1" sessionId="session-1" recentInteractions={[]} />
+      </ToastProvider>,
+    );
+    expect(screen.queryByTestId('hint-ladder-steps')).toBeNull();
+    expect(screen.queryByTestId('hint-source-status')).toBeNull();
+  });
+
+  it('treats empty text and comment-only text as an empty editor', () => {
+    expect(isSqlEditorEmpty('')).toBe(true);
+    expect(isSqlEditorEmpty('   \n ')).toBe(true);
+    expect(isSqlEditorEmpty('-- Write your SQL query here')).toBe(true);
+    expect(isSqlEditorEmpty('/* note */\n-- todo')).toBe(true);
+    expect(isSqlEditorEmpty('-- note\nSELECT 1')).toBe(false);
+    expect(isSqlEditorEmpty('select')).toBe(false);
   });
 
   describe('HintSystem escalation guard', () => {
@@ -223,7 +348,7 @@ describe('HintSystem quota handling', () => {
       </ToastProvider>,
     );
 
-    const requestButton = screen.getByRole('button', { name: /request hint/i });
+    const requestButton = screen.getByRole('button', { name: /get hint/i });
     await user.click(requestButton);
     await screen.findByText('Try selecting only the columns you need.');
     await user.click(screen.getByRole('button', { name: /next hint/i }));

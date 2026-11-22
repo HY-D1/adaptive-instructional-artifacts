@@ -450,7 +450,7 @@ const chatInteractions = useMemo(
                 </Tooltip>
                 <div>
                   <h1 className="text-2xl font-bold flex items-center gap-2">
-                    <BookOpen className="size-6 text-blue-600" />
+                    <BookOpen className="size-6 text-blue-600 dark:text-blue-300" />
                     My Textbook
                   </h1>
                   {isStudent ? (
@@ -487,7 +487,7 @@ const chatInteractions = useMemo(
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
-                          <BookOpen className="size-4 text-blue-600" />
+                          <BookOpen className="size-4 text-blue-600 dark:text-blue-300" />
                           <span className="text-sm font-medium text-blue-700 dark:text-blue-300" data-testid="textbook-total-notes-count">
                             {learningStats.totalUnits} notes
                           </span>
@@ -500,7 +500,7 @@ const chatInteractions = useMemo(
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-200 dark:border-green-800">
-                          <TrendingUp className="size-4 text-green-600" />
+                          <TrendingUp className="size-4 text-green-600 dark:text-green-300" />
                           <span className="text-sm font-medium text-green-700 dark:text-green-300">
                             {learningStats.conceptsCovered} concepts
                           </span>
@@ -575,7 +575,7 @@ const chatInteractions = useMemo(
             <Card className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
               <div className="flex items-start gap-3">
                 <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                  <Sparkles className="size-5 text-blue-600" />
+                  <Sparkles className="size-5 text-blue-600 dark:text-blue-300" />
                 </div>
                 <div>
                   <h3 className="font-semibold text-blue-900 dark:text-blue-200">Your Personal Study Guide</h3>
@@ -715,7 +715,7 @@ const chatInteractions = useMemo(
                   </div>
                   <div className="flex items-center gap-2">
                     {selectedAttemptId && !selectedAttemptExists && (
-                      <Badge variant="outline" className="text-xs text-amber-800 border-amber-300">
+                      <Badge variant="outline" className="text-xs text-amber-800 dark:text-amber-200 border-amber-300">
                         Selected evidence reference not found
                       </Badge>
                     )}
@@ -741,7 +741,7 @@ const chatInteractions = useMemo(
                 {showFilters && (
                   <div className="flex flex-col sm:flex-row gap-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
                     <div className="relative flex-1">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400" />
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-gray-400 dark:text-gray-500" />
                       <Input
                         placeholder="Search by problem, event type, or subtype..."
                         value={searchQuery}
@@ -842,7 +842,7 @@ const chatInteractions = useMemo(
                         className={`rounded-lg border p-3 text-sm transition-all ${
                           isSelected 
                             ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 shadow-sm' 
-                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-800/50'
                         }`}
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -865,12 +865,12 @@ const chatInteractions = useMemo(
                         </div>
                         <div className="flex items-center gap-2 mt-2 text-xs text-gray-600 dark:text-gray-300">
                           <span className="font-medium">{interaction.problemId}</span>
-                          <span className="text-gray-400">•</span>
+                          <span className="text-gray-400 dark:text-gray-500">•</span>
                           <Badge variant="secondary" className="text-xs">
                             {interaction.eventType.replace(new RegExp('_', 'g'), ' ')}
                           </Badge>
                           {interaction.successful && (
-                            <Badge variant="outline" className="text-xs text-green-600 border-green-200">
+                            <Badge variant="outline" className="text-xs text-green-600 dark:text-green-300 border-green-200 dark:border-green-800">
                               Success
                             </Badge>
                           )}

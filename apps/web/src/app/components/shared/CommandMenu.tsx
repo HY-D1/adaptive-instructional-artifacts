@@ -87,7 +87,7 @@ export function CommandMenu({ open: controlledOpen, onOpenChange }: CommandMenuP
   // Empty state component
   const EmptyState = () => (
     <div className="flex flex-col items-center justify-center py-12 text-center">
-      <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+      <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center mb-4">
         <Search className="w-6 h-6 text-gray-400" />
       </div>
       <p className="text-gray-600 font-medium mb-1">No results found</p>
@@ -99,7 +99,7 @@ export function CommandMenu({ open: controlledOpen, onOpenChange }: CommandMenuP
           <button
             key={term}
             onClick={() => setQuery(term)}
-            className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full transition-colors"
+            className="px-3 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-600 rounded-full transition-colors"
           >
             {term}
           </button>
@@ -122,7 +122,7 @@ export function CommandMenu({ open: controlledOpen, onOpenChange }: CommandMenuP
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="p-0 gap-0 max-w-2xl overflow-hidden border-0 bg-transparent shadow-2xl">
         <Command
-          className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-2xl"
+          className="bg-white dark:bg-gray-900 rounded-xl overflow-hidden border border-gray-200 shadow-2xl"
           label="Global search"
           shouldFilter={false}
           loop
@@ -147,7 +147,7 @@ export function CommandMenu({ open: controlledOpen, onOpenChange }: CommandMenuP
                   <X className="w-4 h-4" />
                 </button>
               )}
-              <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-400 bg-gray-100 rounded">
+              <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-400 bg-gray-100 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600 rounded">
                 <span>ESC</span>
               </kbd>
             </div>
@@ -244,19 +244,19 @@ export function CommandMenu({ open: controlledOpen, onOpenChange }: CommandMenuP
           </Command.List>
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/50 text-xs text-gray-500">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/50 dark:bg-gray-800/60 text-xs text-gray-500">
             <div className="flex items-center gap-4">
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-white border rounded text-gray-600 font-sans">↑↓</kbd>
+                <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600 border rounded text-gray-600 font-sans">↑↓</kbd>
                 to navigate
               </span>
               <span className="flex items-center gap-1">
-                <kbd className="px-1.5 py-0.5 bg-white border rounded text-gray-600 font-sans">↵</kbd>
+                <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600 border rounded text-gray-600 font-sans">↵</kbd>
                 to select
               </span>
             </div>
             <span className="hidden sm:inline">
-              Press <kbd className="px-1.5 py-0.5 bg-white border rounded text-gray-600 font-sans">⌘K</kbd> to toggle
+              Press <kbd className="px-1.5 py-0.5 bg-white dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600 border rounded text-gray-600 font-sans">⌘K</kbd> to toggle
             </span>
           </div>
         </Command>
@@ -286,7 +286,7 @@ function CommandItem({ item, onSelect, icon: CustomIcon }: CommandItemProps) {
         "hover:bg-gray-50 transition-colors outline-none"
       )}
     >
-      <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-gray-100 flex items-center justify-center">
+      <div className="flex-shrink-0 w-9 h-9 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
         <Icon className="w-4.5 h-4.5 text-gray-500" />
       </div>
       <div className="flex-1 min-w-0">
@@ -350,7 +350,7 @@ export function CommandTrigger({ className, variant = 'default' }: CommandTrigge
     >
       <Search className="w-4 h-4" />
       <span className="hidden sm:inline">Search...</span>
-      <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-medium text-gray-400 bg-gray-100 rounded ml-2">
+      <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-medium text-gray-400 bg-gray-100 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600 rounded ml-2">
         ⌘K
       </kbd>
     </button>

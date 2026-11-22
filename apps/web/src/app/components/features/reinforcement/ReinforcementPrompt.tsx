@@ -184,17 +184,17 @@ export function ReinforcementPrompt({
             <div className="flex items-center gap-2">
               <div className={cn(
                 "p-1.5 rounded-lg",
-                prompt.promptType === 'mcq' && "bg-blue-50",
-                prompt.promptType === 'sql_completion' && "bg-purple-50",
-                prompt.promptType === 'concept_explanation' && "bg-emerald-50",
+                prompt.promptType === 'mcq' && "bg-blue-50 dark:bg-blue-900/30",
+                prompt.promptType === 'sql_completion' && "bg-purple-50 dark:bg-purple-950/40",
+                prompt.promptType === 'concept_explanation' && "bg-emerald-50 dark:bg-emerald-950/40",
               )}>
                 {getPromptIcon()}
               </div>
               <div>
-                <CardTitle className="text-sm font-semibold text-gray-900">
+                <CardTitle className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                   {prompt.content.title}
                 </CardTitle>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   {getPromptTypeLabel()}
                 </p>
               </div>
@@ -203,10 +203,10 @@ export function ReinforcementPrompt({
             <div className="flex items-center gap-3">
               {/* Progress indicator */}
               <div 
-                className="flex items-center gap-1 text-xs font-medium text-gray-500"
+                className="flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400"
                 data-testid="progress-indicator"
               >
-                <span className="text-gray-900">{promptNumber}</span>
+                <span className="text-gray-900 dark:text-gray-100">{promptNumber}</span>
                 <span>/</span>
                 <span>{totalPrompts}</span>
               </div>
@@ -217,7 +217,7 @@ export function ReinforcementPrompt({
                   variant="ghost"
                   size="sm"
                   onClick={handleDismiss}
-                  className="h-7 w-7 p-0 text-gray-400 hover:text-gray-600"
+                  className="h-7 w-7 p-0 text-gray-400 dark:text-gray-500 hover:text-gray-600"
                   data-testid="dismiss-button"
                 >
                   <X className="size-4" />
@@ -227,7 +227,7 @@ export function ReinforcementPrompt({
           </div>
 
           {/* Progress bar */}
-          <div className="mt-3 h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+          <div className="mt-3 h-1.5 w-full rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
             <div 
               className="h-full rounded-full bg-amber-500 transition-all duration-300"
               style={{ width: `${(promptNumber / totalPrompts) * 100}%` }}
@@ -238,7 +238,7 @@ export function ReinforcementPrompt({
 
         <CardContent className="space-y-4">
           {/* Question display */}
-          <div className="text-sm text-gray-800 leading-relaxed" data-testid="question-text">
+          <div className="text-base font-medium text-gray-900 dark:text-white leading-relaxed" data-testid="question-text">
             {prompt.content.question}
           </div>
 
@@ -247,37 +247,37 @@ export function ReinforcementPrompt({
             <div className="space-y-2" data-testid="retention-options">
               <Button
                 variant="outline"
-                className="w-full justify-start h-auto p-3 border-green-200 hover:bg-green-50 hover:border-green-300"
+                className="w-full justify-start h-auto p-3 border-green-200 dark:border-green-800 hover:bg-green-50 hover:border-green-300 dark:hover:bg-green-900/40 dark:hover:border-green-600"
                 onClick={() => handleRetentionResponse('remembered')}
               >
                 <CheckCircle2 className="size-5 text-green-500 mr-3 shrink-0" />
                 <div className="text-left">
-                  <div className="font-medium text-gray-900">I remember clearly</div>
-                  <div className="text-xs text-gray-500">I can explain this concept confidently</div>
+                  <div className="font-medium text-gray-900 dark:text-gray-100">I remember clearly</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">I can explain this concept confidently</div>
                 </div>
               </Button>
               
               <Button
                 variant="outline"
-                className="w-full justify-start h-auto p-3 border-yellow-200 hover:bg-yellow-50 hover:border-yellow-300"
+                className="w-full justify-start h-auto p-3 border-yellow-200 dark:border-yellow-800 hover:bg-yellow-50 hover:border-yellow-300 dark:hover:bg-yellow-900/40 dark:hover:border-yellow-600"
                 onClick={() => handleRetentionResponse('partial')}
               >
                 <Lightbulb className="size-5 text-yellow-500 mr-3 shrink-0" />
                 <div className="text-left">
-                  <div className="font-medium text-gray-900">I remember partially</div>
-                  <div className="text-xs text-gray-500">I recall some parts but need a refresher</div>
+                  <div className="font-medium text-gray-900 dark:text-gray-100">I remember partially</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">I recall some parts but need a refresher</div>
                 </div>
               </Button>
               
               <Button
                 variant="outline"
-                className="w-full justify-start h-auto p-3 border-red-200 hover:bg-red-50 hover:border-red-300"
+                className="w-full justify-start h-auto p-3 border-red-200 dark:border-red-800 hover:bg-red-50 hover:border-red-300 dark:hover:bg-red-900/40 dark:hover:border-red-600"
                 onClick={() => handleRetentionResponse('forgotten')}
               >
                 <XCircle className="size-5 text-red-500 mr-3 shrink-0" />
                 <div className="text-left">
-                  <div className="font-medium text-gray-900">I don't remember</div>
-                  <div className="text-xs text-gray-500">I need to review this concept again</div>
+                  <div className="font-medium text-gray-900 dark:text-gray-100">I don't remember</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">I need to review this concept again</div>
                 </div>
               </Button>
             </div>
@@ -297,8 +297,8 @@ export function ReinforcementPrompt({
                   className={cn(
                     "flex items-center gap-3 rounded-lg border p-3 transition-colors cursor-pointer",
                     selectedOption === option
-                      ? "border-amber-500 bg-amber-50/50" 
-                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                      ? "border-amber-500 bg-amber-50/50 dark:bg-amber-900/30" 
+                      : "border-gray-200 dark:border-gray-700 hover:border-gray-300 hover:bg-gray-50 dark:hover:border-gray-500 dark:hover:bg-gray-700"
                   )}
                   onClick={() => setSelectedOption(option)}
                   data-testid={`option-${index}`}
@@ -310,7 +310,7 @@ export function ReinforcementPrompt({
                   />
                   <Label 
                     htmlFor={`option-${index}`}
-                    className="cursor-pointer text-sm text-gray-700 flex-1"
+                    className="cursor-pointer text-sm text-gray-800 dark:text-gray-100 flex-1"
                   >
                     {option}
                   </Label>
@@ -323,12 +323,12 @@ export function ReinforcementPrompt({
           {prompt.promptType === 'sql_completion' && !submitted && (
             <div className="space-y-2" data-testid="sql-input-container">
               {prompt.content.partialQuery && (
-                <div className="bg-gray-50 p-3 rounded-lg font-mono text-sm">
+                <div className="bg-gray-50 dark:bg-gray-900 p-3 rounded-lg font-mono text-sm">
                   {prompt.content.partialQuery.replace('___', '______')}
                 </div>
               )}
               <div className="relative">
-                <Code className="absolute left-3 top-2.5 size-4 text-gray-400" />
+                <Code className="absolute left-3 top-2.5 size-4 text-gray-400 dark:text-gray-500" />
                 <Input
                   value={sqlInput}
                   onChange={(e) => setSqlInput(e.target.value)}
@@ -350,7 +350,7 @@ export function ReinforcementPrompt({
                 className="min-h-[100px] resize-none"
                 data-testid="explanation-textarea"
               />
-              <div className="flex justify-between text-xs text-gray-500">
+              <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
                 <span>{explanationInput.length} characters</span>
                 <span>Minimum 20 characters recommended</span>
               </div>
@@ -363,8 +363,8 @@ export function ReinforcementPrompt({
               className={cn(
                 "rounded-lg border p-4 space-y-3",
                 isCorrect 
-                  ? "bg-green-50 border-green-200" 
-                  : "bg-yellow-50 border-yellow-200"
+                  ? "bg-green-50 dark:bg-green-950/40 border-green-200 dark:border-green-800" 
+                  : "bg-yellow-50 dark:bg-yellow-950/40 border-yellow-200 dark:border-yellow-800"
               )}
               data-testid="feedback-section"
             >
@@ -372,13 +372,13 @@ export function ReinforcementPrompt({
               <div className="flex items-center gap-2">
                 {isCorrect ? (
                   <>
-                    <CheckCircle2 className="size-5 text-green-600" />
-                    <span className="font-semibold text-green-800">Great job!</span>
+                    <CheckCircle2 className="size-5 text-green-600 dark:text-green-300" />
+                    <span className="font-semibold text-green-800 dark:text-green-200">Great job!</span>
                   </>
                 ) : (
                   <>
-                    <Lightbulb className="size-5 text-yellow-600" />
-                    <span className="font-semibold text-yellow-800">Keep practicing</span>
+                    <Lightbulb className="size-5 text-yellow-600 dark:text-yellow-300" />
+                    <span className="font-semibold text-yellow-800 dark:text-yellow-200">Keep practicing</span>
                   </>
                 )}
               </div>
@@ -386,19 +386,19 @@ export function ReinforcementPrompt({
               {/* Show correct answer for MCQ/SQL when incorrect */}
               {!isCorrect && prompt.content.correctAnswer && prompt.promptType !== 'concept_explanation' && (
                 <div className="text-sm">
-                  <span className="font-medium text-gray-700">Correct answer: </span>
-                  <span className="text-gray-900">{prompt.content.correctAnswer}</span>
+                  <span className="font-medium text-gray-700 dark:text-gray-200">Correct answer: </span>
+                  <span className="text-gray-900 dark:text-gray-100">{prompt.content.correctAnswer}</span>
                 </div>
               )}
 
               {/* Explanation */}
               {showExplanation && prompt.content.explanation && (
                 <div className="pt-2 border-t border-gray-200/50">
-                  <div className="flex items-center gap-1.5 text-xs font-medium text-gray-600 mb-1">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
                     <BookOpen className="size-3.5" />
                     Explanation
                   </div>
-                  <p className="text-sm text-gray-700 leading-relaxed">
+                  <p className="text-sm text-gray-700 dark:text-gray-200 leading-relaxed">
                     {prompt.content.explanation}
                   </p>
                 </div>

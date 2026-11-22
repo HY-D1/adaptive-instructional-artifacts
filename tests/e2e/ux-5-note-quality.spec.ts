@@ -114,7 +114,8 @@ WHERE department = 'Engineering' AND salary > 80000`);
     }
 
     // Navigate to My Textbook
-    await page.getByRole('link', { name: 'My Textbook' }).first().click();
+    await page.getByTestId('textbook-updates-button').click();
+  await page.getByTestId('textbook-updates-open').click();
     await expect(page).toHaveURL(/\/textbook/, { timeout: 10000 });
     await page.waitForTimeout(2000);
 
@@ -213,7 +214,8 @@ SELECT * FROM employees WHERE department = 'Engineering'
     await page.goto('/');
     await expect(page).toHaveURL(/\/practice/, { timeout: 30000 });
 
-    await page.getByRole('link', { name: 'My Textbook' }).first().click();
+    await page.getByTestId('textbook-updates-button').click();
+  await page.getByTestId('textbook-updates-open').click();
     await expect(page).toHaveURL(/\/textbook/, { timeout: 10000 });
     await page.waitForTimeout(2000);
 
@@ -447,7 +449,7 @@ SELECT * FROM employees WHERE department = 'Engineering'
       hasEditor: await page.locator('.monaco-editor').isVisible().catch(() => false),
       hasRunButton: await page.getByRole('button', { name: 'Run Query' }).isVisible().catch(() => false),
       hasHelpButton: await page.getByRole('button', { name: /Get Help/i }).isVisible().catch(() => false),
-      hasMyTextbookLink: await page.getByRole('link', { name: 'My Textbook' }).isVisible().catch(() => false),
+      hasMyTextbookLink: await page.getByTestId('textbook-updates-button').isVisible().catch(() => false),
       hasSolvedCounter: await page.locator('text=/solved|problems/i').first().isVisible().catch(() => false)
     };
 
@@ -488,7 +490,8 @@ WHERE department = 'Engineering' AND salary > 80000`);
     }
 
     // 4. Textbook Page Audit
-    await page.getByRole('link', { name: 'My Textbook' }).first().click();
+    await page.getByTestId('textbook-updates-button').click();
+  await page.getByTestId('textbook-updates-open').click();
     await expect(page).toHaveURL(/\/textbook/, { timeout: 10000 });
     await page.waitForTimeout(2000);
 

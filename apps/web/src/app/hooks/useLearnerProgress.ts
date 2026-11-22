@@ -84,12 +84,15 @@ export function useLearnerProgress(options: UseLearnerProgressOptions): LearnerP
   // Get the solved problem IDs from storage (memoized for performance)
   // Prefer injected hydrated data over localStorage read to avoid race conditions
   const solvedProblemIds = useMemo(() => {
-    if (hydratedSolvedIds && hydratedSolvedIds.size > 0) {
-      return hydratedSolvedIds;
+    // Combine the hydrated set with what is saved locally. Using only the
+    // hydrated set froze the list, so problems solved after login never showed
+    // as solved (and the green "Next Problem" text did not appear).
+    const combined = new Set<string>(hydratedSolvedIds ?? []);
+    if (learnerId) {
+      const profile = localStorageManager.getProfile(learnerId);
+      profile?.solvedProblemIds?.forEach((id) => combined.add(id));
     }
-    if (!learnerId) return new Set<string>();
-    const profile = localStorageManager.getProfile(learnerId);
-    return profile?.solvedProblemIds ?? new Set<string>();
+    return combined;
   }, [learnerId, refreshKey, hydratedSolvedIds]);
 
   // Calculate current problem's 1-based position in difficulty-ranked order

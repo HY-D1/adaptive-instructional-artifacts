@@ -554,6 +554,11 @@ export type SQLProblem = {
   expectedQuery: string;
   expectedResult?: any[];
   gradingMode?: 'result' | 'exec-only' | 'database-state-v1';
+  /**
+   * SQL the question explicitly asks for (for example "using EXISTS"). Matching
+   * output is not enough when one of these is missing from the query.
+   */
+  requiredConstructs?: RequiredSqlConstruct[];
   /** Query used to compare the database after a mutation with the reference. */
   gradingStateQuery?: string;
   hints?: string[];
@@ -796,4 +801,14 @@ export interface ScheduledPrompt {
   scheduledTime: number;
   shownTime?: number;
   completedTime?: number;
+}
+
+/** A piece of SQL a problem requires (or forbids) in the learner's query. */
+export interface RequiredSqlConstruct {
+  /** Regular expression source, matched case-insensitively against the cleaned query. */
+  pattern: string;
+  /** Short name shown to the learner, for example "EXISTS". */
+  label: string;
+  /** When true the pattern must NOT appear. */
+  forbid?: boolean;
 }

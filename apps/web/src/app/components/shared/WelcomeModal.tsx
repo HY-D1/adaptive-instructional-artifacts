@@ -139,7 +139,7 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
         >
           <div className="flex min-h-0 flex-1 flex-col">
             {/* Header */}
-            <div className="p-6 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
+            <div className="p-6 border-b bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-800">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
                   <motion.div 
@@ -151,10 +151,10 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                     <StepIcon className="size-6 text-white" />
                   </motion.div>
                   <div>
-                    <h1 className="text-2xl font-bold text-gray-900">
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                       {WELCOME_STEPS[currentStep].title}
                     </h1>
-                    <p className="text-gray-600 mt-1">
+                    <p className="text-gray-600 mt-1 dark:text-gray-300">
                       {WELCOME_STEPS[currentStep].subtitle}
                     </p>
                   </div>
@@ -198,7 +198,7 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
-                    className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg"
+                    className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg dark:bg-green-900/20 dark:border-green-800"
                   >
                     <div className="flex items-center gap-2 text-green-800">
                       <CheckCircle2 className="size-5" />
@@ -220,7 +220,7 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                         <Database className="size-12 text-white" />
                       </div>
                       <h2 className="text-3xl font-bold mb-3">Master SQL Through Practice</h2>
-                      <p className="text-lg text-gray-600 max-w-lg mx-auto">
+                      <p className="text-lg text-gray-600 max-w-lg mx-auto dark:text-gray-300">
                         SQL-Adapt uses adaptive learning technology to personalize your SQL education 
                         based on your interaction patterns and learning progress.
                       </p>
@@ -237,11 +237,11 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: idx * 0.1 }}
-                          className="text-center p-4 bg-gray-50 rounded-xl"
+                          className="text-center p-4 bg-gray-50 dark:bg-gray-800/60 rounded-xl"
                         >
                           <item.icon className="size-8 mx-auto mb-2 text-blue-600" />
-                          <p className="font-medium text-gray-900">{item.label}</p>
-                          <p className="text-sm text-gray-500">{item.desc}</p>
+                          <p className="font-medium text-gray-900 dark:text-gray-100">{item.label}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-300">{item.desc}</p>
                         </motion.div>
                       ))}
                     </div>
@@ -256,14 +256,14 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                     exit={{ opacity: 0, x: -20 }}
                     className="grid grid-cols-1 md:grid-cols-2 gap-4"
                   >
-                    <Card className="p-5 border-2 border-blue-200 bg-blue-50/50 hover:shadow-md transition-shadow">
+                    <Card className="p-5 border-2 border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-gray-800 hover:shadow-md transition-shadow">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="p-2 bg-blue-600 rounded-lg">
                           <Brain className="size-5 text-white" />
                         </div>
                         <h3 className="font-semibold text-lg">Adaptive Orchestration</h3>
                       </div>
-                      <p className="text-sm text-gray-700 mb-3">
+                      <p className="text-sm text-gray-700 mb-3 dark:text-gray-300">
                         The system intelligently decides when to show hints, escalate to explanations,
                         or aggregate content into your personalized textbook.
                       </p>
@@ -283,14 +283,14 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                       </ul>
                     </Card>
 
-                    <Card className="p-5 border-2 border-purple-200 bg-purple-50/50 hover:shadow-md transition-shadow">
+                    <Card className="p-5 border-2 border-purple-200 bg-purple-50/50 dark:border-purple-800 dark:bg-gray-800 hover:shadow-md transition-shadow">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="p-2 bg-purple-600 rounded-lg">
                           <Lightbulb className="size-5 text-white" />
                         </div>
                         <h3 className="font-semibold text-lg">Guidance Ladder</h3>
                       </div>
-                      <p className="text-sm text-gray-700 mb-3">
+                      <p className="text-sm text-gray-700 mb-3 dark:text-gray-300">
                         Hints are the lowest-level instructional unit, managed by the Guidance Ladder
                         with controlled escalation policies.
                       </p>
@@ -310,14 +310,14 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                       </ul>
                     </Card>
 
-                    <Card className="p-5 border-2 border-green-200 bg-green-50/50 hover:shadow-md transition-shadow">
+                    <Card className="p-5 border-2 border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-gray-800 hover:shadow-md transition-shadow">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="p-2 bg-green-600 rounded-lg">
                           <Database className="size-5 text-white" />
                         </div>
                         <h3 className="font-semibold text-lg">SQL-Engage Backbone</h3>
                       </div>
-                      <p className="text-sm text-gray-700 mb-3">
+                      <p className="text-sm text-gray-700 mb-3 dark:text-gray-300">
                         A knowledge graph of SQL concepts with mapped error subtypes and
                         validated feedback templates.
                       </p>
@@ -337,14 +337,14 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                       </ul>
                     </Card>
 
-                    <Card className="p-5 border-2 border-orange-200 bg-orange-50/50 hover:shadow-md transition-shadow">
+                    <Card className="p-5 border-2 border-orange-200 bg-orange-50/50 dark:border-orange-800 dark:bg-gray-800 hover:shadow-md transition-shadow">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="p-2 bg-orange-600 rounded-lg">
                           <BarChart3 className="size-5 text-white" />
                         </div>
                         <h3 className="font-semibold text-lg">Research Dashboard</h3>
                       </div>
-                      <p className="text-sm text-gray-700 mb-3">
+                      <p className="text-sm text-gray-700 mb-3 dark:text-gray-300">
                         Offline replay and comparison of adaptive strategies for publishable research.
                       </p>
                       <ul className="text-sm space-y-2">
@@ -374,39 +374,39 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                     className="max-w-lg mx-auto"
                   >
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/60 rounded-lg">
                         <div className="flex items-center gap-3">
-                          <kbd className="px-3 py-1.5 bg-white border rounded-md font-mono text-sm shadow-sm">
+                          <kbd className="px-3 py-1.5 bg-white dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600 border rounded-md font-mono text-sm shadow-sm">
                             Ctrl
                           </kbd>
                           <span>+</span>
-                          <kbd className="px-3 py-1.5 bg-white border rounded-md font-mono text-sm shadow-sm">
+                          <kbd className="px-3 py-1.5 bg-white dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600 border rounded-md font-mono text-sm shadow-sm">
                             Enter
                           </kbd>
                         </div>
-                        <span className="text-gray-700">Run SQL query</span>
+                        <span className="text-gray-700 dark:text-gray-300">Run SQL query</span>
                       </div>
 
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/60 rounded-lg">
                         <div className="flex items-center gap-3">
-                          <kbd className="px-3 py-1.5 bg-white border rounded-md font-mono text-sm shadow-sm">
+                          <kbd className="px-3 py-1.5 bg-white dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600 border rounded-md font-mono text-sm shadow-sm">
                             Esc
                           </kbd>
                         </div>
-                        <span className="text-gray-700">Close modals</span>
+                        <span className="text-gray-700 dark:text-gray-300">Close modals</span>
                       </div>
 
-                      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/60 rounded-lg">
                         <div className="flex items-center gap-3">
-                          <kbd className="px-3 py-1.5 bg-white border rounded-md font-mono text-sm shadow-sm">
+                          <kbd className="px-3 py-1.5 bg-white dark:bg-gray-900 dark:text-gray-100 dark:border-gray-600 border rounded-md font-mono text-sm shadow-sm">
                             ?
                           </kbd>
                         </div>
-                        <span className="text-gray-700">Show this help</span>
+                        <span className="text-gray-700 dark:text-gray-300">Show this help</span>
                       </div>
                     </div>
 
-                    <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg dark:bg-blue-900/20 dark:border-blue-800">
                       <p className="text-sm text-blue-800">
                         <strong>Tip:</strong> You can always access this help dialog by clicking 
                         the Help button in the top navigation bar.
@@ -418,7 +418,7 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
             </div>
 
             {/* Footer */}
-            <div className="p-6 border-t bg-gray-50" data-testid="welcome-modal-footer">
+            <div className="p-6 border-t bg-gray-50 dark:bg-gray-800/60" data-testid="welcome-modal-footer">
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -427,7 +427,7 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                       checked={dontShowAgain}
                       onCheckedChange={(checked) => setDontShowAgain(checked as boolean)}
                     />
-                    <Label htmlFor="dont-show" className="text-sm text-gray-600 cursor-pointer">
+                    <Label htmlFor="dont-show" className="text-sm text-gray-600 cursor-pointer dark:text-gray-300">
                       Don&apos;t show again
                     </Label>
                   </div>
@@ -473,7 +473,7 @@ export function WelcomeModal({ onClose }: WelcomeModalProps) {
                   </Button>
                 </div>
 
-                <p className="text-xs text-gray-500 text-center">
+                <p className="text-xs text-gray-500 text-center dark:text-gray-300">
                   This prototype demonstrates core research components for adaptive SQL instruction.
                   All data is stored locally in your browser.
                 </p>

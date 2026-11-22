@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { UserRole, UserProfile } from '../types';
 import { storage } from '../lib/storage';
+import { emitProfileCleared } from '../lib/storage/session-events';
 
 const DEFAULT_ROLE: UserRole = 'student';
 
@@ -112,7 +113,10 @@ export function useUserRole(options?: UseUserRoleOptions) {
   }, []);
 
   const clearProfile = useCallback(() => {
+    const previousProfile = storage.getUserProfile();
     storage.clearUserProfile();
+    // Tell the rest of this tab (the navigation bar) right away, not only other tabs.
+    emitProfileCleared(previousProfile, 'manual');
     setProfile(null);
     setRoleState(DEFAULT_ROLE);
   }, []);

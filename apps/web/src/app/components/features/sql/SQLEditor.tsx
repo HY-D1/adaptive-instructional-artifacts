@@ -9,6 +9,7 @@ import { Play, RotateCcw, CheckCircle, XCircle, AlertCircle, Terminal, Loader2, 
 import { SQLExecutor, QueryResult, resetSQLInitialization } from '../../../lib/sql-executor';
 import { gradeDatabaseState } from '../../../lib/sql-state-grading';
 import { SQLProblem } from '../../../types';
+import { findMissingConstructsForProblem } from '../../../lib/sql/required-constructs';
 
 export const DEFAULT_SQL_EDITOR_CODE = '-- Write your SQL query here';
 
@@ -24,6 +25,8 @@ type CorrectnessState = {
   match: boolean;
   differences: string[];
   mode: 'result' | 'exec-only' | 'database-state-v1';
+  /** True when the output matched but the query skipped something the question asks for. */
+  requirementMissing?: boolean;
 };
 
 // Parse SQL error to extract line numbers and format message
@@ -141,6 +144,8 @@ function generatePositiveFeedback(query: string): string {
 export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: SQLEditorProps) {
   const [result, setResult] = useState<QueryResult | null>(null);
   const [stateCorrectness, setStateCorrectness] = useState<CorrectnessState | null>(null);
+  // The query that produced the result on screen (the editor may have changed since).
+  const [executedQuery, setExecutedQuery] = useState('');
   const [executor, setExecutor] = useState<SQLExecutor | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
@@ -268,7 +273,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
   }, [problem.id, initExecutor]);
 
   // Helper to check correctness given a result (used for immediate feedback)
-  const checkCorrectnessForResult = (result: QueryResult): { match: boolean; mode: 'result' | 'exec-only' } | null => {
+  const checkCorrectnessForResult = (result: QueryResult, query: string): { match: boolean; mode: 'result' | 'exec-only' } | null => {
     // Use ref for immediate access to avoid stale closure issues
     const currentExecutor = activeExecutorRef.current || executor;
     if (!result.success || !currentExecutor) return null;
@@ -293,8 +298,9 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
     }
     
     const comparison = currentExecutor.compareResults(actualResults, problem.expectedResult!);
+    const missingConstructs = comparison.match ? findMissingConstructsForProblem(query, problem) : [];
     
-    return { match: comparison.match, mode: 'result' };
+    return { match: comparison.match && missingConstructs.length === 0, mode: 'result' };
   };
 
   const handleExecute = async () => {
@@ -316,10 +322,11 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
         ? { ...stateGrade, mode: 'database-state-v1' }
         : null;
       setStateCorrectness(stateResult);
+      setExecutedQuery(code);
       setResult(queryResult);
       
       // Calculate correctness to pass to parent
-      const correctness = stateResult ?? checkCorrectnessForResult(queryResult);
+      const correctness = stateResult ?? checkCorrectnessForResult(queryResult, code);
       onExecute(code, queryResult, correctness?.match ?? queryResult.success);
     } catch (error) {
       // Query execution error handled
@@ -385,6 +392,10 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
     
     const actualResults = formatResults(result);
     const comparison = executor.compareResults(actualResults, problem.expectedResult!);
+    const missingConstructs = comparison.match ? findMissingConstructsForProblem(executedQuery, problem) : [];
+    if (missingConstructs.length > 0) {
+      return { match: false, differences: missingConstructs, mode: 'result', requirementMissing: true };
+    }
     
     return { ...comparison, mode: 'result' };
   };
@@ -396,7 +407,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
     <div className="flex flex-col h-full gap-4">
         <Card className="flex-1 overflow-hidden min-h-[180px]">
           <div className="h-full flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b bg-gray-50/50 flex-wrap gap-2">
+            <div className="flex items-center justify-between p-4 border-b bg-gray-50/50 dark:bg-gray-800/60 flex-wrap gap-2">
               <div className="flex gap-2 items-center flex-wrap">
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -414,7 +425,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
                   <TooltipContent side="bottom">
                     <div className="flex items-center gap-2">
                       <span>Run query</span>
-                      <kbd className="px-1.5 py-0.5 text-[10px] bg-gray-100 border rounded">Ctrl+Enter</kbd>
+                      <kbd className="px-1.5 py-0.5 text-[10px] bg-gray-100 dark:bg-gray-700 dark:text-gray-100 dark:border-gray-600 border rounded">Ctrl+Enter</kbd>
                     </div>
                   </TooltipContent>
                 </Tooltip>
@@ -579,7 +590,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
               />
             </div>
             {/* Bottom quick-action bar for tablet — always visible below editor */}
-            <div className="lg:hidden border-t p-2 flex justify-center bg-gray-50/50 shrink-0">
+            <div className="lg:hidden border-t p-2 flex justify-center bg-gray-50/50 dark:bg-gray-800/60 shrink-0">
               <Button
                 onClick={handleExecute}
                 disabled={isExecuting || !code.trim() || initStatus !== 'ready'}
@@ -669,7 +680,9 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
                         <AlertCircle className="size-4" />
                         {correctness.mode === 'database-state-v1'
                           ? 'The database does not reflect the requested change:'
-                          : 'Your query returned different results:'}
+                          : correctness.requirementMissing
+                            ? 'Almost there. The question asks for a specific approach:'
+                            : 'Your query returned different results:'}
                       </p>
                       <ul className="text-sm text-amber-700 dark:text-amber-300 space-y-1">
                         {correctness.differences.slice(0, 3).map((diff, idx) => (
@@ -704,7 +717,7 @@ export function SQLEditor({ problem, code, onExecute, onCodeChange, onReset }: S
                         )}
                       </div>
                       
-                      <div className="bg-white border border-red-200 rounded-lg p-3 overflow-x-auto shadow-sm">
+                      <div className="bg-white dark:bg-gray-900 dark:border-red-800 border border-red-200 rounded-lg p-3 overflow-x-auto shadow-sm">
                         <code className="text-sm text-red-700 dark:text-red-300 font-mono whitespace-pre-wrap block">
                           {parsedError?.formattedMessage || result.error}
                         </code>

@@ -71,6 +71,8 @@ interface AskMyTextbookChatProps {
   recentInteractions: InteractionEvent[];
   /** Callback when interaction is logged */
   onInteractionLogged?: (event: InteractionEvent) => void;
+  /** Fill the height of the parent (used inside the floating chat window). */
+  fillHeight?: boolean;
 }
 
 // Quick chip options
@@ -165,28 +167,163 @@ export function deriveChatLearningSignals(
 }
 
 /**
- * Convert markdown to HTML
- * Handles bold, italic, inline code, code blocks, and lists
+ * Latest failed run for THIS problem (and session, when known).
+ * Errors from other problems must never leak into the chat context.
  */
-function renderMarkdownToHtml(content: string): string {
-  let html = content
-    // Code blocks (must be before inline code)
-    .replace(/```sql\n([\s\S]*?)```/g, '<pre class="bg-gray-900 text-gray-100 p-2 rounded text-xs overflow-x-auto my-2 font-mono"><code>$1</code></pre>')
-    .replace(/```\n?([\s\S]*?)```/g, '<pre class="bg-gray-100 dark:bg-gray-700 p-2 rounded text-xs overflow-x-auto my-2 font-mono"><code>$1</code></pre>')
-    // Bold
-    .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-gray-900 dark:text-gray-100">$1</strong>')
-    // Italic
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/_(.+?)_/g, '<em>$1</em>')
-    // Inline code
-    .replace(/`(.+?)`/g, '<code class="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded text-xs font-mono text-pink-600">$1</code>')
-    // List items
-    .replace(/^\*\s+(.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
-    .replace(/^-\s+(.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
-    // Convert remaining newlines to <br/>
-    .replace(/\n/g, '<br/>');
-  
-  return html;
+export function findLastProblemError(
+  interactions: InteractionEvent[],
+  problemId: string,
+  sessionId?: string
+): InteractionEvent | undefined {
+  return [...interactions]
+    .reverse()
+    .find((interaction) => {
+      if (interaction.problemId !== problemId) return false;
+      if (sessionId && interaction.sessionId && interaction.sessionId !== sessionId) return false;
+      return interaction.eventType === 'error' ||
+        (interaction.eventType === 'execution' && interaction.successful === false);
+    });
+}
+
+/**
+ * System prompt for the "Ask my textbook" chat.
+ * Each request is independent (no chat memory), so off-topic questions must be
+ * declined and never referred to in later answers.
+ */
+/**
+ * For a typed question, rank textbook units by how well they match the words in
+ * the question. Units that match come first, then the rest keep their order.
+ * Quick chips do not use this because their meaning is fixed.
+ */
+export function rankUnitsForQuery<T extends { title: string; content: string; summary?: string; conceptId?: string }>(
+  units: T[],
+  query: string
+): T[] {
+  const stopWords = new Set(['the', 'and', 'what', 'how', 'does', 'for', 'with', 'this', 'that', 'can', 'are', 'you', 'why', 'when', 'use', 'mean', 'means', 'about', 'tell', 'explain']);
+  const terms = query
+    .toLowerCase()
+    .replace(/[^a-z0-9_ ]/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length > 2 && !stopWords.has(t));
+  if (terms.length === 0) return units;
+  const score = (unit: T): number => {
+    const title = unit.title.toLowerCase();
+    const body = `${unit.summary ?? ''} ${unit.content} ${unit.conceptId ?? ''}`.toLowerCase();
+    return terms.reduce((sum, term) => sum + (title.includes(term) ? 3 : 0) + (body.includes(term) ? 1 : 0), 0);
+  };
+  const scored = units.map((unit, index) => ({ unit, index, value: score(unit) }));
+  if (!scored.some((entry) => entry.value > 0)) return units;
+  return scored
+    .sort((a, b) => b.value - a.value || a.index - b.index)
+    .map((entry) => entry.unit);
+}
+
+export const CHAT_SYSTEM_PROMPT = [
+  'You are a Socratic SQL tutor.',
+  "Use the learner's latest error, retry count, hints viewed, and stuck signal to choose the next helpful nudge.",
+  'NEVER give working SQL code. NEVER give the solution. NEVER write "Example: SELECT..." with real code.',
+  'Help students discover answers through guidance and questions.',
+  'Be concise (under 300 chars). Cite sources like "(from your notes)".',
+  'Only answer questions about SQL, databases, or the current practice problem.',
+  'If the question is about anything else (general knowledge, news, personal topics), politely say in one short sentence that you can only help with SQL and database topics, then redirect the student back to the current problem or invite an SQL question.',
+  'Answer only the question asked now. Do not bring up earlier questions or other problems.'
+].join(' ');
+
+/**
+ * Escape characters so model text cannot add its own HTML.
+ */
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * Inline formatting: bold, italic (asterisks only, so snake_case and ___ stay as typed) and inline code.
+ */
+function renderInlineMarkdown(text: string): string {
+  return escapeHtml(text)
+    .replace(/`([^`]+)`/g, '<code class="bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded text-xs font-mono text-pink-600 dark:text-pink-300">$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong class="font-semibold text-gray-900 dark:text-gray-100">$1</strong>')
+    .replace(/(^|[^*])\*([^*\s][^*]*)\*(?!\*)/g, '$1<em>$2</em>');
+}
+
+/**
+ * Convert the model's markdown into clean block HTML:
+ * paragraphs, bullet and numbered lists, headings (shown as bold lines) and code blocks.
+ */
+export function renderMarkdownToHtml(content: string): string {
+  const lines = content.replace(/\r\n/g, '\n').split('\n');
+  const out: string[] = [];
+  let paragraph: string[] = [];
+  let list: { type: 'ul' | 'ol'; items: string[] } | null = null;
+  let code: string[] | null = null;
+
+  const flushParagraph = () => {
+    if (paragraph.length > 0) {
+      out.push(`<p class="mb-2 last:mb-0 leading-relaxed">${paragraph.map(renderInlineMarkdown).join('<br/>')}</p>`);
+      paragraph = [];
+    }
+  };
+  const flushList = () => {
+    if (list) {
+      const cls = list.type === 'ul' ? 'list-disc' : 'list-decimal';
+      out.push(
+        `<${list.type} class="${cls} pl-5 mb-2 space-y-1">${list.items.map((item) => `<li>${renderInlineMarkdown(item)}</li>`).join('')}</${list.type}>`
+      );
+      list = null;
+    }
+  };
+
+  for (const line of lines) {
+    if (/^\s*```/.test(line)) {
+      if (code === null) {
+        flushParagraph();
+        flushList();
+        code = [];
+      } else {
+        out.push(
+          `<pre class="bg-gray-900 text-gray-100 p-2 rounded text-xs overflow-x-auto my-2 font-mono whitespace-pre"><code>${escapeHtml(code.join('\n'))}</code></pre>`
+        );
+        code = null;
+      }
+      continue;
+    }
+    if (code !== null) {
+      code.push(line);
+      continue;
+    }
+    if (!line.trim()) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+    const heading = line.match(/^\s*#{1,6}\s+(.+)$/);
+    if (heading) {
+      flushParagraph();
+      flushList();
+      out.push(`<p class="mb-1 font-semibold text-gray-900 dark:text-gray-100">${renderInlineMarkdown(heading[1])}</p>`);
+      continue;
+    }
+    const bullet = line.match(/^\s*[-*•]\s+(.+)$/);
+    const numbered = line.match(/^\s*\d+[.)]\s+(.+)$/);
+    if (bullet || numbered) {
+      flushParagraph();
+      const type = bullet ? 'ul' : 'ol';
+      if (!list || list.type !== type) {
+        flushList();
+        list = { type, items: [] };
+      }
+      list.items.push((bullet ?? numbered)![1]);
+      continue;
+    }
+    flushList();
+    paragraph.push(line.trim());
+  }
+  if (code !== null) {
+    out.push(`<pre class="bg-gray-900 text-gray-100 p-2 rounded text-xs overflow-x-auto my-2 font-mono whitespace-pre"><code>${escapeHtml(code.join('\n'))}</code></pre>`);
+  }
+  flushParagraph();
+  flushList();
+  return out.join('');
 }
 
 /**
@@ -222,13 +359,13 @@ function ChatMessageBubble({ msg, idx, onSaveToNotes }: ChatMessageBubbleProps) 
     // Assistant messages - render markdown
     const html = renderMarkdownToHtml(msg.content);
     const sanitizedHtml = DOMPurify.sanitize(html, { 
-      ALLOWED_TAGS: ['strong', 'em', 'code', 'pre', 'li', 'br', 'span'],
+      ALLOWED_TAGS: ['strong', 'em', 'code', 'pre', 'p', 'ul', 'ol', 'li', 'br', 'span'],
       ALLOWED_ATTR: ['class']
     });
     
     return (
       <div 
-        className="whitespace-pre-wrap break-words prose prose-sm max-w-none text-gray-700 dark:text-gray-200"
+        className="break-words max-w-none text-gray-700 dark:text-gray-200"
         dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
       />
     );
@@ -262,7 +399,7 @@ function ChatMessageBubble({ msg, idx, onSaveToNotes }: ChatMessageBubbleProps) 
                 <button
                   type="button"
                   onClick={() => setShowSources(!showSources)}
-                  className="inline-flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
+                  className="inline-flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-400 dark:hover:text-gray-300 transition-colors"
                 >
                   <span className="bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">
                     {sourceCount} source{sourceCount !== 1 ? 's' : ''}
@@ -286,7 +423,7 @@ function ChatMessageBubble({ msg, idx, onSaveToNotes }: ChatMessageBubbleProps) 
             <Button
               variant="ghost"
               size="sm"
-              className="h-5 px-2 text-[10px] text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+              className="h-5 px-2 text-[10px] text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 dark:text-gray-400 dark:hover:text-gray-300"
               onClick={() => onSaveToNotes(idx)}
               disabled={msg.savedToNotes}
             >
@@ -356,7 +493,8 @@ export function AskMyTextbookChat({
   learnerId,
   problemId,
   recentInteractions,
-  onInteractionLogged
+  onInteractionLogged,
+  fillHeight = false
 }: AskMyTextbookChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -371,6 +509,10 @@ export function AskMyTextbookChat({
   const CHAT_HISTORY_KEY = `chat-history-${learnerId}-${problemId}`;
 
   useEffect(() => {
+    // Always start from an empty chat for this learner + problem, then restore
+    // any saved history. Without this, messages from the previous problem stay
+    // on screen and get saved under the new problem's key.
+    setMessages([]);
     const saved = localStorage.getItem(CHAT_HISTORY_KEY);
     if (saved) {
       try {
@@ -514,10 +656,7 @@ export function AskMyTextbookChat({
       : recentInteractions;
     
     // Get the last error subtype for context (includes failed executions)
-    const lastError = [...allInteractions]
-      .reverse()
-      .find(i => i.eventType === 'error' || 
-                 (i.eventType === 'execution' && i.successful === false));
+    const lastError = findLastProblemError(allInteractions, problemId, sessionId);
     const errorSubtype = lastError?.sqlEngageSubtype || 
                         lastError?.errorSubtypeId ||
                         (lastError?.successful === false ? 'incorrect_results' : undefined);
@@ -547,6 +686,15 @@ export function AskMyTextbookChat({
       });
     }
     
+    // Typed questions: search ALL units by the words in the question, so the
+    // answer matches what was asked and not only the current problem.
+    if (!quickChip && query.trim()) {
+      const allRanked = rankUnitsForQuery(textbookUnits, query);
+      if (allRanked !== textbookUnits && allRanked.length > 0) {
+        relevantUnits = allRanked.slice(0, 2);
+      }
+    }
+
     // Take top 2 most relevant units (reduce clutter)
     relevantUnits = relevantUnits.slice(0, 2);
 
@@ -1073,12 +1221,12 @@ export function AskMyTextbookChat({
         userPrompt = `Student question: "${query}"\n\nProblem: ${problem?.title}\nError: ${errorSubtype || 'None'}\n\nUsing this context:\n${contextText}\n\nProvide a helpful response (2-4 sentences). Guide their thinking with questions. DO NOT give them the SQL solution.`;
       }
       
-      const systemPrompt = `You are a Socratic SQL tutor. Use the learner's latest error, retry count, hints viewed, and stuck signal to choose the next helpful nudge. NEVER give working SQL code. NEVER give the solution. NEVER write "Example: SELECT..." with real code. Help students discover answers through guidance and questions. Be concise (under 300 chars). Cite sources like "(from your notes)".`;
+      const systemPrompt = CHAT_SYSTEM_PROMPT;
       
       // Call LLM
       const llmCall = async (prompt: string): Promise<string> => {
         const result = await generateWithLLM(prompt, { 
-          params: { temperature: 0.3, max_tokens: 200 }
+          params: { temperature: 0.3, max_tokens: quickChip ? 200 : 350 }
         });
         return result.text;
       };
@@ -1497,7 +1645,7 @@ export function AskMyTextbookChat({
   }
 
   return (
-    <Card className="flex flex-col relative" data-testid="chat-panel">
+    <Card className={cn('flex flex-col relative', fillHeight && 'h-full min-h-0 border-0 shadow-none rounded-none')} data-testid="chat-panel">
       {/* Toast Notifications */}
       <div className="fixed top-4 right-4 z-50 space-y-2 pointer-events-none">
         {toasts.map(toast => (
@@ -1559,7 +1707,7 @@ export function AskMyTextbookChat({
       </div>
 
       {/* Messages */}
-      <div className="flex-1 min-h-[200px] max-h-[400px] overflow-y-auto">
+      <div className={cn('flex-1 overflow-y-auto', fillHeight ? 'min-h-0' : 'min-h-[200px] max-h-[400px]')}>
         <div className="p-3 space-y-4">
           {messages.length === 0 ? (
             <div className="text-center py-6 text-gray-400 dark:text-gray-500 text-sm">

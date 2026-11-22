@@ -9,11 +9,13 @@ const authState = vi.hoisted(() => ({
 const mockNavigate = vi.hoisted(() => vi.fn());
 const mockLogout = vi.hoisted(() => vi.fn(async () => ({ success: true })));
 
+const locationState = vi.hoisted(() => ({ pathname: '/' }));
+
 vi.mock('react-router', () => ({
   Link: ({ children, to, ...props }: { children: React.ReactNode; to: string }) => <a href={to} {...props}>{children}</a>,
   Navigate: () => null,
   Outlet: () => null,
-  useLocation: () => ({ pathname: '/' }),
+  useLocation: () => ({ pathname: locationState.pathname, search: '' }),
   useNavigate: () => mockNavigate,
 }));
 
@@ -46,6 +48,14 @@ vi.mock('../lib/storage', () => ({
     getUserProfile: vi.fn(() => null),
     finalizeActiveSessionBeforeLogout: vi.fn(async () => ({ backendConfirmed: true })),
   },
+}));
+
+vi.mock('../components/shared/TextbookUpdatesButton', () => ({
+  TextbookUpdatesButton: () => <span data-testid="textbook-updates-stub">My Textbook</span>,
+}));
+
+vi.mock('../components/features/surveys/SurveyInvitationLinks', () => ({
+  SurveyInvitationLinks: () => <span data-testid="survey-links-stub" />,
 }));
 
 vi.mock('../lib/auth-guard', () => ({
@@ -107,6 +117,7 @@ describe('RootLayout signed-in visibility', () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
     })) as unknown as typeof window.matchMedia;
+    locationState.pathname = '/';
     mockNavigate.mockReset();
     mockLogout.mockReset();
     mockLogout.mockResolvedValue({ success: true });
@@ -126,6 +137,7 @@ describe('RootLayout signed-in visibility', () => {
     expect(screen.queryByText('Student')).toBeNull();
     expect(screen.queryByText('My Textbook')).toBeNull();
     expect(screen.queryByText('Settings')).toBeNull();
+    expect(screen.queryAllByTestId('survey-links-stub')).toHaveLength(0);
   });
 
   it('hides authenticated controls while the session is loading', () => {
@@ -139,6 +151,7 @@ describe('RootLayout signed-in visibility', () => {
 
   it('shows the role badge and both desktop and mobile Logout controls when signed in', () => {
     authState.user = { learnerId: 'student-1', name: 'Student One', role: 'student' };
+    locationState.pathname = '/practice';
 
     render(<RootLayout />);
 
@@ -146,6 +159,7 @@ describe('RootLayout signed-in visibility', () => {
     expect(screen.getAllByRole('button', { name: 'Logout' })).toHaveLength(2);
     expect(screen.getAllByText('My Textbook')).toHaveLength(2);
     expect(screen.getAllByText('Settings')).toHaveLength(2);
+    expect(screen.getAllByTestId('survey-links-stub').length).toBeGreaterThan(0);
   });
 
   it('removes the role badge and both Logout controls after logout', async () => {
@@ -158,5 +172,13 @@ describe('RootLayout signed-in visibility', () => {
 
     expect(screen.queryAllByRole('button', { name: 'Logout' })).toHaveLength(0);
     expect(screen.queryByText('Student')).toBeNull();
+    expect(screen.queryAllByTestId('survey-links-stub')).toHaveLength(0);
+  });
+
+  it('never shows survey buttons on the login page, even if a session is still signed in', () => {
+    authState.user = { learnerId: 'student-1', name: 'Student One', role: 'student' };
+    locationState.pathname = '/login';
+    render(<RootLayout />);
+    expect(screen.queryAllByTestId('survey-links-stub')).toHaveLength(0);
   });
 });

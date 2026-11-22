@@ -37,7 +37,6 @@ import {
   GraduationCap,
   Target,
   Settings2,
-  Keyboard,
   Zap,
   Sprout,
   TrendingUp,
@@ -46,19 +45,25 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
-  XCircle
+  XCircle,
+  MessageCircle,
+  Lightbulb,
+  ChevronDown,
+  ChevronUp,
+  LayoutDashboard
 } from 'lucide-react';
 
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { useOptionalToast } from '../components/ui/toast';
 import { Badge } from '../components/ui/badge';
+import { Popover } from '../components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../components/ui/tooltip';
 import { Skeleton } from '../components/ui/skeleton';
 import { cn } from '../components/ui/utils';
 import { DEFAULT_SQL_EDITOR_CODE, SQLEditor } from '../components/features/sql/SQLEditor';
-import { HintSystem } from '../components/features/hints/HintSystem';
-import { SurveyInvitationLinks } from '../components/features/surveys/SurveyInvitationLinks';
+import { HintSystem, isSqlEditorEmpty, REQUEST_HINT_EVENT } from '../components/features/hints/HintSystem';
 import { ConceptCoverage } from '../components/features/research/ConceptCoverage';
 import { AskMyTextbookChat } from '../components/features/chat/AskMyTextbookChat';
 import { ReinforcementPrompt } from '../components/features/reinforcement/ReinforcementPrompt';
@@ -81,6 +86,7 @@ import type { QueryResult } from '../lib/sql-executor';
 import { orchestrator } from '../lib/adaptive-orchestrator';
 import { buildBundleForCurrentProblem, generateUnitFromLLM } from '../lib/content/content-generator';
 import { renderTextbookContent } from '../lib/content/textbook-renderer';
+import { TEXTBOOK_CHANGED_EVENT } from '../lib/storage/textbook-updates';
 import { buildPdfIndexOutputFields } from '../lib/api/pdf-retrieval';
 import { createEventId } from '../lib/utils/event-id';
 import { startBackgroundAnalysis, stopBackgroundAnalysis, runAnalysisOnce, ANALYSIS_INTERVAL_MS } from '../lib/trace-analyzer';
@@ -138,7 +144,7 @@ const STRATEGY_OPTIONS: Array<{ value: LearnerProfile['currentStrategy']; label:
 // Difficulty color mapping
 const difficultyColors = {
   beginner: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800',
-  intermediate: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-200',
+  intermediate: 'bg-amber-50 text-amber-800 border-amber-200 dark:border-amber-800 dark:bg-amber-900/30 dark:text-amber-200',
   advanced: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-200 dark:border-red-800'
 };
 
@@ -341,12 +347,12 @@ function DependencyWarningToast({ onClose }: DependencyWarningToastProps) {
       data-testid="dependency-warning-toast"
     >
       <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 max-w-sm">
-        <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center shrink-0">
+        <div className="w-8 h-8 bg-amber-100 dark:bg-amber-900/40 rounded-full flex items-center justify-center shrink-0">
           <Sparkles className="w-4 h-4 text-amber-600" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="font-medium text-sm">You're doing great! 💪</p>
-          <p className="text-amber-700 text-xs mt-0.5">Try solving the next one without hints</p>
+          <p className="text-amber-700 dark:text-amber-300 text-xs mt-0.5">Try solving the next one without hints</p>
         </div>
         <button
           onClick={onClose}
@@ -428,7 +434,7 @@ export function GeneratedExplanationPreview({ unit }: { unit: InstructionalUnit 
   });
 
   return (
-    <div className="max-h-96 overflow-y-auto rounded border bg-slate-50 p-3">
+    <div className="max-h-96 overflow-y-auto rounded border bg-slate-50 dark:bg-gray-800 p-3">
       <p className="text-xs font-medium text-slate-700">{unit.title}</p>
       <div
         className="prose prose-sm mt-2 max-w-none break-words text-slate-700 [&_code]:break-all [&_pre]:whitespace-pre-wrap"
@@ -477,7 +483,7 @@ export function GeneratedExplanationCard({
       <Card className="p-4 space-y-3">
         <div>
           <h3 className="font-semibold">Save This Explanation</h3>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
             You have viewed all available hints. Save this explanation to your notes for later review.
           </p>
         </div>
@@ -492,7 +498,7 @@ export function GeneratedExplanationCard({
           )}
         </Button>
         {isGeneratingUnit && (
-          <p className="text-xs text-gray-500">Preparing your explanation…</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Preparing your explanation…</p>
         )}
         {generationError && (
           <p className="text-xs text-amber-700 dark:text-amber-300">{generationError}</p>
@@ -500,15 +506,12 @@ export function GeneratedExplanationCard({
         {notesActionMessage && (
           <div className="text-sm text-green-700 dark:text-green-300 bg-green-50 dark:bg-green-900/30 p-3 rounded-lg border border-green-300 dark:border-green-800 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-300">
             <div className="flex items-center gap-2">
-              <CheckCircle className="size-5 text-green-600 flex-shrink-0" />
+              <CheckCircle className="size-5 text-green-600 dark:text-green-300 flex-shrink-0" />
               <p className="font-medium">{notesActionMessage}</p>
             </div>
-            <Link to="/textbook" className="text-blue-600 hover:underline mt-2 inline-flex items-center gap-1 text-xs">
-              View in My Textbook →
-            </Link>
+            <p className="mt-1 text-xs text-green-700 dark:text-green-300">Look for the book icon at the top of the page.</p>
           </div>
         )}
-        {unit && <GeneratedExplanationPreview unit={unit} />}
       </Card>
     </div>
   );
@@ -560,7 +563,16 @@ export function LearningInterface() {
   const [lastErrorEventId, setLastErrorEventId] = useState<string | undefined>();
   const [subtypeOverride, setSubtypeOverride] = useState('auto');
   const [escalationTriggered, setEscalationTriggered] = useState(false);
-  const [notesActionMessage, setNotesActionMessage] = useState<string | undefined>();
+  const toastApi = useOptionalToast();
+  const [notesActionMessage, setNotesActionMessageState] = useState<string | undefined>();
+  // Saving to My Textbook is announced with a toast, since the explanation
+  // card is no longer on the Practice page.
+  const setNotesActionMessage = (message: string | undefined) => {
+    setNotesActionMessageState(message);
+    if (message) {
+      toastApi?.addToast({ type: 'success', title: 'Saved to My Textbook', message: message.replace(/^✓\s*/, ''), duration: 5000 });
+    }
+  };
   const [sessionSyncStatus, setSessionSyncStatus] = useState<'checking' | 'confirmed' | 'pending' | 'failed'>('checking');
   const [sessionSyncError, setSessionSyncError] = useState<string | undefined>();
   const [sessionConfigError, setSessionConfigError] = useState<string | undefined>();
@@ -600,6 +612,39 @@ export function LearningInterface() {
   const [showDependencyWarning, setShowDependencyWarning] = useState(false);
   const [hdiRefreshKey, setHdiRefreshKey] = useState(0);
   const [solvedRefreshKey, setSolvedRefreshKey] = useState(0);
+  const [chatOpen, setChatOpen] = useState(false);
+  // The student header strip starts folded away so the problem, editor and hints get the space.
+  // Mirrors the hint card's main button so the mobile bar cannot request help the card would refuse.
+  const [mobileHintState, setMobileHintState] = useState<{ disabled: boolean; label: string }>({ disabled: false, label: 'Get hint' });
+  const [headerCollapsed, setHeaderCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('sql-adapt-practice-header-collapsed') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  // Menus inside the strip may overflow it, but only once it has finished opening.
+  const stripCollapsed = isStudent && headerCollapsed;
+  const [stripSettledOpen, setStripSettledOpen] = useState(!stripCollapsed);
+  useEffect(() => {
+    if (stripCollapsed) {
+      setStripSettledOpen(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setStripSettledOpen(true), 320);
+    return () => window.clearTimeout(timer);
+  }, [stripCollapsed]);
+  const toggleHeaderCollapsed = useCallback(() => {
+    setHeaderCollapsed((previous) => {
+      const next = !previous;
+      try {
+        localStorage.setItem('sql-adapt-practice-header-collapsed', String(next));
+      } catch {
+        // Storage unavailable: the choice just lasts for this visit.
+      }
+      return next;
+    });
+  }, []);
   const [hydratedSolvedIds, setHydratedSolvedIds] = useState<Set<string>>(new Set());
   const dependencyWarningShownRef = useRef(false);
   const lastHintRequestTimeRef = useRef<number>(0);
@@ -1686,6 +1731,22 @@ export function LearningInterface() {
     emittedConceptViewsRef.current.clear();
   }, [learnerId, sessionId]);
 
+  // Safety net: the problem can also change from a URL parameter or restored UI
+  // state (not only handleProblemChange). Whatever the path, per-problem
+  // transient state (last error, escalation, generated explanation) must not
+  // carry over to the next problem.
+  const lastResetProblemIdRef = useRef(currentProblem.id);
+  useEffect(() => {
+    if (lastResetProblemIdRef.current === currentProblem.id) return;
+    lastResetProblemIdRef.current = currentProblem.id;
+    setLastError(undefined);
+    setLastErrorEventId(undefined);
+    setEscalationTriggered(false);
+    setNotesActionMessage(undefined);
+    setGenerationError(undefined);
+    setLatestGeneratedUnit(null);
+  }, [currentProblem.id]);
+
   const handleProblemChange = useCallback((id: string) => {
     const problem = sqlProblems.find(p => p.id === id);
     if (!problem) {
@@ -2180,6 +2241,7 @@ export function LearningInterface() {
         ));
         // Signal other tabs (e.g. TextbookPage open alongside) to reload units.
         broadcastSync('sql-adapt-textbook', learnerId);
+        window.dispatchEvent(new Event(TEXTBOOK_CHANGED_EVENT));
       })
       .catch((error) => {
         setGenerationError((error as Error).message);
@@ -2204,51 +2266,6 @@ export function LearningInterface() {
       }
       return [...previousInteractions, event];
     });
-  };
-
-  const handleAddToNotes = async () => {
-    // Try error-based context first, then fall back to problem concepts
-    let noteSubtype = lastError || resolveLatestProblemErrorSubtype();
-
-    if (!noteSubtype) {
-      // Fall back to the first concept of the current problem
-      // This allows saving notes even when no error has occurred
-      const problemConcepts = currentProblem.concepts;
-      if (problemConcepts && problemConcepts.length > 0) {
-        noteSubtype = problemConcepts[0];
-      }
-    }
-
-    if (!noteSubtype) {
-      setGenerationError('Could not save note: no concept context identified. Try submitting a query or requesting a hint first.');
-      return;
-    }
-    if (!lastError) {
-      setLastError(noteSubtype);
-    }
-
-    const sourceIds = collectNoteEvidenceIds([], { maxInteractions: 12 });
-    setIsGeneratingUnit(true);
-    setGenerationError(undefined);
-    try {
-      const { textbookResult, textbookWriteStatus } = await persistGeneratedUnit(
-        'notebook_unit.v1',
-        sourceIds,
-        noteSubtype,
-        'manual-add-to-notes'
-      );
-      setNotesActionMessage(formatTextbookSaveMessage(
-        textbookResult.unit.title,
-        textbookResult.action,
-        textbookWriteStatus,
-        `✓ Saved "${textbookResult.unit.title}" — find it in My Textbook`,
-        `✓ Updated "${textbookResult.unit.title}" in My Textbook`,
-      ));
-    } catch (error) {
-      setGenerationError((error as Error).message);
-    } finally {
-      setIsGeneratingUnit(false);
-    }
   };
 
   const buildSessionEndEvent = useCallback((): InteractionEvent | null => {
@@ -2546,17 +2563,6 @@ export function LearningInterface() {
 
   const latestProblemErrorSubtype = latestProblemErrorEvent?.sqlEngageSubtype || latestProblemErrorEvent?.errorSubtypeId;
   const effectiveLastError = lastError || latestProblemErrorSubtype;
-  // Show Save to Notes when student has engaged with the problem:
-  // 1. After hint escalation with an error (original behavior)
-  // 2. After viewing any hints (student actively sought help)
-  // 3. After solving the problem (student may want to save their learning)
-  const hasViewedHints = problemInteractions.some(i => i.eventType === 'hint_view');
-  const hasSolvedCurrentProblem = isCurrentProblemSolved;
-  const showAddToNotes = 
-    (escalationTriggered && !!effectiveLastError) ||  // Original path
-    hasViewedHints ||                                   // Viewed at least one hint
-    hasSolvedCurrentProblem;                           // Solved the problem
-  
   const errorCount = useMemo(() => 
     problemInteractions.filter(i => i.eventType === 'error').length,
     [problemInteractions]
@@ -2608,8 +2614,128 @@ export function LearningInterface() {
     );
   }
 
+  const progressPanels = (
+    <>
+              <ConceptCoverage learnerId={learnerId} />
+
+              {/* Knowledge-Structure Layer: Prerequisite Warnings */}
+              {currentProblem.concepts.some(conceptId => {
+                const profile = storage.getProfile(learnerId);
+                if (!profile) return false;
+                const status = checkPrerequisites(conceptId, profile.conceptsCovered);
+                return !status.ready;
+              }) && (
+                <Card className="p-4 bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="size-4 text-amber-600" />
+                    <h3 className="font-semibold text-amber-900 dark:text-amber-100">Prerequisites Needed</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {currentProblem.concepts.map(conceptId => {
+                      const profile = storage.getProfile(learnerId);
+                      if (!profile) return null;
+                      const status = checkPrerequisites(conceptId, profile.conceptsCovered);
+                      if (status.ready) return null;
+                      
+                      return (
+                        <div key={conceptId} className="text-sm">
+                          <p className="text-amber-800 dark:text-amber-300 font-medium">
+                            {conceptId.replace(/-/g, ' ')}
+                          </p>
+                          {status.missing.length > 0 && (
+                            <p className="text-amber-700 dark:text-amber-300 text-xs mt-0.5">
+                              Missing: {status.missing.slice(0, 2).join(', ')}
+                              {status.missing.length > 2 && ` +${status.missing.length - 2} more`}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              )}
+              
+              {/* Knowledge-Structure Layer: Learning Path Recommendations */}
+              {learningPath && learningPath.recommendedConcepts.length > 0 && (
+                <Card className="p-4 bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center gap-2 mb-3">
+                    <GraduationCap className="size-4 text-blue-600 dark:text-blue-300" />
+                    <h3 className="font-semibold text-blue-900 dark:text-blue-100">Learning Path</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {learningPath.recommendedConcepts.slice(0, 3).map((rec, index) => (
+                      <div key={rec.conceptId} className="flex items-start gap-2">
+                        <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs flex items-center justify-center font-medium">
+                          {index + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-blue-800 dark:text-blue-200 truncate">
+                            {rec.name}
+                          </p>
+                          <p className="text-xs text-blue-600 dark:text-blue-300">
+                            {rec.reason}
+                          </p>
+                        </div>
+                        {rec.priority === 'high' && (
+                          <span className="flex-shrink-0 px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-[10px] rounded">
+                            High
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
+                    <div className="flex items-center justify-between text-xs text-blue-700 dark:text-blue-300">
+                      <span>Progress: {learningPath.progressPercentage}%</span>
+                      <span>{learningPath.completedConcepts}/{learningPath.totalConcepts} concepts</span>
+                    </div>
+                    <div className="mt-1.5 h-2 bg-blue-200 dark:bg-blue-900/30 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-500 rounded-full transition-all"
+                        style={{ width: `${learningPath.progressPercentage}%` }}
+                      />
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              <Card className="p-4">
+                <h3 className="font-semibold mb-3">Session Stats</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 text-sm">
+                  <div className="text-gray-600 dark:text-gray-300" title="Query attempts in this session only">Attempts (this session):</div>
+                  <div className="font-medium text-right">{totalAttempts}</div>
+                  <div className="text-gray-600 dark:text-gray-300">Hints viewed:</div>
+                  <div className="font-medium text-right">{hintViewsCount}</div>
+                  <div className="text-gray-600 dark:text-gray-300">Help requests:</div>
+                  <div className="font-medium text-right">{helpRequestsCount}</div>
+                  <div className="text-gray-600 dark:text-gray-300">Session ID:</div>
+                  <div className="max-w-[180px] break-all text-right text-[11px] font-medium text-gray-700 dark:text-gray-200 sm:max-w-[220px] sm:text-xs">
+                    {sessionId || 'pending'}
+                  </div>
+                  <div className="text-gray-600 dark:text-gray-300">Session sync:</div>
+                  <div
+                    className={cn(
+                      'text-right text-xs font-medium capitalize',
+                      sessionSyncStatus === 'confirmed' && 'text-green-700 dark:text-green-300',
+                      sessionSyncStatus === 'pending' && 'text-amber-700 dark:text-amber-300',
+                      sessionSyncStatus === 'failed' && 'text-red-700 dark:text-red-300',
+                      sessionSyncStatus === 'checking' && 'text-gray-600 dark:text-gray-300',
+                    )}
+                    title={sessionSyncError}
+                  >
+                    {sessionSyncStatus}
+                  </div>
+                  <div className="text-gray-600 dark:text-gray-300">Time spent:</div>
+                  <div className="font-medium text-right">
+                    {formatTime(timeSpent)}
+                  </div>
+                </div>
+              </Card>
+    </>
+  );
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen xl:min-h-0 xl:h-full xl:flex xl:flex-col bg-gray-50 dark:bg-gray-900">
         {/* Week 5: Dependency Warning Toast */}
         {showDependencyWarning && (
           <DependencyWarningToast onClose={() => setShowDependencyWarning(false)} />
@@ -2644,55 +2770,151 @@ export function LearningInterface() {
           </div>
         )}
 
-        <div className={cn(
+        {isStudent && !sessionConfig?.textbookDisabled && (
+          <>
+            <div
+              role="dialog"
+              aria-label="Ask my textbook"
+              data-testid="chat-popup"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') setChatOpen(false);
+              }}
+              className={cn(
+                'fixed bottom-24 right-4 z-40 flex h-[min(600px,72vh)] w-[min(94vw,400px)] flex-col overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-2xl',
+                !chatOpen && 'hidden',
+              )}
+            >
+              <div className="flex justify-end border-b border-gray-200 dark:border-gray-700 px-2 py-1">
+                <button
+                  type="button"
+                  onClick={() => setChatOpen(false)}
+                  aria-label="Close chat"
+                  className="rounded p-1 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  <X className="size-4" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="min-h-0 flex-1">
+                <AskMyTextbookChat
+                  key={`${learnerId}:${currentProblem.id}`}
+                  sessionId={sessionId}
+                  learnerId={learnerId}
+                  problemId={currentProblem.id}
+                  recentInteractions={problemInteractions}
+                  onInteractionLogged={handleHintSystemInteraction}
+                  fillHeight
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setChatOpen((open) => !open)}
+              aria-label="Ask my textbook"
+              aria-expanded={chatOpen}
+              data-testid="chat-launcher"
+              className="group fixed bottom-20 lg:bottom-6 right-4 z-40 inline-flex size-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2"
+            >
+              {chatOpen ? <X className="size-6" aria-hidden="true" /> : <MessageCircle className="size-6 -scale-x-100" aria-hidden="true" />}
+              {!chatOpen && (
+                <span role="tooltip" className="pointer-events-none absolute right-full mr-3 whitespace-nowrap rounded-md bg-gray-900 px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                  Ask my textbook
+                </span>
+              )}
+            </button>
+          </>
+        )}
+
+        {/* Phones and tablets: a hint button that stays on screen, so students do not scroll down to the hint card. */}
+        {isStudent && (
+          <div className="fixed inset-x-0 bottom-0 z-30 border-t border-gray-200 bg-white/95 px-4 py-2 shadow-[0_-2px_8px_rgba(0,0,0,0.08)] backdrop-blur dark:border-gray-700 dark:bg-gray-900/95 lg:hidden">
+            <button
+              type="button"
+              data-testid="mobile-hint-bar-button"
+              disabled={mobileHintState.disabled}
+              onClick={() => {
+                if (mobileHintState.disabled) return;
+                window.dispatchEvent(new Event(REQUEST_HINT_EVENT));
+                document.querySelector('[data-testid="hint-panel"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-amber-500 text-sm font-semibold text-gray-900 shadow-sm hover:bg-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-500 disabled:hover:bg-gray-200 dark:focus-visible:ring-offset-gray-900 dark:disabled:bg-gray-700 dark:disabled:text-gray-300"
+            >
+              <Lightbulb className="size-4" aria-hidden="true" />
+              {mobileHintState.label === 'Get hint' ? 'Get a hint' : mobileHintState.label}
+            </button>
+          </div>
+        )}
+
+        {isStudent && (
+          <>
+            <h1 className="sr-only">Practice SQL</h1>
+            <div className="sticky top-2 z-30 h-0">
+              <button
+                type="button"
+                onClick={toggleHeaderCollapsed}
+                aria-expanded={!headerCollapsed}
+                aria-controls="practice-header-strip"
+                data-testid="practice-header-toggle"
+                className="absolute right-4 top-0 inline-flex items-center gap-1.5 rounded-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-800 dark:text-gray-100 shadow-md hover:bg-gray-50 dark:hover:bg-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                {headerCollapsed ? <ChevronDown className="size-4" aria-hidden="true" /> : <ChevronUp className="size-4" aria-hidden="true" />}
+                {headerCollapsed ? 'Progress' : 'Hide'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* The strip folds away with a height transition instead of popping in and out. */}
+        <div
+          className={cn(
+            "grid shrink-0 transition-[grid-template-rows,opacity,visibility] duration-300 ease-out motion-reduce:transition-none",
+            isStudent && headerCollapsed ? "grid-rows-[0fr] opacity-0 invisible" : "grid-rows-[1fr] opacity-100 visible"
+          )}
+          aria-hidden={isStudent && headerCollapsed ? true : undefined}
+        >
+        <div className={cn("min-h-0", stripSettledOpen ? "overflow-visible" : "overflow-hidden")}>
+        <div id="practice-header-strip" className={cn(
           "border-b",
-          isStudent ? "bg-gradient-to-r from-blue-50 to-white dark:from-blue-950 dark:to-gray-900 border-blue-100 dark:border-blue-800" : "bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800"
+          isStudent ? "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700" : "bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800"
         )}>
-          <div className="container mx-auto px-4 py-4">
+          <div className="container mx-auto px-4 py-3">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               {isStudent ? (
-                // Student-friendly header with blue accent
-                <div className="flex items-start gap-3">
-                  <div className="p-2 bg-blue-100 rounded-xl">
-                    <GraduationCap className="size-7 text-blue-600" />
+                // Student header: plain title with the problem position under it
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-[22px] font-bold text-gray-900 dark:text-gray-100">Practice SQL</h1>
+                    {isPreviewMode && (
+                      <Badge className="bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200 border-purple-300 dark:border-purple-700">
+                        Preview Mode
+                      </Badge>
+                    )}
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h1 className="text-2xl font-bold text-gray-900">Practice SQL</h1>
-                      {isPreviewMode && (
-                        <Badge className="bg-purple-100 text-purple-800 border-purple-300">
-                          Preview Mode
-                        </Badge>
-                      )}
-                    </div>
-                    <p className="text-gray-600 text-sm">
-                      {isPreviewMode 
-                        ? 'You are previewing the student experience. Click "Exit Preview" to return.'
-                        : 'Learn SQL with personalized hints and explanations'
-                      }
-                    </p>
-                  </div>
+                  <p className="text-gray-600 dark:text-gray-300 text-sm">
+                    {isPreviewMode
+                      ? 'You are previewing the student experience. Click "Exit Preview" to return.'
+                      : `Problem ${currentProblemNumber} of ${totalProblems}`
+                    }
+                  </p>
                 </div>
               ) : (
                 // Instructor header with amber accent
                 <div className="flex items-start gap-3">
                   <div className="p-2 bg-amber-200 rounded-xl">
-                    <Settings2 className="size-7 text-amber-700" />
+                    <Settings2 className="size-7 text-amber-700 dark:text-amber-300" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h1 className="text-2xl font-bold text-gray-900">SQL Learning Lab</h1>
+                      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">SQL Learning Lab</h1>
                       <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">
                         Instructor Mode
                       </Badge>
                     </div>
-                    <p className="text-gray-600 text-sm">Adaptive instructional system with Guidance Ladder</p>
+                    <p className="text-gray-600 dark:text-gray-300 text-sm">Adaptive instructional system with Guidance Ladder</p>
                   </div>
                 </div>
               )}
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-                {/* Provisional self-initiated survey links; this is intentionally non-blocking pending demo confirmation. */}
-                {isStudent && <SurveyInvitationLinks />}
+                {/* Survey links now live in the top navigation bar so they never hide with this strip. */}
                 {/* Enhanced Session Timer */}
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -2700,13 +2922,13 @@ export function LearningInterface() {
                       {isTimerPaused ? (
                         <Pause className="size-4 text-amber-500" />
                       ) : (
-                        <Clock className="size-4 text-gray-500" />
+                        <Clock className="size-4 text-gray-500 dark:text-gray-400" />
                       )}
                       <span className="text-sm font-medium tabular-nums">
                         {formatTime(elapsedTime)}
                       </span>
                       {totalTimeAcrossSessions > 0 && (
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
                           (total: {formatTime(totalTimeAcrossSessions + elapsedTime)})
                         </span>
                       )}
@@ -2715,7 +2937,7 @@ export function LearningInterface() {
                   <TooltipContent>
                     <p>Session time (pauses when tab is inactive)</p>
                     {totalTimeAcrossSessions > 0 && (
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-400 dark:text-gray-500">
                         Total across all sessions: {formatTime(totalTimeAcrossSessions + elapsedTime)}
                       </p>
                     )}
@@ -2727,7 +2949,7 @@ export function LearningInterface() {
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 dark:bg-green-900/30 rounded-lg border border-green-200 dark:border-green-800">
-                        <Target className="size-4 text-green-600" />
+                        <Target className="size-4 text-green-600 dark:text-green-300" />
                         <span className="text-sm font-medium text-green-700 dark:text-green-300">
                           Solved: {solvedCount} / {totalProblems}
                         </span>
@@ -2745,7 +2967,7 @@ export function LearningInterface() {
                         {Array.from(topicProgressMap.entries()).map(([topic, progress]) => (
                           <div key={topic} className="flex items-center gap-2 text-xs">
                             <span className="capitalize w-20">{topic}:</span>
-                            <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="w-16 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                               <div 
                                 className="h-full bg-green-500 rounded-full"
                                 style={{ width: `${progress.percent}%` }}
@@ -2771,7 +2993,7 @@ export function LearningInterface() {
                       )}>
                         <Zap className={cn(
                           "size-3",
-                          profileBadgeColors[currentProfileId]?.icon || 'text-gray-500'
+                          profileBadgeColors[currentProfileId]?.icon || 'text-gray-500 dark:text-gray-400'
                         )} />
                         <span>{profileDisplayNames[currentProfileId] || currentProfileId}</span>
                       </div>
@@ -2779,7 +3001,7 @@ export function LearningInterface() {
                     <TooltipContent side="bottom">
                       <p>{profileDescriptions[currentProfileId]}</p>
                       {isInstructor && (
-                        <p className="text-xs text-gray-400 mt-1">
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                           HDI: {(currentHDI * 100).toFixed(0)}% • {hdiTrend}
                         </p>
                       )}
@@ -2806,29 +3028,50 @@ export function LearningInterface() {
 
                 {/* User name display - switching handled via "Switch User" in navigation */}
                 {profile?.name && (
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-lg border border-blue-200">
-                    <GraduationCap className="size-4 text-blue-600" />
-                    <span className="text-sm font-medium text-blue-700">{profile.name}</span>
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <GraduationCap className="size-4 text-blue-600 dark:text-blue-300" />
+                    <span className="text-sm font-medium text-blue-700 dark:text-blue-300">{profile.name}</span>
                   </div>
+                )}
+
+                {/* Student menu: concept coverage, learning path and stats live here instead of the page */}
+                {isStudent && (
+                  <Popover
+                    triggerLabel="Progress and tools"
+                    triggerTestId="progress-menu-button"
+                    panelTestId="progress-menu-panel"
+                    panelClassName="w-[min(94vw,420px)]"
+                    trigger={
+                      <>
+                        <LayoutDashboard className="size-4" aria-hidden="true" />
+                        <span>Progress &amp; tools</span>
+                        <ChevronDown className="size-4" aria-hidden="true" />
+                      </>
+                    }
+                  >
+                    <div className="space-y-4">{progressPanels}</div>
+                  </Popover>
                 )}
               </div>
             </div>
           </div>
         </div>
+        </div>
+        </div>
 
-        <div className="container mx-auto px-4 py-6">
+        <div className="container mx-auto px-4 pt-6 pb-24 lg:pb-6 xl:flex-1 xl:min-h-0 xl:flex xl:flex-col">
           {/* Concept Learning Banner */}
           {activeConceptId && activeConceptTitle && (
-            <div className="mb-6 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg p-4">
+            <div className="mb-6 bg-blue-50 dark:bg-blue-900/30 border-l-4 border-blue-500 rounded-r-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-blue-600 font-medium mb-1">Learning Mode</p>
-                  <p className="text-blue-900 font-semibold text-lg">{activeConceptTitle}</p>
+                  <p className="text-sm text-blue-600 dark:text-blue-300 font-medium mb-1">Learning Mode</p>
+                  <p className="text-blue-900 dark:text-blue-100 font-semibold text-lg">{activeConceptTitle}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <Link 
                     to={`/concepts/${activeConceptId}`}
-                    className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                    className="text-sm text-blue-600 dark:text-blue-300 hover:text-blue-800 hover:underline flex items-center gap-1"
                   >
                     <BookOpen className="w-4 h-4" />
                     Review Concept
@@ -2840,7 +3083,7 @@ export function LearningInterface() {
                       // Clear query params without reload
                       window.history.replaceState({}, '', '/practice');
                     }}
-                    className="text-gray-400 hover:text-gray-600"
+                    className="text-gray-400 dark:text-gray-500 hover:text-gray-600"
                     title="Clear learning context"
                   >
                     ×
@@ -2850,16 +3093,16 @@ export function LearningInterface() {
             </div>
           )}
           
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 xl:flex-1 xl:min-h-0 xl:grid-rows-[minmax(0,1fr)]">
             {/* Main problem area */}
-            <div className="lg:col-span-2 space-y-4 xl:grid xl:grid-cols-2 xl:gap-4 xl:space-y-0 min-w-0">
+            <div className="lg:col-span-2 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 xl:grid-rows-[minmax(0,1fr)] xl:h-full xl:min-h-0 min-w-0">
               {/* Left sub-column: Problem description + schema */}
-              <div className="space-y-4 xl:max-h-[calc(100vh-200px)] xl:overflow-y-auto">
+              <div className="space-y-4 xl:h-full xl:min-h-0 xl:overflow-y-auto">
                 <Card className="p-6">
                 <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between">
                   <div className="flex-auto min-w-0 space-y-4">
                     <div className="space-y-2">
-                      <span className="text-sm text-gray-500 font-medium block">
+                      <span className="text-sm text-gray-500 dark:text-gray-400 font-medium block">
                         Problem {currentProblemNumber} of {totalProblems}
                       </span>
                       <div className="flex flex-wrap items-center gap-2">
@@ -2911,7 +3154,7 @@ export function LearningInterface() {
                             <TooltipContent>
                               <p className="font-medium">{concept?.name || conceptId}</p>
                               {concept?.description && (
-                                <p className="text-xs text-gray-400 max-w-xs">{concept.description}</p>
+                                <p className="text-xs text-gray-400 dark:text-gray-500 max-w-xs">{concept.description}</p>
                               )}
                             </TooltipContent>
                           </Tooltip>
@@ -2922,7 +3165,7 @@ export function LearningInterface() {
                   </div>
                   
                   {/* Enhanced Problem Selector with difficulty, concepts, and solved status */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex w-full min-w-0 items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
@@ -2938,9 +3181,18 @@ export function LearningInterface() {
                       value={currentProblem.id}
                       onValueChange={handleProblemChange}
                     >
-                    <SelectTrigger className="w-full lg:w-[300px]" data-testid="problem-select-trigger">
+                    <SelectTrigger className="min-w-0 flex-1 w-auto max-w-full" data-testid="problem-select-trigger">
                       <div className="flex items-center gap-2 overflow-hidden">
                         <span className="truncate">{currentProblem.title}</span>
+                        {isProblemSolved(currentProblem.id) && (
+                          <span
+                            data-testid="problem-solved-badge"
+                            className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-800 dark:bg-green-900/40 dark:text-green-200"
+                          >
+                            <Check className="size-2.5" aria-hidden="true" />
+                            Solved
+                          </span>
+                        )}
                         <Badge variant="outline" className="text-[10px] px-1 shrink-0 hidden sm:inline-flex" title="Problems solved">
                           {solvedCount} of {totalProblems} solved
                         </Badge>
@@ -2974,10 +3226,13 @@ export function LearningInterface() {
                                           {problem.title}
                                         </span>
                                         {solved && (
-                                          <Check className="size-3.5 text-green-600 shrink-0" />
+                                          <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-800 dark:bg-green-900/40 dark:text-green-200">
+                                            <Check className="size-2.5" aria-hidden="true" />
+                                            Solved
+                                          </span>
                                         )}
                                       </div>
-                                      <span className="text-xs text-gray-500">
+                                      <span className="text-xs text-gray-500 dark:text-gray-400">
                                         {problem.concepts.length} concept{problem.concepts.length !== 1 ? 's' : ''} • Level {problem.topicDifficultyLevel}
                                       </span>
                                     </div>
@@ -3004,7 +3259,7 @@ export function LearningInterface() {
                   </div>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800 mb-4 flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800 mb-4 flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-300">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <div className="flex items-center gap-1 cursor-help">
@@ -3037,7 +3292,7 @@ export function LearningInterface() {
                     <h3 className="font-semibold text-sm mb-3">Instructor Controls</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <p className="text-xs text-gray-700 mb-1">Error subtype override</p>
+                        <p className="text-xs text-gray-700 dark:text-gray-200 mb-1">Error subtype override</p>
                         <Select value={subtypeOverride} onValueChange={setSubtypeOverride}>
                           <SelectTrigger>
                             <SelectValue />
@@ -3053,7 +3308,7 @@ export function LearningInterface() {
                         </Select>
                       </div>
                       <div>
-                        <p className="text-xs text-gray-700 mb-1">Strategy</p>
+                        <p className="text-xs text-gray-700 dark:text-gray-200 mb-1">Strategy</p>
                         <Select
                           value={storage.getProfile(learnerId)?.currentStrategy || 'adaptive-medium'}
                           onValueChange={(value) => {
@@ -3104,14 +3359,14 @@ export function LearningInterface() {
                       <div key={attempt.id} className="text-xs border rounded p-2 bg-gray-50 dark:bg-gray-800">
                         <div className="flex items-center gap-2 mb-1">
                           {attempt.successful ? (
-                            <CheckCircle className="size-3 text-green-600" />
+                            <CheckCircle className="size-3 text-green-600 dark:text-green-300" />
                           ) : (
-                            <XCircle className="size-3 text-red-600" />
+                            <XCircle className="size-3 text-red-600 dark:text-red-300" />
                           )}
                           <span className="font-medium">
                             {attempt.successful ? 'Correct' : 'Incorrect'}
                           </span>
-                          <span className="text-gray-400 ml-auto">
+                          <span className="text-gray-400 dark:text-gray-500 ml-auto">
                             {new Date(attempt.timestamp).toLocaleTimeString()}
                           </span>
                         </div>
@@ -3119,20 +3374,20 @@ export function LearningInterface() {
                           <code className="block font-mono text-[10px] truncate">{attempt.code}</code>
                         )}
                         {attempt.error && (
-                          <p className="text-red-600 truncate mt-0.5">{attempt.error}</p>
+                          <p className="text-red-600 dark:text-red-300 truncate mt-0.5">{attempt.error}</p>
                         )}
                       </div>
                     ))}
                     {problemAttempts.length === 0 && (
-                      <p className="text-xs text-gray-500">No attempts yet.</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">No attempts yet.</p>
                     )}
                   </div>
                 </details>
               </Card>
             </div>
 
-            <div className="xl:h-[calc(100vh-200px)]">
-              <div className="h-[300px] sm:h-[350px] md:h-[450px] lg:h-[500px] max-h-[65vh] xl:h-full xl:max-h-full">
+            <div className="xl:h-full xl:min-h-0">
+              <div className="h-[300px] sm:h-[350px] md:h-[450px] lg:h-[500px] max-h-[65vh] xl:h-full xl:max-h-none">
                 <SQLEditor
                   key={currentProblem.id}
                   problem={currentProblem}
@@ -3146,8 +3401,9 @@ export function LearningInterface() {
           </div>
 
           {/* Sidebar with hints */}
-            <div className="space-y-4 min-w-0">
+            <div className="space-y-4 min-w-0 xl:h-full xl:min-h-0 xl:overflow-y-auto">
               <HintSystem
+                onActionStateChange={setMobileHintState}
                 key={`${learnerId}:${sessionId}:${currentProblem.id}:${instructorSubtypeOverride || 'auto'}`}
                 sessionId={sessionId}
                 learnerId={learnerId}
@@ -3161,22 +3417,13 @@ export function LearningInterface() {
                 escalationProfile={currentEscalationProfile}
                 sessionConfig={sessionConfig}
                 isExplanationGenerating={isGeneratingUnit}
+                isEditorEmpty={isSqlEditorEmpty(sqlDraft)}
               />
-
-              {showAddToNotes && (
-                <GeneratedExplanationCard
-                  unit={latestGeneratedUnit}
-                  isGeneratingUnit={isGeneratingUnit}
-                  generationError={generationError}
-                  notesActionMessage={notesActionMessage}
-                  onSave={handleAddToNotes}
-                />
-              )}
 
               {/* Week 5: Progress Hint - subtle, below hint panel */}
               {isStudent && progressHint && (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-500">
-                  <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100 rounded-lg">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-100 dark:border-emerald-800 rounded-lg">
                     {hdiTrend === 'decreasing' ? (
                       <Sprout className="size-4 text-emerald-500" />
                     ) : hdiTrend === 'increasing' ? (
@@ -3189,9 +3436,13 @@ export function LearningInterface() {
                 </div>
               )}
 
+              {/* Instructors keep the full sidebar. Students get these in the chat window and the Progress menu. */}
+              {!isStudent && (
+                <>
               {/* Week 3 Feature: Ask My Textbook Chat - conditionally hidden if textbookDisabled */}
               {(!sessionConfig?.textbookDisabled) && (
                 <AskMyTextbookChat
+                  key={`${learnerId}:${currentProblem.id}`}
                   sessionId={sessionId}
                   learnerId={learnerId}
                   problemId={currentProblem.id}
@@ -3200,121 +3451,9 @@ export function LearningInterface() {
                 />
               )}
 
-              <ConceptCoverage learnerId={learnerId} />
-
-              {/* Knowledge-Structure Layer: Prerequisite Warnings */}
-              {currentProblem.concepts.some(conceptId => {
-                const profile = storage.getProfile(learnerId);
-                if (!profile) return false;
-                const status = checkPrerequisites(conceptId, profile.conceptsCovered);
-                return !status.ready;
-              }) && (
-                <Card className="p-4 bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle className="size-4 text-amber-600" />
-                    <h3 className="font-semibold text-amber-900">Prerequisites Needed</h3>
-                  </div>
-                  <div className="space-y-2">
-                    {currentProblem.concepts.map(conceptId => {
-                      const profile = storage.getProfile(learnerId);
-                      if (!profile) return null;
-                      const status = checkPrerequisites(conceptId, profile.conceptsCovered);
-                      if (status.ready) return null;
-                      
-                      return (
-                        <div key={conceptId} className="text-sm">
-                          <p className="text-amber-800 dark:text-amber-300 font-medium">
-                            {conceptId.replace(/-/g, ' ')}
-                          </p>
-                          {status.missing.length > 0 && (
-                            <p className="text-amber-700 dark:text-amber-300 text-xs mt-0.5">
-                              Missing: {status.missing.slice(0, 2).join(', ')}
-                              {status.missing.length > 2 && ` +${status.missing.length - 2} more`}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </Card>
+                  {progressPanels}
+                </>
               )}
-              
-              {/* Knowledge-Structure Layer: Learning Path Recommendations */}
-              {learningPath && learningPath.recommendedConcepts.length > 0 && (
-                <Card className="p-4 bg-blue-50 border-blue-200">
-                  <div className="flex items-center gap-2 mb-3">
-                    <GraduationCap className="size-4 text-blue-600" />
-                    <h3 className="font-semibold text-blue-900">Learning Path</h3>
-                  </div>
-                  <div className="space-y-2">
-                    {learningPath.recommendedConcepts.slice(0, 3).map((rec, index) => (
-                      <div key={rec.conceptId} className="flex items-start gap-2">
-                        <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs flex items-center justify-center font-medium">
-                          {index + 1}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-blue-800 truncate">
-                            {rec.name}
-                          </p>
-                          <p className="text-xs text-blue-600">
-                            {rec.reason}
-                          </p>
-                        </div>
-                        {rec.priority === 'high' && (
-                          <span className="flex-shrink-0 px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-[10px] rounded">
-                            High
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-blue-200">
-                    <div className="flex items-center justify-between text-xs text-blue-700">
-                      <span>Progress: {learningPath.progressPercentage}%</span>
-                      <span>{learningPath.completedConcepts}/{learningPath.totalConcepts} concepts</span>
-                    </div>
-                    <div className="mt-1.5 h-2 bg-blue-200 dark:bg-blue-900/30 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-blue-500 rounded-full transition-all"
-                        style={{ width: `${learningPath.progressPercentage}%` }}
-                      />
-                    </div>
-                  </div>
-                </Card>
-              )}
-
-              <Card className="p-4">
-                <h3 className="font-semibold mb-3">Session Stats</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 text-sm">
-                  <div className="text-gray-600" title="Query attempts in this session only">Attempts (this session):</div>
-                  <div className="font-medium text-right">{totalAttempts}</div>
-                  <div className="text-gray-600">Hints viewed:</div>
-                  <div className="font-medium text-right">{hintViewsCount}</div>
-                  <div className="text-gray-600">Help requests:</div>
-                  <div className="font-medium text-right">{helpRequestsCount}</div>
-                  <div className="text-gray-600">Session ID:</div>
-                  <div className="max-w-[180px] break-all text-right text-[11px] font-medium text-gray-700 sm:max-w-[220px] sm:text-xs">
-                    {sessionId || 'pending'}
-                  </div>
-                  <div className="text-gray-600">Session sync:</div>
-                  <div
-                    className={cn(
-                      'text-right text-xs font-medium capitalize',
-                      sessionSyncStatus === 'confirmed' && 'text-green-700 dark:text-green-300',
-                      sessionSyncStatus === 'pending' && 'text-amber-700 dark:text-amber-300',
-                      sessionSyncStatus === 'failed' && 'text-red-700 dark:text-red-300',
-                      sessionSyncStatus === 'checking' && 'text-gray-600',
-                    )}
-                    title={sessionSyncError}
-                  >
-                    {sessionSyncStatus}
-                  </div>
-                  <div className="text-gray-600">Time spent:</div>
-                  <div className="font-medium text-right">
-                    {formatTime(timeSpent)}
-                  </div>
-                </div>
-              </Card>
 
               {/* Week 5: Unified HDI Display with 5 Components - INSTRUCTOR ONLY */}
               {isInstructor && (
@@ -3338,7 +3477,7 @@ export function LearningInterface() {
                     </TooltipTrigger>
                     <TooltipContent>
                       <p>HDI Level: {hdiLevel} dependency on hints</p>
-                      <p className="text-xs text-gray-400">Score: {(currentHDI * 100).toFixed(1)}%</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">Score: {(currentHDI * 100).toFixed(1)}%</p>
                     </TooltipContent>
                   </Tooltip>
                 </div>
@@ -3371,21 +3510,21 @@ export function LearningInterface() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-600 w-12 shrink-0">HPA</span>
+                          <span className="text-xs text-gray-600 dark:text-gray-300 w-12 shrink-0">HPA</span>
                           <div className="flex-1 h-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-indigo-500 rounded-full"
                               style={{ width: `${hdiComponents.hpa * 100}%` }}
                             />
                           </div>
-                          <span className="text-xs font-mono text-gray-700 w-10 text-right">
+                          <span className="text-xs font-mono text-gray-700 dark:text-gray-200 w-10 text-right">
                             {hdiComponents.hpa.toFixed(2)}
                           </span>
                         </div>
                       </TooltipTrigger>
                       <TooltipContent side="left">
                         <p className="font-medium">Hints Per Attempt (HPA)</p>
-                        <p className="text-xs text-gray-400">Ratio of hint requests to problem attempts</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">Ratio of hint requests to problem attempts</p>
                       </TooltipContent>
                     </Tooltip>
 
@@ -3393,21 +3532,21 @@ export function LearningInterface() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-600 w-12 shrink-0">AED</span>
+                          <span className="text-xs text-gray-600 dark:text-gray-300 w-12 shrink-0">AED</span>
                           <div className="flex-1 h-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-indigo-500 rounded-full"
                               style={{ width: `${hdiComponents.aed * 100}%` }}
                             />
                           </div>
-                          <span className="text-xs font-mono text-gray-700 w-10 text-right">
+                          <span className="text-xs font-mono text-gray-700 dark:text-gray-200 w-10 text-right">
                             {hdiComponents.aed.toFixed(2)}
                           </span>
                         </div>
                       </TooltipTrigger>
                       <TooltipContent side="left">
                         <p className="font-medium">Average Escalation Depth (AED)</p>
-                        <p className="text-xs text-gray-400">Average hint level used (1-3), normalized</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">Average hint level used (1-3), normalized</p>
                       </TooltipContent>
                     </Tooltip>
 
@@ -3415,21 +3554,21 @@ export function LearningInterface() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-600 w-12 shrink-0">ER</span>
+                          <span className="text-xs text-gray-600 dark:text-gray-300 w-12 shrink-0">ER</span>
                           <div className="flex-1 h-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-indigo-500 rounded-full"
                               style={{ width: `${hdiComponents.er * 100}%` }}
                             />
                           </div>
-                          <span className="text-xs font-mono text-gray-700 w-10 text-right">
+                          <span className="text-xs font-mono text-gray-700 dark:text-gray-200 w-10 text-right">
                             {hdiComponents.er.toFixed(2)}
                           </span>
                         </div>
                       </TooltipTrigger>
                       <TooltipContent side="left">
                         <p className="font-medium">Explanation Rate (ER)</p>
-                        <p className="text-xs text-gray-400">Ratio of explanation views to attempts</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">Ratio of explanation views to attempts</p>
                       </TooltipContent>
                     </Tooltip>
 
@@ -3437,21 +3576,21 @@ export function LearningInterface() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-600 w-12 shrink-0">REAE</span>
+                          <span className="text-xs text-gray-600 dark:text-gray-300 w-12 shrink-0">REAE</span>
                           <div className="flex-1 h-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-indigo-500 rounded-full"
                               style={{ width: `${hdiComponents.reae * 100}%` }}
                             />
                           </div>
-                          <span className="text-xs font-mono text-gray-700 w-10 text-right">
+                          <span className="text-xs font-mono text-gray-700 dark:text-gray-200 w-10 text-right">
                             {hdiComponents.reae.toFixed(2)}
                           </span>
                         </div>
                       </TooltipTrigger>
                       <TooltipContent side="left">
                         <p className="font-medium">Repeated Error After Explanation (REAE)</p>
-                        <p className="text-xs text-gray-400">Errors made after viewing explanations</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">Errors made after viewing explanations</p>
                       </TooltipContent>
                     </Tooltip>
 
@@ -3459,21 +3598,21 @@ export function LearningInterface() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-600 w-12 shrink-0">IWH</span>
+                          <span className="text-xs text-gray-600 dark:text-gray-300 w-12 shrink-0">IWH</span>
                           <div className="flex-1 h-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-green-500 rounded-full"
                               style={{ width: `${hdiComponents.iwh * 100}%` }}
                             />
                           </div>
-                          <span className="text-xs font-mono text-gray-700 w-10 text-right">
+                          <span className="text-xs font-mono text-gray-700 dark:text-gray-200 w-10 text-right">
                             {hdiComponents.iwh.toFixed(2)}
                           </span>
                         </div>
                       </TooltipTrigger>
                       <TooltipContent side="left">
                         <p className="font-medium">Improvement Without Hint (IWH)</p>
-                        <p className="text-xs text-gray-400">Successful attempts without using hints</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">Successful attempts without using hints</p>
                       </TooltipContent>
                     </Tooltip>
                   </div>
@@ -3485,9 +3624,9 @@ export function LearningInterface() {
                     <span className="text-indigo-600">Trend:</span>
                     <span className={cn(
                       "font-medium",
-                      hdiTrend === 'decreasing' && "text-green-600",
+                      hdiTrend === 'decreasing' && "text-green-600 dark:text-green-300",
                       hdiTrend === 'increasing' && "text-amber-600",
-                      hdiTrend === 'stable' && "text-gray-600"
+                      hdiTrend === 'stable' && "text-gray-600 dark:text-gray-300"
                     )}>
                       {hdiTrend === 'decreasing' && '↓ Improving'}
                       {hdiTrend === 'increasing' && '↑ Rising'}
@@ -3498,23 +3637,6 @@ export function LearningInterface() {
               </Card>
               )}
 
-              {/* Keyboard Shortcuts Help */}
-              <Card className="p-4 bg-slate-50 border-slate-200">
-                <div className="flex items-center gap-2 mb-3">
-                  <Keyboard className="size-4 text-slate-600" />
-                  <h3 className="font-semibold text-sm text-slate-700">Keyboard Shortcuts</h3>
-                </div>
-                <div className="space-y-2 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600">Run query</span>
-                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 font-mono text-xs shadow-sm">Ctrl+Enter</kbd>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-600">Focus problem</span>
-                    <kbd className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 font-mono text-xs shadow-sm">Ctrl+/</kbd>
-                  </div>
-                </div>
-              </Card>
             </div>
           </div>
         </div>

@@ -271,6 +271,8 @@ export default defineConfig({
   ],
   define: {
     __API_BASE_URL__: JSON.stringify(process.env.VITE_API_BASE_URL || ''),
+    // Short commit id shown at the bottom of the app so we can tell which build is live.
+    __BUILD_ID__: JSON.stringify((process.env.VERCEL_GIT_COMMIT_SHA || 'local').slice(0, 7)),
   },
   resolve: {
     alias: {

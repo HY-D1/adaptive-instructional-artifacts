@@ -43,7 +43,13 @@ export function applyHintSafetyLayer(
   }
 
   // Block full answer SQL patterns (SELECT ... FROM ... without placeholders)
-  const fullAnswerRegex = /\bselect\s+.+\s+from\s+.+\b/i;
+  // Only real query shapes: SELECT [DISTINCT] <column/function list> FROM <table>.
+  // Plain sentences such as "select the column from the table" are allowed.
+  const selectItem = String.raw`(?:\*|[\w.]+(?:\([^)]*\))?(?:\s+as\s+\w+)?)`;
+  const fullAnswerRegex = new RegExp(
+    String.raw`\bselect\s+(?:distinct\s+)?${selectItem}(?:\s*,\s*${selectItem})*\s+from\s+[\w.]+`,
+    'i'
+  );
   if (fullAnswerRegex.test(next) && !next.includes('___')) {
     return {
       content: getGenericFallbackHint(rung, errorSubtypeId),

@@ -119,13 +119,38 @@ describe('LLM hint generation safety retry', () => {
     expect(result.safetyFilterApplied).toBe(false);
     expect(result.hintSource).toBe('llm');
     expect(result.llmModel).toBe('openai/gpt-oss-20b');
-    expect(result.promptVersion).toBe('adaptive-hint-v2');
+    expect(result.promptVersion).toBe('adaptive-hint-v3');
     const prompt = mocks.generateWithLLM.mock.calls[0][0] as string;
     expect(prompt).toContain('Select all columns from users.');
     expect(prompt).toContain('SELECT * FROM users;');
     expect(prompt).toContain('<student-sql>');
     expect(prompt).not.toContain('learner-1');
     expect(prompt).not.toContain('expectedQuery');
+  });
+
+  it('tells the model there is no SQL yet and not to repeat earlier hints', async () => {
+    mocks.generateWithLLM.mockResolvedValue({
+      text: 'Content: Start by looking at which table holds the data.\nConcepts: select-basic\nSources: sql-engage:select-basic',
+      model: 'test-model',
+      params: {},
+    });
+    const { generateLLMEnhancedHint } = await import('./llm-generation');
+    await generateLLMEnhancedHint(
+      {
+        learnerId: 'learner-1',
+        problemId: 'problem-1',
+        sessionId: 'session-1',
+        errorSubtypeId: 'incomplete query',
+        rung: 1,
+        recentInteractions: [],
+      },
+      retrievalBundle,
+      { sqlEngage: true, textbook: false, llm: true, pdfIndex: false },
+      retrievalSignals,
+    );
+    const prompt = mocks.generateWithLLM.mock.calls[0][0] as string;
+    expect(prompt).toContain('has not written or run any SQL yet');
+    expect(prompt).not.toContain('<student-sql>');
   });
 
   it('builds a bounded, injection-resistant prompt and separates cache entries by SQL', async () => {

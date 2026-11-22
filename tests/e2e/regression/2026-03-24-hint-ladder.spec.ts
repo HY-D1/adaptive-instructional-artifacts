@@ -229,7 +229,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     await runUntilErrorCount(page, runQueryButton, 1);
 
     // Request first hint and wait for it to appear
-    await page.getByRole('button', { name: 'Request Hint' }).click();
+    await page.getByRole('button', { name: /Get hint|Request Hint/i }).click();
     await expect(page.getByTestId('hint-label-1')).toBeVisible();
 
     // Wait for hint action button to be visible and enabled before clicking
@@ -294,7 +294,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     await replaceEditorText(page, 'SELECT * FROM nonexistent_table;');
     await runUntilErrorCount(page, runQueryButton, 1);
 
-    await page.getByRole('button', { name: 'Request Hint' }).click();
+    await page.getByRole('button', { name: /Get hint|Request Hint/i }).click();
     await expect(page.getByTestId('hint-label-1')).toBeVisible();
 
     const hintEvent = await getLastHintEvent(page);
@@ -325,7 +325,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     await replaceEditorText(page, 'SELECT');
     await runUntilErrorCount(page, runQueryButton, 1);
 
-    await page.getByRole('button', { name: 'Request Hint' }).click();
+    await page.getByRole('button', { name: /Get hint|Request Hint/i }).click();
     await expect(page.getByTestId('hint-label-1')).toBeVisible();
 
     const hintEvent = await getLastHintEvent(page);
@@ -464,7 +464,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     await replaceEditorText(page, 'SELECT');
     await runUntilErrorCount(page, runQueryButton, 1);
 
-    const hintButton = page.getByRole('button', { name: 'Request Hint' });
+    const hintButton = page.getByRole('button', { name: /Get hint|Request Hint/i });
     
     // Button may be disabled without profile, or app creates default profile
     const isEnabled = await hintButton.isEnabled().catch(() => false);
@@ -520,7 +520,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     expect(sessionId).not.toBeNull();
     
     // Hint button should be enabled now
-    const hintButton = page.getByRole('button', { name: 'Request Hint' });
+    const hintButton = page.getByRole('button', { name: /Get hint|Request Hint/i });
     await expect(hintButton).toBeEnabled();
   });
 
@@ -551,7 +551,7 @@ test.describe('@weekly Hint Ladder System - Feature 1', () => {
     await replaceEditorText(page, 'SELECT');
     await runUntilErrorCount(page, runQueryButton, 1);
 
-    await page.getByRole('button', { name: 'Request Hint' }).click();
+    await page.getByRole('button', { name: /Get hint|Request Hint/i }).click();
     await expect(page.getByTestId('hint-label-1')).toBeVisible();
 
     const hintEvent = await getLastHintEvent(page);
